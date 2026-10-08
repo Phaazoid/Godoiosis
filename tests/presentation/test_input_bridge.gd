@@ -16,6 +16,7 @@ extends GdUnitTestSuite
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 const LEVEL_1 := "res://Scenarios/missions/Level_1.tres"
+const MD := preload("res://tests/support/menu_drive.gd")
 
 var _scene: Node3D
 var _game: Node2D
@@ -295,6 +296,32 @@ func _selected() -> Unit:
 	return unit
 
 
+# The orders the player actually gave: setup_hold_move_actions files a hold for every member that
+# is not moving, and those are nobody's order.
+func _active_orders() -> Array[BaseAction]:
+	var orders: Array[BaseAction] = []
+	var squad: Squad = _game.squad_manager.active_squad
+	if squad == null:
+		return orders
+	for action: BaseAction in squad.action_queue:
+		if action is MoveAction and (action as MoveAction).is_hold_position:
+			continue
+		orders.append(action)
+	return orders
+
+
+# A point over bare board, so a press there is the board's to read: nothing in the UI layer covers
+# it, and the queue panel that opens once an order is queued is exactly what could.
+func _bare_board_point() -> Vector2:
+	var view: Rect2 = _scene.get_viewport().get_visible_rect()
+	var grid: TileMapLayer = _game.grid
+	for cell: Vector2i in grid.get_used_cells():
+		var at := _screen_of(cell)
+		if view.has_point(at) and not _under_ui(at):
+			return at
+	return Vector2(-1.0, -1.0)
+
+
 # --- The click wire --------------------------------------------------------------------
 
 func test_a_3d_click_selects_the_unit_it_lands_on() -> void:
@@ -314,7 +341,7 @@ func test_pointing_snaps_the_hidden_camera_to_the_hovered_cell() -> void:
 	var unit := _pickable_player_unit()
 	var cam: CameraController = _game.camera_controller
 	var world: Vector2 = GridUtils.cell_world(_game.grid, unit.movement.cell)
-	# Derive the clamped truth through the same seam, then park the camera far away.
+	# Derive the expected position through the same seam, then park the camera far away.
 	cam.snap_to_position(world)
 	var expected: Vector2 = cam.global_position
 	cam.snap_to_position(Vector2(-100000.0, -100000.0))
@@ -738,6 +765,54 @@ func test_rmb_cancels_the_current_mode() -> void:
 	assert_object(_selected()).is_null()
 
 
+# ONE physical right-click does ONE job (#1081). The ring backs out on the PRESS and frees itself;
+# the board's cancel waits for the RELEASE, because right-drag is also the orbit. Nothing was left
+# to catch that release, so it reached a board at rest and undid the newest order.
+#
+# The frame gap between the halves IS the case: _parse_click delivers both in one flush, the ring
+# is still alive to swallow its own release, and the bug hides.
+func test_right_clicking_the_ring_shut_leaves_the_queue_alone() -> void:
+	var pair := _unit_with_a_destination()
+	assert_bool(pair.is_empty()).override_failure_message(
+			"no player unit has a clickable destination; the case cannot be driven").is_false()
+	var unit: Unit = pair[0]
+	var destination: Vector2i = pair[1]
+	_game.selected_unit = unit
+	_game.enter_move_mode(unit)
+	_parse_click(_screen_of(destination))
+	await _pump()
+	assert_int(_active_orders().size()).override_failure_message(
+			"the move never queued, so there is no order to lose").is_equal(1)
+
+	_game._on_left_click(unit.get_projected_destination())
+	assert_object(MD.controller_of(_game)).override_failure_message(
+			"clicking the unit opened no ring").is_not_null()
+
+	var at := _bare_board_point()
+	assert_bool(at.x >= 0.0).override_failure_message(
+			"no board point is clear of the UI; the case cannot be driven").is_true()
+	_parse_motion(at)
+	_parse_button(at, MOUSE_BUTTON_RIGHT, true)
+	await _pump()
+	assert_object(MD.controller_of(_game)).override_failure_message(
+			"the press never reached the ring, so this case is not driving the bug").is_null()
+	_parse_button(at, MOUSE_BUTTON_RIGHT, false)
+	await _pump()
+
+	# The state as well as the count: re-planning a lone move spends the order on entry, so a pop
+	# and a re-plan both leave the count changed, and only the mode says which happened.
+	assert_int(_game.game_state).override_failure_message(
+			"the release reached the board and re-opened the move's planning").is_equal(_game.GameState.IDLE)
+	assert_int(_active_orders().size()).override_failure_message(
+			"closing the ring cost the player an order").is_equal(1)
+
+	# One job per click, not none: the NEXT right-click is the board's, and it reaches the queue.
+	_parse_click(at, MOUSE_BUTTON_RIGHT)
+	await _pump()
+	assert_int(_game.game_state).override_failure_message(
+			"a right-click on the board at rest no longer reaches the queue").is_equal(_game.GameState.CHOOSING_MOVE)
+
+
 func test_demo_mode_forces_both_factions_ai_and_playable_does_not() -> void:
 	var ai: AIController = _game.ai_controller
 	await _scene._start()
@@ -805,6 +880,60 @@ func test_the_playable_rig_freezes_with_the_game() -> void:
 	var rig: Node3D = _scene.get_node("CameraRig")
 	assert_bool(rig.is_processing()).is_false()
 	_game.process_mode = Node.PROCESS_MODE_INHERIT
+
+
+# One half of a middle-button drag, with the mask Godot gives it.
+func _parse_middle(screen_pos: Vector2, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.position = screen_pos
+	event.global_position = screen_pos
+	event.button_index = MOUSE_BUTTON_MIDDLE
+	event.pressed = pressed
+	event.button_mask = MOUSE_BUTTON_MASK_MIDDLE if pressed else 0
+	Input.parse_input_event(event)
+
+
+func _parse_middle_drag(screen_pos: Vector2, pixels: Vector2) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = screen_pos + pixels
+	motion.global_position = screen_pos + pixels
+	motion.relative = pixels
+	motion.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+	Input.parse_input_event(motion)
+
+
+# A pan held into a modal freeze (#1037). The frozen rig cannot hear the release, so the host has
+# to let the pan go, or every plain mouse move after the card closes drags the board.
+func test_a_pan_held_into_a_modal_freeze_is_let_go() -> void:
+	var rig := _rig() as CameraRig3D
+	assert_int(rig.pan_button).override_failure_message(
+			"precondition: the pan is not on middle, so these presses start nothing").is_equal(MOUSE_BUTTON_MIDDLE)
+	var at := _bare_board_point()
+	assert_bool(at.x >= 0.0).override_failure_message("no bare board point to press on").is_true()
+	_parse_middle(at, true)
+	await _pump()
+	var start: Vector3 = rig._target_aim
+	_parse_middle_drag(at, Vector2(30.0, 0.0))
+	await _pump()
+	assert_bool(rig._target_aim.is_equal_approx(start)).override_failure_message(
+			"precondition: the middle drag never panned, so this proves nothing").is_false()
+
+	_game.process_mode = Node.PROCESS_MODE_DISABLED   # the freeze, at ModalLock's own seam
+	await _pump()
+	_parse_middle(at, false)   # let go while the card is up
+	await _pump()
+	_game.process_mode = Node.PROCESS_MODE_INHERIT
+	await _pump()
+
+	var settled: Vector3 = rig._target_aim
+	var plain := InputEventMouseMotion.new()
+	plain.position = at
+	plain.global_position = at
+	plain.relative = Vector2(30.0, 0.0)
+	Input.parse_input_event(plain)
+	await _pump()
+	assert_that(rig._target_aim).override_failure_message(
+			"the pan outlived the freeze -- every mouse move now drags the board").is_equal(settled)
 
 
 func test_the_dev_overlay_resolves_while_the_game_is_hosted_in_3d() -> void:

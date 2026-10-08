@@ -25,6 +25,12 @@ var resolved_stop_index := -1
 # the channel every other order says it through, and the Wet chip draws with no edit to the panel.
 var resolved: ResolvedOutcome
 
+# The step of `path` the walk soaked its mover at (#884), or -1: stamped by PlanResolver._soak beside
+# `resolved` and reset with it. Playback applies the soaking there when a shot lands on this walker
+# afterwards (ResolvedPlan.walk_moments, #46), so the two happen in the order the resolve put them.
+var resolved_soak_step := -1
+var _walk_states_applied := false
+
 # PLAYBACK ONLY (#567): the steps of `path` this walk HALTS at while a triggered shot plays, in
 # ascending order. Written by OrderExecutor before execute(), off the moments the resolve stamped on
 # the shots — never by the resolver, and never read by anything that decides an outcome. Nothing
@@ -60,10 +66,12 @@ func init_hold_position(unit: Unit, destination_tile_texture: Texture2D):
 	else:
 		destination_texture = destination_tile_texture
 
-func actor_can_perform() -> bool:
+func actor_block_reason() -> String:
 	# Move-before-main: a unit that locked its main action can't move after it (attacks
 	# resolve from the final position — no attack-then-flee).
-	return not actor.has_main_action_queued()
+	if actor.has_main_action_queued():
+		return "%s already has a main action queued, and a move must come before it." % actor.get_unit_name()
+	return ""
 
 func is_reorderable() -> bool:
 	# A hold is a filler nobody ordered and crosses nothing — resequencing it means nothing (#412).
@@ -91,17 +99,25 @@ func execute():
 		while _parked_at >= 0 and is_instance_valid(actor):
 			await actor.get_tree().process_frame
 	await _walk_leg(walk.slice(start))
-
-	# What the walk did to the mover, played back exactly as resolved (E3/R3) -- remove-then-add,
-	# the order AttackAction.execute applies. Guarded because a triggered shot can down or remove the
-	# crosser mid-walk, and a halted walk only ever resolved the cells it actually reached.
-	if resolved != null and actor != null and is_instance_valid(actor):
-		for s in resolved.states_removed:
-			actor.remove_element_state(s)
-		for s in resolved.states_added:
-			actor.add_element_state(s, resolved.state_turns.get(s, 0))
-
+	apply_walk_states()   # a no-op when the executor already played it at the soak moment
 	finish_execution()
+
+
+# What the walk did to the mover, played back exactly as resolved (E3/R3) -- remove-then-add, the order
+# AttackAction.land applies. Once per walk, and both hosts call it (#46): at its soak moment when there
+# is one, else as the walk ends. Guarded because a triggered shot can down or remove the crosser
+# mid-walk, and a halted walk only ever resolved the cells it actually reached. True when it applied.
+func apply_walk_states() -> bool:
+	if _walk_states_applied:
+		return false
+	_walk_states_applied = true
+	if resolved == null or actor == null or not is_instance_valid(actor):
+		return false
+	for s in resolved.states_removed:
+		actor.remove_element_state(s)
+	for s in resolved.states_added:
+		actor.add_element_state(s, resolved.state_turns.get(s, 0))
+	return true
 
 
 # One stretch of the walk. Guarded because the walk can now outlive its own mover: a shot fired at

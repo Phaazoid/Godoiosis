@@ -1,8 +1,13 @@
 extends PanelContainer
 
-# Inventory section of the inspect panel (UnitInfoPanel.tscn): the fixed grid of item slots
-# (code-generated), with an equip/unequip/toss action popup when the inspected unit is
-# controllable (can_act). Slot rows show the computed weapon view (elements incl. mods).
+# Inventory section of the inspect panel (UnitInfoPanel.tscn): one column of full-width item slots
+# (code-generated, #966), with an action popup -- equip/unequip/toss when the inspected unit is
+# controllable (can_act), and Inspect for any item with a detail card, whoever holds it (#1152: the
+# card is a read, so an enemy's weapon opens too). Slot rows show the computed weapon view (elements
+# incl. mods). The slots are the action queue's rows, in the player's palette (#1105).
+#
+# A slot is a PanelContainer, never a Panel: a Panel lays out nothing, so its row sat at the top
+# edge at its own minimum width and ran past the border (#966).
 
 @onready var slots_container = $MarginContainer/InventorySlots
 signal loadout_changed
@@ -11,38 +16,36 @@ signal loadout_changed
 # stale* and every listener is a staleness handler that would have to accept arguments it ignores.
 # Two questions, two answers -- and both leave from the ONE funnel below, so no door is missed.
 signal loadout_acted(unit: Unit, verb: String, index: int)
+# The player asked to READ an item (#1152) -- PreMissionCard's signal, and for its reason: the panel
+# knows nothing of cards, and ItemDetail decides which one opens. Not a loadout act, so no
+# loadout_acted beside it.
+signal detail_requested(item: Item, owner: Unit)
 
 var unit: Unit = null
 var can_act := false
 var selected_index := -1
 var action_popup: Control = null
 
-const COLOR_BORDER_DEFAULT := Color(0.3, 0.3, 0.3, 1)
-const COLOR_BORDER_SELECTED := Color(0.9, 0.78, 0.32, 1)
-const COLOR_EQUIPPED := Color(1, 0.85, 0.3, 1)
-const COLOR_EMPTY := Color(0.6, 0.616, 0.6, 1.0)
-
 func _ready() -> void:
 	_create_slots()
 
+# The player's palette (#1105): the slots are the action queue's rows on paper, re-inked on every
+# refresh, so a palette switch needs only a refresh.
+func restyle() -> void:
+	_refresh()
+
+# A slot NAME is text on paper, so it takes a font colour; `modulate` multiplies the theme's white
+# and cannot darken it for parchment.
+static func _ink_name(label: Label, role: QueueStyle.Role) -> void:
+	label.add_theme_color_override("font_color", QueueStyle.ink(role))
+
 func _create_slots():
 	for i in range(Unit.MAX_INVENTORY_SIZE):
-		var slot_panel := Panel.new()
-		slot_panel.custom_minimum_size = Vector2i(130, 40)
+		var slot_panel := PanelContainer.new()
+		slot_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # span the one grid column
 		slot_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.15, 0.15, 0.15, 1)
-		style.border_width_left = 1
-		style.border_width_right = 1
-		style.border_width_top = 1
-		style.border_width_bottom = 1
-		style.corner_radius_top_left = 4
-		style.corner_radius_top_right = 4
-		style.corner_radius_bottom_left = 4
-		style.corner_radius_bottom_right = 4
-		style.border_color = COLOR_BORDER_DEFAULT
-		slot_panel.add_theme_stylebox_override("panel", style)
+		slot_panel.add_theme_stylebox_override("panel", QueueStyle.row_box(false, false))
 
 		var hbox := HBoxContainer.new()
 		hbox.name = "SlotHBox"
@@ -61,6 +64,10 @@ func _create_slots():
 		var name_label := Label.new()
 		name_label.text = ""
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		# A guard, not a look: no authored name trims today, but an over-long one must not widen the
+		# slot and walk the panel out of its column (the #685 edge). Trimming alone drops the label's
+		# minimum width, so no clip_text is needed.
+		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		name_label.name = "ItemName"
 		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -95,40 +102,68 @@ func _select_slot(index: int):
 		return
 	selected_index = index
 	_refresh()
-	if can_act:
+	if _offers_anything(unit.inventory[index]):
 		_show_action_popup(index)
 	else:
 		_close_action_popup()
 
+# A popup opens for a slot that has any verb in it: the loadout verbs need a controllable unit, and
+# Inspect needs only a card (#1152).
+func _offers_anything(item: Item) -> bool:
+	return can_act or ItemDetail.has_card(item)
+
 func _show_action_popup(index: int):
 	_close_action_popup()
-	if unit == null or not can_act:
+	if unit == null:
 		return
 	var item = unit.inventory[index]
-	if item == null:
+	if item == null or not _offers_anything(item):
 		return
-		
 
 	var popup := PanelContainer.new()
+	popup.add_theme_stylebox_override("panel", QueueStyle.panel_box())
 	popup.z_index = UiLayers.INVENTORY_POPUP
 	var vbox := VBoxContainer.new()
 	popup.add_child(vbox)
 
+	if ItemDetail.has_card(item):
+		var inspect_btn := Button.new()
+		inspect_btn.text = "Inspect"
+		inspect_btn.pressed.connect(_do_inspect.bind(index))
+		vbox.add_child(inspect_btn)
+
+	if can_act:
+		_add_loadout_rows(vbox, item, index)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.pressed.connect(_do_cancel)
+	vbox.add_child(cancel_btn)
+
+	add_child(popup)
+	var slot = slots_container.get_child(index)
+	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
+	action_popup = popup
+
+# The verbs that CHANGE what the unit carries -- only ever built for a controllable unit. Which verb a
+# row offers is this surface's; whether it may happen, and why not, is GearVerbs' (#46), the rule the
+# replay viewer and the headless Play API ask too.
+func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 	if item is ArmorData:
 		var wear_btn := Button.new()
 		if item == unit.worn_armor:
 			wear_btn.text = "Remove"
 			wear_btn.pressed.connect(_do_remove_armor)
-		elif item.can_equip(unit):
-			wear_btn.text = "Wear"
-			wear_btn.pressed.connect(_do_wear.bind(index))
 		else:
 			# The gate, shown rather than silently swallowed -- and since #744 in the SENTENCE the
 			# gate itself chose, against this wearer, rather than this surface re-wording the rule
 			# from requirement_text (which cannot see who is holding it, so it could only ever say
 			# what the piece demands, never how far short you are).
-			wear_btn.text = "Wear — %s" % item.can_equip_reason(unit)
-			wear_btn.disabled = true
+			var refusal := GearVerbs.block_reason(unit, GearVerbs.Verb.WEAR, index)
+			wear_btn.text = "Wear" if refusal == "" else "Wear — %s" % refusal
+			wear_btn.disabled = refusal != ""
+			if refusal == "":
+				wear_btn.pressed.connect(_do_wear.bind(index))
 		vbox.add_child(wear_btn)
 	# Any non-armor equippable: weapons AND runes. Mirrors equip_weapon_from_inventory's
 	# own split — armor is caught above and fills a different slot.
@@ -137,15 +172,15 @@ func _show_action_popup(index: int):
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"
 			equip_btn.pressed.connect(_do_unequip.bind(index))
-		elif item.can_equip(unit):
-			equip_btn.text = "Equip"
-			equip_btn.pressed.connect(_do_equip.bind(index))
 		else:
 			# The gate, shown rather than silently swallowed — armor's precedent above (#157). This
 			# used to hardcode "can't channel", which was true only while runes were the one kind
 			# that could refuse; #744 made every kind able to say its own.
-			equip_btn.text = "Equip — %s" % item.can_equip_reason(unit)
-			equip_btn.disabled = true
+			var refusal := GearVerbs.block_reason(unit, GearVerbs.Verb.EQUIP, index)
+			equip_btn.text = "Equip" if refusal == "" else "Equip — %s" % refusal
+			equip_btn.disabled = refusal != ""
+			if refusal == "":
+				equip_btn.pressed.connect(_do_equip.bind(index))
 		vbox.add_child(equip_btn)
 
 	# A vial is CARRIED, never slotted, so its verb is Use rather than Equip (#697). Same shape as
@@ -155,7 +190,7 @@ func _show_action_popup(index: int):
 	if item is VialData:
 		var vial := item as VialData
 		var use_btn := Button.new()
-		var refusal := vial.use_block_reason(unit)
+		var refusal := GearVerbs.block_reason(unit, GearVerbs.Verb.USE, index)
 		if refusal != "":
 			use_btn.text = "Use — %s" % refusal
 			use_btn.disabled = true
@@ -168,7 +203,7 @@ func _show_action_popup(index: int):
 	# Unit's own rule (#741), not a second reading of the prosthetic fitting -- the gate this used to
 	# re-ask is the shape #744 collapsed in the three branches above. Disabled wearing the sentence
 	# rather than hidden, for their reason: a row the player cannot use still has to say why (#166).
-	var toss_block := unit.remove_block_reason(index)
+	var toss_block := GearVerbs.block_reason(unit, GearVerbs.Verb.TOSS, index)
 	var toss_btn := Button.new()
 	if toss_block != "":
 		toss_btn.text = "Toss — %s" % toss_block
@@ -177,16 +212,6 @@ func _show_action_popup(index: int):
 		toss_btn.text = "Toss"
 		toss_btn.pressed.connect(_do_toss.bind(index))
 	vbox.add_child(toss_btn)
-
-	var cancel_btn := Button.new()
-	cancel_btn.text = "Cancel"
-	cancel_btn.pressed.connect(_do_cancel)
-	vbox.add_child(cancel_btn)
-
-	add_child(popup)
-	var slot = slots_container.get_child(index)
-	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
-	action_popup = popup
 
 func _close_action_popup():
 	if action_popup != null and is_instance_valid(action_popup):
@@ -203,37 +228,43 @@ func _apply_change(verb := "", index := -1):
 	if verb != "":
 		loadout_acted.emit(unit, verb, index)
 
+# The six acts, each through GearVerbs.perform (the refusal was asked above and wears it on the
+# button). What loadout_acted records is unchanged, Remove's missing index included (#46).
 func _do_use(index: int):
-	if unit != null:
-		unit.use_vial(index)   # the refusal was asked above and wears it on the button
+	_perform(GearVerbs.Verb.USE, index)
 	selected_index = -1
-	_apply_change("use", index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.USE), index)
 
 func _do_equip(index: int):
-	if unit != null:
-		unit.equip_weapon_from_inventory(index)
-	_apply_change("equip", index)
+	_perform(GearVerbs.Verb.EQUIP, index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.EQUIP), index)
 
 func _do_unequip(index: int):
-	if unit != null:
-		unit.unequip_weapon()
-	_apply_change("unequip", index)
+	_perform(GearVerbs.Verb.UNEQUIP, index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.UNEQUIP), index)
 
 func _do_wear(index: int):
-	if unit != null:
-		unit.wear_armor(index)
-	_apply_change("wear", index)
+	_perform(GearVerbs.Verb.WEAR, index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.WEAR), index)
 
 func _do_remove_armor():
-	if unit != null:
-		unit.remove_armor()
-	_apply_change("remove_armor")
+	_perform(GearVerbs.Verb.REMOVE_ARMOR, -1)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.REMOVE_ARMOR))
 
 func _do_toss(index: int):
-	if unit != null:
-		unit.remove_item(index)
+	_perform(GearVerbs.Verb.TOSS, index)
 	selected_index = -1
-	_apply_change("toss", index)
+	_apply_change(GearVerbs.name_of(GearVerbs.Verb.TOSS), index)
+
+func _perform(verb: GearVerbs.Verb, index: int) -> void:
+	if unit != null:
+		GearVerbs.perform(unit, verb, index)
+
+func _do_inspect(index: int):
+	var item: Item = unit.inventory[index] if unit != null else null
+	_do_cancel()   # the card goes over the dock; the slot it was asked from lets go
+	if item != null:
+		detail_requested.emit(item, unit)
 
 func _do_cancel():
 	selected_index = -1
@@ -250,9 +281,9 @@ func _refresh():
 		var slot = slots_container.get_child(i)
 		var icon = slot.get_node("SlotHBox/Icon")
 		var name_label = slot.get_node("SlotHBox/ItemName")
-		var style: StyleBoxFlat = slot.get_theme_stylebox("panel")
-
-		style.border_color = COLOR_BORDER_SELECTED if i == selected_index else COLOR_BORDER_DEFAULT
+		# The selected slot wears the row's hover look. Swapped, never edited: QueueStyle's boxes are
+		# shared, so writing a border into one would recolour every row in the game.
+		slot.add_theme_stylebox_override("panel", QueueStyle.row_box(false, i == selected_index))
 
 		if unit and i < unit.inventory.size() and unit.inventory[i] != null:
 			var item = unit.inventory[i]
@@ -265,12 +296,12 @@ func _refresh():
 
 			if item == unit.get_equipped_weapon():
 				display_name += "  (E)"
-				name_label.modulate = COLOR_EQUIPPED
+				_ink_name(name_label, QueueStyle.Role.EMPHASIS_TEXT)
 			elif item == unit.worn_armor:
 				display_name += "  (W)"
-				name_label.modulate = COLOR_EQUIPPED
+				_ink_name(name_label, QueueStyle.Role.EMPHASIS_TEXT)
 			else:
-				name_label.modulate = Color(1, 1, 1, 1)
+				_ink_name(name_label, QueueStyle.Role.BODY_TEXT)
 			if item is ArmorData and item.modifier_text() != "":
 				display_name += "  [%s]" % item.modifier_text()
 
@@ -286,5 +317,5 @@ func _refresh():
 		else:
 			icon.texture = null
 			name_label.text = "Empty"
-			name_label.modulate = COLOR_EMPTY
+			_ink_name(name_label, QueueStyle.Role.HEADER_TEXT)
 			slot.tooltip_text = ""

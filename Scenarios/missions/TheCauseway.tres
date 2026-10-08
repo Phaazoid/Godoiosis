@@ -52,14 +52,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_u8whh")])
 equipped_index = 0
 affinity_saved = true
@@ -99,14 +97,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_c1u88")])
 equipped_index = 0
 affinity_saved = true
@@ -146,14 +142,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_jqy18")])
 equipped_index = 0
 affinity_saved = true
@@ -196,14 +190,12 @@ stats = Dictionary[int, int]({
 0: 10,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_mfpgr")])
 equipped_index = 0
 affinity_saved = true
@@ -243,14 +235,12 @@ stats = Dictionary[int, int]({
 0: 10,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_a6ear")])
 equipped_index = 0
 affinity_saved = true
@@ -294,14 +284,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_d1pus")])
 equipped_index = 0
 affinity_saved = true
@@ -341,14 +329,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_fwrqj")])
 equipped_index = 0
 affinity_saved = true
@@ -388,14 +374,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_d3i6q")]([SubResource("Resource_b2dpb")])
 equipped_index = 0
 affinity_saved = true

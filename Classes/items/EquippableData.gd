@@ -143,6 +143,12 @@ func attack_block_reason(_wielder: Unit, _attack: AttackData) -> String:
 func attack_detail(_wielder: Unit, _attack: AttackData) -> String:
 	return ""
 
+# The live count a menu row prints beside this attack's name (#1045) -- rounds, charge, a tank, rev
+# turns left. null = the row shows nothing. Asked of the SOURCE for the reason the two above are:
+# only it knows which of its attacks its economy touches.
+func attack_gauge(_wielder: Unit, _attack: AttackData) -> WeaponGauge:
+	return null
+
 # --- Weapon-verb surface (#73/#84, promoted here from WeaponInstance 2026-07-27) ---
 # The self-abilities the Weapon Action menu can offer. Same shape and same reasoning as the
 # attack surface above: every default is the INERT answer, so Unit asks whatever is in the slot

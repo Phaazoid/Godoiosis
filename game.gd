@@ -3,14 +3,14 @@ extends Node2D
 # Input/game-state coordinator — the root node of the game scene (game.tscn), instanced inside
 # the GameView SubViewport (CLAUDE.md "Sharp edges"). Owns the GameState machine and routes
 # clicks into the right mode handler; PICKING_TARGET is the one generic "pick a highlighted
-# unit" mode (rescue/intimidate/squad-up/join-squad all ride it via enter_target_pick_mode) —
+# unit" mode (rescue/squad-up/join-squad all ride it via enter_target_pick_mode) —
 # ATTACK_TARGETING and the CHOOSING_MOVE/GROUP_MOVE cell-pickers stay their own modes on
 # purpose (see CLAUDE.md's Actions bullet). The seam most cross-system wiring hangs off of.
 #
 # Reorganized 2026-07-26 into the sections marked below. Three collaborators were split out;
 # each is built in _build_collaborators and holds a back-ref here (the DevController pattern):
 #   MainActionMenu (ui/)     — every menu: what's offered, how it's drawn, where a pick goes
-#   HoverPresenter (board/)  — mouse position -> cursor, overlays, hover card, row highlight
+#   HoverPresenter (board/)  — mouse position -> cursor, overlays, row highlight
 #   OrderExecutor (actions/) — running a squad's plan, and the Crisis/downed fallout it makes
 #
 # Still the heaviest file in the project. Prefer moving domain logic out to the system that
@@ -48,6 +48,9 @@ extends Node2D
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner
 @onready var ui_layer: CanvasLayer = $UILayer
+# Every ModalCard mounts here, a CanvasLayer over the wheel and the dialogue (#1034). Built in code
+# so its number lives only in UiLayers.
+var card_layer: CanvasLayer
 @onready var unit_info_panel: Control = $UILayer/UnitInfoPanelControl
 @onready var hover_info_panel: Control = $UILayer/HoverInfoPanelControl
 @onready var dev_overlay: DevOverlay = _find_dev_overlay()
@@ -129,10 +132,12 @@ var ai_controller: AIController
 var scenario_director: ScenarioDirector   # fires authored DialogBeats (#182)
 var terrain_states: TerrainStateManager
 var board_heights: BoardHeights   # per-cell elevation + ramps (#257); RefCounted, so not a child
+var gas_field: GasField   # the atmosphere: how much of each gas every cell holds (#508); RefCounted
 var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; deleted when art lands
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
+var squad_tether_presenter: SquadTetherPresenter   # membership changes -> tether moments (#367)
 # THE T KEY AND ITS WHOLE CYCLE ARE GONE (#1069). #710 slice 3 gave the intent readout a
 # {NONE, INTENTS, EVERYTHING} cycle so a player could turn it off; #1069 retired the readout itself,
 # on the dev's ruling that the lines should answer who can REACH a cell rather than who intends
@@ -145,7 +150,7 @@ var ranges_shown := false     # the V toggle (slice 3): every enemy's move + rea
 # Which enemies stay drawn once the pointer leaves them, by instance id -- see toggle_enemy_pin.
 # They outlive the pointer and a queued order, but NOT the V key going off (2026-09-18).
 var pinned_enemies: Dictionary[int, bool] = {}
-var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves
+var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves, or a unit goes down, dies or is revived
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
@@ -153,6 +158,7 @@ var mission_log: MissionLog   # the playtest recorder (#53); writes down what th
 var telemetry_uploader: TelemetryUploader   # ships a sealed run to the intake (#53 slice 5)
 var audio_director: AudioDirector   # the one place a sound is played (#136)
 var music_director: MusicDirector   # ...and the one place a TRACK is chosen (#136 slice 3)
+var playback_control: PlaybackControl   # fast-forward, skip and the playback speed setting (#545)
 
 # ==============================================================================
 #  Lifecycle
@@ -163,6 +169,7 @@ func _ready() -> void:
 	# ending, and a launch is the only moment anything can finish one. FIRST, and ahead of
 	# _build_collaborators: this must never meet a run this process is about to open.
 	MissionLog.sweep_unsealed()
+	_build_ui_layers()
 	_build_collaborators()
 	# ...AND THEN SEND THEM (#53 slice 5), in that order and for that reason: the sweep is what
 	# turns a killed run into a complete record, so sending first would ship the fragment. This is
@@ -175,7 +182,7 @@ func _ready() -> void:
 	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 
 	_wire_signals()
-	camera_controller.game = self   # so its WASD poll can see board_input_delegated (#176 4d)
+	camera_controller.game = self   # so its WASD poll and pan wall can see board_input_delegated (#176 4d, #974)
 	camera_controller.refresh_bounds(grid)
 	# The front door (#96 slice 2). TestBoard is no longer spawned at boot — it is a row on the
 	# menu now. Lock the board synchronously, but DEFER opening the screen by a frame: during
@@ -194,6 +201,15 @@ func _find_dev_overlay() -> DevOverlay:
 	if not DevTools.enabled():
 		return null
 	return get_node_or_null("../../../DevOverlay")
+
+# Both UI layers take their numbers from UiLayers, so the whole stack is stated in one table. Before
+# anything else is built: the title screen and the first-launch notice are cards.
+func _build_ui_layers() -> void:
+	ui_layer.layer = UiLayers.LAYER_HUD
+	card_layer = CanvasLayer.new()
+	card_layer.name = "CardLayer"
+	card_layer.layer = UiLayers.LAYER_CARDS
+	add_child(card_layer)
 
 func _build_collaborators() -> void:
 	dev_controller = DevController.new()
@@ -220,6 +236,8 @@ func _build_collaborators() -> void:
 	add_child(terrain_states)
 
 	board_heights = BoardHeights.new()   # no add_child: RefCounted, and it needs nothing from the tree
+	gas_field = GasField.new()   # the same: a RefCounted store, built beside its structural twin
+	gas_field.ground_source = terrain_states.ground_source   # gas needs ground, by the tile states' own rule
 
 	if DevTools.enabled():
 		height_debug_overlay = HeightDebugOverlay.new()
@@ -242,6 +260,9 @@ func _build_collaborators() -> void:
 
 	mission_controller = MissionController.new()
 	mission_controller.game = self
+	mission_controller.mission.zones = zone_manager   # the one zone store, built above (#46)
+	# A claim's game reactions hang off the state, which a CaptureAction holds in place of this node (#46).
+	mission_controller.mission.zone_captured.connect(mission_controller._on_zone_captured)
 	add_child(mission_controller)
 	# The pre-mission briefing's one wire (#882): the phase holds its loadout screen back until the
 	# director has stopped talking. Connected here rather than in either node's _ready, because the
@@ -251,6 +272,10 @@ func _build_collaborators() -> void:
 	hover_presenter = HoverPresenter.new()
 	hover_presenter.game = self
 	add_child(hover_presenter)
+
+	squad_tether_presenter = SquadTetherPresenter.new()
+	squad_tether_presenter.game = self
+	add_child(squad_tether_presenter)   # after @onready: _ready here connects squad_manager
 
 	bug_reporter = BugReporter.new()
 	bug_reporter.game = self
@@ -272,6 +297,10 @@ func _build_collaborators() -> void:
 	music_director.game = self
 	add_child(music_director)   # AFTER mission_controller: its reconcile reads mission_select_is_up
 
+	playback_control = PlaybackControl.new()
+	playback_control.game = self
+	add_child(playback_control)   # AFTER scenario_director: a skip asks whether a dialog is up
+
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)
 	turn_manager.round_completed.connect(_on_round_completed)
@@ -283,8 +312,10 @@ func _wire_signals() -> void:
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
+	scenario_manager.board_loaded.connect(camera_controller.refresh_bounds.bind(grid))   # ...and new pan bounds (#974)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
+	squad_manager.active_squad_changed.connect(_on_active_squad_changed)   # End Turn hides mid-queue (#541)
 
 	# Standing squad rings follow membership (#423 slice 1). squad_created covers every LEAVE as
 	# well as every birth -- leave_squad ends in create_squad -- so the two ejection sweeps that
@@ -303,11 +334,28 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
+	# The dock's Inspect (#1152): the item's own card, READ-ONLY -- fitting a mod is a pre-mission act,
+	# and a battle has no mod pool to offer, hence the empty one.
+	unit_info_panel.detail_requested.connect(func(item: Item, owner: Unit) -> void:
+		var no_pool: Array[WeaponModData] = []
+		ItemDetail.open(self, item, owner, no_pool, Callable(), true))
+	# The info card's tile face reads the one tile-facts builder (#1105), handed over rather than
+	# looked up so the card never learns what a game is. It closes with the dock: a tile card beside
+	# the dock was opened with it.
+	hover_info_panel.tile_source = func(cell: Vector2i) -> TileReadout.Readout:
+		return TileReadout.read(self, cell)
+	hover_info_panel.tile_sections_source = func(cell: Vector2i) -> Array[TileReadout.Section]:
+		return TileReadout.compose(self, cell)
+	unit_info_panel.closed.connect(hover_info_panel.clear)
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
+	squad_action_queue_control.row_clicked.connect(_on_queue_row_clicked)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
+	mission_status_panel.drawn_zone_kinds = overlay_manager.drawn_zone_kinds
+	mission_status_panel.zone_row_hovered.connect(hover_presenter.on_objective_row_hover_changed)
+	mission_status_panel.zone_row_clicked.connect(look_at_next_zone)
 	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
 
 	# HoverPresenter connects its own handlers in its _ready, so this one runs after them.
@@ -415,6 +463,11 @@ func _unhandled_input(event: InputEvent) -> void:
 # Esc during play. MENU locks the board while the card is up; the prior state is restored on
 # Resume so an in-progress aim survives the pause.
 func _open_pause_menu() -> void:
+	# An open wheel closes first (#1034, dev ruling): three rows below tear the board down, and a ring
+	# frozen under the card would come back over the new board holding a freed unit. FIRST, because
+	# closing it clears the selection, which writes game_state -- landing after MENU, it would rest the
+	# board under the open card and _restore_state would then skip the restore.
+	main_action_menu.close_ring()
 	var prior: GameState = game_state
 	# READ BEFORE THE WRITE BELOW (#723): playback_owns_board() asks about game_state, so once MENU
 	# lands here an AI turn no longer looks like one and the card would grey nothing. The card is
@@ -502,6 +555,11 @@ func _restore_state(prior: GameState) -> void:
 func open_report_card(default_kind: BugReporter.Kind) -> void:
 	bug_reporter.open_card(GameState.keys()[game_state], default_kind)
 
+# The mission-end banner's form (#1052), handed to the same exchange a card runs. Named here for the
+# reason above; the banner is up, so the state it names is MISSION_OVER.
+func serve_report_form(form: ReportForm, frame: Image) -> void:
+	bug_reporter.serve(form, GameState.keys()[game_state], frame)
+
 # One handler per mode, mirroring HoverPresenter's branches. Each is responsible for leaving
 # the mode it handles (exit_current_mode), so the dispatcher stays a plain table.
 func _on_left_click(cell: Vector2i, shift_held := false) -> void:
@@ -543,15 +601,27 @@ func _on_left_click(cell: Vector2i, shift_held := false) -> void:
 # MOVES get one extra rung in between (#417 round 2, dev call): a queued move re-opens its
 # planning rather than being deleted, so the press cycles move queued -> planning -> nothing.
 # The second press needs no code -- planning already spent the order on entry.
+#
+# And a READOUT is a rung too (#1105): at rest, a tile card or the Inspect dock is what is open, so
+# the press closes it and stops. A tile card comes up on every empty-tile click, and dismissing one
+# must never cost the player an order.
 func _on_right_click() -> void:
-	if game_state == GameState.CHOOSING_MOVE:
-		overlay_manager.clear_planned_path(selected_unit)
-	# Read BEFORE exiting, since exit_current_mode is what returns the board to rest.
+	if game_state == _base_state() and (hover_info_panel.is_showing_tile() or unit_info_panel.is_showing()):
+		hover_info_panel.clear()
+		unit_info_panel.clear()
+		return
+	# Read BEFORE leaving, since exit_current_mode is what returns the board to rest.
 	var was_at_rest := game_state == _base_state()
-	exit_current_mode()
+	_leave_mode()
 	unit_info_panel.clear()   #TODO Add close button to this panel
 	if was_at_rest:
 		_pop_last_gesture()
+
+# Leave whatever mode is open, as a right-click does. A queue-row click (#1122) leaves one the same way.
+func _leave_mode() -> void:
+	if game_state == GameState.CHOOSING_MOVE:
+		overlay_manager.clear_planned_path(selected_unit)
+	exit_current_mode()
 
 # The LIFO undo. Thin caller by design (Law #4): every removal goes through the queue panel's own
 # cancel, so the move-before-main cascade, the plan revalidate and the hold-only deactivation are
@@ -593,7 +663,8 @@ func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
 #
 # An empty DEPLOYMENT cell offers the units still in reserve, which is the dev's own description:
 # "click a blank spot and click add, and get a dropdown of all deployable units to bring one in."
-# A click anywhere else rests the board, so a mis-click closes whatever was open.
+# A click anywhere else rests the board, so a mis-click closes whatever was open, and shows the
+# clicked tile's card (#1105).
 func _click_pre_mission(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target != null:
@@ -602,18 +673,55 @@ func _click_pre_mission(cell: Vector2i) -> void:
 		main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 		return
 	if mission_controller.can_deploy_another() and mission_controller.open_deployment_cells().has(cell):
+		hover_info_panel.clear()
 		main_action_menu.show_deploy_menu(cell, get_viewport().get_mouse_position())
 		return
 	clear_selection()
+	show_tile_card(cell)
 
 func _click_idle(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target == null:
+		show_tile_card(cell)
 		return
-	select_unit(target, cell)
+	open_unit_ring(target, cell, get_viewport().get_mouse_position())
+
+# Select a unit and open its ring at `at`. Two doors: a board click, and a queue-row click (#1122).
+# `cell` is where the cursor sits in TILE_SELECTED -- the unit's projected cell, which is what a
+# board click resolved it from.
+func open_unit_ring(unit: Unit, cell: Vector2i, at: Vector2i) -> void:
+	select_unit(unit, cell)
 	game_state = GameState.TILE_SELECTED
-	show_selected_reach(target)
-	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+	show_selected_reach(unit)
+	main_action_menu.show_main_menu(unit, at)
+
+# THE INFO CARD (#1105, dev: "Nothing on hover, at all... Clicking a tile brings up the full tile for
+# it"). One card, the last request wins; these are its three openers.
+
+# A clicked tile's card. The same tile again closes it, and a click off the map closes it too.
+func show_tile_card(cell: Vector2i) -> void:
+	if grid.get_cell_tile_data(cell) == null or hover_info_panel.is_showing_tile_at(cell):
+		hover_info_panel.clear()
+		return
+	hover_info_panel.show_tile(cell, GridUtils.cell_world(grid, cell), _card_left_x())
+
+# The unit card while that unit's ring is up. With the dock already showing this unit, the dock IS
+# its card, and whatever sits beside it stays.
+func show_unit_card(unit: Unit) -> void:
+	if unit_info_panel.is_showing_unit(unit):
+		return
+	hover_info_panel.show_unit(unit, unit.global_position, _card_left_x())
+
+# The ring's Inspect: the unit in the dock, and the tile it stands on in the card beside it.
+func inspect_unit(unit: Unit) -> void:
+	unit_info_panel.set_unit(unit, can_control(unit), _board())
+	hover_info_panel.show_tile_of(unit, _card_left_x())
+
+# The card parks right of an open dock rather than under it (#68).
+func _card_left_x() -> int:
+	if unit_info_panel.is_showing():
+		return int(unit_info_panel.panel_width()) + 8
+	return HoverInfoPanelControl.MARGIN
 
 # WHAT A SELECTED UNIT THREATENS FROM WHERE IT STANDS (#1069, dev: "Selecting a unit, though (for
 # us, bringing up the radial menu, and also choosing a move, etc), brings up the unit's attack
@@ -669,7 +777,7 @@ func _click_choosing_move(cell: Vector2i) -> void:
 		return
 	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
-		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+		var path := route_to(unit, moverange, cell)
 		var move := MoveAction.new()
 		move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, path.back()))
 		if squad_manager.queue_action(unit.squad, move):
@@ -738,7 +846,7 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	drop_threat_field()   # the other side moved (#710)
-	_run_turn_start_ticks(faction)
+	TurnBoundary.turn_start_ticks(_all_units(), faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
@@ -766,24 +874,27 @@ func _on_turn_started(faction: Team.Faction):
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
 
+# An AI faction claims the board BEFORE the hand-off beat, because its first squad plans INSIDE it
+# (#1220 ruling 7): the costliest decision of the turn hides behind the banner, and orders queued on
+# an unlocked board would be the player's to click. The lock is not negotiable.
 func start_faction_turn(faction: Team.Faction):
-	game_state = GameState.BETWEEN_TURNS
-	await Pacing.beat(self, Pacing.TURN_HANDOFF)
-	game_state = _base_state()   # AI_TURN below still overrides -- the lock is not negotiable
-
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
 		camera_controller.set_playback_locked(true)
-		await ai_controller.take_faction_turn(faction)
+		await ai_controller.take_faction_turn(faction, Pacing.TURN_HANDOFF)
 		camera_controller.set_playback_locked(false)
 		return
+
+	game_state = GameState.BETWEEN_TURNS
+	await Pacing.beat(self, Pacing.TURN_HANDOFF)
+	game_state = _base_state()
 
 	#TODO This should probably be it's own game state - IN_MENU or something.
 	#Can call an end menu function from the popup hide that calls update visuals instead.
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
 
 func end_turn():
-	await order_executor.apply_burning_tile_damage(turn_manager.active_faction())
+	await order_executor.apply_end_of_turn_tiles(turn_manager.active_faction())
 	mission_controller.check()   # a burning tile can take the last unit (#96)
 	if mission_controller.is_over():
 		return
@@ -792,8 +903,8 @@ func end_turn():
 	turn_manager.end_turn(_board().present_factions())
 
 # The bottom-right End Turn button's one caller (#189) -- same guard `_on_queue_execute_requested`
-# uses. It stopped being belt-and-braces with #467: the button is permanently on screen now, so a
-# press really can arrive during an AI turn or over a finished mission, and this is what refuses it.
+# uses. Still load-bearing after #541 took the button off the AI turn: it stays up over a finished
+# mission and behind a menu, and a press arriving there is what this refuses.
 #
 # It also ASKS when there is anything left to do (dev call, #467). The question is
 # `faction_all_squads_acted` -- the same predicate that decides whether the button is flashing --
@@ -813,21 +924,8 @@ func _on_end_turn_button_pressed() -> void:
 func _on_round_completed() -> void:
 	terrain_states.tick_states()
 	overlay_manager.redraw_terrain_live(terrain_states)
+	gas_field.tick(_board())   # the gas's round (#508); GasMirror polls the store, so no redraw call
 	mission_controller.advance_round()   # the mission clock's ONE tick (#101); the turn-start check() sees it
-
-# Per-unit state that decays at the owning faction's turn start (downed clocks, crisis surge,
-# weapon rev, …). One pass; each tick self-guards, so no per-effect pre-filter. Add a new
-# turn-start tick as one line here — no wrapper, no _on_turn_started edit.
-func _run_turn_start_ticks(faction: Team.Faction) -> void:
-	for unit in _all_units():
-		if unit.get_faction() != faction:
-			continue
-		unit.tick_downed_countdown()
-		unit.tick_stat_effects()      # BEFORE the surge below: an effect applied this turn must not tick this turn
-		unit.advance_crisis_surge()
-		unit.tick_weapon_rev()
-		unit.lapse_guard()            # #414: last turn's Guard is gone BEFORE this turn's move phase
-		unit.lapse_watch()            # #413: and so is last turn's untriggered watch
 
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the
 # end-of-mission card is up, and while Mission Select is up.
@@ -873,9 +971,7 @@ func can_control(unit: Unit) -> bool:
 		return false
 	if game_state == GameState.DEV_MODE:
 		return true
-	if not unit.is_active():        # downed/dead units can't be commanded (will-and-death.md)
-		return false
-	return unit.get_faction() == turn_manager.active_faction()
+	return RulesService.command_block_reason(unit, turn_manager.active_faction()) == ""
 
 # Bring the view back to `unit` (#471). The action ring does NOT lock the board, so the player can
 # pan anywhere while it is open — and a COMMITTED order is about the unit, not about wherever the
@@ -892,14 +988,38 @@ func can_control(unit: Unit) -> bool:
 func focus_view_on(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
-	var cell := unit.get_projected_destination()
+	focus_view_on_cell(unit.get_projected_destination())
+
+# The door above with the cell already in hand (#955 part 3). Neither half asks whether the board is
+# locked -- a caller that can fire while it is must ask first (look_at_next_zone does).
+func focus_view_on_cell(cell: Vector2i) -> void:
 	# A 3D host owns the visible camera and answers the signal below for it; THIS camera is hidden
-	# there, and battle3d._update_pointer snaps it per motion to park the hover card, so writing it
+	# there, and battle3d._update_pointer snaps it per motion to park the info card, so writing it
 	# here would only mis-anchor that card. Same flag and the same reason CameraController's WASD
 	# poll stands down on (#176 4d).
 	if not board_input_delegated:
 		camera_controller.snap_to_position(GridUtils.cell_world(grid, cell))
 	view_focus_requested.emit(cell)
+
+# An objectives-panel zone row was clicked (#955 part 3): the camera goes to the next drawn zone of
+# that kind, in drawn order and wrapping, aimed at the cell its emblem stands on. Refused while the
+# board is locked, since that panel stays up through enemy turns, the pass and the mission's end.
+var _zone_look_turn: Dictionary[int, int] = {}
+
+func look_at_next_zone(kind: int) -> void:
+	if _board_locked_for_player():
+		return
+	var zones: Array[Dictionary] = []
+	for zone in overlay_manager.drawn_zones:
+		if int(zone["kind"]) == kind:
+			zones.append(zone)
+	if zones.is_empty():
+		return
+	var turn: int = _zone_look_turn.get(kind, 0) % zones.size()
+	_zone_look_turn[kind] = turn + 1
+	var cells: Array[Vector2i] = []
+	cells.assign(zones[turn]["cells"])
+	focus_view_on_cell(ZoneMarks.emblem_cell(cells))
 
 # ==============================================================================
 #  Modes — entering and leaving
@@ -1005,7 +1125,7 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE):
 		Reach.get_all_attack_cells_from(unit, reach_origin, aiming),
 		Reach.blocked_cells_from(unit, reach_origin, aiming, _board()))
 
-# Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
+# Generic "pick one highlighted unit" mode (rescue, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
 # its own mode — directional aiming doesn't fit this shape.
 # mark_candidates false means the CALLER is already marking them some other way (#442: join-squad's
@@ -1111,9 +1231,9 @@ func clear_selection():
 #  Queueing orders
 # ==============================================================================
 
-# The no-argument main-action verbs: all four differed only by which BaseAction subclass got
-# instantiated, so they share one queue path (dev call 2026-07-28). Rescue/intimidate/capture stay
-# separate on purpose — they take real arguments (a unit, a unit, a cell), and forcing them
+# The no-argument main-action verbs differ only by which BaseAction subclass gets instantiated,
+# so they share one queue path (dev call 2026-07-28). Rescue/capture stay
+# separate on purpose — they take real arguments (a unit, a cell), and forcing them
 # through this signature would just move the branching into a parameter bag.
 func queue_simple_action(unit: Unit, type: BaseAction.ActionType):
 	var action := _make_simple_action(type)
@@ -1128,8 +1248,6 @@ func queue_simple_action(unit: Unit, type: BaseAction.ActionType):
 # every branch statically typed. An unregistered type returns null and is a loud failure above.
 func _make_simple_action(type: BaseAction.ActionType) -> BaseAction:
 	match type:
-		BaseAction.ActionType.RALLY:
-			return RallyAction.new()
 		BaseAction.ActionType.RELOAD:
 			return ReloadAction.new()
 		BaseAction.ActionType.REV:
@@ -1142,7 +1260,7 @@ func _make_simple_action(type: BaseAction.ActionType) -> BaseAction:
 # tile the move ends on (#96 slice 3).
 func queue_capture(unit: Unit):
 	var capture := CaptureAction.new()
-	capture.init(unit, unit.get_projected_destination(), mission_controller)
+	capture.init(unit, unit.get_projected_destination(), mission_controller.mission)
 	squad_manager.queue_action(unit.squad, capture)
 	clear_selection()
 
@@ -1153,11 +1271,6 @@ func queue_rescue(rescuer: Unit, target: Unit, landing: Vector2i) -> void:
 	var rescue := RescueAction.new()
 	rescue.init(rescuer, target, landing)
 	squad_manager.queue_action(rescuer.squad, rescue)
-
-func queue_intimidate(intimidator: Unit, target: Unit) -> void:
-	var intimidate := IntimidateAction.new()
-	intimidate.init(intimidator, target)
-	squad_manager.queue_action(intimidator.squad, intimidate)
 
 func queue_guard(guarding_unit: Unit, ward: Unit) -> void:
 	var guard := GuardAction.new()
@@ -1210,6 +1323,34 @@ func _on_queue_cancel_requested(display_action: BaseAction):
 	# squads "active", keeping the queue open and blocking selection of another squad.
 	squad_manager.revert_if_only_hold(squad)
 
+# A click on a queue row (#1122, dev: "jump to that unit in game, with the action menu brought up,
+# to requeue that action"). It SPENDS the order through the X's own path, the #417 rule -- the ring
+# hides every main action while one is queued, so a ring opened over the order could offer nothing
+# to requeue it with. Then the view goes to the unit and its way back in opens: move planning for a
+# move (dev: straight there, as right-click's re-plan does), the ring for anything else, at the
+# view's centre because that is where the camera is taking the unit. A row that is not an order has
+# nothing to spend, so the click only looks -- except a HOLD (#1158): no order, but the unit's move
+# slot, empty, so it re-plans like any move row, main action included.
+func _on_queue_row_clicked(action: BaseAction) -> void:
+	if _board_locked_for_player():
+		return
+	if action == null or not is_instance_valid(action.actor):
+		return
+	var unit: Unit = action.actor
+	_leave_mode()
+	var leads_back := action.is_reorderable() or action.action_type == BaseAction.ActionType.MOVE
+	if not leads_back or not can_control(unit):
+		focus_view_on(unit)
+		return
+	# BEFORE the ring: build_tree snapshots the options at open.
+	_on_queue_cancel_requested(action)
+	focus_view_on(unit)
+	if action.action_type == BaseAction.ActionType.MOVE:
+		select_unit(unit, unit.movement.cell)
+		begin_move_planning(unit)
+		return
+	open_unit_ring(unit, unit.get_projected_destination(), Vector2i(get_viewport().get_visible_rect().size / 2.0))
+
 func _cancel_stored_main_action(unit: Unit, squad: Squad) -> void:
 	for action in squad.action_queue.duplicate():
 		if action.actor == unit and action.is_main_action():
@@ -1233,6 +1374,8 @@ func refresh_action_queue(squad: Squad):
 		overlay_manager.clear_guard_preview()
 		overlay_manager.clear_watch_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
+		var none: Array[BaseAction] = []
+		squad_action_queue_control.set_refusals(none)
 		return
 	# A running pass owns its plan (#361). Every order is still in the queue until _end_squad_turn,
 	# so a re-derive mid-pass re-simulates attacks that have ALREADY landed — _hypo_for seeds from
@@ -1261,19 +1404,24 @@ func refresh_action_queue(squad: Squad):
 	# watch must stop drawing its footprint now, not when it lands. Takes the plan the resolve above
 	# produced -- the cache read would be the same object, but passing it says which pass answered.
 	refresh_watch_markers(plan)
-	var can_execute: bool = (squad_manager.active_squad == squad
+	# Whether Execute is on offer at all, and then whether it would be refused (#1121). A refused plan
+	# still takes the press -- execute_orders refuses it out loud -- while one not on offer never can:
+	# a hold-only squad whose press arrived would run its hold-only plan.
+	var offered: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions(squad)
-		and not squad_manager.squad_has_invalid_actions(squad)
 		and not _board_locked_for_player())
-	if not can_execute:
+	squad_action_queue_control.set_refusals(squad_manager.refused_orders(squad))
+	if not offered:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
+	elif squad_manager.squad_has_invalid_actions(squad):
+		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.REFUSED)
 	elif _squad_all_committed(squad):
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.ALL_COMMITTED)
 	else:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
 
 # The mission-status HUD (#134). Called from MissionController's write points (check, capture,
-# set_objectives, set_lose_conditions, advance_round, restore_progress, reset) plus the dev Scenario
+# set_objectives, set_lose_conditions, advance_round, apply_scenario, reset) plus the dev Scenario
 # tab's live objective toggle — the refresh_action_queue pattern, not a signal. A board that declares
 # nothing (sandbox, cleared) hides the panel.
 #
@@ -1285,22 +1433,32 @@ func refresh_mission_status() -> void:
 			and instruction == "":
 		mission_status_panel.clear()
 		return
-	mission_status_panel.show_status(mission_controller, _board(), instruction)
+	mission_status_panel.show_status(mission_controller.mission, _board(), instruction)
 
-# The bottom-right End Turn affordance (#189): flashes with the SAME Pulse cue as Execute Orders
-# once every squad on the active faction has acted or waited -- there's nothing left to click but
-# this. Called from has_acted's write points (SquadManager.set_has_acted's callers) and the turn
-# handoff -- the refresh_mission_status pattern above (#134), a write-point call, not a signal.
+# The bottom-right End Turn affordance (#189): whether it is OFFERED, and whether it flashes with the
+# SAME Pulse cue as Execute Orders once every squad on the active faction has acted or waited.
+# Called from has_acted's write points (SquadManager.set_has_acted's callers), the turn handoff and
+# every active_squad change -- the refresh_mission_status pattern above (#134), a write-point call.
 func refresh_end_turn_button() -> void:
 	var faction: Team.Faction = turn_manager.active_faction()
-	# Since #467 this decides the FLASH, not the visibility -- the button is up whenever the player
-	# could act, so this predicate never hides it. Same predicate the early-press confirm reads,
-	# which is what makes "it is flashing" and "it will not ask" the same fact. What DOES hide it is
-	# a cinematic (#722), on a different predicate and through set_hud_hidden_for_playback below.
+	var ai_turn: bool = ai_controller.is_ai_faction(faction)
+	# #541: not on an AI faction's turn -- read off the ACTIVE FACTION, which names whose turn it is from
+	# the handoff on (an AI faction also claims the board before its beat since #1220) -- and not while a squad's
+	# plan is open, where it sits under Execute and reads as the same red button. A cinematic (#722)
+	# and the pre-mission phase hide it too, through set_battle_hud_hidden below.
+	end_turn_button.set_offered(not ai_turn and squad_manager.active_squad == null)
+	# The FLASH. Same predicate the early-press confirm reads, which is what makes "it is flashing"
+	# and "it will not ask" the same fact.
 	var urgent: bool = (not _board_locked_for_player()
-		and not ai_controller.is_ai_faction(faction)
+		and not ai_turn
 		and squad_manager.faction_all_squads_acted(faction))
 	end_turn_button.set_urgent(urgent)
+
+# The threat preview queues and rolls back (#710), so its writes round-trip and repaint nothing.
+func _on_active_squad_changed(_squad: Squad) -> void:
+	if squad_manager.previewing:
+		return
+	refresh_end_turn_button()
 
 # THE CINEMATIC OWNS THE FRAME (#722). Called from CameraController's playback_cinematic setter --
 # the one edge, since that field is cleared on both lock edges and published once per pass.
@@ -1312,8 +1470,8 @@ func refresh_end_turn_button() -> void:
 #
 # Each surface conjoins the flag into its OWN gate rather than being written here (visual-clarity's
 # "one gate, no second visibility expression"), which is what keeps a mid-pass re-show impossible:
-# the hover card is re-driven on every cursor-cell change, and a player's own Execute never leaves
-# game_state IDLE.
+# the info card is re-shown by every click and redraws itself as its unit walks, and a player's own
+# Execute never leaves game_state IDLE.
 func set_hud_hidden_for_playback(hidden: bool) -> void:
 	set_battle_hud_hidden(hidden)
 	hover_info_panel.set_hidden_for_playback(hidden)
@@ -1336,30 +1494,25 @@ func set_battle_hud_hidden(hidden: bool) -> void:
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).
 func _preview_plan_effects(plan: ResolvedPlan) -> void:
-	var deposits: Array = []
-	var seen := {}
-	for effect in plan.cell_effects:
-		for state in effect.states_added:
-			# Vector3i key = (cell.x, cell.y, state) — dedupes per cell-AND-state, so two
-			# attacks igniting one cell draw one icon but a cell gaining two states draws both.
-			var key := Vector3i(effect.cell.x, effect.cell.y, state)
-			if seen.has(key):
-				continue
-			seen[key] = true
-			deposits.append({"cell": effect.cell, "state": state})
-	overlay_manager.show_terrain_preview(deposits)
+	# The pass's deposits (#50) and gas (#508), deduped per cell and state -- the plan's own answer,
+	# which the Play API's preview prints too (#46).
+	overlay_manager.show_terrain_preview(plan.pending_deposits())
 	# Attacks AND counters (#259 closed the gap: counter shoves were never previewed). The path
 	# is the trail's one source -- a landing tumble can bend it, so endpoints cannot describe it.
 	var all_hits: Array = []
 	all_hits.append_array(plan.attacks)
 	all_hits.append_array(plan.counters)
+	# A shove the target's weight held outright draws no trail, so it is marked where it held (#1186).
 	var shoves: Array = []
+	var holds: Array[Vector2i] = []
 	for atk: AttackAction in all_hits:
+		if atk.resolved != null and atk.resolved.held_in_place():
+			holds.append(atk.resolved.knockback_from)
 		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
 			shoves.append({"target": atk.target, "path": atk.resolved.knockback_path,
 				"to": atk.resolved.knockback_to, "removed": atk.resolved.removed,
 				"landing_index": atk.resolved.knockback_landing_index})
-	overlay_manager.show_knockback_preview(shoves)
+	overlay_manager.show_knockback_preview(shoves, holds)
 	# Guards this plan has QUEUED but not yet armed (#450 part 2). ResolvedPlan.guards holds the
 	# armed wards and the pending ones together, and GuardWard.sequence already tells them apart --
 	# make() leaves it 0, arm() stamps 1 upward and copy() preserves it -- so "is this only a plan?"
@@ -1463,7 +1616,6 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 		for unit in icons_to_draw.keys():
 			for icontype in icons_to_draw[unit]:
 				overlay_manager.create_unit_icon(unit, icontype)
-	squad_manager.setup_hold_move_actions(squad)
 	refresh_action_queue(squad)
 
 func _on_squad_has_no_actions(squad: Squad):
@@ -1563,11 +1715,7 @@ func spawn_sandbox() -> void:
 # `is_body` is the #116 exception: a drowning unit legitimately lies where nothing may stand.
 #TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
 func can_spawn_at(pos: Vector2i, is_body := false) -> bool:
-	if grid.get_cell_tile_data(pos) == null:
-		return false
-	if not is_body and not _board().is_walkable(pos):
-		return false
-	return get_unit_at_cell(pos) == null
+	return RulesService.can_spawn_at(_board(), pos, is_body)   # one rule for both hosts (#46)
 
 # Build a Unit and give it the two wires every unit needs, WITHOUT parenting it (#738). Shared by
 # the two entry doors below, so there is one place a unit is made and one place it is wired -- the
@@ -1586,6 +1734,9 @@ func _build_unit(data: UnitData, grid_layer: TileMapLayer, cell: Vector2i) -> Un
 	# the since-deleted Crisis offer poll, #158) unreachable: downed units were never ejected, so
 	# their tiles stayed walkable to squadmates and a downed leader kept the squad.
 	unit.went_downed.connect(order_executor.on_unit_downed)
+	# A down is a lifecycle change no plan edit announces: the dev Down button and a turn-start tick
+	# land outside any pass, so without this the cached field keeps the body as an attacker.
+	unit.went_downed.connect(drop_threat_field.unbind(1))
 	return unit
 
 func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
@@ -1663,9 +1814,9 @@ func _on_unit_died(unit: Unit):
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
 	if unit == selected_unit:
 		selected_unit = null
+	drop_threat_field()   # ahead of the pin release, so its repaint reads a field without the corpse
 	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
-	overlay_manager.handle_unit_death(unit)
-	squad_manager.handle_unit_death(unit)
+	squad_manager.handle_unit_death(unit)   # its overlays go first, inside (#46)
 	refresh_action_queue(squad_manager.active_squad)
 
 # ==============================================================================
@@ -1696,6 +1847,9 @@ func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 # the anchor OverlayIcon's ring rides. `strained` names the members whose tether the hovered move would
 # break; `candidates` adds a GHOST tether from each unit that could join.
 #
+# An ENEMY squad's lines wear the enemy colour (#1109) -- whose side, read off its leader here, so
+# no caller has to say.
+#
 # Solo squads are the CALLERS' question: Squad Up draws round a lone unit on purpose.
 func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary = {},
 		strained: Array[Unit] = [], candidates: Array[Unit] = []) -> void:
@@ -1709,7 +1863,8 @@ func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary
 	for candidate in candidates:
 		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
 				"state": SquadLines2D.Strain.GHOST})
-	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board())
+	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board(),
+			SquadLines2D.is_hostile(squad.get_leader().get_faction()))
 
 # The joinable squads' own rings ARE the marking (#442) -- drawn through draw_squad_unit_icons, so
 # with ALWAYS_SHOW_SQUAD_RINGS on this is idempotent over the standing set and only the PULSE
@@ -1717,7 +1872,9 @@ func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary
 #
 # The cohesion range stays: WHERE THE JOINER WOULD STAND is a different fact from WHOSE SQUAD THIS
 # IS. Since #1070 it is the squad lines' dashed stroke rather than an orange fill, and the joiner
-# gets a GHOST tether to each leader it could join -- Squad Up's treatment from the other side.
+# gets a GHOST tether to each leader it could join -- Squad Up's treatment from the other side. A
+# joiner is only offered its own side's squads, so the joiner's side is theirs (#1109) -- an enemy in
+# hotseat sees enemy squads, in the enemy colour.
 func draw_joinable_squads(joining_unit: Unit, joinable: Array[Squad]):
 	overlay_manager.clear_selection_overlays()
 	var bubbles: Array = []
@@ -1729,7 +1886,8 @@ func draw_joinable_squads(joining_unit: Unit, joinable: Array[Squad]):
 		links.append({"from": joining_unit.get_projected_destination(),
 				"to": leader.get_projected_destination(), "state": SquadLines2D.Strain.GHOST})
 		overlay_manager.draw_squad_unit_icons(squad)
-	overlay_manager.show_squad_lines(bubbles, links, _board())
+	overlay_manager.show_squad_lines(bubbles, links, _board(),
+			SquadLines2D.is_hostile(joining_unit.get_faction()))
 
 # A leader's move range split by whether the SQUAD can follow there (#1069's rule; one helper since
 # #1070 made hover its third caller, beside both move modes): {"green": the followable destinations,
@@ -1843,11 +2001,15 @@ func refresh_watch_markers(plan: ResolvedPlan = null) -> void:
 # plan will leave, these tones the board as it stands -- so a line could name a victim the tones
 # said was out of reach, with the line telling the truth. The cache is what bounds the cost: this
 # runs once per plan change, never per frame.
+#
+# The build itself is ThreatField.for_viewer, shared with the Play API's `ranges` (#46); this keeps
+# the cache and decides the PENDING SOAK (#1197): who your own queued plan will leave wet, so a wade
+# through the ford reads as wet before it has happened. Not mid-pass, for refresh_action_queue's
+# reason -- a resolve then counts the hits that already landed twice.
 func threat_field() -> ThreatField:
 	if _threat_field == null:
-		var saved := AIController.stand_on_projected(squad_manager)
-		_threat_field = ThreatField.build(_board(), Team.Faction.PLAYER)
-		AIController.restore_cells(saved)
+		var with_pending: bool = order_executor == null or order_executor.executing_plan == null
+		_threat_field = ThreatField.for_viewer(squad_manager, Team.Faction.PLAYER, with_pending)
 	return _threat_field
 
 
@@ -2034,7 +2196,8 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+			mission_controller.mission if mission_controller != null else null)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []
@@ -2051,7 +2214,7 @@ func get_unit_at_cell(cell: Vector2i) -> Unit:
 	return null
 
 # Which unit's SPRITE is on this cell? The one answer for every pointer question -- what a click
-# selects, what the hover card shows, what hovered_unit_changed names.
+# selects, what the info card shows, what hovered_unit_changed names.
 #
 # Nothing is derived here. The board draws exactly one sprite per unit, at that unit's PROJECTED
 # cell: both ghost-drawers pair "hide the real sprite" with "draw a ghost" (redraw_projected_units
@@ -2064,6 +2227,10 @@ func unit_at_pointer(cell: Vector2i) -> Unit:
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
+
+# The path a move to `cell` walks (#920): the arrow and the click both ask this, so they cannot differ.
+func route_to(unit: Unit, moverange: Dictionary, cell: Vector2i) -> Array[Vector2i]:
+	return RulesService.route_to(unit, moverange, cell, _board())
 
 # The reachable cells worth DRAWING: everything the unit can reach except where it already is.
 func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
@@ -2098,7 +2265,7 @@ func show_player_reach(unit: Unit, origin: Vector2i) -> void:
 
 # Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
 # tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an
-# empty queue, so projected == live for them; rescue and intimidate are the two that needed it.
+# empty queue, so projected == live for them; rescue is the one that needed it.
 func _unit_cells(units: Array[Unit]) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for unit in units:

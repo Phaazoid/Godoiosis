@@ -16,6 +16,7 @@ var _scout: JobData
 var _scout_snap: Dictionary
 
 func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
 	_scout = JobCatalog.get_job("scout")
 	_scout_snap = F.snapshot(_scout)
 	var ability := AbilityData.new()
@@ -23,6 +24,7 @@ func before_test() -> void:
 	_scout.ability_pool = [ability]
 
 func after_test() -> void:
+	AIProfiles.clear_fixtures()
 	F.restore(_scout, _scout_snap)
 
 
@@ -148,6 +150,42 @@ func test_group_move_unclamped_is_unchanged() -> void:
 		if move.actor == member:
 			member_destination = move.destination
 	assert_that(member_destination).is_equal(Vector2i(4, 0))
+
+
+# A pinned member (#760, the AI's seek) is placed first and its cell is taken from the formation:
+# here it is pinned onto the cell the other member's offset wants, so that member goes elsewhere.
+func test_a_pinned_member_takes_its_cell_and_the_formation_works_round_it() -> void:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 8, 3))
+	var leader: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.LDR: 8}, Team.Faction.ENEMY), Vector2i(0, 0))
+	var first: Unit = BB.spawn(board, H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(1, 0))
+	var second: Unit = BB.spawn(board, H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(2, 0))
+	board.squad_manager.join_squad(first, leader.squad)
+	board.squad_manager.join_squad(second, leader.squad)
+
+	var pins := { second: Vector2i(4, 0) }   # the cell `first` keeps its +1 offset on
+	var landing := {}
+	for move in GroupMoveSolver.plan(leader.squad, Vector2i(3, 0), _context(board), null, pins):
+		landing[move.actor] = move.destination
+
+	assert_that(landing.get(second)).is_equal(Vector2i(4, 0))
+	assert_bool(landing.has(first)).override_failure_message("the unpinned member was not placed").is_true()
+	assert_that(landing.get(first)).is_not_equal(Vector2i(4, 0))
+
+
+# A leader staying put moves only its pinned members -- and with nobody pinned, nothing at all.
+func test_a_leader_staying_put_moves_only_its_pinned_member() -> void:
+	var board: Dictionary = _build_squad_board()
+	var leader: Unit = board.leader
+	var member: Unit = board.member
+
+	assert_array(GroupMoveSolver.plan(leader.squad, leader.movement.cell, _context(board))).is_empty()
+	var moves: Array[MoveAction] = GroupMoveSolver.plan(leader.squad, leader.movement.cell, _context(board), null,
+			{ member: Vector2i(1, 1) })
+	assert_int(moves.size()).is_equal(1)
+	assert_object(moves[0].actor).is_same(member)
+	assert_that(moves[0].destination).is_equal(Vector2i(1, 1))
 
 
 # --- RulesService.path_hops bounds (perf fix 2026-07-26) ---

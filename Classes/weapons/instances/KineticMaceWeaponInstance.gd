@@ -36,10 +36,12 @@ func consume_readiness_for(attack: WeaponAttackData) -> void:
 	if attack.builds_readiness:
 		charge = mini(MAX_CHARGE, charge + 1)
 
+func gauge() -> WeaponGauge:
+	return WeaponGauge.stock(charge, MAX_CHARGE)
+
 func status_text() -> String:
-	if charge <= 0:
-		return "Charge 0/%d — Blowback unavailable" % MAX_CHARGE
-	return "Charge %d/%d" % [charge, MAX_CHARGE]
+	var bank := "Charge %s" % gauge().label()
+	return bank + " — Blowback unavailable" if charge <= 0 else bank
 
 func readiness_noun() -> String:
 	return "charge"

@@ -100,8 +100,8 @@ func is_legal() -> bool:
 
 # The held carvings this wielder can actually channel (temper floors + trained leeway).
 # --- Attack-source surface (EquippableData) ---
-# A rune fires whichever inscribed carving it can currently channel; an aura-dry rune offers
-# nothing, which is the honest bare-fist fallback.
+# A rune fires whichever inscribed carving it can currently channel; an aura-dry rune fires
+# nothing -- no ring row, no AI candidate, no counter (#1215).
 
 # FILTERED on purpose, and deliberately no longer the same list as choice_attacks (#166): this is
 # "what could actually fire", the list the AI probes and has_any_fireable_attack scans. The

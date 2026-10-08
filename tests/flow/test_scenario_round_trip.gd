@@ -134,7 +134,7 @@ func test_a_spent_squad_reloads_with_its_members_still_joined() -> void:
 # ==============================================================================
 
 func test_a_captured_zone_stays_captured() -> void:
-	# clear_board() -> reset() wipes captured zones on every load; restore_progress is what puts a
+	# clear_board() -> reset() wipes captured zones on every load; the load's apply_scenario is what puts a
 	# snapshot's progress back over that blank slate. Without it, reloading mid-mission silently
 	# un-takes every objective the player has already paid for.
 	game.zone_manager.paint_cell("Point", ZoneManager.Kind.CAPTURE, Vector2i(2, 2))

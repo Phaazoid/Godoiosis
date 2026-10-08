@@ -5,10 +5,10 @@ class_name MissionController
 # latches that keep it from firing twice (#96 slice 1). Built in game._build_collaborators with a
 # back-ref -- the DevController/OrderExecutor pattern.
 #
-# The rule itself is NOT here; it is MissionRules, pure and static. This node holds what a pure
-# predicate structurally cannot: whether the mission has already ended, whether both sides were
-# ever up at once, this battle's progress (captured zones, the round clock), and -- since #101 --
-# WHY it was lost, which the banner has to name.
+# The rule itself is NOT here; it is MissionRules, pure and static. The battle-scoped state and the
+# rules that read it -- the latches, captured zones, the round clock, why it was lost -- are
+# MissionState since #46, shared with the headless Play API. This node is what the GAME does about
+# them: the HUD, the zone overlay, the telemetry log, the banner, and the mission's screens.
 #
 # check() is called from every point board state can change AND settle -- the end of a resolution
 # pass, the end-of-turn burn, and turn start after the downed clocks tick. Pass-end rather than
@@ -17,8 +17,22 @@ class_name MissionController
 
 var game   # the Game coordinator; set by game._ready()
 
-var outcome: MissionRules.Outcome = MissionRules.Outcome.ONGOING
-var _contested := false
+# This mission's state and rules (#46). Its zone store is handed in by game._build_collaborators.
+var mission := MissionState.new()
+# Forwarded, not copied: the authored lists are written in place by the dev Scenario tab, and these
+# hand back the state's own arrays, so an append lands in the one store.
+var outcome: MissionRules.Outcome:
+	get: return mission.outcome
+	set(value): mission.outcome = value
+var objectives: Array[MissionRules.Objective]:
+	get: return mission.objectives
+	set(value): mission.objectives = value
+var lose_conditions: Array[MissionRules.LoseCondition]:
+	get: return mission.lose_conditions
+	set(value): mission.lose_conditions = value
+var round_limit: int:
+	get: return mission.round_limit
+	set(value): mission.round_limit = value
 var _ending := false   # _end_mission awaits the banner, so check() can re-enter behind it
 var _select_screen: MissionSelectScreen
 # The pre-mission screen (#740), open for exactly as long as _deploying is. Held rather than looked
@@ -27,15 +41,10 @@ var _premission_screen: PreMissionScreen
 # Its board-side twin (#774): the corner affordance that is up exactly while the screen is not, so
 # the phase never leaves the frame with nothing on it. Same lifecycle, same one owner.
 var _premission_bar: PreMissionBar
-# The roster as ENTRY ORDER, which is the order #740's card grid draws in. Node order cannot answer
-# it: deploy_unit and undeploy_unit REPARENT, so units_root and reserve_root both reshuffle every
-# time the player changes their mind and the grid would reorder under them mid-decision.
-var _roster_units: Array[Unit] = []
-# The phase's LIVE gear (#741) -- the stash as copies, plus the one judge every move goes through.
-# Built beside the draw below, where the Roster is already in hand, and dropped on the same edge
-# _roster_units is: a stash read off the resolved resource would be Godot's cache, and the first move
-# out of it would deplete the authored roster for the rest of the session.
-var _loadout: Loadout = Loadout.new()
+# The phase's roster, live gear and rules (#46) -- built by deploy_roster with this game as its host,
+# and dropped in reset() because it holds references into a board about to be freed. Never null: an
+# empty phase is what a board with no roster has.
+var _phase: PreMissionPhase = PreMissionPhase.new()
 # WHAT THE PLAYER CHOSE last time they left this phase (#763), so a retry does not make them build
 # a five-minute loadout again to move one unit two tiles. Taken at the commit; replayed by a
 # restart of the SAME mission.
@@ -59,29 +68,7 @@ var _staged: PreMissionSnapshot = null
 # is advice about a choice already made. Cleared in _close_deployment_menu rather than in reset(),
 # which is the only door every exit takes -- abandon_mission never reaches reset() at all.
 var _briefing := false
-# Which CAPTURE zones have been claimed, by name. Battle-scoped, which is why it lives here and
-# not on ScenarioData: the zones are authored content, taking them is this battle's progress.
-var _captured_zones: Array[String] = []
-# What THIS mission requires. Authored content that arrives with the scenario, so it is cleared by
-# reset() and refilled on load -- one list for every objective kind, rather than a field per kind.
-var objectives: Array[MissionRules.Objective] = []
-# What LOSES it, and the clock's limit (#101). Authored, so both clear with the objectives above.
-var lose_conditions: Array[MissionRules.LoseCondition] = []
-var round_limit := 0
-# Rounds the clock has counted. Battle-scoped like _captured_zones, for the same reason: the limit
-# is authored content, how far through it this battle is is progress. Advanced from ONE place.
-var _rounds_elapsed := 0
-# Why the mission was lost, for the banner. Set beside `outcome`, so it can never name a reason for
-# an ending that did not happen.
-var _failed_by: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
-# Has a unit the mission was protecting died (#572)? A LATCH, not a board question, and it has to be:
-# Unit.die() queue_frees the node, so by the time any check() runs the unit is simply gone -- which
-# is indistinguishable from one that was never placed at all. Battle-scoped, cleared by reset().
-#
-# It never needs saving. The mission ends on the very next check() after the death, and check() runs
-# at the end of the pass the death resolved in, so no save can be taken while this is true.
-var _protected_lost := false
-# Has a turn actually STARTED on this board (#736)? Battle-scoped like the two above, and set from
+# Has a turn actually STARTED on this board (#736)? Battle-scoped like `mission`, and set from
 # _begin_turn -- the one door every arrival takes (mission select, restart, resume, sandbox), and
 # NOT from begin_mission, which #737's pre-mission phase will run inside. False therefore means
 # "nobody is playing yet": an authoring session loaded through the dev tools, or that phase.
@@ -122,28 +109,19 @@ var _deploying := false:
 
 
 func is_over() -> bool:
-	return outcome != MissionRules.Outcome.ONGOING
+	return mission.is_over()
 
 func check() -> void:
 	# The board has settled whether or not the mission ends -- the HUD reads the settled state (#134).
 	game.refresh_mission_status()
-	if is_over() or _ending:
+	if mission.is_over() or _ending:
 		return
-	var board: BoardContext = game._board()
-	if not _contested:
-		_contested = MissionRules.is_contested(board)
-	var failure: MissionRules.LoseCondition = failure_for(board)
-	var result: MissionRules.Outcome = MissionRules.evaluate(board, _contested,
-			objective_progress(board), failure)
-	if result == MissionRules.Outcome.ONGOING:
+	if mission.evaluate(game._board()) == MissionRules.Outcome.ONGOING:
 		return
-	outcome = result
-	if result == MissionRules.Outcome.DEFEAT:
-		_failed_by = failure   # set beside the outcome, so the banner cannot name a stale reason
 	_end_mission()   # deliberately un-awaited: outcome is already set, so is_over() is true for
 					 # every caller the moment we return, while the banner blocks only itself
 
-# Mission START: the blank slate restore_progress() writes a mid-battle snapshot back over (#87).
+# Mission START: the blank slate apply_scenario() writes a mid-battle snapshot back over (#87).
 func reset() -> void:
 	# FIRST, and before anything below is cleared (#53): this is the universal teardown, so it is
 	# the one place that catches every door out of a mission that does NOT go through a named exit
@@ -153,33 +131,24 @@ func reset() -> void:
 	#
 	# It composes with the named seals rather than fighting them: seal() early-returns when closed,
 	# so restart_mission's RESTARTED still wins and this call is then a no-op. And it must run BEFORE
-	# _rounds_elapsed is zeroed -- clear_board frees the units AFTER this, so the sealed record still
-	# reads the final board.
+	# mission.reset() zeroes the rounds -- clear_board frees the units AFTER this, so the sealed record
+	# still reads the final board.
 	game.mission_log.seal(MissionLog.Ending.INTERRUPTED)
-	outcome = MissionRules.Outcome.ONGOING
-	_contested = false
+	mission.reset()
 	_ending = false
-	_captured_zones.clear()
-	objectives.clear()
-	lose_conditions.clear()
-	round_limit = 0
-	_rounds_elapsed = 0
-	_failed_by = MissionRules.LoseCondition.NONE
-	_protected_lost = false
 	_battle_begun = false
 	# Through the setter, so the HUD comes back up on every board teardown (#739). This is the edge
 	# that covers F2, a board swap, Load Game and Abandon -- none of which pass through commit.
 	_deploying = false
 	_close_deployment_menu()
 	# Dropped BEFORE clear_board frees these nodes, so nothing holds a reference into a dead board.
-	_roster_units.clear()
-	_loadout = Loadout.new()   # the phase's gear dies with the phase (#731 ruling 3)
+	_phase = PreMissionPhase.new()   # the phase's gear dies with the phase (#731 ruling 3)
 	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
 
 func captured_zone_names() -> Array[String]:
-	return _captured_zones.duplicate()
+	return mission.captured_zones.duplicate()
 
 
 # THE answer to "which painted zones should not be drawn right now" -- redraw_zones' `hidden`
@@ -191,22 +160,22 @@ func captured_zone_names() -> Array[String]:
 # because it says where you MAY PLACE units and placement is over. Both are "this zone has stopped
 # being information", which is why they are one list and not two mechanisms.
 func hidden_zone_names() -> Array[String]:
-	var hidden: Array[String] = _captured_zones.duplicate()
+	var hidden: Array[String] = mission.captured_zones.duplicate()
 	if _battle_begun:
 		hidden.append_array(game.zone_manager.zone_names_of(ZoneManager.Kind.DEPLOYMENT))
 	return hidden
 
 func is_contested() -> bool:
-	return _contested
+	return mission.contested
 
 func rounds_elapsed() -> int:
-	return _rounds_elapsed
+	return mission.rounds_elapsed
 
-# Runs after zones are refilled, since the redraw needs them painted.
-func restore_progress(zones: Array[String], contested: bool, rounds := 0) -> void:
-	_captured_zones.assign(zones)
-	_contested = contested
-	_rounds_elapsed = rounds
+# The mission half of a scenario load (#46): the state reads the scenario, and this is what the GAME
+# does about it. Runs after the zones are refilled, since the shout and the redraw both read them.
+func apply_scenario(scenario: ScenarioData) -> void:
+	mission.apply_scenario(scenario)
+	_shout_missing_geometry()
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()
 
@@ -252,7 +221,7 @@ func _open_mission_select(dev: bool) -> void:
 	# that when both are due on one launch, the notice is the later sibling and sits on top.
 	_nag_if_outdated()
 	# What changed since this install last looked (#1075). A child of the title screen rather than
-	# of ui_layer, so it cannot follow a mission out. Before the notice, which needs an answer and
+	# of card_layer, so it cannot follow a mission out. Before the notice, which needs an answer and
 	# so belongs on top when both are due.
 	WhatsNewCard.show_if_needed(_select_screen)
 	# The first-launch notice (#53 slice 3), stacked over the screen we just built. Here rather
@@ -321,13 +290,15 @@ func begin_mission(path: String, armed := true) -> void:
 	# Staged against the path we were HANDED, not last_loaded_path: same value here, but this one
 	# cannot be read before the load has set it (#763 ruling 1 -- the buffer belongs to a mission,
 	# not to the button that got us here, so coming back through Mission Select restores it too).
-	var drawn := deploy_roster(_staged_for(path))   # BEFORE the arm, and it matters -- see the function
-	# A PLAYER is what the phase is for (#739). armed=false is the watch-only boot (#375) and the
-	# Play API's shape -- nobody there to answer it -- so the draw stands as the answer and the
-	# mission starts, which is #731 ruling 8's "both auto-deploy". A board that drew NOBODY (no
+	var offered: bool = game.scenario_manager.current_offers_pre_mission
+	var drawn := deploy_roster(PreMissionPhase.replay_for(_staged, path, offered))   # BEFORE the arm, and it matters -- see the function
+	# A PLAYER is what the phase is for (#739). armed=false is the watch-only boot (#375) -- nobody
+	# there to answer it -- so the draw stands as the answer and the mission starts, which is #731
+	# ruling 8's "both auto-deploy". (The headless Play API answers the phase itself since #46.) A board that drew NOBODY (no
 	# roster, or a zone with no room, which Check board BLOCKS) also falls straight through: a phase
-	# with nothing in it is one you could never commit.
-	if armed and drawn > 0:
+	# with nothing in it is one you could never commit. A board whose box is unticked (#46) takes the
+	# same fall-through: the draw's authored placement stands, and the battle begins armed.
+	if armed and PreMissionPhase.opens(offered, drawn):
 		_open_deployment()
 		return
 	# armed=false is the watch-only boot (#375: a lesson needs a student -- demo mode has no player
@@ -347,6 +318,7 @@ func begin_mission(path: String, armed := true) -> void:
 # start_faction_turn on the other branch, so the phase and a turn come to rest the same way.
 func _open_deployment() -> void:
 	_deploying = true
+	game.squad_tether_presenter.arm()   # #367: the placement ring's Squad Up plays; the draw did not
 	game.clear_selection()   # -> _base_state(), which now answers PRE_MISSION
 	_premission_screen = PreMissionScreen.open(game, self)
 	_premission_bar = PreMissionBar.open(game, self)
@@ -378,6 +350,10 @@ func _on_director_quiet() -> void:
 # growing a second teardown -- reset, commit and abandon already all come through this one door.
 func _close_deployment_menu() -> void:
 	_briefing = false   # #882: every exit passes here, and reset() does not cover abandon_mission
+	# So does an open ring (#1034): Enter's confirm card became clickable over the deploy wheel, and
+	# "Begin" left it offering reserve units to a battle already running. reset() is every board
+	# teardown too, and runs before clear_board frees a unit, so no ring outlives its board.
+	game.main_action_menu.close_ring()
 	if is_instance_valid(_premission_screen):
 		_premission_screen.queue_free()
 	_premission_screen = null
@@ -416,13 +392,14 @@ func toggle_deployment_menu() -> void:
 func commit_deployment() -> bool:
 	if not _deploying:
 		return false
-	if deployed_roster_count() == 0:
-		game.turn_banner.show_label("Deploy someone first")
+	var refusal := _phase.commit_block_reason()
+	if refusal != "":
+		game.turn_banner.show_label(refusal)
 		return false
 	# BEFORE anything tears the phase down (#763). This is the instant the player's choices are
 	# final and the board has not begun to move, which is also what keeps the battle-scoped half of
 	# a captured entry inert -- nothing is downed, in crisis or on watch until _begin_turn below.
-	_capture_staged()
+	_staged = _phase.capture(game.scenario_manager.last_loaded_path)
 	_deploying = false
 	_close_deployment_menu()
 	game.exit_current_mode()   # the phase's own ring/pick is over; rests on the new _base_state
@@ -465,116 +442,47 @@ func is_deploying() -> bool:
 	return _deploying
 
 
-# The DEPLOYMENT cells a unit could actually be put on, right now. TWO callers and that is the point
-# (#739): the draw asks it once at mission start, and every click on an empty cell asks it again --
-# so "where may a unit stand" is one answer, not one the walk holds and one the click re-derives.
-#
-# Legality is asked HERE and passed onward, never inside PreMission's pure walk: game.can_spawn_at
-# IS spawn_unit's own gate, so a cell this accepts is one that spawn cannot refuse, while the
-# headless host's spawn answers differently. One question, asked by whoever can answer it.
+# --- The phase's rules and state live on PreMissionPhase (#46) ---
+# Shared with the headless Play API, so they are answered there once. What stays here is the GAME's
+# half: every door into and out of the phase, the screen and bar, the briefing, the HUD, and the
+# restart buffer. These are the phase's answers, read through this node so no UI caller had to move.
+
 func open_deployment_cells() -> Array[Vector2i]:
-	var open_cells: Array[Vector2i] = []
-	for cell: Vector2i in game.zone_manager.cells_of_kind(ZoneManager.Kind.DEPLOYMENT):
-		if game.can_spawn_at(cell):
-			open_cells.append(cell)
-	return open_cells
+	return _phase.open_deployment_cells()
 
-# Where this unit could stand instead (#772). The deployment zone's cells, minus its own, keeping
-# both a FREE cell and one another ROSTER-DRAWN unit holds -- swapping is allowed (dev, 2026-09-05),
-# so an occupied cell is a legal target rather than a refusal.
-#
-# Authored units are not swappable, for the reason Undeploy is gated the same way: they are the
-# BOARD's, additive to the roster's draw (#731 ruling 2c), and trading places with one would move a
-# unit the player was never given.
-#
-# can_spawn_at is asked for the FREE case rather than restated, so a cell this offers is one the
-# draw would also have accepted -- terrain, the map's edge and occupancy, one answer.
 func reposition_cells(unit: Unit) -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	if unit == null or not unit.drawn_from_roster:
-		return cells
-	for cell: Vector2i in game.zone_manager.cells_of_kind(ZoneManager.Kind.DEPLOYMENT):
-		if cell == unit.movement.cell:
-			continue
-		if game.can_spawn_at(cell):
-			cells.append(cell)
-			continue
-		var occupant: Unit = game.get_unit_at_cell(cell)
-		if occupant != null and occupant.drawn_from_roster:
-			cells.append(cell)   # a swap
-	return cells
+	return _phase.reposition_cells(unit)
 
-
-# Move a placed unit inside the zone, trading places with whoever is there.
-#
-# set_cell rather than deploy_unit: the unit is already ON the board with a squad, so this is a
-# position change, not a board entry -- the same door DevController's armed move uses.
-#
-# THEN THE SQUAD SETTLES, IMMEDIATELY (dev, 2026-09-05: it "ejects them there and then in the battle
-# preview"). Placing a member out of its leader's cohesion range is legal, and enforce_contact is
-# what answers for it -- the same sweep that runs at the end of a resolution pass and at turn start,
-# so THE PRE-MISSION PHASE IS A THIRD SETTLE POINT. Calling it here rather than leaving turn 1 to
-# find it is what makes the consequence land while the player is still looking at the board that
-# caused it, instead of a turn later with nothing on screen to connect it to.
+# The board's own redraw rides the phase's reposition, which settles the squads (#772).
 func reposition(unit: Unit, cell: Vector2i) -> bool:
-	if not _deploying or unit == null or not unit.drawn_from_roster:
+	if not _deploying:
 		return false
-	if not reposition_cells(unit).has(cell):
+	if not _phase.reposition(unit, cell):
 		return false
-	var from := unit.movement.cell
-	var occupant: Unit = game.get_unit_at_cell(cell)
-	unit.movement.set_cell(cell)
-	if occupant != null:
-		occupant.movement.set_cell(from)   # the swap: both ends move, then the squads settle ONCE
-	game.squad_manager.enforce_contact()
 	game.overlay_manager.redraw_projected_units()
 	return true
 
-
-# The roster in ENTRY ORDER -- what #740's card grid iterates. Node order cannot serve: deploying
-# and undeploying REPARENT between units_root and reserve_root, so both lists reshuffle every time
-# the player changes their mind, and a grid drawn off them would reorder mid-decision.
-# The phase's gear, for the screen that edits it. Never null: an empty Loadout is what a board with
-# no roster has, and a surface asking a null one is a crash a missing stash does not deserve.
+# Never null: an empty Loadout is what a board with no roster has.
 func loadout() -> Loadout:
-	return _loadout
+	return _phase.loadout
 
-
+# The roster in ENTRY ORDER (#763). The card grid orders ITSELF (#1089) and reads this for
+# membership and a tie-break only.
 func roster_units() -> Array[Unit]:
-	return _roster_units
+	return _phase.units
 
-# How many of the ROSTER are standing on the board -- what the cap counts, and what #743's strip
-# will read as the left half of "4 / 6". Authored units on the same board are not the roster's and
-# never count against its cap (ruling 2c: authored units are additive).
 func deployed_roster_count() -> int:
-	var count := 0
-	for unit: Unit in game.units_root.get_children():
-		if unit.drawn_from_roster:
-			count += 1
-	return count
+	return _phase.deployed_count()
 
-
-# Room under the cap for one more? `0` is the cap's own "as many as fit" sentinel (#736), and the
-# ZONE is the other limit -- but that one enforces itself, since a cell with nothing free is a cell
-# open_deployment_cells never offers.
 func can_deploy_another() -> bool:
-	var cap: int = game.scenario_manager.current_deployment_cap
-	return cap == PreMission.NO_CAP or deployed_roster_count() < cap
+	return _phase.can_deploy_another()
 
-# The pre-mission phase's DRAW (#737). A board that names a Roster (#735) spawns ALL of it (#738)
-# and stands as many as its cap allows on its DEPLOYMENT zone (#736). Returns how many stood up;
-# the rest wait in game.reserve_root until clear_board frees them.
-#
-# THE PLAYER NOW LINGERS HERE (#739, replacing #737's "not yet"): the draw is the OPENING position
-# rather than the answer, and begin_mission holds the board in the phase instead of playing on. So
-# the three things #737 left unbuilt -- a commit that can be refused, a ring that can undeploy, a
-# save refusal -- are built, now that there is something for each of them to serve rather than a
-# mechanism whose only job was to survive until this ticket.
-#
-# IT HAS TWO ENDINGS SINCE #763, and only the reserve draw is shared. The authored walk below is
-# what a mission opens on; a RESTART of a mission the player has already committed once replays
-# what they chose instead, because the walk being deterministic only ever meant it re-drew the same
-# CHARACTERS -- every hand placement, squad, gear move, job and fitted mod was made again by hand.
+# Why one more cannot be placed, or "" -- the card's refusal, answered by the phase.
+func deploy_block_reason() -> String:
+	return _phase.deploy_block_reason()
+
+# The pre-mission phase's DRAW (#737), stood up by PreMissionPhase with this game as its host.
+# Returns how many stood up; the rest wait in game.reserve_root until clear_board frees them.
 #
 # WHERE IT IS CALLED IS THE WHOLE DESIGN. It sits at the two FRESH-START doors, beside the arm
 # decision the director already forks on (#182) -- never inside apply_scenario, which every board
@@ -583,210 +491,20 @@ func can_deploy_another() -> bool:
 # and on F2, neither of which is a mission starting.
 #
 # And BEFORE the arm, not after. spawn_unit creates a solo squad per unit, which emits
-# squad_created, which an ARMED ScenarioDirector answers by firing SQUAD_FORMED beats and advancing
-# the lesson -- so a three-unit draw would play its "now you move as one" payoff three times before
-# the player had touched anything. The director's own header says it: a loading board must never
-# trip a lesson or a beat.
-#
+# squad_created, which an ARMED ScenarioDirector answers by firing SQUAD_FORMED beats -- so a
+# three-unit draw would play its "now you move as one" payoff three times before the player had
+# touched anything.
 func deploy_roster(staged: PreMissionSnapshot = null) -> int:
 	var scenario_manager: ScenarioManager = game.scenario_manager
-	# "" resolves to null, which is every board saved before #735 and every board that simply has no
-	# pre-mission phase. A NAMED roster that will not resolve push_errors and is a BLOCKS finding on
-	# Check board -- substituting a different pool would hand the player a different mission.
-	var roster: Roster = RosterCatalog.resolve(scenario_manager.current_roster)
-	if roster == null:
-		return 0
-
-	# RESOLVED ONCE and passed to both walks (#812). offered_entries() SYNTHESIZES entries when the
-	# roster says "every character", so two calls would hand back two sets of objects -- and
-	# _stand_authored keys unit_of_entry BY THE ENTRY, so every lookup would miss and nobody would
-	# stand. A resolved list is a value; asking twice is asking a different question.
-	var entries: Array[ScenarioUnitEntry] = roster.offered_entries()
-	var unit_of_entry: Dictionary = _draw_reserve(roster, entries)
-
-	var deployed := 0
-	if staged != null and staged.fits(_roster_units):
-		deployed = _stand_staged(staged)
-		if deployed == 0:
-			# Every staged cell refused -- the deployment zone has been repainted under the buffer,
-			# which takes the dev tools between two attempts. _stand_staged bails BEFORE it applies
-			# any of the buffer, so the reserve here is exactly what the draw made, and the authored
-			# walk below is a clean second answer rather than a hybrid. It has to run: both callers
-			# gate the phase on a non-zero return, so returning 0 would start a battle with the
-			# whole roster sitting in reserve and the defeat floor waiting.
-			push_warning("Pre-mission: no staged cell is open any more -- drawing the mission's own")
-	if deployed == 0:
-		deployed = _stand_authored(entries, unit_of_entry)
-
+	_phase = PreMissionPhase.new(game, game.zone_manager, game.squad_manager,
+			func() -> int: return scenario_manager.current_deployment_cap)
+	var deployed := _phase.draw(scenario_manager.current_roster, staged)
 	if deployed > 0:
 		# apply_scenario's own last two calls, repeated because the board has mutated AGAIN since it
-		# made them. This is #134's write-point trap exactly, and that function's comment names it:
-		# the mission HUD refreshed before these units existed, so an EXTRACT objective would read
-		# its progress off the authored cast alone and sit stale until the first turn event.
+		# made them -- #134's write-point trap: the HUD refreshed before these units existed.
 		game.refresh_end_turn_button()
 		game.refresh_mission_status()
 	return deployed
-
-
-# The half BOTH endings need: the WHOLE roster spawns, deployed or not (#738), into
-# game.reserve_root -- so a card on #740's screen is a real Unit and every wielder-taking predicate
-# serves it unchanged. It is also what makes this the ONE way a roster unit reaches the board: both
-# walks below deploy out of the same set the screen will later let the player choose from, rather
-# than a second spawn path #740 would have had to replace.
-#
-# Returns the entry -> reserve Unit pairing the authored walk needs; the staged one indexes
-# _roster_units directly, since its rows are the draw order rather than the roster's.
-func _draw_reserve(roster: Roster, entries: Array[ScenarioUnitEntry]) -> Dictionary:
-	var unit_of_entry: Dictionary = {}   # ScenarioUnitEntry -> its reserve Unit
-	_roster_units.clear()
-	_loadout = Loadout.from_roster(roster)
-	for entry: ScenarioUnitEntry in entries:
-		# The same skip PreMission.deployment_plan makes, so the two loops agree about who exists.
-		if entry == null or entry.unit_data == null:
-			continue
-		# Un-duplicated, exactly as apply_scenario passes it (#177): UnitFactory copies anyway, and
-		# an outer duplicate destroys the resource_path a reference entry exists to keep.
-		var unit: Unit = game.spawn_reserve_unit(entry.unit_data)
-		# Marked here rather than at deploy, so deploy_unit stays a pure board-entry that knows
-		# nothing about rosters -- and so an undeployed unit carries the mark too, for whenever
-		# something starts asking.
-		unit.drawn_from_roster = true
-		if entry.state_saved:
-			entry.apply_unit_state(unit)   # the snapshot half of #177's fork, same as the loader's
-		unit_of_entry[entry] = unit
-		_roster_units.append(unit)   # entry order, and it must survive every later reparent
-	return unit_of_entry
-
-
-# The mission's OWN opening position: PreMission's pure walk, stood up on cells this host has
-# already judged. What every first arrival takes.
-func _stand_authored(entries: Array[ScenarioUnitEntry], unit_of_entry: Dictionary) -> int:
-	var deployed := 0
-	for row: Dictionary in PreMission.deployment_plan(entries, open_deployment_cells(),
-			game.scenario_manager.current_deployment_cap):
-		var entry: ScenarioUnitEntry = row[PreMission.ENTRY]
-		var unit: Unit = unit_of_entry.get(entry)
-		if unit == null:
-			continue
-		if not game.deploy_unit(unit, row[PreMission.CELL]):
-			continue   # the cells were filtered, so this is a bug rather than a blocked cell
-		# One unit per entry: a file hand-edited to list the same sub-resource twice would otherwise
-		# try to deploy it a second time. It spends a slot and says nothing, which is the right
-		# volume for authoring nonsense RosterLint has not been taught to name.
-		unit_of_entry.erase(entry)
-		deployed += 1
-	return deployed
-
-
-# ...and the OTHER ending (#763): what the player chose last time they left this phase.
-#
-# PLACEMENT FIRST, AND NOTHING ELSE UNTIL IT HAS SUCCEEDED. can_spawn_at is asked through
-# deploy_unit exactly as the authored walk asks it, so a cell that has stopped being legal refuses
-# here too; a unit whose cell refuses simply waits in reserve, the way a squad saved without a
-# leader degrades to solos. But NOBODY standing means the buffer no longer describes this board at
-# all, and the caller needs the units untouched to redraw -- which is why the state, the squads and
-# the stash all wait until after the count is known.
-#
-# STATE, THEN SQUADS, and the order is apply_scenario's for apply_scenario's reason: a join needs
-# both ends on the board, so every deploy_unit has to be behind us before the first join_squad.
-func _stand_staged(staged: PreMissionSnapshot) -> int:
-	var stood := 0
-	for i in _roster_units.size():
-		if not staged.deployed[i]:
-			continue
-		if game.deploy_unit(_roster_units[i], staged.entries[i].cell):
-			stood += 1
-		else:
-			push_warning("Pre-mission: %s's staged cell %s is no longer open -- left in reserve"
-					% [_roster_units[i].get_unit_name(), staged.entries[i].cell])
-	if stood == 0:
-		return 0
-
-	# Over the reserve too, not just the standing: a unit the player stripped and left behind must
-	# come back stripped and left behind. apply_unit_state is safe off-board -- deploy_roster has
-	# always called it on reserve units -- because it touches inventory, stats and jobs, never a cell.
-	for i in _roster_units.size():
-		staged.entries[i].apply_unit_state(_roster_units[i])
-
-	_rejoin_staged_squads(staged)
-
-	# Fresh copies, not the buffer's own objects. The unit side gets this free (apply_unit_state
-	# copies through copy_for_grant on the way in), and without it here a second restart would hand
-	# out stash items the first restart's units have been carrying and editing.
-	_loadout.stash.clear()
-	for item: Item in staged.stash:
-		_loadout.stash.append(item.copy_for_grant())
-	return stood
-
-
-# MEMBERSHIP AND NOTHING ELSE. apply_scenario also restores a squad's name, archetype, zone and
-# home cell, because a saved battle can carry AI squads that author all four -- the phase cannot.
-# It has exactly four squad verbs (form, join, leave, disband), every one of them membership, so
-# capturing the rest would be capturing the defaults create_squad just wrote.
-#
-# The two-pass shape IS apply_scenario's: leaders collected first, members joined after, because a
-# member's leader may sit later in the draw order than the member does.
-func _rejoin_staged_squads(staged: PreMissionSnapshot) -> void:
-	var leader_of_id: Dictionary = {}    # squad_id -> the Unit that led it
-	var members_of_id: Dictionary = {}   # squad_id -> Array[Unit]
-	for i in _roster_units.size():
-		var entry: ScenarioUnitEntry = staged.entries[i]
-		# A reserve unit has no squad to be in -- undeploy_unit releases it -- so it was captured
-		# with no id, and one that failed to stand above must not be joined to anything either.
-		if entry.squad_id == -1 or not game.is_deployed(_roster_units[i]):
-			continue
-		if entry.is_leader:
-			leader_of_id[entry.squad_id] = _roster_units[i]
-		else:
-			if not members_of_id.has(entry.squad_id):
-				members_of_id[entry.squad_id] = []
-			members_of_id[entry.squad_id].append(_roster_units[i])
-
-	for squad_id: int in members_of_id:
-		var leader: Unit = leader_of_id.get(squad_id)
-		if leader == null:
-			continue   # the leader could not stand; the members keep the solo squads they were given
-		for member: Unit in members_of_id[squad_id]:
-			game.squad_manager.join_squad(member, leader.squad)
-
-
-# The capture (#763), taken at the commit and nowhere else -- see _staged for why nothing clears it.
-#
-# EVERY DRAWN UNIT gets a row, standing or waiting, because "who did I leave in reserve, carrying
-# what" is as much a choice as where the rest are. The rows are the DRAW order, which is what the
-# replay indexes by; roster entry order and draw order are the same order, but only one of them is
-# a list this node is holding.
-func _capture_staged() -> void:
-	var snapshot := PreMissionSnapshot.new()
-	snapshot.mission_path = game.scenario_manager.last_loaded_path
-	for unit: Unit in _roster_units:
-		var entry := ScenarioUnitEntry.new()
-		# The character FILE, which is what fits() compares -- never unit.unit_data, a per-unit copy
-		# with no resource_path that would make every row look like a different character.
-		entry.unit_data = unit.unit_data_source
-		entry.capture_unit_state(unit)
-		var standing: bool = game.is_deployed(unit)
-		snapshot.deployed.append(standing)
-		if standing:
-			# Asked ONLY of a standing unit: undeploy_unit takes the grid and the squad away, so
-			# movement.cell push_errors and Unit.is_leader() -- a bare squad.get_leader() -- would
-			# throw outright on a unit waiting in reserve.
-			entry.cell = unit.movement.cell
-			entry.squad_id = game.squad_manager.squads.find(unit.squad)
-			entry.is_leader = unit.is_leader()
-		snapshot.entries.append(entry)
-	for item: Item in _loadout.stash:
-		snapshot.stash.append(item.copy_for_grant())
-	_staged = snapshot
-
-
-# The buffer, but only if it describes THIS board -- the reason no mission door has to remember to
-# clear one. Both fresh-start doors ask; the answer for a mission the player has not committed once
-# in this session is null, which is the authored draw.
-func _staged_for(path: String) -> PreMissionSnapshot:
-	if _staged == null or _staged.mission_path != path or path == "":
-		return null
-	return _staged
 
 
 func _on_sandbox_chosen() -> void:
@@ -809,12 +527,15 @@ func _on_load_game_chosen() -> void:
 func _begin_turn(record_to_disk := true) -> void:
 	# The deployment window closes here (#736), and the zones that showed it stop being drawn. Set
 	# BEFORE the redraw for the obvious reason, and the redraw is needed at all because every
-	# arrival painted the zones on the way in (apply_scenario -> restore_progress) while this was
+	# arrival painted the zones on the way in (the load's apply_scenario) while this was
 	# still false.
 	_battle_begun = true
 	# Defaulted, so all five arrival doors are unchanged. The replay driver is the one caller that
 	# passes false: it takes this same door so the board is armed identically, and records in memory.
 	game.mission_log.begin(record_to_disk)   # the run starts here, whichever door brought us (#53)
+	# Membership changes play from here on (#367). This and _open_deployment are where every load
+	# lands, so the load's own joins are the baseline rather than a moment.
+	game.squad_tether_presenter.arm()
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	var faction: Team.Faction = game.turn_manager.active_faction()
 	game.turn_banner.show_label("%s Turn" % Team.faction_name(faction))
@@ -830,17 +551,20 @@ func restart_mission() -> void:
 	# routes through clear_board -> reset(), and reset() clears the flag -- so the same question asked
 	# one line lower answers "no" every time, and a restart taken from inside the phase would replay
 	# the buffer it exists to drop. A restart from a phase that has not started means the mission as
-	# the author wrote it; the pause menu renames its own row there to say so.
-	if _deploying:
-		_staged = null
-	var staged: PreMissionSnapshot = _staged_for(game.scenario_manager.last_loaded_path)
+	# the author wrote it; the pause menu renames its own row there to say so. The rule itself is
+	# PreMissionPhase's, shared with the headless Play API's restart (#46).
+	_staged = PreMissionPhase.kept_by_restart(_staged, _deploying)
 	game.mission_log.seal(MissionLog.Ending.RESTARTED)   # a retry is its own metric (#53)
 	game.scenario_manager.reload_current()
 	# ...and returns to the PHASE, so a retry is a chance to place differently (#739) -- with what
 	# was placed LAST attempt already standing there (#763), rather than five minutes of loadout to
-	# rebuild before one unit can move two tiles.
+	# rebuild before one unit can move two tiles. Whether the board offers the phase at all (#46) is
+	# the RELOADED board's answer, so the buffer is asked for after the reload.
+	var offered: bool = game.scenario_manager.current_offers_pre_mission
+	var staged: PreMissionSnapshot = PreMissionPhase.replay_for(_staged,
+			game.scenario_manager.last_loaded_path, offered)
 	var drawn := deploy_roster(staged)
-	if drawn > 0:
+	if PreMissionPhase.opens(offered, drawn):
 		_open_deployment()
 		return
 	game.scenario_director.mission_started()   # a restart is a fresh start (#182); arms before turn 1
@@ -855,8 +579,7 @@ func resume_from_slot(slot: int) -> void:
 	var save: SaveGame = game.scenario_manager.load_slot(slot)
 	if save == null:
 		return
-	game.scenario_manager.apply_scenario(save.scenario)
-	game.scenario_manager.last_loaded_path = save.mission_path
+	game.scenario_manager.apply_scenario(save.scenario, save.mission_path)
 	_begin_turn()
 	game.scenario_director.disarm()   # a resume is not a fresh start; dialog beats are fresh-start content (#182)
 
@@ -882,161 +605,74 @@ func abandon_mission() -> void:
 #  The capture objective (slice 3)
 # ==============================================================================
 
-# The uncaptured CAPTURE zone at this cell, "" when none. Kind-filtered because zones overlap
-# (2026-08-12): "the" zone at a cell stopped being a well-formed question, and every reader of the
-# old zone_at was asking exactly this one. A captured zone stops matching, so where two capture
-# zones overlap the second becomes capturable once the first is claimed.
+# The rules live on MissionState; these keep the names every reader already calls.
 func capturable_zone_at(cell: Vector2i) -> String:
-	for name in game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE):
-		if game.zone_manager.contains(name, cell) and not _captured_zones.has(name):
-			return name
-	return ""
+	return mission.capturable_zone_at(cell)
 
-# Standing anywhere in a capture zone claims the WHOLE zone -- a multi-tile objective is one
-# objective, not N of them.
+# The claim is the state's, and so is the order's: CaptureAction holds the mission, not this node.
 func capture(zone_name: String) -> void:
-	if zone_name == "" or _captured_zones.has(zone_name):
-		return
-	if game.zone_manager.kind_of(zone_name) != ZoneManager.Kind.CAPTURE:
-		return
-	_captured_zones.append(zone_name)
+	mission.capture(zone_name)
+
+# What the GAME does about a claim -- the log, the zone overlay, the HUD. Heard off
+# MissionState.zone_captured (wired in game._build_collaborators), so every claimant reaches it (#46).
+func _on_zone_captured(zone_name: String) -> void:
 	game.mission_log.record_capture(zone_name)
 	game.overlay_manager.redraw_zones(game.zone_manager, hidden_zone_names())
 	game.refresh_mission_status()
 
 func is_zone_captured(zone_name: String) -> bool:
-	return _captured_zones.has(zone_name)
+	return mission.is_zone_captured(zone_name)
 
 
 func set_objectives(list: Array[MissionRules.Objective]) -> void:
-	objectives.assign(list)
-	for objective in objectives_missing_geometry():
-		push_error("Mission objective %s is declared but no matching zone is painted — this mission cannot be won." % MissionRules.Objective.keys()[objective])
+	mission.objectives.assign(list)
+	_shout_missing_geometry()
 	game.refresh_mission_status()
 
-# Declared objectives whose geometry was never painted. ROUT needs none, so it can never appear
-# here. The Scenario tab shows this live while authoring; set_objectives shouts it once on load.
+func _shout_missing_geometry() -> void:
+	for objective in objectives_missing_geometry():
+		push_error("Mission objective %s is declared but no matching zone is painted — this mission cannot be won." % MissionRules.Objective.keys()[objective])
+
+# The Scenario tab shows this live while authoring; set_objectives and apply_scenario shout it on load.
 func objectives_missing_geometry() -> Array[MissionRules.Objective]:
-	var missing: Array[MissionRules.Objective] = []
-	if objectives.has(MissionRules.Objective.CAPTURE) and game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE).is_empty():
-		missing.append(MissionRules.Objective.CAPTURE)
-	if objectives.has(MissionRules.Objective.EXTRACT) and game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION).is_empty():
-		missing.append(MissionRules.Objective.EXTRACT)
-	return missing
+	return mission.objectives_missing_geometry()
 
-# Every declared objective must be met -- they compose by AND. An empty list is NONE, which sends
-# MissionRules.evaluate to its rout fallback.
 func objective_progress(board: BoardContext) -> MissionRules.Progress:
-	if objectives.is_empty():
-		return MissionRules.Progress.NONE
-	for objective in objectives:
-		if progress_for(objective, board) != MissionRules.Progress.MET:
-			return MissionRules.Progress.PENDING
-	return MissionRules.Progress.MET
+	return mission.objective_progress(board)
 
-# Public since #134: the mission-status HUD reads each declared objective's own progress. The
-# rules stay here -- the HUD never re-derives them.
+# The mission-status HUD reads each declared objective's own progress here (#134).
 func progress_for(objective: MissionRules.Objective, board: BoardContext) -> MissionRules.Progress:
-	match objective:
-		MissionRules.Objective.ROUT:
-			return MissionRules.Progress.MET if not MissionRules.has_active_hostiles(board) else MissionRules.Progress.PENDING
-		MissionRules.Objective.CAPTURE:
-			return _capture_progress()
-		MissionRules.Objective.EXTRACT:
-			return _extract_progress(board)
-	push_error("MissionController: no progress rule for objective %s" % MissionRules.Objective.keys()[objective])
-	return MissionRules.Progress.PENDING
+	return mission.progress_for(objective, board)
 
-# (captured, total painted CAPTURE zones) -- the HUD's "1/2 zones". _capture_progress derives MET
-# from these same numbers so the count and the boolean cannot drift (#134).
 func capture_counts() -> Vector2i:
-	var targets: Array[String] = game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE)
-	var done := 0
-	for name in targets:
-		if _captured_zones.has(name):
-			done += 1
-	return Vector2i(done, targets.size())
+	return mission.capture_counts()
 
-# Unpainted geometry reads as PENDING, not MET: the mission really is unwinnable, and silently
-# dropping the objective would quietly turn a broken map into a different, playable one.
-func _capture_progress() -> MissionRules.Progress:
-	var counts := capture_counts()
-	if counts.y == 0:
-		return MissionRules.Progress.PENDING
-	return MissionRules.Progress.MET if counts.x == counts.y else MissionRules.Progress.PENDING
-
-# (surviving player units inside an extraction zone, surviving player units) -- "surviving" is
-# not-DEAD, so the DOWNED count on both sides of the fraction, per the doctrine on
-# _extract_progress below.
 func extract_counts(board: BoardContext) -> Vector2i:
-	var zones: Array[String] = game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION)
-	var done := 0
-	var total := 0
-	for unit in board.units:
-		if not is_instance_valid(unit) or unit.get_faction() != Team.Faction.PLAYER or unit.is_dead():
-			continue
-		total += 1
-		if _in_any_zone(zones, unit.movement.cell):
-			done += 1
-	return Vector2i(done, total)
-
-# "Surviving" is not-DEAD, so a DOWNED unit inside the zone counts as extracted exactly like an
-# active one -- alive and in the zone means they get out. What blocks the objective is a living
-# unit OUTSIDE the zone, and a downed one out there cannot walk in on its own: someone has to
-# reach them with RescueAction, which revives to ACTIVE at whatever HP the body has.
-func _extract_progress(board: BoardContext) -> MissionRules.Progress:
-	# The zones-empty guard runs BEFORE the counts: an unpainted extraction with no player units
-	# would read 0 == 0 as MET, converting the broken map _capture_progress refuses to.
-	if game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION).is_empty():
-		return MissionRules.Progress.PENDING
-	var counts := extract_counts(board)
-	# Zero surviving players is _capture_progress's counts.y == 0 twin (missing until 2026-08-12):
-	# 0 == 0 read as MET, which ticked Extract on the HUD during load, before units had spawned.
-	# For evaluate() the guard never decides anything -- DEFEAT is checked first.
-	if counts.y == 0:
-		return MissionRules.Progress.PENDING
-	return MissionRules.Progress.MET if counts.x == counts.y else MissionRules.Progress.PENDING
-
-# Several extraction zones on one map are alternatives, not a set to split across.
-func _in_any_zone(zone_names: Array[String], cell: Vector2i) -> bool:
-	for name in zone_names:
-		if game.zone_manager.contains(name, cell):
-			return true
-	return false
+	return mission.extract_counts(board)
 
 # ==============================================================================
 #  Lose conditions (#101)
 # ==============================================================================
 
-# The cargo this mission is holding -- every painted Kind.DEFEND zone. ONE answer, and both readers
-# are downstream of it: the lose condition asks whether a hostile is standing in any of them, and
-# the HUD names them. There is no owner and no progress to hold, which is why this whole section is
-# a pass-through to the zone store rather than a battle-scoped field like _captured_zones: a
-# defended point is authored geometry that either still holds or has ended the mission.
 # THE #572 WIRE. game._on_unit_died is the one place every death arrives -- take_damage's two
 # branches, the downed countdown and the dev kill button all reach Unit.die(), which emits once and
 # is idempotent -- so this is asked once per unit and never re-asked about a corpse.
 func note_unit_died(unit: Unit) -> void:
-	if unit != null and unit.must_survive:
-		_protected_lost = true
+	mission.note_unit_died(unit)
 
-# Who this mission is protecting, still standing -- the HUD's readout.
 func protected_units(board: BoardContext) -> Array[Unit]:
-	return MissionRules.protected_units(board)
-
+	return mission.protected_units(board)
 
 func defend_zone_names() -> Array[String]:
-	return game.zone_manager.zone_names_of(ZoneManager.Kind.DEFEND)
+	return mission.defend_zone_names()
 
-# Who is standing on the cargo right now, null while it holds. The HUD's readout and the predicate
-# both come off MissionRules, so the row and the rule cannot disagree.
 func breaching_unit(board: BoardContext) -> Unit:
-	return MissionRules.breaching_unit(board, defend_zone_names(), game.zone_manager)
+	return mission.breaching_unit(board)
 
 
 func set_lose_conditions(list: Array[MissionRules.LoseCondition], limit: int) -> void:
-	lose_conditions.assign(list)
-	round_limit = limit
+	mission.lose_conditions.assign(list)
+	mission.round_limit = limit
 	game.refresh_mission_status()
 
 # The shout, MOVED OUT of set_lose_conditions above (#572) rather than duplicated. It used to fire
@@ -1049,77 +685,38 @@ func report_missing_setup() -> void:
 	for condition in lose_conditions_missing_setup():
 		push_error("Lose condition %s is declared but has nothing to fire on — this mission would be lost immediately." % MissionRules.LoseCondition.keys()[condition])
 
-# Declared lose conditions with no usable parameter -- objectives_missing_geometry's twin, and the
-# same doctrine: the mission really is broken, so say so loudly rather than dropping the clause.
+# Asked of the live board; MissionState takes the board as a parameter, since it holds no game.
 func lose_conditions_missing_setup() -> Array[MissionRules.LoseCondition]:
-	var missing: Array[MissionRules.LoseCondition] = []
-	if lose_conditions.has(MissionRules.LoseCondition.ROUND_LIMIT) and round_limit <= 0:
-		missing.append(MissionRules.LoseCondition.ROUND_LIMIT)
-	# #571's geometry half, and it is objectives_missing_geometry's rule rather than the clock's:
-	# the cargo IS the painted zone, so a declared POINT_LOST with nothing painted has nothing to
-	# lose and the mission is simply not the mission that was authored.
-	if lose_conditions.has(MissionRules.LoseCondition.POINT_LOST) and defend_zone_names().is_empty():
-		missing.append(MissionRules.LoseCondition.POINT_LOST)
-	# #572's twin, with one extra clause that is not decoration: once the VIP has died there is
-	# genuinely nobody flagged on the board, and without `not _protected_lost` the row would flip to
-	# "not set" at the exact moment the condition FIRED -- reporting a broken board for the one
-	# thing that worked.
-	if lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST) and not _protected_lost \
-			and protected_units(game._board()).is_empty():
-		missing.append(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
-	return missing
+	return mission.lose_conditions_missing_setup(game._board())
 
-# The ONE increment point, called from game._on_round_completed. TurnManager emits round_completed
-# before turn_started, so the very next check() -- turn start, after the downed clocks tick -- is
-# the one that sees it. No new evaluation seam.
+# Called from game._on_round_completed; the count is the state's, the HUD refresh is the game's.
 func advance_round() -> void:
-	_rounds_elapsed += 1
+	mission.advance_round()
 	game.refresh_mission_status()
 
-# Rounds left on the clock, for the HUD. 0 when no clock is authored.
 func rounds_remaining() -> int:
-	return MissionRules.rounds_remaining(_rounds_elapsed, round_limit)
+	return mission.rounds_remaining()
 
-# WHY this mission is lost, NONE while it is not. The reason only; whether the mission ends is
-# MissionRules.evaluate's answer, which is handed this and keeps its own wipe branch for the
-# callers that pass nothing (the headless Play API). Both read the one faction predicate below.
-#
-# The wipe outranks an authored condition, matching evaluate's own order: a squad lost on the round
-# the clock expires reports the squad, which is the more concrete thing that happened.
 func failure_for(board: BoardContext) -> MissionRules.LoseCondition:
-	if not board.faction_has_active_units(Team.Faction.PLAYER):
-		return MissionRules.LoseCondition.SQUAD_LOST
-	for condition in lose_conditions:
-		if _condition_fired(condition, board):
-			return condition   # ANY, not all -- the first one that fires ends it
-	return MissionRules.LoseCondition.NONE
-
-func _condition_fired(condition: MissionRules.LoseCondition, board: BoardContext) -> bool:
-	match condition:
-		MissionRules.LoseCondition.ROUND_LIMIT:
-			return MissionRules.round_limit_reached(_rounds_elapsed, round_limit)
-		MissionRules.LoseCondition.POINT_LOST:
-			return MissionRules.defend_zone_breached(board, defend_zone_names(), game.zone_manager)
-		MissionRules.LoseCondition.PROTECTED_UNIT_LOST:
-			return _protected_lost
-		MissionRules.LoseCondition.NONE, MissionRules.LoseCondition.SQUAD_LOST:
-			return false   # never authored; the wipe is answered above, not from the list
-	push_error("MissionController: no rule for lose condition %s" % MissionRules.LoseCondition.keys()[condition])
-	return false
+	return mission.failure_for(board)
 
 func _end_mission() -> void:
 	_ending = true
 	# Sealed BEFORE the banner: a player who quits at it still has the record (#53).
-	var ending: MissionLog.Ending = MissionLog.Ending.VICTORY if outcome == MissionRules.Outcome.VICTORY else MissionLog.Ending.DEFEAT
-	game.mission_log.seal(ending, _failed_by)
+	var ending: MissionLog.Ending = MissionLog.Ending.VICTORY if mission.outcome == MissionRules.Outcome.VICTORY else MissionLog.Ending.DEFEAT
+	game.mission_log.seal(ending, mission.failed_by)
 	game.clear_selection()                            # rests game_state ...
 	game.refresh_action_queue(null)
 	game.unit_info_panel.clear()
 	game.game_state = game.GameState.MISSION_OVER     # ... so lock the board AFTER it
 
-	var victory: bool = outcome == MissionRules.Outcome.VICTORY
-	var reason: String = MissionRules.defeat_reason(_failed_by)   # "" on a victory; the banner falls back
-	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart(), reason)
+	var victory: bool = mission.outcome == MissionRules.Outcome.VICTORY
+	var reason: String = MissionRules.defeat_reason(mission.failed_by)   # "" on a victory; the banner falls back
+	# Grabbed BEFORE the banner draws, which carries a report form (#1052): a report filed from it
+	# wants the board as the mission ended, not a picture of the form. _open_pause_menu's rule, and
+	# its reason for locking first -- the extra frame is not interactive.
+	var frame: Image = await game.bug_reporter.capture_frame()
+	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart(), reason, frame)
 
 	_ending = false
 	game.game_state = game._base_state()   # unlock; dev mode survives a mission end (2026-08-11)

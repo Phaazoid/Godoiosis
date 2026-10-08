@@ -105,7 +105,7 @@ func test_it_sees_an_experiment_flag_left_on() -> void:
 	# Experiments._state has the identical shape and the identical exposure (test_staging sets
 	# DIORAMA_BYSTANDERS). Two stores, one rule -- both derived from their own DEFS, so a flag added
 	# later is covered with no edit to the fingerprint.
-	var flag: Experiments.Flag = Experiments.DEFS.keys()[0]
+	var flag: Experiments.Flag = _first_toggle()
 	var was := Experiments.is_on(flag)
 	var before := _take()
 	Experiments.set_on(flag, not was)
@@ -190,3 +190,12 @@ func _reset_to(pristine: ScenarioData) -> void:
 	_game.scenario_manager.apply_scenario(pristine)
 	await DialogFixtures.end_all_dialog(self)
 	await await_idle_frame()
+
+
+# The first ON/OFF flag: a choice row (#508) answers with an index, and flipping it as a bool is
+# exactly the coercion the registry refuses.
+func _first_toggle() -> Experiments.Flag:
+	for flag: Experiments.Flag in Experiments.all_flags():
+		if not Experiments.is_choice(flag):
+			return flag
+	return Experiments.Flag.EXAMPLE_FLAG

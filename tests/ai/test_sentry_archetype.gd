@@ -10,6 +10,14 @@ const BB := preload("res://play/board_builder.gd")
 const ZONE := "post"
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board() -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -49,7 +57,7 @@ func _bind_sentry(unit: Unit, home: Vector2i) -> Squad:
 
 func _move_destinations(squad: Squad) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	for action in squad.action_queue:
+	for action in H.given_orders(squad):   # a hold filler (#46) goes nowhere
 		if action is MoveAction:
 			result.append((action as MoveAction).destination)
 	return result
@@ -77,8 +85,8 @@ func test_idle_at_post_takes_a_fallback_action_but_never_moves_or_attacks() -> v
 
 	assert_array(_move_destinations(squad)).is_empty()
 	assert_array(_attack_aims(squad)).is_empty()
-	assert_int(squad.action_queue.size()).is_equal(1)
-	assert_int(squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.REV)
+	assert_int(H.given_orders(squad).size()).is_equal(1)
+	assert_int(H.given_orders(squad)[0].action_type).is_equal(BaseAction.ActionType.REV)
 
 
 func test_cannot_be_lured_by_enemy_in_reach_but_outside_zone() -> void:

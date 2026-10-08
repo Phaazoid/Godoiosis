@@ -3,7 +3,7 @@ class_name ScenarioUnitEntry
 
 # One saved unit's snapshot inside a ScenarioData (the persistence seam, #8): spawn cell,
 # squad membership, and the UnitInstance state that survives missions (#83) — stats, HP,
-# Will, inventory, limbs, proficiency, aura, jobs. What ScenarioManager reads on save
+# inventory, limbs, proficiency, aura, jobs. What ScenarioManager reads on save
 # and writes back on load.
 
 @export var unit_data: UnitData
@@ -29,16 +29,19 @@ class_name ScenarioUnitEntry
 # subject is marked by painting a zone rather than by naming one on ScenarioData. "Which person is
 # this" is a real question and #501 will ask it; a half-answer built here would be the one to beat.
 #
-# Written and read by ScenarioManager directly, OUTSIDE the #177 reference/snapshot fork -- a
-# reference entry (state_saved = false) never calls apply_unit_state, and a VIP must survive that.
+# Read through apply_placement, OUTSIDE the #177 reference/snapshot fork -- a reference entry
+# (state_saved = false) never calls apply_unit_state, and a VIP must survive that.
 @export var must_survive := false
+# Which AI profile this unit plays (#1230), by FILE NAME under AIProfiles.PROFILE_DIR; "" = Hard.
+# A name, never a reference: ScenarioData.look_preset's two reasons. Outside the #177 fork with
+# must_survive, so a reference entry keeps it.
+@export var ai_profile := ""
 @export var jobs: Array[String] = []
 
 # --- UnitInstance state (#83). All additive: a pre-#83 save reads defaults, and every
 # default below means "not saved — keep initialize()'s result". ---
 @export var stats: Dictionary[Stats.Stat, int] = {}
 @export var current_hp := -1     # -1 = unsaved; live HP is always >= 1
-@export var current_will := -1   # -1 = unsaved; 0 is a legal saved value
 @export var inventory: Array[Item] = []
 @export var equipped_index := -1   # into inventory; -1 = unarmed. Replaced the equipped_weapon copy (#83).
 @export var worn_armor_index := -1   # into inventory; -1 = unarmored. Mirrors equipped_index (#65).
@@ -61,9 +64,9 @@ class_name ScenarioUnitEntry
 @export var stat_effects: Array[StatEffect] = []
 @export var lifecycle_state: Unit.LifecycleState = Unit.LifecycleState.ACTIVE   # DEAD never saves: a corpse is absent, not stored
 @export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
+@export var wounded := false   # went down this battle (#1174)
 @export var in_crisis := false
 @export var crisis_surge_pending := false
-@export var rally_count := 0
 @export var squad_has_acted := false   # LEADER's entry only, beside squad_name/archetype/zone
 # The Guard this unit had armed (#414), as an INDEX into ScenarioData.unit_entries — a live Unit ref
 # cannot serialize and a name is not unique, so this is the limb_prosthetic_items re-link pattern.
@@ -94,6 +97,27 @@ class_name ScenarioUnitEntry
 @export var watch_spent := false
 @export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
 
+# What this entry says about the unit's place in the MISSION -- the VIP flag, the AI profile, and a
+# leader's squad name, AI archetype, zone and post. The ONE writer for both loaders (#46): the headless one never
+# copied these, so every saved Sentry rushed and no escort could be lost. Outside the #177 fork,
+# since a VIP or a sentry is usually cast. Called right after the spawn, which made the solo squad.
+func apply_placement(unit: Unit) -> void:
+	unit.must_survive = must_survive
+	unit.ai_profile = ai_profile
+	if squad_id == -1 or not is_leader:
+		return
+	unit.squad.squad_name = squad_name
+	unit.squad.archetype = squad_archetype
+	unit.squad.zone_name = squad_zone
+	unit.squad.home_cell = cell
+
+# Does this entry spawn as a BODY, RulesService.can_spawn_at's is_body (#116)? A saved DOWNED unit may
+# lie on ground nothing may STAND on -- deep water -- and without this a load would silently drop it.
+# A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right. The ONE
+# answer both loaders pass to their spawn gate (#46).
+func spawns_as_body() -> bool:
+	return state_saved and lifecycle_state == Unit.LifecycleState.DOWNED
+
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
 # installed prosthetic saves as the INDEX of its carried instance so load can re-link.
@@ -102,7 +126,6 @@ func capture_unit_state(unit: Unit) -> void:
 	jobs = inst.jobs.duplicate()
 	stats = inst.stats.duplicate()
 	current_hp = inst.current_hp
-	current_will = inst.current_will
 	weapon_proficiency = inst.weapon_proficiency.duplicate()
 	aura = inst.aura.duplicate()
 	affinity = inst.affinity.duplicate()
@@ -170,9 +193,9 @@ func capture_unit_state(unit: Unit) -> void:
 		stat_effects.append(effect.duplicate(true))
 	lifecycle_state = unit.lifecycle_state
 	downed_turns_remaining = unit.downed_turns_remaining
+	wounded = unit.wounded
 	in_crisis = unit.in_crisis
 	crisis_surge_pending = unit.crisis_surge_pending
-	rally_count = unit.rally_count
 
 	# The armed watch (#413). A save taken between a pass and the enemy phase is exactly when a live
 	# one is the whole point, which is why it is captured here rather than left to reset.
@@ -194,14 +217,16 @@ func capture_unit_state(unit: Unit) -> void:
 			watch_cancelled = unit.watch.cancelled
 
 # Write the snapshot back onto a freshly spawned unit. Runs AFTER initialize() (which
-# rebuilds stats/limbs/aura and refills HP+Will), deliberately overriding that reset.
-# Order matters: stats before HP/Will (their maxes may be edited), inventory before
+# rebuilds stats/limbs/aura and refills HP), deliberately overriding that reset.
+# Order matters: stats before HP (its max may be edited), inventory before
 # limbs (the prosthetic re-link reads loaded slots).
 func apply_unit_state(unit: Unit) -> void:
 	var inst: UnitInstance = unit.unit_instance
 	inst.jobs = jobs.duplicate()
 
 	for stat in stats:
+		if Stats.RETIRED.has(stat):
+			continue                     # a save written before the stat retired (#1174)
 		inst.stats[stat] = stats[stat]   # per-key: a stat appended after this save keeps its default
 
 	inst.weapon_proficiency = weapon_proficiency.duplicate()   # empty = all DEFAULT, saved or not
@@ -269,9 +294,9 @@ func apply_unit_state(unit: Unit) -> void:
 
 	unit.element_states = element_states.duplicate()
 	unit.attunement = attunement
+	unit.wounded = wounded
 	unit.in_crisis = in_crisis
 	unit.crisis_surge_pending = crisis_surge_pending
-	unit.rally_count = rally_count
 	unit.restore_lifecycle(lifecycle_state, downed_turns_remaining)
 
 	# The armed watch (#413), after the inventory, because the stored index IS the attack's identity —
@@ -291,5 +316,3 @@ func apply_unit_state(unit: Unit) -> void:
 		# gear-less max — so every save/load of an armoured unit quietly shed the band's worth of
 		# HP. A data-losing round trip, not just a bad readout.
 		unit.set_current_hp(maxi(1, current_hp))   # floor 1: never fire died() out of a load
-	if current_will >= 0:
-		inst.set_current_will(current_will)

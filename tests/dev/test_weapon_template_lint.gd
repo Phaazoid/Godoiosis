@@ -222,18 +222,39 @@ func test_a_weapon_nobody_has_fitted_writes_no_spaces_key() -> void:
 	assert_str(FileAccess.get_file_as_string(FIXTURE_PATH)).not_contains("\nspaces = ")
 
 
-# The other half of the fireball rule. .tres omits properties at their default, so a template that
-# never wrote mod_spaces silently inherits whatever the default becomes -- which is exactly how a
-# prototype forced to one space would have quietly gained two. The claim is that every template
-# SAYS what its spaces are, not what any of them says.
-func test_every_prototype_writes_its_mod_spaces_rather_than_inheriting_the_default() -> void:
-	var silent: Array[String] = []
-	var prototypes := WeaponCatalog.get_prototypes()
-	for name in prototypes:
-		var template: WeaponData = prototypes[name]
-		if not FileAccess.get_file_as_string(template.resource_path).contains("\nmod_spaces = "):
-			silent.append(name)
-	assert_array(silent).is_empty()
+# #1185, the wire. The writer omits a property only when the SCRIPT can name its default, and a
+# default written as a call (`.duplicate()`) names none -- so every save wrote the spaces out (the
+# editor wrote `null`, reading the same default) and pinned the template to that day's const.
+# The edited half is the other direction: a fix that took the field out of storage would pass the
+# first half and lose every authored trade.
+func test_a_template_at_the_default_leaves_its_spaces_out_of_the_file() -> void:
+	var script: Script = WeaponData.new().get_script()
+	var default: Variant = script.get_property_default_value("mod_spaces")
+	assert_bool(default is Array and default == WeaponData.SPACE_CAPACITIES) \
+		.override_failure_message("the script names no default for mod_spaces: %s" % [default]).is_true()
+
+	assert_int(ResourceSaver.save(_template(), FIXTURE_PATH)).is_equal(OK)
+	assert_str(FileAccess.get_file_as_string(FIXTURE_PATH)).not_contains("\nmod_spaces = ")
+
+	var edited := _template()
+	edited.mod_spaces.append(1)   # what Add space does
+	assert_int(ResourceSaver.save(edited, FIXTURE_PATH)).is_equal(OK)
+	assert_str(FileAccess.get_file_as_string(FIXTURE_PATH)).contains("\nmod_spaces = ")
+
+
+# #1185, the content half. A template holding the default leaves mod_spaces OUT of its file and
+# follows SPACE_CAPACITIES -- families and prototypes alike (dev, 2026-10-03). The writer can no
+# longer produce such a line (above), so one here arrived another way: a hand edit, or a branch
+# saved before the fix. A `null` line loads as the default, so the same predicate catches it.
+func test_no_shipped_template_pins_the_default_spaces() -> void:
+	var pinned: Array[String] = []
+	for source: Dictionary in [WeaponCatalog.get_family_bases(), WeaponCatalog.get_prototypes()]:
+		for key: String in source:
+			var template: WeaponData = source[key]
+			if template.mod_spaces == WeaponData.SPACE_CAPACITIES \
+					and FileAccess.get_file_as_string(template.resource_path).contains("\nmod_spaces = "):
+				pinned.append(key)
+	assert_array(pinned).is_empty()
 
 
 # THE SECOND DOOR onto the same #590 rule, and the one that was open (#810 follow-up): effective_main

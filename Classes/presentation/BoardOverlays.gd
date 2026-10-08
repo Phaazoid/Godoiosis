@@ -38,7 +38,10 @@ enum Layer {
 	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 	ZONE_DEPLOYMENT, ZONE_DEFEND,
 	REACH, THREAT, ENEMY_FOCUS_EDGE, REACH_LINES,
-	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN,
+	COHESION_EDGE, TETHERS, TETHER_GHOST, TETHER_STRAIN, TETHER_MOMENT, TETHER_SHARDS,
+	ZONE_MARKS, ZONE_EMBLEMS,
+	PAYLOAD,
+	TETHER_GLOW,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -71,6 +74,10 @@ const EFFECT_RENDER_PRIORITY := 16
 # coplanar quads (outline, missing, fill, the predicted span, the notch) then the number's outline
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
+# The gas's fog floor (#508's pixel-puff style): it lies on the ground UNDER every piece of markup,
+# so a move tile or a zone still reads on a gassed cell. One below the lowest LAYERS sort, and both
+# its draw order and its height follow from that number the way a layer's do (gas_floor_lift).
+const GAS_FLOOR_SORT := -8
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it
@@ -105,6 +112,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# sort * lift_step, so the lowest sort must still clear the tile's own OPAQUE top face -- a real
 	# z-fight, unlike the transparent-vs-transparent case below. At slice 3 that meant 0.02 -> 0.03;
 	# at slice 4, -7 would have landed at 0.002 and fill_lift went to 0.04. The floor is a law.
+	# The four PLAY kinds' rows (capture, extraction, deployment, defend) are each kind's COLOUR since
+	# #955, read by ZoneMarks and tuned on the Game tab; nothing fills them, a zone draws as ZONE_MARKS.
 	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -7, "kind": Kind.FILL},
 	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -7, "kind": Kind.FILL},
 	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -7, "kind": Kind.FILL},
@@ -132,8 +141,9 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# not pool-allocation luck. A test pins THREAT < REACH < MOVE.
 	#
 	# Sorts -3 and -4 fell vacant when slice 4's dim pair went (the dev: "they shouldn't dim at
-	# all"), and -5 when #1070 retired the orange squad fills for lines. They are left vacant rather
-	# than compacted: the FLOOR is what a shift threatens --
+	# all"), and -5 when #1070 retired the orange squad fills for lines. #955 re-let -5 and -3 to the
+	# zone marks and emblems; -4 is still vacant. They were left vacant rather than compacted: the
+	# FLOOR is what a shift threatens --
 	# _lift_of is fill_lift + sort * lift_step, and the -7 zones sit at 0.012 with fill_lift 0.04.
 	Layer.THREAT: {"color": Color(0.72, 0.15, 0.28, 0.5), "sort": -2, "kind": Kind.FILL},
 	# ...and a stroke round the OUTSIDE of the hovered enemy's whole footprint (slice 4, the dev's
@@ -187,21 +197,42 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# a line in the air should read over one on the floor. Colours arrive per draw from SquadLines2D's
 	# statics, so these entries are fallbacks. The range is the "cohesion" set and the tethers the
 	# "squad" one -- two widths, one glow and one dash pattern (DASHED_BEAMS), which is what makes them
-	# read as one system.
+	# read as one system. All six wear a dark CASING (#1109 round 2), declared per entry by `"casing"`,
+	# which goes LAST because KnobSource's colour rewriter reads `"color"` first.
 	Layer.COHESION_EDGE: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 12, "lift_sort": 6,
-		"beam": "cohesion", "kind": Kind.LINE},
+		"beam": "cohesion", "kind": Kind.LINE, "casing": true},
 	# ...and the tethers, one layer per STATE because a layer is one material: the pluck is a uniform,
 	# and only the strained tethers may shake. They hang at the body's middle and a ribbon writes no
 	# depth, so the three share 14, the last free sort under ICONS. `cone_alpha` puts their arrowhead on
 	# the SEE-THROUGH cone, so a tether colour's alpha fades the arrow with the shaft (dev, 2026-09-22);
 	# the reach mark's stays solid, which was #1069's ruling for an intent.
 	Layer.TETHERS: {"color": Color(1.0, 0.55, 0.12, 0.95), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE, "cone_alpha": true},
+		"kind": Kind.LINE, "cone_alpha": true, "casing": true},
 	Layer.TETHER_GHOST: {"color": Color(0.72, 0.42, 0.16, 0.5), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE, "cone_alpha": true},
+		"kind": Kind.LINE, "cone_alpha": true, "casing": true},
 	Layer.TETHER_STRAIN: {"color": Color(1.0, 0.18, 0.14, 0.95), "sort": 14, "beam": "squad",
-		"kind": Kind.LINE, "cone_alpha": true},
+		"kind": Kind.LINE, "cone_alpha": true, "casing": true},
+	# ...and a membership MOMENT (#367): a tether drawing in on a join, reeling in on a leave. WHITE,
+	# because each moment's own colour and fade ride its vertex colour -- several play at once, at
+	# different ages, on one material. Rebuilt per frame while one is in the air (ArcLightning's shape).
+	Layer.TETHER_MOMENT: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "squad", "kind": Kind.LINE, "cone_alpha": true,
+		"casing": true},
+	# ...and a BREAK's pieces and sparks (#367 part 2B), which are SOLID: each piece is one dash already,
+	# and the squad beam marches its dashes along a stroke, which would cut a falling piece up as it fell.
+	Layer.TETHER_SHARDS: {"color": Color(1, 1, 1, 1), "sort": 14, "beam": "shard", "kind": Kind.LINE,
+		"casing": true},
+	# ...and a death's PULSE (#1104): the warm light that runs down a dead member's tether to whoever is
+	# left. A SOFT stroke, uncased and blooming ("glow"), tapered at both ends by per-point widths so it
+	# reads as a light rather than a dash -- the windowed probe's finding. 14, with the tethers it runs
+	# along: the icons' billboards sit at 15, and every other kind of layer sorts below them.
+	Layer.TETHER_GLOW: {"color": Color(1.0, 0.72, 0.38, 1), "sort": 14, "beam": "glow", "kind": Kind.LINE},
 	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
+	# The aim's PAYLOAD tiles (#1058 D2b): the footprint's twin, inset a size smaller (InsetSquare), for the
+	# tiles only what the attack DROPS reaches. It SHARES AIM's sort, and may: its cells are the payloads'
+	# minus the aim's own, so the two are disjoint by construction and never meet on one plane -- ATTACK and
+	# ATTACK_BLOCKED's arrangement. Colour here is only the fallback; the mirror copies the footprint's.
+	# NB `"inset"` goes LAST -- see _texture_for.
+	Layer.PAYLOAD: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL, "inset": true},
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
 	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
@@ -257,6 +288,13 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# the lawful band -- a law pins every layer under EFFECT_RENDER_PRIORITY. A BILLBOARD
 	# ignores _lift_of and rides billboard_lift, so this moves PRIORITY only, not geometry.
 	Layer.ICONS: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD},
+	# A zone's RIM (#955), per cell -- which is how a zone draws; the kind's FILL row above is only its
+	# colour now, and nothing fills it. -5 is a vacated slot in the zone band's neighbourhood: above the
+	# wash and the picked-zone highlight, UNDER every range tone, because a zone is ground and the
+	# interaction reads over it (#346). Tint arrives per marker, so the colour here is WHITE.
+	Layer.ZONE_MARKS: {"color": Color.WHITE, "sort": -5, "kind": Kind.SPRITE},
+	# ...and its EMBLEM, one per zone, a slot above the edge it can share a cell with.
+	Layer.ZONE_EMBLEMS: {"color": Color.WHITE, "sort": -3, "kind": Kind.SPRITE},
 }
 
 const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"
@@ -269,6 +307,9 @@ const REACH_CONE_SHADER_PATH := "res://Classes/presentation/reach_cone.gdshader"
 # ...and its SEE-THROUGH twin (#1070 follow-up), for a layer whose spec carries `cone_alpha`: a third
 # file for the same reason, since blending and back-face culling are render_mode too.
 const REACH_CONE_ALPHA_SHADER_PATH := "res://Classes/presentation/reach_cone_alpha.gdshader"
+# ...and the CASING round a cased layer's cone (#1109 round 2): an inverted hull, which needs its FRONT
+# faces culled -- a fourth file, for the same reason.
+const REACH_CONE_CASING_SHADER_PATH := "res://Classes/presentation/reach_cone_casing.gdshader"
 # The fixed world direction the cone's facets are shaded against. NOT the camera and NOT a knob:
 # the shade is baked into vertex colour when a mark is rebuilt (on a hover change), so a
 # camera-relative bake is stale the instant the rig orbits, and a direction is three sliders nobody
@@ -368,14 +409,45 @@ enum SelectorDepth { LEVEL, HALF }
 # range's dashes too faint on the ground (2026-09-22), which cohesion_line_width answers. Near the
 # bloom threshold, like the outline -- these are markup. The DASHES are not here: they are
 # SquadLines2D statics, because the flat view draws them too.
-@export var squad_line_width := 0.045: set = _set_squad_line_width
-@export var squad_line_intensity := 1.2: set = _set_squad_line_intensity
-@export var cohesion_line_width := 0.09: set = _set_cohesion_line_width
+@export var squad_line_width := 0.035: set = _set_squad_line_width
+@export var squad_line_intensity := 0.95: set = _set_squad_line_intensity
+@export var cohesion_line_width := 0.035: set = _set_cohesion_line_width
+# The dark CASING's width, world units EACH side (#1109 round 2), on every layer declaring `"casing"`.
+# Its colour is SquadLines2D.CASING_COLOR, since the flat view draws the casing too.
+@export var squad_casing_width := 0.015: set = _set_squad_casing_width
+# A death's PULSE light (#1104): its width at the middle (world units; the ends taper to nothing), its
+# brightness (past the diorama's 1.2 glow threshold, so it blooms) and its own falloff -- softer than
+# the shared one, which is tuned for a laser.
+@export var pulse_glow_width := 0.18: set = _set_pulse_glow_width
+@export var pulse_glow_intensity := 2.6: set = _set_pulse_glow_intensity
+@export var pulse_glow_softness := 1.6: set = _set_pulse_glow_softness
+
+
+func _set_pulse_glow_width(value: float) -> void:
+	pulse_glow_width = value
+	_apply_beam_params()
+
+
+func _set_pulse_glow_intensity(value: float) -> void:
+	pulse_glow_intensity = value
+	_apply_beam_params()
+
+
+func _set_pulse_glow_softness(value: float) -> void:
+	pulse_glow_softness = value
+	_apply_beam_params()
 
 
 func _set_squad_line_width(value: float) -> void:
 	squad_line_width = value
 	_apply_beam_params()
+
+
+# A material uniform on the ribbons AND geometry on the arrowheads' hulls, so it has to do both.
+func _set_squad_casing_width(value: float) -> void:
+	squad_casing_width = value
+	_apply_beam_params()
+	_rebuild_cones()
 
 
 func _set_cohesion_line_width(value: float) -> void:
@@ -457,6 +529,8 @@ var fill_texture: Texture2D
 # MoveGrid's art at the diorama's resolution (#1074), shared by every marker on a `"grid"` layer and
 # replaced wholesale by restyle_grid. Lazy -- a board that never shows a move range pays nothing.
 var _grid_texture: ImageTexture
+# ...and InsetSquare's, for the payload layer (#1058 D2b). Same lazy, wholesale-replaced shape.
+var _inset_texture: ImageTexture
 
 var _beams_animating := true   # the last composed photosensitivity read; see poll_beam_motion
 
@@ -470,6 +544,9 @@ var _lines: Dictionary[Layer, Array] = {}   # LINE layers: the current segments 
 # kinds of node in it; `_cone_batches` is what a knob change re-emits from, the way `intent_shafts`
 # is what a mark knob re-derives from one layer up.
 var _cones: Dictionary[Layer, MeshInstance3D] = {}
+# ...and a CASED layer's outline round those cones (#1109 round 2): a third node, on a third shader,
+# for the reason the cone has a second.
+var _cone_hulls: Dictionary[Layer, MeshInstance3D] = {}
 var _cone_batches: Dictionary[Layer, Array] = {}
 var _cone_colors: Dictionary[Layer, Color] = {}
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
@@ -492,7 +569,8 @@ func _ready() -> void:
 # layer marked `"grid"` wears MoveGrid's generated lattice instead (#1069, re-cut by #1074), which is
 # how MOVE draws as GRIDLINES without becoming a second render Kind -- every law this table already
 # carries (the sort, the lift, the ramp tilt, the corner-cell fold, set_layer_modulate, the mirror's
-# per-frame tint copy) goes on applying to it untouched, because it IS still a fill.
+# per-frame tint copy) goes on applying to it untouched, because it IS still a fill. A layer marked
+# `"inset"` wears InsetSquare's (#1058 D2b) on the same terms.
 #
 # The key is declared LAST on its LAYERS line, and that is not style: KnobSource's colour rewriter
 # is a regex requiring `"color"` to be an entry's FIRST key, so a key ahead of it would make every
@@ -500,6 +578,8 @@ func _ready() -> void:
 func _texture_for(spec: Dictionary) -> Texture2D:
 	if spec.get("grid", false):
 		return grid_texture()
+	if spec.get("inset", false):
+		return inset_texture()
 	return fill_texture
 
 
@@ -527,6 +607,25 @@ func restyle_grid() -> void:
 		for node: Node3D in _pool_for(layer):
 			var material := (node as MeshInstance3D).material_override as StandardMaterial3D
 			material.albedo_texture = _grid_texture
+
+
+func inset_texture() -> Texture2D:
+	if _inset_texture == null:
+		_inset_texture = ImageTexture.create_from_image(InsetSquare.image(MoveGrid.ART_TEXELS))
+	return _inset_texture
+
+
+# A turned inset knob (#1058 D2b): restyle_grid's shape and its reason for a new object.
+func restyle_inset() -> void:
+	if _inset_texture == null:
+		return
+	_inset_texture = ImageTexture.create_from_image(InsetSquare.image(MoveGrid.ART_TEXELS))
+	for layer: Layer in LAYERS:
+		if not LAYERS[layer].get("inset", false):
+			continue
+		for node: Node3D in _pool_for(layer):
+			var material := (node as MeshInstance3D).material_override as StandardMaterial3D
+			material.albedo_texture = _inset_texture
 
 
 # Replaces the layer's cells wholesale (idempotent — calling twice with the same
@@ -679,8 +778,14 @@ func set_lines(layer: Layer, segments: Array[PackedVector3Array], color: Color) 
 #
 # `widths` is shaped like `marks` -- a per-point scale for each stroke -- and empty means every
 # stroke is drawn at the layer's own width, which is what `set_lines` and its three other layers want.
+#
+# `tints` (one per mark, empty = white = unchanged) ride the vertex colour, so one layer can draw marks
+# of different colours and fades at once (#367's moments). `starts` (one per mark, empty = 0) is how
+# far along its line a mark BEGINS, so a part-drawn tether's dashes sit where the whole one's would.
+# A cone entry may carry its own "tint" the same way.
 func set_marks(layer: Layer, marks: Array[Array], color: Color,
-		widths: Array[Array] = [], cones: Array[Dictionary] = []) -> void:
+		widths: Array[Array] = [], cones: Array[Dictionary] = [], tints: Array[Color] = [],
+		starts: PackedFloat32Array = PackedFloat32Array()) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
 		push_error("set_marks on a %s layer" % Kind.keys()[spec["kind"]])
@@ -709,11 +814,12 @@ func set_marks(layer: Layer, marks: Array[Array], color: Color,
 		var strip_count: int = strokes.size()
 		if not cone.is_empty() and strip_count > 1:
 			strip_count -= 1
-		var travelled := 0.0
+		var tint: Color = tints[m] if m < tints.size() else Color.WHITE
+		var travelled: float = starts[m] if m < starts.size() else 0.0
 		for s in strip_count:
 			var stroke: PackedVector3Array = strokes[s]
 			var scale: PackedFloat32Array = PackedFloat32Array() if s >= scales.size() else scales[s]
-			if add_beam_strip(mesh, stroke, Color.WHITE, travelled, scale):
+			if add_beam_strip(mesh, stroke, tint, travelled, scale):
 				drawn = true
 			travelled += _stroke_length(stroke)
 		if not cone.is_empty():
@@ -746,11 +852,49 @@ func _emit_cones(layer: Layer) -> void:
 	var drawn := false
 	for entry: Dictionary in batch:
 		if add_beam_cone(mesh, entry["base"], entry["tip"], float(entry["radius"]),
-				float(entry.get("dist", 0.0)), cone_shading, cone_facets):
+				float(entry.get("dist", 0.0)), cone_shading, cone_facets, entry.get("tint", Color.WHITE)):
 			drawn = true
 	node.visible = drawn
-	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color",
-			_cone_colors.get(layer, Color.WHITE))
+	var color: Color = _cone_colors.get(layer, Color.WHITE)
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+	if LAYERS[layer].get("casing", false):
+		_emit_hulls(layer, batch, color)
+
+
+# The CASING round each of a cased layer's cones (#1109 round 2): one larger cone per arrowhead, the same
+# shape grown by the casing width, drawn inside-out behind it. Unshaded and flat -- a shade of 1.0 bakes
+# white -- carrying only each cone's own tint ALPHA, so a fading moment fades its outline.
+func _emit_hulls(layer: Layer, batch: Array, color: Color) -> void:
+	var node := _hull_for(layer)
+	var mesh := node.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	var drawn := false
+	if squad_casing_width > 0.0:
+		for entry: Dictionary in batch:
+			var hull := casing_cone(entry["base"], entry["tip"], float(entry["radius"]), squad_casing_width)
+			var tint: Color = entry.get("tint", Color.WHITE)
+			if add_beam_cone(mesh, hull["base"], hull["tip"], float(hull["radius"]), 0.0, 1.0, cone_facets,
+					Color(1.0, 1.0, 1.0, tint.a)):
+				drawn = true
+	node.visible = drawn
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+
+
+# The cone that wraps another by `width` all round: the SAME apex angle, its base pushed back by
+# `width` and its tip out by `width / sin(half_angle)`, which is exactly what puts every point of the
+# slanted face `width` outside the original's. Static and pure, so a case can state a cone and check
+# the wrap; zero width is the cone it was given.
+static func casing_cone(base: Vector3, tip: Vector3, radius: float, width: float) -> Dictionary:
+	var axis := tip - base
+	var length := axis.length()
+	if length <= 0.0 or radius <= 0.0 or width <= 0.0:
+		return {"base": base, "tip": tip, "radius": radius}
+	axis /= length
+	var half_angle := atan2(radius, length)
+	var grown_base := base - axis * width
+	var grown_tip := tip + axis * (width / sin(half_angle))
+	return {"base": grown_base, "tip": grown_tip,
+		"radius": grown_base.distance_to(grown_tip) * tan(half_angle)}
 
 
 # One SOLID cone: a radial fan from `base` to `tip` plus the base cap, emitted as triangles onto a
@@ -764,8 +908,11 @@ func _emit_cones(layer: Layer) -> void:
 #
 # UV2.x carries the vertex's own distance ALONG THE AXIS from `dist_start`, so the shaft's bead runs
 # into the cone and up to the tip as one continuous sweep instead of restarting at the base.
+#
+# `tint` multiplies into that shade (#367), so one layer's cones can differ in colour and fade. White,
+# the default, leaves every vertex exactly the (shade, shade, shade, 1) it always was.
 static func add_beam_cone(mesh: ImmediateMesh, base: Vector3, tip: Vector3, radius: float,
-		dist_start := 0.0, shading := 0.45, facets := 12) -> bool:
+		dist_start := 0.0, shading := 0.45, facets := 12, tint := Color.WHITE) -> bool:
 	var axis := tip - base
 	var length := axis.length()
 	if length <= 0.0 or radius <= 0.0 or facets < 3:
@@ -784,21 +931,21 @@ static func add_beam_cone(mesh: ImmediateMesh, base: Vector3, tip: Vector3, radi
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in facets:
 		var j := (i + 1) % facets
-		_cone_face(mesh, tip, ring[i], ring[j], base, axis, light, dist_start, shading)
+		_cone_face(mesh, tip, ring[i], ring[j], base, axis, light, dist_start, shading, tint)
 		# The cap, wound the other way so its own face normal points back down the axis and it
 		# shades as the underside rather than as a copy of the side above it.
-		_cone_face(mesh, base, ring[j], ring[i], base, axis, light, dist_start, shading)
+		_cone_face(mesh, base, ring[j], ring[i], base, axis, light, dist_start, shading, tint)
 	mesh.surface_end()
 	return true
 
 
 static func _cone_face(mesh: ImmediateMesh, a: Vector3, b: Vector3, c: Vector3, base: Vector3,
-		axis: Vector3, light: Vector3, dist_start: float, shading: float) -> void:
+		axis: Vector3, light: Vector3, dist_start: float, shading: float, cone_tint: Color) -> void:
 	var normal := (b - a).cross(c - a)
 	if normal.length_squared() > 0.0:
 		normal = normal.normalized()
 	var lit: float = shading + (1.0 - shading) * maxf(normal.dot(light), 0.0)
-	var tint := Color(lit, lit, lit, 1.0)
+	var tint := Color(lit * cone_tint.r, lit * cone_tint.g, lit * cone_tint.b, cone_tint.a)
 	# EMITTED a, c, b: `normal` above is the OUTWARD one, and Godot's front face is (v0-v2)x(v0-v1),
 	# the opposite turn (measured, #876) -- so emitting a, b, c made the outside a BACK face. Harmless
 	# on the opaque cone, which culls nothing; the see-through one culls back faces and would have
@@ -916,6 +1063,10 @@ func _apply_beam_params() -> void:
 	# ...and the cones beside them, which carry the bead's own three so the pulse stays one sweep.
 	for layer: Layer in _cones:
 		_style_cone((_cones[layer] as MeshInstance3D).material_override as ShaderMaterial, LAYERS[layer])
+	# ...and the casing round them, whose colour is a SquadLines2D static a knob can move.
+	for layer: Layer in _cone_hulls:
+		((_cone_hulls[layer] as MeshInstance3D).material_override as ShaderMaterial) \
+			.set_shader_parameter("casing_color", SquadLines2D.CASING_COLOR)
 
 
 # A squad-line knob moved (#1070) -- the dashes live on SquadLines2D, so nothing here would otherwise
@@ -939,8 +1090,9 @@ const DASHED_BEAMS: Array[String] = ["squad", "cohesion"]
 
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
 # bead's width and an intensity whose own comment reads ">1.2 blooms" -- and the focus outline is
-# markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared: the
-# falloff SHAPE is not a thing the three want to differ about.
+# markup, so inheriting them made it a glowing rope around forty cells. Softness stays shared, but
+# for the one set that IS a light rather than a line -- a death's PULSE ("glow", #1104), whose probe
+# only read as a light once its falloff was softer than the laser's.
 #
 # Three tenants since #1042, so the binary fork became a named lookup rather than a second ternary
 # per parameter -- a fourth adds a row here and nothing else.
@@ -956,14 +1108,18 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"mark":
 			width = mark_width
 			intensity = mark_intensity
-		"squad":
+		"squad", "shard":
 			width = squad_line_width
 			intensity = squad_line_intensity
 		"cohesion":
 			width = cohesion_line_width
 			intensity = squad_line_intensity
+		"glow":
+			width = pulse_glow_width
+			intensity = pulse_glow_intensity
 	material.set_shader_parameter("beam_width", width)
-	material.set_shader_parameter("beam_softness", beam_softness)
+	material.set_shader_parameter("beam_softness",
+			pulse_glow_softness if spec.get("beam", "") == "glow" else beam_softness)
 	material.set_shader_parameter("beam_intensity", intensity)
 	# The bead rides ONLY the layers that ask for it; everything else reads a zero length and the
 	# shader's whole motion branch drops out. `motion` is the composed photosensitivity read.
@@ -979,6 +1135,11 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	material.set_shader_parameter("dash_fill", clampf(SquadLines2D.DASH_FILL, 0.0, 1.0))
 	material.set_shader_parameter("dash_speed", SquadLines2D.DASH_SPEED * BoardSpace.CELL_SIZE)
 	material.set_shader_parameter("motion", 1.0 if beams_animating() else 0.0)
+	# ...and the dark CASING (#1109 round 2), only on a layer that DECLARES one. Every other beam reads a
+	# zero width, which is the shader's original path untouched.
+	var cased: bool = spec.get("casing", false)
+	material.set_shader_parameter("casing_width", squad_casing_width if cased else 0.0)
+	material.set_shader_parameter("casing_color", SquadLines2D.CASING_COLOR)
 
 
 # The CONE's material (#1069), which is a different shader from the shaft's and therefore a
@@ -1111,8 +1272,34 @@ func cone_vertices_of(layer: Layer) -> Array[Dictionary]:
 			out.append({
 				"point": points[i],
 				"shade": 1.0 if i >= colors.size() else colors[i].r,
+				"color": Color.WHITE if i >= colors.size() else colors[i],
 				"dist": 0.0 if i >= uv2.size() else uv2[i].x,
 			})
+	return out
+
+
+# ...and a cased layer's arrowhead CASING (#1109 round 2): its material, and its geometry in the
+# cone_vertices_of shape. Null and empty on a layer that has never built one.
+func hull_material_of(layer: Layer) -> ShaderMaterial:
+	if not _cone_hulls.has(layer) or not is_instance_valid(_cone_hulls[layer]):
+		return null
+	return (_cone_hulls[layer] as MeshInstance3D).material_override as ShaderMaterial
+
+
+func hull_vertices_of(layer: Layer) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if not _cone_hulls.has(layer) or not is_instance_valid(_cone_hulls[layer]):
+		return out
+	var mesh := (_cone_hulls[layer] as MeshInstance3D).mesh as ImmediateMesh
+	if mesh == null:
+		return out
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		for i in points.size():
+			out.append({"point": points[i],
+				"color": Color.WHITE if i >= colors.size() else colors[i]})
 	return out
 
 
@@ -1261,6 +1448,11 @@ func _build_bent_mesh(shape: Vector4i) -> ArrayMesh:
 # it outlines. Relational either way: it moves with fill_lift instead of becoming a second number.
 func _lift_of(spec: Dictionary) -> float:
 	return fill_lift + spec.get("lift_sort", spec["sort"]) * lift_step
+
+
+# How far off its surface the gas's fog floor lies: a plane of the same stack, at GAS_FLOOR_SORT.
+func gas_floor_lift() -> float:
+	return fill_lift + GAS_FLOOR_SORT * lift_step
 
 
 # How far off its surface this layer's markup sits. Public because a marker that has to MEET other
@@ -1434,6 +1626,26 @@ func _cone_for(layer: Layer) -> MeshInstance3D:
 	add_child(instance)
 	_style_cone(material, LAYERS[layer])
 	_cones[layer] = instance
+	return instance
+
+
+# The cone's CASING node (#1109 round 2), built lazily beside it on a cased layer. One render priority
+# UNDER its layer: it writes no depth, so at the cone's own priority the two would sort by distance and
+# the hull's far side could draw over the arrowhead it outlines.
+func _hull_for(layer: Layer) -> MeshInstance3D:
+	if _cone_hulls.has(layer) and is_instance_valid(_cone_hulls[layer]):
+		return _cone_hulls[layer]
+	var instance := MeshInstance3D.new()
+	instance.mesh = ImmediateMesh.new()
+	var material := ShaderMaterial.new()
+	material.shader = load(REACH_CONE_CASING_SHADER_PATH) as Shader
+	material.render_priority = int(LAYERS[layer]["sort"]) - 1
+	material.set_shader_parameter("casing_color", SquadLines2D.CASING_COLOR)
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
+	add_child(instance)
+	_cone_hulls[layer] = instance
 	return instance
 
 

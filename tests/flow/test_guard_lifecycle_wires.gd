@@ -2,7 +2,7 @@
 # every rule test stays green — #103's shape, three times over:
 #
 #   1. The lapse tick. "Lapses when its owner's faction's next turn begins" is one line in
-#      game._run_turn_start_ticks; without it a Guard is immortal and the rule tests never notice,
+#      TurnBoundary.turn_start_ticks; without it a Guard is immortal and the rule tests never notice,
 #      because they call Unit.lapse_guard directly.
 #   2. The ground markers. An armed Guard has to be visible on the board through the enemy phase,
 #      which means it cannot ride the selection channel — and the refresh has to actually be called.

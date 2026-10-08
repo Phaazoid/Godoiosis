@@ -4,7 +4,8 @@ class_name UnitInfoPanelControl
 # Controller for the click-to-inspect panel (UnitInfoPanel.tscn) — a docked, full-height
 # left column as of #68 (replaces the old flip-top/bottom popup). Owns show/hide + which
 # unit is open, sets the header (name/jobs), and fans set_unit/clear out to the child
-# sections so their signal hookups tear down together.
+# sections so their signal hookups tear down together. The tile the unit stands on is not read
+# here: Inspect opens it in the info card beside this dock (#1105), which closes with it.
 
 @onready var portrait_panel = $UnitInfoPanel/Margin/VBox/HeaderRow/PortraitPanel
 @onready var name_label: Label = $UnitInfoPanel/Margin/VBox/HeaderRow/HeaderText/NameLabel
@@ -18,6 +19,9 @@ class_name UnitInfoPanelControl
 # panel knows nothing about the queue, and the plan's numbers are the game's to re-resolve (#697).
 signal loadout_changed
 signal loadout_acted(unit: Unit, verb: String, index: int)   # #53: what the player DID, not that it is stale
+signal detail_requested(item: Item, owner: Unit)   # #1152: read an item's card; the game opens it
+# The panel let go of its unit; the tile card beside it goes with it (#1105).
+signal closed
 
 var current_unit: Unit
 var current_board: BoardContext   # kept so a live refresh can recompute terrain-dependent DEF
@@ -25,8 +29,8 @@ var current_board: BoardContext   # kept so a live refresh can recompute terrain
 # Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
 # `_content_shown` is exactly what `visible` meant before #722, which is why is_showing/
 # is_showing_unit read it: a panel hidden for a cinematic has NOT let go of its unit, and
-# HoverPresenter asks those two to decide where the hover card parks and whether it would be a
-# second card for the same unit. Answering "no unit is open" there would move the card mid-pass.
+# game asks those two to decide where the info card parks and whether it would be a second card
+# for the same unit. Answering "no unit is open" there would move the card mid-pass.
 var _hidden_for_playback := false
 var _content_shown := false
 
@@ -35,6 +39,22 @@ func _ready() -> void:
 	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
 	inventory_panel.loadout_changed.connect(loadout_changed.emit)
 	inventory_panel.loadout_acted.connect(loadout_acted.emit)   # #53: forwarded on the line above's idiom
+	inventory_panel.detail_requested.connect(detail_requested.emit)
+	restyle()
+
+# The player's palette (#1105): the frame, the two paper boxes and the header's inks, asked of
+# QueueStyle -- the dock's own old colours are where slate was copied from, so slate looks as it
+# did. Nothing is pushed on a palette switch, so SettingsScreen calls this on close; the children
+# re-ink themselves from it.
+func restyle() -> void:
+	$UnitInfoPanel.add_theme_stylebox_override("panel", QueueStyle.panel_box())
+	inventory_panel.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	squad_panel.add_theme_stylebox_override("panel", QueueStyle.section_box())
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	jobs_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+	stats_section.restyle()
+	inventory_panel.restyle()
+	squad_panel.restyle()
 
 func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if current_unit == unit:
@@ -73,6 +93,7 @@ func _release_current_unit() -> void:
 		current_unit.movement.movement_finished.disconnect(_refresh_derived_rows)
 
 func clear():
+	var was_open := _content_shown
 	_release_current_unit()
 	current_unit = null
 	_content_shown = false
@@ -82,6 +103,8 @@ func clear():
 	inventory_panel.set_unit(null)
 	squad_panel.set_unit(null)
 	states_bar.set_unit(null)
+	if was_open:
+		closed.emit()
 
 # #722's one input.
 func set_hidden_for_playback(hidden: bool) -> void:

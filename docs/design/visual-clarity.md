@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1100 (2026-09-23).**
+**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -57,6 +57,31 @@ plus the running order of the queue-UX checklist. Update it as items land.
    readouts stay, they just stop popping up mid-flow). Still open here: the rune "reacts-with"
    list — #167's inventory tooltip shows recipe/hit/strain, not reactions (the middle term was "payload" until #1058 gave that word to the attack a hit drops).
 
+   *A tile is READ ON A CLICK since [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)
+   (2026-09-23, reshaped by two play reviews), out of the 2026-09-22 stream playtest ("no way to
+   inspect things on tiles like overwatch paint, and zones").* **Nothing shows on hover any more —
+   this reverses round 2's "every real tile carries a hover card".** The dev's 2026-09-27 ruling,
+   after a unit card and a full tile card were drawn together: *"This is just too much on the
+   screen at once... Nothing on hover, at all. While the radial menu is up for a unit, we get that
+   unit's card up. Inspect from the menu brings up the full one. For tiles, nothing on hover.
+   Clicking a tile brings up the full tile for it."* So the one info card has two faces: a unit's
+   card for exactly as long as its ring is up, and the **tile card** — one boxed section per layer,
+   **Overwatch** (who watches it: side, unit, attack), **Zones** (each drawn zone and what its kind
+   asks, including *how* to take a capture point) and **Ground** (states with live clocks, rules,
+   which elements can touch it) — for a clicked empty tile, or beside the dock for the tile an
+   inspected unit stands on, following that unit as it walks. **A tile is never read inside the
+   dock** (*"much better than including the new info in the unit overlay"*). Two earlier shapes were
+   built and thrown out, and why is worth keeping: a click opening the tile in the full-height dock
+   (*"far too much"*, and it stood beside the hover card for the same tile), then the Z key growing
+   the hover card in place (*"the Z button just isn't doing it for me"* — it all has to be reachable
+   by mouse). Right-click closes a card before it undoes an order, since a card now comes up on every
+   empty-tile click. `TileReadout` (`Classes/board/`) is the ONE builder and `TileInfoSections` the
+   one renderer and the one redraw diff — whose old `""` sentinel, doubling as an empty readout's
+   signature, is what showed a rock the grass tile's fire (dev report, 2026-09-26). The hover setting
+   slice 2 was to add (Verbose / Minimal / Off) was dropped when #1105 closed (dev, 2026-09-27): with
+   no hover card left, there is nothing for it to set.
+
+
 ## #49 Action Queue UX — CLOSED, all items shipped
 
 **Found stale during the 2026-07-16 design-doc sweep:** this checklist read as an active running
@@ -71,11 +96,31 @@ directly against `Classes/ui/queue/SquadActionQueueControl.gd` / `ActionQueueRow
    builds COUNTER as its own section, last, with skipped counters hidden.
 3. **Group a volley into one expandable row.** — **DONE** —
    `SquadActionQueueControl._collect_volley_group` / `_add_volley_group`, per-actor expand/collapse
-   state (`_expanded_actors`), `ActionQueueRow.setup_volley_summary`.
+   state (`_expanded_actors`), `ActionQueueRow.setup_volley_summary`. Since #1122 the toggle is the
+   header's `[+] xN` readout (`ActionQueueRow.expand_toggled`); a click on the header row requeues.
 4. **Outer scrollbox for the whole queue.** — **DONE** — `_section_scrolls: Array[ScrollContainer]`,
    one per section plus the outer list.
 5. **Click-drag to reorder attacks.** — **DONE** — full drag machinery (`_drag_row` / `_drag_section`,
    `reorder_attacks_requested` signal) in `SquadActionQueueControl`.
+
+**A click on a row REQUEUES its order ([#1122](https://github.com/Phaazoid/Godoiosis/issues/1122),
+2026-09-28).** Dev: *"jump to that unit in game, with the action menu brought up, to requeue that
+action."* The click SPENDS the order through the row's own X path (`game._on_queue_cancel_requested`,
+so a move takes its unit's main with it, move-before-main) and then opens the way back in: move
+planning for a move row (`begin_move_planning`, where right-click's re-plan goes), the unit's ring
+for anything else, at the view's centre because that is where the camera is taking the unit. The
+spend is not a design preference but a precondition: the ring hides every main action while one is
+queued (`MainActionMenu._can_take_main_action`), so a ring opened over the live order offers only
+Inspect, and the spend must come BEFORE the ring opens because `build_tree` snapshots at open. A row
+that is not an order (`is_reorderable()` false: a counter, a watch shot, a tile hit, a sink) only
+moves the camera. **A HOLD is the exception ([#1158](https://github.com/Phaazoid/Godoiosis/issues/1158),
+2026-09-29)** — dev: *"clicking on someone with an empty move... nothing happens."* It is not an order
+(no drag, no X), but it IS the unit's move slot, empty, so its row re-plans like a move row, main
+action included. `is_reorderable()` answers the DRAG's question and the click asks whether a row leads
+back to an order, so the click's gate adds `action_type == MOVE` rather than widening
+`is_reorderable()`. A click is a release that reordered nothing AND travelled no further than
+`GearDropZone.CLICK_SLOP`, since a click now costs an order and an abandoned drag must not. How the
+player is told any of this is [#1085](https://github.com/Phaazoid/Godoiosis/issues/1085)'s.
 
 ## Tooltip / popup legibility — open items (added 2026-07-29)
 
@@ -87,7 +132,7 @@ Collected at @Phaazoid's direction while building [#90](https://github.com/Phaaz
 2. **A rune has no meaningful inventory tooltip — DONE 2026-08-10 ([#167](https://github.com/Phaazoid/Godoiosis/issues/167), filed during #166 playtest, a #44 sub-issue).** `inventory_panel._tooltip_for` had a `WeaponInstance` branch and an `ArmorData` branch; a `RuneData` fell through to the generic case and showed only its name plus flavour text. The new branch is a readout, not new machinery: a temper/size/used-capacity headline, then one line per inscribed carving built from the exact `attack_detail`/`attack_block_reason` pair #166 built for the Transmutation submenu's rows (same detail-then-reason order, so the two surfaces read consistently) — a carried-but-unequipped rune, or one force-stripped by a maim, now explains itself the same way an equipped one's submenu does. Read against the panel's own unit (the tooltip's wielder), since the numbers are per-wielder. Pinned by `tests/ui/test_rune_inventory_tooltip.gd`, sibling fixture to #166's `tests/ui/test_menu_catalogue_rows.gd`, asserting on the rendered slot tooltip rather than the builder function in isolation. **That whole composition moved to `ItemText.hover` at [#137](https://github.com/Phaazoid/Godoiosis/issues/137)** — the rule is unchanged and so is this readout; what changed is that the pre-mission surfaces now say the same words, where both had answered with the item's name alone.
 3. **The Transmutation submenu reads as a catalogue, not just a picker — BUILT 2026-08-10 ([#166](https://github.com/Phaazoid/Godoiosis/issues/166); the item was #88's, filed as a ticket out of [#157](https://github.com/Phaazoid/Godoiosis/issues/157)'s plan and a #44 sub-issue).** #157's equip gate killed the fully-dead-rune case but is "at least one channelable carving", so a partial rune's dead entries permanently owe the player a reason — the gate made this readout more necessary, not less. Both dev-requested parts shipped, and the mechanism under them is deliberately general:
    - **Un-channelable carvings are LISTED and greyed with a reason.** `RuneData.choice_attacks` is now the catalogue (every inscription), matching `WeaponInstance.secondary_attacks`, which always returned all extras and let the row disable them; whether a given carving can be paid for is asked per entry.
-   - **Every row carries a hover readout** — recipe · hit · strain (the middle term was "payload" until #1058 gave the word to the attack a hit drops), derived per wielder (`TransmutationData.mechanical_text`, the carving's answer to the role `ArmorData.mechanical_text` plays for a worn piece). Deliberately derived rather than authored: an `AttackData.description` for prose can be appended as one more line whenever it is wanted, at the same cost.
+   - **Every row carries a hover readout** — recipe · hit · strain (the middle term was "payload" until #1058 gave the word to the attack a hit drops), derived per wielder (`TransmutationData.mechanical_text`, the carving's answer to the role `ArmorData.mechanical_text` plays for a worn piece). Deliberately derived rather than authored: an `AttackData.description` for prose can be appended as one more line whenever it is wanted, at the same cost. **Since [#1083](https://github.com/Phaazoid/Godoiosis/issues/1083) every attack row, weapon or carving, fire or watch, also says whether it hits allies** — one line, the only one of the cards' channel list the ring carries, by ruling (the rest is the item card's, [#1152](https://github.com/Phaazoid/Godoiosis/issues/1152)). The rule is in `weapons.md` → *The ally line*.
    - **The generalization, which is the reusable part: a menu can only grey what it can explain.** The reason a row is dead belongs to the data layer, not the menu — `EquippableData.attack_block_reason(wielder, attack)`, answered per kind (a weapon reports readiness in its family's own `status_text()` words, a rune reports aura), with `Unit.is_attack_fireable` **derived** from it so the refusal and its explanation can never drift (Law #4). The menu side is one row builder, `MainActionMenu._entry(name, blocked_reason, detail)`, which any other menu can adopt without new machinery. The one hardcoded reason string that used to live in the menu is gone.
    - **Which options get listed-and-greyed is still per-menu policy, and only this one changed.** The Weapon Action *self-verbs* (Reload/Rev/Burrow) stay hidden when unavailable, because `can_reload()` conflates "this family cannot reload at all" with "the magazine is already full" — they need that distinction before they could honestly say why. `populate()`'s top-level rows likewise stay omit-when-unavailable; a permanently full main menu is a UX change, not a readout fix.
    - This is also **why the category opens for a single carving** rather than requiring two: with descriptions and greyed entries it is informative even when it offers no alternative choice. Note the category's *row* still gates on something ACTIONABLE (`Unit.has_transmutations`, the same loop `has_weapon_actions` uses) — the catalogue is what's inside it, not what opens it.
@@ -516,7 +561,7 @@ had. What landed:
 **The widget is a SEGMENTED STRIP, and an `OptionButton` was structurally out.** A dropdown opens an
 embedded `PopupMenu`, and `CLAUDE.md`'s SubViewport gotcha (2) records that those do not dismiss on
 outside-click inside `GameView` — the #26 reason the action menu has been Control-based ever since
-and "must not go back to a `Popup`". `ReportPanel._build_kind_row` is the same shape already
+and "must not go back to a `Popup`". `ReportForm._build_kind_row` is the same shape already
 shipped, and its own comment states the other half of the reason: every choice is readable, and
 which one is picked is readable, without a click. Three toggle `Button`s in one `ButtonGroup`, so
 "two modes chosen at once" is unrepresentable rather than merely avoided.
@@ -641,7 +686,9 @@ Four things that generalise past this ticket:
    skips a unit already queued for deletion, so the mirror never observes HP at 0; and noticing the
    unit VANISH instead would fire on `clear_board`, which frees without dying. `unit_died` is
    therefore the one signal this deliberately poll-based node listens to, and the exception is
-   structural rather than a preference.
+   structural rather than a preference. *(Since #480 the host also HANDS it each blow — see "When the
+   cubes fly" below — for the same kind of reason: a poll sees one number fall and cannot say how much
+   of it was the fall.)*
 4. **A TEST'S PRECONDITION THAT IS NEVER ESTABLISHED IS NOT A PRECONDITION.** The baseline case
    (2 above) originally never let the readout be up *before* the damage, so `_last_hp` was never
    seeded and the `.get(id, current)` default silently stood in for it — the case passed against a
@@ -786,6 +833,56 @@ HP would, with no second convention to keep in step. **A cube comes back the way
   numbers and was left alone. Holding it red would couple the colour seam to the animation seam and
   soften `filled_block_count()`, round 3's non-collapsing answer to *which sockets are full*, in the
   middle of a pop.
+
+### When the cubes fly ([#480](https://github.com/Phaazoid/Godoiosis/issues/480), BUILT 2026-09-29)
+
+*"Let's make it so that the health bar drop only occurs when an attack hits, or when the unit actually
+hits the ground from falls, rather than mid swing."* The readout has no moment of its own — it bursts
+on the first frame HP moves — so this is two retimings, and only one of them touches the rules' clock.
+
+- **The payload lands at the lunge's PEAK.** `UnitVisuals.play_attack_lunge` returns when the OUT leg
+  completes (a `lunge_peaked` signal off a tween callback between the two legs) while the return leg
+  plays on; `AttackAction.execute` then emits `impact` and applies the payload there. The bodyguard's
+  block lunge is the same function, so a guarded hit lands at the BLOCK's peak — consistent, and
+  stated. Only *when* a resolved number lands moved (Law #2 intact). The headless executor
+  (`play_session._apply_attack`, which calls the same state steps back to back since #46) has no
+  animation and needed nothing.
+- **A fall's cubes wait for the landing — in the READOUT only.** `ResolvedOutcome.fall_damage` is
+  folded into `damage` and stays so: ONE `take_damage` at the hit, because splitting it would change
+  the lethality ladder's overkill arithmetic and break preview == execution. What moved is the burst.
+  `battle3d` hands `UnitMirror.hold_falls` every blow off `OrderExecutor.volley_struck`; it ARMS each
+  struck unit's `fall_damage`, the unit's next HP drop HOLDS `min(armed, loss)` of it standing, and the
+  hold ends on `movement.landing_falling`'s true→false edge (the touchdown), with the shove being over
+  as the fail-safe. The readout draws HP plus the hold, and the cubes thrown are the difference in THAT
+  between frames — so the hit's share leaves at the hit and the fall's at the landing, with one rule.
+  The NUMBER is part of the readout and waits too: a hovered falling unit reads HP plus the fall until
+  it touches down, while the 2D unit card reads live HP throughout.
+- **The baseline and the hold are both written above the visibility gate** (#314's rule, unreopened):
+  a hidden readout holds and lets go like a shown one, and simply throws nothing.
+- **A LETHAL fall never holds.** The fall is folded into the one `take_damage`, so the unit dies AT
+  THE HIT, before any hold exists, and `_on_unit_died` detonates the whole pre-hit grid there — the
+  fall's cubes do not wait for the ground. A death while a hold stands (something else killing the
+  unit mid-fall) would detonate the whole grid as well, held cubes included, since they are drawn
+  filled.
+- **The camera jolt stays at the hit.** It rides the live HP diff; the landing reports nothing of its
+  own, since the blow was already reported once.
+- **Declared edges.** A shove that falls at TWO breaks releases the whole fall at the FIRST touchdown
+  (the outcome carries one fall number, and splitting it per edge would be a re-derivation). A
+  drowning's `drown_damage` is not held. A triggered shot landing on a volley member between the lead's
+  blow and that member's own would spend the member's arm. The cube grid is 3D-only, so this is a
+  declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry.
+- **Declared edge: a fall that DOWNS.** When hit plus fall reaches the unit's HP within the overkill
+  ceiling, `take_damage` downs it AT THE HIT: the downed art and the DOWNED glyph arrive there, while
+  the hold keeps up to `fall_damage` cubes (and the number) standing over the body until touchdown —
+  the transient contradiction #322's glyph exists to prevent, for the length of the fall. The down
+  also clamps the loss at HP−1, and `min(armed, loss)` then splits it FALL-FIRST: HP 8, a hit of 5 and
+  a fall of 5 throw 2 cubes at the hit and 5 at the landing, although the hit alone took 5. Iron Will's
+  cap skews the split the same way. Kept as built (the approved plan's `loss − held` read literally);
+  skipping the hold when the hit downs the unit is an open fork for the dev.
+- **What a headless suite can and cannot see.** The fall beat is instant headless and never raises
+  `landing_falling`, so the real slide ends the hold at the fail-safe there; the touchdown case raises
+  and lowers the flag itself inside a real slide and says so. The peak IS observable headless — the
+  lunge is a real tween — so the payload case records the attacker's art offset at the instant HP moves.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 
@@ -1176,6 +1273,42 @@ Overrun shrinks the font to `MIN_LABEL_FONT_SIZE`, the same floor and the same r
 uses. Nothing shipped reaches it: the budget is ~83px and *Rebecca*, the longest name in
 `Resources/units/`, is ~64.
 
+### A weapon's live count rides its attack rows ([#1045](https://github.com/Phaazoid/Godoiosis/issues/1045) + [#663](https://github.com/Phaazoid/Godoiosis/issues/663), 2026-09-28)
+
+From the watched first-time playtest: *"There is no easy way to see a Carbine's current and total
+ammo. Should be much more obvious. Next to the attack name in the menu, even."* The magazine was
+readable in Inspect and on the pre-mission card (`ItemText` → `status_text()`) and nowhere on the
+board. The look was grilled against a to-scale mockup of the real ring, and five rulings came out:
+
+- **Form A, plain text** — `Shot 4/6`, the count after the name in the name's own colour. Pips and
+  a segmented rim strip were drawn beside it; text read best at 1x and needs no new drawing.
+- **Kit rows only**, never the Weapon category slice — hovering Weapon already ghosts the kit ring
+  legibly, so the count is one hover away without a click.
+- **Every family's count**: Carbine rounds, Mace charge, Springspear spring (`Stab 0/1`), the
+  Chemical Spitter's tank (on its main, under either form), **and the Chainsword's rev timer**.
+- **The timer must look meaningfully different from an ammo count** — so it reads in turns and is
+  TINTED (`Slash 2 turns`, `ActionMenuController.GAUGE_TIMER_COLOR`, a Game-tab row under *Ring:
+  readout*). Orange on the selected blue wedge is the weakest contrast of the candidates, which is
+  why it is a knob rather than a number.
+- **#663 in the same diff**: the headless unit legend appends the family's `status_text()`.
+
+**One answer, and what keeps it one.** `WeaponGauge` is the structured answer — a STOCK or a TIMER,
+current and maximum — and `WeaponInstance.gauge()` is each family's. `status_text()` now words its
+numbers FROM it, so the Inspect sentence and the ring cannot disagree about how many rounds there
+are; `readiness_noun()` stays the other question (the rule, not the state). **Which rows print it** is
+`EquippableData.attack_gauge(wielder, attack)`: the readiness flags by default (#108 — the flags are
+the only thing a family may consult), with two declared overrides because neither reaches its attacks
+through a flag — the tank rides `is_main_form`, and rev rides every attack the sword fires (it is what
+makes all of them ignore DEF). `MainActionMenu._with_gauge` attaches it BESIDE `name`, never into it,
+so the name stays the row's identity for `_append_unique` and the readout title.
+
+**The label is drawn only through `ActionMenuController.slice_label_parts`** — `[text, colour]` runs —
+so a headless case reads what reaches the screen and a gauge has no second path to take. The whole
+label shares the existing shrink-to-fit floor, so a crowded kit ring (a Carbine carrying three
+granted attacks, six rows) shrinks `Overwatch 6/6` rather than dropping the count; that was the
+declared residual at build time. What no headless suite can see is the draw itself and how the tint
+reads over a live board — those are play-checks.
+
 ### Round 2: what the first play-through changed (dev, same day)
 
 Six items, and three of them had something underneath worth recording.
@@ -1201,12 +1334,23 @@ already had a richer HUD door. The principle worth keeping: **the unit's menu is
 the turn is the HUD's business.** The one capability genuinely lost is *"wipe everything this unit
 has queued in one press"*, which is now N presses of the queue row's X.
 
-**So the End Turn button is permanent** — with TWO exceptions, and they are one mechanism answering
-two questions. [#722](https://github.com/Phaazoid/Godoiosis/issues/722) stands it down while a
-cinematic pass owns the frame, on a different predicate entirely (see *The shell's menus, and what the
-cinematic owns* below); [#739](https://github.com/Phaazoid/Godoiosis/issues/739) stands the same pair
-down -- End Turn and the queue dock, through `game.set_battle_hud_hidden` -- for the pre-mission
-placement phase. A cinematic is nobody LOOKING; the phase is nobody ACTING, which is why the two
+**So the End Turn button stopped waiting for every squad to act** — it is up whenever ending the turn
+is on offer, and ONE `visible` composes two terms. The CONTENT term is
+[#541](https://github.com/Phaazoid/Godoiosis/issues/541)'s (dev, 2026-09-27: *"The End Turn button
+should not appear while queuing orders… the buttons are easily confused. It should also be hidden
+during the enemy turn."*): not while the ACTIVE FACTION is an AI faction, and not while a squad's plan
+is open (`squad_manager.active_squad`), where it sat under Execute as the same red rectangle. The
+AI's turn is read off the active faction rather than `playback_owns_board()`, because the faction
+switches at the handoff, a whole `TURN_HANDOFF` beat before the lock was claimed (since #1220 an AI
+faction claims it before the beat, to plan its first squad there, and the faction stays the read that
+names whose turn it is); and "the AI's turn"
+rather than "not the player's", so a hotseat faction keeps its door. `active_squad` got a SETTER for
+it, since its null writes land after `squad_became_empty` or with no signal at all. The HIDE term is
+one mechanism answering two questions. [#722](https://github.com/Phaazoid/Godoiosis/issues/722) stands
+it down while a cinematic pass owns the frame, on a different predicate entirely (see *The shell's
+menus, and what the cinematic owns* below); [#739](https://github.com/Phaazoid/Godoiosis/issues/739)
+stands the same pair down -- End Turn and the queue dock, through `game.set_battle_hud_hidden` -- for
+the pre-mission placement phase. A cinematic is nobody LOOKING; the phase is nobody ACTING, which is why the two
 readouts stay up there and not here. The second one is load-bearing rather than tidy: the button's
 press gates on `_board_locked_for_player()`, which is FALSE during the phase, so an un-hidden button
 would run `end_turn()` on a turn that never started.
@@ -1220,13 +1364,18 @@ its height FROM the reservation (`BUTTON_CLEARANCE - CORNER_MARGIN`) rather than
 third time. The general rule the pair of tickets makes: **a surface that stands down owes the frame
 whatever the player still needs from that corner.**
 
-A plain enemy turn still leaves it up, which is #541's ruling. What its old visibility rule became is the FLASH, and the
+What its old visibility rule became is the FLASH, and the
 same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
 so a flashing button never interrupts and a still one always does, and the cue and the confirmation
 cannot disagree. Two notes measured rather than assumed while making it permanent: `MissionStatusPanel`
 already reserved its corner slot *even while it was hidden*, so nothing reflows; and the queue dock
 occupies y 25..490 against the button's y 676..712, so the old "these two are never on screen
-together" argument was retired without its conclusion changing.
+together" argument was retired without its conclusion changing. #541 then made them rarely on screen
+together again, for a reason that is not layout; the measured gap is still what the suite asserts.
+What #541 leaves up is declared: behind a menu or a finished mission (the press refuses there), and
+ending a turn with a half-built queue now means executing or cancelling it first —
+[#1086](https://github.com/Phaazoid/Godoiosis/issues/1086)'s cancel-the-whole-queue is what makes that
+cheap.
 
 **A wedge is capped at how much it PAINTS** (`MAX_WEDGE_DEGREES`) — *"the massive balloon arcs just
 don't look great."* A compacting ring produces rings of one and two constantly, and without a cap
@@ -1362,6 +1511,8 @@ first as `ALWAYS_SHOW_SQUAD_RINGS`. What remains open is the animation itself, a
 question the restraint doctrine sharpens: squads re-form often, and three of these firing at once
 during a settle is worth designing for rather than discovering.
 
+**Built on the TETHER rather than the ring by [#367](https://github.com/Phaazoid/Godoiosis/issues/367) (2026-09-23)**, #423 folded in: see *Membership MOMENTS* at the end of this file.
+
 **Warn when a move ends on — or crosses — an element-afflicted tile — the QUEUE half BUILT
 ([#419](https://github.com/Phaazoid/Godoiosis/issues/419), 2026-09-01).** *(Merged capture: the
 action-menu warning recorded 2026-08-18 and the queue-row warning recorded 2026-08-19 are the same
@@ -1411,7 +1562,7 @@ live on both counts**: re-planning a move still sends it to the back of the queu
 section is draggable, so the escape hatch exists exactly where this note said it would need to.
 
 Two things deliberately did NOT change. **Move-before-main stands**: a unit holding a main action
-still loses the row, because `MoveAction.actor_can_perform` refuses the order at the chokepoint, so
+still loses the row, because `MoveAction.actor_block_reason` refuses the order at the chokepoint, so
 relaxing that would be a rules change and not a menu one. Greying it with a reason instead of hiding
 it stays a live idea, and stays governed by the top-level ruling above — a permanently full main menu
 is a UX change, not a readout fix. **Group Move was one-shot for one day**: both rows read
@@ -1538,7 +1689,9 @@ its **aim line** (`origin_cell → target_cell`, the resolver's own aim) and the
 yaw, because only the rig knows what to measure from. The line comes off the ATTACK rather than off
 the two units, so #47's swing at open ground still has a direction and a victim freed mid-pass
 cannot take the angle down with it. `BoardSpace.side_on_yaw` is the arithmetic, and it returns the
-NEARER of the two perpendiculars — which is what makes the shot a spin instead of a lurch.
+NEARER of the two perpendiculars — which is what makes the shot a spin instead of a lurch. (Still
+true of `side_on_yaw`; since [#1132](https://github.com/Phaazoid/Godoiosis/issues/1132) the shot
+clearance may add a TURN on top when the nearer side has something standing in it.)
 
 `_beat_lines` is a third schedule beside `_beat_holds` and `_beat_subjects`, keyed identically by
 the beat's opening action, and inherits their rule: **a beat left out means the camera keeps the
@@ -1586,8 +1739,11 @@ place. (Diff 2b adds a third, the flourish -- see *The camera JOLTS, SWAYS and S
 the pass-end view return (`restore_view`), both recentres (SPACE and #471's return to the acting
 unit), and R. The snaps are `frame()`/`pose()` — a rig still lerping unprojects at one distance and
 picks at another, desyncing every screen-space read taken on the way in — WASD, because a held key
-is already continuous and easing it only adds lag, and the playback mirror, for the compounding
-reason above. All of them go through `hold_at`, so none leaves a stale target for the ease to fight.
+is already continuous and easing it only adds lag, the playback mirror, for the compounding
+reason above, and the middle-drag grab pan (#1037), which an ease would slip out from under the hand
+(it starts from the live aim, so a drag taken mid-glide cancels the glide where the camera is rather
+than jumping to its destination). All of them go through `hold_at`, so none leaves a stale target for
+the ease to fight.
 
 **THE GAP THIS CLOSED, and it was flagged at PR #568 and missed in its own build:** `_aim_over`
 answers the *board's* surface, so before this the fight lifted into the diorama and the camera
@@ -1597,9 +1753,10 @@ stretch, so a poll below the gate would never see a frame with the tiles home an
 stay in the sky for ever.
 
 **`_center_rig_on` must never be reached while the board is staged** — `BoardSpace.surface_point`
-carries the staged offset and `_aim_over` does not, so a call there would lift twice. Structural
-rather than guarded: both its callers are refused while playback owns the board, and playback is
-the only thing that stages anything.
+carries the staged offset and `_aim_over` does not, so a call there would lift twice. Unreachable
+rather than guarded there: every caller is refused while playback owns the board, and playback is
+the only thing that stages anything. The objectives panel's zone rows (#955 part 3) are the one
+caller that asks for itself, since that panel stays up through the pass.
 
 **An AI move is framed across BOTH ENDS** (dev: *"instead of just centering on the unit, it should
 try to show both their start and end position in the initial shot (should be doable unless super
@@ -1770,11 +1927,10 @@ places rather than everywhere makes them have more effect."*
   *yes* so a forgotten verb keeps playing exactly as it does today, and
   `tests/law/test_action_registry.gd` is what refuses the omission — degrade in play, red in the
   suite, the same bargain `hold_for` makes when it floors `coda_hold`'s sentinel.
-- **Deliberately NOT extended to the other silent verbs.** RELOAD is the same shape, and RALLY and
-  INTIMIDATE move Will, which [#965](https://github.com/Phaazoid/Godoiosis/issues/965) says has no
-  board channel at all — so all three are also spending camera on something invisible. Left alone
-  on purpose: pulling the camera off Rally and Intimidate would make Will *more* invisible while
-  #965 is open and unruled. The table asks the question out loud instead of answering it for him.
+- **Deliberately NOT extended to the other silent verbs.** RELOAD is the same shape and is left alone
+  on purpose; the table asks the question out loud instead of answering it for him. (RALLY and
+  INTIMIDATE were the other two, left alone because they moved Will, which
+  [#965](https://github.com/Phaazoid/Godoiosis/issues/965) said had no board channel; #1174 retired both.)
 - **What was NOT built, and why:** a persistent *revved* board marker. It fails #322's licensing
   test — a marker answering *what is this unit* may ride the health readout's gate only where an
   unconditional carrier already exists, and Rev has no art at all. That is the same ground #965
@@ -1807,7 +1963,11 @@ computes its diff and then returns early on `previous == current or not bar.visi
 `HEALTH_BARS` ships **HOVERED** — so reporting below that line would leave the default settings
 with no impact in them anywhere, which is [#534](https://github.com/Phaazoid/Godoiosis/issues/534)'s
 bug verbatim. Sharing one observation with the burst is also what keeps them in step: the jolt and
-the cubes cannot disagree about when the hit landed.
+the cubes cannot disagree about when the hit landed. *(Amended by
+[#480](https://github.com/Phaazoid/Godoiosis/issues/480): the early return now compares what the
+readout SHOWS, `was_shown == shown or not bar.visible`, HP plus a held fall; the jolt still rides the
+live HP diff above it. The jolt and the HIT's cubes share that one observation, while a shove's fall
+cubes deliberately wait for the touchdown — see "When the cubes fly".)*
 
 **A death fires the down rung ALONE.** `die()` emits and `queue_free`s in one frame and the reconcile
 skips a unit already queued for deletion, so the poll **never** observes a unit at 0 HP. Without a
@@ -1920,8 +2080,9 @@ its own reason, whoever owns the base.
 spends its time by stopping the world. Three things are load-bearing: the unfreeze timer is created
 with `ignore_time_scale`, or it would be frozen by the freeze it exists to end and hang the game;
 re-entry is **counted**, so a volley killing two cannot have the first restore end the second freeze
-and race; and the restore writes `1.0` literally, which is correct only while nothing else writes
-`time_scale` — true today, and the comment says where to look when it stops being.
+and race; and the restore wrote `1.0` literally, which was correct only while nothing else wrote
+`time_scale` — until #545 made `Pacing._apply_time_scale` the one writer, so a release now comes
+back to the playback speed.
 
 **It fires from the death path and needed no new plumbing.** A killing blow already reaches
 `UnitMirror._on_unit_died` alone — the HP poll structurally never observes 0 HP — and that is already
@@ -1947,7 +2108,11 @@ what lets one observation drive two consequences.
 halves of its tween and is *awaited* before `take_damage` runs, so the sprite is back at rest by the
 instant the death signal fires — there is no swing to freeze mid-. What 2c ships is the **impact
 freeze**; the anticipation freeze needs frames to freeze between, which is
-[#603](https://github.com/Phaazoid/Godoiosis/issues/603).
+[#603](https://github.com/Phaazoid/Godoiosis/issues/603). *(Half of that premise moved with
+[#480](https://github.com/Phaazoid/Godoiosis/issues/480): the lunge now returns at its PEAK and the
+payload lands there, so the attacker is mid-swing when the death signal fires. Whether the impact
+freeze now reads as a swing held at its top is an eye check nobody has made; the anticipation
+freeze is still #603's.)*
 
 **Superseded, not forgotten:** #520's original scope named a *keyframe/segment layer over `pose()`*.
 It was never built and is not owed — the published-fact channels (`directed_line` / `framed_span` /
@@ -2389,7 +2554,8 @@ reason.
 A pass whose last blow knocked somebody into a pit ends with the shot still deep below the board, and
 the climb is *eased* — longer than `TEAR_OUT_AFTERMATH` — so the board used to start reassembling
 mid-climb. The exit now waits on the rig's own published depth
-(`CameraController.fall_depth`, the one fact that travels rig → playback down that channel) rather
+(`CameraController.fall_depth`, the one fact that travelled rig → playback down that channel until
+#1132's `view_arriving` joined it) rather
 than on a beat of its own, which would be a second answer to how long the climb takes and would
 disagree the moment the rate knob moved. Since round 4 the same wait covers the death show too —
 the depth stays published until the last cube lands — and the exit's return pan restores the WIDE
@@ -2671,7 +2837,9 @@ Four things are worth carrying out of the build.
   first beat and never came back, though `_shot_volume`'s own header calls that volume *"the WIDE
   shot"*. Nobody wrote that rule; it was what five independent edges added up to. **Ruled
   2026-09-02: a release falls to the next LIVE shot**, so the gap between beats now holds the stage.
-  No feel value moved — what moved is which shipped shot the gap belongs to.
+  No feel value moved — what moved is which shipped shot the gap belongs to. (On the BATTLE ZOOM
+  there is no gap since 2026-10-07: the next beat's approach is its shot from the pan's first frame
+  -- see *The approach is the shot* under #1132. The ruling still governs every other release.)
 
 Five latches retired from `battle3d` (`_playback_owned_camera`, `_framed_span`,
 `_stage_cells_solved`, `_trained_seen_id`, `_release_deferred`), each of which half-answered "what
@@ -2708,7 +2876,8 @@ ruled change is its own commit, moving two readings and nothing else.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
-landed as #229 above; the PANEL half and Will are both still open); squad-target
+landed as #229 above; the PANEL half is still open, and Will is moot since #1174 retired it --
+#965 now asks for Wounded on the board instead); squad-target
 cursor color-coding; simultaneous-movement legibility (needs design first — the umbrella's core
 problem).
 
@@ -2731,6 +2900,230 @@ already found is that Crisis cannot be a red TINT, since an enemy already wears 
 
 *Authored by Claude (Opus 4.8) at @Phaazoid's direction, 2026-06-26.*
 
+## The battle zoom sees past what stands in the way ([#1132](https://github.com/Phaazoid/Godoiosis/issues/1132), BUILT 2026-10-07)
+
+The dev's play-check of #1104: *"a lot of the time, it will zoom in on action, but there will be
+other units or terrain in its way ... The battle zoom camera should always zoom in such a way to
+avoid that, or when it can't, selectively make things invisible."* Nothing in the camera had ever
+asked what stands between the lens and its subject, and the beat's yaw was solved ONCE -- the
+shorter of `side_on_yaw`'s two answers -- and never re-asked while the subject moved. That second
+half is [#972](https://github.com/Phaazoid/Godoiosis/issues/972) exactly: a tumble bending 90
+degrees, held side-on to the BLOW, on a cliff face for the whole death show.
+
+**His four rulings (2026-10-07, on the issue):** both halves, angle first then hide; units, props
+and terrain may all be hidden; hide OUTRIGHT, no fade; the battle zoom only.
+
+**`ShotClearance` (`presentation/`) is the whole rule**, ShotDirector's shape: a scene-free core plus
+the one piece of state an edge needs.
+
+- **The test is a sight line from the SETTLED lens to points on the action** -- each subject's
+  middle and head, at its centre and both ink edges. A column blocks when the line passes inside its
+  box from the board's underside to its drawn top; a prop or a unit when the line crosses its box.
+  The box matters for the tear-out: the stage floats forty cells up, and "anything below the top"
+  would call a line passing UNDER it blocked.
+- **The walk is `BoardPicker.crossings`**, lifted out of `pick_cell` rather than copied: one walk,
+  two questions, so the mouse pick and the clearance cannot disagree about which cells a ray
+  crosses.
+- **Turning comes first.** The turns `0, 180, ±45, 180±45, ±90` relative to the beat's directed
+  yaw, ranked by unclearable blocks, then hides, then how far from side-on (both side-on angles
+  rank equal), then the shorter swing. `CameraRig3D.directed_yaw` is the one spelling of the yaw
+  `aim_along` writes, and `lens_at(yaw, When)` composes where the lens would settle at a yaw it
+  has not turned to yet -- #670's LIVE/SETTLED axis, asked of the camera's position.
+- **Hiding is what no angle clears**, and it GROWS within a shot: a blocker hidden stays hidden
+  until the shot changes, so nothing pops in and out while a body tumbles. A fresh search runs on
+  every shot edge and every new aim line, judged from where a running pan LANDS (see *The approach*
+  below; it shipped deferred to the pan's end and that was the bug); every other frame checks only
+  the angle held. This bullet first said that check SPUN to a fully clear angle when the held one
+  became blocked, as #972's fix; round 3 below repealed that, and the check now only hides.
+- **The action is never hidden**: the trained subject, whoever stands on the aim line, everyone on
+  the stage, the walker -- and the ground under each. They still count AGAINST an angle, which is
+  what keeps the old side-on reason (attacker and target across the frame, not one behind the
+  other) inside the ranking. **Round 4 below narrowed this:** "everyone on the stage" made every
+  bystander unhideable through every close-up, and a close-up only ever LOOKED at its victim, so
+  that side-on reason was never actually in the ranking.
+- **`DEATH_SHOW` holds everything**, matching its "writes nothing" rule; `WIDE` clears the hides and
+  keeps the turn; the release, the gate going off and a board in flight clear both.
+
+**Where the hides land is two existing seams, never a second writer.** A column goes to
+`BoardMirror.hidden_board`, an invisible lattice, through `_map_for` -- the tear-out's own move, so
+`reconcile_cell` does the routing; `_lattices(cell)` replaced four hand-spelled map lists while it
+was there. What stands on the cell hides at its ROOT, and every builder (`_reconcile_prop`,
+`_reconcile_state`, `_rebuild_fires`) asks the hidden set, because a staging bump rebuilds a staged
+cell's prop and a hide written only on change would come back at the next landing. A unit is one
+more conjunct on `UnitMirror`'s sprite gate and one VETO on the bar's -- which also silences that
+unit's cube bursts and its status particles. **The gate is `playback_cinematic` (#722's answer to
+"is the battle zoom on") AND the beat's profile**, so zoom-off, a Combat-Only walk and the burn
+pass are untouched.
+
+**Declared residuals:** a hidden lantern or fire goes dark with its root; a hidden unit's crown and
+rings stay; a cell a tumbling body lands on reappears under it (ground under a participant is
+protected); a hole's lip beside a hidden column stays; water surfaces do not hide; and a beat with
+no aim line can only hide. The View line in every report now says the turn and what is hidden.
+
+### The approach is the shot, and the hit waits for the camera (the same day's play-check)
+
+The dev, on the build above: *"the camera first jumps to a combat, then the camera adjusts to the
+proper viewing angle while the hit is playing out. What should be happening is, that first camera
+zoom should just be going to the correct spot to watch the hit, and it should be there and still for
+a moment before the hit even starts."* Three causes, stacked, and the first was this section's own:
+
+- **The search waited for the pan to land**, because it judged from where the camera was passing
+  through. The cure was to judge from where it is GOING: `lens_at` takes an aim, and while a pan
+  runs `battle3d._landing_aim` hands it the aim over `CameraController.pan_destination` with the
+  subject's drop applied through `_depth_below`, the arithmetic `_fall_below` already used. The
+  `settled` deferral left `ShotClearance.step` with it.
+- **The close-up only began on landing.** `pan_to` nulls the follow for the whole glide, so the
+  TRAINED row was dark until the camera had arrived: the travel pulled OUT to the wide distance (or
+  the stage) and the landing zoomed back IN. `pan_to` now publishes `pan_subject`, and on a
+  battle-zoom beat `battle3d._shot_subject` lets it stand in for the follow -- never while a death
+  show is live, which would pull the camera out of the pit mid-show (#602 round 8). **Consequence,
+  stated in the plan he approved:** between two battle-zoom beats the camera goes close-up to
+  close-up and no longer drops to the stage while it pans -- the 2026-09-02 ruling above made that
+  gap hold the stage, and on the battle zoom there is no longer a gap. The stage is still framed
+  before the first blow, after the last and through a tether break.
+- **Nothing waited for the rig.** The hit waited for the 2D tween and a fixed hold, while the yaw and
+  zoom eased on the rig's own clock -- a 180-degree turn starting at landing needed most of the hold
+  to get within two degrees. `CameraRig3D.is_arriving()` answers "every eased channel within
+  `ARRIVED_*` of its target", `battle3d` publishes it as `CameraController.view_arriving` beside
+  `fall_depth` (the second fact that travels rig -> playback), and a CINEMATIC beat waits on it
+  after the pan and before its hold, capped by `Pacing.CAMERA_ARRIVAL_CAP`. The sway is an addend
+  with no target, so it keeps breathing through the hold.
+
+Zoom off and Combat-Only walks are untouched -- every part is gated on the battle-zoom beat. **The
+wait itself is invisible headless** (a pan lands at once there, and the wait asks
+`Pacing.unwatched()` like every playback escape since #545, so a skip collapses it too), so "the
+blow starts once the camera has stopped" is a play-check; `is_arriving` and the approach's shot are
+pinned. `OrderExecutor.gd` joined `test_playback_escapes_ask_unwatched`'s file list for that escape.
+
+### The camera never moves while anything plays (round 3, the same day)
+
+The dev, on the build above, with report `2026-10-07_15-34-16`: *"The camera is jerking towards a
+new perspective as attacks are happening. If the camera is still moving to a new position, nothing
+should be playing, and playback should always give at least a half second for the camera to settle
+in a new position."*
+
+**Measured, not guessed.** A throwaway headless probe (never committed) replayed that report's board
+and orders with real-time pacing, logging the 3D camera every frame beside each unit's lunge and HP.
+It ran by patching `Pacing.unwatched()` to answer only the skip. The approach above was already right:
+one movement, then about 0.6s still. Then, **one frame after each of the five blows landed, the camera
+spun 45 to 90 degrees**:
+
+| Blow | Time | Spin |
+|---|---|---|
+| 1 | 8.670 | +90 |
+| 2 | 10.454 | +45 |
+| 3 | 12.070 | +90 |
+| 4 | 14.603 | −90 |
+| 5 | 16.387 | +45 |
+
+The cause was this section's own #972 fix. At a lunge's peak the attacker's body enters the sight
+line to the victim, and the per-frame check read a fixed participant on the line as a blocked angle.
+A second finding: `ARRIVED_DEGREES` at 1° declared arrival while the yaw was still turning about 8°
+a second, so part of every hold was spent creeping.
+
+Three changes:
+
+- **The angle changes on the approach and nowhere else.** `battle3d._clear_the_shot` passes
+  `can_turn = cam.is_panning()`, so only a search made while a playback pan is still travelling can
+  turn. `ShotClearance.step`'s per-frame path only HIDES what newly comes into the way, and
+  `_first_clear` is deleted. **This repeals #972's fix as written above:** a tumble that bends behind
+  a cliff now hides the cliff column instead of swinging the camera round, and a blocker that cannot
+  be hidden (a fighter, or the ground under one) stays in view for the rest of that action.
+- **Nothing plays until the camera has stopped, plus at least half a second.**
+  `OrderExecutor._settle_then(hold)` waits for `view_arriving` to clear, then holds
+  `maxf(hold, Pacing.CAMERA_SETTLE)` (0.5s, a Game-tab knob beside *Camera travel to the action*).
+  The CINEMATIC gate is gone, because the dev's word was "always". So it runs after every playback
+  pan: each beat in both profiles, the walk framing, the tear-out's brace, the way home and each
+  burn hit. The cost, stated in the approved plan: zoom-off passes and the burn are a little slower.
+- **Arrival means invisible.** `ARRIVED_DEGREES` 1.0 → 0.1 and `ARRIVED_UNITS` 0.05 → 0.01.
+
+**The re-run on the fixed build, same board.** No turn anywhere in the pass. Camera motion counts
+yaw, pitch, zoom and ground position, and excludes the vertical resting sway and the impact jolt:
+
+| Blow | Still before the lunge | Frames moving during it |
+|---|---|---|
+| 1 | 0.508s | 0 |
+| 2 | 0.517s | 0 |
+| 3 | 0.592s | 0 |
+| 4 | 0.519s | 0 |
+| 5 | 0.518s | 0 |
+
+The walk began 0.53s after its framing arrived and played under a still camera. Two things the probe
+saw and this round leaves alone:
+
+- **The resting sway** (#520 diff 2b) still breathes about ±0.04 units vertically through every hold.
+  It is authored motion, not travel to a new position, with its own knobs (*Sway: how far*, *Sway
+  strength (zoom on)*).
+- **The stage's framing lift** (`_aim_over`'s `STAGE_AIM_LIFT`) snaps the aim up half a unit on the
+  frame a stage is published. `hold_at` does not ease, and this happens at the start of the tear-out
+  approach, not during a blow.
+
+Pinned: a held angle that becomes blocked hides and never turns (`test_shot_clearance`); once landed,
+a new blocker is hidden and the yaw target stays put, and a shot change after landing hides rather
+than turns (`test_camera_clearance`). Both cases were falsified: letting the per-frame path turn
+again, and dropping the `is_panning()` gate, each turns them red. The settle itself is
+headless-invisible, so the probe numbers above are its evidence and the feel is his play-check.
+
+### The clearance sees the units in the way, readouts included (round 4, the same day)
+
+The dev, on round 3: *"the pacing has now gone from broken, back to normal. But the actual point of
+the ticket hasn't done much yet... we had battles hiding behind units 3 times."* Three reports, each
+`clearance turn +0, hidden 0/0/0`.
+
+**What went wrong in my own verification.** Round 3's probe logged `hid 0/0/0` and turn 0 for every
+one of 1,569 frames, on a board where units visibly stand in each other's way. I reported "no turn
+anywhere" as the success it was meant to measure, when it was the symptom. A probe that measures a
+feature must also show it ACTING where it should, not only that it never misbehaves.
+
+**Measured on his board.** A print inside `_search` showed every candidate angle scoring clear
+(`f0/h0`) in every search, for three stacked reasons:
+
+- **A unit blocked only as its sprite's ink, about 0.47 units tall.** From the battle zoom's 30°
+  camera, the line to the victim passes OVER the head in front. Under the zoom every unit wears its
+  health readout (the zoom forces them on), about a cell wide and floating above the head, and that
+  readout is what buried the victim. Soldier3's readout spanned y 41.76 to 41.98, and the line to
+  Soldier2's middle crossed it at 41.89. The clearance had never counted readouts.
+- **On a torn-out stage, everyone on it was the action.** The stage stays published through every
+  close-up, so once readouts counted, every block came out unclearable and nothing could be hidden.
+- **A close-up looked only at its victim.** With the first two fixed, beat 1 turned end-on and
+  parked the victim in front of the attacker: the same complaint from the other direction.
+
+The changes:
+
+- `ShotClearance.Body` gains a `hud` box, built in `UnitMirror.body_of` from where the bar is and
+  what it says its size is (`UnitHealthBar.half_extents` beside `top_extent`). `Body.blocks()` asks
+  both boxes, so the gap between a head and its readout stays see-through.
+- On a close-up the action is the trained subject and the aim line, and the close-up looks at both
+  ends of that line. The ground under everyone on stage stays protected.
+- Every walker is the action on a walk (dev ruling mid-build). The replay of the fix had hidden
+  Soldier3 for 0.4s while Soldier3 was walking beside the framed walker.
+
+**Re-run on his board:**
+
+| Beat | Report | Before | After |
+|---|---|---|---|
+| 1, S1→S2 | 18-52-16 | nothing | side-on, hides Soldier3 |
+| 2, S3→S4 | | clear | clear |
+| 3, S6→S2 | 18-52-18 | nothing | turns +180, hides nothing |
+| 4, counter S2→S1 | 18-52-22 | nothing | side-on, hides Soldier3 |
+| 5, counter S4→S3 | | clear | clear |
+
+Nobody was hidden during the walk. Round 3's stillness held: zero frames of camera motion during any
+blow, and 0.50 to 0.52s still before each.
+
+Pinned:
+- a readout blocks a line that clears its head (`test_shot_clearance`);
+- the readout box covers what the bar draws;
+- a readout in front of the victim turns the camera;
+- a bystander on stage is not the action on a close-up, and its ground is still protected;
+- the close-up watches the attacker;
+- every walker is the action on a walk (`test_camera_clearance`).
+
+Each wire case was falsified with its own mutant. Writing the stage-publishing cases found a fixture
+trap worth knowing: `set_playback_locked(true)` clears `shot_cells` on the claim, so a stage
+published before `_frame` was silently wiped. The participants assertion passed vacuously until the
+ground assertion beside it caught that, and `_frame` now publishes the stage after its lock.
+
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 
 **An authored pixel size is a design-space unit, not a screen pixel.** Every Control in the battle
@@ -2749,8 +3142,11 @@ root window is the wrong place for it here: the root's base size would clamp `Ga
 Text follows without help — `Viewport.oversampling` reads the same transform, so glyphs
 re-rasterize at the effective scale rather than being magnified.
 
-**One seam, deliberately.** Every panel, menu, modal and screen mounts at `game.ui_layer` inside
-that viewport, so all of them scale with no per-surface work — and so does anything added later.
+**One seam, deliberately.** Every panel mounts at `game.ui_layer` and every card and screen at
+`game.card_layer` ([#1034](https://github.com/Phaazoid/Godoiosis/issues/1034)), both inside that
+viewport, so all of them scale with no per-surface work — and so does anything added later. The seam
+is the VIEWPORT, not either layer: any CanvasLayer mounted in it scales, which is what let #1034 add
+one without touching this section's mechanism.
 It rides on the *container* rather than on `Battle3D` because all four hosting paths must get it:
 Battle3D's three views each work by setting that node's anchors or size, and a bare `Main.tscn`
 launch sets neither, so `resized` covers the lot and `battle3d.gd` needs no edit at all. CORNER
@@ -2802,7 +3198,14 @@ milestone was the first UI a stranger sees. `ScenarioDirector._start` now hands
   frozen subtree. None of that applies one level up: `ModalLock` disables the **`Game` node**, and
   the layout is a `CanvasLayer` at 1 over `UILayer`'s 0 — exactly the relationship it had to
   `GameContainer` at the root. Dev ruling 2026-09-08, asked before the plan: *preserve today's
-  semantics*, the dialog still draws over everything and is still not frozen by a card.
+  semantics*, the dialog still draws over everything and is still not frozen by a card. **Both
+  halves of that ruling were REPLACED by [#1034](https://github.com/Phaazoid/Godoiosis/issues/1034)
+  (dev, 2026-09-27)** — "preserve" was the right call for a scaling ticket, and the semantics it
+  preserved were the bug a playtester then reported: a click on the pause menu advanced the dialog,
+  because a `CanvasLayer` at 1 beats a card's `z_index` for the mouse as well as the eye. Cards now
+  sit on their own layer above it, and `ModalLock` pauses Dialogic from the same group state as the
+  Game freeze, since no card takes focus and Enter/Space otherwise advanced it behind the menu. The
+  dialog still sits BESIDE `Game`; only what the freeze reaches moved. See `UiLayers`' header.
 - **The ticket's own alternative was wrong, and the reason generalizes.** It proposed scaling the
   layout's `CanvasLayer` transform in place. A Control whose parent is a `CanvasLayer` anchors
   against `get_viewport().get_visible_rect()` — the canvas transform is not in it — so the layer's
@@ -2853,8 +3256,8 @@ and is the wrong field: it is held between passes, so it reads CINEMATIC for eve
 PUBLISHES — the disable path's predicate is the nearest one, not the right one.**
 
 **The set is DECLARED and can never be `ui_layer.visible = false`** —
-[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s skip affordance has to live on screen during
-exactly this window, so it is outside the set by construction. Hidden: the queue panel, the hover card,
+[#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s key hint lives on screen during exactly
+this window, in End Turn's slot, so the set stays declared and the hint is outside it by construction. Hidden: the queue panel, the hover card,
 the inspect panel and End Turn. **`MissionStatusPanel` stays up** (dev, 2026-09-03) — objectives, the
 build stamp and #182's tutorial instruction row, which has to survive the moment the lesson is being
 demonstrated. Hard `visible = false`, no fade and no knob: there is no tuned value here to disagree
@@ -2862,12 +3265,14 @@ about.
 
 Each surface conjoins the flag into **its own** gate rather than being written from outside — *one gate,
 no second visibility expression*, the rule stated three times above. That is load-bearing, not tidy:
-`HoverPresenter` re-drives the hover card on every cursor-CELL change and a player's own Execute never
-leaves `game_state` at IDLE, so a one-shot write at the claim edge is undone by the first mouse move.
+every show re-runs the info card's gate (and since #1105 a tile card redraws itself as its unit walks) while a
+player's own Execute never leaves `game_state` at IDLE, so a one-shot write at the claim edge is undone by the next show.
 `UnitInfoPanelControl.is_showing()`/`is_showing_unit()` therefore read the CONTENT half — a panel hidden
-for a cinematic has not let go of its unit, and `HoverPresenter` asks those two where to park the card.
-`#541` closed into this: one predicate writes the End Turn button's `visible`, and a plain enemy turn
-leaves it up.
+for a cinematic has not let go of its unit, and game asks those two where to park the card.
+`#541` closed into this, and was REOPENED on 2026-09-27 for the wider rule its closing comment named:
+End Turn now also stands down for the whole AI turn and while a squad's plan is open. It is still ONE
+`visible` — the cinematic is the button's hide term and #541 its content term, the shape the other
+three surfaces already had (see *So the End Turn button stopped waiting* above).
 
 **2. The pause list is a build history, not a decision
 ([#724](https://github.com/Phaazoid/Godoiosis/issues/724)).** `PauseMenu._build`'s `_add_button` sequence
@@ -3319,6 +3724,17 @@ One consequence outside the roles: `PlayerSettings`' own description still said 
 *"the order panel on the right"*, which stopped being true when the pre-mission surfaces adopted the
 palette. Ruled a whole-UI skin (dev, 2026-09-07), so the setting is now **Menu colours**.
 
+### The Inspect dock and the info card join the palette ([#1105](https://github.com/Phaazoid/Godoiosis/issues/1105), 2026-09-27)
+
+The palette was ruled a whole-UI skin above, and the two panels it had never reached were the ones slate was copied FROM: the Inspect dock's scene boxes were `PANEL_BG`/`SECTION_BG`'s source, so under parchment it stayed dark beside a parchment screen, and the info card was a salmon box of its own. Both now ask `QueueStyle`, and their scenes carry no box of their own (the queue scene's precedent):
+
+- **The dock:** the frame is `panel_box()` (dark in both palettes, so the stats on it keep their colours and only the muted tags take `FRAME_TEXT`), the inventory and squad boxes are `section_box()` paper, and the slots are the queue's `row_box` with the **selected** slot in the row's hover look. The slot names moved from `modulate` to a font colour, because `modulate` multiplies the theme's white and cannot darken it for paper; `modulate` is also invisible to the contrast walker.
+- **The info card:** both faces wear `panel_box()`; a tile card's sections are `section_box()` under a `header_box()` strip, rows in `BODY_TEXT`, explanations in `HEADER_TEXT` (drawn and approved as a mockup).
+- **`EMPHASIS_TEXT` is a role of its own, crimson in BOTH palettes** -- an equipped or worn item, a squad's count and leader. The dock's gold adapted to parchment as a dark mustard; drawn on paper it read badly, and of the candidates the dev ruled for a TEXT colour over a border or fill, because *"we don't want to communicate things differently in the slate than in the parchment."* It equals `READOUT_ENEMY` today and is kept separate on purpose: what marks your gear and what marks an enemy are two questions.
+- **Both restyle on Settings close**, beside the queue (`SettingsScreen.show_screen`), since either can be up behind the page.
+
+The contrast walker moved to `tests/support/palette_contrast.gd` so `tests/ui/test_info_card_contrast.gd` asks the same law of these surfaces; it learned `RichTextLabel` (the squad box) on the way.
+
 ## A ring frames the CHARACTER, not the canvas ([#930](https://github.com/Phaazoid/Godoiosis/issues/930), BUILT 2026-09-12)
 
 The aura readout is a ring of ticks around a portrait, on the pre-mission card and in the inspect panel both. Three things it settled are about looking at things generally rather than about aura.
@@ -3329,6 +3745,8 @@ The aura readout is a ring of ticks around a portrait, on the pre-mission card a
 
 **...but the SWEEP that carried that law missed a surface, and the card is it ([#990](https://github.com/Phaazoid/Godoiosis/issues/990), 2026-09-16).** #937 re-derived `ActionMenuController`, `UnitSprite3D`, `MapSpriteInk` and `PreMissionScreen` off the ink and left `AuraRing` fitting the whole 64px CELL into its 52px box -- so 52px of column bought ~19px of character, and the ring, honestly framing ink that really was that small, came out 32px across inside a 52px node with the top 28 of it blank canvas. The **24px deployed-strip disc drew the same character larger**, cropping at 1:1, which is the measurement that settles *is there room* without an opinion in it. The card ZOOMS now -- `MapSpriteInk.ink_fit_rect` is the third answer beside the offset and the reach, and the sprite is drawn to fill the ring rather than the box -- which made the ring concentric with its node and retired the `Fit` enum, both of whose branches then computed the same centre. **A measurement law must be swept over every surface that DRAWS the art, not every surface that reads the helper**: all five read `MapSpriteInk`, and the one that was wrong was wrong about what it did with the answer.
 
+**[#1082](https://github.com/Phaazoid/Godoiosis/issues/1082) (2026-09-27) found the surface that law's own enumeration could not: the action-queue row drew the sheet without reading `MapSpriteInk` at all**, fitting the whole 64px cell into a 32px `TextureRect` -- a third playtest report of the same bug, and the one a grep for the helper can never list. **Enumerate by what reaches the ART** (`get_map_sprite_texture()`, `unit_data.map_sprite`), never by who calls the helper. It gave the helper a fourth answer, `portrait()` -- at first a 1:1 window of the sheet as a texture, ink centred across and feet on the window's floor, for a slot that can only be handed a texture -- and it passes anything not sheet-sized through untouched, because the row's target slot also shows a move's 16px terrain icon. **The window stopped being 1:1 a day later (2026-09-28): the dev asked for the sprites to FILL the slot**, was shown a to-scale mockup of a shared zoom beside a per-sprite fit, and ruled the per-sprite fit. `portrait()` now hands over the square around THAT sprite's own ink (`MapSpriteInk.ink_of`, which is `BoardMirror.opaque_bounds` cached per texture) and the slot's `TextureRect` stretches it, so every unit fills its slot and nothing is cut off, at the declared cost that units there no longer share one scale. It is the one surface that does not read `INK_RECT`, and the one where the median is the wrong answer: a zoom sized to it cut the lance, scythe or blade off five of the twelve characters the shipped missions field.
+
 Two things about the SHAPE of that fix worth keeping. The old case pinned *the ring sits below the box's middle*, which is how an ink-centred ring proved itself while the sprite was fitted cell-and-all -- and the fix makes that false, the centre being the box's middle exactly. **A test's assertion can be the right rule wearing the old mechanism's arithmetic**, so the rule was restated against the two values together (the drawn ink fills the ring's inner circle) rather than deleted. And filling the ring with the INK means the CELL is drawn larger than the node, so an outlier sprite -- `INK_RECT` is a MEDIAN and the pack's big monsters overflow it on purpose -- puts its own overflow outside the column; declared rather than clipped, because the ring's ticks reach the node's edge and a clip would shave them.
 
 **Geometry is derived from the rect a widget lands in, never from a size passed to it.** The panel's ring is a `FULL_RECT` child of a `Panel`, and a `Panel` aggregates no minimum from its children — so the constructor argument that looked like it sized the ring never did, and the scene's own 108 was silently the only answer. Two answers to *how big is this*, agreeing by luck. A mutant is what found it: growing the constant changed nothing at all, which is the tell that a value is not load-bearing.
@@ -3337,6 +3755,27 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 
 **A docked panel has a height budget and nothing says so out loud.** The inspect panel is 300 × **720** — the viewport's own height — and its body already wanted 648 of that before this ticket, so every future row competes for 72px. The first attempt put a 160px wheel in the body and overflowed by 92: the squad box and the states bar ran off the bottom of the screen, silently, because a `VBoxContainer` lays its children past its own rect without complaint. The ring moved onto the portrait (108px box, +12px of header) and the budget is now a law in `tests/ui/test_unit_info_panel_refresh.gd`, asked as a property against the panel's own height rather than as a pixel count — the lesson [#723](https://github.com/Phaazoid/Godoiosis/issues/723) learned on the title screen, arriving at a surface that is not a `ModalCard`. It reads the outermost CONTAINER, never the panel `Control`, because a plain Control aggregates nothing and answers `(0, 0)` however much is built underneath it.
 
+**The budget decided [#1105](https://github.com/Phaazoid/Godoiosis/issues/1105)'s first layout, and then the tile left the dock altogether.** Re-measured on every authored unit: **660 of 700**, so a tile's sections could not simply go under a unit's. The first build answered with a Unit/Tile switch in the dock's header and a scroll area for the tile body (three watches, two zones and a fire on one cell need 766 there); the 2026-09-27 ruling put the tile in the info card BESIDE the dock instead, which retired both. **The card cannot scroll** (the wheel zooms the board), so it has to fit: at its 300px width it measured 94 (plain grass) and 632 for the three-watch case, of the 704 the screen leaves it (98 and 636 before the palette's header strips) -- and 675 since #955 split that case's two zones into a section per kind and framed the picture, pinned alone and beside the dock by `tests/ui/test_tile_inspect.gd`. The two ways to show a unit card and a tile card at once were drawn for the dev first (stacked: 225 + 4 + up to 636, off the bottom; side by side: 464px wide), and his answer was one card at a time. Getting there needed one fix, and it later needed a second: a free-floating card of autowrapped rows reports a tall minimum before layout hands the rows their width, and the container never shrinks back by itself, so the first measurement read 514px for one line of grass; `HoverInfoPanelControl` snaps its tile panel down whenever its minimum settles lower. The second was the GIANT CARD (dev report 2026-09-27): the redraw also sized the card to that tall mid-layout minimum on the spot, and the snap waits on a signal that fires only when the minimum changes from the LAST value it reported -- so a second tile with the same readout settled straight back to it and the card stayed 514px tall, parked off the top. Nothing but the snap may write the size now; a per-frame fit was tried as a backstop and dropped, because no case needed it and it hid that old line coming back.
+
+**[#966](https://github.com/Phaazoid/Godoiosis/issues/966) (2026-09-28) spent 38 of what was left on the inventory.** Its item slots were a two-column grid of plain `Panel`s, which lay out nothing, so every row sat at its slot's top edge and a name wider than the slot ran past the border. Measured in the game's own font, the grid gave a name 98px: 13 of 43 authored names did not fit on their own, and almost no equipped or worn item fit once `(E)`/`(W)` was added. Four fixes were drawn to scale (trim the line, trim the name and pin the tag, two lines, one column), and the dev picked **one column of full-width rows**, where every authored name and tag fits (236px against a widest of 197). The section went 140 → 178 and the body **660 → 698 of 720**, so the budget has 22px left, and in one column **each inventory slot past six costs 28px** (a `Deep Pockets`-style slot bonus would fail the law). The label trims with an ellipsis only as a guard against a future name the column cannot hold, so it can never widen the panel (#685's edge); `tests/ui/test_inventory_slot_layout.gd` pins the centring, the containment, the column span and that trim against the panel's anchored rect.
+
+### Marking a zone on the board: a rim, a wall, an emblem ([#955](https://github.com/Phaazoid/Godoiosis/issues/955) part 1, 2026-09-27)
+
+The problem and the rulings are `missions.md`'s; this is how it draws. **`ZoneMarks` (`Classes/board/`) is the one home** -- MoveGrid's shape, statics both views read and the Game tab tunes (*Markers > Zone marks*), art GENERATED rather than baked so a knob moves it.
+
+- **The rim.** Every cell of a drawn zone wears a texture for the sides it faces out of (`cell_masks`, which also notches an L's inner corner): a dark outline, a bright line, then a glow fading inward to a faint fill. White-with-alpha plus BLACK, tinted by the kind's colour -- black survives any tint (#325's ring trick), which is what keeps green-on-grass readable. It is generated at `BoardOverlays.ART_PIXELS_PER_CELL` (16), because a SPRITE marker's quad is sized by its art's pixels. The diorama draws it on **`Layer.ZONE_MARKS` (-5)**, tinted by the kind's LIVE layer colour; the flat view draws the SAME texture object as sprites sized to its own tile (`OverlayManager._rebuild_zone_marks`), so the two views cannot disagree about what a zone looks like. Nothing washes a play zone any more: the four kind `LAYERS` rows are each kind's colour home, and the flat view's four wash layers are gone.
+- **The wall** (the diorama only). **`ZoneWalls`**, one mesh of vertical strips standing on `ZoneMarks.wall_outline` -- the tracer the COH line and the enemy focus edge share, stepped `WALL_INSET` (half a texel) inside the zone, trimmed at outer corners and run on at inner ones so the ring stays closed -- faded upward with a shimmer on `zone_wall.gdshader`'s own clock.
+- **The emblem**, one per zone on the cell `emblem_cell` picks, on **`Layer.ZONE_EMBLEMS` (-3)** in the diorama and as a sprite in the flat view.
+
+A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks`, `_restyle_move_grid`'s shape): the diorama re-reads `ZoneMarks` every frame, and the flat sprites are rebuilt.
+
+**LIT, from the objectives panel ([#955](https://github.com/Phaazoid/Godoiosis/issues/955) part 3, 2026-09-27).** Hovering a zone row in the objectives panel lights every drawn zone of its kind: a fuller wash in both views (`ZoneMarks.texture(mask, lit)`, the same rim over `ZONE_LIT_FILL_ALPHA`) and, in the diorama, a taller and stronger wall. Each wall strip now carries its own height, and its strength rides the vertex alpha, so the wall is still one mesh and one draw. `OverlayManager.lit_zone_kind` is the one store; `set_lit_zone_kind` bumps `drawn_zones_version`, so both views rebuild on the hover's edge and never per frame. Three knobs sit beside the rest (*Lit fill*, *Lit wall height*, *Lit wall strength*). The dev picked this from a drawn mockup over two alternatives: the pale wash a sentry's patrol area gets, and fading every other zone. The fade had a hole, since a board with one kind of zone has nothing else to fade. What the row itself does is `missions.md`'s.
+
+**Why -5 and -3**: above the picked-zone highlight, UNDER every range tone -- a zone is ground, and the interaction reads over it (#346); the emblem a slot above the rim it shares a cell with. Pinned as a relationship in `test_board_overlays`. Declared: **the wall hides while a tear-out is up**, its strips standing where the ground rests (the rim follows the flight; [#1118](https://github.com/Phaazoid/Godoiosis/issues/1118)); **the flat view has no wall**, a flat view having nothing to stand one in; and **two kinds on one cell share `ZONE_MARKS`' plane** -- #955's own shared-plane finding (Level_1's extraction and deployment cells are identical before turn 1), per-kind layers being the fix if it ever shows.
+
+**How it got here.** The dev saw three looks drawn and asked to judge them in play, so they shipped behind an experiment (PR #1114): A a painted edge, B a soft rim, C a light wall. His first play found two bugs, one cause each. *"The painted edge goes too far outside of the zone"*: the art was generated at 32 texels, copied from `MoveGrid` -- but `Layer.MOVE` is a FILL layer, whose quad is one cell whatever its texture, while a SPRITE marker's quad is its art's pixels over 16, so every edge landed half a cell OUTSIDE the zone. `OverlayManager` already warned of exactly this beside the watch mark (*"32px art is a FOUR-CELL decal"*); it was not read. *"z fighting light wall"*: the wall stood on the border, the plane a full-cell crate's face and a raised neighbour's side stand in, hence the inset. He then ruled C = B's rim + the wall, and after playing it, *"wipe the experiment, and go with C"*. The wire suite had counted marks and never measured one, which is how a two-cell quad passed; `test_zone_looks` now asks the drawn quads' footprints, every wall vertex, and the flat twin's texture identity, each falsified.
+
+
 
 ## What the enemy COULD do ([#710](https://github.com/Phaazoid/Godoiosis/issues/710) slice 1, BUILT 2026-09-16; reshaped by slice 3 and corrected by slice 4, 2026-09-17)
 
@@ -3344,7 +3783,7 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 
 **Two tiers, because the two questions cost different things.** *Who CAN reach this cell* is a reach field, cheap enough to keep live; *who WILL attack whom* is a real AI turn per engaged squad, and is debounced. They ended up on separate keys for a better reason than cost, though: they answer different questions, and the dev found in play that showing both as beams was *"a bit too much"*.
 
-**The field is `Classes/ai/ThreatField.gd`, and it is the ARCHETYPE'S OWN ENVELOPE rather than a generic danger zone:** Hold fires from where it stands, a Sentry fires only from its zone + post and only INTO its zone, Rushdown walks its whole move range; each origin is dilated by every fireable attack under the same vertical gate `AITactics._attack_candidates` applies, so the field and the AI's own builder cannot disagree about geometry. `game.threat_field()` builds it once and drops it whenever the plan or the board moves.
+**The field is `Classes/ai/ThreatField.gd`, and it is the ARCHETYPE'S OWN ENVELOPE rather than a generic danger zone:** Hold fires from where it stands, a Sentry fires only from its zone + post and only INTO its zone, Rushdown walks its whole move range; each origin is dilated by every fireable attack under the same vertical gate `AITactics._attack_candidates` applies, so the field and the AI's own builder cannot disagree about geometry. `game.threat_field()` builds it once and drops it whenever the plan or the board moves, or a unit goes down, dies or is revived: the unit's own `went_downed`, `game._on_unit_died`, and the dev Revive button (`revive()` announces only its downed clock since [#1009](https://github.com/Phaazoid/Godoiosis/issues/1009), a panel signal the field does not hear; its one other caller, a rescue, lands mid-pass, and the pass end drops the field).
 
 **IT IS BUILT ON THE PROJECTED BOARD, the same positional snapshot the plan tier plans against (slice 4).** Slice 1 read the LIVE board, which was the only board there was until slice 2 built the snapshot -- a premise that expired without anybody noticing. The cost was a duplicate seam the dev then caught in play: the intent LINES described the board after his pending plan and these tones described the board as it stands, so a line could name a victim the tones said was out of reach, with the line telling the truth. `AIController.stand_on_projected`/`restore_cells` are the one door both tiers open.
 
@@ -3352,7 +3791,53 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 
 **COHESION IS IGNORED, and until slice 4 it was not.** `_origins_of` read `compute_move_range`'s `reachable` alone, which files every cell outside the squad's bubble under `squad_unreachable` -- measured against where the LEADER stands now. On the enemy's own turn the leader moves FIRST and `GroupMoveSolver` measures each member against its DESTINATION, so the clamped half is exactly the ground a follower walks and this field, whose whole contract is an upper bound, was under-stating it. Both buckets now: the standable footprint, the same pair `followable_destinations` unions.
 
-**A PATROL ANSWERS OUTSIDE ITS LEASH (dev, 2026-09-17: _"technically they can attack one tile outside of their range if already there in counter situations"_).** The zone clip is a fact about a Sentry's AGGRESSION, not its counter -- and because the clipped reach is a subset of the zone while the origins cover the zone, nearly the whole red layer sat underneath the blue: measured, a melee patrol showed **2 of its 30** reach cells and a bow **5 of 36**, so the outer silhouette of the threat was the MOVEMENT tone. `_add_counter_reach` is a second, unclipped pass over the counter attack alone, borrowing `SquadManager.can_counter`'s own gates so an unarmed or dry enemy adds nothing. **It adds nothing to any archetype WITHOUT a leash either** (measured: rushdown +0, hold +0), because their counter is already inside `get_selectable_attacks()`. For a RANGED patrol the rim is its bow's own range rather than one tile, which is the consequence the dev ruled on: it will never OPEN from out there and will always ANSWER from there. It deliberately does NOT ask `is_standing_watch()` the way `can_counter` does -- an armed watch is a threat by a mechanism this field cannot draw at all, so dropping the rim there would under-state exactly where the warning matters. Whether a poked sentry should then AGGRO is its own ticket.
+**A PATROL ANSWERS OUTSIDE ITS LEASH (dev, 2026-09-17: _"technically they can attack one tile outside of their range if already there in counter situations"_).** The zone clip is a fact about a Sentry's AGGRESSION, not its counter -- and because the clipped reach is a subset of the zone while the origins cover the zone, nearly the whole red layer sat underneath the blue: measured, a melee patrol showed **2 of its 30** reach cells and a bow **5 of 36**, so the outer silhouette of the threat was the MOVEMENT tone. `_add_counter_reach` is a second, unclipped pass over the counter attack alone, borrowing `SquadManager.can_counter`'s own gates so an unarmed or dry enemy adds nothing. **It adds nothing to any archetype WITHOUT a leash either** (measured: rushdown +0, hold +0), because their counter is already inside `get_selectable_attacks()`. For a RANGED patrol the rim is its bow's own range rather than one tile, which is the consequence the dev ruled on: it will never OPEN from out there and will always ANSWER from there. It deliberately does NOT ask `is_standing_watch()` the way `can_counter` does. A watch standing NOW fires during your own move, on the cells you walk through, and that is the watch overlay's to draw, not this field's; dropping the rim there would under-state exactly where the warning matters. (This sentence used to say an armed watch was a mechanism the field "cannot draw at all". #1197 below made the field draw the lanes a watcher could set NEXT turn, so the claim is narrowed to the watch already standing.) Whether a poked sentry should then AGGRO is its own ticket.
+
+**THE FIELD DRAWS THE WATCH SHOT AND THE CURRENT ([#1197](https://github.com/Phaazoid/Godoiosis/issues/1197), 2026-10-03).** The field promises an upper bound, and two live mechanisms hit cells it painted safe.
+
+- **The watch shot.** A watch set over a cell an enemy already stands in fires on the spot ([#1003](https://github.com/Phaazoid/Godoiosis/issues/1003)). A watch attack is never in the fire view ([#590](https://github.com/Phaazoid/Godoiosis/issues/590)), so the reach pass never saw one. The Carbine's Shot fires at exactly 2 and its watch lane runs 1 to 4, so in practice the watch is its point-blank shot. That was live on The Causeway's Bridge Watch.
+- **Shock arcs.** A SHOCK hit runs on through water and through anyone wet, and the field never asked `Conduction`. That was live by The Quarry's ford.
+
+So the prediction reach (`ThreatField._threat_of`) now has four parts:
+1. **Fire, accumulated by attack.** Keyed by attack because the current depends on the element of the attack that made the hit.
+2. **The counter rim**, as above.
+3. **`_add_watch_reach`.** The union of every lane `AITactics.watch_lanes` could set from every origin, asked only of an archetype whose declared priority list has OVERWATCH (Rushdown's is NEVER), and only of a watch attack `AITactics.watch_attack_for` says is ready.
+   - These are the builder's own two doors, so the drawn lanes are the lanes it could set.
+   - **They are not zone-clipped:** the shot takes anyone in the lane, and a Sentry at its post aims at the nearest enemy wherever that enemy stands.
+4. **`_add_arc`.** `Conduction.arc_cells`, seeded with each attack's own cells.
+   - One flood over the union is the union of one flood per aim, because it is a bounded multi-source search.
+   - Not zone-clipped either; a current doesn't respect a leash.
+
+**Your own red (`reach_from`) keeps parts 1 and 2 only.** It is a permission, and a watch in your hands shows what it can fire at, not the lanes it could set.
+
+**A soaking your own plan hasn't made yet counts (dev, 2026-10-03, chosen over declaring it as a limit).** The board only knows who is wet now.
+- The usual case is wading the ford onto dry ground beside the lit water.
+- `game.threat_field()` therefore resolves your pending plan first, on the live board, through `AIController.viewer_plans` (`#1001`'s loop, extracted), and hands its hypo to `ThreatField.build`. `Conduction` reads wetness through that hypo exactly as a pass does.
+- `preview_turn` passes the same hypo, so the two tiers still feed the field the same inputs.
+- **It re-resolves rather than reading the plan cache, because the cache is one order stale at that moment.** `_on_unit_action_queued` and `_on_unit_action_cancelled` drop the field BEFORE `refresh_action_queue` resolves the new order, and the drop rebuilds synchronously.
+- **One plan, because one squad holds orders at a time.** `MainActionMenu._can_take_main_action` refuses a squad while another is mid-activation, so `pending_hypo` reads the active squad's plan, which `viewer_plans` resolves last.
+- A resolve republishes that plan's own shoves, which is what was published already, so building the field leaves the board as it found it.
+- Not mid-pass, for `refresh_action_queue`'s reason: a resolve then counts the hits that already landed twice.
+
+**Measured on every shipped board as loaded** (no pending plan):
+
+| Board | Cells gained |
+|---|---|
+| The Causeway | +7 (watch) |
+| The Quarry | +25 (7 watch, 18 arc) |
+| Level_1 | +7 |
+| The Dry Field | +8 |
+| The Ford | +7 |
+| Castle Assault | +1 |
+| 2, Terraces | 0 |
+
+The red grows modestly everywhere.
+
+**Declared limits:**
+- ~~**Placed-blast splash and payload landings.**~~ **Closed by [#1207](https://github.com/Phaazoid/Godoiosis/issues/1207) inside #1220 (2026-10-05).** For an attack placed at range, `Reach.get_all_attack_cells_from` answers the range ring, not the blast area around each aim, so `ThreatField._add_splash` dilates the ring by the stamp (and a payload by its knockback, then its own footprint). It had to land with #1220's candidate aims: the AI now drops a blast beside a target, and `_squad_can_reach_anyone` relies on the field covering every aim the AI can take.
+- **A wet unit HOVERING a dry destination beside lit water reads safe until the move is queued.** The field is per cell, not per unit; queued, the field rebuilds with the unit standing there.
+- **A soaking from the enemy's own turn is not chained** (their Splash, then their Zap). No shipped squad pairs the two.
+- **The dormant plan preview's AI still plans against live states**, the positions-only snapshot from #1001. The field it gates is a superset either way.
 
 > **REPEALED by [#1066](https://github.com/Phaazoid/Godoiosis/issues/1066) (2026-09-21) — the two tones below are ONE, and the ordering ruling went with them.** An enemy no longer says where it can STAND as against where it can HIT; that pair is the vocabulary your OWN unit speaks now. The record below stays because the *field* is unchanged — `move_by_unit` and `by_unit` are both still computed, and the archetype honesty and the counter rim are exactly as described — only the DRAWING merged. See *...and what #1066 re-cut about the vocabulary* at the end of this half.
 
@@ -3376,7 +3861,7 @@ Two things about the SHAPE of that fix worth keeping. The old case pinned *the r
 - **Hovering an enemy** -- that one enemy, transiently.
 - **Shift+left-click an enemy** -- PINS it, so it stays up past the pointer AND past V going off (dev: the pin overrides the toggle). Keyed by instance id, dropped in `game._on_unit_died`, and scoped to IDLE and PRE_MISSION -- the modes below own their click outright. **Right-click could not take this gesture**: it is the LIFO undo, and the most common moment to undo is right after queueing an attack, when the cursor is still sitting on the enemy you targeted.
 
-**HOVERING AN ENEMY IS READ IN THE ENEMY'S OWN VOCABULARY (dev ruling: unify).** It used to borrow THREE of the player's layers -- the yellow `MOVE` range, the orange `SQUAD_RANGE` cohesion bubble and the red `INVALID_MOVE` -- and all three answer the RAW question, *where could this body physically walk*. The cohesion bubble was the sharpest: a third picture of enemy movement, and the one `ThreatField` deliberately ignores. The enemy arm of `_hover_idle` draws the enemy's own field and the leash and none of those.
+**HOVERING AN ENEMY IS READ IN THE ENEMY'S OWN VOCABULARY (dev ruling: unify).** It used to borrow THREE of the player's layers -- the yellow `MOVE` range, the orange `SQUAD_RANGE` cohesion bubble and the red `INVALID_MOVE` -- and all three answer the RAW question, *where could this body physically walk*. The cohesion bubble was the sharpest: a third picture of enemy movement, and the one `ThreatField` deliberately ignores. The enemy arm of `_hover_idle` draws the enemy's own field and the leash and none of those. **[#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) brought one back in another form**: the enemy squad's range and tethers, as a membership readout in the enemy's colour. See *An enemy squad's LINES* below.
 
 **The FRIENDLY arm grew the other half of that ruling in [#1066](https://github.com/Phaazoid/Godoiosis/issues/1066)**, and the dev's words were the whole spec: *"friendly units having different colors for showing movement and nothing for attack range is really outdated, and needs to be fixed. Blue for movement, attack range as red, like everyone else."* Until then your unit answered where it could WALK and said nothing at all about where it could HIT, while every enemy on the board answered both. The reach is drawn on HOVER as well as on selection, on his ruling: deciding who to move is when you want to know who they can touch.
 
@@ -3654,6 +4139,8 @@ Asked and answered: **regroup by subject**. Markup is now the readout, in this o
 
 This is the orange cohesion bubble and the mauve `INVALID_MOVE`, deferred through #1066 and #1069 until the dev had played the new board. He had, and brought four asks and a fifth from a friend's playtest. There were four rulings from the questions (below), and one follow-up went to [#423](https://github.com/Phaazoid/Godoiosis/issues/423).
 
+**Every squad line wears a dark CASING since [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) round 2**, both sides': see *An enemy squad's LINES* → *Round 2: the casing*.
+
 ### Hover and Move now answer the same question about a leader
 
 > a squad leader, when hovered, shows his full move range. When move is selected, that move range is cut if squad mates can't follow. These two floodfills disagreeing is problematic.
@@ -3719,7 +4206,7 @@ The dev's addition:
 
 A click on a grey tile calls `OverlayManager.shake_tethers()` and **stays in the mode** (ruled over shake-then-leave). A click outside the whole range still leaves, as before.
 
-**It is the board's one refusal that answers back.** Every other refusal stays silent. Nothing here makes that a general rule; it is scoped to the case where the reason is on screen as a red line.
+**It is the board's one refusal that answers back.** Every other refusal stays silent. Nothing here makes that a general rule; it is scoped to the case where the reason is on screen as a red line. (A refused EXECUTE answers back too since #1121, on the same scope: its reasons are red rows already on screen. See *A refused Execute says why* below.)
 
 The pluck is a string plucked in the middle: a perpendicular offset weighted by `sin(pi * along)`, so both ends stay pinned, with a decaying swing. One envelope drives both views:
 
@@ -3756,7 +4243,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 
 - **A grey tile** draws the unit's ghost and the red tether, and nothing else. That covers a member past its leader's range, a leader's stranding tile, and Group Move's stranding tile. The red reach, the reach lines, the path arrow and the plan re-validation are withheld. The red the last legal tile drew is cleared, not left standing.
 - **Outside the whole range**, the red goes back to the unit's own tile, which is what Move paints when it opens. Before this it stood wherever the last legal tile had left it.
-- **The Squad Up marker has a black border.** It is the white corner-bracket tile (`OverlayManager.TARGET_ATLAS_COORDS`), which vanished on white stone. The border is a 1px ring baked into the art, so every unit pick carries it: Rescue, Intimidate, Join Squad and Squad Up. Both views read the one tile.
+- **The Squad Up marker has a black border.** It is the white corner-bracket tile (`OverlayManager.TARGET_ATLAS_COORDS`), which vanished on white stone. The border is a 1px ring baked into the art, so every unit pick carries it: Rescue, Guard, Join Squad and Squad Up. Both views read the one tile.
 - **The range's outline has its own width** (`BoardOverlays.cohesion_line_width`, *Range outline width (3D)*), starting at double the tethers'. It is its own beam set, `"cohesion"`, and `DASHED_BEAMS` keeps it on the tethers' one dash pattern. The flat view keeps its single stroke width.
 - **The grid's colour is the dev's.** He tuned the out-of-range grid to navy. "Grey" in this section names the role (MoveGrid's lattice switched off), not a hue.
 
@@ -3782,7 +4269,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
 ### Declared residuals
 
 - ~~**A ghost cone is darker, not see-through.**~~ **Built the same day**, on the dev's first look: see *The shape is shared* above. It took the second shader file this line predicted.
-- **The tether BREAKING** when a shove or melting ice ejects a member went to #423, with the correction comment's warning attached. Tethers are interaction-scoped, so at a settle point there is usually none on screen to snap, and the break has to be its own short-lived effect.
+- **The tether BREAKING** when a shove or melting ice ejects a member went to #423, with the correction comment's warning attached. Tethers are interaction-scoped, so at a settle point there is usually none on screen to snap, and the break has to be its own short-lived effect. **#423 folded into [#367](https://github.com/Phaazoid/Godoiosis/issues/367) on 2026-09-23 — see *Membership MOMENTS* below.**
 - **What only the dev can judge:**
   - dash size and speed;
   - whether the range and the tethers read as one system;
@@ -3790,3 +4277,366 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
   - the pluck's feel;
   - whether grey reads as "walkable, not now";
   - all of it in the flat view.
+
+## An enemy squad's LINES, on enemy hover ([#1109](https://github.com/Phaazoid/Godoiosis/issues/1109), BUILT 2026-09-27)
+
+The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH range at all."* Hovering an enemy now draws its squad's cohesion range and tethers, exactly as your own squad's are drawn, in the enemy's colour.
+
+**It reopens one line of #1066.** That ruling (*an enemy is read in the enemy's own vocabulary*) took the orange cohesion bubble off enemy hover before tethers existed. What came back is a readout of who is in the squad and how far its leash reaches, not a third picture of where it will move: `ThreatField` still ignores cohesion.
+
+### Rulings (grill, 2026-09-27, off an inline mockup on the real sprites)
+
+| Fork | Ruling |
+|---|---|
+| Colour | The threat field's purple, **lightened** (`SquadLines2D.ENEMY_TETHER_COLOR`) so it reads over that field and over bare ground alike. One colour for every enemy squad. Not taken: the exact threat purple (its dashes vanished over its own field), the squad's ring hue (dealt per squad, and the enemy orange nearly matches your tethers), bone white (reads as the white focus outline). |
+| What shows | **Both** the range stroke and the tethers. |
+| An enemy's break and draw-in | **The enemy colour too**, so an enemy tether looks the same standing or breaking. A break still strains to the one strain red, which means "breaking" for either side. |
+| While your squad is mid-plan | **Shown anyway**: that is when a shove to split them gets planned. The enemy's rings keep their gate. |
+
+### How it is built
+
+- **Whose side** is `SquadLines2D.is_hostile(faction)`, which is `Team.is_enemy(PLAYER, faction)`. It asks WHOSE SIDE, never who is in control (`MusicDirector`'s ruling), so a hotseat enemy squad wears the enemy colour while you command it, Join Squad included.
+- **One side per draw.** `OverlayManager.show_squad_lines(..., hostile)` stores `squad_lines_hostile`, which both views read. `game.draw_squad_cohesion` reads the side off the squad's leader, so all its callers are right with no edit. This holds because no caller draws two sides' squads at once; one that ever must would need the flag per link.
+- **Moments carry their own side.** `SquadTetherPresenter._link` stamps `hostile` and `moment_drawing` reads it. Moments of both sides already share `TETHER_MOMENT`, since each rides its own vertex tint.
+- **A pass takes the hover's lines down when it starts** (`OrderExecutor.execute_orders`). The 3D picker stops polling while the board is locked, so a hovered tether would otherwise stand intact, at its old cells, beside its own break at the blow. This covers your own squad's lines too, which had the same gap.
+- **Knob:** Game tab → Squad lines → *Enemy tether and range (2D+3D)*.
+
+**Test-craft worth carrying.** A case about hover markup during a pass has to hold the pointer the way the 3D picker does (`HoverPresenter.pointer_source`). In the flat scene the hover reads the live mouse, the pass pans the camera, and the hover's own repaint clears the lines by accident. The mutant without the pass-start clear passed that way until the case held its pointer.
+
+### Declared residuals
+
+- **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it.
+- **The Split chip stays tether orange**, even on a row whose blow splits an enemy squad (2A's ruling, not revisited here).
+- ~~**How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.~~ **It read badly, and Round 2 below answers it.**
+
+### Round 2: the casing (2026-09-27)
+
+The dev, after playing it: *"it is too hard to see this rose color inside the enemy threat field color."* He sent a Shift+F3 report, and its frame said why.
+
+**What the frame measured.**
+- Over pale stone the enemy field renders LIGHT PINK, about (215,163,174), and its brick pattern spans (208,96,128) to (216,200,208).
+- The enemy line pixels sat at about (250,145,185), inside the field's own range, so the lines vanished on colour.
+- The range stroke runs along cell edges, which is exactly where the grout lines are, so it vanished on pattern as well.
+
+**Why the first mockup lied.** It blended the threat purple over the floor flat and unlit, which made the field BROWN. The rose looked fine against brown. **Build a look mockup from a REAL FRAME, never a hand-composited floor:** the round-2 mockup took his own screenshot and repainted only the lines' own pixels.
+
+| Fork | Ruling |
+|---|---|
+| Treatment | **Keep the rose, add a dark CASING**: an outline round each dash, tether and arrowhead. It reads on any floor, the casing on light ground and the rose on dark. Not taken: dark plum ink (fails on dark ground), and a near-white core with a rose edge (reads as the white focus outline). |
+| Scope | **Both sides.** Your own orange lines wear the casing too, so it is one look for the whole system. |
+
+**How it is built.**
+- **The ribbon.** `sight_beam.gdshader` gained `casing_width` and `casing_color`, INERT at zero width: the fragment then takes its original path untouched, so the sight bead, the reach marks, the focus edge and the arc's bolts are unchanged by construction. The cased path draws a crisp core inside a dark band, and cuts the band with the dash window dilated by the casing's width, so every dash is outlined at its ends as well as its sides. The casing's alpha follows the line's, so a ghost's casing is as see-through as the ghost.
+- **Which lines.** `"casing": true` goes last on the six squad-line entries of `BoardOverlays.LAYERS`, and `_style_beam` pushes a width only where it is declared. A law case in `test_board_overlays` holds every other LINE layer at zero.
+- **The arrowhead.** An INVERTED HULL: a second, larger cone per arrowhead, drawn front-faces-culled on `reach_cone_casing.gdshader`, one render priority under its layer. `BoardOverlays.casing_cone` keeps the apex angle, pushes the base back by the width and the tip out by `width / sin(half_angle)`, which puts the whole cone exactly the width inside it.
+- **The flat view.** `SquadLines2D` draws a wider polyline under each dash, extended at both ends (`CASING_PX`, one pixel), a triangle grown about its incentre under each arrowhead, and the same under a break's pieces.
+- **Knobs.** Game tab → Squad lines → *Squad line casing (2D+3D)* (the colour, `SquadLines2D.CASING_COLOR`) and *Casing width (3D)* (`BoardOverlays.squad_casing_width`; zero takes the casing off).
+- **Checked by eye before building on it.** A headless suite cannot see a shader's pixels, so a scratch windowed render of a cased and an uncased ribbon over the measured pink came first. The uncased rose on a grout line all but vanished, as reported; the cased one did not.
+
+**The line's core is CRISP now**, where it had a soft falloff to its rim, so every squad line is a little harder-edged than it was.
+
+**Declared residuals.**
+- **Sparks are cased too.** They share `TETHER_SHARDS` with a break's falling pieces, and a material has one casing. Splitting them onto a layer of their own is the fix, if the outlined sparks look wrong.
+- **A ghost's arrowhead reads a little darker**, because its outline shows through the see-through cone.
+- **The arrowhead's outline runs to a longer point than the mockup's.** A constant-width outline round a sharp cone meets in a miter, `width / sin(half_angle)` past the tip, where the mockup's pixel dilation rounded it. The tip stops short of the leader (`TETHER_INSET`), so most of that point sits behind the leader's sprite. If it reads as a needle, capping the apex push is the fix.
+- **A stroke's free start can show a sliver of casing with no ink** for a moment, as a dash marches off it. A tether's start sits under its member's sprite.
+- **The Split chip is still orange** on a row whose blow splits an enemy squad.
+- **What only the dev can judge:** the casing's width and darkness in play, the harder edge, and outlined sparks.
+
+## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it, a death or a down plays a look of its own ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27; [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104) BUILT 2026-09-27)
+
+#367 asked for a visible moment when a squad forms, a unit joins, or one leaves. #1070's tethers gave membership a body, and the dev's framing was that they are the vehicle: *"We have new tethers now for additional effect vectors."* [#423](https://github.com/Phaazoid/Godoiosis/issues/423)'s break folded in the same day. It is one mechanism, built as two PRs, and #423 closes with the second.
+
+### The rulings (grill, 2026-09-23, off animated mockups with the real sprites)
+
+| Question | Ruling |
+|---|---|
+| Join | **Draw in.** The tether grows from the member to the leader, then the cone pops. |
+| Voluntary leave (Leave Squad, Disband) | **Reel in.** The tether is pulled into the leader. |
+| Forced break (part 2) | *"the snap, sparks, and shatter"*: red strain, a snap with sparks at the break, the dashes shatter and fall, and the arrowhead drops too. |
+| Downed | Breaks, like a shove (part 2). **Superseded 2026-09-27 (#1104):** a down plays the death looks, and the snap is kept for displacement. |
+| Death | *"death should have other effects, for a later issue"*: [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104), since built (*A death's own moment*, below). |
+| Leadership passes | The old links play their exit, **then** each remaining member draws in to the new leader. |
+| Factions | Breaks play for every faction, each in its own side's colour since [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109). Joins and leaves only ever come from the player; nothing in `ai/` forms or leaves a squad mid-battle. |
+
+### A moment is its own drawing, never a state on a standing tether
+
+Tethers stand only while something is selected, and membership changes at settle points when nothing is. That is #423's visibility-schedule law, and it rules out animating a standing tether. So each change plays a short-lived **moment** that draws whether or not a tether was up.
+
+- **Who does what.** `SquadTetherPresenter` (`board/`) decides which moments play. `OverlayManager.squad_tether_moments` holds them while they do. `SquadLines2D.moment_at` / `moment_drawing` is the one answer to what a moment looks like at a given age, and both views read it. The diorama draws on `Layer.TETHER_MOMENT`, rebuilt every frame while a moment is in the air and cleared once after: `ArcLightning`'s rebuild-while-alive shape, costing nothing when idle.
+- **The presenter diffs; it does not react per signal.** One call can change membership several times: a leader leaving picks a new leader, and that leader's range and capacity can eject members in the same call. Handled per signal, a tether would draw in to the new leader and end in the same frame. So the presenter keeps a baseline of every member-to-leader link and asks, once the operation is over, which links ended, which began, and why each ended. An ended link takes the MEMBER's cause if the member left, otherwise its leader's; a death at either end wins over both (#1104). The baseline advances on every flush whether or not anything plays, so it cannot go stale.
+- **A join settles at once, a leave at the end of the frame.** `join_squad` emits last, and Squad Up redraws the squad's tethers one line later in the same frame. Settling first is what lets the recruit's tether be held back from its first frame; a deferred settle showed it whole for one frame in 3D, because `OverlayMirror._process` lifts before the deferred queue runs. A leave defers because a disband loops and a leader's leave cascades.
+- **A draw-in holds back its pair's standing tether.** A draw-in over a tether that is already whole is invisible. `squad_tethers` stays the truth, and `drawn_squad_tethers` omits any pair a draw-in is standing in for, running or waiting its turn. Both views read the drawn list. The draw-in hands over once it has popped if a standing tether exists for its pair (mid-Squad Up); if none does (Join Squad has just closed its pick), it holds, then fades.
+- **Where the new leader's links wait.** A link that begins in the same operation as one that ends waits for the exit to finish. That is the dev's "then": the reel-in's time after a voluntary leave, the break's after a forced one.
+- **Dashes stay where the whole tether's would be.** A part-drawn tether carries its distance from the chord's origin: the flat view's `_dashed(start)` and the diorama's `set_marks(..., starts)`. The pattern neither slides nor restarts, and the hand-over is seamless.
+- **Loading is inert.** `arm()` takes the baseline silently. `MissionController._begin_turn` and `_open_deployment` call it, and those are where every load lands: fresh start, commit, restart, resume and the pre-mission phase. `ScenarioManager.clear_board` resets it.
+
+### Why a unit left: `SquadManager.LeaveCause`
+
+`squad_member_left(squad, unit, cause)` is the twin #182 deliberately left unbuilt. It is emitted from `_erase_from`, the one erase door. **`disband_squad` used to erase directly and was the one loss nothing announced**; it goes through the door now.
+
+- `leave_squad(unit)` is the VERB. The menu, replay and the Play API call it, and it is always VOLUNTARY.
+- Every forced exit that keeps the unit standing is `eject(unit, cause)`: FORCED for `enforce_contact` and both `check_reassign_leader` ejections, DOWNED for `handle_unit_downed`.
+- `handle_unit_death` is DEATH. `release` (the pre-mission undeploy) is RELEASE.
+- Leaving a solo squad to join another is VOLUNTARY too, and ends no link.
+
+What plays: VOLUNTARY reels in. FORCED BREAKS (part 2B, below). DEATH and DOWNED play one of four looks of their own (*A death's own moment*, below), and a body shoved into a hole breaks at the ledge. RELEASE plays nothing, since an undeploy has no ruling.
+
+### Two facts the build measured
+
+- **A vertex colour is stored at EIGHT BITS a channel** (0.5 reads back 0.498). The moments' colours and fades ride the vertex colour, which is fine for a fade, but a case comparing colours needs a step's tolerance.
+- **`reach_cone_alpha.gdshader` reads `COLOR.rgb` and `COLOR.a` now**, with a cone's tint multiplied into its baked facet shade (`add_beam_cone`'s `tint`). White bakes (shade, shade, shade, 1), which is exactly the `COLOR.r` read it replaced. The solid `reach_cone.gdshader` is untouched.
+
+### Declared residuals
+
+- **The moments run on the wall clock**, like the pluck. A modal opened mid-moment lets it finish unseen, and a hitstop does not freeze it.
+- **What only the dev can judge:**
+  - the timings;
+  - whether the pop reads at his zoom;
+  - whether the new leader's "then" is too slow;
+  - all of it in the flat view.
+
+### Part 2A: the Split forecast and the queue chip (BUILT 2026-09-27)
+
+The dev's playtest of part 1 found the queue silent about exactly this: *"when I have an attack queued up that will remove an enemy from their squad… there is no feedback anywhere telling me in advance"*. That is a Law #2 gap, so part 2 opens with the forecast rather than the look.
+
+**Rulings (2026-09-26/27, the second off an inline mockup of the row and the zoom):**
+
+| Question | Ruling |
+|---|---|
+| Queue | A chip on the **row that causes it**. The word is **"Split"**, and "Split 2" when one blow sends out two. |
+| Chip colour | **Tether orange** (`ActionQueueRow.split_ink()`, the tether's own knob adapted to the palette). |
+| Hover | The names only, until the dev words it. |
+| Break inside the battle zoom (part 2B) | The zoom lifts only the fight's cells, 40 cells up, and a moment draws at board height today, so it would play unseen. **Ruled Z2:** the far end of each breaking tether is lifted with the fight. **With battle zooms off, it plays on the board.** |
+
+**What counts.** A unit that leaves a squad of two or more because of the blow: the victim going down, anyone the successor cannot hold (range or capacity), a shove out of range. **So every blow that downs a squadded unit also wears Split.** A death is never counted: it is not a split, and its tether plays a look of its own (#1104). Nor is leaving a squad of one.
+
+**The forecast is `SplitForecast` (`squads/`), stamped into `ResolvedOutcome.splits` by `SquadManager.resolve_plan`** (and, since [#761](https://github.com/Phaazoid/Godoiosis/issues/761), by `resolve_hypothetical` too: the AI's score reads it, see `ai-tactics.md` → *Attack scoring*). It replays the live settle in its live order:
+- a death settles at once, mid-pass, so a killed leader's successor is judged where everyone stands at that blow;
+- at pass end, the downed leave in the order they went down, skipping one finished off later in the pass, and a downed leader hands over;
+- then the contact sweep.
+
+The RULES inside each step are shared, never copied: `SquadManager.successor_among` and `capacity_overflow` are what `check_reassign_leader` now calls too, and range is `SquadCohesion.in_range_of` over `Squad.range_of` / `capacity_of`, which take a LEADER so a successor the plan has not appointed can be asked. **Positions at a blow are rebuilt, not snapshotted**: once the walk is over only a knockback moves a unit, and each outcome records its own `knockback_from` / `knockback_to`.
+
+**A contact break is owned by the blow after which the pair STAYED out of range**, the last in-range to out-of-range transition, whether the member or its leader was the one shoved. The last blow to MOVE either is the tempting wrong answer: a second shove that only carries a member further away would take the chip off the blow that broke the link.
+
+`tests/squad/test_split_forecast.gd` is the Law #2 harness: every case runs the REAL pass and requires the forecast to name exactly the units `squad_member_left` then reports as FORCED or DOWNED out of a squad with members left.
+
+**Its five declared residuals were built after part 2B** (dev's ruling, 2026-09-27): see *Part 2A's leftovers* below.
+
+### Part 2B: the break, at the blow, in the zoom (BUILT 2026-09-27)
+
+**Rulings it carries:**
+
+| Question | Ruling |
+|---|---|
+| Timing (2026-09-26) | A fight-caused moment plays **at the blow**, inside the battle zoom. Ones nothing predicts (turn-start ice melt) play on the map. |
+| Z2 (2026-09-27) | The far end of a breaking tether is lifted with the fight; with battle zooms off, the break plays on the board. |
+| Camera (2026-09-27) | While a break plays, the camera **pulls back to the stage**. The close-up at `Pacing.TRAINED_DISTANCE` cuts off a 3-6 cell tether's far end. |
+
+**The look is `Moment.BREAK`**, one more branch of the moment every view reads (`SquadLines2D.moment_at` / `moment_drawing`):
+1. **Strain.** The whole tether turns toward `TETHER_STRAIN_COLOR`, the #1070 strain red, and shivers with the pluck's own amplitude and swings, growing rather than decaying.
+2. **Snap**, at the middle of the shaft. Sparks fly out of it as short streaks, each as long as the way it travelled in `SPARK_TRAIL_SECONDS`.
+3. **Shatter.** Every dash on screen at the snap (the march frozen at that instant) becomes a piece, kicked apart along the chord and scattered sideways by index (the golden angle, `HealthBlockDebris`'s doctrine), tumbling. The arrowhead falls with them.
+
+- **Nothing about the fall is a knob.** Each piece is eased onto the ground under the chord (its body-middle height taken back off) exactly as the shatter time runs out: the drip's rule from #358.
+- **The seven Break knobs** sit on Game → Markers → Squad lines: strain, shatter, kick, tumble, sparks, spark speed, spark time.
+- **Why a second line layer, `TETHER_SHARDS`.** The squad beam marches its dashes along a stroke, so a piece drawn on `TETHER_MOMENT` would be cut up as it fell. The pieces and sparks ride a SOLID layer, the `"shard"` beam: squad width and glow, no dash.
+- **The shiver is baked into the shaft's points**, not pushed as a uniform: the pluck's uniform is one per layer, and moments of every age share `TETHER_MOMENT`.
+- **#217.** The shiver is stilled (a shake is motion, the pluck's own rule) and the sparks do not whiten. The strain red, the snap and the fall all still play.
+- **The flat view has no height** (`_flat` drops it), so there the fall reads as a scatter and fade. A declared #292 difference.
+
+**The forecast names LINKS.** `SplitForecast` also stamps `ResolvedOutcome.relinks`: the member-to-leader links each blow ends or begins, recorded where it already decides who leaves.
+- **A leader's leaving ends every member's link.** A member the successor then cannot hold ends on its OWN cause (FORCED), and the rest end on the leader's, which is exactly how the live presenter reads them.
+- **The survivors' links to the successor begin.** So a handover's new leader is named once, in the one place that walks the settle, rather than re-derived at the blow.
+- **The link check.** `test_split_forecast` requires that the links before the pass, with every relink applied blow by blow, equal the links the real pass leaves.
+
+**It plays at the blow.**
+- **The hook.** `OrderExecutor.after_the_blow` runs in `_execute_action_sequence` once `execution_complete` says the lunge's peak, the shove and the fall are done (the lunge's return leg may still be playing since #480): the first moment a shoved member stands out of range. Every attack passes through that loop (aims, counters, coda shots and the walk's own watch shots), so there is one call site.
+  - It asks `SquadTetherPresenter.foretell(outcome)` to play the outcome's relinks now.
+  - While a fight is staged (`shot_cells` non-empty), it releases the follow, so `ShotDirector` falls from TRAINED to STAGE.
+  - It lingers `max(linger, shown)`. `shown` is the break's own length, plus a handover's draw-in up to its pop (`SquadLines2D.shown_seconds`), so tuning a break can never outrun the camera.
+- **A kill already settled live.** `handle_unit_death` runs mid-blow, and the presenter's ordinary deferred flush plays it at that blow. So `foretell` skips any link `_current_links()` has already changed, and nothing plays twice whichever of the two gets there first. Since #1104 the kill's own look still holds its blow (*A death's own moment*, below).
+- **The settle reads a ledger.** Everything foretold goes into `_foretold_ends` / `_foretold_begins`. After `enforce_contact`, the executor calls `flush()` SYNCHRONOUSLY, and the diff consumes the ledger instead of playing those links again. Then `end_pass()` clears whatever is left, so a link the forecast named but the pass never changed cannot swallow a later, real leave.
+- **An exit no forecast saw breaks at the settle, on the board**, through the ordinary diff. Since *Part 2A's leftovers* the pass's own ice is forecast; what still arrives this way is a burn's break, at the end-of-turn settle, and the contact backstops outside a pass (turn start, a pre-mission reposition).
+
+**Z2 is two edits.**
+- **The stage.** `BeatSheet._gather_cells` marks both cells of every relink on the outcomes it already stages. Mid-walk shots stay off it, as their footprints do.
+- **The 3D moment.** `OverlayMirror._moment_point` adds `BoardSpace.staged_offset` to every point, blended between the two end cells' offsets along the chord. Z2 stages both ends, so in practice that is one offset. The blend keeps a moment joined if one end is not staged.
+
+With zooms off nothing stages: the break plays on the board, at the blow, with the same wait.
+
+**Testing it.** Sampling the store per frame cannot see "during the pass": headless, everything after the shove's slide runs to the settle without another frame. So `tests/squad/test_split_break_in_play.gd` reads the ORDER at the settle's own `squad_member_left` for the member: the break must already be in the store then. It also checks that the break is in the store once across the whole pass, and it measures that the break is strung between exactly the cells the stage lifted.
+
+**Declared residuals:**
+- **A moment still fading when the tiles go home drops to the board with them.** The wait covers the break and a draw-in's pop, not a draw-in's hold and fade.
+- **A mid-walk watch shot's break plays on the board**, before the tear-out, like its footprint.
+- **A break the forecast predicted but the pass did not deliver has already played**, and nothing redraws the tether until it is next shown. The link check makes this a bug to fix rather than a mode.
+- **A down's handover is judged at end-of-pass positions** (the settle's own order), so a member shoved out of the successor's reach before the down plays the down's look at its blow, as its chip says.
+- **The dashes' march is frozen at the snap from the flat view's clock.** The diorama's shader marches on its own `TIME`, so its last dash positions and the pieces can differ by a fraction of a dash.
+
+### Part 2A's leftovers (BUILT 2026-09-27)
+
+2A declared five things its forecast got wrong or could not show, and the dev ruled they come after 2B. Each was re-derived from the code before building; two were not what 2A said.
+
+| Leftover | What the code did | What changed |
+|---|---|---|
+| **The end-of-turn burn** | `stamp` never read `plan.tile_hits`, so a burn that downed a squadded unit wore no Split. | The burn settles after the contact sweep, in the live order: a death hands over at once, and the downed leave once every burn has landed (`apply_end_of_turn_tiles`, then named `apply_burning_tile_damage`). It settles on the ground the pass leaves, and its Split rides the END OF TURN row. |
+| **This pass's ice** | A pass's deposits land in ONE batch after the attack volley (`OrderExecutor._apply_cell_effects`), while the forecast read only the pre-pass board. A melt that stranded a member was missed; a freeze that restored a path gave a false Split, whose break 2B then played for a link the pass kept. | `BoardContext.with_deposits` folds deposits over the live store through the existing `TerrainStateManager.projected_states_at`. The walk and the volley settle on the board as it was, the counters onward on the landed one. A pass that deposits anything copies every squad with members, since a melt splits one no blow touched. Ownership counts each blow's OWN deposits (`ResolvedCellEffect.cause`), so the melt's Split is on the fire. |
+| **A watch shot halting a walk** | Unreachable, measured. The validator judges a halted walk where the shot catches it (`MoveAction.get_destination`), so a catch out of range reds the walk and the plan is refused. A catch in range makes the shove an ordinary in-range to out-of-range change the forecast already owned. | Nothing in the forecast. `test_split_forecast` pins the refusal, since the forecast now leans on it. |
+| **A leader killed mid-walk** | Every walk starts together and a watch shot plays while the others keep walking, so the successor's reach was read at the frame of the kill. The pan, the shot's length and the battle-zoom setting decided who stayed; the Play API, which finishes every walk before any shot, already disagreed with the game. | **A live rule change (dev, 2026-09-27).** The successor is still named at once (it reads LDR, not cells), but its reach, range then capacity, waits for the walk to end: `SquadManager.hold_handovers`, held across `OrderExecutor._execute_move_phase`. The forecast defers the same check past the last mid-walk shot and keeps the chip on the killing blow. On screen, the new leader's tethers draw in at the kill, and anyone still out of its reach breaks off when the walk ends. |
+| **The collapsed volley row** | A collapsed volley shows no chips; expanding it shows the Split. | **Ruled as-is (dev, 2026-09-27)**, the same as every other consequence. |
+
+**Declared residuals:**
+- **A burn's break plays as the burn phase settles, on the board**, not at each burn: the live burn list is rebuilt at end of turn (`TurnBoundary.tile_hits`), so there is no forecast outcome at a burn to play it from.
+- **A burn is forecast against this squad's pass.** Another squad's pass later in the turn can change it, as with any forecast.
+- **A mid-walk kill and a later mid-walk shove that both matter**: the kill's row wears the chip.
+
+### A death's own moment ([#1104](https://github.com/Phaazoid/Godoiosis/issues/1104), BUILT 2026-09-27)
+
+A death used to play nothing on its tether; only the health cubes burst (#314). The dev picked the look off an animated mockup on the real sprites.
+
+**Rulings (grill, 2026-09-27):**
+
+| Question | Ruling |
+|---|---|
+| Look | **All four, one at random per death**: Drain, Slack, Pulse and Motes (below). |
+| Colour | The tether **turns grey** (ash), whichever side it was. |
+| Pacing | **The pass waits for it, like a break.** In the zoom the camera pulls back to the stage. |
+| A leader dies | Every member's tether plays **the same** look, and the heir's tethers draw in after it (the "then" rule, unchanged). |
+| A down (his play-check, 2026-09-27) | A squadded enemy almost always goes DOWN before it dies, so **a down plays the looks too**, the same ash. **The snap is kept for displacement** (a FORCED exit). |
+| Shoved into a hole (same play-check) | It is broken off by the distance as much as by the death, so it **SNAPS at the ledge, before the camera follows the body down**, and the dead end **rides the body to the ledge** (picked off a second mockup). |
+| The hang (his play-check of that, same day) | *"hover over the ledge a moment, wile e coyote style, until the tether snaps, then the unit falls."* The body **hangs over the hole from its arrival** (`Pacing.VOID_HANG`, a knob), the tether **holds taut and keeps shivering** until the hang ends (off a third mockup), and only a tethered body hangs. |
+| The snap has to be SEEN ([#1171](https://github.com/Phaazoid/Godoiosis/issues/1171), his report, 2026-09-29) | *"the unit is falling and the camera is following before snapping animation from the tethers has a chance to play and be seen."* The build fell in the same instant it snapped, and lengthening the hang only moved both. Now the body **stays up after the snap** for `Pacing.VOID_SNAP_HOLD` (its own knob, so the shiver and the gap tune apart), **then** falls. |
+
+**The four looks** are `Moment.DRAIN`, `SLACK`, `PULSE` and `MOTES` (appended; `SquadLines2D.DEATH_LOOKS`), drawn by `_death_drawing` beside the break's. In each, the dashes stop where they stood and become solid pieces on `TETHER_SHARDS`:
+- **Drain.** Ash runs from the dead end to the other, then the tether fades.
+- **Slack.** It sags, and the dead end drops to the ground under it, greying as it falls, then fades. `slack_point` clamps to the ground the break's pieces land on.
+- **Pulse.** A warm light runs from the dead end to whoever is left, emptying the tether behind it, and the one it reaches flashes.
+- **Motes.** It greys, then crumbles into pale motes that rise and fade.
+
+**Which look is DERIVED, never rolled** (`SquadLines2D.death_look`). It hashes where the body fell and how many deaths the board has seen, and steps on if it would repeat the look before it. That is the presentation's scatter rule (`HealthBlockDebris`, `ParticleFan`), so a replay plays the same looks. Law #1 is untouched: none of this is gameplay. `DEATH_LOOK` pins one look for tuning (Game → Markers → Squad lines → *Death look*).
+
+**The fall is taken at the fall.** `squad_member_left(DEATH)` fires inside `Unit.die()`, before `queue_free()`. The presenter's flush is deferred, and by then the body is going. So `_note_fall` reads the cell, the side and the look at the death, and `_link` strings a dead body's end from that capture; any other gone end still leaves the link empty.
+- **A unit's moment is decided ONCE.** A down foretold at its blow and a body that broke at the ledge already have one. So a unit downed then killed in one pass plays once, and owes no second wait.
+- **A fall at either end wins** (`_fallen_end`, then `_exit_for`), a death or a down, over the other end's own reason. A member the heir cannot hold is ejected FORCED in the same call, and would otherwise break while its squadmates played the look.
+- **Each link says which end fell** (`leader_died`), so Drain and Pulse run the right way and Slack drops the right end. It also names the survivor, for the flash.
+
+**The pass waits for it.** A kill settles mid-blow, so its look plays from the ordinary flush, not from `foretell`. While a pass runs (`OrderExecutor.executing_plan`), `_note_fall` also owes the blow the look's time, plus a draw-in when a dead leader leaves two or more. The next `foretell` (the same blow's `after_the_blow`) returns it: the same linger and camera release a break gets. A death outside a pass holds nothing.
+
+**A down plays at its blow.** Its ejection waits for the pass's end, but the forecast names the down's links. `foretell` now takes the blow's victim: when the outcome is DOWNED, every relink touching the victim plays the victim's look, including a FORCED relink whose leader is the victim. The settle's flush then finds those links in the ledger. Foretold links are strung from the relink's own cells, the ones the stage lifts. At every call today these agree with the live cells (a mutant swapping them survives), so that choice is declared rather than pinned.
+
+**A body shoved into a hole snaps at the ledge.** The removal plays slide, plummet, then `die()`. The camera rides the plummet and holds in the pit for the burst, so a look played at `die()` was never on screen, and the playtest found exactly that.
+- **At the blow, before the slide**, `AttackAction` emits `going_over`, per victim. It is wired beside `impact` in `OrderExecutor._listen_for_the_blow`, which covers aims, counters and watch shots.
+- **The executor's `_break_at_the_ledge` calls `SquadTetherPresenter.foretell_removal`.** That plays the removal's relinks as BREAK, strung from the struck cell, and marks the victim decided, so its death plays nothing more.
+- **The break is HELD until the hang ends** (round 3, the wile e coyote hang). Round 2 timed the snap from the blow, and the slide into the hole used most of that clock up, so the body arrived and dropped with no beat of its own. Now:
+  - `foretell_removal` returns whether a tether broke, and marks its breaks `held_by` the attack with `snap` at INF. The executor sets `AttackAction.tether_held`.
+  - After the slide, a held body **hangs** for `Pacing.VOID_HANG` (`Pacing.beat`), THEN stamps `tether_snap_msec`, then **stays up** for `Pacing.VOID_SNAP_HOLD` while the snap plays, THEN plummets. The stamp is written as the hang ENDS, so a pause mid-hang holds the tether too.
+  - **The hold after the snap is #1171's fix.** Round 3 plummeted in the frame it stamped, and the plummet is what the camera rides (`plummeting`/`plummet_depth` → `battle3d._fall_below`), so the camera dived just as the snap's sparks and shatter began at the lip. Lengthening `VOID_HANG` moved the snap and the fall together, so no setting opened a gap. The hold is its own knob rather than the break's tail length, because tying it to `BREAK_SHATTER_SECONDS` would couple two values again, one knob over.
+  - `OverlayManager._await_the_snap` reads that stamp every frame and adopts it as the entry's `snap`. An attack that is gone snaps it at once, so a break can never hold the clock open for ever.
+  - **A break's snap time is the entry's own fact**: `SquadLines2D.snap_seconds`, defaulting to the strain's end, so every ordinary break is unchanged. `moment_at`, `moment_drawing` and `_break_drawing` read it, and the dash freeze and "done" key off it. Past its strain a held break stays whole at full strain red and keeps shivering at the strain's full swing; #217 stills that like the strain's own shake.
+  - **Only a tethered body hangs.** The hang exists to show the snap, so a unit with no tether falls as it always did.
+- **The dead end RIDES THE BODY**: until the break snaps, `OverlayManager._follow` moves the victim's chord end to the body's live position. It reads `UnitMirror.board_xz`, the one conversion that places the sprite, extracted for this. At the snap it lets go, and the pieces fall from where the body hung. The height stays the struck cell's, which is the lip's, and that is the height `UnitMirror.stand_height` holds an airborne body at.
+
+**The survivor's flash** fires off the moments' own clock. `OverlayManager._process` calls `UnitVisuals.play_loss_flash()` once, when a Pulse's run ends; a tween delay would drift out of step with the light under the modal lock and the kill's hitstop. **It is the lowest tier on `sprite.modulate`**: it yields to an aim pulse, to a pin flash (a pinned survivor is already white), and to a running one-shot, since that tween also drives the lunge and the shake.
+
+**The light in 3D** is its own LINE layer, `TETHER_GLOW`, on a `"glow"` beam set: uncased, undashed, no bead, with its own width, intensity and softness (three Game-tab rows). The probe found that a solid ribbon read as a lit dash. So `OverlayMirror` samples the stroke at nine points and tapers it to nothing at both ends (`GLOW_TAPER`, as per-point widths), with a softer falloff than the laser's. The flat view draws soft rings.
+
+**#217.** The light and the flash are stilled; the grey, the fall and the fade still play.
+
+**Tests.**
+- `test_squad_lines`: each look against its knobs, and the pick. A break that snaps late holds whole, red and shivering (still under #217) until its snap, then falls exactly as an ordinary one only later; a held one never ends on its own.
+- `test_squad_tether_presenter`: the capture, the precedence, the pacing, the flash and its tier, a down at the settle and at the blow, a downed leader's dropped member, down-then-kill, the ledge break (held, by its attack), the ride through the hold until the attack stamps the snap, and a break whose attack is freed snapping at once.
+- `test_overlay_mirror`: both layers, and their clearing.
+- `test_split_break_in_play`: a real kill, the pacing wire through `Unit.die`, a real down (its look already playing when the settle ejects it, and no snap), and a real shove into a hole (one break from the struck cell, no death look, the body held, the snap stamped no earlier than the body's ARRIVAL, and the break hearing it).
+- 36 mutants across the three rounds, each red on its case except the declared relink-cell one above. Round 3's ten are the hang: the snap stamped at the blow or never, the overlay not adopting it, either snap reader ignoring it, the follow letting go at the strain, a freed attack holding for ever, the held shiver removed, the attack never marked held, and the links never held. One of them found a real hole: a down that reached `foretell` without its victim was ledgered before it played, and swallowed. The ledger now takes only what played.
+
+**Declared residuals:**
+- **Motes are cased specks in 3D.** They ride `TETHER_SHARDS`, which wears the casing; moving them to the glow layer is the fix if they read wrong.
+- **The first instant plays through the kill's hitstop.** The moments run on the wall clock.
+- **The flat view has no height.** Slack reads there as its grey and fade, and the motes as their drift (#292).
+- **Pulse's closing fade has nothing left to fade.** The light has emptied the tether by then, so the fade is a short hold while the survivor flashes.
+- **The hang's LENGTH is a play-check, and so is the hold after the snap (#1171).** `Pacing.beat` collapses headless, so no suite sees how long the body hangs or how long it stays up once the tether has snapped; that the snap comes after the arrival is pinned. The hold cannot be pinned even as an ORDER: the stamp already came before the plummet, so a case asking that passes with the hold deleted.
+- **A void-killed leader's heir draws in while the camera is down the pit.** Its draw-in still waits a fixed break's length from the blow, so with a long hang or a long slide it can begin before the held break snaps.
+- **On a raised board the body can drop before it hangs.** A hole lower than the lip gets #602's step-off fall to the hole's own height first, then the hang, then the plummet. The Causeway is flat, so this is untested in play.
+- **What blocks the zoom's view** (units, terrain) is #1132, not this.
+
+## A refused Execute says why ([#1121](https://github.com/Phaazoid/Godoiosis/issues/1121), BUILT 2026-09-28)
+
+The dev's playtest note:
+
+> Trying to click execute orders while invalid orders should shake the invalid order rows, and give an short explanation of why the orders cannot yet be executed.
+
+**The press never arrived.** `set_execute_state(DISABLED)` set `execute_button.disabled`, and a disabled Button emits no `pressed`. So `OrderExecutor.execute_orders`' human refusal branch, which flashes each refused unit and hands the plan back, had never been reachable by a click. The reasons already existed as data (`BaseAction.validation_errors`, written by `SquadPlanValidator`); nothing under `Classes/ui/` read them.
+
+**This is the Execute ATTEMPT, not queue authoring.** The 2026-07-31 ruling that queue-time refusals stay silent is unchanged. What speaks here is the press on a plan that has gone red since it was authored.
+
+### Rulings (grill, 2026-09-28, off rendered mockups on the real dock and sprites)
+
+| Question | Ruling |
+|---|---|
+| Where the reason goes | Between the list and Execute (candidate A, over a per-row line or a tooltip) |
+| Its look | A box of its own, in the refused ROW's fill and border, one line per refused order: `Name:` then the validator's reasons |
+| A title strip | None for now |
+| When it shows | After a refused press; it re-reads the refusals on every refresh and goes when nothing is red |
+| Board units | Flash too (the existing `play_invalid_flash`) |
+| A red row below the fold | The press scrolls the first one into view |
+| A refusal sound | Not built; noted on #934 |
+
+### How it is built
+
+- **`ExecuteState.REFUSED`**: the DISABLED look, but pressable. `game.refresh_action_queue` splits the old `can_execute` into *offered* (active squad, not hold-only, board not locked) and *refused* (`squad_has_invalid_actions`). Not offered wins and stays truly disabled, so a hold-only squad's press can never run its hold-only plan.
+- **`execute_orders` stays the authority.** The press takes the ordinary path, re-validates, and refuses in the branch that was already there. The button's look is only a preview of that answer.
+- **`SquadManager.refused_orders`** is the one list of refused orders. `squad_has_invalid_actions` and the AI concede log read it; the Play API's twin (`play_session.gd`) still walks the queue itself.
+- **`play_refusal` runs AFTER the branch's own refresh**, because that refresh frees and rebuilds every row. A shake started before it plays on freed rows.
+- **`_execute` hides the button only when the press was not refused.** The hide comes after the emit (the refresh inside re-shows the button) and stops a second press during a pass, so it cannot simply go.
+- **The shake is the tether pluck's envelope** (`SquadLines2D.shake_envelope`, split out of `shake_offset`) at the queue's own size (`QueueStyle.REFUSAL_SHAKE_PX`, a Game-tab row). It runs through the row wrapper's margins, so the container's layout moves the row and a refresh that frees the row ends the shake. #217 stills it; the box and the red rows still carry the refusal.
+- **The box is built in code**, not added to the `.tscn`, so no hand-authored scene node goes stale under an editor save.
+- **This is now the second refusal that answers back**, beside #1070's grey tile. Both are scoped the same way: the reason is already on screen as red.
+
+### Declared residuals
+
+- ~~**A unit hidden behind its move ghost flashes invisibly**~~ — **FIXED by [#1150](https://github.com/Phaazoid/Godoiosis/issues/1150) (2026-09-29).** The refusal loop forks the way the queue-row hover does (`HoverPresenter._highlight_unit`): a unit with a ghost standing in for it (`OverlayManager.has_projected_unit`, a move ghost or a knockback ghost) flashes that ghost through `play_projected_unit_invalid_flash`, and only a unit on its own sprite plays `UnitVisuals.play_invalid_flash`. Both play one flash, `UnitVisuals.tween_invalid_flash`, back to their own rest (the ghost to `PROJECTED_MODULATE`). No 3D code: `OverlayMirror` already copies each 2D ghost's modulate and position into its diorama ghost every frame. The flash still ignores the photosensitivity setting, as it did before.
+- **The validator's strings become player-visible for the first time.** Several were written as internal messages; their wording is the dev's to change.
+- **Many refusals make a tall box.** It takes its height from the list, which scrolls; nothing caps it.
+- **What only the dev can judge:** the shake's size and feel, and whether the box reads as the reasons for the red rows.
+
+## Fast-forward, skip and a playback speed ([#545](https://github.com/Phaazoid/Godoiosis/issues/545), BUILT 2026-10-07)
+
+### Rulings (dev, 2026-10-07)
+
+| Fork | Ruling |
+|---|---|
+| Fast-forward or jump to the end | **Both.** A held fast-forward, and a skip |
+| What a hold covers | Any playback: your Execute, the enemy turn, the burn pass. Let go and it is back to normal at once |
+| What one skip covers | The rest of playback, until the board is the player's again: the whole rest of an enemy turn, or the rest of your own pass |
+| How a skip gets to the end | Resolve under a fade: black, the real pass at maximum speed, then back in on the settled board with the camera home |
+| Button, key or both | Keys only. Hold **Shift** to fast-forward, tap **Space** to skip |
+| Per press or a setting | Both. **Playback speed** (1x / 2x / 3x) is the base for all playback; holding Shift takes whichever is faster, never both multiplied |
+| An on-screen hint (round 2, off three mockups on a real frame) | Yes: each key, an arrow, what it does. In **End Turn's corner** (bottom right), styled like the objectives panel, shown during **any playback** for **the whole of it** |
+
+### How it is built
+
+- **A skip changes how fast a pass runs and whether anyone sees it, never which code runs.** That is the whole design, and it is why the four things this ticket said a skip must not break (the pass reaching `_end_squad_turn`, the camera coming home, the headless escape, the two-window key trap) hold by construction rather than by care. Nothing returns early from `execute_orders`.
+- **`Pacing.unwatched()` is the one spelling of *nobody is watching playback*: headless, or a skip resolving.** Nine playback escapes asked `DisplayServer.get_name() == "headless"` by hand (`Pacing.beat` and `hitstop`, `CameraController`'s lerp and `pan_to_position`, `CameraRig3D`'s glide, recover and flourish clocks, `MovementComponent`'s shove fall and plummet). They ask the predicate now, so a skip collapses exactly what the suite already collapses, through paths every suite already runs. `tests/law/test_playback_escapes_ask_unwatched.gd` refuses a tenth spelling in those files, because no headless case can tell the two apart.
+- **`Pacing._apply_time_scale` is the one writer of `Engine.time_scale`.** A hitstop's freeze outranks the playback speed and its release comes back to that speed. Before #545 the release wrote `1.0` literally, correct only while nothing else wrote the scale. The freeze is also divided by the speed, so it lasts the same share of a pass at any speed.
+- **`PlaybackControl` (`Classes/flow/`) decides; it is a per-frame reconcile, MusicDirector's idiom.** Its gate is `game.playback_owns_board()`, the existing answer to *is playback running*. A menu or a card drops the speed to 1x without ending a skip, so the pause menu never animates at skip speed and closing it carries on. Both keys are read off the global `Input` state rather than one window's event stream, which is the two-window trap answered by polling instead of forwarding. `PROCESS_MODE_ALWAYS`, because `ModalLock` disables the Game node.
+- **The skip waits for FULL black before anything runs unwatched**, so the snapping never shows through the fade. The fade runs on real time, so a hitstop cannot stall it. Going dark is not a flash, so #217's cap does not apply.
+- **The fade lives in the GAME's HUD layer, at `UiLayers.PLAYBACK_FADE`, and that placement is the fix for a bug the first build shipped.** It began as a rect in `battle3d`'s own `$UI` CanvasLayer, which is in the ROOT viewport and draws over the whole game viewport, so the pause menu (a card inside that viewport) opened UNDER the black and Esc mid-skip looked like nothing happened. A layer number only orders layers inside ONE viewport, which is why `test_the_fade_sits_under_the_dialogue_and_every_card` asserts the same viewport as the cards before it compares layers. Now the dialogue, the wheel and every card draw over the dark, and the flat 2D dev view gets the fade too.
+- **The key hint (`Classes/ui/PlaybackHint.gd`) sits in End Turn's slot during playback**, in the objectives panel's own box (`MissionStatusPanel.panel_style()`, read rather than copied). Its keys come from `Controls.key_for_action`, the F3 sign's idiom, so it cannot name a key the Input Map lacks; Shift's reads "Shift (hold)" because that is how the registry spells it. Speed up lights while Shift is down. `PlaybackControl` owns the hint and the fade and pushes both every tick. **One slot, one occupant:** the hint yields to End Turn wherever that is still up, which is your own end-of-turn burn.
+- **Space advances dialog too**, so a skip is refused while a timeline plays and on the frame after one ends: the press that ends a last line has already ended it by the time the frame asks. `ScenarioDirector.is_talking()` is the one answer to that question; it replaced two inline copies.
+- **The effects go quiet while a skip resolves** (`AudioDirector`'s bus pass folds the skip into the SFX level). Music plays on.
+- **Knobs:** *Fast-forward speed*, *Skip speed* and *Skip fade*, a "Fast-forward and skip" group on the Playback page. The setting's multipliers are a const beside its labels, because a knob could make "2x" lie; `test_player_settings` pins each label to its number.
+
+### What the suite cannot see
+
+Headless is already unwatched, so no case can watch a skip collapse a pause or a pan. The suite pins the speed each state asks for, the latch's edges, the fade, the mute, and that a skipped real pass still spends its squad and hands the borrowed view back (#520's *"restored after, including on skip"*). How long the screen stays dark is a play-check; `SKIP_SPEED` is the dial.
+
+### Declared residuals
+
+- The tether snap and pluck and the squad lines' dash run on wall clock, so they play at 1x during a fast-forward.
+- The 1 s hand-off beat before the player's turn sits outside `playback_owns_board` and plays at 1x.
+- A dialog that fires mid-skip plays on top of the dark screen.
+- Typing Shift or Space into a dev-tools text field during playback fast-forwards or skips (dev-only).
+- The hint does not show during your own end-of-turn burn, because End Turn holds the slot there.
+- The tear-out's white flash lives in `battle3d`'s own layer, so a flash already running as a skip begins draws over the fade until the skip collapses it.

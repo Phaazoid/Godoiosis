@@ -28,7 +28,7 @@ const UNIT_SCENE := preload("res://Scenes/Unit.tscn")
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "InvalidMoveOverlay",
-	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay", "DeploymentOverlay", "DefendOverlay",
+	"ZoneOverlay",
 ]
 
 # Test-tuned values for the few stats the suites actually reason about: low MHP so a couple
@@ -83,6 +83,16 @@ static func stamped_attack(attacker: Unit, target: Unit) -> AttackAction:
 	var action := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 	action.fired_attack = attacker.get_fired_attack()
 	return action
+
+# The orders somebody GAVE, in queue order: the queue minus the hold-position fillers a squad grows
+# when its plan opens (SquadManager.setup_hold_move_actions -- every host since #46). For a suite that
+# counts or indexes orders; read the raw queue when the fillers are the point.
+static func given_orders(squad: Squad) -> Array[BaseAction]:
+	var orders: Array[BaseAction] = []
+	for action: BaseAction in squad.action_queue:
+		if not (action is MoveAction and (action as MoveAction).is_hold_position):
+			orders.append(action)
+	return orders
 
 # Instance a real Unit, register it for cleanup, add it to the tree (so _ready
 # builds unit_instance and resolves the @onready components), then place it.
@@ -174,3 +184,24 @@ static func stamp_struck(action: AttackAction, board: BoardContext) -> AttackAct
 	action.struck_cells = Reach.get_affected_cells_from(action.actor, action.origin_cell,
 			action.target_cell, action.fired_attack, board)
 	return action
+
+
+# The catalog every resolve reads by default, the executor's included, holding exactly these reactions,
+# authored in the test so no retune of Resources/Reactions can empty a fixture that leans on one. A
+# suite calling this must call ReactionCatalog.refresh() in after_test, or the next suite resolves
+# with these.
+static func only_reactions(reactions: Array[ElementalReaction]) -> void:
+	ReactionCatalog._cache.assign(reactions)
+	ReactionCatalog._scanned = true
+
+# A reaction an `incoming` hit sets off on a unit holding `required`, stripping that state.
+static func stripping(incoming: Elemental.Element, required: Elemental.State) -> ElementalReaction:
+	var reaction := ElementalReaction.new()
+	reaction.incoming_element = incoming
+	reaction.required_state = required
+	reaction.remove_states.assign([required])
+	return reaction
+
+# A SHOCK hit on a WET unit strips the soaking: the shape of the shipped electrocution.
+static func only_electrocution() -> void:
+	only_reactions([stripping(Elemental.Element.SHOCK, Elemental.State.WET)])

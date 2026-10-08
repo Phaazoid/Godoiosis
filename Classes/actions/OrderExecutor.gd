@@ -49,7 +49,7 @@ var executing_plan: ResolvedPlan = null
 # for the same reason executing_plan is, and read by the same poll: a health readout is up because
 # something is ABOUT to happen to that unit (#350), and this phase is exactly that -- but it has no
 # ResolvedPlan to be read out of and must not fake one. Instance ids, since the reader asks per unit
-# per frame. apply_burning_tile_damage owns both ends; nothing here consumes it.
+# per frame. apply_end_of_turn_tiles owns both ends; nothing here consumes it.
 var effect_pass_subjects: Dictionary[int, bool] = {}
 
 # ==============================================================================
@@ -64,21 +64,34 @@ func execute_orders(unit):
 	game.refresh_action_queue(squad)
 
 	if game.squad_manager.squad_has_invalid_actions(squad):
-		# A human gets control BACK here: flash the bad rows, leave the plan queued, let them fix it
-		# and press Execute again. An AI squad has nobody to hand control back TO -- nothing in the
-		# turn cycle mutates the state that produced the plan, so the identical plan is refused every
-		# turn while the board keeps its ghosts and the squad never acts (#103). It concedes instead:
-		# however a plan turns out, an AI pass must reach _end_squad_turn.
+		# A human gets control BACK here: flash the refused units, shake their rows and say why
+		# (#1121), leave the plan queued, let them fix it and press Execute again. An AI squad has
+		# nobody to hand control back TO -- nothing in the turn cycle mutates the state that produced
+		# the plan, so the identical plan is refused every turn while the board keeps its ghosts and
+		# the squad never acts (#103). It concedes instead: however a plan turns out, an AI pass must
+		# reach _end_squad_turn.
 		if game.ai_controller.is_ai_faction(squad.leader.get_faction()):
 			push_warning("AI squad conceded its turn: %s" % _invalid_plan_summary(squad))
 			_end_squad_turn(squad)
 			return
-		for action in squad.action_queue:
-			if not action.is_valid:
+		var refused: Array[BaseAction] = game.squad_manager.refused_orders(squad)
+		var overlays: OverlayManager = game.overlay_manager
+		for action in refused:
+			# Whichever sprite stands for the unit: a planning ghost hides the real one (#1150).
+			if overlays.has_projected_unit(action.actor):
+				overlays.play_projected_unit_invalid_flash(action.actor)
+			else:
 				action.actor.visuals.play_invalid_flash()
+		# AFTER the refresh above, which rebuilt every row: a shake started before it would play on
+		# rows that are already freed.
+		game.squad_action_queue_control.play_refusal()
 		return
 
 	game.clear_selection_icons()
+	# ...and the squad lines a hover left up (#1109). The pointer stops polling while the pass plays, so
+	# they would otherwise stand at cells the pass is about to empty -- an intact tether beside its own
+	# break at the blow. The next hover redraws them.
+	game.overlay_manager.clear_squad_lines()
 
 	# Explicit types throughout: `game` is untyped (game.gd has no class_name), so every
 	# game.* call reads as Variant and `:=` cannot infer from it.
@@ -185,6 +198,7 @@ func execute_orders(unit):
 	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases,
 			profiles)
 	_apply_cell_effects(plan.cell_effects)
+	await _play_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND))   # the ice just went (#922)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of. It is a COMBAT beat under
 	# COMBAT_ONLY (dev, 2026-08-28), so it keeps the cinematic's hold there.
@@ -225,6 +239,8 @@ func execute_orders(unit):
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai).merged(holds),
 				_beat_subjects(codas).merged(subjects), lines, _beat_lingers(codas).merged(lingers),
 				_beat_emphases(codas).merged(emphases), _beat_profiles(codas).merged(profiles))
+	# The melts only a counter or a tail shot made (#922) -- the pass has settled, and the stage is still up.
+	await _play_sinks(plan.sinks_at(SinkAction.Moment.PASS_END))
 	await _bring_the_board_home()   # the tiles travel back into their sockets (#521 slice B)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
@@ -236,6 +252,13 @@ func execute_orders(unit):
 	# pass has settled, and a member a shove displaced out of its leader's path-bubble is no
 	# longer commandable. The plan could not have authored this -- the validator refuses it.
 	game.squad_manager.enforce_contact()
+	# ...and the tethers settle with it (#367 part 2B), NOW rather than deferred: the links this pass
+	# already broke at the blow are in the presenter's ledger, which the diff must read before the
+	# pass lets go of it. Anything the forecast could not see (ice this pass melted) breaks here.
+	var tethers: SquadTetherPresenter = game.squad_tether_presenter
+	if tethers != null:
+		tethers.flush()
+		tethers.end_pass()
 	# The pass has settled, so this is where a Guard has finished arming (side channel) or been spent
 	# (an absorbed hit). One redraw for both (#414).
 	game.refresh_guard_markers()
@@ -280,9 +303,9 @@ func _end_squad_turn(squad: Squad) -> void:
 # the refusal is visible at all.
 func _invalid_plan_summary(squad: Squad) -> String:
 	var lines: Array[String] = []
-	for action in squad.action_queue:
-		if not action.is_valid:
-			lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
+	var refused: Array[BaseAction] = game.squad_manager.refused_orders(squad)
+	for action in refused:
+		lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
 	return " | ".join(lines)
 
 # The move phase: every walk starts at once and they are awaited together, which is the whole of
@@ -360,6 +383,11 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 	for action in actions:
 		action.begin_execution()
 
+	# Every walk starts together and a watch shot plays while the others keep walking, so a leader it
+	# kills hands over mid-stride: its successor's reach waits for the walk's end (#367), where the
+	# Split forecast and the Play API already judge it.
+	var squads: SquadManager = game.squad_manager
+	squads.hold_handovers()
 	for action in actions:
 		action.execute()
 
@@ -382,14 +410,19 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			# without its pause because its mover was removed mid-shot. Unreachable by design, and
 			# it plays the shot late rather than dropping it.
 			if mover.parked_at() == int(next["step"]) or all_complete:
-				await _execute_action_sequence(next["shots"], beat, holds, subjects, lines,
+				# The soaking lands first, as the resolve soaked the walker before this step's shots (#46).
+				if next["soak"]:
+					mover.apply_walk_states()
+				var shots: Array = next["shots"]
+				await _execute_action_sequence(shots, beat, holds, subjects, lines,
 						lingers, emphases, profiles)
 				mover.release()
 				pending.pop_front()
 				# The walk is still running, so the camera goes back to it (dev 2026-08-28). Skipped
 				# once nothing is left to watch, where the next phase's own pan takes over. It restores
 				# the walk's profile too, or the shot's cinematic would ride on through the rest of it.
-				if not all_complete:
+				# A soaking alone played nothing, so nothing left the walk to come back from.
+				if not all_complete and not shots.is_empty():
 					await _frame_the_walk(span, walk_profile, Pacing.PLAYBACK_PAN)
 				continue
 
@@ -416,6 +449,7 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			# takes one to clear the stage.
 			var cam: CameraController = game.camera_controller
 			cam.framed_span = []
+			squads.release_handovers()
 			return
 
 		await get_tree().process_frame
@@ -424,7 +458,8 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 # Where the camera sits for the walk (#520): the MIDPOINT of the walk's span in 2D, with the span
 # itself published for the 3D rig to widen its distance to. The span goes out BEFORE the travel and
 # is never awaited, exactly as a beat's angle is -- the rig widens on its own edge while the pan
-# tweens, so the two are one movement. No hold: the pan IS the beat.
+# tweens, so the two are one movement. No hold of its own -- but the walk waits for the camera to
+# arrive and settle, like everything else a pass plays after a pan (#1132, dev 2026-10-07).
 #
 # One spelling, two call sites (#567) -- the top of the move phase, and again after each interrupt.
 # An EMPTY span is "nothing walks", which is a hold-position queue or none at all.
@@ -453,38 +488,25 @@ func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile, duration: f
 	await game.camera_controller.pan_to_position(
 			(GridUtils.cell_world(grid, span[0]) + GridUtils.cell_world(grid, span[1])) * 0.5,
 			duration)
+	await _settle_then(0.0)
 
 
-# The pass's mid-walk interrupts, in the order the resolve fired them (#567): one entry per moment,
-# each carrying the walk to halt, the step to halt at, and every shot that one entry set off --
-# a pinball chain included, since the cascade shares the moment that started it.
+# The pass's mid-walk interrupts (#567): ResolvedPlan.walk_moments, the one list both hosts play (#46),
+# each entry a walk to halt, the step to halt it at, and what plays there -- its shots, its soaking.
 #
 # The steps are handed to the walks here rather than stamped by the resolver: where a walk PAUSES is
 # playback's question, and the resolve already answered the only one it owns (when the shot fired).
 # Assigned to every mover, empty list included, so last pass's pauses can never survive into this one.
 func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
-	var moments: Array[Dictionary] = []
-	var by_move: Dictionary[MoveAction, Array] = {}
-	for shot in plan.mid_walk_shots():
-		var mover := shot.triggered_during as MoveAction
-		if mover == null or not actions.has(mover):
-			continue
-		var step: int = shot.triggered_at_step
-		if not moments.is_empty() and moments[-1]["move"] == mover and int(moments[-1]["step"]) == step:
-			(moments[-1]["shots"] as Array).append(shot)
-			continue
-		moments.append({"move": mover, "step": step, "shots": [shot]})
-		if not by_move.has(mover):
-			by_move[mover] = []
-		(by_move[mover] as Array).append(step)
-
+	var moments := plan.walk_moments(actions)
 	for action in actions:
 		var mover := action as MoveAction
 		if mover == null:
 			continue
 		var steps: Array[int] = []
-		if by_move.has(mover):
-			steps.assign(by_move[mover])
+		for moment in moments:
+			if moment["move"] == mover:
+				steps.append(int(moment["step"]))
 		mover.interrupt_steps = steps
 	return moments
 
@@ -492,8 +514,13 @@ func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
 # 2026-08-26: "the AI ghost unit stays around for a bit after the unit already reaches its move
 # destination"). Until this, nothing pulled a ghost until _end_squad_turn -- so a unit spent the rest
 # of the pass standing underneath a translucent copy of itself.
+#
+# A walker a watch shot KILLED is already freed by the time its walk completes; its markup went with
+# it (OverlayManager.handle_unit_death, through SquadManager's removal), and a freed unit cannot
+# pass the typed parameter.
 func _retire_move_markup(action: BaseAction) -> void:
-	game.overlay_manager.clear_move_markup(action.actor)
+	if is_instance_valid(action.actor):
+		game.overlay_manager.clear_move_markup(action.actor)
 
 # The HOLD lands before each action and the LINGER after it -- two schedules, two moments, and they
 # are different questions: a hold is anticipation and scales with the drama profile, a linger is
@@ -538,7 +565,12 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			# cinematic claimed, and the sway would otherwise ride in from whatever came before.
 			game.camera_controller.beat_profile = profiles.get(action, Pacing.Profile.BOARD)
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
-		await Pacing.beat(self, hold)
+			# ...and the 2D tween landing is not the camera arriving: the rig eases its angle and zoom on
+			# its own clock, so the hold waits for THAT, and then lasts at least the settle (#1132, dev
+			# 2026-10-07: "If the camera is still moving to a new position, nothing should be playing").
+			await _settle_then(hold)
+		else:
+			await Pacing.beat(self, hold)
 		_listen_for_the_blow(action)
 		action.begin_execution()
 		action.execute()
@@ -555,7 +587,63 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# Pacing.beat returns without awaiting in a headless run (that escape is what keeps every
 		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
 		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
-		await Pacing.beat(self, float(lingers.get(action, 0.0)))
+		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
+
+
+# Wait until the 3D camera has finished easing onto the beat's shot (#1132 follow-up). The rig says so
+# through view_arriving -- the eases are its own clock, so nothing else can -- and the first frame is
+# spent unconditionally so the mirror has polled since the pan landed. Capped by
+# Pacing.CAMERA_ARRIVAL_CAP, counting only time no card is up: a pause freezes the rig, and a cap
+# spent behind the pause menu would let the blow start mid-turn once it closed.
+#
+# Unwatched returns at once, Pacing.beat's escape and for its reason (#545): nobody is watching a
+# headless run or a skip under the fade, and every suite that resolves a cinematic pass would otherwise
+# spend frames here. Which also means NO SUITE SEES THIS WAIT -- the rig's half (is_arriving) is
+# pinned; that the hit waits on it is a play-check.
+func _camera_arrives() -> void:
+	if Pacing.unwatched():
+		return
+	var tree := get_tree()
+	await tree.process_frame
+	var waited := 0.0
+	while game.camera_controller.view_arriving and waited < Pacing.CAMERA_ARRIVAL_CAP:
+		await tree.process_frame
+		if not ModalLock.any_open(tree):
+			waited += get_process_delta_time()
+
+
+# The camera has just been sent somewhere new: wait for it to ARRIVE, then keep it still for at least
+# Pacing.CAMERA_SETTLE -- or for `hold`, when the caller's own beat there is the longer of the two.
+# Every playback pan ends here (dev, 2026-10-07: "playback should always give at least a half second
+# for the camera to settle in a new position"), so nothing a pass plays can start under a moving shot.
+func _settle_then(hold: float) -> void:
+	await _camera_arrives()
+	await Pacing.beat(self, maxf(hold, Pacing.CAMERA_SETTLE))
+
+
+# What a landed blow -- or a sinking (#922) -- owes its squads' tethers (#367 part 2B): the links the forecast says it ends and
+# begins play NOW, at the blow, rather than at the settle once the fight is over -- and the pass waits
+# for them, since a break the camera has already left is the bug that asked for this. While the fight
+# is on stage the camera lets go of the victim, so the stage shot frames the whole diorama and the
+# tether's far end, lifted with it (the dev's Z2 and "pull back to the stage"). Returns the linger.
+func after_the_blow(action: BaseAction, linger: float) -> float:
+	var outcome := action.resolved_outcome()
+	if outcome == null:
+		return linger
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	if presenter == null:
+		return linger
+	# Whose down this is (#1104: a down's links play ITS look), through the order's own door -- asked
+	# only of a DOWN, whose body stands by definition: a kill has freed its victim by now, and a freed ref
+	# must never meet a typed read (#149).
+	var victim: Unit = action.aimed_at() if outcome.lethality == ResolvedOutcome.Lethality.DOWNED else null
+	var shown := presenter.foretell(outcome, victim)
+	if shown <= 0.0:
+		return linger
+	var camera: CameraController = game.camera_controller
+	if not camera.shot_cells.is_empty():
+		camera.follow(null)
+	return maxf(linger, shown)
 
 
 # Subscribe to one order's landing, if it is the kind of order that lands (#887). Every attack in
@@ -565,16 +653,29 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 #
 # ONE-SHOT, because a blow lands once; the guard is for the connect rather than the fire, since a
 # derived action rebuilt every resolve is a fresh object and a re-executed one would need a fresh
-# connection anyway. Belt and braces on a wire whose failure mode is a second flash.
+# connection anyway. Belt and braces on a wire whose failure mode is a second flash. The same loop
+# is why going_over (#1104) is wired here too: a shove into a hole can be any of the three.
 func _listen_for_the_blow(action: BaseAction) -> void:
 	var blow := action as AttackAction
-	if blow == null or blow.impact.is_connected(_relay_the_blow):
+	if blow == null:
 		return
-	blow.impact.connect(_relay_the_blow, CONNECT_ONE_SHOT)
+	if not blow.impact.is_connected(_relay_the_blow):
+		blow.impact.connect(_relay_the_blow, CONNECT_ONE_SHOT)
+	if not blow.going_over.is_connected(_break_at_the_ledge):
+		blow.going_over.connect(_break_at_the_ledge, CONNECT_ONE_SHOT)
 
 
 func _relay_the_blow(attack: AttackAction) -> void:
 	volley_struck.emit(attack)
+
+
+# A blow sending its victim over the edge (#1104): its tethers start straining NOW, at the ledge, and
+# hold until the hang ends -- AttackAction hangs it over the hole when one did.
+func _break_at_the_ledge(attack: AttackAction) -> void:
+	var presenter: SquadTetherPresenter = game.squad_tether_presenter
+	if presenter == null:
+		return
+	attack.tether_held = presenter.foretell_removal(attack)
 
 
 # Which ground goes on stage (#521). BOARD stages nothing at all -- the tear-out is the cinematic's,
@@ -628,8 +729,8 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 	await game.camera_controller.pan_to_position(_stage_centre(cells), Pacing.PLAYBACK_PAN)
 	# The board holds still, intact, before it comes apart. BEFORE stage(), not after: staging is
 	# what puts the cells in the diorama, and a beat between that and begin_flight would hold them
-	# in the sky rather than on the board.
-	await Pacing.beat(self, Pacing.TEAR_OUT_BRACE)
+	# in the sky rather than on the board. Counted from the camera's ARRIVAL, and at least the settle.
+	await _settle_then(Pacing.TEAR_OUT_BRACE)
 	BoardSpace.stage(cells, BoardSpace.lift_offset())
 	await _play_transition(cells, true)
 	# ...and the assembled diorama holds before the first blow (dev, 2026-08-28: the action used to
@@ -640,7 +741,7 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 # Wait until the rig is back on the board plane (#602 round 2). It waits on the fact the RIG
 # publishes rather than on a beat of its own: the climb is the rig's eased channel, so a beat here
 # would be a second answer to how long it takes and the two would disagree the moment the rate knob
-# moved. See CameraController.fall_depth for why that one fact travels the other way.
+# moved. See CameraController.fall_depth for why that fact travels the other way.
 #
 # BOUNDED rather than open. Nothing publishes headlessly, so this returns on its first check there
 # and costs the suite nothing; and a rig that somehow never settles costs ten seconds rather than
@@ -723,8 +824,8 @@ func _bring_the_board_home() -> void:
 		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
 		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
 		# last blow is not immediately swept away by the tiles going home. AFTER the climb, so it is
-		# a beat on the diorama rather than a beat spent travelling.
-		await Pacing.beat(self, Pacing.TEAR_OUT_AFTERMATH)
+		# a beat on the diorama rather than a beat spent travelling -- and after the camera arrives.
+		await _settle_then(Pacing.TEAR_OUT_AFTERMATH)
 		await _play_transition(staged, false)
 	BoardSpace.clear_staging()
 	# The stage leaves the air the moment the ground does. The release edge clears it too, but the
@@ -837,20 +938,31 @@ func _beat_lines(beats: Array[BeatSheet.Beat]) -> Dictionary:
 			lines[beat.actions[0]] = line
 	return lines
 
+# The units the pass's own terrain dropped into the water (#922), played back as resolved (R3) -- each
+# goes under, then the same look the end-of-turn burn gives a unit the ground hurt. The stage the
+# deposits' beat staged is still up, so the camera stays where it is.
+func _play_sinks(sinks: Array[SinkAction]) -> void:
+	for sink in sinks:
+		sink.execute()
+		await Pacing.beat(self, after_the_blow(sink, Pacing.ENVIRONMENT_HOLD))
+
+
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
 # the attack phase that produced them.
 func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 	for effect in cell_effects:
 		game.terrain_states.apply(effect)
+		game.gas_field.apply(effect)   # GasMirror polls the store's version, so no redraw call
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 
 # ==============================================================================
-#  End-of-phase damage
+#  End-of-turn tiles
 # ==============================================================================
 
-# End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
-# through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass
-# uses. No is_active() filter (#191): burn is a damage source like any other, so the ladder names
+# End-of-turn tiles: a unit standing in fire when ITS faction's turn ends takes damage, and since
+# #508 one standing in steam is soaked first (TileHitAction.gas_hits). The burn is routed through
+# take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses. No
+# is_active() filter (#191): burn is a damage source like any other, so the ladder names
 # its rung exactly as it names a blow's, and take_damage no-ops safely on an already-DEAD unit --
 # nothing upstream needs to ask the question again. #191's own wording said the ladder rules
 # DOWNED-plus-any-damage KILLED, which #1002 repealed: a body burns for real damage now and dies
@@ -865,15 +977,18 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # and deliberately NOT a BeatSheet: that reads a Squad and a ResolvedPlan, and this phase has
 # neither, so using it would mean faking a plan. It reuses #520's camera seam at a shorter
 # duration rather than growing one of its own.
-func apply_burning_tile_damage(faction: Team.Faction) -> void:
-	var hits := _tile_hits_for(faction)
+func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
+	var units: Array[Unit] = game._all_units()
+	var states_store: TerrainStateManager = game.terrain_states
+	var gas: GasField = game.gas_field
+	var hits := TurnBoundary.tile_hits(units, states_store, gas, faction)
 	# Claim NOTHING for a phase with nothing to show: the release is what hands the player their
 	# view back (#520 follow-up), so claiming here would fire a camera return at the end of every
 	# turn, burning or not.
 	if hits.is_empty():
 		_process_downed_pending()
 		return
-	game.mission_log.record_turn_effects(faction, hits)   # the one damage channel no pass holds (#53)
+	game.mission_log.record_turn_effects(faction, hits)   # the one channel no pass holds (#53)
 
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)
@@ -884,6 +999,8 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 		effect_pass_subjects[hit.actor.get_instance_id()] = true
 	for hit in hits:
 		await game.camera_controller.pan_to(hit.actor, Pacing.ENVIRONMENT_PAN)
+		# ...and nothing burns until the camera has stopped (#1132, dev 2026-10-07: "always").
+		await _settle_then(0.0)
 		# The hit lands BEFORE the hold (dev, 2026-08-26: "the point of the linger is to show that
 		# something happened"). The other way round, the pause watched a unit at full health and the
 		# camera left as the cubes burst. It is also what keeps the mission banner off a kill that is
@@ -893,30 +1010,6 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 	effect_pass_subjects.clear()
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	_process_downed_pending()
-
-# Who this phase is about, answered ONCE before any of it plays -- the same TileHitAction the queue
-# forecasts (#419), derived here from LIVE positions and tile state instead of the plan's projected
-# ones. Two derivations of one rule: a plan is per-SQUAD and this phase is per-FACTION, so neither
-# can consume the other's list -- what they share is RulesService.occupant_damage_for and the maker
-# below it. That rule is TWO layers since #892: what the ground charges (Terrain.occupant_damage)
-# and whether this unit pays it (fire insulation), and BOTH callers must ask the outer one or an
-# immune unit gets a forecast that lies about it.
-#
-# Walks UNITS rather than burning cells, which is what keeps it symmetric with the forecast: both
-# ask "what is under this unit", so a hazard family the forecast can see cannot be one this misses.
-func _tile_hits_for(faction: Team.Faction) -> Array[TileHitAction]:
-	var hits: Array[TileHitAction] = []
-	var states_store: TerrainStateManager = game.terrain_states
-	var units: Array[Unit] = game._all_units()
-	for unit in units:
-		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
-			continue
-		var states := states_store.states_at(unit.movement.cell)
-		var damage := RulesService.occupant_damage_for(unit, states)
-		if damage > 0:
-			hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage,
-					LethalityRules.situation_for(unit)))
-	return hits
 
 # ==============================================================================
 #  Downed units
@@ -935,14 +1028,7 @@ func _process_downed_pending() -> void:
 	for unit in _downed_pending:
 		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
 			continue   # finished off later in the same pass -- the death path already cleaned it up
-		game.overlay_manager.handle_unit_death(unit)   # clear its planning overlays (not its board presence)
-		game.squad_manager.handle_unit_downed(unit)    # eject into a solo squad -- safe now, execution is over
-		# A unit standing again at sweep time was rescued in the SAME pass (#124) -- Crisis accepts
-		# were erased from the list above. It is still ejected (the rule stands either way), and it
-		# is still SPENT the turn it's rescued -- but its solo squad only exists as of the eject, so
-		# the mark lands here rather than in RescueAction.execute.
-		if unit.is_active():
-			unit.squad.has_acted = true
+		game.squad_manager.settle_downed(unit)   # clear its overlays, eject, and spend one rescued this same pass -- safe now, execution is over
 	_downed_pending.clear()
 	game.refresh_action_queue(game.squad_manager.active_squad)
 

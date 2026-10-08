@@ -1,9 +1,10 @@
 # The dev Unit Editor's Down / Revive buttons (#156).
 #
 # The Down button is a deliberate BYPASS of the lethality ladder, not a simulated hit: it must not
-# spend Will, must not maim, and must not trigger Crisis however the unit is armed. Those three are
-# the cases with teeth -- the issue as FILED recommended routing through `take_damage`, which fails
-# all three, so they are exactly what separates the built button from the specified one. Each of
+# take a limb, and must not trigger Crisis however the unit is armed. Those two are the cases with
+# teeth -- the issue as FILED recommended routing through `take_damage`, which fails both, so they
+# are exactly what separates the built button from the specified one. It DOES wound: a down is a
+# down, and Wounded is what a down leaves behind (#1174). Each of
 # them first asserts what `LethalityRules.predict` WOULD have done with the same unit, so the case
 # cannot quietly go vacuous if tuning moves underneath it.
 #
@@ -74,7 +75,7 @@ func _press(label: String) -> void:
 
 
 # What the LADDER would do to this unit for an exactly-lethal hit. The Down button must diverge from
-# it on Will, maim and Crisis -- these cases assert that divergence, so they need the baseline.
+# it on the limb and on Crisis -- these cases assert that divergence, so they need the baseline.
 func _ladder_verdict(unit: Unit) -> ResolvedOutcome.Lethality:
 	return LethalityRules.predict(LethalityRules.situation_for(unit), unit.get_current_hp())
 
@@ -121,43 +122,41 @@ func test_the_buttons_track_lifecycle() -> void:
 #  The bypass -- what makes this button NOT a simulated hit
 # ==============================================================================
 
-func test_down_never_spends_will() -> void:
+func test_down_wounds_the_unit() -> void:
 	var unit := _spawn(Vector2i(1, 0))
-	var inst: UnitInstance = unit.unit_instance
-	inst.set_current_will(UnitInstance.DOWN_WILL_COST)   # can afford the down: the ladder would charge it
-	assert_int(_ladder_verdict(unit)).is_equal(ResolvedOutcome.Lethality.DOWNED)
 	_editor.edit_unit(unit)
 
 	_press("Down Unit")
 
-	assert_int(inst.get_current_will()) \
-		.override_failure_message("the Down button charged the down-Will cost") \
-		.is_equal(UnitInstance.DOWN_WILL_COST)
+	assert_bool(unit.wounded) \
+		.override_failure_message("the Down button downed the unit without wounding it").is_true()
 
 
-func test_down_never_maims_a_unit_that_cannot_pay() -> void:
+# Standing at the limb threshold, an exactly-lethal hit is ALSO limb-sized, so the ladder would take
+# a limb with the down. The button is no blow and takes none.
+func test_down_never_takes_a_limb() -> void:
 	var unit := _spawn(Vector2i(1, 0))
 	var inst: UnitInstance = unit.unit_instance
-	inst.set_current_will(UnitInstance.DOWN_WILL_COST - 1)   # can't pay -> the ladder takes a limb
-	assert_int(inst.next_maim_slot()).is_not_equal(-1)       # and one IS available to take
-	assert_int(_ladder_verdict(unit)).is_equal(ResolvedOutcome.Lethality.MAIMED)
+	unit.set_current_hp(LethalityRules.LIMB_LOSS_DAMAGE)
+	assert_int(_ladder_verdict(unit)).is_equal(ResolvedOutcome.Lethality.DOWNED)
+	assert_bool(LethalityRules.severs(LethalityRules.situation_for(unit), unit.get_current_hp(),
+			ResolvedOutcome.Lethality.DOWNED)) \
+		.override_failure_message("fixture: the ladder would not take a limb here either").is_true()
 	_editor.edit_unit(unit)
 
 	_press("Down Unit")
 
 	assert_bool(inst.is_maimed()) \
-		.override_failure_message("the Down button maimed a unit that could not pay").is_false()
-	assert_int(inst.get_current_will()).is_equal(UnitInstance.DOWN_WILL_COST - 1)
+		.override_failure_message("the Down button took a limb").is_false()
 	assert_bool(unit.is_downed()).is_true()
 
 
 func test_down_never_triggers_crisis_on_an_armed_unit() -> void:
-	# WIL at the gate + the Berserker pool (Abilities.Id.CRISIS) is the exact input where an
+	# An unwounded unit holding the Berserker pool (Abilities.Id.CRISIS) is the exact input where an
 	# exactly-lethal hit stands the unit back up surged instead of felling it.
-	var unit := _spawn(Vector2i(1, 0), {Stats.Stat.WIL: UnitInstance.MAX_WILL})
+	var unit := _spawn(Vector2i(1, 0))
 	var inst: UnitInstance = unit.unit_instance
 	inst.jobs.append("berserker")
-	inst.set_current_will(inst.get_max_will())
 	assert_bool(LethalityRules.crisis_armed_for(unit)).is_true()
 	assert_int(_ladder_verdict(unit)).is_equal(ResolvedOutcome.Lethality.CRISIS)
 	_editor.edit_unit(unit)
@@ -193,3 +192,49 @@ func test_down_ejects_the_body_into_a_solo_squad() -> void:
 		.override_failure_message("_downed_pending did not drain").is_equal(0)
 	assert_bool(member.is_downed()).is_true()          # ejected, not removed from the board
 	assert_that(member.movement.cell).is_equal(Vector2i(2, 0))
+
+
+# ==============================================================================
+#  The enemy field -- the other thing a press outside any pass has to settle
+# ==============================================================================
+
+# game.threat_field() is a cache, and only a plan edit or a pass end used to drop it -- so an enemy
+# downed here kept drawing reach lines (the 2026-09-23 report), and one revived here drew none.
+func _spawn_enemy(cell: Vector2i) -> Unit:
+	var enemy: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), cell)
+	assert_object(enemy).is_not_null()
+	enemy.equipped_weapon = H.make_weapon()
+	enemy.squad.archetype = AIArchetype.Type.HOLD
+	return enemy
+
+
+func _reaches(enemy: Unit, cell: Vector2i) -> bool:
+	return game.threat_field().attackers_of(cell).has(enemy)
+
+
+func test_down_takes_the_unit_out_of_the_enemy_field() -> void:
+	var enemy := _spawn_enemy(Vector2i(4, 0))
+	var cell := Vector2i(3, 0)
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"fixture is vacuous: the standing enemy never reached the cell beside it").is_true()
+	_editor.edit_unit(enemy)
+
+	_press("Down Unit")
+
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"the downed enemy is still in the cached threat field").is_false()
+
+
+func test_revive_puts_the_unit_back_into_the_enemy_field() -> void:
+	var enemy := _spawn_enemy(Vector2i(4, 0))
+	var cell := Vector2i(3, 0)
+	_editor.edit_unit(enemy)
+	_press("Down Unit")
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"fixture is vacuous: the downed enemy still reaches the cell, so a revive proves nothing") \
+		.is_false()
+
+	_press("Revive Unit")
+
+	assert_bool(_reaches(enemy, cell)).override_failure_message(
+			"the revived enemy is missing from the cached threat field").is_true()

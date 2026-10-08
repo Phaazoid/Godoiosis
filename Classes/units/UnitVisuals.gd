@@ -35,6 +35,9 @@ static var PIN_PULSE_MODULATE := Color(2.2, 2.2, 2.2)
 # How long it sits at that peak, in seconds. The ramp either side is Pulse.PERIOD, so this is the
 # share of the cycle the cue actually occupies rather than one frame at the top of a ramp.
 static var PIN_PULSE_HOLD := 0.2
+# How white the one a death's PULSE ran to flashes as it arrives (#1104), and how long the flash takes.
+static var LOSS_FLASH_MODULATE := Color(2.0, 2.0, 2.0)
+static var LOSS_FLASH_SECONDS := 0.3
 # Every unit whose pin flash is RUNNING right now (#1074) -- the set a new flash looks in for a beat to
 # join, so every pinned enemy flashes on one timer. Membership is maintained at the two doors a pin
 # tween opens and closes through, sync_pin_flash and drop_pin_flash.
@@ -151,6 +154,19 @@ func reset_visuals():
 	sprite.modulate = base_modulate
 	sprite.scale = base_scale
 	
+# A one-shot flash for the one a death's PULSE ran to (#1104). It YIELDS where play_invalid_flash
+# seizes: to an aim pulse (news about this unit), to a pin flash (already white), and to any one-shot
+# already running -- that tween also drives the lunge and the shake, and killing it mid-lunge would
+# leave the sprite where the lunge had it. The lowest tier on sprite.modulate.
+func play_loss_flash() -> void:
+	if sprite == null or pulse_tween != null or pin_tween != null:
+		return
+	if visual_tween != null and visual_tween.is_running():
+		return
+	visual_tween = create_tween()
+	visual_tween.tween_property(sprite, "modulate", LOSS_FLASH_MODULATE, LOSS_FLASH_SECONDS * 0.3)
+	visual_tween.tween_property(sprite, "modulate", base_modulate, LOSS_FLASH_SECONDS * 0.7)
+
 func play_invalid_flash():
 	if sprite == null:
 		return
@@ -159,18 +175,22 @@ func play_invalid_flash():
 	
 	visual_tween = create_tween()
 	visual_tween.set_parallel(true)
-	
+	tween_invalid_flash(visual_tween, sprite, base_modulate, base_position)
+
+# What the refusal flash IS -- a red flash and a small shake, back to the sprite's rest -- as steps on
+# a parallel tween, so the planning ghost standing in for a unit plays the same one (#1150).
+static func tween_invalid_flash(tween: Tween, target: CanvasItem, rest_modulate: Color, rest_position: Vector2) -> void:
 	#Color Flash
-	visual_tween.tween_property(sprite, "modulate", Color(1, .25, .25), .08).set_delay(.06)
-	visual_tween.tween_property(sprite, "modulate", Color.WHITE, .06).set_delay(.14)
-	visual_tween.tween_property(sprite, "modulate", base_modulate, .12).set_delay(.22)
+	tween.tween_property(target, "modulate", Color(1, .25, .25), .08).set_delay(.06)
+	tween.tween_property(target, "modulate", Color.WHITE, .06).set_delay(.14)
+	tween.tween_property(target, "modulate", rest_modulate, .12).set_delay(.22)
 	
 	#Shake
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(-3, 0), 0.04)
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(3, 0), 0.04).set_delay(0.04)
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(-2, 0), 0.04).set_delay(0.08)
-	visual_tween.tween_property(sprite, "position", base_position + Vector2(2, 0),0.04).set_delay(0.12)
-	visual_tween.tween_property(sprite, "position", base_position,0.04).set_delay(0.16)
+	tween.tween_property(target, "position", rest_position + Vector2(-3, 0), 0.04)
+	tween.tween_property(target, "position", rest_position + Vector2(3, 0), 0.04).set_delay(0.04)
+	tween.tween_property(target, "position", rest_position + Vector2(-2, 0), 0.04).set_delay(0.08)
+	tween.tween_property(target, "position", rest_position + Vector2(2, 0),0.04).set_delay(0.12)
+	tween.tween_property(target, "position", rest_position,0.04).set_delay(0.16)
 	
 func set_hovered(value: bool):
 	if sprite == null:
@@ -207,19 +227,24 @@ func animation_offset() -> Vector2:
 		return Vector2.ZERO
 	return sprite.position - base_position
 
+# The lunge's PEAK, where its blow lands (#480).
+signal lunge_peaked
+
+# Returns at the PEAK, not the end: the caller lands the blow there while the return leg keeps playing.
 func play_attack_lunge(direction: Vector2):
 	if sprite == null:
 		return
-		
+
 	if visual_tween:
 		visual_tween.kill()
-	
+
 	sprite.position = base_position
 	var lunge_distance := GridUtils.TILE_SIZE / 2
 	var lunge_pos = base_position + direction.normalized() * lunge_distance
 	visual_tween = create_tween()
-	
+
 	visual_tween.tween_property(sprite, "position", lunge_pos, 0.08)
+	visual_tween.tween_callback(lunge_peaked.emit)
 	visual_tween.tween_property(sprite, "position", base_position, 0.10)
-	
-	await visual_tween.finished
+
+	await lunge_peaked

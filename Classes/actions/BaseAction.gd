@@ -26,7 +26,7 @@ var validation_errors: Array[String] = []
 #
 # WHY A STAMP AND NOT A FILTER IN OrderExecutor: six surfaces ask whether a queued rescue will
 # happen -- the haul projection, PlanResolver._rescued_this_pass' end-of-turn forecast, the queue
-# row, the validator, execute_orders' tail, and play_session's hand-copied twin. A filter at the
+# row, the validator, execute_orders' tail, and play_session's own tail loop. A filter at the
 # executor answers one of them and leaves the preview lying and the Play API diverging, which is
 # the exact shape of the went_downed wire bug (will-and-death.md). It is also the BREAK repeal:
 # execution applies what the resolve decided, it does not re-derive it.
@@ -41,15 +41,14 @@ enum ActionType {
 	ATTACK,
 	COUNTER_ATTACK,
 	RESCUE,
-	RALLY,
-	INTIMIDATE,
 	RELOAD,
 	REV,
 	BURROW,
 	CAPTURE,
 	GUARD,
 	OVERWATCH,
-	TILE_HIT   # derived, never queued (#419) — the tile's own end-of-turn damage
+	TILE_HIT,  # derived, never queued (#419) — the tile's own end-of-turn damage
+	SINK       # derived, never queued (#922) — the ground leaving a unit, so it goes under
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -61,8 +60,6 @@ enum ActionType {
 const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.ATTACK,
 	ActionType.RESCUE,
-	ActionType.RALLY,
-	ActionType.INTIMIDATE,
 	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW,
@@ -76,8 +73,6 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 # queue panel's sections, and the Play API iterate THIS list.
 const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.RESCUE,
-	ActionType.RALLY,
-	ActionType.INTIMIDATE,
 	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW,
@@ -102,18 +97,24 @@ func is_main_action() -> bool:
 func is_reorderable() -> bool:
 	return true
 
-# Actor-intrinsic requirement for queueing this action; subclasses override (move ordering,
-# verb locks, ability gates). SquadManager.queue_action is the sole enforcement point
-# (Law #3). Plan-context checks (adjacency, occupancy) belong to plan validation instead.
+# WHY the actor may not take this action, "" meaning it may -- the actor-intrinsic requirement for
+# queueing it (move ordering, verb locks, ability gates). Subclasses override THIS, never
+# actor_can_perform, so a refusal always carries its reason (#662). SquadManager.try_queue_action
+# is the sole enforcement point (Law #3); plan-context checks (adjacency, occupancy) belong to plan
+# validation instead.
+func actor_block_reason() -> String:
+	return ""
+
+# Derived, never overridden: the yes/no and its reason cannot disagree.
 func actor_can_perform() -> bool:
-	return true
+	return actor_block_reason() == ""
 
 # Who this order is AIMED AT -- the unit it is done TO, rather than the one doing it. The default
-# is the actor, which is the honest answer for a verb that acts on itself (move, rally, reload);
-# Attack/Rescue/Intimidate/Guard override it with the `target` they each already store.
+# is the actor, which is the honest answer for a verb that acts on itself (move, reload, rev);
+# Attack/Rescue/Guard override it with the `target` they each already store.
 #
-# Declared per Law #4: those four have held a private `var target: Unit` each, with no shared door,
-# since they were written -- this is the door, not a fifth copy. It exists because BeatSheet has to
+# Declared per Law #4: those three have held a private `var target: Unit` each, with no shared door,
+# since they were written -- this is the door, not a fourth copy. It exists because BeatSheet has to
 # ask the question of an order whose class it does not know (#520): a beat frames what is being
 # done to whom, and only the order can say who that is.
 func aimed_at() -> Unit:

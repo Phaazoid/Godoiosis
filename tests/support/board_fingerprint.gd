@@ -58,6 +58,10 @@ static func take(host: Node3D, scenario_manager) -> Dictionary:
 		# Measured, not imagined: that is exactly what test_overlay_mirror's FLAT_2D case did to the
 		# two crown cases after it, and the symptom was a hover that drew nothing at all.
 		"view": null if host == null else host.get("view"),
+		# What the battle zoom HID (#1132): a column parked in the invisible lattice or a sprite
+		# vetoed off the board is a board the next case cannot see, and neither mirror's own reset
+		# runs unless the camera releases -- so it is sampled rather than trusted.
+		"clearance": _clearance_state(host),
 		# ...and its sibling one level in: DEV MODE. Also not board state -- a session toggle -- but
 		# it decides what _base_state() rests on, so a case that switches it on leaves every later
 		# case's game_state at DEV_MODE however cleanly the board itself was restored. Sampled
@@ -92,7 +96,7 @@ static func _settings_state() -> Dictionary:
 static func _experiments_state() -> Dictionary:
 	var out := {}
 	for flag: Experiments.Flag in Experiments.DEFS:
-		out[Experiments.Flag.keys()[flag]] = Experiments.is_on(flag)
+		out[Experiments.Flag.keys()[flag]] = Experiments.value_of(flag)
 	return out
 
 
@@ -103,8 +107,21 @@ static func _dev_mode(host: Node3D) -> Variant:
 	return null if game == null else game.get("dev_mode_enabled")
 
 
+static func _clearance_state(host: Node3D) -> Variant:
+	if host == null:
+		return null
+	var board := host.get_node_or_null("BoardMirror") as BoardMirror
+	var units := host.get_node_or_null("UnitMirror") as UnitMirror
+	if board == null or units == null:
+		return null
+	return "%s columns/props, %d units" % [board.hidden_counts(), units.camera_hidden.size()]
+
+
 static func differences(before: Dictionary, after: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
+	if before.get("clearance") != after.get("clearance"):
+		out.append("camera clearance hidden: %s -> %s"
+				% [before.get("clearance"), after.get("clearance")])
 	_diff_value("board", before.get("board"), after.get("board"), out, 0)
 	_diff_indexed("class knob", GameKnobs.CLASS_KNOBS, before.get("class_knobs", []),
 			after.get("class_knobs", []), out)

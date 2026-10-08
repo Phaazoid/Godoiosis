@@ -20,7 +20,7 @@ class_name BeatSheet
 #
 # A beat's WEIGHT is facts, never a duration and never a severity ranking: the lethality rungs it
 # contains, whether it shoves, drops, removes, or was held by Iron Will. Collapsing those into a
-# beat length is #519's table under a chosen profile, and ranking KILLED against MAIMED is that
+# beat length is #519's table under a chosen profile, and ranking KILLED against a lost limb is that
 # same table's call. Doing either here would be a second answer to a question #519 owns (Law #4).
 
 enum Kind { MOVES, VOLLEY, CELL_EFFECTS, TURNOVER, CODA }
@@ -47,10 +47,11 @@ class Beat:
 	var has_knockback := false
 	var has_fall := false
 	var has_removal := false
+	var has_severed := false        # a hit took a limb, standing or not (#1174)
 	var iron_will_held := false
 	var has_heal := false
 
-	# CODA only: which side-channel order this is (RESCUE, RALLY, GUARD, ...).
+	# CODA only: which side-channel order this is (RESCUE, RELOAD, GUARD, ...).
 	var coda_type: BaseAction.ActionType = BaseAction.ActionType.ATTACK
 
 	func has_lethality(rung: ResolvedOutcome.Lethality) -> bool:
@@ -78,7 +79,18 @@ class Beat:
 			var who := action.aimed_at()
 			if who != null and is_instance_valid(who):
 				return who
+		# A payload level that hit nobody holds the camera where it is (#1058): its actor is the
+		# thrower, and swinging back to them mid-chain frames the one place nothing is happening.
+		if is_payload_level():
+			return null
 		return actor if actor != null and is_instance_valid(actor) else null
+
+	# One level of the payloads a fired attack dropped (#1058, ruling 51), played as one beat.
+	func is_payload_level() -> bool:
+		if actions.is_empty():
+			return false
+		var lead := actions[0] as AttackAction
+		return lead != null and lead.dropped_by != null
 
 	# The line the camera frames this beat ACROSS (#520): [from, to] in sim cells, empty when the
 	# beat has no direction to be seen from. Only a VOLLEY has one -- the ticket's profile shot and
@@ -121,6 +133,7 @@ class Beat:
 			has_knockback = has_knockback or out.knockback_applied
 			has_fall = has_fall or out.fall_levels > 0
 			has_removal = has_removal or out.removed
+			has_severed = has_severed or out.severed_limb != -1
 			iron_will_held = iron_will_held or out.iron_will_held
 			# The RESOLVER's own answer, like every other fact here -- never a re-read of
 			# fired_attack.heals. A heal that fired reads true even if the cap ate it.
@@ -292,6 +305,10 @@ static func read(squad: Squad, plan: ResolvedPlan, is_ai: bool = false) -> BeatS
 # Walk a flat action list into volleys. A lead member (is_secondary_hit false) opens a beat and
 # every secondary after it joins it -- the same read PlanResolver.resolve_counters makes over the
 # same flat array. A beat left empty by skipped members is dropped entirely.
+#
+# ...except a PAYLOAD volley's lead, which joins the beat already open when that beat is the same
+# level of the same fired attack's payloads (#1058, ruling 51): one level goes off at once, however
+# many it holds. drop_payloads lays each level out contiguously, so this regroups and never reorders.
 static func _group(actions: Array, is_counter: bool) -> Array[Beat]:
 	var grouped: Array[Beat] = []
 	var current: Beat = null
@@ -299,7 +316,7 @@ static func _group(actions: Array, is_counter: bool) -> Array[Beat]:
 		var attack := action as AttackAction
 		if attack == null:
 			continue
-		if current == null or not attack.is_secondary_hit:
+		if current == null or not (attack.is_secondary_hit or _same_level(current, attack)):
 			current = Beat.new()
 			current.kind = Kind.VOLLEY
 			current.is_counter = is_counter
@@ -313,6 +330,19 @@ static func _group(actions: Array, is_counter: bool) -> Array[Beat]:
 		if not beat.actions.is_empty():
 			played.append(beat)
 	return played
+
+
+# Is `attack` a payload at the same depth, dropped by the same fired attack, as the beat open now?
+# The same fired attack is one root VOLLEY -- or one root hit, for an attack that built none.
+static func _same_level(current: Beat, attack: AttackAction) -> bool:
+	if attack.dropped_by == null or not current.is_payload_level():
+		return false
+	var open := current.actions[0] as AttackAction
+	if open.payload_depth != attack.payload_depth:
+		return false
+	var open_root := open.payload_root()
+	var root := attack.payload_root()
+	return is_same(open_root, root) or (not root.volley.is_empty() and is_same(open_root.volley, root.volley))
 
 
 func _gather_cast(squad: Squad, plan: ResolvedPlan) -> void:
@@ -361,7 +391,14 @@ func _gather_cells(plan: ResolvedPlan) -> void:
 			for cell in attack.footprint:
 				_mark(cell, seen)
 			var out := attack.resolved
-			if out == null or not out.knockback_applied:
+			if out == null:
+				continue
+			# Both ends of every tether this blow ends or begins (#367 part 2B, the dev's Z2): the break
+			# plays at the blow, in the diorama, so its far end has to be up there with the fight.
+			for link in out.relinks:
+				_mark(link.member_cell, seen)
+				_mark(link.leader_cell, seen)
+			if not out.knockback_applied:
 				continue
 			# The whole flight, not just its ends: #520 pans ALONG this and #521 has to tear out
 			# every cell it crosses. knockback_path is already the resolver's own route.

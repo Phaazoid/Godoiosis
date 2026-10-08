@@ -74,6 +74,12 @@ static func of(events: Array[Dictionary]) -> Dictionary:
 				turn_of_last_damage = maxi(turn_of_last_damage, int(e.get("round", 0)))
 			if heal > 0:
 				_add(heal_to, target_faction, heal)
+		# The ground's own damage (#922), which no hit carries -- counted like the burn below.
+		for sink: Dictionary in e.get("sinks", []):
+			var sunk := int(sink.get("damage", 0))
+			if sunk > 0:
+				_add(damage_to, str(faction_of.get(_id_of(sink.get("unit")), "")), sunk)
+				turn_of_last_damage = maxi(turn_of_last_damage, int(e.get("round", 0)))
 	for e: Dictionary in _all(events, "turn_effects"):
 		for hit: Dictionary in e.get("hits", []):
 			var damage := int(hit.get("damage", 0))

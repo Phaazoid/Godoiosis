@@ -58,6 +58,14 @@ var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by w
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
+var _moments_drawn := false   # whether the moment layers hold anything, so an idle board costs nothing (#367)
+# A death's PULSE light (#1104) narrows to nothing at both ends and swells in the middle -- the shape,
+# as per-point width scales along its sampled stroke (sin over nine points).
+const GLOW_TAPER: Array[float] = [0.0, 0.383, 0.707, 0.924, 1.0, 0.924, 0.707, 0.383, 0.0]
+# The zones' wall (#955), built on first need, and what it was last built from -- the zones, the
+# knobs and the colours -- so a still board rebuilds nothing.
+var _zone_walls: ZoneWalls
+var _last_wall_key: Array = []
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -83,13 +91,7 @@ func _process(_delta: float) -> void:
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.ZONE_CAPTURE, om.capture_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.ZONE_EXTRACTION, om.extraction_overlay.get_used_cells())
-	# Ungated like the two above, not gated like PATROL below (#736): the gate exists to keep AI
-	# internals out of play, and where the player may stand is the opposite of a secret. What ends
-	# it is redraw_zones' `hidden` list once turn 1 begins, so the cells simply stop being there.
-	_fill(BoardOverlays.Layer.ZONE_DEPLOYMENT, om.deployment_overlay.get_used_cells())
-	_fill(BoardOverlays.Layer.ZONE_DEFEND, om.defend_overlay.get_used_cells())
+	# The four play kinds are not washed: _zones draws their rim marks, emblems and wall (#955).
 	# Authoring scaffolding: cells AND the authoring INTENT, or patrol zones leak into play. The
 	# highlight is ALSO the play-time leash reveal (#710), so its gate is either intent, and its
 	# tint is copied from the 2D like AIM's since the colour became a knob.
@@ -112,6 +114,10 @@ func _process(_delta: float) -> void:
 	# The aim footprint: its cells and steady colour by copy, then its travel-order flash per cell.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
 	overlays.set_layer_modulate(BoardOverlays.Layer.AIM, om.hover_overlay.modulate)
+	# ...and its PAYLOAD tiles (#1058 D2b), in the footprint's colour: the 2D inset layer is the footprint's
+	# child, so that modulate is the one it is drawn in there too.
+	_fill_gated(BoardOverlays.Layer.PAYLOAD, om.payload_overlay, true)
+	overlays.set_layer_modulate(BoardOverlays.Layer.PAYLOAD, om.hover_overlay.modulate)
 	_aim_flash(om)
 
 	_attack(om)
@@ -120,6 +126,7 @@ func _process(_delta: float) -> void:
 	_reach_lines(om)
 	_focus_outline(om)
 	_squad_lines(om)
+	_tether_moments(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -128,6 +135,7 @@ func _process(_delta: float) -> void:
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
 
 	_icons(om)
+	_zones(om)
 	_squad_count(om)
 	_guard_links(om)
 	_terrain(om)
@@ -233,6 +241,8 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 # The aim's travel-order flash (#1057 part 2): each lit tile is the footprint's LIVE colour whitened
 # by the 2D's level for it, so a watch aim and every aim palette flash from their own colour. There
 # is no clock here -- the 2D holds it, under Game, so a modal freezes both views together.
+# The PAYLOAD layer takes the same map: its cells and AIM's never meet, and a layer ignores a cell it
+# does not hold, so one set of levels lights each tile on whichever layer drew it.
 func _aim_flash(om: OverlayManager) -> void:
 	var colors: Dictionary[Vector3i, Color] = {}
 	var base: Color = om.hover_overlay.modulate
@@ -241,6 +251,7 @@ func _aim_flash(om: OverlayManager) -> void:
 		if levels[cell] > 0.0:
 			colors[BoardSpace.of_cell(cell, _row_of(cell))] = AimFlash2D.tint(base, levels[cell])
 	overlays.set_cell_colors(BoardOverlays.Layer.AIM, colors)
+	overlays.set_cell_colors(BoardOverlays.Layer.PAYLOAD, colors)
 
 
 # ATTACK is TRIPLE-use in 2D: reach fill at (0,0), target-pick markers at (1,0), and the
@@ -605,6 +616,68 @@ func _icons(om: OverlayManager) -> void:
 	_markers(BoardOverlays.Layer.WATCH_ICONS, watched)
 
 
+# The drawn zones (#955), off OverlayManager.drawn_zones -- the one answer to what a player may see,
+# the hidden list already applied (so a DEPLOYMENT zone goes the moment turn 1 begins). Each zone
+# cell wears the rim for the sides it faces out of, plus one emblem per zone and the wall. The tint
+# is the kind's LIVE layer colour, so dragging a zone colour on the Game tab moves the marks.
+func _zones(om: OverlayManager) -> void:
+	var marks: Array[Dictionary] = []
+	var emblems: Array[Dictionary] = []
+	for zone in om.drawn_zones:
+		var kind: ZoneManager.Kind = zone["kind"]
+		var cells: Array[Vector2i] = []
+		cells.assign(zone["cells"])
+		var tint := overlays.layer_modulate(ZoneMarks.LAYER_OF_KIND[kind])
+		tint.a = 1.0
+		emblems.append(_marker(_anchor(ZoneMarks.emblem_cell(cells)), ZoneMarks.emblem_of(kind), tint))
+		var masks := ZoneMarks.cell_masks(cells)
+		var lit := om.is_lit(zone)
+		for cell: Vector2i in masks:
+			marks.append(_marker(_anchor(cell), ZoneMarks.texture(masks[cell], lit), tint))
+	_markers(BoardOverlays.Layer.ZONE_MARKS, marks)
+	_markers(BoardOverlays.Layer.ZONE_EMBLEMS, emblems)
+	_zone_wall_sync(om)
+
+
+# The zones' wall, standing just inside each zone (ZoneMarks.wall_outline). Hidden while a tear-out
+# is up, since its strips stand where the ground rests.
+func _zone_wall_sync(om: OverlayManager) -> void:
+	var wanted := not om.drawn_zones.is_empty()
+
+	if _zone_walls == null:
+		if not wanted:
+			return
+		_zone_walls = ZoneWalls.new()
+		add_child(_zone_walls)
+	_zone_walls.visible = wanted and not BoardSpace.staging_active()
+	if not wanted:
+		return
+	var key: Array = [om.drawn_zones_version, ZoneMarks.art_version]
+	for layer: BoardOverlays.Layer in ZoneMarks.LAYER_OF_KIND.values():
+		key.append(overlays.layer_modulate(layer))   # a zone colour dragged on the Game tab
+	if key == _last_wall_key and not _heights_moved:
+		return
+	_last_wall_key = key
+	var board: BoardContext = null
+	if game != null and game.squad_manager.board_source.is_valid():
+		board = game.squad_manager.board_source.call()
+	var lift := Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.ZONE_MARKS)
+	var strips: Array[Dictionary] = []
+	for zone in om.drawn_zones:
+		var kind: ZoneManager.Kind = zone["kind"]
+		var cells: Array[Vector2i] = []
+		cells.assign(zone["cells"])
+		var colour := overlays.layer_modulate(ZoneMarks.LAYER_OF_KIND[kind])
+		# A lit zone (#955 part 3) stands taller and stronger; its strength rides the vertex alpha.
+		var lit := om.is_lit(zone)
+		colour.a = ZoneMarks.ZONE_LIT_WALL_ALPHA if lit else ZoneMarks.ZONE_WALL_ALPHA
+		var height := (ZoneMarks.ZONE_LIT_WALL_HEIGHT if lit else ZoneMarks.ZONE_WALL_HEIGHT) * BoardSpace.CELL_SIZE
+		for segment in ZoneMarks.wall_outline(cells, board):
+			strips.append({"from": BoardSpace.trace_point(segment[0]) + lift,
+					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour, "height": height})
+	_zone_walls.build(strips, ZoneMarks.ZONE_SHIMMER_SPEED)
+
+
 # Where a leader's crown STANDS (#1070): its cell's ground, as every marker here, lifted by the
 # unit's own head -- the art's top, or its health readout's top while one is up -- so the readout can
 # grow a row or a status and lift the crown instead of running through it. The billboard's clearance
@@ -789,7 +862,8 @@ func _focus_outline(om: OverlayManager) -> void:
 # The squad's lines (#1070): the range's stroke lies on the ground as the focus edge does, and each
 # tether hangs where its chord put it -- the middles of the two bodies -- with the cone at the
 # leader's end built exactly as a reach mark's is. The three tether STATES go to three layers,
-# because the pluck is a material uniform and only a strained tether may shake.
+# because the pluck is a material uniform and only a strained tether may shake. An enemy squad's draw
+# wears the enemy colour on the same layers (#1109): the colour already arrives per draw.
 #
 # The pluck is pushed every frame it rings and never otherwise: the store holds a start stamp, and
 # the envelope is SquadLines2D's, so the flat line and the ribbon swing as one.
@@ -805,12 +879,14 @@ func _squad_lines(om: OverlayManager) -> void:
 		for p: Vector3 in segment:
 			points.append(BoardSpace.trace_point(p) + lift)
 		segments.append(points)
-	overlays.set_lines(BoardOverlays.Layer.COHESION_EDGE, segments, SquadLines2D.TETHER_COLOR)
+	overlays.set_lines(BoardOverlays.Layer.COHESION_EDGE, segments,
+			SquadLines2D.tether_color(om.squad_lines_hostile))
 	for state: int in SquadLines2D.Strain.values():
 		var marks: Array[Array] = []
 		var widths: Array[Array] = []
 		var cones: Array[Dictionary] = []
-		for entry: Dictionary in om.squad_tethers:
+		# The DRAWN set, not the truth: a tether a draw-in moment stands in for waits for it (#367).
+		for entry: Dictionary in om.drawn_squad_tethers:
 			if entry["state"] != state:
 				continue
 			var flat: Array[PackedVector3Array] = []
@@ -832,7 +908,104 @@ func _squad_lines(om: OverlayManager) -> void:
 					"tip": BoardSpace.trace_point(cone["tip"]),
 					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5,
 				})
-		overlays.set_marks(TETHER_LAYERS[state], marks, SquadLines2D.color_of(state), widths, cones)
+		overlays.set_marks(TETHER_LAYERS[state], marks, SquadLines2D.color_of(state, om.squad_lines_hostile),
+				widths, cones)
+
+
+# The membership moments (#367), rebuilt EVERY frame one is in the air -- the growth, the pop and the
+# reel are geometry, not a uniform -- and cleared once when the last one ends, so an idle board pays
+# nothing. SquadLines2D.moment_drawing is the one answer both views read; this only lifts it. Each
+# moment's colour and fade ride its vertex tint, and `starts` keeps its dashes where the standing
+# tether's would be, so a draw-in hands over to one without a jump. A break's shiver is baked into
+# the shaft (the pluck's uniform is one per layer, and moments of every age share this one), and its
+# falling pieces and sparks ride TETHER_SHARDS, which does not march dashes.
+func _tether_moments(om: OverlayManager) -> void:
+	if om.squad_tether_moments.is_empty():
+		if _moments_drawn:
+			overlays.clear(BoardOverlays.Layer.TETHER_MOMENT)
+			overlays.clear(BoardOverlays.Layer.TETHER_SHARDS)
+			overlays.clear(BoardOverlays.Layer.TETHER_GLOW)
+			_moments_drawn = false
+		return
+	var now := Time.get_ticks_msec()
+	var flash := BoardOverlays.beams_animating()
+	var marks: Array[Array] = []
+	var cones: Array[Dictionary] = []
+	var tints: Array[Color] = []
+	var starts := PackedFloat32Array()
+	var shards: Array[Array] = []
+	var shard_tints: Array[Color] = []
+	var glows: Array[Array] = []
+	var glow_widths: Array[Array] = []
+	var glow_tints: Array[Color] = []
+	for entry: Dictionary in om.squad_tether_moments:
+		var drawing := SquadLines2D.moment_drawing(entry, now, flash)
+		var trace_shaft := SquadLines2D.bent(drawing["shaft"], float(drawing["bend"]))
+		var shaft := PackedVector3Array()
+		for p: Vector3 in trace_shaft:
+			shaft.append(_moment_point(entry, p))
+		var strokes: Array[PackedVector3Array] = [shaft]
+		var cone: Dictionary = drawing["cone"]
+		if cone.is_empty():
+			cones.append({})
+		else:
+			var base := _moment_point(entry, cone["base"])
+			var tip := _moment_point(entry, cone["tip"])
+			strokes.append(PackedVector3Array([base, tip]))
+			cones.append({"base": base, "tip": tip,
+					"radius": overlays.squad_line_width * float(cone["scale"]) * 0.5, "tint": cone["tint"]})
+		marks.append(strokes)
+		tints.append(drawing["tint"])
+		var origin := _moment_point(entry, drawing["origin"])
+		starts.append(origin.distance_to(shaft[0]) if not shaft.is_empty() else 0.0)
+		for piece: Dictionary in drawing["pieces"]:
+			var points: PackedVector3Array = piece["points"]
+			var stroke: Array[PackedVector3Array] = [PackedVector3Array([_moment_point(entry, points[0]),
+					_moment_point(entry, points[1])])]
+			shards.append(stroke)
+			shard_tints.append(piece["tint"])
+		var glow: Dictionary = drawing["glow"]
+		if not glow.is_empty():
+			var ends: PackedVector3Array = glow["points"]
+			glows.append([_glow_stroke(entry, ends)])
+			glow_widths.append([PackedFloat32Array(GLOW_TAPER)])
+			glow_tints.append(glow["tint"])
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones, tints, starts)
+	if shards.is_empty():
+		overlays.clear(BoardOverlays.Layer.TETHER_SHARDS)
+	else:
+		overlays.set_marks(BoardOverlays.Layer.TETHER_SHARDS, shards, Color.WHITE, [], [], shard_tints)
+	if glows.is_empty():
+		overlays.clear(BoardOverlays.Layer.TETHER_GLOW)
+	else:
+		overlays.set_marks(BoardOverlays.Layer.TETHER_GLOW, glows, Color.WHITE, glow_widths, [], glow_tints)
+	_moments_drawn = true
+
+
+# A death's PULSE light as the stroke that draws it (#1104): sampled between its two ends so GLOW_TAPER
+# can narrow it to nothing at both -- a solid-ended ribbon read as a lit dash in the probe, not a light.
+func _glow_stroke(entry: Dictionary, ends: PackedVector3Array) -> PackedVector3Array:
+	var stroke := PackedVector3Array()
+	var count := GLOW_TAPER.size()
+	for i in count:
+		stroke.append(_moment_point(entry, ends[0].lerp(ends[1], float(i) / float(count - 1))))
+	return stroke
+
+
+# Where a moment's trace-space point draws: lifted with the fight when its ends are on stage (#367's
+# Z2 -- the zoom lifts the far end of a breaking tether with the fight). Each end's staged offset,
+# blended along the chord, so a moment with one end left on the board still draws joined.
+func _moment_point(entry: Dictionary, p: Vector3) -> Vector3:
+	var from: Vector2i = entry["from"]
+	var to: Vector2i = entry["to"]
+	var near := BoardSpace.staged_offset(from)
+	var far := BoardSpace.staged_offset(to)
+	if near == far:
+		return BoardSpace.trace_point(p) + near
+	var chord: PackedVector3Array = entry["chord"]
+	var span := chord[1] - chord[0]
+	var t := clampf((p - chord[0]).dot(span) / span.length_squared(), 0.0, 1.0)
+	return BoardSpace.trace_point(p) + near.lerp(far, t)
 
 
 # Which diorama layer draws each tether state.

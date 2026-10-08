@@ -505,3 +505,134 @@ added to coalesce a group move's per-member drops, which is real — five member
 five times — but it broke the hover seam (see visual-clarity.md) and the staleness it was also
 credited with fixing does not exist. If that rebuild count ever matters, the fix belongs at
 `_on_unit_action_queued`'s batching early-out, which the drop currently sits above.
+
+## 2026-09-27 — the payload aim preview (#1058 D2b)
+
+Hovering an attack that carries a payload runs `SquadManager.preview_payloads` on every cell the
+pointer crosses: a hypothetical resolve with the candidate, then the restoring `resolve_plan`. Only a
+payload attack pays it; every other aim is untouched. Measured with a throwaway gdUnit probe (never
+committed): a placed 3×3 tile blast whose payload is the same blast, on a 33×33 board, the thrower's
+queue empty, five reps each, the median shown.
+
+| Payload volleys | Empty ground | 16 foes round the aim |
+|---|---|---|
+| 9 (depth 1) | 28 ms | 36 ms |
+| 81 (depth 2) | 42 ms | 100 ms |
+| 729 (depth 3) | 158 ms | not run |
+
+**Every row is over one 60 fps frame (16.7 ms)**, so a payload hover drops a frame per cell change —
+per cell, not per frame, since the hover only repaints when the hovered cell moves. It grows with the
+foes a chain reaches much faster than with its size on empty ground, because each hit is a resolve.
+The Attack Editor already warns past a fan-out of 16. If a payload hover ever feels sticky, the first
+things to measure are the restore resolve (it re-resolves the whole real queue, which is empty here
+and will not be in play) and the per-call `ReactionCatalog.get_all()` default arguments (cached since
+#1213, below).
+
+## 2026-10-03 — the AI's seek for a removal or a squad break (#760)
+
+`AITactics.seek_positions` runs once per fighting squad (`engage`), before its group move. It stands
+the leader, then each member, on its cells and resolves its candidates there, so its cost is resolves
+per cell. Measured with `tools/profile_ai_turn.gd`, the branch against the same branch with the seek
+short-circuited (so the difference is the seek alone), two runs each:
+
+| Board | Seek off | Seek on |
+|---|---|---|
+| Castle Assault, whole board (3 squads) | 1222 / 1046 ms | 1260 / 1249 ms |
+| Moles and Holes, whole board (13 squads, opening board) | 774 ms | 795 ms |
+
+About **+10%** on Castle Assault, inside noise on Moles and Holes, and every decision record is
+byte-identical (neither board offers a removal or a break from another cell on the turns measured).
+Two things keep it that size, both in `ai-tactics.md` → *Seeking a removal or a squad break*: the
+first removal ends a unit's search, and cells that give a victim the same fate share one resolve. The
+base plan is re-resolved before each cell only when a trial has run since, because a trial's shove
+stays published and the candidate builder reads it (#709).
+
+## 2026-10-03 — the danger field draws watch lanes and shock arcs, and reads your pending plan (#1197)
+
+`ThreatField.build` gained two passes (the lanes a watcher could set, and a `Conduction` flood per
+attack), and `game.threat_field()` now resolves your pending plan once before building, to learn who
+it soaks. Measured with a scratch tool (not committed): 20 builds or rebuilds averaged, two runs each,
+this branch against `main`'s versions of the same four files.
+
+| What | `main` | #1197 |
+|---|---|---|
+| Castle Assault, `ThreatField.build` alone | 2.2 / 2.6 ms | 3.6 / 3.7 ms |
+| Castle Assault, `drop_threat_field` + `threat_field()`, no orders queued | 2.3 / 2.7 ms | 3.7 / 3.8 ms |
+| Castle Assault, the same with one player move queued | 2.4 / 2.6 ms | 12.0 / 12.8 ms |
+| The Quarry, `ThreatField.build` alone | 32.7 / 34.1 ms | 33.3 / 33.9 ms |
+
+- **The two passes cost about +1.2 ms** on Castle Assault and nothing measurable on The Quarry.
+  The Quarry's ~33 ms build is `main`'s own (its Rushdown Galvanist walks a large envelope), and is
+  worth its own look if the range view ever feels slow there.
+- **The pending resolve costs about 9.5 ms, and 7.2 ms of that is the two reaction catalogs**
+  (`ReactionCatalog.get_all()` + `TerrainReactionCatalog.get_all()`, measured alone). They scan
+  their folders on every call, as `resolve_hypothetical`'s default arguments. The resolve itself is
+  about 2.3 ms. `refresh_action_queue`'s own resolve pays the same scans on every order, so caching
+  those two catalogs would cut both. #1213 did, below.
+- **It runs once per plan change, never per frame.** The field is cached and dropped only when the
+  plan or the board moves; with no orders queued, `viewer_plans` resolves nothing.
+
+## 2026-10-04 — the reaction catalogs cache their scan (#1213)
+
+`ReactionCatalog.get_all()` and `TerrainReactionCatalog.get_all()` read their folders once a session
+now and hand out a copy, `JobCatalog`'s shape. Both are default arguments of every resolve, so the
+scan had been paid by every queue refresh, every danger-field rebuild with a plan, and every resolve
+the AI scores. Measured with #1197's scratch tool (extended to time the two calls alone) and
+`tools/profile_ai_turn.gd`, `main`'s two catalogs and Tiles page against this branch:
+
+| What | `main` | #1213 |
+|---|---|---|
+| The two `get_all()` calls together | 7.6 / 7.3 ms | ~0 ms |
+| Castle Assault, danger-field rebuild with one player move queued | 11.1 / 12.2 ms | 4.1 / 4.1 / 4.1 ms |
+| Castle Assault, whole board (every AI squad decides once) | 1206 / 1203 ms | 1045 / 1068 / 1003 ms |
+
+- **The rebuild with a plan is back near the no-plan cost** (3.5–4.4 ms both sides); the build alone
+  and The Quarry, which queued no plan, did not move.
+- **The AI decision is about 14% faster**, and its decision record is byte-identical — the cache
+  changes when the folder is read, never what is in it.
+- **`scans` on each catalog counts real folder reads**, the cache's one observable, because "faster"
+  has no behaviour a case can see (#710 slice 2's law). The Tiles page's burnable tick is the one
+  runtime writer that adds or removes a reaction file, and it calls `refresh()` before it re-wires
+  the board.
+
+## 2026-10-05 — the AI batch (#1220), and planning the first squad behind the banner
+
+`tools/profile_ai_turn.gd`, Castle Assault, `main` (`a6f87623`) in a scratch worktree against the
+branch, two runs each, alternating:
+
+| What | `main` | #1220 |
+|---|---|---|
+| A Rushdown squad's decision (5 members), each of two | 338–366 ms | 484–511 ms |
+| The Sentry squad's decision (5 members) | 293 / 318 ms | 240 / 247 ms |
+| Whole board (every AI squad decides once) | 975 / 1026 ms | 1234 / 1268 ms |
+
+- **About +25% on the whole board**, against the plan's line of flagging anything that doubles it.
+  The moving squads pay for it: every directional attack now tries four facings and every point
+  attack its ring, and a member with nobody to hit asks the follow cells around it. The Sentry got
+  cheaper, because the followable sweep is asked once per squad decision and shared.
+- **The decision record changes in two explained ways.** A directional aim names the facing cell
+  rather than the enemy (same footprint), and two members that had nobody to hit from their
+  formation cell step one cell to land a Spring (#1220 ruling 9).
+- **The first squad's cost is hidden** (ruling 7): an AI faction plans its first squad inside the
+  1.0 s hand-off beat, so on this board 240–510 ms of decision lands behind the banner. Every LATER
+  squad still decides between passes, which is the hitch left to see in play.
+- **The safe route costs nothing without a watch in reach**: `RulesService.route_to` falls straight
+  back to the range's own tree, so the boards above, which have no armed watch at decision time, do
+  not run its search at all.
+
+## 2026-10-05 — AI difficulty bands (#1230)
+
+`tools/profile_ai_turn.gd`, Castle Assault, `main` (`5d9e75af`) in a scratch worktree against the
+branch, three runs each, alternating. The machine was noisy that evening: `main` alone spread
+1555–1673 ms.
+
+| What | `main` | #1230 |
+|---|---|---|
+| Whole board (every AI squad decides once) | 1601 / 1555 / 1673 ms | 1698 / 1649 / 1820 ms |
+
+- **About +6% on the whole board.** Every rule now asks its unit's profile (`AIProfiles.of`, a
+  cached dictionary read) at the site it governs, and a lone Rushdown or Balanced unit asks its
+  engageable set once more to decide whether it is idle. Nothing was restructured for speed.
+- **The decision record is byte-identical** to `main` with every unit unassigned (Hard): no
+  Crisis-armed unit, no hit reaching the limb threshold and no stray on turn 1 (the profiler now runs
+  the regroup pass first and prints `regroup = 0 join(s)` per faction).

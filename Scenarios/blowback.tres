@@ -38,7 +38,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -57,13 +56,11 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_0jp17")])
 equipped_index = 0
 limb_states = Dictionary[int, int]({
@@ -86,7 +83,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -106,13 +102,11 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_ng2b5")])
 equipped_index = 0
 limb_states = Dictionary[int, int]({
@@ -135,7 +129,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -154,13 +147,11 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
 })
 current_hp = 12
-current_will = 5
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_hjx60")])
 equipped_index = 0
 limb_states = Dictionary[int, int]({
@@ -183,7 +174,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -203,13 +193,11 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
 })
 current_hp = 12
-current_will = 5
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_5c0il")])
 equipped_index = 0
 limb_states = Dictionary[int, int]({
@@ -232,7 +220,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -252,13 +239,11 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_x3031")])
 equipped_index = 0
 limb_states = Dictionary[int, int]({
@@ -281,7 +266,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -300,13 +284,11 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_3i87w")])
 equipped_index = 0
 limb_states = Dictionary[int, int]({

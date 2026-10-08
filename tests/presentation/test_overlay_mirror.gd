@@ -428,6 +428,48 @@ func test_aim_footprint_and_its_flash_ride_the_poll() -> void:
 	assert_that(_overlays.drawn_color(BoardOverlays.Layer.AIM, quad)).is_equal(AimFlash2D.tint(watch, level))
 
 
+# The aim's PAYLOAD tiles (#1058 D2b) ride the same poll onto their own layer: the 2D's inset cells,
+# in the footprint's live colour, lit by the same clock one step after the aim (ruling 52).
+func test_payload_insets_and_their_flash_ride_the_poll() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	attacker.equipped_weapon = H.make_weapon(3)
+	var main: WeaponAttackData = attacker.get_equipped_weapon().template.main_attack
+	main.targets = EquippableData.TargetMode.MAP
+	var blast := WeaponAttackData.new()
+	blast.power = 1
+	blast.targets = EquippableData.TargetMode.MAP
+	blast.max_range = 3
+	var square: Array[Vector2i] = [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
+	blast.attack_shape = AttackShape.new()
+	blast.attack_shape.stamp = square
+	main.payload = blast
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game.hover_presenter._hover_attack_targeting(foe.movement.cell)
+	await _settle()
+	var payload_2d: TileMapLayer = _om().payload_overlay
+	assert_bool(payload_2d.get_used_cells().is_empty()).override_failure_message(
+			"the aim drew no payload tiles, so this case proves nothing").is_false()
+	assert_that(_sorted_3d(BoardOverlays.Layer.PAYLOAD)).is_equal(_lifted(payload_2d))
+	var live: Color = _om().hover_overlay.modulate
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.PAYLOAD)).is_equal(live)
+
+	var cell: Vector2i = payload_2d.get_used_cells()[0]
+	var quad := BoardSpace.of_cell(cell, BoardSpace.top_row_of(game.board_heights.elevation_at(cell)))
+	_om()._aim_flash.clock = AimFlash2D.STEP_SECONDS + AimFlash2D.FLASH_SECONDS * AimFlash2D.RISE_SHARE
+	_mirror._process(0.0)
+	var level: float = _om().aim_flash_levels()[cell]
+	assert_float(level).is_greater(0.0)   # non-vacuity: the payload tile really is lit
+	assert_that(_overlays.drawn_color(BoardOverlays.Layer.PAYLOAD, quad)).override_failure_message(
+			"the diorama's payload tile is not lit with the 2D's flash").is_equal(AimFlash2D.tint(live, level))
+
+	game.exit_current_mode()
+	await _settle()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.PAYLOAD).size()).override_failure_message(
+			"the payload tiles outlived the aim in the diorama").is_equal(0)
+
+
 # --- Units -------------------------------------------------------------------------
 
 func test_unit_pulse_reaches_the_mirrored_sprite() -> void:
@@ -522,6 +564,35 @@ func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 	# The landing ghost joins the unit-mirror pool; the real sprite hides behind it.
 	assert_int(_unit_mirror.ghost_count()).is_equal(1)
 	assert_bool(_unit_mirror.sprite_for(foe).visible).is_false()
+
+
+# A fully held shove (#1186) reaches the diorama as ONE mark on its own cell, in the trail's tint and
+# with no ghost -- carried there by the trail's own array and parent, which is why the mirror has no
+# code for it -- and the preview's clear takes it with the rest.
+func test_a_held_shove_mirrors_one_mark_in_the_trail_colour_and_clears_with_it() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	var holds: Array[Vector2i] = [Vector2i(3, 2), Vector2i(3, 2)]   # two held hits, one cell
+	_om().show_knockback_preview([], holds)
+	await _settle()
+	var mark: Sprite2D = null
+	for node: Node2D in _om().knockback_preview_sprites:
+		var sprite := node as Sprite2D
+		if sprite != null and sprite.texture == OverlayManager.PATH_HELD:
+			mark = sprite
+	assert_object(mark).override_failure_message("no hold mark was drawn in 2D").is_not_null()
+	var markers := _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)
+	assert_int(markers.size()).is_equal(1)
+	if markers.size() == 1 and mark != null:
+		var pos: Vector3 = markers[0]["pos"]
+		assert_that(Vector2(pos.x, pos.z)).is_equal(mark.global_position / 16.0)
+		assert_that(markers[0]["texture"]).is_equal(OverlayManager.PATH_HELD)
+		assert_that(markers[0]["modulate"]).is_equal(OverlayManager.KNOCKBACK_MODULATE)
+	assert_int(_unit_mirror.ghost_count()).is_equal(0)
+	assert_bool(_unit_mirror.sprite_for(foe).visible).is_true()
+
+	_om().clear_knockback_preview()
+	await _settle()
+	assert_array(_overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)).is_empty()
 
 
 # The honest trail (#259 rework, dev: the arrow should paint "in the air until he would drop,
@@ -963,6 +1034,199 @@ func test_squad_lines_and_icons_mirror() -> void:
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(1)
 
 
+# An ENEMY squad's lines reach the diorama in the enemy colour (#1109), and a player's draw after it
+# is back in the player's -- read off the beam MATERIAL, which is what the wire has to reach. The
+# colours are compared to the statics, never to a value.
+func test_an_enemy_squads_lines_reach_the_diorama_in_the_enemy_colour() -> void:
+	assert_bool(SquadLines2D.ENEMY_TETHER_COLOR.is_equal_approx(SquadLines2D.TETHER_COLOR)) \
+		.override_failure_message("the two sides are tuned to one colour -- this case cannot tell them apart") \
+		.is_false()
+	var enemy_leader := _spawn(ENEMY, Vector2i(2, 2))
+	var enemy_member := _spawn(ENEMY, Vector2i(4, 3))
+	game.squad_manager.join_squad(enemy_member, enemy_leader.squad)
+	var leader := _spawn(PLAYER, Vector2i(3, 2))
+	var member := _spawn(PLAYER, Vector2i(5, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+
+	game.draw_squad_cohesion(enemy_leader.squad, enemy_leader.movement.cell)
+	await _settle()
+	assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).size() > 0).override_failure_message(
+			"fixture: the enemy's tether never reached the diorama").is_true()
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.COHESION_EDGE, BoardOverlays.Layer.TETHERS]:
+		assert_that(_overlays.beam_parameter(layer, &"beam_color")).override_failure_message(
+				"%s drew an enemy squad in the player's colour" % BoardOverlays.Layer.keys()[layer]) \
+			.is_equal(SquadLines2D.ENEMY_TETHER_COLOR)
+
+	game.draw_squad_cohesion(leader.squad, leader.movement.cell)
+	await _settle()
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.COHESION_EDGE, BoardOverlays.Layer.TETHERS]:
+		assert_that(_overlays.beam_parameter(layer, &"beam_color")).override_failure_message(
+				"%s kept the enemy colour for the player's own squad" % BoardOverlays.Layer.keys()[layer]) \
+			.is_equal(SquadLines2D.TETHER_COLOR)
+
+
+# The dark CASING (#1109 round 2) reaches a REAL squad's lines through the real draw, both sides' -- the
+# dev's "both sides" ruling. Compared to the knob, never to a number.
+func test_a_squads_lines_reach_the_diorama_cased_on_both_sides() -> void:
+	var enemy_leader := _spawn(ENEMY, Vector2i(2, 2))
+	var enemy_member := _spawn(ENEMY, Vector2i(4, 3))
+	game.squad_manager.join_squad(enemy_member, enemy_leader.squad)
+	var leader := _spawn(PLAYER, Vector2i(3, 2))
+	var member := _spawn(PLAYER, Vector2i(5, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+	assert_float(_overlays.squad_casing_width).override_failure_message(
+			"fixture: the casing is tuned to nothing, so this case cannot see it").is_greater(0.0)
+
+	for squad_leader: Unit in [enemy_leader, leader]:
+		game.draw_squad_cohesion(squad_leader.squad, squad_leader.movement.cell)
+		await _settle()
+		assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).size() > 0).override_failure_message(
+				"fixture: the tether never reached the diorama").is_true()
+		for layer: BoardOverlays.Layer in [BoardOverlays.Layer.COHESION_EDGE, BoardOverlays.Layer.TETHERS]:
+			assert_float(float(_overlays.beam_parameter(layer, &"casing_width"))).override_failure_message(
+					"%s drew the %s squad's lines with no casing" % [BoardOverlays.Layer.keys()[layer],
+						"enemy" if squad_leader == enemy_leader else "player's"]) \
+				.is_equal_approx(_overlays.squad_casing_width, 0.0001)
+
+
+# --- Membership moments (#367) ---------------------------------------------------------------------
+
+# A moment reaches the diorama off the same store the flat view draws, hanging at its chord like the
+# tether it stands for -- and part-drawn, its dash measure counts on from the chord's origin, so its
+# dashes sit where the whole tether's would. Played with a long reel and aged by hand to mid-reel,
+# so the member end has moved and there is an offset to see.
+func test_a_tether_moment_hangs_at_its_chord_with_its_dashes_in_place() -> void:
+	var saved := SquadLines2D.REEL_IN_SECONDS
+	SquadLines2D.REEL_IN_SECONDS = 30.0
+	var pair := _squad_pair()
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.REEL_IN, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	_om().squad_tether_moments[0]["start_msec"] = Time.get_ticks_msec() - 15000
+	await _settle()
+	var lines := _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT)
+	var chord: PackedVector3Array = _om().squad_tether_moments[0]["chord"]
+	var marker := _overlays._markers[BoardOverlays.Layer.TETHER_MOMENT][0] as MeshInstance3D
+	var uv2: PackedVector2Array = (marker.mesh as ImmediateMesh).surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+	SquadLines2D.REEL_IN_SECONDS = saved
+
+	assert_bool(lines.size() > 0 and lines[0].size() > 0).override_failure_message(
+			"the moment never reached the diorama").is_true()
+	var origin := BoardSpace.trace_point(chord[0])
+	assert_float(lines[0][0].y).override_failure_message("the moment does not hang at its chord's height") \
+		.is_equal_approx(origin.y, 0.001)
+	var offset := origin.distance_to(lines[0][0])
+	assert_float(offset).override_failure_message("fixture: the member end has not moved yet") \
+		.is_greater(0.0)
+	assert_float(uv2[0].x).override_failure_message(
+			"the moment's dashes restarted at its own end instead of counting from the chord's origin") \
+		.is_equal_approx(offset, 0.001)
+
+
+# #367 part 2B, the dev's Z2: a moment whose two ends stand on STAGED ground draws up there with the
+# fight, lifted by the staged offset -- not down under the diorama at the board's own height, which is
+# where a moment drawn off trace_point alone would play unseen.
+func test_a_tether_moment_over_the_staged_fight_draws_lifted_with_it() -> void:
+	var saved := SquadLines2D.REEL_IN_SECONDS
+	SquadLines2D.REEL_IN_SECONDS = 30.0
+	var pair := _squad_pair()
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.REEL_IN, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	var lift := Vector3(0.0, BoardSpace.STAGE_LIFT, 0.0)
+	var cells: Array[Vector2i] = [pair[0].movement.cell, pair[1].movement.cell]
+	BoardSpace.stage(cells, lift)
+	await _settle()
+	var lines := _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT)
+	var chord: PackedVector3Array = _om().squad_tether_moments[0]["chord"]
+	BoardSpace.clear_staging()
+	SquadLines2D.REEL_IN_SECONDS = saved
+
+	assert_bool(lines.size() > 0 and lines[0].size() > 0).override_failure_message(
+			"the moment never reached the diorama").is_true()
+	assert_float(lift.y).override_failure_message("fixture: the stage lifts nothing").is_greater(0.0)
+	assert_float(lines[0][0].y).override_failure_message(
+			"a moment over the staged fight drew at the board's height, under the diorama") \
+		.is_equal_approx(BoardSpace.trace_point(chord[0]).y + lift.y, 0.01)
+
+
+# A DRAW-IN stands in for its pair's standing tether: while it grows, the standing one is held back in
+# the diorama too (a whole tether under a growing one hides the growth), though the store still holds
+# it as the truth -- and once the draw-in has popped, the standing tether is handed back.
+func test_a_draw_in_holds_back_its_pairs_standing_tether_then_hands_it_over() -> void:
+	var saved := [SquadLines2D.DRAW_IN_SECONDS, SquadLines2D.POP_SECONDS]
+	var pair := _squad_pair()
+	game.draw_squad_cohesion(pair[0].squad, pair[0].movement.cell)
+	await _settle()
+	assert_bool(_overlays.lines_of(BoardOverlays.Layer.TETHERS).is_empty()).override_failure_message(
+			"fixture: no standing tether to hold back").is_false()
+
+	SquadLines2D.DRAW_IN_SECONDS = 30.0
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.DRAW_IN, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	await _settle()
+	var held_back := _overlays.lines_of(BoardOverlays.Layer.TETHERS).is_empty()
+	var truth := _om().squad_tethers.size()
+	var growing := not _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT).is_empty()
+
+	SquadLines2D.DRAW_IN_SECONDS = 0.0
+	SquadLines2D.POP_SECONDS = 0.0
+	await _settle()
+	var handed_back := not _overlays.lines_of(BoardOverlays.Layer.TETHERS).is_empty()
+	var moment_gone := _overlays.lines_of(BoardOverlays.Layer.TETHER_MOMENT).is_empty()
+	SquadLines2D.DRAW_IN_SECONDS = saved[0]
+	SquadLines2D.POP_SECONDS = saved[1]
+
+	assert_bool(growing).override_failure_message("the draw-in never reached the diorama").is_true()
+	assert_bool(held_back).override_failure_message(
+			"the standing tether drew underneath its own draw-in").is_true()
+	assert_int(truth).override_failure_message("holding the tether back dropped it from the store's truth") \
+		.is_equal(1)
+	assert_bool(handed_back).override_failure_message(
+			"the standing tether never came back after its draw-in").is_true()
+	assert_bool(moment_gone).override_failure_message("the finished moment stayed in the diorama").is_true()
+
+
+# #1104: a death's pieces reach the diorama on the shard layer, like a break's, and a PULSE's light on
+# its own glow layer -- one tapered stroke per light. The light goes out when it arrives, while the
+# moment is still live, and everything leaves with the moment. Aged by hand, with a long run and fade.
+func test_a_deaths_pieces_and_its_light_reach_the_diorama_and_leave_with_it() -> void:
+	var saved := [SquadLines2D.PULSE_SECONDS, SquadLines2D.DEATH_FADE_SECONDS]
+	SquadLines2D.PULSE_SECONDS = 10.0
+	SquadLines2D.DEATH_FADE_SECONDS = 10.0
+	var pair := _squad_pair()
+	var links: Array[Dictionary] = [{"from": pair[1].movement.cell, "to": pair[0].movement.cell,
+			"moment": SquadLines2D.Moment.PULSE, "delay": 0.0}]
+	_om().play_tether_moments(links, game._board())
+	var entry: Dictionary = _om().squad_tether_moments[0]
+	entry["start_msec"] = Time.get_ticks_msec() - 4000
+	await _settle()
+	var running_shards := _overlays.lines_of(BoardOverlays.Layer.TETHER_SHARDS).size()
+	var running_glow := _overlays.lines_of(BoardOverlays.Layer.TETHER_GLOW)
+	entry["start_msec"] = Time.get_ticks_msec() - 12000
+	await _settle()
+	var arrived_glow := _overlays.lines_of(BoardOverlays.Layer.TETHER_GLOW).size()
+	var arrived_live := _om().squad_tether_moments.size()
+	entry["start_msec"] = Time.get_ticks_msec() - 25000
+	await _settle()
+	var ended_shards := _overlays.lines_of(BoardOverlays.Layer.TETHER_SHARDS).size()
+	var ended_glow := _overlays.lines_of(BoardOverlays.Layer.TETHER_GLOW).size()
+	SquadLines2D.PULSE_SECONDS = saved[0]
+	SquadLines2D.DEATH_FADE_SECONDS = saved[1]
+
+	assert_int(running_shards).override_failure_message("the death's pieces never reached the diorama") \
+		.is_greater(0)
+	assert_int(running_glow.size()).override_failure_message("the pulse's light never reached the diorama") \
+		.is_equal(1)
+	assert_int(running_glow[0].size()).override_failure_message("the light was not drawn tapered") \
+		.is_equal(OverlayMirror.GLOW_TAPER.size())
+	assert_int(arrived_live).override_failure_message("fixture: the moment ended with its light").is_equal(1)
+	assert_int(arrived_glow).override_failure_message("the light stayed lit after it arrived").is_equal(0)
+	assert_int(ended_shards + ended_glow).override_failure_message(
+			"the death stayed in the diorama after its moment ended").is_equal(0)
+
+
 # The tether's arrowhead is sized by ITS OWN knob (dev, 2026-09-22): the diorama's cone scales with
 # SquadLines2D.ARROW_WIDTH_SCALE, and the reach mark's CONE_WIDTH_SCALE -- the enemy intent's -- does
 # not reach it. Asked as ratios against the drawn geometry, never as the widths themselves.
@@ -1068,7 +1332,9 @@ func test_a_ring_on_a_corner_cell_carries_the_shape_it_lies_on() -> void:
 			+ "marker on a corner cell draws flat and cuts through the ground").is_greater(0)
 
 
-func test_zone_fills_mirror_and_captured_zones_drop() -> void:
+# Since #955 a zone draws as rim marks, not a wash: every cell of a drawn zone wears one, tinted by its
+# kind, and a captured zone drops out with its marks.
+func test_zone_marks_mirror_and_captured_zones_drop() -> void:
 	var zones := {
 		"cap": {"kind": ZoneManager.Kind.CAPTURE, "cells": [Vector2i(1, 1), Vector2i(2, 1)]},
 		"ext": {"kind": ZoneManager.Kind.EXTRACTION, "cells": [Vector2i(6, 6)]},
@@ -1076,15 +1342,29 @@ func test_zone_fills_mirror_and_captured_zones_drop() -> void:
 	game.zone_manager.load_dict(zones)
 	_om().redraw_zones(game.zone_manager)
 	await _settle()
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)) \
-		.is_equal([BoardSpace.of_cell(Vector2i(1, 1), BoardSpace.top_row_of(0)), BoardSpace.of_cell(Vector2i(2, 1), BoardSpace.top_row_of(0))] as Array[Vector3i])
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_EXTRACTION)) \
-		.is_equal([BoardSpace.of_cell(Vector2i(6, 6), BoardSpace.top_row_of(0))] as Array[Vector3i])
-	# A captured zone stops glowing in 2D (redraw_zones' hidden list) — and therefore in 3D.
+	assert_that(_marked_cells(BoardOverlays.Layer.ZONE_CAPTURE)) \
+		.is_equal([Vector2i(1, 1), Vector2i(2, 1)] as Array[Vector2i])
+	assert_that(_marked_cells(BoardOverlays.Layer.ZONE_EXTRACTION)) \
+		.is_equal([Vector2i(6, 6)] as Array[Vector2i])
+	# A captured zone stops being drawn (redraw_zones' hidden list), in both views.
 	_om().redraw_zones(game.zone_manager, ["cap"])
 	await _settle()
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_CAPTURE).size()).is_equal(0)
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(1)
+	assert_int(_marked_cells(BoardOverlays.Layer.ZONE_CAPTURE).size()).is_equal(0)
+	assert_int(_marked_cells(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(1)
+
+
+# The cells a kind's rim marks stand on (#955), read off the ZONE_MARKS entries its colour tints.
+func _marked_cells(kind_layer: BoardOverlays.Layer) -> Array[Vector2i]:
+	var tint := _overlays.layer_modulate(kind_layer)
+	tint.a = 1.0
+	var cells: Array[Vector2i] = []
+	for mark in _overlays.markers_of(BoardOverlays.Layer.ZONE_MARKS):
+		if mark["modulate"] == tint:
+			var pos: Vector3 = mark["pos"]
+			cells.append(Vector2i(floori(pos.x / BoardSpace.CELL_SIZE), floori(pos.z / BoardSpace.CELL_SIZE)))
+	cells.sort()
+	return cells
+
 
 
 # #736. UNGATED, deliberately — the opposite of the patrol case directly below, and the two exist
@@ -1100,15 +1380,15 @@ func test_a_deployment_zone_mirrors_without_the_authoring_gate() -> void:
 
 	_om().set_zone_visibility(false)   # the play view: patrol scaffolding is DOWN here
 	await _settle()
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_DEPLOYMENT)).override_failure_message(
+	assert_that(_marked_cells(BoardOverlays.Layer.ZONE_DEPLOYMENT)).override_failure_message(
 			"a painted deployment zone is invisible in 3D").is_equal(
-		[BoardSpace.of_cell(Vector2i(4, 2), BoardSpace.top_row_of(0)),
-			BoardSpace.of_cell(Vector2i(5, 2), BoardSpace.top_row_of(0))] as Array[Vector3i])
+		[Vector2i(4, 2), Vector2i(5, 2)] as Array[Vector2i])
 
 	# ...and the hidden list is what takes it away, not a visibility flag.
 	_om().redraw_zones(game.zone_manager, ["landing"])
 	await _settle()
-	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_DEPLOYMENT).size()).is_equal(0)
+	assert_int(_marked_cells(BoardOverlays.Layer.ZONE_DEPLOYMENT).size()).is_equal(0)
+
 
 
 func test_the_patrol_zone_and_picked_highlight_mirror_only_while_visible() -> void:
@@ -1221,31 +1501,43 @@ func test_exit_current_mode_clears_the_mirrored_layers() -> void:
 # battle3d._on_board_loaded used to empty EVERY 3D layer while the mirror's push cache went on
 # saying it had already drawn them. apply_scenario is synchronous end to end, so the mirror never
 # observes the intermediate empty — it sees the same cells before and after, diffs equal, and the
-# wiped layer stays wiped for the life of the board. Zones are the visible casualty for being the
-# only markup static across a whole board; a gameplay layer self-heals within a click or two.
+# wiped layer stays wiped for the life of the board. Zones (their rim marks since #955) are the
+# visible casualty for being the only markup static across a whole board; a gameplay layer
+# self-heals within a click or two.
 #
 # Asserting the settled end state of a FIRST load passes against that bug (the cache starts empty),
 # so this reloads an UNCHANGED board through the real funnel: capture_scenario -> apply_scenario ->
 # board_loaded -> battle3d. The zones are hand-built rather than read off a mission, so nothing here
 # pins authored content — they round-trip through ScenarioData.zones like any other board content.
-func test_a_reload_of_an_unchanged_board_leaves_the_zone_fills_drawn() -> void:
+func test_a_reload_of_an_unchanged_board_leaves_the_zone_marks_drawn() -> void:
 	game.zone_manager.load_dict({
 		"cap": {"kind": ZoneManager.Kind.CAPTURE, "cells": [Vector2i(1, 1), Vector2i(2, 1)]},
 	})
 	_om().redraw_zones(game.zone_manager)
 	await _settle()
-	var drawn := _sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)
+	var drawn := _mark_positions(BoardOverlays.Layer.ZONE_MARKS)
 	assert_array(drawn).override_failure_message(
 			"nothing was drawn before the reload, so the reload could not lose it").is_not_empty()
 
 	var manager: ScenarioManager = game.scenario_manager
 	manager.apply_scenario(manager.capture_scenario("reload-test"))
 	await _settle()
-	# The 2D kept them, or the 3D would be right to be empty — assert the authority first.
-	assert_that(_lifted(_om().capture_overlay)).override_failure_message(
-			"the 2D lost the zones on reload, which is a different bug").is_equal(drawn)
-	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)).override_failure_message(
+	# The store kept them, or the 3D would be right to be empty -- assert the authority first.
+	var kept: Array = _om().drawn_zones.map(func(zone: Dictionary) -> String: return zone["name"])
+	assert_array(kept).override_failure_message(
+			"the zone store lost the zones on reload, which is a different bug").contains(["cap"])
+	assert_that(_mark_positions(BoardOverlays.Layer.ZONE_MARKS)).override_failure_message(
 			"the board reloaded and its zones never came back in 3D").is_equal(drawn)
+
+
+# Where a marker layer's entries stand, sorted, so two draws of the same marks compare equal.
+func _mark_positions(layer: BoardOverlays.Layer) -> Array[Vector3]:
+	var at: Array[Vector3] = []
+	for mark in _overlays.markers_of(layer):
+		at.append(mark["pos"])
+	at.sort()
+	return at
+
 
 
 # Move the pointer the way the picker does, so everything past this line is the real hover wire:

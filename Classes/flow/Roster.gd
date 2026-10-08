@@ -120,11 +120,7 @@ func offered_stash() -> Array[Item]:
 func offered_mods() -> Array[WeaponModData]:
 	if not offers_every_mod:
 		return available_mods
-	var every: Array[WeaponModData] = []
-	var mods := WeaponModCatalog.get_mods()
-	for key in mods:
-		every.append(mods[key])
-	return every
+	return WeaponModCatalog.all_mods()
 
 
 # The jobs the picker may offer, BEFORE the union with whatever the unit already holds -- which is a

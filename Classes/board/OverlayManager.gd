@@ -2,7 +2,8 @@ extends Node
 class_name OverlayManager
 
 # All 2D board visuals: the tile-layer fills (move/attack/hover/squad/zones), path
-# arrows, selection icons, projected-unit ghosts, knockback + terrain previews, and
+# arrows, selection icons, projected-unit ghosts, knockback + terrain previews (a fully held
+# shove's mark among them, #1186), and
 # the target-pulse channel, and the aim's travel-order flash (AimFlash2D). Every draw is RETAINED — the layers hold their cells and
 # the dicts below hold their sprites — which is what lets the 3D OverlayMirror poll
 # full parity off this manager with zero trigger hooks (#222).
@@ -16,12 +17,10 @@ class_name OverlayManager
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
 @onready var zone_overlay = $ZoneOverlay
-@onready var capture_overlay = $CaptureOverlay
-@onready var extraction_overlay = $ExtractionOverlay
-@onready var deployment_overlay = $DeploymentOverlay
-@onready var defend_overlay = $DefendOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
+# A shove the target's weight holds outright (#1186): the hold icon, greyscale so the shove tint reads true.
+const PATH_HELD := preload("res://Art/Icons/ArrowIcons/nomove_trail.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
 const PATH_VERTICAL := preload("res://Art/Icons/ArrowIcons/vertical.png")
 
@@ -68,6 +67,9 @@ const BLOCKED_ATLAS_COORDS = Vector2i(2, 0)
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
 const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
+# A ghost's running refusal flash and the position it shakes about (#1150), held on the ghost itself.
+const GHOST_FLASH_META := &"invalid_flash"
+const GHOST_REST_META := &"invalid_flash_rest"
 # static var since #422, joining the reach pair below: the footprint is one of the three channels a
 # player's palette repaints, so its authored value has to be tunable like the two it sits with.
 static var HOVER_MODULATE := Color(1, 1, 0)             # the aim-footprint fill
@@ -315,12 +317,17 @@ const SQUAD_HUES_ENEMY: Array[Color] = [
 	Color(1.0, 0.95, 0.5),   # yellow
 ]
 const RING_Z_INDEX := 2       # underfoot: above terrain state (1), below arrows (3) and units (4)
+const ZONE_MARK_Z_INDEX := 1  # a zone's rim, where its wash lay: under the move grid (2) and the emblem
 const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the toggle round-trips
 
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 
-# The cells every live watch covers (#413) — THE store, written only by redraw_watch_marks. Both
+# Every watch the board marks (#413; the watches themselves since #1105) — THE store, written only by
+# redraw_watch_marks. A tile's Inspect names who is watching from here, so it can never name a
+# watch whose mark is gone.
+var watches: Array[Watch] = []
+# Its cells, once each — written in the same loop as `watches`, so neither can lag the other. Both
 # views read it: the 2D sprites beside it, and OverlayMirror's Layer.WATCH_ICONS markers. A cell
 # rather than a unit anchors this markup, which is why it is not an OverlayIcon: an OverlayIcon
 # FOLLOWS its unit, and a watch's footprint is frozen geometry that deliberately does not.
@@ -368,13 +375,22 @@ var knockback_preview_sprites: Array[Node2D] = []
 # lifetimes (a move ghost dies with clear_projected_unit, a shove's with clear_knockback_preview),
 # so they stay apart and _ghost_for is the one place that answers across both.
 var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
-# ZoneManager.Kind -> the TileMapLayer that draws it. A layer per kind rather than a method per
-# kind: colour is `modulate`, which is per-LAYER, so a kind that needs its own colour needs its
-# own layer. Adding a kind is one line here.
+# ZoneManager.Kind -> the TileMapLayer that washes it: the AUTHORING kinds only (PATROL). A kind a
+# player sees draws as ZoneMarks sprites instead (#955), so it needs no layer here.
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
+# The zones redraw_zones last drew for a player (#955): {"name", "kind", "cells"} each, the hidden
+# list applied and the authoring kinds left out -- the one answer the zone marks, the emblems and the
+# walls all read. The version is the mirror's change signal (#308).
+var drawn_zones: Array[Dictionary] = []
+var drawn_zones_version := 0
+# Which zone kind is LIT (#955 part 3): the objectives panel row under the pointer names one, and
+# every drawn zone of it brightens in both views. MissionRules.NO_ZONE lights nothing.
+var lit_zone_kind := MissionRules.NO_ZONE
+var _zone_sprites: Array[Sprite2D] = []   # the flat view's rims and emblems, rebuilt with the zones
 var reach_overlay: TileMapLayer = null   # YOUR unit's attack reach (#1066); built in _ready
 var threat_overlay: TileMapLayer = null   # ...and the enemy's one undifferentiated field, under it
+var payload_overlay: TileMapLayer = null   # the aim's PAYLOAD tiles, inset (#1058 D2b); built in _ready
 # The stroke round that one enemy's footprint (slice 4), in ThreatLines2D's trace space. Versioned
 # on reach_line_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
@@ -385,8 +401,21 @@ var focus_outline_version := 0
 # the source and `squad_tethers` is derived from them, so a knob that reshapes a tether re-derives
 # without anyone holding a BoardContext across frames for a slider (ThreatLines2D.mark's reason).
 var squad_outline: Array[PackedVector3Array] = []
-var squad_tether_chords: Array[Dictionary] = []   # {"chord": PackedVector3Array, "state": SquadLines2D.Strain}
+# {"chord": PackedVector3Array, "state": SquadLines2D.Strain, "from": member cell, "to": leader cell}
+var squad_tether_chords: Array[Dictionary] = []
 var squad_tethers: Array[Dictionary] = []   # {"strokes": Array[PackedVector3Array], "state": ...}
+# ...the ones the views DRAW (#367): the same, minus any tether a draw-in moment is standing in for,
+# since a draw-in over an already-whole tether is invisible. squad_tethers stays the truth.
+var drawn_squad_tethers: Array[Dictionary] = []
+# Whose squad the standing lines are (#1109) -- true for an enemy's, which wear the enemy colour.
+var squad_lines_hostile := false
+# The membership MOMENTS in the air (#367): {"from", "to", "chord", "moment": SquadLines2D.Moment,
+# "start_msec", "standing", "hostile"}. `standing` is whether a standing tether exists for the same
+# pair, which is what lets a draw-in hand over to it rather than fade; `hostile` is whose squad it
+# was (#1109). A break at the ledge (#1104) also carries "follow"/"follow_end" (the body its end rides)
+# and, while it holds, "held_by" (the attack whose stamp snaps it) with "snap" at INF. Played on one
+# clock, pruned by _process.
+var squad_tether_moments: Array[Dictionary] = []
 var squad_lines_version := 0
 # When the strained tethers were last plucked (#1070), in Time.get_ticks_msec; -1 is never. A stamp
 # rather than a running animation, so both views read one clock and neither owns a tween.
@@ -439,6 +468,9 @@ var sight_trace_version := 0
 var _sight_trace_2d: SightTrace2D
 var _aim_flash: AimFlash2D
 var _threat_lines_2d: ThreatLines2D
+# The payload layer's generated inset square and the texel size it was cut at (#1058 D2b).
+var _payload_source: TileSetAtlasSource
+var _payload_size := 16
 # The move tileset's generated art and the texel size it was cut at (#1074) -- see _install_move_grid.
 var _move_grid_texture: ImageTexture
 var _move_grid_size := 16
@@ -480,25 +512,11 @@ func _ready() -> void:
 	invalidmove_overlay.modulate = Color(0.78, 0.8, 0.84, 0.5)
 	zone_overlay.modulate = ZONE_PATROL_MODULATE
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
-	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
-	extraction_overlay.modulate = Color(0.4, 1, 0.5, 0.5)
-	deployment_overlay.modulate = Color(0.65, 0.5, 1, 0.45)
-	defend_overlay.modulate = ZONE_DEFEND_MODULATE
-	# These three restate BoardOverlays.LAYERS' literal rather than sharing a const the way PATROL
-	# does, and that fork is deliberate: the Game tab's markup-colour knob rewrites the LAYERS
-	# entry, so a shared const would be replaced by a literal on the first Save. PATROL is excluded
-	# from that table precisely because it shares one (GameKnobs.CLASS_KNOBS says so).
-	#
-	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab); CAPTURE and
-	# EXTRACTION are live objective information and stay visible for the whole battle. DEPLOYMENT
-	# (#736) is a third thing again -- it is real information the player acts on, but only until
-	# turn 1 begins, after which MissionController.hidden_zone_names() stops it being drawn.
+	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab), so it is still a wash.
+	# The kinds a player sees are not washed at all since #955: _rebuild_zone_marks draws their rim and
+	# emblem, in the colour BoardOverlays.LAYERS authors, and hidden_zone_names() says which are drawn.
 	zone_layer_map = {
 		ZoneManager.Kind.PATROL: zone_overlay,
-		ZoneManager.Kind.CAPTURE: capture_overlay,
-		ZoneManager.Kind.EXTRACTION: extraction_overlay,
-		ZoneManager.Kind.DEPLOYMENT: deployment_overlay,
-		ZoneManager.Kind.DEFEND: defend_overlay,
 	}
 	# The Tile Brush's picked-zone highlight: a white lift drawn over the kind layers so the picked
 	# zone reads against its neighbours. Code-built as a duplicate of zone_overlay (same tileset and
@@ -525,6 +543,12 @@ func _ready() -> void:
 	if hover_overlay is CanvasItem:
 		_aim_flash.z_index = (hover_overlay as CanvasItem).z_index
 	add_child(_aim_flash)
+	# The aim's PAYLOAD tiles (#1058 D2b), inset a size smaller. A CHILD of the footprint layer, so it wears
+	# the footprint's modulate and z by construction: a watch aim or a player's palette reaches the insets
+	# with no second write to forget. Its own tileset, built here rather than copied, because its one tile
+	# is generated art. None on a headless Play board, whose overlays are bare Node2Ds.
+	if hover_overlay is TileMapLayer:
+		_install_payload_overlay()
 	# The two range fills under the move layer (#1066), each a duplicate of it, tinted, and placed
 	# UNDER it in tree order: your blue, then your red beneath it, then the enemy's purple beneath
 	# both. THREAT is inserted first and REACH second, because move_child(x, move_overlay.get_index())
@@ -560,6 +584,8 @@ func _ready() -> void:
 	_squad_lines_2d.name = "SquadLines2D"
 	_squad_lines_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_squad_lines_2d)
+	# The moments' clock (#367) runs only while one is in the air.
+	set_process(false)
 
 
 # The flat view's half of MoveGrid (#1074): the move tileset's one tile, drawn from the same rule the
@@ -589,6 +615,35 @@ func move_grid_texture() -> Texture2D:
 	return _move_grid_texture
 
 
+# The flat view's half of InsetSquare (#1058 D2b): one atlas tile, cut at the footprint's own tile
+# size so an inset can never come out a different size from the cell it sits in.
+func _install_payload_overlay() -> void:
+	var tile_set := TileSet.new()
+	tile_set.tile_size = (hover_overlay as TileMapLayer).tile_set.tile_size
+	_payload_size = tile_set.tile_size.x
+	_payload_source = TileSetAtlasSource.new()
+	_payload_source.texture = ImageTexture.create_from_image(InsetSquare.image(_payload_size))
+	_payload_source.texture_region_size = tile_set.tile_size
+	_payload_source.create_tile(ATLAS_COORDS)
+	tile_set.add_source(_payload_source, SOURCE_ID)
+	payload_overlay = TileMapLayer.new()
+	payload_overlay.name = "PayloadOverlay"
+	payload_overlay.tile_set = tile_set
+	hover_overlay.add_child(payload_overlay)
+
+
+# A turned inset knob, flat-view half: a fresh texture, which every painted cell reads.
+# BoardOverlays.restyle_inset is the diorama's twin.
+func restyle_payload_inset() -> void:
+	if _payload_source == null:
+		return
+	_payload_source.texture = ImageTexture.create_from_image(InsetSquare.image(_payload_size))
+
+
+func payload_inset_texture() -> Texture2D:
+	return _payload_source.texture if _payload_source != null else null
+
+
 func show_sight_trace(trace: Reach.SightTrace) -> void:
 	sight_trace = trace
 	sight_trace_version += 1
@@ -607,12 +662,21 @@ func clear_sight_trace() -> void:
 
 # The hovered aim's timing (Conduction.Sweep.steps): the flash plays it. The SAME steps keep the
 # running loop, so a re-hover of one aim never restarts the travel.
-func set_aim_flash(steps: Dictionary[Vector2i, Array]) -> void:
-	_aim_flash.show_steps(steps)
+#
+# `insets` are the aim's PAYLOAD tiles (#1058 D2b) -- the ones only what it drops reaches. They are
+# painted here rather than through show_overlay because they live and die with the flash: every door
+# that takes the flash down takes them with it.
+func set_aim_flash(steps: Dictionary[Vector2i, Array], insets: Array[Vector2i] = []) -> void:
+	_aim_flash.show_steps(steps, insets)
+	if payload_overlay != null:
+		payload_overlay.clear()
+		draw_cells(payload_overlay, insets, ATLAS_COORDS)
 
 
 func clear_aim_flash() -> void:
 	_aim_flash.clear()
+	if payload_overlay != null:
+		payload_overlay.clear()
 
 
 # How white each footprint tile is this frame -- what OverlayMirror copies into the diorama.
@@ -779,7 +843,12 @@ static func _corner_height(cell: Vector2i, offset: Vector2i, board: BoardContext
 # "state": SquadLines2D.Strain}. The caller says WHERE each body is drawn, because only it knows which
 # of a unit's stand-ins is showing (its projected cell, a hover ghost, a formation ghost); this store
 # turns that into geometry, and nothing else does.
-func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardContext) -> void:
+#
+# `hostile` is the SIDE of the whole draw (#1109): an enemy squad's lines wear the enemy colour. ONE
+# side per draw, which holds because no caller shows two sides' squads at once -- a caller that ever
+# must would need the flag per link and per bubble instead.
+func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardContext,
+		hostile := false) -> void:
 	if bubbles.is_empty() and links.is_empty() and squad_outline.is_empty() \
 			and squad_tether_chords.is_empty():
 		return   # idempotent -- every exit path clears, and the version moves only on real change
@@ -791,9 +860,11 @@ func show_squad_lines(bubbles: Array, links: Array[Dictionary], board: BoardCont
 	var chords: Array[Dictionary] = []
 	for link: Dictionary in links:
 		chords.append({"chord": SquadLines2D.chord(link["from"], link["to"], board),
-				"state": link.get("state", SquadLines2D.Strain.SOLID)})
+				"state": link.get("state", SquadLines2D.Strain.SOLID),
+				"from": link["from"], "to": link["to"]})
 	squad_outline = outline
 	squad_tether_chords = chords
+	squad_lines_hostile = hostile
 	_rebuild_squad_tethers()
 
 
@@ -807,17 +878,142 @@ func restyle_squad_lines() -> void:
 	_rebuild_squad_tethers()
 
 
-# THE ONE derivation from chord to strokes, so the draw path and the knob path cannot disagree.
+# THE ONE derivation from chord to strokes, so the draw path and the knob path cannot disagree. It also
+# settles the two facts the standing set and the moments decide about each other (#367): which
+# standing tethers a draw-in is standing in for, and which moments have a standing tether to hand to.
 func _rebuild_squad_tethers() -> void:
 	var built: Array[Dictionary] = []
+	var drawn: Array[Dictionary] = []
 	for entry: Dictionary in squad_tether_chords:
-		built.append({"strokes": SquadLines2D.tether(entry["chord"]), "state": entry["state"]})
+		var tether := {"strokes": SquadLines2D.tether(entry["chord"]), "state": entry["state"]}
+		built.append(tether)
+		if not _drawing_in(entry["from"], entry["to"]):
+			drawn.append(tether)
+	for moment: Dictionary in squad_tether_moments:
+		moment["standing"] = _has_standing_tether(moment["from"], moment["to"])
 	squad_tethers = built
+	drawn_squad_tethers = drawn
 	squad_lines_version += 1
 	if _squad_lines_2d != null:
 		_squad_lines_2d.outline = squad_outline
-		_squad_lines_2d.tethers = squad_tethers
+		_squad_lines_2d.tethers = drawn_squad_tethers
+		_squad_lines_2d.hostile = squad_lines_hostile
+		_squad_lines_2d.moments = squad_tether_moments
 		_squad_lines_2d.refresh()
+
+
+# --- Membership moments (#367) ------------------------------------------------------------------
+# SquadTetherPresenter decides WHICH moments play; this is where they live while they do, the same
+# store/two-views shape as the tethers. Each link is {"from": member cell, "to": leader cell,
+# "moment": SquadLines2D.Moment, "delay": seconds before it starts, "hostile": whose squad (#1109)}.
+
+func play_tether_moments(links: Array[Dictionary], board: BoardContext) -> void:
+	if links.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	for link: Dictionary in links:
+		var entry := {"from": link["from"], "to": link["to"],
+				"chord": SquadLines2D.chord(link["from"], link["to"], board),
+				"moment": link["moment"], "start_msec": now + int(float(link.get("delay", 0.0)) * 1000.0),
+				"standing": false, "hostile": bool(link.get("hostile", false)),
+				"leader_died": bool(link.get("leader_died", false)), "survivor": int(link.get("survivor", 0))}
+		if link.has("follow"):
+			entry["follow"] = int(link["follow"])
+			entry["follow_end"] = int(link["follow_end"])
+		if link.has("held_by"):
+			entry["held_by"] = int(link["held_by"])
+			entry["snap"] = INF
+		squad_tether_moments.append(entry)
+	_rebuild_squad_tethers()
+	set_process(true)
+
+
+func clear_tether_moments() -> void:
+	if squad_tether_moments.is_empty():
+		return
+	squad_tether_moments = []
+	_rebuild_squad_tethers()
+	set_process(false)
+
+
+# The moments' clock: a finished one leaves, and the tether it stood in for comes back. A death's
+# PULSE flashes whoever it runs to as it arrives (#1104) -- on THIS clock rather than a tween's delay,
+# which the modal lock and the kill's hitstop would pull out of step with the light.
+func _process(_delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	var live: Array[Dictionary] = []
+	for moment: Dictionary in squad_tether_moments:
+		var elapsed := float(now - int(moment["start_msec"])) / 1000.0
+		if moment.has("held_by"):
+			_await_the_snap(moment, now)
+		if moment.has("follow"):
+			_follow(moment, elapsed)
+		var drawn := SquadLines2D.moment_at(moment["moment"], moment["chord"], elapsed, moment["standing"],
+				true, false, SquadLines2D.snap_seconds(moment))
+		if int(moment["moment"]) == SquadLines2D.Moment.PULSE and elapsed >= SquadLines2D.PULSE_SECONDS \
+				and not moment.get("flashed", false):
+			moment["flashed"] = true
+			_flash_survivor(int(moment.get("survivor", 0)))
+		if not drawn["done"]:
+			live.append(moment)
+	if live.size() != squad_tether_moments.size():
+		squad_tether_moments = live
+		_rebuild_squad_tethers()
+	if squad_tether_moments.is_empty():
+		set_process(false)
+
+
+# A held break (#1104, the dev's wile e coyote hang) snaps when its attack stamps the hang's end: the
+# stamp is the attack's, read here rather than copied at the blow, because the hang starts only when
+# the body ARRIVES. An attack that is gone snaps it at once, so a break can never hold for ever.
+func _await_the_snap(moment: Dictionary, now: int) -> void:
+	var attack := instance_from_id(int(moment["held_by"])) as AttackAction
+	var at := now if attack == null else attack.tether_snap_msec
+	if at <= 0:
+		return
+	moment["snap"] = maxf(float(at - int(moment["start_msec"])) / 1000.0, 0.0)
+	moment.erase("held_by")
+
+
+# A break at the ledge RIDES THE BODY there (#1104, the dev off the mockup): until it snaps, the
+# shoved body's end of the chord is wherever that body is now, and at the snap it lets go and stays
+# put, so the pieces fall from where the body hung. Only x/z move, off the one derivation the sprite
+# is placed from; the height stays the struck cell's, which is the lip's -- the height a body holds
+# over a hole.
+func _follow(moment: Dictionary, elapsed: float) -> void:
+	var unit := instance_from_id(int(moment["follow"])) as Unit
+	if elapsed >= SquadLines2D.snap_seconds(moment) or unit == null or unit.is_queued_for_deletion():
+		moment.erase("follow")
+		return
+	var chord: PackedVector3Array = moment["chord"]
+	var end := int(moment["follow_end"])
+	var at := UnitMirror.board_xz(unit)
+	chord[end] = Vector3(at.x, chord[end].y, at.y)
+	moment["chord"] = chord
+
+
+# The one a PULSE ran to, if it is still on the board. #217's setting stills the flash with the light.
+func _flash_survivor(id: int) -> void:
+	if id == 0 or not BoardOverlays.beams_animating():
+		return
+	var unit := instance_from_id(id) as Unit
+	if unit != null and not unit.is_queued_for_deletion():
+		unit.visuals.play_loss_flash()
+
+
+# Is a draw-in, running or waiting its turn, standing in for this pair's tether?
+func _drawing_in(from: Vector2i, to: Vector2i) -> bool:
+	for moment: Dictionary in squad_tether_moments:
+		if moment["moment"] == SquadLines2D.Moment.DRAW_IN and moment["from"] == from and moment["to"] == to:
+			return true
+	return false
+
+
+func _has_standing_tether(from: Vector2i, to: Vector2i) -> bool:
+	for entry: Dictionary in squad_tether_chords:
+		if entry["from"] == from and entry["to"] == to:
+			return true
+	return false
 
 
 # The refused click (#1070): pluck every STRAINED tether. A stamp both views read against one clock.
@@ -1062,19 +1258,98 @@ func restyle_leash() -> void:
 	if zone_highlight_overlay != null:
 		zone_highlight_overlay.modulate = ZONE_HIGHLIGHT_MODULATE
 
-# One method for every zone kind: each zone draws into the layer registered for its kind, and a
-# kind with no layer simply isn't drawn. `hidden` drops zones that are done with (a captured
-# point stops glowing) without needing a second redraw entry point.
+# One method for every zone kind. A kind a player sees goes into drawn_zones, the store both views
+# draw marks from; an authoring kind is washed on its registered layer. `hidden` drops zones that are
+# done with (a captured point stops glowing) without needing a second redraw entry point.
 func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
 	for layer in zone_layer_map.values():
 		layer.clear()
+	var drawn: Array[Dictionary] = []
 	for name in zones.zone_names():
 		if hidden.has(name):
 			continue
-		var layer = zone_layer_map.get(zones.kind_of(name))
+		var kind: ZoneManager.Kind = zones.kind_of(name)
+		if not ZoneManager.AUTHORING_KINDS.has(kind):
+			drawn.append({"name": name, "kind": kind, "cells": zones.cells_in(name)})
+		var layer = zone_layer_map.get(kind)
 		if layer == null:
 			continue
 		draw_cells(layer, zones.cells_in(name), ATLAS_COORDS)
+	if drawn != drawn_zones:
+		drawn_zones = drawn
+		drawn_zones_version += 1
+	_rebuild_zone_marks()
+
+
+# A zone-mark knob moved (#955): the sprites hold the art they were built with, so build them again.
+func restyle_zone_marks() -> void:
+	_rebuild_zone_marks()
+
+
+# Light every drawn zone of `kind`, or none (#955 part 3). A hover is a discrete event, so the
+# version moves and both views rebuild only when the lit kind changes.
+func set_lit_zone_kind(kind: int) -> void:
+	if kind == lit_zone_kind:
+		return
+	lit_zone_kind = kind
+	drawn_zones_version += 1
+	_rebuild_zone_marks()
+
+
+func is_lit(zone: Dictionary) -> bool:
+	return lit_zone_kind != MissionRules.NO_ZONE and int(zone["kind"]) == lit_zone_kind
+
+
+# The kinds drawn_zones holds -- what the objectives panel may light or visit.
+func drawn_zone_kinds() -> Array[int]:
+	var kinds: Array[int] = []
+	for zone in drawn_zones:
+		var kind := int(zone["kind"])
+		if not kinds.has(kind):
+			kinds.append(kind)
+	return kinds
+
+
+# The flat view's zone marks (#955): per drawn zone cell, the SAME rim texture the diorama draws,
+# sized to this tileset's own tile, plus one emblem per zone on the cell ZoneMarks picks, all in the
+# kind's colour. Sprites for the watch marks' reason: a tile layer holds one tile per cell, and the rim
+# differs from cell to cell. The wall is the diorama's alone.
+func _rebuild_zone_marks() -> void:
+	for sprite in _zone_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	_zone_sprites.clear()
+	if board_tilemap == null or icon_overlay == null:
+		return
+	var tile := Vector2.ONE * ZoneMarks.TEXELS
+	var grid := board_tilemap as TileMapLayer
+	if grid != null and grid.tile_set != null:
+		tile = Vector2(grid.tile_set.tile_size)
+	var art_scale := tile / float(ZoneMarks.TEXELS)
+	for zone in drawn_zones:
+		var kind: ZoneManager.Kind = zone["kind"]
+		var cells: Array[Vector2i] = []
+		cells.assign(zone["cells"])
+		var colour := ZoneMarks.colour_of(kind)
+		var masks := ZoneMarks.cell_masks(cells)
+		var lit := is_lit(zone)
+		for cell: Vector2i in masks:
+			var rim := Sprite2D.new()
+			rim.texture = ZoneMarks.texture(masks[cell], lit)
+			rim.modulate = colour
+			rim.scale = art_scale
+			rim.z_index = ZONE_MARK_Z_INDEX
+			rim.position = board_tilemap.map_to_local(cell)
+			icon_overlay.add_child(rim)
+			_zone_sprites.append(rim)
+		var emblem := Sprite2D.new()
+		emblem.texture = ZoneMarks.emblem_of(kind)
+		emblem.modulate = colour
+		emblem.z_index = RING_Z_INDEX
+		emblem.position = board_tilemap.map_to_local(ZoneMarks.emblem_cell(cells))
+		icon_overlay.add_child(emblem)
+		_zone_sprites.append(emblem)
+
 
 # The aim's live feedback on the UNITS it would hit: their sprites pulse, while the red reach layer
 # never changes. The tiles say it separately, by flashing in travel order (set_aim_flash) -- every
@@ -1161,15 +1436,22 @@ func clear_hover_ghosts() -> void:
 # you execute). Takes {"cell": Vector2i, "state": Terrain.TileState} entries (mirrors
 # show_knockback_preview's shape) so each deposit draws its OWN icon — was BURNING-only until
 # Burrow (#84) made a second previewable state real. Ephemeral: redrawn on plan change.
+# A {"cell", "gas": Gas.Kind} entry is a gas the pass leaves (#508), drawn with the kind's own puff.
 func show_terrain_preview(deposits: Array) -> void:
 	clear_terrain_preview()
 	for deposit in deposits:
-		var state: Terrain.TileState = deposit["state"]
-		if not TERRAIN_STATE_ICONS.has(state):
+		var icon: Texture2D = null
+		if deposit.has("gas"):
+			var kind: Gas.Kind = deposit["gas"]
+			icon = GasPuffArt.icon(kind)
+		else:
+			var state: Terrain.TileState = deposit["state"]
+			icon = TERRAIN_STATE_ICONS.get(state, null)
+		if icon == null:
 			continue
 		var cell: Vector2i = deposit["cell"]
 		var sprite := Sprite2D.new()
-		sprite.texture = TERRAIN_STATE_ICONS[state]
+		sprite.texture = icon
 		sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
 		sprite.z_index = TERRAIN_Z_INDEX
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE
@@ -1189,8 +1471,18 @@ func clear_terrain_preview() -> void:
 # endpoints-plus-direction reconstruction can no longer describe it (and its `while cursor != to`
 # was an infinite loop for any bent pair). A REMOVED target (shoved into a void) gets a trail and
 # neither ghost nor hide: its sprite stays where it stands, matching the unpublished projection.
-func show_knockback_preview(shoves: Array) -> void:
+# `holds` are the cells where a target's weight held a whole shove (#1186): each gets the hold icon
+# in the trail's tint and nothing else, since that unit stays put. Riding the trail's array and
+# parent is what clears, retints and mirrors it.
+func show_knockback_preview(shoves: Array, holds: Array[Vector2i] = []) -> void:
 	clear_knockback_preview()
+
+	var marked := {}
+	for cell in holds:
+		if marked.has(cell):
+			continue
+		marked[cell] = true
+		knockback_preview_sprites.append(_create_arrow_sprite(cell, PATH_HELD, KNOCKBACK_MODULATE))
 
 	var final_cell := {}   # Unit -> Vector2i; entries arrive in resolve order, so the last one wins
 	var removed := {}      # Unit -> bool, same last-one-wins
@@ -1573,11 +1865,12 @@ func restyle_guard_link() -> void:
 # yours to the enemy and theirs to you. Axiom 4's telegraph: a watch is never a surprise, and the
 # victim staying undirected is what keeps it a puzzle rather than a warning label.
 #
-# `watch_cells` is THE store and this is its only writer; the 2D sprites below and OverlayMirror's
-# 3D markers are two projections of it, never two derivations (the parallel-stacks rule). Called
-# from the same three moments the ward markers are: a pass settling, a faction's turn starting, and
-# a board load.
+# `watches` is THE store and this is its only writer; the 2D sprites below and OverlayMirror's
+# 3D markers are two projections of its cells, never two derivations (the parallel-stacks rule).
+# Called from the same three moments the ward markers are: a pass settling, a faction's turn
+# starting, and a board load.
 func redraw_watch_marks(units: Array[Unit], plan: ResolvedPlan = null) -> void:
+	watches = []
 	watch_cells = []
 	for unit in units:
 		if not is_instance_valid(unit) or unit.watch == null:
@@ -1596,10 +1889,19 @@ func redraw_watch_marks(units: Array[Unit], plan: ResolvedPlan = null) -> void:
 		# sources, exactly as GuardWard.in_range is asked by three callers.
 		if not unit.watch.is_anchored(unit.movement.cell):
 			continue
+		watches.append(unit.watch)
 		for cell in unit.watch.footprint:
 			if not watch_cells.has(cell):
 				watch_cells.append(cell)
 	_rebuild_watch_sprites()
+
+# The marked watches covering this cell, in board order — what a tile's Inspect names.
+func watches_covering(cell: Vector2i) -> Array[Watch]:
+	var out: Array[Watch] = []
+	for watch in watches:
+		if watch.covers(cell):
+			out.append(watch)
+	return out
 
 # Does this pass end that unit's watch? Reads the pass's own COPY, which is where the resolver
 # records it -- never a second derivation of the rule (Law #4). A watch the pass FIRED counts too:
@@ -1915,6 +2217,25 @@ func set_projected_unit_highlighted(unit: Unit, value: bool) -> void:
 		return
 	sprite.modulate = PROJECTED_HIGHLIGHT if value else PROJECTED_MODULATE
 
+# The refusal flash on the ghost standing in for a unit, whose real sprite is hidden (#1150). The
+# tween is bound to the ghost, so a redraw that frees the ghost ends the flash with it.
+func play_projected_unit_invalid_flash(unit: Unit) -> void:
+	var ghost := _ghost_for(unit)
+	if ghost == null:
+		return
+	if ghost.has_meta(GHOST_FLASH_META):
+		var previous: Tween = ghost.get_meta(GHOST_FLASH_META)
+		if previous != null and previous.is_valid():
+			previous.kill()
+		ghost.position = ghost.get_meta(GHOST_REST_META)
+	else:
+		ghost.set_meta(GHOST_REST_META, ghost.position)
+	ghost.modulate = PROJECTED_MODULATE
+	var tween := ghost.create_tween()
+	tween.set_parallel(true)
+	UnitVisuals.tween_invalid_flash(tween, ghost, PROJECTED_MODULATE, ghost.get_meta(GHOST_REST_META))
+	ghost.set_meta(GHOST_FLASH_META, tween)
+
 func clear_projected_unit(unit: Unit):
 	if not projected_unit_sprites.has(unit):
 		return
@@ -1927,8 +2248,16 @@ func clear_projected_unit(unit: Unit):
 		
 	projected_unit_sprites.erase(unit)
 	
+# A key can be a unit freed since its ghost was drawn, which clear_projected_unit's typed parameter
+# cannot take, so a freed key is dropped here (_purge_unit_entry's shape).
 func clear_all_projected_sprites():
 	for unit in projected_unit_sprites.keys().duplicate():
+		if not is_instance_valid(unit):
+			var sprite: Variant = projected_unit_sprites[unit]
+			if is_instance_valid(sprite):
+				(sprite as Node).queue_free()
+			projected_unit_sprites.erase(unit)
+			continue
 		clear_projected_unit(unit)
 		
 func redraw_projected_units():

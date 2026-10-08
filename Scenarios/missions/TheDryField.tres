@@ -41,6 +41,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_6wroh"]
@@ -51,7 +52,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
@@ -74,14 +74,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_ewwln"), SubResource("Resource_qeafl")])
 equipped_index = 0
 worn_armor_index = 1
@@ -108,6 +106,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_u1883"]
@@ -118,7 +117,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
@@ -141,14 +139,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_emg0v"), SubResource("Resource_4g15e")])
 equipped_index = 0
 worn_armor_index = 1
@@ -175,6 +171,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_n31xq"]
@@ -185,7 +182,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
@@ -208,14 +204,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_kuxfe"), SubResource("Resource_4gknw")])
 equipped_index = 0
 worn_armor_index = 1
@@ -242,6 +236,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_2ljva"]
@@ -252,7 +247,6 @@ base_stats = Dictionary[int, int]({
 0: 22,
 1: 6,
 2: 8,
-3: 5,
 4: 5,
 5: 4,
 6: 5,
@@ -278,14 +272,12 @@ stats = Dictionary[int, int]({
 0: 22,
 1: 6,
 2: 8,
-3: 5,
 4: 5,
 5: 4,
 6: 5,
 7: 5
 })
 current_hp = 22
-current_will = 5
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_gem78"), SubResource("Resource_khbsf")])
 equipped_index = 0
 worn_armor_index = 1
@@ -312,6 +304,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_un4od"]
@@ -322,7 +315,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
@@ -345,14 +337,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 6,
 2: 3,
-3: 4,
 4: 5,
 5: 4,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_l7cbb"), SubResource("Resource_tbmit")])
 equipped_index = 0
 worn_armor_index = 1
@@ -391,6 +381,7 @@ size = 1
 inscriptions = Array[ExtResource("18_vnqxw")]([SubResource("Resource_rdfi3")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_w65ut"]
@@ -399,6 +390,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_kjqhg"]
@@ -409,7 +401,6 @@ base_stats = Dictionary[int, int]({
 0: 18,
 1: 3,
 2: 4,
-3: 6,
 4: 4,
 5: 5,
 6: 4,
@@ -439,14 +430,12 @@ stats = Dictionary[int, int]({
 0: 18,
 1: 3,
 2: 4,
-3: 6,
 4: 4,
 5: 5,
 6: 4,
 7: 4
 })
 current_hp = 18
-current_will = 6
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_twq6n"), SubResource("Resource_w65ut")])
 equipped_index = 0
 worn_armor_index = 1
@@ -472,6 +461,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("8_4g15e")]([ExtResource("9_u1883")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_u7qn7"]
@@ -482,7 +472,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 3,
-3: 4,
 4: 4,
 5: 6,
 6: 5,
@@ -505,14 +494,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 3,
-3: 4,
 4: 4,
 5: 6,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 4
 inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_ov2o0"), SubResource("Resource_pj7se")])
 equipped_index = 0
 worn_armor_index = 1

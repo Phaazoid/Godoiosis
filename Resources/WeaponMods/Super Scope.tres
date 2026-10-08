@@ -9,3 +9,4 @@
 script = ExtResource("4_grumn")
 display_name = "Super Scope"
 granted_attacks = Array[ExtResource("2_e7g6e")]([ExtResource("3_s7gn7")])
+weight = 1

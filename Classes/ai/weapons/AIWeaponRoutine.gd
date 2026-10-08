@@ -27,7 +27,7 @@ class_name AIWeaponRoutine
 # ai-tactics.md, "Weapon routines".
 
 # Which verbs a routine may be asked about: the weapon SELF-abilities -- the Weapon Action
-# submenu's own set (Unit.has_weapon_actions) -- never RESCUE/INTIMIDATE/RALLY. A family cannot
+# submenu's own set (Unit.has_weapon_actions) -- never RESCUE. A family cannot
 # veto a verb that is not its own.
 #
 # OVERWATCH joined it in #751, because that set has included a watchable attack since #413 and this
@@ -89,5 +89,5 @@ func allows_preparation(_unit: Unit, _verb: BaseAction.ActionType, _board: Board
 # Is this candidate a LAST RESORT for its own member? Asked by AITactics._best_candidate_for after
 # the hypothetical is resolved and scored. A deferred candidate loses to every candidate the same
 # member did not defer and is still taken when it has nothing else -- deferred, never deleted.
-func defers_candidate(_unit: Unit, _candidate: AttackAction, _plan: ResolvedPlan, _score: Vector3i) -> bool:
+func defers_candidate(_unit: Unit, _candidate: AttackAction, _plan: ResolvedPlan, _score: AIScore) -> bool:
 	return false

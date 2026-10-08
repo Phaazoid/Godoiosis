@@ -63,7 +63,7 @@ func _init() -> void:
 static func open(game_node: Node, mission_paths: Array[String], other_paths: Array[String],
 		dev_tools := true) -> MissionSelectScreen:
 	var screen := MissionSelectScreen.new()
-	game_node.ui_layer.add_child(screen)
+	game_node.card_layer.add_child(screen)
 	screen._build(mission_paths, other_paths, dev_tools)
 	return screen
 

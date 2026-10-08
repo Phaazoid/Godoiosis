@@ -14,6 +14,9 @@
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
+const H := preload("res://tests/support/squad_fixtures.gd")
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)
 
 var _main: Node
 var game: Node2D
@@ -92,7 +95,7 @@ func test_reporting_from_the_pause_menu_leaves_the_board_playable() -> void:
 
 	var card: Node = _first_modal_of(ReportPanel)
 	assert_object(card).is_not_null()
-	card.finished.emit(false)          # Cancel
+	card.form.finished.emit(false)          # Cancel
 	await _frames(4)
 
 	# The pause menu comes back rather than dumping them into the board mid-thought.
@@ -116,7 +119,7 @@ func test_a_second_escape_does_not_stack_a_second_card() -> void:
 	assert_int(_modals().size()).is_equal(1)
 
 	var card: Node = _first_modal_of(ReportPanel)
-	card.finished.emit(false)
+	card.form.finished.emit(false)
 	await _frames(4)
 
 
@@ -130,7 +133,7 @@ func test_a_locked_board_can_still_be_reported_on() -> void:
 		await _frames(4)
 		var card: Node = _first_modal_of(ReportPanel)
 		assert_object(card).is_not_null()
-		card.finished.emit(false)
+		card.form.finished.emit(false)
 		await _frames(4)
 		assert_int(_modals().size()).is_equal(0)
 
@@ -272,7 +275,7 @@ func test_a_card_freezes_the_game_and_closing_it_thaws() -> void:
 	assert_bool(game.hover_presenter.can_process()).is_false()
 
 	var card: Node = _first_modal_of(ReportPanel)
-	card.finished.emit(false)
+	card.form.finished.emit(false)
 	await _frames(4)
 	assert_bool(game.can_process()).is_true()
 	assert_bool(game.camera_controller.can_process()).is_true()
@@ -338,7 +341,7 @@ func test_the_camera_does_not_move_while_a_card_is_up() -> void:
 
 	# Not vacuous: the same held key MUST reach the camera once the card is gone, or this test
 	# would pass just as well against a camera that never panned at all.
-	_first_modal_of(ReportPanel).finished.emit(false)
+	_first_modal_of(ReportPanel).form.finished.emit(false)
 	await _frames(10)
 	assert_vector(camera.keyboard_direction).is_not_equal(Vector2.ZERO)
 	Input.action_release("cam_right")
@@ -357,7 +360,7 @@ func test_the_freeze_survives_the_handoff_back_to_the_pause_menu() -> void:
 	await _frames(4)
 	assert_bool(game.can_process()).is_false()
 
-	_first_modal_of(ReportPanel).finished.emit(false)
+	_first_modal_of(ReportPanel).form.finished.emit(false)
 	await _frames(4)
 	assert_bool(game.can_process()).is_false()   # the pause menu is back
 
@@ -394,7 +397,7 @@ func test_dev_controls_outlive_the_modal_lock() -> void:
 	assert_bool(dev.can_process()).is_true()
 
 	var card: Node = _first_modal_of(ReportPanel)
-	card.finished.emit(false)
+	card.form.finished.emit(false)
 	await _frames(4)
 
 
@@ -407,7 +410,11 @@ func test_the_report_hotkey_fires_behind_a_modal() -> void:
 	# rather than to the player's F3: DevController is PROCESS_MODE_ALWAYS and fires behind a card,
 	# where game.gd._input receives nothing while one is up (see the player case below).
 	assert_bool(DevTools.enabled()).is_true()   # the gate; without this the case passes vacuously
-	var before: int = _report_dirs().size()
+	# A report already on disk, which this case must leave alone (#1147): its cleanup used to queue
+	# every folder under user://reports, deleting the saved reports of whoever ran the suite.
+	var planted := "user://reports/__planted_by_1147"
+	DirAccess.make_dir_recursive_absolute(planted)
+	var before: Array[String] = _report_dirs()
 
 	game._open_pause_menu()
 	await _frames(4)
@@ -419,10 +426,10 @@ func test_the_report_hotkey_fires_behind_a_modal() -> void:
 	game.dev_controller._input(press)
 	await _frames(4)
 
-	var after: Array[String] = _report_dirs()
-	assert_int(after.size()).is_equal(before + 1)
-	for dir: String in after:
-		_written.append("user://reports/".path_join(dir))
+	assert_int(_new_report_dirs(before).size()).is_equal(1)
+	assert_bool(_written.has(planted)).override_failure_message(
+		"the cleanup queued a report folder this case did not write").is_false()
+	DirAccess.remove_absolute(planted)
 
 
 # ==============================================================================
@@ -440,7 +447,7 @@ func test_f3_opens_the_card_for_a_player() -> void:
 
 	assert_object(_first_modal_of(ReportPanel)).override_failure_message(
 		"F3 did not reach the report card").is_not_null()
-	_first_modal_of(ReportPanel).finished.emit(false)
+	_first_modal_of(ReportPanel).form.finished.emit(false)
 	await _frames(4)
 
 
@@ -489,7 +496,7 @@ func test_the_card_leaves_a_live_board_as_it_found_it() -> void:
 	await _frames(4)
 	var card: Node = _first_modal_of(ReportPanel)
 	assert_object(card).is_not_null()
-	card.finished.emit(false)
+	card.form.finished.emit(false)
 	await _frames(4)
 
 	assert_int(game.game_state).override_failure_message(
@@ -560,3 +567,162 @@ func test_an_empty_note_is_stated_rather_than_left_blank() -> void:
 	# in the reporter itself.
 	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "   ", "", "")
 	assert_str(summary).contains("(nothing typed)")
+
+
+# ==============================================================================
+#  The mission-end form (#1052)
+# ==============================================================================
+
+# A REAL ending, reached through MissionController.check() the way a pass reaches it. A banner built
+# by hand would skip _end_mission, which is where the frame is grabbed and the form handed to
+# BugReporter -- the two things these cases exist to see.
+func _end_a_mission() -> MissionEndBanner:
+	var mc: MissionController = game.mission_controller
+	mc._close_mission_select()
+	game.scenario_manager.clear_board()
+	game.game_state = game.GameState.IDLE
+	for x in range(4):
+		for y in range(2):
+			game.grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(3, 0))
+	var rout: Array[MissionRules.Objective] = [MissionRules.Objective.ROUT]
+	mc.set_objectives(rout)
+	mc._begin_turn()
+	mc.check()   # latches contested
+	foe.die()
+	mc.check()   # VICTORY -> _end_mission
+	await _frames(2)
+	var banner: MissionEndBanner = _first_modal_of(MissionEndBanner)
+	assert_object(banner).override_failure_message("fixture: the rout raised no banner").is_not_null()
+	return banner
+
+
+func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, faction), cell)
+	assert_object(unit).is_not_null()
+	return unit
+
+
+func _form_buttons(form: ReportForm) -> Array[String]:
+	var texts: Array[String] = []
+	for node: Node in form.find_children("*", "Button", true, false):
+		texts.append((node as Button).text)
+	return texts
+
+
+func _form_button(form: ReportForm, text: String) -> Button:
+	for node: Node in form.find_children("*", "Button", true, false):
+		if (node as Button).text == text:
+			return node as Button
+	return null
+
+
+func _note_box(form: ReportForm) -> TextEdit:
+	return form.find_children("*", "TextEdit", true, false)[0] as TextEdit
+
+
+# Only the folders this case wrote, so the cleanup never touches a report that was already there.
+func _new_report_dirs(before: Array[String]) -> Array[String]:
+	var fresh: Array[String] = []
+	for dir: String in _report_dirs():
+		if not before.has(dir):
+			fresh.append("user://reports/".path_join(dir))
+	_written.append_array(fresh)
+	return fresh
+
+
+func test_the_mission_end_banner_asks_for_feedback() -> void:
+	# The dev's ruling: the ending carries the report form by default, starting on feedback, as PART
+	# of the card -- not a second card stacked over it -- and it cannot back out, because the
+	# banner's own buttons are the only ways off it.
+	var banner: MissionEndBanner = await _end_a_mission()
+	var form: ReportForm = banner.form
+	assert_object(form).is_not_null()
+	assert_bool(banner.is_ancestor_of(form)).override_failure_message(
+		"the form must be part of the banner, not a card over it").is_true()
+	assert_object(_first_modal_of(ReportPanel)).is_null()
+	assert_int(form.selected_kind()).is_equal(BugReporter.Kind.FEEDBACK)
+
+	var texts: Array[String] = _form_buttons(form)
+	assert_array(texts).contains(["Submit"])
+	assert_array(texts).not_contains(["Cancel"])
+
+	banner.chosen.emit(MissionEndBanner.Choice.STAY)
+	await _frames(2)
+
+
+func test_submitting_from_the_banner_files_feedback_and_leaves_the_banner_standing() -> void:
+	var before: Array[String] = _report_dirs()
+	var banner: MissionEndBanner = await _end_a_mission()
+	var form: ReportForm = banner.form
+	_note_box(form).text = "it said I won and I did"
+	_form_button(form, "Submit").pressed.emit()   # the real button, not the signal behind it
+	await _frames(4)
+
+	var fresh: Array[String] = _new_report_dirs(before)
+	assert_int(fresh.size()).override_failure_message("Submit on the banner filed nothing").is_equal(1)
+	var text := FileAccess.get_file_as_string(fresh[0].path_join("report.md"))
+	assert_str(text).contains("it said I won and I did")
+	assert_str(text).contains("# Feedback report")
+	assert_str(text).contains("MISSION_OVER")
+
+	# The card stays up with the outcome on its form, the verdict buttons still the way off, and the
+	# board still frozen behind it. Submit is gone -- one report per banner -- and no Close appeared.
+	assert_bool(is_instance_valid(banner) and banner.is_inside_tree()).is_true()
+	assert_bool(game.can_process()).is_false()
+	assert_array(_form_buttons(form)).not_contains(["Submit", "Close"])
+
+	banner.chosen.emit(MissionEndBanner.Choice.STAY)
+	await _frames(2)
+
+
+# An upload that takes a frame, which the real one never does headless: is_configured refuses, so
+# send_report returns before its first await and the whole send is over inside the Submit press --
+# "leave while it is in flight" could not happen at all without this.
+class _SlowUploader extends ReportUploader:
+	func send_report(_dir: String, _summary: String) -> bool:
+		await get_tree().process_frame
+		return false
+
+
+func test_leaving_the_banner_mid_send_still_files_the_report() -> void:
+	# The ordering case. The upload outlives the form: Mission Select frees the banner while the send
+	# is in flight, and the report must still land with nothing left to call back into.
+	var before: Array[String] = _report_dirs()
+	var banner: MissionEndBanner = await _end_a_mission()
+	var slow := _SlowUploader.new()
+	game.bug_reporter.add_child(slow)
+	game.bug_reporter._uploader = slow
+
+	var form: ReportForm = banner.form
+	_note_box(form).text = "leaving before it lands"
+	_form_button(form, "Submit").pressed.emit()
+	banner.chosen.emit(MissionEndBanner.Choice.MISSION_SELECT)   # the send has not come back yet
+	await _frames(6)
+
+	assert_bool(is_instance_valid(form)).override_failure_message(
+		"fixture: the form outlived the banner, so nothing here was mid-send").is_false()
+	var fresh: Array[String] = _new_report_dirs(before)
+	assert_int(fresh.size()).is_equal(1)
+	assert_str(FileAccess.get_file_as_string(fresh[0].path_join("report.md"))).contains(
+		"leaving before it lands")
+
+
+func test_the_banner_with_its_form_fits_the_screen() -> void:
+	# #418's shape: a card taller than the viewport hangs off both edges, with its buttons out of
+	# reach. The form roughly doubles the banner. Asked of the outermost CONTAINER, because a plain
+	# Control aggregates nothing, and against the viewport's own height rather than a pixel count.
+	var banner: MissionEndBanner = await _end_a_mission()
+	var centre: CenterContainer = null
+	for child: Node in banner.get_children():
+		if child is CenterContainer:
+			centre = child as CenterContainer
+	assert_object(centre).is_not_null()
+	var wanted: float = centre.get_combined_minimum_size().y
+	var room: float = (_main.get_node("GameContainer/GameView") as SubViewport).get_visible_rect().size.y
+	assert_float(wanted).override_failure_message(
+		"the banner wants %.0fpx of a %.0fpx screen" % [wanted, room]).is_less_equal(room)
+
+	banner.chosen.emit(MissionEndBanner.Choice.STAY)
+	await _frames(2)

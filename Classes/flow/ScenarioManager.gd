@@ -81,6 +81,11 @@ var current_roster := ""
 # mission's ENDING, which a deployment cap has nothing to do with.
 var current_deployment_cap := 0
 
+# Whether the CURRENT board opens the pre-mission screen (#46). Same store and same four writers as
+# the roster above. TRUE at rest, unlike in_demo below: clear_board's false would switch the phase off
+# for every suite and Sandbox board that authors a roster after a clear.
+var current_offers_pre_mission := true
+
 # Does the CURRENT board appear in a shipped build's mission list (#860)? Same store and same four
 # writers as the roster above -- apply_scenario sets it from the loaded board, clear_board zeroes
 # it, the dev Scenario tab writes it when you tick the box, capture_scenario reads it back out.
@@ -104,6 +109,20 @@ static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
 			continue
 		result.append(entry)
 	return result
+
+# Armed Guards (#414), after every spawn: a pair cannot be re-linked until both ends exist. A ward
+# whose entry never spawned (blocked cell, off-map) simply loses the Guard rather than failing the
+# load, matching how a squad saved without a leader degrades to solos. Static so both loaders call
+# it (#46); unit_of_entry maps each ScenarioUnitEntry to the Unit it spawned.
+static func relink_guards(scenario: ScenarioData, unit_of_entry: Dictionary) -> void:
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		if entry.guard_ward_index < 0 or entry.guard_ward_index >= scenario.unit_entries.size():
+			continue
+		var ward_entry: ScenarioUnitEntry = scenario.unit_entries[entry.guard_ward_index]
+		if not unit_of_entry.has(ward_entry):
+			continue
+		var guarding_unit: Unit = unit_of_entry[entry]
+		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
 
 # The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and
 # the error path (mirrored into status_label when given, #168) all live there, not here.
@@ -162,20 +181,22 @@ func capture_board() -> BoardSnapshot:
 	snapshot.terrain_states = game.terrain_states.to_state_dict()
 	snapshot.terrain_state_turns = game.terrain_states.to_turns_dict()
 	snapshot.corner_heights = game.board_heights.to_corner_dict()
+	snapshot.gas = game.gas_field.to_dict()
 	snapshot.zones = game.zone_manager.to_dict()
 	return snapshot
 
 # Two things a load does are deliberately NOT here, so that routing apply_scenario through this
 # could not move the load path:
-#   - CameraController.refresh_bounds, which a scenario load has never done. The dev brush does, at
-#     its own three sites, and undo joins them there.
-#   - the CAPTURED-zone redraw. MissionController.restore_progress runs one immediately after a
+#   - CameraController.refresh_bounds. A load gets it from board_loaded (game.gd, #974); the dev
+#     brush does it at its own three sites, and undo joins them there.
+#   - the CAPTURED-zone redraw. MissionController.apply_scenario runs one immediately after a
 #     load and is the last writer either way; the plain redraw here is what an undo needs, since
 #     nothing else follows it.
 func restore_board(snapshot: BoardSnapshot) -> void:
 	grid.restore(snapshot.tile_data)
 	game.terrain_states.load_state_dict(snapshot.terrain_states, snapshot.terrain_state_turns)
 	game.board_heights.load_corner_dict(snapshot.corner_heights)
+	game.gas_field.load_dict(snapshot.gas)
 	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
 	overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.zone_manager.load_dict(snapshot.zones)
@@ -198,6 +219,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.roster = current_roster                         # #735: who it offers, if anyone
 	scenario.deployment_cap = current_deployment_cap         # #736: and how many of them
+	scenario.offers_pre_mission = current_offers_pre_mission   # #46: and whether they get a screen
 	scenario.in_demo = current_in_demo                       # #860: and whether it ships
 	scenario.camera_start = current_camera_start             # #234: where it opens, if authored
 	scenario.dialog_beats = current_dialog_beats.duplicate()       # #182/#397: Update must not wipe
@@ -231,6 +253,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 			entry.unit_data = unit.unit_data.duplicate(true)
 		entry.cell = unit.movement.cell
 		entry.must_survive = unit.must_survive   # #572: authored, and outside the #177 fork above
+		entry.ai_profile = unit.ai_profile   # #1230: the same, verbatim -- a stale name survives to be linted
 		entry.squad_id = squad_manager.squads.find(unit.squad)
 		entry.is_leader = unit.is_leader()
 		if entry.is_leader:
@@ -266,18 +289,16 @@ func load_scenario(path: String):
 		push_error("Could not load scenario at %s" % path)
 		return
 
-	apply_scenario(scenario)
+	apply_scenario(scenario, path)
+
+# Rebuild the board from a snapshot. path is the file this board answers to ("" = none).
+func apply_scenario(scenario: ScenarioData, path := "") -> void:
+	clear_board()
+	# Board identity, settled before board_loaded like the fields below: the header reads it (#967).
 	last_loaded_path = path
 
-# Rebuild the board from a snapshot; path bookkeeping stays in load_scenario.
-func apply_scenario(scenario: ScenarioData) -> void:
-	clear_board()
-
 	restore_board(BoardSnapshot.from_scenario(scenario))
-	game.mission_controller.set_objectives(scenario.objectives)
-	game.mission_controller.set_lose_conditions(scenario.lose_conditions, scenario.round_limit)   # #101
-	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested,
-			scenario.rounds_elapsed)
+	game.mission_controller.apply_scenario(scenario)   # objectives, lose conditions, the clock (#46)
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
 	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
 	game.ai_controller.set_ai_factions(scenario.ai_factions)
@@ -292,6 +313,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded
 	current_roster = scenario.roster              # #735; the mission-start doors draw from it (#737)
 	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
+	current_offers_pre_mission = scenario.offers_pre_mission   # #46: whether the phase opens on it
 	current_in_demo = scenario.in_demo            # #860: whether a shipped build lists it
 
 	var leaders_by_squad_id := {}
@@ -302,17 +324,13 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	for entry in valid_entries(scenario):
 		# Handed WITHOUT the old outer duplicate (#177): UnitFactory copies anyway, and the copy
 		# here was destroying resource_path — the provenance a reference entry exists to keep.
-		# The saved lifecycle is passed, not looked up (#116): a DOWNED entry may lie on ground
-		# nothing may STAND on -- deep water -- and without this the load would silently drop it.
-		# A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right.
-		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell,
-			entry.state_saved and entry.lifecycle_state == Unit.LifecycleState.DOWNED)
+		# The saved lifecycle is passed, not looked up (#116): a body may lie in deep water.
+		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell, entry.spawns_as_body())
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
 
-		unit.must_survive = entry.must_survive   # #572, and BEFORE the fork: apply_unit_state never
-												 # runs for a reference entry, and a VIP is cast
+		entry.apply_placement(unit)   # the VIP flag and a leader's squad fields, BEFORE the fork (#46)
 		if entry.state_saved:
 			entry.apply_unit_state(unit)
 
@@ -323,10 +341,6 @@ func apply_scenario(scenario: ScenarioData) -> void:
 
 		if entry.is_leader:
 			leaders_by_squad_id[entry.squad_id] = unit
-			unit.squad.squad_name = entry.squad_name
-			unit.squad.archetype = entry.squad_archetype
-			unit.squad.zone_name = entry.squad_zone
-			unit.squad.home_cell = entry.cell
 			if entry.squad_has_acted:
 				acted_squad_ids.append(entry.squad_id)   # applied AFTER the rebuild below
 		else:
@@ -343,23 +357,13 @@ func apply_scenario(scenario: ScenarioData) -> void:
 			squad_manager.join_squad(member, leader.squad)
 
 	# has_acted after the rebuild: join_squad is ungated, but assemble-then-mark-spent stays correct
-	# if the loader is ever routed through the player-facing gate (_formation_basics_ok).
+	# if the loader is ever routed through the player-facing gate (formation_block_reason).
 	for squad_id: int in acted_squad_ids:
 		var acted_leader: Unit = leaders_by_squad_id.get(squad_id)
 		if acted_leader != null:
 			squad_manager.set_has_acted(acted_leader.squad, true)
 
-	# Armed Guards (#414), after every spawn: a pair cannot be re-linked until both ends exist. A ward
-	# whose entry never spawned (blocked cell, off-map) simply loses the Guard rather than failing the
-	# load, matching how a squad saved without a leader degrades to solos above.
-	for entry in unit_of_entry:
-		if entry.guard_ward_index < 0 or entry.guard_ward_index >= scenario.unit_entries.size():
-			continue
-		var ward_entry: ScenarioUnitEntry = scenario.unit_entries[entry.guard_ward_index]
-		if not unit_of_entry.has(ward_entry):
-			continue
-		var guarding_unit: Unit = unit_of_entry[entry]
-		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
+	relink_guards(scenario, unit_of_entry)   # armed Guards (#414), after every spawn
 	game.refresh_guard_markers()
 	game.refresh_watch_markers()   # a loaded watch is telegraphed the moment the board is up (#413)
 
@@ -409,9 +413,10 @@ func clear_board():
 	# re-renders stale on the dying board (#182).
 	game.scenario_director.reset()
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
+	game.squad_tether_presenter.reset()   # no tether moment outlives its board (#367)
 	# A cleared board has NO loaded scenario. Update's load-gate reads this; a stale path would let
-	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). Safe for
-	# load paths: load_scenario re-sets it AFTER apply_scenario's internal clear_board.
+	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). A load
+	# re-sets it: apply_scenario writes its path straight after this, before board_loaded (#967).
 	last_loaded_path = ""
 	# Same reasoning for the look (#253 part 2): spawn_sandbox() lands here with no ScenarioData,
 	# so without this it would keep wearing the last mission's preset. Empty = the default.
@@ -425,6 +430,9 @@ func clear_board():
 	# And the cap with it (#736) -- a sandbox board offers nobody, so it can hardly cap them at six,
 	# and the same Save As would write the stale number into a fixture beside the stale name.
 	current_deployment_cap = 0
+	# And the screen box (#46), back to TRUE: the field's own default, so a board authored after a
+	# clear opens its phase as every board did before the box existed.
+	current_offers_pre_mission = true
 	# And whether it ships (#860) -- the sharpest Save As consequence of the three: inheriting a
 	# TRUE here would bake a scratch fixture into the demo's mission list without anyone ticking it.
 	current_in_demo = false
@@ -453,6 +461,7 @@ func clear_board():
 	overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.board_heights.clear()   # so is elevation (#257) -- a sandbox spawn starts flat, not on the
 								 # last mission's cliff. apply_scenario refills it straight after.
+	game.gas_field.clear()   # and gas (#508) -- the atmosphere is board content like the rest
 	if game.dev_overlay != null:
 		game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()

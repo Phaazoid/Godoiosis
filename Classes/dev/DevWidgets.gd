@@ -114,6 +114,8 @@ static func add_label(container: Node, text: String) -> void:
 # with its own HEADING_COLOR, and #825 wanted a fourth for the Attack Editor's form. One question,
 # one answer: the copies are gone and the colour lives here with the only code that reads it.
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
+# Marks the label as a section heading, so DevSearch can name the section a row sits in (#1184).
+const HEADING_META := &"dev_heading"
 
 #
 # Returns the nodes it added -- the rule and its label -- so a caller that can HIDE a whole section
@@ -127,6 +129,7 @@ static func add_heading(container: Node, text: String) -> Array[Node]:
 	var heading := Label.new()
 	heading.text = text
 	heading.add_theme_color_override("font_color", HEADING_COLOR)
+	heading.set_meta(HEADING_META, true)
 	container.add_child(heading)
 	added.append(heading)
 	return added
@@ -486,12 +489,17 @@ static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
 # It exists because build_resource_editor draws no dictionary at all -- its match has arms for
 # int/float/bool/string/object and nothing else -- so every Dictionary field in the project has
 # been silently undrawn (WeaponModData.scaling_change, ArmorData.stat_modifiers).
-static func add_stat_dict(container: Node, label_text: String, values: Dictionary, tooltip := "") -> void:
+#
+# `exclude` names stats this dictionary may never hold, so the form does not offer what a law refuses
+# (gear passes Stats.GEAR_EXCLUDED).
+static func add_stat_dict(container: Node, label_text: String, values: Dictionary, tooltip := "", exclude: Array = []) -> void:
 	var first := container.get_child_count()
 	add_label(container, label_text)
 	var grid := GridContainer.new()
 	grid.columns = 4
 	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
+		if exclude.has(stat):
+			continue
 		var key := stat
 		var name_label := Label.new()
 		name_label.text = Stats.Stat.keys()[key]

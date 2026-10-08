@@ -13,13 +13,33 @@ extends SceneTree
 #   load   {"path": "res://..."} - load a saved scenario
 #   overview | preview           - render the board / the active plan
 #   focus  {"unit": "A"}         - render a unit's move/attack reach
+#   ranges {"unit": "a"}         - where the enemy can strike or stand next turn, and who can hit each
+#                                  of your units where its plan leaves it (the game's V key); "unit"
+#                                  optional: omitted, every enemy
 #   move   {"unit": "A", "x": 4, "y": 0}
-#   attack {"unit": "A", "x": 5, "y": 0}
+#   group_move {"unit": "A", "x": 4, "y": 0} - A (a squad leader) moves and the squad follows in formation
+#   attack {"unit": "A", "x": 5, "y": 0, "attack": "Splash"}   - "attack" optional (#615), as are
+#                                 overwatch's and legal_targets'; omitted, the default fires
 #   cancel {"unit": "A"}
-#   rescue {"unit": "A", "target": "b"}   - A picks up adjacent downed ally b (a main action)
+#   wait {"unit": "A"}           - A's squad spends its turn doing nothing (the ring's Wait)
+#   rescue {"unit": "A", "target": "b", "x": 4, "y": 0}   - A picks up adjacent downed ally b (a main
+#                                 action); x/y optional: the bank a body in deep water is hauled to (#116),
+#                                 the first when omitted, with the reply naming the others
+#   capture {"unit": "A"}                 - A claims the capture zone it will stand in (a main action)
 #   join   {"unit": "B", "leader": "A"}   - B joins A's squad (squad-up / join)
 #   leave  {"unit": "B"}                  - B leaves its squad (back to solo)
 #   disband{"unit": "A"}                  - A (squad leader) disbands its squad
+#   deploy {"unit": "F", "x": 4, "y": 0} | undeploy {"unit": "C"} | reposition {...} | begin
+#                                - the pre-mission phase a roster mission opens on (#46)
+#   give  {"from": "C", "slot": 0, "to": "stash"} - move gear; "stash" at either end
+#   job   {"unit": "C", "job": "scout"}           - pick a job by id; "" for none
+#   fit   {"unit": "C", "slot": 0, "mod": "Line Sniper", "space": 1} | unfit {unit, slot, mod}
+#                                - "unit" may be "stash"; `slot` counts from 0, `space` from 1
+#   kit   {"unit": "C"}          - a unit's slots, job and mods, or "stash"
+#   equip | wear | use | toss {"unit": "C", "slot": 0} | unequip | remove_armor {"unit": "C"}
+#                                - the inspect dock's verbs (#46), in either phase, for a unit on the board
+#   restart                      - the loaded mission again, back in its pre-mission phase with the last
+#                                  Begin's loadout; from inside the phase it is Reset Loadout (#46)
 #   execute | endturn            - resolve+apply the plan / pass the turn
 #   quit                         - shut the bridge down
 
@@ -35,6 +55,10 @@ const FRAMES_DIR := "res://playrun/frames"
 
 var _session
 var _board: Dictionary = {}
+# The restart buffer (#46, #763): what the last Begin captured, kept across boards the way
+# MissionController._staged survives reset(). Which loads replay it is PreMissionPhase's rule.
+var _staged: PreMissionSnapshot = null
+var _loaded_path := ""   # the mission `restart` reloads; "" on a `new` board
 var _last_id := 0
 var _quitting := false
 var _frames   # FrameLog; every state write also lands as a numbered frame
@@ -97,7 +121,10 @@ func _run_one(cmd: String, args) -> Dictionary:
 		"new":
 			return {"ok": true, "text": await _cmd_new()}
 		"load":
-			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")))}
+			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")),
+					bool((args as Dictionary).get("resume", false)))}
+		"restart":
+			return await _cmd_restart()
 	if _session == null:
 		return {"ok": false, "text": "no board - send {\"cmd\":\"new\"} or a load command first"}
 	return _dispatch(cmd, args as Dictionary)
@@ -134,18 +161,32 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"legal_moves":
 			return {"ok": true, "text": BoardView.render_legal_moves(_session, str(args.get("unit", "")))}
 		"legal_targets":
-			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")))}
+			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")), str(args.get("attack", "")))}
+		"ranges":
+			return {"ok": true, "text": BoardView.render_ranges(_session, str(args.get("unit", "")))}
+		# Heights, ramps and gas (#46), which the 3-char overview has no room for.
+		"terrain":
+			return {"ok": true, "text": BoardView.render_terrain(_session)}
 		"move":
 			var r = _session.queue_move(str(args.get("unit", "")), _xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"group_move":
+			var r = _session.group_move(str(args.get("unit", "")), _xy(args))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"attack":
-			var r = _session.queue_attack(str(args.get("unit", "")), _xy(args))
+			var r = _session.queue_attack(str(args.get("unit", "")), _xy(args), str(args.get("attack", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"cancel":
 			var r = _session.cancel(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"wait":
+			var r = _session.wait(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r)}
 		"rescue":
-			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")))
+			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")), _optional_xy(args))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"capture":
+			var r = _session.capture(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		# The squad verbs used to redraw the whole board to report a one-line change. What they
 		# actually changed -- which squads exist and which are spent -- is what the status line on
@@ -159,16 +200,44 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"disband":
 			var r = _session.disband(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r)}
+		# The pre-mission phase (#46): the loadout screen's placement decisions, then its Begin.
+		"deploy":
+			var r = _session.deploy(str(args.get("unit", "")), _xy(args))
+			return {"ok": r.ok, "text": _ack(r)}
+		"undeploy":
+			var r = _session.undeploy(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"reposition":
+			var r = _session.reposition(str(args.get("unit", "")), _xy(args))
+			return {"ok": r.ok, "text": _ack(r)}
+		"begin":
+			var r = _session.begin()
+			if r.ok:
+				_staged = _session.staged   # the buffer outlives this board, as the game's does
+			return {"ok": r.ok, "text": _ack(r)}
+		# ...and its writes (#46 slice 2a): gear, jobs and mods, read back through `kit`.
+		"give":
+			var r = _session.give(str(args.get("from", "")), int(args.get("slot", -1)), str(args.get("to", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"job":
+			var r = _session.set_job(str(args.get("unit", "")), str(args.get("job", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"fit":
+			var r = _session.fit(str(args.get("unit", "")), int(args.get("slot", -1)),
+					str(args.get("mod", "")), int(args.get("space", 0)))
+			return {"ok": r.ok, "text": _ack(r)}
+		"unfit":
+			var r = _session.unfit(str(args.get("unit", "")), int(args.get("slot", -1)), str(args.get("mod", "")))
+			return {"ok": r.ok, "text": _ack(r)}
+		"kit":
+			return {"ok": true, "text": BoardView.render_kit(_session, str(args.get("unit", "")))}
 		# The six verbs PlaySession has always implemented and _dispatch never exposed -- which is
 		# why a driver asking for `burrow` got `unknown cmd` for a verb the docs list (#613).
 		"guard":
 			var r = _session.guard(str(args.get("unit", "")), str(args.get("target", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"overwatch":
-			var r = _session.overwatch(str(args.get("unit", "")), _xy(args))
-			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
-		"rally":
-			var r = _session.rally(str(args.get("unit", "")))
+			var r = _session.overwatch(str(args.get("unit", "")), _xy(args), str(args.get("attack", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"reload":
 			var r = _session.reload(str(args.get("unit", "")))
@@ -206,6 +275,15 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": true, "text": "Turn -> %s\n%s"
 					% [str(r.faction), BoardView.render_result(moves)]}
 		_:
+			# The inspect dock's verbs (#46 slice 2b), named as a run records them, in either phase:
+			# DERIVED from GearVerbs (#1236), so a new dock verb needs no arm here. With a plan open,
+			# the reply carries its preview, since a gear change re-resolves it.
+			if GearVerbs.from_name(cmd) >= 0:
+				var r = _session.gear(str(args.get("unit", "")), cmd, int(args.get("slot", -1)))
+				var text: String = _ack(r)
+				if r.ok and _session.squad_manager.active_squad != null:
+					text += "\n\n" + BoardView.render_preview(_session)
+				return {"ok": r.ok, "text": text}
 			return {"ok": false, "text": "unknown cmd: " + cmd}
 
 func _cmd_new() -> String:
@@ -218,16 +296,50 @@ func _cmd_new() -> String:
 	BoardBuilder.arm(p, 6)
 	BoardBuilder.arm(e, 4)
 	_session = PlaySession.new(_board)
+	_loaded_path = ""   # nothing on disk to reload
 	return "New board (2 units)\n\n" + BoardView.render_overview(_session)
 
-func _cmd_load(path: String) -> String:
+# A load is a mission STARTING, the game's fresh-start door, so a board naming a roster opens the
+# pre-mission phase (#46). `resume` is the other door: a mid-battle snapshot records `roster` too, and
+# drawing it would stand a second force on top of the one the snapshot restored.
+#
+# Like begin_mission, it replays the last Begin's loadout when that was taken on THIS mission (#763
+# ruling 1, PreMissionPhase.replay_for), and says so.
+func _cmd_load(path: String, resume := false) -> String:
 	if path == "":
 		return "load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"
 	_reset_board()
 	_board = BoardBuilder.build(root, "PlayRoot_%d" % Time.get_ticks_msec())
 	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
 	_session = PlaySession.new(_board)
-	return "Loaded %s (%d units)\n\n%s" % [path, loaded.size(), BoardView.render_overview(_session)]
+	_loaded_path = path
+	var offered: bool = _session.scenario_data != null and _session.scenario_data.offers_pre_mission
+	var replay: PreMissionSnapshot = null if resume else PreMissionPhase.replay_for(_staged, path, offered)
+	var drawn: int = 0 if resume else _session.start_pre_mission(replay)
+	await process_frame   # the drawn units' _ready, as load_scenario waits for its own spawns
+	var head := "Loaded %s (%d units)" % [path, loaded.size()]
+	# Keyed on whether the phase OPENED (#46), not on the draw: a board with no pre-mission screen
+	# still draws its roster, and says so, because the force it starts with is the author's.
+	if _session.is_deploying():
+		head += "; pre-mission: %d of the roster stood up" % drawn
+		var roster: Array[Unit] = _session.roster_units()
+		if replay != null and replay.fits(roster):
+			head += " -- your last loadout for this mission stands again"
+	elif drawn > 0:
+		head += "; this mission has no pre-mission screen, so its roster's authored draw of %d stands and the battle has begun" % drawn
+	return "%s\n\n%s" % [head, BoardView.render_overview(_session)]
+
+# The game's Restart (#763): the same mission again, back in its pre-mission phase. Taken from inside
+# the phase it is Reset Loadout and drops the buffer; otherwise the last Begin's loadout replays.
+# Asked BEFORE the reload, while the session still knows it was in the phase (PreMissionPhase.kept_by_restart).
+func _cmd_restart() -> Dictionary:
+	if _session == null or _loaded_path == "":
+		return {"ok": false, "text": "restart reloads a loaded mission -- load one first"}
+	var from_inside_phase: bool = _session.is_deploying()
+	_staged = PreMissionPhase.kept_by_restart(_staged, from_inside_phase)
+	var text := await _cmd_load(_loaded_path)
+	var kind := "Reset Loadout -- the mission's own draw" if from_inside_phase else "Restarted"
+	return {"ok": true, "text": "%s\n%s" % [kind, text]}
 
 func _reset_board() -> void:
 	if _board.has("root") and is_instance_valid(_board.root):
@@ -268,6 +380,12 @@ func _write_state(id: int, ok: bool, cmd: String, text: String) -> void:
 
 func _xy(args: Dictionary) -> Vector2i:
 	return Vector2i(int(args.get("x", 0)), int(args.get("y", 0)))
+
+# The cell a command names, or null when it names none: _xy reads a missing x/y as (0,0), a real cell.
+func _optional_xy(args: Dictionary) -> Variant:
+	if not args.has("x"):
+		return null
+	return _xy(args)
 
 func _ack(r: Dictionary) -> String:
 	return "> " + str(r.summary) if r.ok else "> ERROR: " + str(r.error)

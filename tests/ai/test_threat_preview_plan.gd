@@ -10,8 +10,17 @@ extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
+
+
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
 
 
 func _build_board() -> Dictionary:
@@ -216,3 +225,31 @@ func test_a_lethal_blow_is_marked() -> void:
 	assert_int(intents.size()).is_equal(1)
 	assert_bool(intents[0].fells).override_failure_message(
 			"a blow that downs the target is not marked as felling").is_true()
+
+
+# A WATCH ARMED OVER SOMEBODY FIRES ON THE SPOT (#1003), and that shot lands in plan.watch_shots, never
+# in plan.attacks -- so a harvest that read attacks alone missed it (#1197). Carbine-shaped: its Shot
+# fires at exactly 2, so the neighbour can only be the watch's.
+func test_a_watch_armed_over_you_previews_its_shot() -> void:
+	var board: Dictionary = _build_board()
+	var watcher: Unit = _spawn(board, ENEMY, Vector2i(4, 0))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	P.point(template.main_attack, 2, 2)
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Watch"
+	watch.power = 3
+	watch.can_overwatch = true
+	P.line(watch, 3)
+	var extras: Array[WeaponAttackData] = [watch]
+	template.extra_attacks = extras
+	watcher.equipped_weapon = WeaponInstance.make(template)
+	var beside: Unit = _spawn(board, PLAYER, Vector2i(5, 0))
+
+	var intents: Array[ThreatIntent] = _preview(board)
+	assert_int(intents.size()).override_failure_message(
+			"the shot of a watch armed over a neighbour never reached the preview").is_equal(1)
+	assert_object(intents[0].attacker).is_same(watcher)
+	assert_object(intents[0].target).is_same(beside)

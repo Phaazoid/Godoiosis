@@ -13,7 +13,7 @@ func _init() -> void:
 	button_size = Vector2(220, 44)
 
 # Takes the Game node rather than a parent: ModalLock needs it (it is what gets frozen), and
-# deriving the parent from it removes any chance of a modal being built outside ui_layer.
+# deriving the parent from it removes any chance of a modal being built outside card_layer.
 #
 # mid_pass is PASSED rather than asked here, and that is not a style choice: _open_pause_menu writes
 # game_state = MENU on its way in, and playback_owns_board() reads game_state -- so by the time this
@@ -21,7 +21,7 @@ func _init() -> void:
 # (#723). Same one answer, read at the only moment it is still true.
 static func show_menu(game_node: Node, can_restart: bool, can_load: bool, mid_pass: bool) -> Choice:
 	var menu := PauseMenu.new()
-	game_node.ui_layer.add_child(menu)
+	game_node.card_layer.add_child(menu)
 	menu._build(can_restart, can_load, game_node, mid_pass)
 	var choice: Choice = await menu.chosen
 	menu.queue_free()

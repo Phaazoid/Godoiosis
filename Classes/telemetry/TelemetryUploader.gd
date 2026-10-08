@@ -12,7 +12,8 @@ class_name TelemetryUploader
 #
 # `pending/` vs `sent/` IS the state (dev, 2026-09-08: keep a sent run so the Replay tab can still
 # open it). A folder move rather than a marker file, so there is nothing that can disagree with
-# where the run actually is.
+# where the run actually is. A run this client will NEVER send moves to a third, `held/` (#852),
+# rather than being retried at every launch -- see hold_unsendable.
 #
 # The intake reads ONLY the summary line and stores the events verbatim, which is what keeps a
 # Worker on the free plan inside its CPU budget -- see tools/intake-worker/.
@@ -71,12 +72,20 @@ func send_pending() -> int:
 		# A seal during a send: remember it rather than interleaving two walks over one folder.
 		_again = true
 		return 0
-	# NEITHER OF THESE IS THE SAFETY PROPERTY, and a mutant proved it: deleting the is_configured
-	# call changes nothing observable, because Uploader.submit refuses a headless run itself and no
-	# POST is attempted either way. What they buy is not doing the WORK -- walking pending/ and
-	# reading every run off disk to build payloads nothing will send. The gate that matters lives
-	# one class up, and `test_a_headless_run_never_uploads` asserts on THAT.
-	if not is_configured() or not TelemetryStore.persistence_enabled:
+	# Without this the hold below would walk the machine's real user:// folder from every headless
+	# suite that seals a run -- the launch sweep's rule, for its reason.
+	if not TelemetryStore.persistence_enabled:
+		return 0
+	# HOLDING NEEDS NO SERVER (#852), so it runs AHEAD of the endpoint gate: "will never be sent" is
+	# true whether or not anything is listening. It is also the one step here a headless suite can
+	# see -- everything past is_configured() is invisible to it.
+	hold_unsendable()
+	# NOT THE SAFETY PROPERTY, and a mutant proved it: deleting this changes nothing observable,
+	# because Uploader.submit refuses a headless run itself and no POST is attempted either way.
+	# What it buys is not doing the WORK -- reading every owed run off disk to build payloads nothing
+	# will send. The gate that matters lives one class up, and `test_a_headless_run_never_uploads`
+	# asserts on THAT.
+	if not is_configured():
 		return 0
 
 	_sending = true
@@ -110,19 +119,11 @@ func build_payload(run_id: String) -> Dictionary:
 	if summary_line == "":
 		return {}   # unsealed -- MissionLog.sweep_unsealed finishes these at the next launch
 
-	# A run sealed before this slice carries no run_id, and the intake keys on it. Skipped with a
-	# word rather than retried forever: nothing will ever make an old run grow the field.
-	var summary: Dictionary = run.first("summary").get("summary", {})
-	if str(summary.get("run_id", "")) == "":
-		push_warning("Telemetry: run %s predates the id field and will not be sent" % run_id)
-		return {}
-
-	# THE STRUCTURALLY EMPTY RUN (#851), and the dev's 2026-09-09 refinement of FLAG-NEVER-EXCLUDE:
-	# a run may be refused at the client only when there is nothing in it to lose. Anything merely
-	# THIN is sent and stamped `trivial` by the schema instead, where the threshold is a read-time
-	# expression that can be re-cut over rows already collected -- see tools/intake-worker/.
-	if _is_refusably_empty(summary):
-		print_verbose("Telemetry: run %s is empty and was not sent (#851)" % run_id)
+	# Normally already in held/ by now (send_pending holds first); this meets one only when it was
+	# sealed during a send, and it is held at the next trigger.
+	var why := never_sendable(run)
+	if why != "":
+		print_verbose("Telemetry: run %s will not be sent -- %s" % [run_id, why])
 		return {}
 
 	var files: Array[Dictionary] = []
@@ -142,9 +143,9 @@ func build_payload(run_id: String) -> Dictionary:
 		return {}
 
 	if total > MAX_PAYLOAD_BYTES:
-		# Left in pending/ and retried, which is honest: it will never fit, and a folder that stops
-		# emptying is the visible symptom. Engineering a give-up ledger for a case measured at 3% of
-		# the cap would be building for a number nobody has seen.
+		# Left in pending/ and retried, and deliberately NOT held (#852): this is the one refusal a
+		# raised cap could make sendable, and nothing ever retries held/. The visible symptom is an
+		# owed run on the Info page that never goes. Measured at 3% of the cap; none has been seen.
 		push_warning("Telemetry: run %s is %d bytes, over the %d cap -- not sent" % [
 			run_id, total, MAX_PAYLOAD_BYTES])
 		return {}
@@ -153,6 +154,41 @@ func build_payload(run_id: String) -> Dictionary:
 	# a re-encode turns every int in the summary back into a float (#53 slice 4b's rule). The intake
 	# unwraps `.summary` from it.
 	return {"fields": {"summary": summary_line}, "files": files}
+
+
+# WHY THIS RUN WILL NEVER BE SENT, or "" if it may be (#852). The one answer, read by build_payload
+# and by the hold. Two reasons, both permanent: nothing will ever make an old run grow the id the
+# intake keys on, and an empty chosen run stays empty (#851).
+#
+# AN UNSEALED RUN ANSWERS "", and that clause is why the check lives here rather than at each
+# caller: an unsealed run has no summary, so the id check alone would read it as "predates the id"
+# and hold a run the launch sweep was about to finish -- or the one being recorded right now.
+static func never_sendable(run: ReplayRun) -> String:
+	if _summary_line(run) == "":
+		return ""
+	var summary: Dictionary = run.first("summary").get("summary", {})
+	if str(summary.get("run_id", "")) == "":
+		return "it predates the run_id field"
+	# THE STRUCTURALLY EMPTY RUN (#851), and the dev's 2026-09-09 refinement of FLAG-NEVER-EXCLUDE:
+	# a run may be refused at the client only when there is nothing in it to lose. Anything merely
+	# THIN is sent and stamped `trivial` by the schema instead, where the threshold is a read-time
+	# expression that can be re-cut over rows already collected -- see tools/intake-worker/.
+	if _is_refusably_empty(summary):
+		return "it is empty and its ending was chosen (#851)"
+	return ""
+
+
+# THE WAY OUT OF `pending/` (#852): every run never_sendable names moves to `held/`, so `pending/`
+# means only what it says. load_events, never load_run -- the board is the expensive half and this
+# has no use for it. Returns how many moved.
+static func hold_unsendable() -> int:
+	var held := 0
+	for run_id: String in TelemetryStore.pending_runs():
+		var why := never_sendable(ReplayRun.load_events(run_id))
+		if why != "" and TelemetryStore.mark_held(run_id):
+			print_verbose("Telemetry: run %s moved to held/ -- %s" % [run_id, why])
+			held += 1
+	return held
 
 
 # NOTHING HAPPENED, AND SOMEBODY CHOSE TO END IT (#851). Both halves are required.

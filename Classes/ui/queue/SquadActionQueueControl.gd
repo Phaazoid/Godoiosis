@@ -2,9 +2,9 @@ extends Control
 class_name SquadActionQueueControl
 
 # The action-queue panel: renders a squad's plan as sectioned rows (via ActionQueueDisplayEntry)
-# with drag-reorder and the Execute button. A section IS an action type and a drag never leaves its
-# own section, so the sections are the pass's phase order and the rows inside one are its clock
-# (#412). Which rows may be dragged is the ORDER's answer, not this panel's -- see
+# with drag-reorder, click-to-requeue (#1122) and the Execute button. A section IS an action type
+# and a drag never leaves its own section, so the sections are the pass's phase order and the rows
+# inside one are its clock (#412). Which rows may be dragged is the ORDER's answer, not this panel's -- see
 # ActionQueueRow.is_reorderable_row. Layout invariant (#160): the scene ROOT
 # is full-rect with mouse_filter IGNORE — never STOP, or it eats every board click — and
 # BackgroundPanel is anchored to the RIGHT edge so the dock follows a window resize; don't let
@@ -19,15 +19,22 @@ class_name SquadActionQueueControl
 # be a .tscn sub-resource, and one file answering "what colour is the queue" is what keeps this
 # panel from drifting off the inspect panel it was matched to. That file answers it for TWO palettes
 # since round 5 -- the player picks, this panel only re-applies.
+#
+# A REFUSED Execute answers back (#1121). Red orders leave the button dull but PRESSABLE, the press
+# reaches execute_orders, and its refusal branch calls play_refusal: the red rows shake, the list
+# scrolls to the first of them, and a box above the button says why, one line per refused order. The
+# box stays up, re-read on every refresh, until nothing is red; then it waits for the next refusal.
 
 @onready var sections_box: VBoxContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll/SectionsBox
+@onready var outer_scroll: ScrollContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll
 @onready var execute_button: Button = $BackgroundPanel/MarginContainer/VBox/ExecuteButton
 @onready var title_label: Label = $BackgroundPanel/MarginContainer/VBox/Title
 @onready var background_panel: Panel = $BackgroundPanel
 
 const ACTION_ROW_SCENE := preload("res://Scenes/ActionQueueRow.tscn")
 
-enum ExecuteState { DISABLED, READY, ALL_COMMITTED }
+# REFUSED looks like DISABLED and takes the press, so a refusal can say why (#1121).
+enum ExecuteState { DISABLED, READY, ALL_COMMITTED, REFUSED }
 
 const EXECUTE_DULL := Color(0.5, 0.5, 0.5, 1.0)
 const EXECUTE_BRIGHT := Color(1, 1, 1, 1)
@@ -38,6 +45,7 @@ var _flash_tween: Tween = null
 var _drag_row: ActionQueueRow = null
 var _drag_section: VBoxContainer = null
 var _drag_dirty := false
+var _press_at := Vector2.ZERO                          # where the press landed; a click travels no further than CLICK_SLOP
 var _expanded_actors: Dictionary = {}                  # actor instance_id -> bool (volley expanded?)
 var _last_entries: Array[ActionQueueDisplayEntry] = []  # cached so a toggle re-renders without the backend
 # Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
@@ -49,18 +57,45 @@ var _last_entries: Array[ActionQueueDisplayEntry] = []  # cached so a toggle re-
 var _hidden_for_playback := false
 var _content_shown := false
 
+# The refusal (#1121). `_refusals` is re-read on every refresh; the box shows it only once a press
+# has been refused, and an empty list takes the reveal back.
+var _refusals: Array[BaseAction] = []
+var _refusal_revealed := false
+var _press_refused := false
+var _refusal_box: PanelContainer
+var _refusal_text: RichTextLabel
+var _shaking: Array[Control] = []   # the row wrappers mid-shake
+
 
 signal execute_requested
 signal cancel_requested(action: BaseAction)
 signal row_hover_changed(action: BaseAction, hovering: bool)
 signal reorder_requested(action_type: BaseAction.ActionType, ordered_actors: Array)
+signal row_clicked(action: BaseAction)   # #1122; what a click DOES is game's, asked of the order
 
 func _ready() -> void:
 	execute_button.text = "Execute Orders"
 	execute_button.focus_mode = Control.FOCUS_NONE
 	execute_button.pressed.connect(_execute)
+	_build_refusal_box()
 	_apply_chrome()
 	set_process(false)
+
+# Code-built rather than a .tscn node, so no hand-authored scene entry goes stale under an editor save.
+func _build_refusal_box() -> void:
+	_refusal_box = PanelContainer.new()
+	_refusal_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_refusal_box.visible = false
+	_refusal_text = RichTextLabel.new()
+	_refusal_text.fit_content = true
+	_refusal_text.scroll_active = false
+	_refusal_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_refusal_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_refusal_text.add_theme_font_size_override("normal_font_size", QueueStyle.REFUSAL_FONT_SIZE)
+	_refusal_box.add_child(_refusal_text)
+	var column := execute_button.get_parent()
+	column.add_child(_refusal_box)
+	column.move_child(_refusal_box, execute_button.get_index())
 
 # The PANEL's own chrome, as against the rows' -- the frame, the title and Execute. Its own function
 # only so restyle() can re-apply it; see there for why that matters.
@@ -78,6 +113,8 @@ func _apply_chrome() -> void:
 	execute_button.add_theme_color_override("font_color", execute_text)
 	execute_button.add_theme_color_override("font_hover_color", execute_text)
 	execute_button.add_theme_color_override("font_disabled_color", execute_text)
+	_refusal_box.add_theme_stylebox_override("panel", QueueStyle.refusal_box())
+	_apply_refusal_box()   # its lines carry their inks, so a palette swap rewrites them
 
 # Repaint what is already on screen, with no trip through the backend (#685). The dev's element
 # colours are knobs, so a slider drag needs the rows to re-read them -- and a resolve per tick is
@@ -98,9 +135,14 @@ func restyle() -> void:
 	_render()
 	execute_button.visible = was_showing
 
+# The hide comes AFTER the emit because the refresh inside execute_orders re-shows the button, and it
+# is what stops a second press mid-pass. A REFUSED press (#1121) leaves the player planning, so the
+# button stays.
 func _execute():
+	_press_refused = false
 	execute_requested.emit()
-	execute_button.hide()
+	if not _press_refused:
+		execute_button.hide()
 
 func show_display_entries(entries: Array[ActionQueueDisplayEntry]):
 	if entries == null:
@@ -164,6 +206,9 @@ func set_execute_state(state: ExecuteState) -> void:
 		ExecuteState.DISABLED:
 			execute_button.disabled = true
 			execute_button.modulate = EXECUTE_DULL
+		ExecuteState.REFUSED:
+			execute_button.disabled = false
+			execute_button.modulate = EXECUTE_DULL
 		ExecuteState.READY:
 			execute_button.disabled = false
 			execute_button.modulate = EXECUTE_BRIGHT
@@ -178,6 +223,93 @@ func _start_flash() -> void:
 func _stop_flash() -> void:
 	Pulse.stop(_flash_tween, execute_button, &"modulate", EXECUTE_BRIGHT)
 	_flash_tween = null
+
+# --- the refusal (#1121) --------------------------------------------------------------------------
+
+# Every refresh hands over the squad's refused orders (SquadManager.refused_orders). An empty list
+# takes the reveal back: nothing is red, so the box goes, and it waits for the next refused press.
+func set_refusals(orders: Array[BaseAction]) -> void:
+	_refusals = orders.duplicate()
+	if _refusals.is_empty():
+		_refusal_revealed = false
+	_apply_refusal_box()
+
+# execute_orders' refusal branch, AFTER its refresh has rebuilt the rows.
+func play_refusal() -> void:
+	_press_refused = true
+	_refusal_revealed = true
+	_apply_refusal_box()
+	var refused := _refused_rows()
+	for row in refused:
+		_shake(row)
+	if not refused.is_empty():
+		_scroll_to(refused[0])
+
+# One line per refused order: its unit's name, then the validator's own reasons.
+func _apply_refusal_box() -> void:
+	if _refusal_box == null:
+		return
+	_refusal_box.visible = _refusal_revealed and not _refusals.is_empty()
+	_refusal_text.clear()
+	if not _refusal_box.visible:
+		return
+	var name_ink := QueueStyle.ink(QueueStyle.Role.NAME_TEXT)
+	var reason_ink := QueueStyle.ink(QueueStyle.Role.BODY_TEXT)
+	var first := true
+	for order in _refusals:
+		if not is_instance_valid(order.actor):
+			continue
+		if not first:
+			_refusal_text.newline()
+		first = false
+		_refusal_text.push_color(name_ink)
+		_refusal_text.add_text("%s:" % order.actor.get_unit_name())
+		_refusal_text.pop()
+		_refusal_text.push_color(reason_ink)
+		_refusal_text.add_text(" %s" % ", ".join(order.validation_errors))
+		_refusal_text.pop()
+
+# The live red rows, top to bottom. A card _clear_sections freed is still a child until the frame
+# ends, so a card queued for deletion is skipped rather than walked.
+func _refused_rows() -> Array[ActionQueueRow]:
+	var rows: Array[ActionQueueRow] = []
+	for card in sections_box.get_children():
+		if card.is_queued_for_deletion():
+			continue
+		for node in card.find_children("*", "", true, false):
+			var row := node as ActionQueueRow
+			if row != null and row.action != null and row.action.is_refused():
+				rows.append(row)
+	return rows
+
+# The tether pluck's envelope (SquadLines2D) at the queue's own size, played through the row
+# wrapper's margins so the container's own layout moves the row. The tween is the wrapper's, so a
+# refresh that frees the row mid-shake ends the shake with it. Photosensitivity (#217) stills it.
+func _shake(row: ActionQueueRow) -> void:
+	var wrapper := row.get_parent() as MarginContainer
+	if wrapper == null or not BoardOverlays.beams_animating():
+		return
+	var left := wrapper.get_theme_constant("margin_left")
+	var right := wrapper.get_theme_constant("margin_right")
+	var push := func(dx: int) -> void:
+		wrapper.add_theme_constant_override("margin_left", left + dx)
+		wrapper.add_theme_constant_override("margin_right", right - dx)
+	_shaking.append(wrapper)
+	var tween := wrapper.create_tween()
+	tween.tween_method(func(elapsed: float) -> void:
+		push.call(roundi(QueueStyle.REFUSAL_SHAKE_PX * SquadLines2D.shake_envelope(elapsed))),
+		0.0, SquadLines2D.SHAKE_SECONDS, SquadLines2D.SHAKE_SECONDS)
+	tween.finished.connect(func() -> void:
+		push.call(0)
+		_shaking.erase(wrapper))
+
+# Two frames, so the rebuilt rows and the box that just appeared have both been laid out before the
+# scroll measures them.
+func _scroll_to(row: ActionQueueRow) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if is_instance_valid(row) and not row.is_queued_for_deletion() and row.is_inside_tree():
+		outer_scroll.ensure_control_visible(row)
 
 # A section is a bordered CARD with its own header strip (#685) -- the delineation the dev asked
 # for. ONE SCROLL IN THE PANEL, THE OUTER ONE: each section used to own a ScrollContainer capped at
@@ -277,7 +409,8 @@ func _new_row(list: VBoxContainer, indent_level: int) -> ActionQueueRow:
 func _wire_row(row: ActionQueueRow) -> void:
 	row.cancel_requested.connect(func(a): cancel_requested.emit(a))
 	row.hover_changed.connect(func(a, h): row_hover_changed.emit(a, h))
-	row.drag_requested.connect(_on_row_drag_requested)
+	row.pressed.connect(_on_row_pressed)
+	row.expand_toggled.connect(_toggle_volley)
 
 func clear():
 	current_squad = null
@@ -285,6 +418,8 @@ func clear():
 	_apply_visibility()
 	_clear_sections()
 	_expanded_actors.clear()
+	var none: Array[BaseAction] = []
+	set_refusals(none)
 
 # #722's one input, and the gate both halves write through. Deliberately NOT `_render()` -- that
 # rebuilds every section, and a playback edge has not changed a single row.
@@ -298,14 +433,17 @@ func _apply_visibility() -> void:
 func _clear_sections():
 	for child in sections_box.get_children():
 		child.queue_free()
+	_shaking.clear()   # their tweens die with the wrappers
 
-func _on_row_drag_requested(row: ActionQueueRow) -> void:
+func _on_row_pressed(row: ActionQueueRow) -> void:
 	if not is_instance_valid(row):
 		return
 	_drag_row = row
 	_drag_section = row.get_parent().get_parent() as VBoxContainer   # row -> MarginContainer wrapper -> section VBox
 	_drag_dirty = false
-	row.modulate = Color(1, 1, 1, 0.6)                               # lift cue
+	_press_at = get_global_mouse_position()
+	if row.draggable:
+		row.modulate = Color(1, 1, 1, 0.6)                           # lift cue
 	set_process(true)
 
 func _process(_delta: float) -> void:
@@ -342,6 +480,7 @@ func _end_drag() -> void:
 	var section := _drag_section
 	var row := _drag_row
 	var dirty := _drag_dirty
+	var travelled := _press_at.distance_to(get_global_mouse_position())
 	if is_instance_valid(row):
 		row.modulate = Color(1, 1, 1, 1)
 	_drag_row = null
@@ -360,11 +499,19 @@ func _end_drag() -> void:
 		reorder_requested.emit(reordered_type, ordered_actors)
 		return
 
-	# No movement = a click. On a volley header, that toggles expand/collapse (UI-only re-render).
-	if is_instance_valid(row) and row.is_volley_header and row.action != null and is_instance_valid(row.action.actor):
-		var id := row.action.actor.get_instance_id()
-		_expanded_actors[id] = not _expanded_actors.get(id, false)
-		_render()
+	# A CLICK is a release that reordered nothing AND stayed where it was pressed (#1122). Reordering
+	# nothing alone is not enough: a drag that never crossed a neighbour's midpoint reorders nothing
+	# either, and a click now spends the order.
+	if travelled <= GearDropZone.CLICK_SLOP and is_instance_valid(row) and row.action != null:
+		row_clicked.emit(row.action)
+
+# A volley header's expand/collapse, off its readout since #1122 (UI-only re-render).
+func _toggle_volley(row: ActionQueueRow) -> void:
+	if not is_instance_valid(row) or row.action == null or not is_instance_valid(row.action.actor):
+		return
+	var id := row.action.actor.get_instance_id()
+	_expanded_actors[id] = not _expanded_actors.get(id, false)
+	_render()
 
 func _cancel_drag() -> void:
 	if is_instance_valid(_drag_row):

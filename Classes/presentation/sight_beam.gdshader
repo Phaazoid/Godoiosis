@@ -78,6 +78,19 @@ uniform float dash_speed = 0.0;    // world units per second
 // Pushed per frame by OverlayMirror while it rings, on the strained tethers' material alone.
 uniform float shake = 0.0;
 
+// --- The CASING (#1109 round 2) ---------------------------------------------------------------
+// A dark outline round every dash, so a squad line reads on any floor: the casing on light ground,
+// the line's own colour on dark. The dev's pick off a mockup built from his own frame, after the
+// enemy's rose vanished into its pink field over pale stone. ZERO WIDTH IS THE OLD SHADER EXACTLY --
+// the fragment takes its original path, untouched -- so every tenant that is not a squad line (the
+// sight bead, the reach marks, the focus edge, the arc's bolts) is unchanged by construction.
+uniform float casing_width = 0.0;   // world units, EACH side; 0 = no casing
+uniform vec4 casing_color : source_color = vec4(0.0, 0.0, 0.0, 0.9);
+
+// The core's share of the half-width, handed down by the vertex stage. It is the same at both rim
+// vertices, so it survives interpolation -- unlike the side itself (see the fragment's note).
+varying float core_frac;
+
 void vertex() {
 	// UV.y is the side flag as 0/1; remap to -1/+1. UV.x is the normalized position along the stroke
 	// (see add_beam_strip), which the pluck reads to pin both ends.
@@ -101,7 +114,11 @@ void vertex() {
 	// untouched by construction (#1059). It is what lets the intent mark's CONE converge to a point
 	// on the same layer, and therefore the same material, as the shaft it grows out of.
 	float width_scale = max(1.0 + UV2.y, 0.0);
-	view_pos += side * side_sign * beam_width * width_scale * 0.5;
+	// A casing widens the ribbon by its own width on each side, so the core keeps the width it had.
+	float core_half = beam_width * width_scale * 0.5;
+	float casing = max(casing_width, 0.0);
+	core_frac = core_half / max(core_half + casing, 0.000001);
+	view_pos += side * side_sign * (core_half + casing);
 	// The pluck moves BOTH rim vertices alike -- no side_sign -- so the ribbon bends rather than widens.
 	view_pos += side * shake * sin(3.14159265 * UV.x);
 	POSITION = PROJECTION_MATRIX * vec4(view_pos, 1.0);
@@ -139,17 +156,34 @@ void fragment() {
 	}
 
 	// The dash: ink wherever (distance - marched) mod period falls inside the fill, with its two edges
-	// softened over one pixel's worth of distance so a dash does not crawl as it moves.
+	// softened over one pixel's worth of distance so a dash does not crawl as it moves. `inside` is how
+	// far this fragment sits inside its dash (negative outside), which the casing reads too.
 	float dash = 1.0;
+	float inside = 1.0e6;
 	if (dash_period > 0.0) {
 		float ink = dash_period * clamp(dash_fill, 0.0, 1.0);
 		float phase = mod(UV2.x - TIME * dash_speed * live, dash_period);
-		float inside = phase <= ink ? min(phase, ink - phase) : -min(phase - ink, dash_period - phase);
+		inside = phase <= ink ? min(phase, ink - phase) : -min(phase - ink, dash_period - phase);
 		dash = clamp(inside / max(fwidth(UV2.x), 0.0001) + 0.5, 0.0, 1.0);
 	}
 
 	vec3 tint = mix(beam_color.rgb, bead_color.rgb, bead);
 	float alpha = beam_color.a * (1.0 + bead * bead_color.a);
-	ALBEDO = tint * COLOR.rgb * beam_intensity;
-	ALPHA = clamp(alpha, 0.0, 1.0) * COLOR.a * falloff * dash;
+	if (casing_width <= 0.0) {
+		ALBEDO = tint * COLOR.rgb * beam_intensity;
+		ALPHA = clamp(alpha, 0.0, 1.0) * COLOR.a * falloff * dash;
+	} else {
+		// THE CASED PATH (#1109 round 2): a CRISP core -- a soft falloff would let the casing eat most of
+		// it -- inside a dark band the vertex stage added on either side. The band is cut by a dash window
+		// dilated by the casing's own width, so every dash is outlined at its ends as well as its sides.
+		// Its alpha follows the line's, so a see-through ghost gets a see-through casing and a fading
+		// moment fades its casing with it.
+		float across = max(fwidth(edge), 0.0001);
+		float core = clamp((core_frac - edge) / across + 0.5, 0.0, 1.0) * dash;
+		float casing_dash = dash_period > 0.0
+				? clamp((inside + casing_width) / max(fwidth(UV2.x), 0.0001) + 0.5, 0.0, 1.0) : 1.0;
+		float shell = clamp((1.0 - edge) / across + 0.5, 0.0, 1.0) * casing_dash;
+		ALBEDO = mix(casing_color.rgb, tint * COLOR.rgb * beam_intensity, core);
+		ALPHA = max(clamp(alpha, 0.0, 1.0) * COLOR.a * core, casing_color.a * beam_color.a * COLOR.a * shell);
+	}
 }

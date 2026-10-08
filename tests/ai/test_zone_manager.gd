@@ -19,6 +19,14 @@ const EXTRACTION := ZoneManager.Kind.EXTRACTION
 const DEPLOYMENT := ZoneManager.Kind.DEPLOYMENT
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _zones() -> ZoneManager:
 	var zones: ZoneManager = auto_free(ZoneManager.new())
 	return zones

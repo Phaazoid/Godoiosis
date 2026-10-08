@@ -5,8 +5,8 @@ class_name SquadManager
 # Squad._erase_member(), the sole `members.erase` caller) and the queue/plan-resolution entry
 # point: queue_action validates + stores player orders, resolve_plan expands the queue into a
 # fresh ResolvedPlan each pass (attacks -> derived reactions), and calculate_reactions_for_squad
-# is where reaction existence gets derived, never stored — a counter-attack or, when the source
-# heals, a reactive heal on the defender's own side (#148). See docs/design/squad-system.md and
+# is where reaction existence gets derived, never stored — a counter-attack, and nothing else since
+# the reactive heal (#148) was repealed (dev, 2026-09-28). See docs/design/squad-system.md and
 # docs/design/resolution-pipeline.md.
 #
 # Three tenants moved out 2026-07-26 — this file had become the second dumping ground after
@@ -17,7 +17,10 @@ class_name SquadManager
 # What stays is squad lifecycle, order queueing, activation state, and plan resolution.
 
 var squads: Array[Squad] = []
-var active_squad: Squad = null
+# The squad whose plan is open. A setter because End Turn hides on it (#541) and its null writes land
+# AFTER squad_became_empty (revert_if_only_hold, remove_action, shed_orders) or with no signal at all
+# (destroy_empty_squad, clear_all_squads) -- a listener on the queue signals reads it still set.
+var active_squad: Squad = null: set = _set_active_squad
 
 # True while several orders are queued as ONE player action (Group Move): the expensive per-order
 # fan-out runs once at the end instead. Every order still passes queue_action's gates (Law #3).
@@ -41,10 +44,18 @@ var board_source: Callable
 # The last resolve, kept for candidate gating and the rescue candidate list (#124). Derived data,
 # never read back by the resolver itself; read only through resolved_plan_for, which guards squad
 # identity. Freshness rides the synchronous queue -> repaint -> resolve chain, the same guarantee
-# published knockback leans on -- a caller that queues twice with no resolve between (headless
-# drivers, tests) judges the second order against the first's prefix, exactly like an aim.
+# published knockback leans on -- both hosts ride it (the Play API re-resolves on the queue signals
+# too, #46), so only a caller that queues twice with no resolve between (a test driving the manager
+# bare) judges the second order against the first's prefix, exactly like an aim.
 var _last_resolved_plan: ResolvedPlan = null
 var _last_resolved_squad: Squad = null
+
+# A handover during a WALK waits for the walk to end before judging reach (#367, dev 2026-09-27).
+# The walkers are mid-stride when a watch shot kills a leader, and where each stands at that frame is
+# an animation fact -- the pan and the shot's length decided who was stranded. Held by
+# OrderExecutor._execute_move_phase; the successor is still named at once (it reads LDR, not cells).
+var _handovers_held := false
+var _held_handovers: Array[Squad] = []
 
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var grid: TileMapLayer = $"../Grid"
@@ -55,8 +66,24 @@ signal squad_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.A
 signal squad_became_active(squad: Squad, action: BaseAction)
 signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
-signal squad_member_joined(squad: Squad, unit: Unit)   # emitted by join_squad, the one join door (#182; #367 will consume it too)
+signal squad_member_joined(squad: Squad, unit: Unit)   # emitted by join_squad, the one join door (#182, #367)
+signal active_squad_changed(squad: Squad)   # every write that CHANGES active_squad, whoever makes it (#541)
 
+# WHY a unit left a squad (#367). The tether look forks on it: a voluntary leave reels in, a forced
+# one breaks. DEATH and RELEASE (a pre-mission undeploy) leave the board as well as the squad.
+enum LeaveCause { VOLUNTARY, FORCED, DOWNED, DEATH, RELEASE }
+
+# Its twin (#367): emitted by _erase_from, the one erase door, AFTER the erase and before any leader
+# reassignment -- so a listener that needs the settled squad defers to the end of the operation.
+signal squad_member_left(squad: Squad, unit: Unit, cause: LeaveCause)
+
+
+# No-op on an unchanged value, so re-activating the open squad (every queue_action) emits nothing.
+func _set_active_squad(value: Squad) -> void:
+	if active_squad == value:
+		return
+	active_squad = value
+	active_squad_changed.emit(value)
 
 func any_squad_active() -> bool:
 	for squad in squads:
@@ -117,34 +144,43 @@ func faction_all_squads_acted(faction: Team.Faction) -> bool:
 			return false
 	return any_active
 
-func create_squad(leader: Unit) -> Squad:
+func create_squad(leader: Unit, archetype := AIArchetype.Type.FACTION_DEFAULT, zone_name := "") -> Squad:
 	var squad := Squad.new()
 	add_child(squad)
 
 	squad.set_leader(leader)
+	# Settled before the emit, as join_squad does for the hue (#1196).
+	squad.archetype = archetype
+	squad.zone_name = zone_name
 
 	squads.append(squad)
 	_register_squad_signals(squad)
-	
+
 	squad_created.emit(squad)
 	return squad
 	
-func _detach_from_current_squad(unit: Unit): #This should be the only place that ever erases a unit from a squad
+# THE erase door (#367): every membership loss passes here, so squad_member_left can never miss one.
+# disband_squad used to call _erase_member directly and was the one loss nothing announced.
+func _erase_from(squad: Squad, unit: Unit, cause: LeaveCause) -> void:
+	squad._erase_member(unit)
+	squad_member_left.emit(squad, unit, cause)
+
+func _detach_from_current_squad(unit: Unit, cause: LeaveCause):
 	var old_squad := unit.squad
 	if old_squad == null:
 		return
 
-	old_squad._erase_member(unit)
+	_erase_from(old_squad, unit, cause)
 	check_reassign_leader(old_squad, unit)
 
 	if old_squad.get_members().is_empty():
 		destroy_empty_squad(old_squad)
-		
+
 func join_squad(unit: Unit, target_squad: Squad):
 	if unit.squad == target_squad:
 		return
 
-	_detach_from_current_squad(unit)
+	_detach_from_current_squad(unit, LeaveCause.VOLUNTARY)
 	target_squad._add_member(unit)
 	# #325: the marker hue is dealt at the first moment a squad actually HAS squadmates -- this
 	# is the one growth funnel (_add_member's only other caller is set_leader's solo birth), so
@@ -156,26 +192,44 @@ func join_squad(unit: Unit, target_squad: Squad):
 	if target_squad.members.size() > target_squad.max_size():
 		push_warning("Squad '%s' over capacity (%d/%d) — grandfathered (direct/loaded join)." % [target_squad.squad_name, target_squad.members.size(), target_squad.max_size()])
 
+# The Leave Squad VERB: the unit chose to go. Every forced exit that keeps the unit on the board is
+# eject below, which names its cause -- the split keeps the verb's many callers (menu, replay, the
+# Play API, tests) from having to say "voluntary" (#367).
 func leave_squad(unit: Unit):
-	_detach_from_current_squad(unit)
-	create_squad(unit)
+	eject(unit, LeaveCause.VOLUNTARY)
+
+# Detach and re-solo, for a unit that stays standing: loss of contact, a leader swap's range or
+# capacity overflow (FORCED), a downing (DOWNED).
+#
+# The solo squad keeps the old squad's archetype and zone (#1196): a rescued Hold unit still holds.
+# Not its name (the formation is gone) and not its post (the old leader's cell; Sentry sets a fresh
+# one). Read before the detach, which can free an emptied squad.
+func eject(unit: Unit, cause: LeaveCause):
+	var archetype := AIArchetype.Type.FACTION_DEFAULT
+	var zone_name := ""
+	if unit.squad != null:
+		archetype = unit.squad.archetype
+		zone_name = unit.squad.zone_name
+		unit.left_squad = unit.squad   # #1230: an AI stray rejoins this one first
+	_detach_from_current_squad(unit, cause)
+	create_squad(unit, archetype, zone_name)
 
 # The detach WITHOUT the re-solo (#738) -- for a unit that is leaving the BOARD, not just its squad.
-# leave_squad directly above cannot serve that: it exists for a unit that stays standing (downed
-# ejection, loss of contact), so it hands out a fresh solo squad, and using it to undeploy would
-# leave a live Squad holding a unit in the reserve and emit squad_created on the way out.
+# leave_squad/eject directly above cannot serve that: they exist for a unit that stays standing, so
+# they hand out a fresh solo squad, and using one to undeploy would leave a live Squad holding a unit
+# in the reserve and emit squad_created on the way out.
 #
 # This is the ONE exception to handle_unit_downed's invariant that every unit is in exactly one
 # squad, and the scope of the exception is exactly "is it on the board": game.deploy_unit gives a
 # squad back on the way in.
 func release(unit: Unit):
-	_detach_from_current_squad(unit)
+	_detach_from_current_squad(unit, LeaveCause.RELEASE)
 
 # #151's loss-of-contact backstop: a member whose SETTLED position cannot path to its leader within
 # COH leaves into a solo squad -- you cannot command what you cannot see or hear. Called at the two
 # points board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution
-# pass and turn start after the terrain/downed ticks. Deliberately not previewed, same as downed
-# ejection.
+# pass and turn start after the terrain/downed ticks. A PASS's ejections, this sweep's and the downed
+# ones alike, are forecast by SplitForecast into the queue's Split chip (#367); turn start's are not.
 #
 # WHAT REACHES HERE, corrected at #1069. This used to say movement could no longer author a split
 # because "the validator refuses it", and that was FALSE for a leader's own move for as long as it
@@ -193,7 +247,7 @@ func release(unit: Unit):
 # corner, ice melting under a formation.
 func enforce_contact() -> void:
 	for member in contact_breaks():
-		leave_squad(member)
+		eject(member, LeaveCause.FORCED)
 
 # The predicate half of enforce_contact, split out for #390 rather than copied into it: the board
 # lint warns about exactly the members this sweep is about to eject, so it has to ask the sweep's
@@ -222,29 +276,59 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 	if squad.leader != unit:
 		return
 	
-	var newLeader: Unit = squad.members[0]
-	for member in squad.members.duplicate():
-		if member.get_effective_ldr() > newLeader.get_effective_ldr():
-			newLeader = member
-	squad.leader = newLeader 
+	squad.leader = successor_among(squad.members)
+	if _handovers_held:
+		if not _held_handovers.has(squad):
+			_held_handovers.append(squad)
+		return
+	_check_new_leaders_reach(squad)
 
+# What a new leader can hold: range first, then capacity drops the newest -- in that order, so a
+# held handover waits for BOTH, or a released one could drop a different member.
+func _check_new_leaders_reach(squad: Squad) -> void:
 	var board: BoardContext = board_source.call()
 	for member in squad.members.duplicate():
 		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member, member.movement.cell, board):
-			leave_squad(member)
+			eject(member, LeaveCause.FORCED)
 
-	# Capacity overflow (#63): the new leader may command less than the old one.
-	# Detach newest-first (join order = member order) until the squad fits — deterministic,
-	# mirrors the out-of-range detach above; the leader is never the one detached.
-	while squad.members.size() > squad.max_size():
-		var newest: Unit = null
-		for i in range(squad.members.size() - 1, -1, -1):
-			if squad.members[i] != squad.leader:
-				newest = squad.members[i]
-				break
-		if newest == null:
+	for member in capacity_overflow(squad.members, squad.leader):
+		eject(member, LeaveCause.FORCED)
+
+func hold_handovers() -> void:
+	_handovers_held = true
+
+# The walk is over: every handover it held judges reach where the walkers now stand.
+func release_handovers() -> void:
+	_handovers_held = false
+	var held := _held_handovers
+	_held_handovers = []
+	for squad in held:
+		if is_instance_valid(squad) and not squad.members.is_empty():
+			_check_new_leaders_reach(squad)
+
+# Who takes over a squad whose leader left: the highest effective LDR, the first in member order on a
+# tie. Static so SplitForecast asks the same question of a squad it is only predicting (#367).
+static func successor_among(members: Array[Unit]) -> Unit:
+	var best: Unit = members[0]
+	for member in members:
+		if member.get_effective_ldr() > best.get_effective_ldr():
+			best = member
+	return best
+
+# Capacity overflow (#63): the new leader may command less than the old one. Newest-first (join
+# order = member order) until the squad fits -- deterministic, and never the leader. Returned rather
+# than acted on, so the live settle and SplitForecast drop the same members (#367).
+static func capacity_overflow(members: Array[Unit], squad_leader: Unit) -> Array[Unit]:
+	var dropped: Array[Unit] = []
+	var remaining := members.size()
+	for i in range(members.size() - 1, -1, -1):
+		if remaining <= Squad.capacity_of(squad_leader):
 			break
-		leave_squad(newest)
+		if members[i] == squad_leader:
+			continue
+		dropped.append(members[i])
+		remaining -= 1
+	return dropped
 
 func validate_squad_plan(squad: Squad, plan: ResolvedPlan = null) -> bool:
 	return SquadPlanValidator.validate(squad, squad.action_queue, board_source.call(), plan)
@@ -286,8 +370,8 @@ func disband_squad(squad: Squad):
 		return
 	
 	for member in squad.get_members().duplicate():
-		squad._erase_member(member)
-		create_squad(member)
+		_erase_from(squad, member, LeaveCause.VOLUNTARY)
+		create_squad(member, squad.archetype, squad.zone_name)
 		
 	destroy_empty_squad(squad)
 		
@@ -335,21 +419,34 @@ func _deal_ring_hue(faction: Team.Faction) -> Color:
 	return palette[index % palette.size()]
 
 func queue_action(squad: Squad, action: BaseAction) -> bool:
-	# Downed/dead units can't be ordered. This is the single order chokepoint (Law #3 —
-	# future AI funnels here too), so one check here covers every actor.
-	if action.actor != null and not action.actor.is_active():
-		return false
+	return try_queue_action(squad, action) == ""
 
-	# Per-action requirement (BaseAction.actor_can_perform — move ordering, verb locks,
+# THE order chokepoint (Law #3): queue `action` and answer "", or refuse it and answer WHY, in the
+# words of the gate that refused (#662) -- so a caller reporting a refusal never has to guess.
+#
+# The TURN-FLOW rules are deliberately the CALLER's, not this door's: whose turn it is, whether the
+# squad has acted, and whether another squad is mid-plan. The AI's preview_turn queues enemy orders
+# on the player's turn while the player's squad is active, so the menu, the AI and the Play API each
+# gate those themselves.
+func try_queue_action(squad: Squad, action: BaseAction) -> String:
+	# Downed/dead units can't be ordered; one check here covers every actor.
+	if action.actor != null:
+		var down := RulesService.standing_block_reason(action.actor)
+		if down != "":
+			return down
+
+	# Per-action requirement (BaseAction.actor_block_reason — move ordering, verb locks,
 	# ability gates): each action class declares its own; this chokepoint enforces it for
 	# every caller, including AI. The menu merely hides what this refuses.
-	if action.actor != null and not action.actor_can_perform():
-		return false
+	if action.actor != null:
+		var cannot := action.actor_block_reason()
+		if cannot != "":
+			return cannot
 
 	# Plan-context requirement: invalid is a state you fall into, never one you choose. Batched
 	# orders skip it -- a formation is one decision, judged whole by queue_group_move.
 	if not batching and not _candidate_would_be_valid(squad, action):
-		return false
+		return _plan_refusal(action)
 
 	active_squad = squad
 	# One gesture, one id: a batch wears the id its opener allocated, a lone order takes a fresh
@@ -360,12 +457,20 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	action.batch_id = _next_batch_id
 	squad._queue_action(action)
 	if batching:
-		return true   # the batch re-validates and redraws once, after the last order
+		return ""   # the batch re-validates and redraws once, after the last order
 	validate_squad_plan(squad)
 	if not previewing:
 		overlay_manager.redraw_planned_paths()
 
-	return true
+	return ""
+
+# The plan-context gate's reason: the refused candidate's own validation errors. Never empty -- an
+# empty reason would read as ACCEPTED to every caller deriving yes/no from it.
+static func _plan_refusal(action: BaseAction) -> String:
+	if action.validation_errors.is_empty():
+		push_error("try_queue_action: a plan-context refusal carried no validation error")
+		return "The order would leave the squad's plan invalid."
+	return "; ".join(action.validation_errors)
 
 # Would this order be legal if queued right now? Reads the CANDIDATE's flag, not validate's return
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
@@ -507,11 +612,18 @@ func last_gesture_actions(squad: Squad) -> Array[BaseAction]:
 	return gesture
 
 func squad_has_invalid_actions(squad: Squad) -> bool:
+	return not refused_orders(squad).is_empty()
+
+# The squad's refused orders, in queue order -- what Execute refuses over (#1121). Each carries its
+# own reasons in validation_errors; the queue panel's refusal box and the AI concede log both read
+# this list rather than walking the queue themselves.
+func refused_orders(squad: Squad) -> Array[BaseAction]:
+	var refused: Array[BaseAction] = []
 	for action in squad.action_queue:
 		if not action.is_valid:
-			return true
-	return false
-	
+			refused.append(action)
+	return refused
+
 # `target_cell` overrides where the ATTACKER is taken to be standing; null = wherever the plan
 # leaves them, which is every caller but one. The AI's target selection (#117) is that one: it asks
 # "would this enemy be able to answer me from the cell I would attack it from?" about a cell nobody
@@ -562,87 +674,22 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], 
 			return member
 	return null
 
-# C8 -- a reaction's KIND is its source's AttackData.heals, and the two kinds aim opposite ways.
-# A damaging source picks from the attacking party (above, unchanged); a healing one turns inward
-# and can never pick an enemy. Forked off the same flag the resolver, the executor and the reach
-# overlay already read, rather than a second way to ask "is this a heal" (#148).
-func _choose_reaction_target(reacting_unit: Unit, attacking_party: Array[Unit], hypo: Dictionary, board: BoardContext) -> Unit:
-	if _reaction_heals(reacting_unit):
-		return choose_reaction_heal_target(reacting_unit, board, hypo)
-	return choose_counter_target(reacting_unit, attacking_party, board)
-
-func _reaction_heals(reacting_unit: Unit) -> bool:
-	var source := reacting_unit.get_counter_attack()
-	return source != null and source.heals
-
-# C9 -- the ally a reactive heal lands on. Two rules that must stay separate: "below max HP" is a
-# FILTER, "lowest HP" is the sort. Collapsed into one, a full 19/19 unit outranks a hurt 20/23 one,
-# which is the exact thing the dev ruled out. Ties fall to _all_units order, the same first-in-
-# order tie-break choose_counter_target uses (Law #1).
-func choose_reaction_heal_target(healer: Unit, board: BoardContext, hypo: Dictionary = {}) -> Unit:
-	var best: Unit = null
-	var best_hp := 0
-	for candidate in _all_units():
-		if not can_reaction_heal(healer, candidate, board, hypo):
-			continue
-		var hp := PlanResolver.projected_hp(candidate, hypo)
-		if best == null or hp < best_hp:
-			best = candidate
-			best_hp = hp
-	return best
-
-# May this healer's reaction land on that unit? Everything HP-shaped is read off the threaded
-# hypothetical, because the attacks have already resolved into it and not onto the board -- read
-# live, the healer would pick whoever was hurt BEFORE the swing and skip the squadmate who just
-# took it. A DOWNED ally is excluded outright (dev call, #148), and since #1002 for ONE of the two
-# reasons it was given: a body at 1 HP wins every lowest-HP comparison, so it would eat the squad's
-# whole reaction. The other reason -- that healing a body accomplishes nothing -- is now FALSE (it
-# stops the death clock), and the rule stands on the surviving half.
-func can_reaction_heal(healer: Unit, candidate: Unit, board: BoardContext, hypo: Dictionary = {}) -> bool:
-	if healer == null or candidate == null:
-		return false
-	if not is_instance_valid(healer) or not is_instance_valid(candidate):
-		return false
-	if not healer.attack_source_can_counter():
-		return false
-	# The same rule at the other reaction gate (#810). Justified here rather than inherited: the two
-	# paths share attack_source_can_counter but not this predicate, and a watching medic topping an
-	# ally up is the same free lunch a watching counter-er would be.
-	if healer.is_standing_watch():
-		return false
-	var source := healer.get_counter_attack()
-	if source == null or not source.heals:
-		return false
-	# hits_self/hits_allies still decide who a heal may touch; allies_only strips the enemies an
-	# ordinary aim is allowed to splash. Without it the reaction tops up the attacker (C8).
-	if not RulesService.is_attack_victim(healer, candidate, source, true):
-		return false
-	if PlanResolver.projected_lifecycle(candidate, hypo) != Unit.LifecycleState.ACTIVE:
-		return false
-	if PlanResolver.projected_hp(candidate, hypo) >= candidate.get_max_hp():
-		return false
-	# Same reach test can_counter applies, judged by the attack that will actually fire (#102),
-	# vertical tolerance included (#258).
-	return Reach.can_hit_cell_from(healer, healer.get_projected_destination(), candidate.get_projected_destination(), source, board)
-
-# Every reaction the defending parties get, in RESOLUTION ORDER: damaging ones first, healing ones
-# after (C10). That ordering is the whole reason #148 needed no separate post-counter stage --
-# PlanResolver.resolve_counters walks this list in order, so a reactive heal already lands after
-# any counter that ally-splashed its own squad.
+# Every counter the defending parties get, in resolution order. A healer takes NONE: the reactive heal
+# (#148, squad-system.md C8-C10) was repealed (dev, 2026-09-28: "too strong and doesn't make logical
+# sense"), and AttackData.can_ever_counter refuses a heal, so it falls out through can_counter with
+# every other unit that cannot answer.
 #
 # ONE walk, ONE ledger. C1 (a unit reacts once per plan) and C4 (a party responds once per
-# attacking squad's plan) are bookkeeping, and a second sweep for heals would have to keep its own
-# copy of it -- two answers to "has this party reacted yet", free to drift (Law #4).
+# attacking squad's plan) are bookkeeping, kept here and nowhere else (Law #4).
 #
 # A REACTION ANSWERS A HOSTILE HIT (C5's trigger half, #767). C1 is written "when party X ATTACKS
-# party Y", and until #767 nothing enforced the verb: this walk read every action in plan.attacks,
-# and a heal is an ordinary AttackAction whose target is an ALLY. So a queued heal made the healer's
-# OWN squad the defending party and handed it a free reaction -- invisible for a damaging squadmate,
-# whom choose_counter_target refuses through the same predicate the gate below uses, but a heal
-# reaction turns inward and never asks who it is answering, so the healer simply healed twice.
-func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], board: BoardContext, hypo: Dictionary = {}) -> Array[CounterAttackAction]:
-	var strikes: Array[CounterAttackAction] = []
-	var heals: Array[CounterAttackAction] = []
+# party Y", and a heal is an ordinary AttackAction whose target is an ALLY, so without the gate below
+# a queued heal makes the healer's own squad the defending party. Its only observable leak was the
+# reactive heal, which turned inward and never asked who it was answering; with that gone, every
+# reactor is refused by choose_counter_target's own hostility check anyway, so no case can see this
+# gate any more. It stays because it IS the rule, and because it keeps a friendly hit off the ledger.
+func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], board: BoardContext) -> Array[CounterAttackAction]:
+	var counters: Array[CounterAttackAction] = []
 	var defender_groups_that_countered := {} # {Squad : bool}
 	var attacking_units = attacking_squad.get_members()
 
@@ -657,7 +704,7 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 		# too, so a self-aimed heal falls out here rather than needing a clause of its own.
 		#
 		# ABOVE THE LEDGER, NOT BELOW: a friendly hit must not spend the squad's one reaction (C4).
-		# Unobservable through legal play -- _formation_basics_ok forbids a mixed-faction squad, so
+		# Unobservable through legal play -- formation_block_reason forbids a mixed-faction squad, so
 		# no squad can hold both a hostile and a non-hostile victim of the same plan -- but the
 		# ledger should record reactions that happened, and a scenario file can hand-build that board.
 		if attack.actor == null or not RulesService.can_target(attack.actor, defender):
@@ -679,26 +726,25 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 			continue
 
 		for reacting_unit in defender.squad.get_members():
-			var reaction_target := _choose_reaction_target(reacting_unit, attacking_units, hypo, board)
+			var reaction_target := choose_counter_target(reacting_unit, attacking_units, board)
 			if reaction_target == null:
 				continue
 
 			var reaction := CounterAttackAction.new()
 			reaction.init_counter(reacting_unit, reaction_target, reacting_unit.get_projected_destination(), attack)
-			if _reaction_heals(reacting_unit):
-				heals.append(reaction)
-			else:
-				strikes.append(reaction)
+			counters.append(reaction)
 
 		defender_groups_that_countered[defender_squad] = true
 
-	strikes.append_array(heals)
-	return strikes
+	return counters
 	
 func resolve_plan(squad: Squad, board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
 	var plan := _resolve_actions(squad, squad.action_queue, board, reactions, terrain_reactions)
+	# Who the pass will knock out of a squad, and which blow does it (#367). A hypothetical stamps it
+	# too, since the AI scores a split (#761).
+	SplitForecast.stamp(plan, board)
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad
 	return plan
@@ -715,10 +761,34 @@ func resolve_plan(squad: Squad, board: BoardContext,
 # squad.get_actions()), so a hypothetical MOVE moves nobody in the projection every stage here
 # reads. Main actions are unaffected -- they do not move anyone. Scoring a movement candidate has to
 # queue the move for real or extend projected_cell's axes; it cannot ride this.
+#
+# The split forecast is stamped here as in resolve_plan (#761: the AI scores a squad break), so a
+# hypothetical differs from the real resolve in one thing only -- it never writes the cache.
 func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
-	return _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+	SplitForecast.stamp(plan, board)
+	return plan
+
+
+# What an aim not yet queued would DROP (#1058 D2b): every payload row the resolve derives from
+# `candidate`, in the order it plays. Only a resolve can answer, because a sticky bomb goes off where
+# the hit LEAVES its victim (ruling 43) and that landing exists nowhere else. `source_aim` is the
+# back-link SpringspearWeaponRoutine reads for the candidate's own rows.
+#
+# It keeps resolve_hypothetical's contract HERE rather than leaving it to the caller: the pass
+# publishes the candidate's shoves onto the board, so a real resolve_plan follows before anyone reads
+# a projected position again -- and a hover asks this on every cell it crosses.
+func preview_payloads(squad: Squad, candidate: AttackAction, board: BoardContext) -> Array[AttackAction]:
+	var rows: Array[AttackAction] = []
+	var candidates: Array[BaseAction] = [candidate]
+	var plan := resolve_hypothetical(squad, candidates, board)
+	for row in plan.attacks:
+		if row.source_aim == candidate and row.dropped_by != null:
+			rows.append(row)
+	resolve_plan(squad, board)
+	return rows
 
 
 # One pass over ONE action list. Split out of resolve_plan so a hypothetical queue can be resolved
@@ -763,12 +833,8 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# Standing watches armed in an EARLIER pass (#413) — the enemy-phase case, and the whole point of
 	# the mechanic. Same two-sources-one-list shape the wards above have; watches queued in THIS plan
 	# join at their own slot in the walk below, which is what makes a shove combo sequence-able.
-	var live_watches: Array[Watch] = []
-	for unit in board.units:
-		if unit.watch != null and unit.watch.is_armed():
-			live_watches.append(unit.watch.copy())
-	live_watches.sort_custom(func(a: Watch, b: Watch) -> bool: return a.sequence < b.sequence)
-	plan.watches.append_array(live_watches)
+	for watch in Watch.standing(board.units):
+		plan.watches.append(watch.copy())
 	var watch_orders: Dictionary = {}   # Watch (this pass's copy) -> the OverwatchAction that armed it
 	# ...and the same watches in QUEUE ORDER, for the arm-fire pass in the tail (#1003). Its own
 	# array rather than a walk of watch_orders' keys: the order a Dictionary happens to iterate in
@@ -902,24 +968,23 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			plan.attacks.append_array(dropped)
 			_settle_shoves(dropped, plan, hypo, reactions, board, terrain_reactions)
 
-	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
-	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire
-	# gather the attack loop above uses — so an AoE counter splashes everyone in the blast, not
-	# just its chosen target. (Parallels the #15 "derive victims, don't store" rule for attacks.)
-	for aim in calculate_reactions_for_squad(squad, plan.attacks, board, hypo):
+	# The deposits land after the volley (#922): whoever the melt took the floor from goes under NOW,
+	# before any reaction is derived -- a sunk unit is down, and a body does not counter.
+	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.DEPOSITS_LAND)
+
+	# Counters are derived as single-target "aims" (who answers whom). Expand each into its own
+	# volley from the reactor's projected cell — the same AoE + friendly-fire gather the attack loop
+	# above uses — so an AoE counter splashes everyone in the blast, not just its chosen target.
+	# (Parallels the #15 "derive victims, don't store" rule for attacks.)
+	for aim in calculate_reactions_for_squad(squad, plan.attacks, board):
 		var c_origin := aim.actor.get_projected_destination()
 		var c_aim_cell := aim.target.get_projected_destination()
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
 		# create_counter_volley stamps below (#102).
 		var c_attack := aim.actor.get_counter_attack()
-		# A reaction HEAL's splash is ally-only (C8). Without this the target pick is correct and
-		# the volley still tops the attacker up, because an enemy in the footprint is an ordinary
-		# victim -- #148's bug one layer down from where it was reported. A player-AIMED heal keeps
-		# its enemy splash; that is agency, and only the derived reaction is restricted (dev call).
-		var healing := c_attack != null and c_attack.heals
 		# A counter is an attack like any other, so a shock counter arcs (E7 -- counters are in the
 		# chain). Its current reads the hypo the attacks have already resolved into.
-		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo, healing)
+		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo)
 		var c_affected := c_reach.cells
 		var c_victims := c_reach.victims
 		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
@@ -1026,6 +1091,10 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	for armed in watch_orders:
 		(watch_orders[armed] as OverwatchAction).resolved_spent = (armed as Watch).spent
 
+	# ...and the melts only a counter or a tail shot made (#922), once the pass has settled -- ahead of
+	# the END OF TURN forecast, which must read a sunk unit as down.
+	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.PASS_END)
+
 	# The END OF TURN forecast (#419), last of all: it reads where the pass leaves every member and
 	# which deposits the pass made, so it can only be derived once both are settled.
 	PlanResolver.resolve_tile_hits(plan, squad, actions, hypo, board)
@@ -1078,14 +1147,28 @@ func handle_unit_death(unit: Unit) -> void:
 	_remove_from_squad_and_revalidate(unit, false)
 
 # A downed unit SURVIVES as a body on the board, so it can't be left squad-less (invariant: every
-# unit is in exactly one squad) — leave_squad detaches it AND gives it a fresh solo squad.
+# unit is in exactly one squad) — eject detaches it AND gives it a fresh solo squad.
 func handle_unit_downed(unit: Unit) -> void:
 	_remove_from_squad_and_revalidate(unit, true)
 
-# Shared cleanup: silently drop the unit's planned orders (a death/down is not an order
-# cancellation, and the cancel handlers would restore squad badges), pull it out of its squad,
-# then re-validate whatever's left behind.
+# What a pass's end does with one unit downed during it, for both hosts' sweeps (#46). It is ejected
+# whatever happened next -- revive does NOT re-enlist -- and one standing again was rescued in the
+# SAME pass (#124): still SPENT the turn it is rescued, and its solo squad only exists as of the
+# eject, so the mark lands here rather than in RescueAction.execute. The caller skips a unit finished
+# off later in the pass; the death path already cleaned it up.
+func settle_downed(unit: Unit) -> void:
+	handle_unit_downed(unit)
+	if unit.is_active():
+		unit.squad.has_acted = true
+
+# Shared cleanup: clear the unit's planning overlays (its icons, path, ghost -- not its board
+# presence), silently drop its planned orders (a death/down is not an order cancellation, and the
+# cancel handlers would restore squad badges), pull it out of its squad, then re-validate whatever's
+# left behind. The overlays are cleared HERE so every host does it (#46): the game used to clear them
+# at its two callers, and the headless host never did, so a dead unit's ghost outlived it.
 func _remove_from_squad_and_revalidate(unit: Unit, keep_on_board: bool) -> void:
+	if overlay_manager != null:
+		overlay_manager.handle_unit_death(unit)
 	var squad := unit.squad
 	if squad == null or not is_instance_valid(squad):
 		return
@@ -1093,9 +1176,9 @@ func _remove_from_squad_and_revalidate(unit: Unit, keep_on_board: bool) -> void:
 	squad._remove_actions_for_actor_silent(unit)
 
 	if keep_on_board:
-		leave_squad(unit)
+		eject(unit, LeaveCause.DOWNED)
 	else:
-		_detach_from_current_squad(unit)
+		_detach_from_current_squad(unit, LeaveCause.DEATH)
 
 	if is_instance_valid(squad) and not squad.get_members().is_empty():
 		validate_squad_plan(squad)
@@ -1121,11 +1204,14 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 			return true
 	return false
 
-# Shared by both formation checks: both sides STANDING, in range of the leader, room in the squad,
-# same faction, not already a member, and neither side has spent its turn.
+# Why `unit` may not enter `squad`, or "" when it may: the clauses both formation verbs share, in
+# both directions -- both sides STANDING, same faction, not already a member, neither side spent, room
+# in the squad, and in range of the leader. A REASON since #46, so the Play API's `join` refuses in the
+# game's words; can_squad_up / can_join_squad are derived from it, and the order only decides which
+# reason a refusal names -- the cheap clauses first, the range check (a path search) last.
 #
 # The lifecycle clause is FIRST and it is #1004: a downed unit is ejected into a fresh solo squad,
-# and _process_downed_pending only marks that squad spent when the unit is standing again (the
+# and settle_downed only marks that squad spent when the unit is standing again (the
 # same-pass rescue case), so a body sat there order-free and un-acted -- which every other clause
 # below reads as "available". Asked HERE because this is the one gate every formation verb routes
 # through, in both directions; the alternative of marking the ejected squad has_acted hides a body
@@ -1133,33 +1219,52 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 #
 # is_active(), not is_downed(): a DEAD unit should never reach this (handle_unit_death detaches
 # without a replacement squad), but the predicate that means STANDING is the one to ask.
-func _formation_basics_ok(unit: Unit, squad: Squad) -> bool:
-	if not unit.is_active() or not squad.leader.is_active():
-		return false
-	if not SquadCohesion.in_range(squad, squad.leader.movement.cell, unit, unit.movement.cell, board_source.call()):
-		return false
-	if squad.members.size() >= squad.max_size():
-		return false
-	if squad.leader.get_faction() != unit.get_faction():
-		return false
+func formation_block_reason(unit: Unit, squad: Squad) -> String:
+	var leader := squad.leader
+	if not unit.is_active():
+		return "%s is down" % unit.get_unit_name()
+	if not leader.is_active():
+		return "%s is down" % leader.get_unit_name()
+	if leader.get_faction() != unit.get_faction():
+		return "different factions can't squad up"
 	if squad.get_members().has(unit):
-		return false
-	return not squad.has_acted and not unit.squad.has_acted
+		return "%s is already in %s's squad" % [unit.get_unit_name(), leader.get_unit_name()]
+	if squad.has_acted or unit.squad.has_acted:
+		return "a squad that has acted can't change this turn"
+	if squad.members.size() >= squad.max_size():
+		return "%s's squad is full (%d of %d)" % [leader.get_unit_name(), squad.members.size(), squad.max_size()]
+	if not SquadCohesion.in_range(squad, leader.movement.cell, unit, unit.movement.cell, board_source.call()):
+		return "%s is outside %s's leader range" % [unit.get_unit_name(), leader.get_unit_name()]
+	return ""
 
 # Pulling a loose unit INTO a squad being formed: the recruit must be solo and both sides must
 # still be order-free, since squad membership can't change once a plan exists.
+func squad_up_block_reason(joining_unit: Unit, squad: Squad) -> String:
+	var reason := formation_block_reason(joining_unit, squad)
+	if reason != "":
+		return reason
+	if joining_unit.has_squad():
+		return "%s already has squadmates" % joining_unit.get_unit_name()
+	if joining_unit.has_any_actions():
+		return "%s has orders queued" % joining_unit.get_unit_name()
+	if not squad.action_queue.is_empty():
+		return "%s's squad has orders queued" % squad.leader.get_unit_name()
+	return ""
+
 func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
-	if not _formation_basics_ok(joining_unit, squad):
-		return false
-	if joining_unit.has_squad() or joining_unit.has_any_actions():
-		return false
-	return squad.action_queue.is_empty()
+	return squad_up_block_reason(joining_unit, squad) == ""
 
 # Joining an ALREADY-FORMED squad — so the target's leader must actually have squadmates.
+func join_squad_block_reason(unit: Unit, squad: Squad) -> String:
+	var reason := formation_block_reason(unit, squad)
+	if reason != "":
+		return reason
+	if not squad.leader.has_squad():
+		return "%s leads no squad to join" % squad.leader.get_unit_name()
+	return ""
+
 func can_join_squad(unit: Unit, squad: Squad) -> bool:
-	if not _formation_basics_ok(unit, squad):
-		return false
-	return squad.leader.has_squad()
+	return join_squad_block_reason(unit, squad) == ""
 
 func _all_units() -> Array[Unit]:
 	# Every unit belongs to exactly one managed squad (solo units get a 1-member squad),
@@ -1184,8 +1289,9 @@ func _plan_has_invalid_move(squad: Squad) -> bool:
 			return true
 	return false
 
-func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> bool:
-	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells)
+func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
+		pinned: Dictionary = {}, hazards: Dictionary = {}, direct: Dictionary = {}) -> bool:
+	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells, pinned, hazards, direct)
 
 	# Nothing to author -- plan() refuses to path a leader to a goal it cannot reach. Bail BEFORE the
 	# batch opens rather than falling into the rollback below, which would cancel moves this call
@@ -1263,7 +1369,12 @@ func _on_squad_action_queued(squad: Squad, action: BaseAction):
 func _on_squad_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
 	squad_action_cancelled.emit(squad, unit, actiontype)
 
+# The hold-position fillers are a RULE, so they are queued here for every host (#46), BEFORE the
+# re-emit: a listener that reads the plan sees the whole of it. The threat preview draws nothing and
+# rolls every order back, so it queues none.
 func _on_squad_became_active(squad: Squad, action: BaseAction):
+	if not previewing:
+		setup_hold_move_actions(squad)
 	squad_became_active.emit(squad, action)
 
 func _on_squad_became_empty(squad: Squad):

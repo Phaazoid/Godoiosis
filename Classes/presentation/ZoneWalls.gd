@@ -1,0 +1,59 @@
+extends MeshInstance3D
+class_name ZoneWalls
+
+# A zone's WALL (#955): a low wall of light just inside every drawn zone's perimeter. ONE mesh
+# for the whole board -- a vertical strip per outward cell edge, its kind's colour in the vertices --
+# built by OverlayMirror from ZoneMarks.wall_outline, which steps the tracer the COH line and the
+# enemy focus edge share just inside the zone, off the plane a border block's face stands in. Rebuilt
+# only when the zones, the heights or a knob move; the shimmer is the shader's own clock.
+#
+# On the WORLD render layer alone, or the damp blot would darken it (the decal law). It HIDES while a
+# tear-out has cells up: its strips stand where the ground rests and cannot follow a flight
+# (declared, #1118; the rim marks do follow it). The flat view has no wall.
+
+const SHADER := preload("res://Classes/presentation/zone_wall.gdshader")
+
+var strip_count := 0
+
+
+func _init() -> void:
+	name = "ZoneWalls"
+	layers = BoardOverlays.WORLD_RENDER_LAYER
+	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := ShaderMaterial.new()
+	material.shader = SHADER
+	material.render_priority = BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_MARKS]["sort"]
+	material_override = material
+	visible = false
+
+
+# `strips` is {"from": Vector3, "to": Vector3, "colour": Color, "height": float} each, in world space
+# at the ground. The colour's alpha is the strip's strength at its foot and the height its own, so a LIT
+# zone (#955 part 3) stands taller and brighter in the same one mesh.
+func build(strips: Array[Dictionary], shimmer_speed: float) -> void:
+	var material := material_override as ShaderMaterial
+	material.set_shader_parameter("shimmer_speed", shimmer_speed)
+	strip_count = strips.size()
+	if strips.is_empty():
+		mesh = null
+		return
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for strip in strips:
+		var up := Vector3.UP * float(strip["height"])
+		var a: Vector3 = strip["from"]
+		var b: Vector3 = strip["to"]
+		var colour: Color = strip["colour"]
+		_vertex(st, a, colour, Vector2(0, 0))
+		_vertex(st, b, colour, Vector2(1, 0))
+		_vertex(st, b + up, colour, Vector2(1, 1))
+		_vertex(st, a, colour, Vector2(0, 0))
+		_vertex(st, b + up, colour, Vector2(1, 1))
+		_vertex(st, a + up, colour, Vector2(0, 1))
+	mesh = st.commit()
+
+
+func _vertex(st: SurfaceTool, at: Vector3, colour: Color, uv: Vector2) -> void:
+	st.set_color(colour)
+	st.set_uv(uv)
+	st.add_vertex(at)

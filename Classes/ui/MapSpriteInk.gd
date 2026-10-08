@@ -58,3 +58,45 @@ static func window_offset(window_px: float) -> Vector2:
 static func ink_fit_rect(centre: Vector2, reach: float) -> Rect2:
 	var scale := reach / ink_reach(SHEET)
 	return Rect2(centre - ink_centre(SHEET) * scale, Vector2(SHEET, SHEET) * scale)
+
+
+# The TEXTURE answer, for a slot that can only be handed one (#1082): the square of the sheet around
+# THIS sprite's own ink, its longest side edge to edge, centred across with the feet on the floor. The
+# slot's TextureRect stretches that square to fill itself, so every unit fills its slot and they stop
+# sharing one scale (dev ruling: a wizard draws bigger than a lancer, and nothing is ever cut off).
+# That is why this reads ink_of rather than INK_RECT, which the shared-scale surfaces above keep.
+# Anything not SHEET square is not a map sprite (a move row's 16px terrain icon) and passes through
+# untouched.
+static func portrait(texture: Texture2D) -> Texture2D:
+	if texture == null or Vector2i(texture.get_size()) != Vector2i(SHEET, SHEET):
+		return texture
+	var ink := ink_of(texture)
+	var side := maxi(ink.size.x, ink.size.y)
+	var x := clampi(roundi(ink.position.x + ink.size.x * 0.5 - side * 0.5), 0, SHEET - side)
+	var y := clampi(ink.end.y - side, 0, SHEET - side)
+	var crop := AtlasTexture.new()
+	crop.atlas = texture
+	crop.region = Rect2(x, y, side, side)
+	return crop
+
+
+# One sprite's own ink box in its sheet. BoardMirror.opaque_bounds is the one "is this ink" rule
+# (UnitSprite3D and StatusArt read it too), so the queue cannot disagree with the diorama about where a
+# character is. Cached per texture, UnitSprite3D._art_top_cache's idiom: decoding an imported texture
+# is real work and the queue asks on every rebuild. An unreadable image answers the median.
+static var _ink_cache: Dictionary[String, Rect2i] = {}
+
+
+static func ink_of(texture: Texture2D) -> Rect2i:
+	var key := texture.resource_path
+	if key.is_empty():
+		key = str(texture.get_instance_id())
+	if not _ink_cache.has(key):
+		var image := texture.get_image()
+		if image == null:
+			return INK_RECT
+		if image.is_compressed():
+			image = image.duplicate()
+			image.decompress()
+		_ink_cache[key] = BoardMirror.opaque_bounds(image, Rect2i(Vector2i.ZERO, image.get_size()))
+	return _ink_cache[key]

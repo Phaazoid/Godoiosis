@@ -184,7 +184,7 @@ func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:
 	var before := mirror.fire_marker_count()
 	assert_int(before).override_failure_message("no flame to lose; the case is vacuous").is_greater(0)
 
-	unit._go_downed(false)
+	unit.force_down()
 	await await_idle_frame()
 	await await_idle_frame()
 	assert_int(mirror.fire_marker_count()).override_failure_message(
@@ -2810,10 +2810,12 @@ func test_the_photosensitivity_setting_holds_the_fire_still() -> void:
 				"the fire kept moving with the photosensitivity setting on -- the player's toggle would only hide it"
 		).is_equal(still)
 	# Steady state means steady ENERGY too: a still frame under a flickering lamp is still a strobe.
+	# Approximate: the light stores single precision, so an exact compare passes only for a tuned
+	# value that happens to be exact in 32 bits (2.0 did, 1.95 does not).
 	var light := _light_under(mirror.fire_marker_at(burning[0]))
 	assert_float(light.light_energy).override_failure_message(
 			"the flame's light still flickers with the setting on -- steady state means steady energy"
-	).is_equal(mirror.flame_light_energy)
+	).is_equal_approx(mirror.flame_light_energy, 0.0001)
 
 
 func test_two_burning_cells_do_not_burn_in_lockstep() -> void:

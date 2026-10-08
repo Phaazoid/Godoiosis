@@ -23,6 +23,14 @@ const BB := preload("res://play/board_builder.gd")
 const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 8, 3)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -47,7 +55,7 @@ func _context(board: Dictionary) -> BoardContext:
 # thing clings at 1 HP (Unit._go_downed), and the attack cases below are decided by exactly that HP
 # through the overkill clamp -- hand-set, a body is priced at its full bar and outranks a standing
 # target the ruling says it must lose to. force_down is the dev bypass built for this: DOWNED with no
-# Will spend, no maim, no Crisis. Nothing listens to `went_downed` on a board_builder fixture.
+# limb taken and no Crisis. Nothing listens to `went_downed` on a board_builder fixture.
 func _down(unit: Unit) -> void:
 	unit.force_down()
 

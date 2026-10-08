@@ -20,3 +20,4 @@ size = 1
 inscriptions = Array[ExtResource("1_5h8xb")]([SubResource("Resource_bc5sa")])
 temper = 6
 display_name = "Air Rune"
+weight = 1

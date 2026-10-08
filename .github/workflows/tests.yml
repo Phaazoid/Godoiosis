@@ -29,8 +29,16 @@ on:
   pull_request:
     branches: [main]
     paths: ['**', '!docs/**', '!**.md', 'CHANGELOG.md']
-  # BY HAND, for measuring a runner change without a throwaway commit (2026-09-14).
+  # BY HAND, for measuring a runner change without a throwaway commit (2026-09-14), and by the
+  # failover watcher (tools/ci-failover/), which dispatches `-f runner=local` when GitHub's own
+  # runners stop taking jobs (2026-10-05).
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Where the shards run: hosted (GitHub's image) or local (the dev's WSL runners)"
+        type: choice
+        options: [hosted, local]
+        default: hosted
 
 # THE ONE HAND-MAINTAINED SHARD LIST, AND THE ONLY PLACE IT IS WRITTEN. pres-rest subtracts
 # exactly these, so "pres-rest runs what pres-a does not" is true by CONSTRUCTION rather than by
@@ -54,13 +62,22 @@ env:
 
 jobs:
   test:
-    # WHERE A SHARD RUNS IS THE `RUNNER` REPO VARIABLE, NOT THIS FILE (2026-09-14). `self-hosted`
-    # sends every shard to the runners registered on the dev's machine -- Ubuntu in WSL2, so the
-    # same Linux Godot, sidecar guard and two-pass import, at zero Actions minutes. Unset, it is
-    # GitHub's image again with no edit here. PRIVATE REPO ONLY: a self-hosted runner executes
-    # whatever a pull_request carries, and a public repo's fork PRs carry a stranger's. Clear the
-    # variable before ever going public.
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    # GITHUB'S IMAGE, UNLESS A DISPATCH ASKS FOR THE LOCAL RUNNERS (2026-10-05). The three runners
+    # registered on the dev's machine (Ubuntu in WSL2: the same Linux Godot, sidecar guard and
+    # two-pass import) ran every shard from 2026-09-14 to 09-27 through the `RUNNER` repo variable.
+    # The repo went public on 09-27 and the variable was deleted.
+    #
+    # Now only `workflow_dispatch` with `runner: local` reaches them, which tools/ci-failover/
+    # watch.ps1 sends when hosted jobs sit queued during a GitHub outage. Push and pull_request runs
+    # carry no `inputs`, so they fall through to GitHub's image exactly as before. Only someone with
+    # write access can dispatch.
+    #
+    # THIS LINE IS NOT THE FENCE. A PR from someone else's copy of the repo brings its own copy of
+    # this file and can ask for `self-hosted` directly. What keeps a stranger's code off the dev's
+    # machine is the runners being OFFLINE except while the watcher has failover work for them, plus
+    # the repo's rule that every outside contributor's run waits for approval. `vars.RUNNER` stays in
+    # the chain only as the way back if the repo ever goes private again.
+    runs-on: ${{ inputs.runner == 'local' && 'self-hosted' || vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     strategy:
       # EVERY SHARD REPORTS. One red shard must not cancel the other four: a failing case

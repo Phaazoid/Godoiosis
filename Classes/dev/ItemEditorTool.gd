@@ -335,7 +335,7 @@ func _populate_weapon_editor(weapon: WeaponInstance) -> void:
 	# The two are a different question each -- "is there any mod at all" and "which fit this family" --
 	# and the rows below say something different for each empty.
 	var mods := WeaponModCatalog.get_mods()
-	var offerable := WeaponModCatalog.offerable_for(template.weapon_type)
+	var offerable := WeaponModCatalog.offerable_for(template.weapon_type, WeaponModCatalog.all_mods())
 	for i in range(weapon.space_count()):
 		_populate_mod_space(weapon, i, mods, offerable)
 
@@ -540,7 +540,7 @@ func _shift_text(change: Dictionary) -> String:
 
 func _populate_mod_grants(mod: WeaponModData) -> void:
 	DevWidgets.add_stat_dict(editor_container, "Wielder stat modifiers", mod.stat_modifiers,
-		DevWidgets.property_tip(mod, "stat_modifiers"))
+		DevWidgets.property_tip(mod, "stat_modifiers"), Stats.GEAR_EXCLUDED)
 	_populate_grant_list("Granted attacks:", mod.granted_attacks, WeaponAttackCatalog.get_library(),
 		"(no attacks in %s)" % WeaponAttackCatalog.LIBRARY_DIR, DevWidgets.property_tip(mod, "granted_attacks"))
 	_populate_grant_list("Granted abilities:", mod.granted_abilities, AbilityCatalog.get_abilities(),

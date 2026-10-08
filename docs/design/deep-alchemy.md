@@ -577,3 +577,32 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 3. **Break's argument order** — resolved in review: commutative. Its sibling, **partition choice**, is also resolved — author-confirmed as an intended feature (`Break(F2, E)` vs `Break(F, FE)` on sodium are different transmutations with different effects). What remains is only to *state* both rules in the matching-semantics section: `Break(X, Y)` matches any substance whose formula is exactly X + Y combined, splits it into X and Y, is commutative in its arguments, and distinct partitions are distinct carvings.
 4. **"Duration of the transmutation"** (Splash) — transmutations with durations are a new concept; define or cut.
 5. **Concentration caps / dispersal, edge rules, inventory participation** — one declared answer each, per the exploit list above.
+
+---
+
+## What is built (CLAUDE-AUTHORED)
+
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+
+**Canon checked through #1239 (2026-10-07).**
+
+**Phase 1: formulas and a lint, with no gameplay change.** Agreed in #iosis-talk on 2026-10-06. Nothing in play reads any of it yet.
+
+- **Substances** are one `.tres` each in `Resources/Substances/` (`Classes/alchemy/Substance.gd`). The id is the file name. `formula` is a molecule (`FW`, or a `*` composition) or a compound of other substances joined by `+` (`AE + A2`). The atoms are the five sigil elements the game already has. `phase` is unbound, solid, liquid or gas.
+- **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id, which leaves room for ice and water both being `W2`. A compound is only ever named by id.
+- **Equations** are one line of text on each reaction, `ElementalReaction.equation` and `TerrainReaction.equation`, written as above (`F2 + W2 -> 2FW`).
+- **What each game thing is made of** is `SubstanceMap`: one row for every element, unit state, tile state, ground and gas, each a substance id or a reasoned NONE or PENDING line. A vial carries its own `substance` field.
+- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps a PENDING ledger of the reactions still waiting on a design answer, and it only shrinks honestly.
+
+**Written so far:** Douse, Boils and Quick Dry are all `F2 + W2 -> 2FW`. Quick Dry's equation says steam is made, which the game does not do yet. Water setting Wet is `W2 -> W2`.
+
+**Waiting on c3potheds@, as of 2026-10-07:**
+
+- what ice is, which blocks Freeze, Frozen, Melt and the three Chilled reactions
+- organic matter's proportions, which block grass and tree ignition
+- what lightning through water makes, which blocks Electrocute
+- formulas for stone, dirt, mud, nitre, ichor and vitriol
+- smoke's ratio, entered as `AE + A2` one-to-one as a placeholder
+- sulfur gas is entered as `FAE`, the alchemical-order spelling of the `AFE` proposed in chat
+
+**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. **Still open:** Whether gas spread must conserve matter is deferred.

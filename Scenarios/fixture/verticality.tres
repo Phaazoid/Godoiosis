@@ -87,6 +87,9 @@ display_name = "Gun"
 script = ExtResource("20_tlmki")
 display_name = "Noemie"
 portrait = ExtResource("18_8v8bq")
+base_stats = Dictionary[int, int]({
+8: 10
+})
 faction = 1
 map_sprite = ExtResource("16_qsr8l")
 move_sprite = ExtResource("17_r4ki6")
@@ -107,14 +110,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_me5hs")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -157,11 +158,15 @@ script = ExtResource("14_gkkfx")
 inscriptions = Array[ExtResource("11_r05ue")]([SubResource("Resource_qleu1")])
 temper = 6
 display_name = "woosh"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_xhlih"]
 script = ExtResource("20_tlmki")
 display_name = "Isaac"
 portrait = ExtResource("19_a5n8y")
+base_stats = Dictionary[int, int]({
+8: 9
+})
 map_sprite = ExtResource("17_67jcl")
 move_sprite = ExtResource("18_jw6ao")
 downed_sprite = ExtResource("15_n5m3j")
@@ -186,14 +191,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_7qxt0")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -237,11 +240,15 @@ script = ExtResource("14_gkkfx")
 inscriptions = Array[ExtResource("11_r05ue")]([SubResource("Resource_c6jo3")])
 temper = 6
 display_name = "woosh"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_mayhp"]
 script = ExtResource("20_tlmki")
 display_name = "Isaac"
 portrait = ExtResource("19_a5n8y")
+base_stats = Dictionary[int, int]({
+8: 9
+})
 map_sprite = ExtResource("17_67jcl")
 move_sprite = ExtResource("18_jw6ao")
 downed_sprite = ExtResource("15_n5m3j")
@@ -266,14 +273,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_m6ukm")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -322,11 +327,15 @@ script = ExtResource("14_gkkfx")
 inscriptions = Array[ExtResource("11_r05ue")]([SubResource("Resource_sokeq")])
 temper = 1
 display_name = "BFire"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_albh4"]
 script = ExtResource("20_tlmki")
 display_name = "Isaac"
 portrait = ExtResource("19_a5n8y")
+base_stats = Dictionary[int, int]({
+8: 9
+})
 map_sprite = ExtResource("17_67jcl")
 move_sprite = ExtResource("18_jw6ao")
 downed_sprite = ExtResource("15_n5m3j")
@@ -351,14 +360,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_nn1fn")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -387,6 +394,9 @@ display_name = "Gun"
 script = ExtResource("20_tlmki")
 display_name = "Noemie"
 portrait = ExtResource("18_8v8bq")
+base_stats = Dictionary[int, int]({
+8: 10
+})
 faction = 1
 map_sprite = ExtResource("16_qsr8l")
 move_sprite = ExtResource("17_r4ki6")
@@ -407,14 +417,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_06aty")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -449,11 +457,15 @@ script = ExtResource("14_gkkfx")
 inscriptions = Array[ExtResource("11_r05ue")]([SubResource("Resource_f5uu1")])
 temper = 6
 display_name = "woosh"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_xgaef"]
 script = ExtResource("20_tlmki")
 display_name = "Isaac"
 portrait = ExtResource("19_a5n8y")
+base_stats = Dictionary[int, int]({
+8: 9
+})
 map_sprite = ExtResource("17_67jcl")
 move_sprite = ExtResource("18_jw6ao")
 downed_sprite = ExtResource("15_n5m3j")
@@ -478,14 +490,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_215et")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -518,7 +528,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
@@ -539,14 +548,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("5_m6wh3")]([SubResource("Resource_yeblu")])
 equipped_index = 0
 affinity_saved = true

@@ -4,7 +4,7 @@
 # Two cases exist because the plan's review caught what a naive recorder misses, and each is
 # pinned against its own mutant:
 #   * the FIRST turn_start is written by begin(): TurnManager.turn_started never fires for turn 1
-#   * a pass records the QUEUE as well as the plan: rescue, rally, reload are not on a ResolvedPlan
+#   * a pass records the QUEUE as well as the plan: rescue, rev, reload are not on a ResolvedPlan
 #
 # Persistence is ON here, aimed at a scratch folder, so the file half is exercised in every case
 # rather than trusted: the seal is read back off disk, and the flush case reads the file of a run
@@ -197,7 +197,8 @@ func test_the_summary_carries_the_separation_flags() -> void:
 
 func test_a_resume_is_flagged_with_its_starting_round() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
-	mc.restore_progress([], false, 3)   # a save taken three rounds in
+	var no_zones: Array[String] = []
+	mc.mission.restore(no_zones, false, 3)   # a save taken three rounds in
 	mc._begin_turn()
 	var start := _of("mission_start")[0]
 	assert_bool(bool(start.get("resumed", false))).is_true()
@@ -217,6 +218,19 @@ func test_the_roster_names_what_each_unit_brought() -> void:
 	assert_bool((weapon as Dictionary).has("family")).is_true()
 	assert_bool((row.get("stats") as Dictionary).has("STR")).is_true()
 	assert_int(int(row.get("hp_max", 0))).is_equal(hero.get_max_hp())
+
+
+# #1230: a run says which AI profile each unit played, so a band can be judged from recorded play.
+func test_the_roster_names_each_units_ai_profile() -> void:
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(0, 0))
+	foe.ai_profile = "Easy"
+	_spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	mc._begin_turn()
+	var by_profile := {}
+	for row: Dictionary in _of("mission_start")[0].get("roster", []):
+		by_profile[String(row.get("faction", ""))] = row.get("ai_profile")
+	assert_that(by_profile.get("ENEMY")).is_equal("Easy")
+	assert_that(by_profile.get("PLAYER")).is_equal("")
 
 
 func test_every_line_carries_seq_time_and_round() -> void:
@@ -251,7 +265,7 @@ func test_a_queued_order_and_its_cancel_are_recorded_with_faction_and_pass_state
 	assert_bool(order.has("target")).override_failure_message(
 		"a queued attack has no victim yet -- recording one would write id 0 forever").is_false()
 
-	# The hold filler game.gd queues alongside it is NOT in this stream -- see _on_order_queued.
+	# The hold filler SquadManager queues alongside it is NOT in this stream -- see _on_order_queued.
 	# Read off the RAW queue: has_action_type_queued answers false for a hold on purpose.
 	var holds := 0
 	for queued_action: BaseAction in hero.squad.action_queue:
@@ -326,10 +340,10 @@ func test_a_pass_records_the_hit_it_landed() -> void:
 
 func test_a_pass_records_the_side_channel_order_the_plan_does_not_hold() -> void:
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
-	hero.unit_instance.set_current_will(0)
-	assert_bool(hero.can_rally()).override_failure_message("fixture: rally must be offered").is_true()
+	hero.equipped_weapon = H.make_weapon()   # a chainsword in hand
+	assert_bool(hero.can_rev_weapon()).override_failure_message("fixture: rev must be offered").is_true()
 	mc._begin_turn()
-	game.queue_simple_action(hero, BaseAction.ActionType.RALLY)
+	game.queue_simple_action(hero, BaseAction.ActionType.REV)
 	await game.order_executor.execute_orders(hero)
 
 	var passes := _of("pass")
@@ -337,10 +351,10 @@ func test_a_pass_records_the_side_channel_order_the_plan_does_not_hold() -> void
 	var types: Array[String] = []
 	for order: Dictionary in passes[0].get("orders", []):
 		types.append(str(order.get("type")))
-	# THE REVIEW'S CASE: a ResolvedPlan carries attacks; rally, rescue, reload live on the queue.
+	# THE REVIEW'S CASE: a ResolvedPlan carries attacks; rev, rescue, reload live on the queue.
 	assert_array(types).override_failure_message(
 		"a side-channel verb is on the squad's queue and NOT on the plan -- both must be read"
-		).contains(["RALLY"])
+		).contains(["REV"])
 	assert_int((passes[0].get("hits", []) as Array).size()).is_equal(0)
 
 
@@ -363,6 +377,28 @@ func test_burning_ground_is_recorded_as_turn_effects() -> void:
 	assert_int(hits.size()).is_equal(1)
 	assert_str(str((hits[0] as Dictionary).get("state"))).is_equal("BURNING")
 	assert_int(int((hits[0] as Dictionary).get("damage", 0))).is_equal(before - hero.get_current_hp())
+	assert_bool((hits[0] as Dictionary).has("gas")).override_failure_message(
+			"a burn's row grew the soak's keys -- old runs no longer compare").is_false()
+
+
+# A soak rides the same event (#508 PR 3), naming its gas and what it gave, with no damage.
+func test_a_steam_soak_is_recorded_as_turn_effects() -> void:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(7, 2))
+	mc._begin_turn()
+	game.gas_field.set_level(hero.movement.cell, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	await game.end_turn()
+
+	var effects := _of("turn_effects")
+	assert_int(effects.size()).override_failure_message(
+		"a soak is in no pass and on no signal -- the executor must write it").is_equal(1)
+	var hits: Array = effects[0].get("hits", [])
+	assert_int(hits.size()).is_equal(1)
+	var row := hits[0] as Dictionary
+	assert_str(str(row.get("gas"))).is_equal(Gas.Kind.keys()[Gas.Kind.STEAM])
+	assert_array(row.get("states", []) as Array).contains_exactly([Elemental.State.keys()[rules.state]])
+	assert_int(int(row.get("damage", -1))).is_equal(0)
 
 
 func test_a_capture_is_recorded() -> void:

@@ -93,18 +93,32 @@ var preview_sprites: Array[Node2D] = []
 # that draws the attack itself needs the attack, and a cell-targeted shot into empty water has no
 # HP anywhere to poll.
 #
-# EMITTED FROM THE PAYLOAD MOMENT, after the lunge rather than at the top of execute(): the bolt has
-# to arrive when the blow does, and a lunge is a wind-up. Lead volley member only -- one blast is
+# EMITTED FROM THE PAYLOAD MOMENT, the lunge's PEAK (#480) rather than the top of execute(): the bolt
+# has to arrive when the blow does, and a lunge is a wind-up. Lead volley member only -- one blast is
 # one moment however many it hits, the same gate the readiness, vial and watch spends below use.
 #
 # OrderExecutor is the only subscriber (it re-publishes as volley_struck); nothing here knows what
 # is drawn, and an unlistened emit is free.
 signal impact(attack: AttackAction)
 
+# ...and the blow sending its victim OVER THE EDGE (#1104): a removal, emitted before the slide so the
+# victim's tethers break while the body is still on screen. Per VICTIM, where impact is per volley.
+# OrderExecutor answers it, and sets tether_held when a tether broke.
+signal going_over(attack: AttackAction)
+# A tether that removal broke is holding the body up (#1104): it hangs over the hole for
+# Pacing.VOID_HANG once it arrives, wile e coyote style, the tether snaps, and it falls
+# Pacing.VOID_SNAP_HOLD later (#1171).
+var tether_held := false
+# When that tether snapped (Time.get_ticks_msec), stamped as the hang ENDS so a pause mid-hang holds
+# the tether too. 0 until then. The held break reads it every frame.
+var tether_snap_msec := 0
+
 const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
 const DOWN_ICON := preload("res://Art/Icons/StateIcons/Down.png")
 const KILL_ICON := preload("res://Art/Icons/StateIcons/DedIcon.png")
 const MAIM_ICON := preload("res://Art/Icons/StateIcons/DownMaim.png")
+const SEVERED_ARM_ICON := preload("res://Art/Icons/StateIcons/SeveredArm.png")
+const SEVERED_LEG_ICON := preload("res://Art/Icons/StateIcons/SeveredLeg.png")
 const CRISIS_ICON := preload("res://Art/Icons/ActionIcons/CrisisIcon.png")
 
 func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: Vector2i):
@@ -120,41 +134,29 @@ func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: 
 	else:
 		target_name = "Tile %s" % target_location   # cell-targeted attack (#47)
 
+# The game's playback. What it does to the BOARD is the six state steps below, which the headless Play
+# API calls back to back (play_session._apply_attack, #46); what stays here is this host's alone -- the
+# lunges, the impact, going_over, the slide and the hang and plummet, each between the steps exactly
+# where it falls.
 func execute():
 	begin_execution()
-	# Actor must be live to swing. (target may be null = a cell-targeted attack, #47.)
-	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
+	if not open_playback():
 		finish_execution()
-		return
-
-	# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
-	# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Placed
-	# above every remaining early-out and outside the target block, because a triggered shot that
-	# whiffs or lands on an empty cell has still been taken; lead volley member only.
-	if is_watch_shot and not is_secondary_hit:
-		actor.spend_watch()
-
-	# A UNIT attack whose target vanished this pass — nothing to hit, no lunge (unchanged).
-	# A null target is intentional (a cell attack) and falls through to the lunge.
-	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
-		finish_execution()
-		return
-
-	if resolved != null and resolved.skipped:
-		finish_execution()                          # counter-er went down/dead this pass — no lunge, no damage
 		return
 
 	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
 
 	# A payload's thrower does not lunge at it (#1058): the throw was the lunge of the hit that
-	# dropped it, and this one may be going off across the board.
+	# dropped it, and this one may be going off across the board. The lunge returns at its PEAK
+	# (#480), so the blow below lands mid-swing while the return leg plays on.
 	if not is_secondary_hit and dropped_by == null:
 		await actor.visuals.play_attack_lunge(direction)
 
 	# The block moment (#414), slice one: the bodyguard lunges toward the unit it is covering, the
 	# same lunge an attack plays. The loud jump-in-front the design wants is ANIMATION and waits on
 	# the battle zoom (#603, on #629's SpriteAnimator) -- no bespoke machinery ahead of it. Secondary volley members
-	# skip it for the reason they skip the attacker's lunge: one gesture per blast.
+	# skip it for the reason they skip the attacker's lunge: one gesture per blast. The payload lands at
+	# THIS lunge's peak when there is one (#480).
 	if blocked_for != null and not is_secondary_hit and is_instance_valid(blocked_for):
 		var block_dir = GridUtils.cardinal_direction_between(target.get_projected_destination(), blocked_for.get_projected_destination())
 		await target.visuals.play_attack_lunge(block_dir)
@@ -169,43 +171,94 @@ func execute():
 
 	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
 	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
-	if target != null and resolved != null:
-		# The Guard absorbs exactly one trigger, and THIS was it (#414). Spent before the payload
-		# lands, so a shove into the void that frees the node below cannot skip it. Only the LIVE
-		# ward is touched here — the resolver spent its own per-pass copy.
-		if blocked_for != null:
-			target.spend_guard()
-		if fired_attack != null and fired_attack.heals:
-			target.heal(resolved.heal_amount)
-		else:
-			target.take_damage(resolved.damage)
-		for s in resolved.states_removed:
-			target.remove_element_state(s)
-		for s in resolved.states_added:
-			target.add_element_state(s, resolved.state_turns.get(s, 0))
+	if land():
 		# Knockback (#84, animated by the #259 rework): the target SLIDES the resolver's own trail
 		# to its landing, holding its facing (the mirror gates on movement.sliding). Awaited, so a
 		# sequential later attack finds the body where the plan already said it lands.
+		if resolved.removed:
+			going_over.emit(self)
 		if resolved.knockback_applied and is_instance_valid(target):
 			target.movement.slide_along_path(resolved.knockback_path, resolved.knockback_landing_index)
 			if target.movement.sliding:
 				await target.movement.movement_finished
-		# A void shove (#259): the hit's own damage may be 0, so take_damage above cannot carry
-		# the death -- removal is its own door. die() frees the node and tears the squad down.
-		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap) --
-		# except for the plummet, which is pure spectacle: the sprite falls a long way past the lip
-		# before it goes (#431, dev: it used to vanish in mid-air), and the headless twin has no
-		# sprite to drop. Awaited so the removal lands after the fall, not during it.
+		# The removal (remove(), #259) lands after the fall, not during it. The plummet is pure
+		# spectacle and this host's alone: the sprite falls a long way past the lip before it goes
+		# (#431, dev: it used to vanish in mid-air). A body a tether is holding first HANGS over the
+		# hole from its arrival and the tether snaps as the hang ends (#1104), then it stays up while
+		# the snap plays (#1171): the plummet is what the camera rides, so falling on the snap took the
+		# camera down before the break could be seen. Both beats are play-checks -- Pacing.beat spends
+		# nothing headless, so no suite can see either length.
 		if resolved.removed and is_instance_valid(target):
-			await target.movement.plummet()
-			if is_instance_valid(target):   # the await spans frames; the board can go in them
-				target.die()
+			if tether_held:
+				await Pacing.beat(target, Pacing.VOID_HANG)
+				tether_snap_msec = Time.get_ticks_msec()
+				if is_instance_valid(target):
+					await Pacing.beat(target, Pacing.VOID_SNAP_HOLD)
+			if is_instance_valid(target):   # each await spans frames; the board can go in them
+				await target.movement.plummet()
+				remove()
 
+	settle()
+	finish_execution()
+
+# --- The state steps (#46) ------------------------------------------------------------------------
+#
+# Everything an attack's playback does to the board, as synchronous methods both hosts call in this
+# order: open_playback, land, remove, settle. execute() takes them between its awaits;
+# play_session._apply_attack back to back, with a teleport to the landing where execute() slides --
+# the one declared per-host difference.
+
+# Is there anything to play? False, and nothing more to do, when there is not. Its three clauses are
+# one method because their ORDER is the rule: the watch is spent between the two refusals.
+func open_playback() -> bool:
+	# The swinger must still be on the board to swing. (target may be null = a cell-targeted attack, #47.)
+	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
+		return false
+	# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
+	# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Taken
+	# above the refusal below and outside the target block, because a triggered shot that whiffs
+	# or lands on an empty cell has still been taken; lead volley member only.
+	if is_watch_shot and not is_secondary_hit:
+		actor.spend_watch()
+	# Not a UNIT attack whose target vanished this pass — nothing to hit, no lunge (a null target is
+	# intentional, a cell attack, and plays on) — nor a skipped one, a counter-er that went down/dead
+	# this pass (R7): no lunge, no damage, and nothing spent.
+	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
+		return false
+	return resolved == null or not resolved.skipped
+
+# The blow lands on the target: false, and nothing done, for a cell attack (target null, #47) or an
+# unresolved one, which have no unit consequence.
+func land() -> bool:
+	if target == null or resolved == null:
+		return false
+	# The Guard absorbs exactly one trigger, and THIS was it (#414). Spent before the payload
+	# lands, so a shove into the void that frees the node below cannot skip it. Only the LIVE
+	# ward is touched here — the resolver spent its own per-pass copy.
+	if blocked_for != null:
+		target.spend_guard()
+	if fired_attack != null and fired_attack.heals:
+		target.heal(resolved.heal_amount)
+	else:
+		target.take_damage(resolved.damage, resolved.non_blow())
+	for s in resolved.states_removed:
+		target.remove_element_state(s)
+	for s in resolved.states_added:
+		target.add_element_state(s, resolved.state_turns.get(s, 0))
+	return true
+
+# A void shove (#259): the hit's own damage may be 0, so take_damage cannot carry the death --
+# removal is its own door. die() frees the node and tears the squad down.
+func remove() -> void:
+	if resolved != null and resolved.removed and is_instance_valid(target):
+		target.die()
+
+# What the blow leaves once it has played out, hit or whiff: the watch it broke, then what firing cost.
+func settle() -> void:
 	# The watch broken by this blow (#810), the charge spend's shape: the resolver already decided
 	# WHETHER this hit ended a standing watch -- here there is only the marking. MARKS, never lapses
 	# (Unit.cancel_watch says why), and outside the is_secondary_hit gate the economies above use:
 	# a volley that reaches two watchers breaks both, because each of them was hit.
-	# MIRRORED in play_session._apply_attack (the hand-copied twin).
 	if resolved != null and resolved.cancels_watch and is_instance_valid(target):
 		target.cancel_watch()
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
@@ -240,8 +293,6 @@ func execute():
 		if tank != null:
 			tank.spend_charge()
 
-	finish_execution()
-
 func get_action_icon() -> Texture2D:
 	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else ATTACK_ICON
@@ -264,19 +315,28 @@ func is_inert() -> bool:
 	return (resolved != null and resolved.skipped) or super()
 
 # Static since #419: a derived row that is NOT an attack shows the same rung triple, and two
-# spellings would let the queue disagree with itself about what a down looks like.
+# spellings would let the queue disagree with itself about what a down looks like. The limb (#1174)
+# rides the same slot: a down that takes one wears the maim, a standing hit that takes one wears the
+# severed limb, and a Crisis entry keeps the Crisis icon -- the limb it also takes goes unshown, a
+# declared residual (one slot, and a second badge is a look decision).
 static func lethality_icon(outcome: ResolvedOutcome) -> Texture2D:
 	if outcome != null:
+		var severs := outcome.severed_limb != -1
 		match outcome.lethality:
+			ResolvedOutcome.Lethality.NONE:
+				if severs:
+					return _severed_icon(outcome.severed_limb)
 			ResolvedOutcome.Lethality.DOWNED:
-				return DOWN_ICON
-			ResolvedOutcome.Lethality.MAIMED:
-				return MAIM_ICON
+				return MAIM_ICON if severs else DOWN_ICON
 			ResolvedOutcome.Lethality.KILLED:
 				return KILL_ICON
 			ResolvedOutcome.Lethality.CRISIS:
 				return CRISIS_ICON
 	return null
+
+static func _severed_icon(slot: int) -> Texture2D:
+	var kind := UnitInstance.limb_kind_for_slot(slot as UnitInstance.LimbSlot)
+	return SEVERED_LEG_ICON if kind == WeaponData.LimbKind.LEG else SEVERED_ARM_ICON
 
 func get_target_texture() -> Texture2D:
 	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():
@@ -291,11 +351,17 @@ func get_target_texture() -> Texture2D:
 func is_reorderable() -> bool:
 	return not is_watch_shot
 
-func actor_can_perform() -> bool:
-	# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick
-	# (a sprung Spring, or Stab too if the family locks the whole weapon) can't be queued even
-	# bypassing the menu (Law #3; the menu merely hides/disables what this refuses).
-	return actor.can_wield_equipped() and actor.is_attack_fireable(fired_attack)
+func actor_block_reason() -> String:
+	return AttackAction.fire_block_reason(actor, fired_attack)
+
+# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick (a sprung
+# Spring, or Stab too if the family locks the whole weapon) can't be queued even bypassing the menu
+# (Law #3; the menu merely hides/disables what this refuses). Shared with OverwatchAction.
+static func fire_block_reason(shooter: Unit, attack: AttackData) -> String:
+	var locked := shooter.wield_block_reason()
+	if locked != "":
+		return locked
+	return shooter.attack_block_reason(attack)
 
 func get_description() -> String:
 	# A blocked hit names BOTH ends: the row would otherwise read as an attack on a unit that was
@@ -372,6 +438,16 @@ static func stamp_sweep(group: Array, reach: Conduction.Sweep) -> void:
 			member.direct = reach.direct[i]
 			member.hit_facing = reach.hit_facings[i]
 
+# The hit a payload chain began with (#1058): dropped_by walked back to depth 0, or this hit itself
+# when it is not a payload. Two payloads came from the same fired attack when their roots share one
+# volley -- dropped_by alone is too fine, since two paths onto one unit drop two sibling payloads
+# whose immediate parents differ.
+func payload_root() -> AttackAction:
+	var root: AttackAction = self
+	while root.dropped_by != null:
+		root = root.dropped_by
+	return root
+
 func get_outcome_summary() -> String:
 	if resolved == null or target == null:   # cell attack (#47) — no unit outcome to summarize
 		return ""
@@ -403,10 +479,10 @@ func get_outcome_summary() -> String:
 	match resolved.lethality:
 		ResolvedOutcome.Lethality.DOWNED:
 			parts.append("DOWNS")
-		ResolvedOutcome.Lethality.MAIMED:
-			parts.append("MAIMS (no Will)")
 		ResolvedOutcome.Lethality.KILLED:
 			parts.append("KILLS")
+	if resolved.severed_limb != -1:
+		parts.append("MAIMS")
 	if resolved.brace_bonus > 0:
 		parts.append("+%d brace" % resolved.brace_bonus)
 	for p in resolved.popups:

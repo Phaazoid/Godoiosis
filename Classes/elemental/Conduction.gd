@@ -154,7 +154,9 @@ static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i
 #
 # NO hostility gate and no hits_allies gate, which is the one place this deliberately parts company
 # with RulesService.is_attack_victim (dev, 2026-09-10): the current does not check tags, so your own
-# soaked squadmate in the lake is caught and so is the shooter standing in it. That is what makes
+# soaked squadmate in the lake is caught and so is the shooter standing in it. Nor does it check
+# `targets` (dev, 2026-09-28, #1135): a map-only shock hits nobody itself, but the water it lights
+# catches whoever is in it, a soaked body on the aimed cell included. That is what makes
 # water worth thinking about before firing rather than a free damage multiplier -- and it is the
 # reason this gather is its own function instead of a third flag on the shared one, since "would this
 # attack hit that unit" and "is this unit in the current" are different questions.
@@ -231,9 +233,8 @@ class Sweep extends RefCounted:
 # the tiles would silently fire a path swing as an AoE. The watch, which holds stored geometry
 # rather than an aim, calls sweep_paths.
 static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
-		board: BoardContext, hypo: Dictionary = {}, allies_only := false) -> Sweep:
-	return _sweep(actor, origin_cell, target_cell, attack, board, hypo, allies_only,
-			Vector2i.ZERO, Callable(), false)
+		board: BoardContext, hypo: Dictionary = {}) -> Sweep:
+	return _sweep(actor, origin_cell, target_cell, attack, board, hypo, Vector2i.ZERO, Callable(), false)
 
 
 # A PAYLOAD's sweep (#1058): the same answer, asked of an attack fired from the cell it dropped on --
@@ -242,20 +243,19 @@ static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, att
 # does, and the board's published shoves are only the aims' (PlanResolver._unit_threaded_at).
 static func sweep_payload(actor: Unit, origin_cell: Vector2i, attack: AttackData, board: BoardContext,
 		hypo: Dictionary, facing: Vector2i) -> Sweep:
-	return _sweep(actor, origin_cell, origin_cell, attack, board, hypo, false, facing,
+	return _sweep(actor, origin_cell, origin_cell, attack, board, hypo, facing,
 			PlanResolver._unit_threaded_at.bind(board, hypo), true)
 
 
 static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
-		board: BoardContext, hypo: Dictionary, allies_only: bool, facing: Vector2i,
-		occupant_at: Callable, thrown: bool) -> Sweep:
+		board: BoardContext, hypo: Dictionary, facing: Vector2i, occupant_at: Callable, thrown: bool) -> Sweep:
 	if attack != null and attack.is_single_target_swing():
 		var paths := Reach.get_paths_from(actor, origin_cell, target_cell, attack, board, facing)
-		return sweep_paths(actor, attack, paths, board, hypo, allies_only, occupant_at,
+		return sweep_paths(actor, attack, paths, board, hypo, occupant_at,
 				Reach.travel_facings(origin_cell, target_cell, attack, _tiles_of(paths), facing), thrown)
 	var footprint := Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board, facing)
 	var facings := Reach.travel_facings(origin_cell, target_cell, attack, footprint, facing)
-	var result := _sweep_area(actor, attack, footprint, facings, board, hypo, allies_only, occupant_at, thrown)
+	var result := _sweep_area(actor, attack, footprint, facings, board, hypo, occupant_at, thrown)
 	var landed: Dictionary[Vector2i, Array] = {}
 	var steps := Reach.travel_steps(origin_cell, target_cell, attack, footprint, facing)
 	for cell in steps:
@@ -279,8 +279,7 @@ static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, at
 # tiles), for the one step a path cannot answer from its own tile before; after that, a path is
 # going the way its last step went (#1058). `thrown` is flood's.
 static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], board: BoardContext,
-		hypo: Dictionary = {}, allies_only := false, occupant_at := Callable(),
-		arrival: Dictionary = {}, thrown := false) -> Sweep:
+		hypo: Dictionary = {}, occupant_at := Callable(), arrival: Dictionary = {}, thrown := false) -> Sweep:
 	var result := Sweep.new()
 	if board == null:
 		result.struck = _tiles_of(paths)
@@ -289,7 +288,7 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 		_time(result, _path_steps(paths))
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
-	var hits := RulesService.gather_path_victims(actor, paths, attack, occupancy, allies_only)
+	var hits := RulesService.gather_path_victims(actor, paths, attack, occupancy)
 	for hit in _step_major(hits):
 		result.victims.append(hit.victim)
 		result.direct.append(true)
@@ -297,14 +296,20 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 	var struck_paths: Array[Array] = []
 	for hit in hits:
 		struck_paths.append(hit.cells)
-	result.struck = _tiles_of(struck_paths)
+	# A tile with no surface is walked but never struck (#1228): it takes no deposit and drops no
+	# payload. The PATHS keep it, because a path's step is its index -- see _path_steps.
+	result.struck = Reach.surfaced(_tiles_of(struck_paths), board)
 	result.struck_facings = _path_facings(struck_paths, arrival)
 	var current := flood(actor, attack, result.struck, board, hypo, thrown)
 	_add_caught(result, caught(current.cells, board, hypo, result.victims))
 	result.cells = widened(result.struck, current.cells)
 	result.links = current.links
 	# Timed off the CUT paths: a tile past a victim was never reached, so it has no step.
-	_time(result, _path_steps(struck_paths))
+	var landed := _path_steps(struck_paths)
+	for cell: Vector2i in landed.keys():
+		if not board.has_surface(cell):
+			landed.erase(cell)
+	_time(result, landed)
 	return result
 
 
@@ -384,7 +389,7 @@ static func _time(result: Sweep, landed: Dictionary[Vector2i, Array]) -> void:
 # A victim's facing is the facing of the tile the gather FOUND them on -- the first footprint tile
 # whose occupant they are, which is the same walk the gather itself makes.
 static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
-		facings: Dictionary[Vector2i, Vector2i], board: BoardContext, hypo: Dictionary, allies_only: bool,
+		facings: Dictionary[Vector2i, Vector2i], board: BoardContext, hypo: Dictionary,
 		occupant_at: Callable, thrown: bool) -> Sweep:
 	var result := Sweep.new()
 	result.cells = footprint.duplicate()
@@ -393,7 +398,7 @@ static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector
 	if board == null:
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
-	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, allies_only, occupancy)
+	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, occupancy)
 	for victim in result.victims:
 		result.direct.append(true)
 		result.hit_facings.append(_facing_of(victim, footprint, facings, occupancy))

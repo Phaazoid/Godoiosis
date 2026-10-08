@@ -21,6 +21,9 @@ class_name ScenarioData
 											  # the only reader — see verticality.md. One field, not two:
 											  # a ramp at height 0 has non-zero corners, so it survives
 											  # the round trip on its own.
+# Vector2i -> int, every gas kind's amount packed four bits a kind (#508, GasField / Gas). SPARSE: a
+# cell absent holds no gas, so a board without any saves as {}.
+@export var gas: Dictionary = {}
 
 # DEPRECATED (#427), and NEVER read as data: a board saved before corner heights carries these and no
 # `corner_heights`. Godot ignores properties a resource no longer declares, so without them such a
@@ -76,6 +79,18 @@ class_name ScenarioData
 # independently, or a wide, tactically interesting deployment area also hands over an army and a
 # narrow corridor can never take six.
 @export var deployment_cap := 0
+
+# Does this mission OPEN the pre-mission screen (#46)? Ticked, a board whose roster stands somebody up
+# opens the phase, as every board with a roster always has. Unticked, the roster is still drawn but
+# its authored placement is the answer, and the battle begins at once -- the path the watch-only
+# boot (armed=false) has always taken. Dev, 2026-10-05: "a standard checkbox ... whether or not a
+# mission allows the pre missions screen".
+#
+# TRUE IS THE DEFAULT, for offers_every_job's reason: every board saved before the box existed opened
+# the screen whenever it drew somebody, so a false default would be this field switching the screen
+# off on the demo's own missions. An absent key in a saved file reads true, which is right for every
+# old save too.
+@export var offers_pre_mission := true
 
 # Where the camera OPENS on this board (#234). Null = derive it -- battle3d frames the player's own
 # units, which is the right default and the wrong authored answer for a handcrafted level. Authored

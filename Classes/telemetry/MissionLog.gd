@@ -79,10 +79,11 @@ func _ready() -> void:
 	# Every spawn makes a solo squad (tools/replay_battle.gd's trick), so the unit hooks attach here
 	# without a second walk over the board -- reinforcements included.
 	game.squad_manager.squad_created.connect(_on_squad_created)
-	# THE PLAYER'S SQUAD DECISION (#53 slice 2). Squad Up and Join BOTH commit through
-	# SquadManager.join_squad, and this signal is clean MID-RUN precisely because its other callers
-	# -- the #763 staged rejoin and ScenarioManager's load rebuild -- both run BEFORE begin() opens
-	# a run, so _record drops them for free.
+	# A SQUAD DECISION (#53 slice 2) -- the player's Squad Up and Join, and since #1230 an AI unit
+	# regrouping, all commit through SquadManager.join_squad. Recording the AI's is REQUIRED, not
+	# incidental: a replay turns the AI off and replays the log, so a join it never saw never happens.
+	# The signal is clean MID-RUN because its other callers -- the #763 staged rejoin and
+	# ScenarioManager's load rebuild -- both run BEFORE begin() opens a run, so _record drops them.
 	#
 	# `squad_created` is NOT the twin of this and must never be used as one: create_squad has six
 	# callers (spawn, deploy, leave, disband-per-member, the squad-up verb, the headless builder),
@@ -306,10 +307,25 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 		hits.append(_hit("watch_shot", shot))
 	var effects: Array[Dictionary] = []
 	for effect: ResolvedCellEffect in plan.cell_effects:
+		var gas := {}
+		for kind: Gas.Kind in effect.gas_added:
+			gas[Gas.name_of(kind)] = effect.gas_added[kind]
 		effects.append({
 			"cell": _cell(effect.cell),
 			"added": _names(Terrain.TileState, effect.states_added),
 			"removed": _names(Terrain.TileState, effect.states_removed),
+			"gas": gas,
+		})
+	# Who the pass's own terrain dropped into the water (#922) -- the ground's damage, recorded beside
+	# the hits the way turn_effects records a burn, because no hit carries it.
+	var sinks: Array[Dictionary] = []
+	for sink: SinkAction in plan.sinks:
+		sinks.append({
+			"unit": _ref(sink.actor),
+			"at": _cell(sink.cell),
+			"moment": SinkAction.Moment.keys()[sink.moment],
+			"damage": sink.resolved.damage,
+			"lethality": ResolvedOutcome.Lethality.keys()[sink.resolved.lethality],
 		})
 	_record("pass", {
 		"squad": _squad_ref(squad),
@@ -317,6 +333,7 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 		"orders": orders,
 		"hits": hits,
 		"cell_effects": effects,
+		"sinks": sinks,
 	})
 
 
@@ -325,12 +342,20 @@ func record_turn_effects(faction: Team.Faction, hits: Array[TileHitAction]) -> v
 		return
 	var rows: Array[Dictionary] = []
 	for hit: TileHitAction in hits:
-		rows.append({
+		var row := {
 			"unit": _ref(hit.actor),
 			"state": Terrain.TileState.keys()[hit.state],
 			"damage": hit.resolved.damage,
 			"lethality": ResolvedOutcome.Lethality.keys()[hit.resolved.lethality],
-		})
+		}
+		if hit.gas >= 0:
+			# A soak (#508). Keys added to its row alone, so a burn's row keeps the shape old runs hold.
+			var gained: Array[String] = []
+			for s in hit.resolved.states_added:
+				gained.append(Elemental.State.keys()[s])
+			row["gas"] = Gas.Kind.keys()[hit.gas]
+			row["states"] = gained
+		rows.append(row)
 	_record("turn_effects", {"faction": Team.Faction.keys()[faction], "hits": rows})
 
 
@@ -364,7 +389,7 @@ func _on_turn_started(faction: Team.Faction) -> void:
 func _on_order_queued(squad: Squad, action: BaseAction) -> void:
 	# A HOLD-POSITION FILLER IS NOT AN ORDER ANYBODY GAVE, and batch_id is the project's own answer
 	# to that -- stamped only by queue_action, the Law #3 chokepoint, so 0 means a filler that
-	# game.gd's own signal handler queued direct. Counting them would put one phantom order per
+	# SquadManager queued direct when the squad activated. Counting them would put one phantom order per
 	# squadmate per plan into the churn metric this event exists FOR.
 	#
 	# Nothing is lost by dropping them here: the `pass` record writes the whole queue, fillers
@@ -516,7 +541,7 @@ func _mission_start_fields() -> Dictionary:
 # Everything a unit brought: the denominator every usage metric needs.
 func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 	var stats := {}
-	for stat: Stats.Stat in Stats.Stat.values():
+	for stat: Stats.Stat in Stats.STAT_DEFAULTS:   # the live roster, so a retired stat is not recorded
 		stats[Stats.Stat.keys()[stat]] = unit.get_effective_stat(stat)
 	# A NULL IS AN EMPTY SLOT, not a hole: `inventory` is fixed-size and add_item fills the first
 	# null it finds, so skipping them is reading the store's own vocabulary.
@@ -536,7 +561,7 @@ func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 		"items": items,
 		"stats": stats,
 		"hp_max": unit.get_max_hp(),
-		"will_max": unit.unit_instance.get_max_will(),
+		"ai_profile": unit.ai_profile,   # #1230: "" = unassigned, which plays Hard
 	})
 	return entry
 
@@ -578,8 +603,7 @@ func _vitals(unit: Unit) -> Dictionary:
 		"faction": _faction_name(unit),
 		"hp": unit.get_current_hp(),
 		"hp_max": unit.get_max_hp(),
-		"will": unit.unit_instance.get_current_will(),
-		"will_max": unit.unit_instance.get_max_will(),
+		"wounded": unit.wounded,
 		"state": Unit.LifecycleState.keys()[unit.lifecycle_state],
 		"crisis": unit.in_crisis,
 		"states": _names(Elemental.State, unit.element_states),
@@ -616,8 +640,6 @@ func _order(action: BaseAction) -> Dictionary:
 			row["haul_to"] = _cell(rescue.haul_to) if rescue.haul_to != GridUtils.NO_CELL else null
 		BaseAction.ActionType.GUARD:
 			row["target"] = _ref((action as GuardAction).target)
-		BaseAction.ActionType.INTIMIDATE:
-			row["target"] = _ref((action as IntimidateAction).target)
 		BaseAction.ActionType.CAPTURE:
 			row["zone"] = (action as CaptureAction).zone_name
 		BaseAction.ActionType.OVERWATCH:
@@ -655,9 +677,11 @@ func _hit(kind: String, atk: AttackAction) -> Dictionary:
 		"elements": _names(Elemental.Element, r.elements),
 		"reactions": reactions,
 		"lethality": ResolvedOutcome.Lethality.keys()[r.lethality],
+		"severs": UnitInstance.LimbSlot.keys()[r.severed_limb] if r.severed_limb != -1 else null,
 		"hp_before": r.hp_before,
 		"hp_after": r.target_hp_after,
 		"knockback": r.knockback_applied,
+		"held": r.knockback_held,
 		"removed": r.removed,
 		"fall": r.fall_damage,
 		"skipped": r.skipped,
@@ -708,3 +732,19 @@ static func _names(enum_type: Dictionary, values: Array) -> Array[String]:
 
 static func _stamp() -> String:
 	return Time.get_datetime_string_from_system(true).replace(":", "-").replace("T", "_")
+
+
+# _stamp() read back (#939): the UTC unix time a run id begins with, or -1 when it carries none. Here
+# so one file owns the format both ways. UTC because _stamp() passes `true` -- a reader showing it
+# as local time adds the offset itself.
+const STAMP_LENGTH := 19
+
+
+static func stamp_unix(run_id: String) -> int:
+	if run_id.length() < STAMP_LENGTH:
+		return -1
+	var stamp := run_id.substr(0, STAMP_LENGTH)   # YYYY-MM-DD_HH-MM-SS
+	if stamp[4] != "-" or stamp[7] != "-" or stamp[10] != "_" or stamp[13] != "-" or stamp[16] != "-":
+		return -1
+	var iso := "%sT%s" % [stamp.substr(0, 10), stamp.substr(11).replace("-", ":")]
+	return Time.get_unix_time_from_datetime_string(iso)

@@ -621,6 +621,8 @@ func _paint() -> void:
 			_paint_tile(_mouse_cell())
 		TileBrushTool.PaintMode.CORNER:
 			_paint_corner(_mouse_vertex())
+		TileBrushTool.PaintMode.GAS:
+			_paint_gas(_mouse_cell())
 
 func _erase() -> void:
 	match game.dev_overlay.tile_brush.paint_mode:
@@ -632,6 +634,8 @@ func _erase() -> void:
 			_erase_tile(_mouse_cell())
 		TileBrushTool.PaintMode.CORNER:
 			_erase_corner(_mouse_vertex())
+		TileBrushTool.PaintMode.GAS:
+			_erase_gas(_mouse_cell())
 
 # One click writes the tile AND where it sits (#340): the ground first, then the height, because
 # height goes with the ground (#245/#260) and a store write ahead of the tile would be writing under
@@ -655,9 +659,7 @@ func _erase_tile(cell: Vector2i) -> void:
 	# says nothing about ones already sitting there when the tile is taken away. The REDRAW is not
 	# optional either: without it the store is correct and the icon stays on screen, which is how
 	# this shipped broken the first time -- the 3D mirror then faithfully mirrors a stale sprite.
-	if game.terrain_states.prune_groundless():
-		game.overlay_manager.redraw_terrain_live(game.terrain_states)
-	_prune_groundless_heights()
+	_prune_groundless_stores()
 	game.camera_controller.refresh_bounds(game.grid)
 
 # Corner dragging (#427 slice 4). ABSOLUTE, not relative: the wheel picks a height and every point
@@ -748,9 +750,7 @@ func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) 
 			game.grid.paint(Vector2i(x, y), fill_source, fill_tile)
 	# The SECOND way to take ground away (#245), and the one a per-cell clear at the erase site
 	# would have missed: shrinking strands every state that sat outside the new rectangle.
-	if game.terrain_states.prune_groundless():
-		game.overlay_manager.redraw_terrain_live(game.terrain_states)
-	_prune_groundless_heights()
+	_prune_groundless_stores()
 	game.camera_controller.refresh_bounds(game.grid)
 	_end_stroke()
 
@@ -763,9 +763,39 @@ func clear_tile_states() -> void:
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	_end_stroke()
 
-# Elevation goes with the ground too (#260), at both sites the states do. The redraw is inside the
-# refresh, which no-ops when the readout is hidden.
-func _prune_groundless_heights() -> void:
-	if game.board_heights.prune_groundless(func(cell: Vector2i) -> bool: return GridUtils.has_ground(game.grid, cell)):
+# Everything that sits ON a cell goes with its ground, at both sites ground can leave: tile states
+# (#245), elevation (#260) and gas (#508). One sweep, so a further store is a line here rather than
+# one more thing each site has to remember. The state redraw is not optional (without it the store is
+# right and the icon stays on screen); the height readout's refresh no-ops while it is hidden.
+func _prune_groundless_stores() -> void:
+	if game.terrain_states.prune_groundless():
+		game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	var has_ground := func(cell: Vector2i) -> bool: return GridUtils.has_ground(game.grid, cell)
+	if game.board_heights.prune_groundless(has_ground):
 		_refresh_height_readout()
-	
+	game.gas_field.prune_groundless(has_ground)
+
+# Gas painting (#508). ABSOLUTE like the corner tool: every cell a drag crosses goes to the picked
+# level of the picked gas, so a stroke repaints idempotently. The store refuses a groundless cell
+# (GasField.ground_source) and marks nothing when the value is unchanged.
+func _paint_gas(cell: Vector2i) -> void:
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	game.gas_field.set_level(cell, brush.selected_gas_kind(), brush.selected_gas_level())
+
+# Right-drag takes away the PICKED gas only, the zone brush's scoping: a cell can hold several.
+func _erase_gas(cell: Vector2i) -> void:
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	game.gas_field.set_level(cell, brush.selected_gas_kind(), Gas.Level.NONE)
+
+# The brush's Step Gas: exactly the round's gas step (GasField.tick), bracketed as one undo step.
+func step_gas() -> void:
+	_begin_stroke()
+	var board: BoardContext = game._board()
+	game.gas_field.tick(board)
+	_end_stroke()
+
+# The board-wide gas wipe, bracketed as one undo step like clear_tile_states.
+func clear_gas() -> void:
+	_begin_stroke()
+	game.gas_field.clear()
+	_end_stroke()

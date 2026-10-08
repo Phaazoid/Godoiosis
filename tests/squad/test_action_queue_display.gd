@@ -6,6 +6,7 @@
 extends GdUnitTestSuite
 
 const BoardBuilder := preload("res://play/board_builder.gd")
+const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 
@@ -24,13 +25,13 @@ func test_side_channel_sections_follow_registry_order() -> void:
 
 	ally.take_damage(ally.get_current_hp())   # overkill 0 <= ceiling -> DOWNED, rescuable
 	assert_bool(ally.is_downed()).is_true()
-	mate.unit_instance.set_current_will(1)    # room to restore -> can_rally holds
+	mate.equipped_weapon = H.make_weapon()   # a chainsword in hand -> can_rev_weapon holds
 
-	# Queue RALLY first, RESCUE second: section order must come from SIDE_CHANNEL_ORDER
-	# (RESCUE before RALLY), not from queue insertion order.
-	var rally := RallyAction.new()
-	rally.init(mate)
-	assert_bool(manager.queue_action(hero.squad, rally)).is_true()
+	# Queue REV first, RESCUE second: section order must come from SIDE_CHANNEL_ORDER
+	# (RESCUE before REV), not from queue insertion order.
+	var rev := RevAction.new()
+	rev.init(mate)
+	assert_bool(manager.queue_action(hero.squad, rev)).is_true()
 	var rescue := RescueAction.new()
 	rescue.init(hero, ally, ally.movement.cell)   # dry ground: the landing IS its own cell (#116)
 	assert_bool(manager.queue_action(hero.squad, rescue)).is_true()
@@ -39,15 +40,20 @@ func test_side_channel_sections_follow_registry_order() -> void:
 	var plan: ResolvedPlan = manager.resolve_plan(hero.squad, context)
 	var entries: Array[ActionQueueDisplayEntry] = ActionQueueDisplayEntry.build_for(hero.squad, plan)
 
+	# The hold-position fillers the squad grows when its plan opens (#46) are a MOVE section of their
+	# own; this case is about the side channel, so they are read past.
 	var headers: Array[String] = []
 	var rows: Array = []
 	for entry in entries:
 		if entry.entry_type == ActionQueueDisplayEntry.EntryType.HEADER:
-			headers.append(entry.label)
+			if entry.label != "MOVE":
+				headers.append(entry.label)
 		elif entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION:
+			if not H.given_orders(hero.squad).has(entry.action):
+				continue
 			rows.append(entry.action)
 
-	assert_array(headers).contains_exactly(["RESCUE", "RALLY"])
+	assert_array(headers).contains_exactly(["RESCUE", "REV"])
 	assert_int(rows.size()).is_equal(2)
 	assert_object(rows[0]).is_same(rescue)
-	assert_object(rows[1]).is_same(rally)
+	assert_object(rows[1]).is_same(rev)

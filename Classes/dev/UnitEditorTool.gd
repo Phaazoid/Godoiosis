@@ -17,11 +17,12 @@ var game   # injected by DevOverlay
 var _dirty := false
 var _stats: Dictionary[Stats.Stat, int] = {}
 var _current_hp := 0
-var _current_will := 0
+var _wounded := false   # #1174: went down this battle (battle-scoped, on the Unit)
 var _faction: Team.Faction = Team.Faction.PLAYER
 var _squad_name := ""
 var _unit_name := ""
 var _must_survive := false   # #572: does the mission end if this one dies?
+var _ai_profile := ""   # #1230: which AI profile it plays, by file name ("" = Hard)
 var _jobs: Array[String] = []
 var _limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
 var _limb_prosthetics: Dictionary[UnitInstance.LimbSlot, int] = {}   # slot -> _inventory index, or -1 (placeholder)
@@ -72,11 +73,12 @@ func _capture(unit: Unit) -> void:
 	var inst: UnitInstance = unit.unit_instance
 	_stats = inst.stats.duplicate()
 	_current_hp = unit.get_current_hp()
-	_current_will = inst.get_current_will()
+	_wounded = unit.wounded
 	_faction = unit.get_faction()
 	_squad_name = unit.squad.squad_name
 	_unit_name = unit.get_unit_name()
 	_must_survive = unit.must_survive
+	_ai_profile = unit.ai_profile
 	_jobs = inst.jobs.duplicate()
 	_affinity = inst.affinity.duplicate()
 	_alkahest = inst.is_alkahest_affine
@@ -141,12 +143,13 @@ func _apply(unit: Unit) -> void:
 		unit.worn_armor = null
 
 	unit.set_current_hp(maxi(1, _current_hp))   # through the UNIT: only it can derive the ceiling
-	inst.set_current_will(_current_will)
+	unit.wounded = _wounded
 
 	if unit.get_faction() != _faction:
 		unit.change_faction(_faction)
 	unit.squad.squad_name = _squad_name
 	unit.must_survive = _must_survive
+	unit.ai_profile = _ai_profile
 	var trimmed_name := _unit_name.strip_edges()
 	if trimmed_name != "":
 		unit.unit_data.display_name = trimmed_name
@@ -244,6 +247,7 @@ func populate_unit_editor(unit):
 	var tabs := TabContainer.new()
 	tabs.name = "SubTabs"
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tabs.tab_focus_mode = Control.FOCUS_NONE   # only the mouse changes the page (#1184)
 	unit_editor_container.add_child(tabs)
 
 	_add_stats_section(_add_subtab(tabs, "Stats"))
@@ -282,7 +286,7 @@ func populate_unit_editor(unit):
 
 	var down_button := Button.new()
 	down_button.text = "Down Unit"
-	down_button.tooltip_text = "Straight to downed — skips the ladder, so no Will spend, no maim, no Crisis"
+	down_button.tooltip_text = "Straight to downed — skips the ladder, so no limb and no Crisis. Still wounds the unit."
 	down_button.disabled = not unit.is_active()
 	down_button.pressed.connect(func(): _down_unit(unit))
 	unit_editor_container.add_child(down_button)
@@ -334,7 +338,6 @@ func _add_stats_section(page: VBoxContainer) -> void:
 		var key: Stats.Stat = stat
 		_add_grid_spinbox(grid, Stats.Stat.keys()[key], _stats[key], func(v): _stage_stat(key, int(v)))
 	_add_grid_spinbox(grid, "Current HP", _current_hp, func(v): _stage_hp(int(v)))
-	_add_grid_spinbox(grid, "Current Will", _current_will, func(v): _stage_will(int(v)))
 
 	DevWidgets.add_option(page, "Faction", Team.Faction.keys(), Team.Faction.keys()[_faction],
 		func(s): _stage_faction(s))
@@ -342,6 +345,12 @@ func _add_stats_section(page: VBoxContainer) -> void:
 	DevWidgets.add_lineedit(page, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
 	DevWidgets.add_checkbox(page, "Must survive", _must_survive, func(v): _stage_must_survive(v),
 		"#572: the mission is LOST if this unit dies. Declare PROTECTED_UNIT_LOST on the Scenario tab too -- this flag is the geometry, that list is the rule.")
+	var band_row := DevWidgets.add_option(page, "AI band", ai_profile_options(), _ai_profile_label(_ai_profile),
+		func(s): _stage_ai_profile(s))
+	DevWidgets.apply_tooltip(band_row,
+		"#1230: how well this unit plays when its side is AI-controlled. Default plays Hard. Bands are few and fixed on purpose -- a bespoke profile (a boss) is its own file in Resources/AIProfiles/.")
+	DevWidgets.add_checkbox(page, "Wounded", _wounded, func(v): _stage_wounded(v),
+		"#1174: went down this battle, so a smaller blow takes a limb and Crisis cannot fire.")
 
 func _add_grid_spinbox(grid: GridContainer, label_text: String, value: int, on_change: Callable) -> void:
 	var label := Label.new()
@@ -375,8 +384,8 @@ func _stage_hp(value: int) -> void:
 	_current_hp = maxi(1, value)
 	_touch()
 
-func _stage_will(value: int) -> void:
-	_current_will = value
+func _stage_wounded(value: bool) -> void:
+	_wounded = value
 	_touch()
 
 func _stage_faction(faction_name: String) -> void:
@@ -385,6 +394,24 @@ func _stage_faction(faction_name: String) -> void:
 
 func _stage_must_survive(value: bool) -> void:
 	_must_survive = value
+	_touch()
+
+# The AI band dropdown's rows: the default, then every profile on disk (bands first), plus a stale
+# name this unit still carries -- so opening the editor never silently rewrites it.
+const DEFAULT_PROFILE_LABEL := "Default (Hard)"
+
+func ai_profile_options() -> Array:
+	var rows: Array = [DEFAULT_PROFILE_LABEL]
+	rows.append_array(AIProfiles.names())
+	if _ai_profile != "" and not rows.has(_ai_profile):
+		rows.append(_ai_profile)
+	return rows
+
+func _ai_profile_label(profile_name: String) -> String:
+	return DEFAULT_PROFILE_LABEL if profile_name == "" else profile_name
+
+func _stage_ai_profile(label: String) -> void:
+	_ai_profile = "" if label == DEFAULT_PROFILE_LABEL else label
 	_touch()
 
 
@@ -724,14 +751,16 @@ func _stage_aura(element: Elemental.Element, value: int) -> void:
 # not the staged buffer above. Battle-scoped test setup (soak, then fire SHOCK); never saved here.
 func _add_element_state_section(into: VBoxContainer, unit: Unit) -> void:
 	DevWidgets.add_label(into, "Element States (live)")
+	var boxes: Dictionary[Elemental.State, CheckBox] = {}
 	for i in Elemental.State.size():
 		var state: Elemental.State = Elemental.State.values()[i]
 		if state == Elemental.State.NONE:
 			continue
 		var state_name: String = Elemental.State.keys()[i]
 		DevWidgets.add_checkbox(into, state_name.capitalize(), unit.element_states.has(state),
-			func(pressed: bool): _on_element_state_toggled(unit, state, pressed),
+			func(pressed: bool): _on_element_state_toggled(unit, state, pressed, boxes),
 			"Applies to the live unit immediately -- no Save needed; a reaction can still consume it")
+		boxes[state] = into.get_child(into.get_child_count() - 1) as CheckBox
 
 # A LIVE write skips the staged Save entirely, so it marks here (#259 rework round 2 -- the edit
 # sweep): the header lights, and the unit diverges (dev_edited) when the write is unit state a
@@ -742,13 +771,18 @@ func _mark_live_edit(unit: Unit, diverges: bool) -> void:
 	if _header != null:
 		_header.mark_modified()
 
-func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool) -> void:
+# The door may refuse a tick or strip another state (#1092), so every box re-reads the unit.
+# No repaint: this runs inside the emitting box's own signal.
+func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool,
+		boxes: Dictionary[Elemental.State, CheckBox]) -> void:
 	if not is_instance_valid(unit):
 		return
 	if pressed:
 		unit.add_element_state(state)
 	else:
 		unit.remove_element_state(state)
+	for s: Elemental.State in boxes:
+		boxes[s].set_pressed_no_signal(unit.element_states.has(s))
 	_mark_live_edit(unit, true)
 
 func _delete_unit(unit: Unit):
@@ -775,6 +809,7 @@ func _revive_unit(unit: Unit) -> void:
 		return
 	unit.revive()   # the same call RescueAction makes; the body keeps its solo squad
 	game.refresh_action_queue(game.squad_manager.active_squad)   # a rescue aimed here just went invalid
+	game.drop_threat_field()   # revive() announces only its clock (a panel signal), not the lifecycle; a standing body threatens again
 	_mark_live_edit(unit, true)
 	_resync(unit)
 

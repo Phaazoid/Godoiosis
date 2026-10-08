@@ -5,9 +5,8 @@ class_name GridUtils
 # overlays, dev tools): Manhattan/blended ranges, cardinal facings, and the tileset's
 # terrain_type custom-data -> Terrain.Kind / icon lookups.
 
-# The tileset's tile size in pixels — the single definition (CameraController and UnitVisuals
-# each used to declare their own `TILE_SIZE = 16`). NB: a board CELL is two tiles wide; see
-# CameraController.CELL_WORLD.
+# The tileset's tile size in pixels, and so a board cell's pitch: one tile per cell (#974) — the
+# single definition (CameraController and UnitVisuals each used to declare their own `TILE_SIZE = 16`).
 const TILE_SIZE := 16
 
 # "No cell" sentinel — far outside any real board, so it can never collide with a live cell.
@@ -132,6 +131,14 @@ static func is_void_at(grid: TileMapLayer, cell: Vector2i) -> bool:
 	if get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.VOID:
 		return true
 	return not has_ground(grid, cell) and grid.get_used_rect().has_point(cell)
+
+
+# Does this cell have a SURFACE (#1228): a tile, and not a hole. Off the map, an erased cell and an
+# authored hole have none; water does. The one answer to "could anything ever be here", read by an
+# attack's footprint (Reach), the gas a cell may hold (GasSpread) and the walls a hole's lip needs
+# (BoardMirror). A null grid cannot judge, so it answers true, as has_ground does.
+static func has_surface(grid: TileMapLayer, cell: Vector2i) -> bool:
+	return has_ground(grid, cell) and not is_void_at(grid, cell)
 
 
 # The kind a TileData carries. Split out of get_terrain_kind_at_cell (#250) so a caller

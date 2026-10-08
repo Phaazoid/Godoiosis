@@ -6,7 +6,7 @@
 # That chain is four correct-in-isolation pieces, which is exactly the shape #103 shipped for
 # thirteen months — and a drag that silently does nothing is invisible to every green suite.
 #
-# The gesture is driven at _on_row_drag_requested / _end_drag rather than through synthesized mouse
+# The gesture is driven at _on_row_pressed / _end_drag rather than through synthesized mouse
 # events, because the live drag runs in _process against Input.is_mouse_button_pressed, which a
 # headless run cannot hold down. Everything between those two calls (the re-parent) is what a real
 # drag leaves behind, so it is reproduced literally.
@@ -80,7 +80,7 @@ func _move_section() -> VBoxContainer:
 	# The panel builds one section per header in build_for's order, so the FIRST row in tree order is
 	# a MOVE row. Reached through the row rather than by walking the panel's nesting, and the walk is
 	# the production one: `row -> indent wrapper -> the section's row list` is exactly the hop count
-	# _on_row_drag_requested takes, so this helper cannot pass while the drag's own lookup is broken.
+	# _on_row_pressed takes, so this helper cannot pass while the drag's own lookup is broken.
 	var panel = game.squad_action_queue_control
 	var row := _first_row(panel.sections_box)
 	if row == null:
@@ -147,7 +147,7 @@ func test_finishing_a_drag_on_the_move_section_reorders_the_queue() -> void:
 	assert_object(dragged.action.actor).is_same(units[0])   # the lead's row starts first
 
 	# Press, drop it past its sibling, release — what a real drag leaves behind.
-	panel._on_row_drag_requested(dragged)
+	panel._on_row_pressed(dragged)
 	var wrapper: Control = dragged.get_parent()
 	section.move_child(wrapper, section.get_child_count() - 1)
 	panel._drag_dirty = true

@@ -4,10 +4,16 @@ class_name MissionEndBanner
 # The end-of-mission card (#96 slice 1) -- the moment the game finally has an ENDING to show.
 # Built on ModalCard, the base shared with every other full-screen surface.
 #
-# Usage:  var choice: Choice = await MissionEndBanner.show_banner(game_node, victory, can_retry, reason)
+# Usage:  var choice: Choice = await MissionEndBanner.show_banner(game_node, victory, can_retry, reason, frame)
 #
 # `reason` is what LOST it (#101), worded by MissionRules.defeat_reason -- the vocabulary belongs to
 # the rule, not to the card. Empty falls back to the squad-wipe line every pre-#101 defeat showed.
+#
+# It ASKS FOR FEEDBACK BY DEFAULT (#1052, dev 2026-09-28): the report form sits under the verdict,
+# starting on Just feedback, because this is the moment a player has just been handed a verdict and
+# the one screen F3 cannot reach. It is part of the card rather than a card over it, so ignoring it
+# costs nothing. `frame` is the board as the mission ended, grabbed before this card drew, so a
+# report filed from here carries the board rather than a picture of the form.
 
 # STAY leaves the finished board standing so it can be inspected with the dev tools; the mission
 # is still over either way (MissionController's latch never unwinds).
@@ -17,15 +23,19 @@ signal chosen(choice: Choice)
 
 const BUTTON_ROW_SEPARATION := 24
 
+var form: ReportForm
+
 func _init() -> void:
 	title_font_size = 48         # deliberately the biggest title in the game: this is the ending
 	button_size = Vector2(160, 48)
 
 # Takes the Game node rather than a parent, for the reason PauseMenu.show_menu does.
-static func show_banner(game_node: Node, victory: bool, can_retry: bool, reason := "") -> Choice:
+static func show_banner(game_node: Node, victory: bool, can_retry: bool, reason := "",
+		frame: Image = null) -> Choice:
 	var banner := MissionEndBanner.new()
-	game_node.ui_layer.add_child(banner)
+	game_node.card_layer.add_child(banner)
 	banner._build(victory, can_retry, game_node, reason)
+	game_node.serve_report_form(banner.form, frame)
 	var choice: Choice = await banner.chosen
 	banner.queue_free()
 	return choice
@@ -49,3 +59,10 @@ func _build(victory: bool, can_retry: bool, game_node: Node, reason := "") -> vo
 
 	_add_button(row, "Mission Select", func(): chosen.emit(Choice.MISSION_SELECT))
 	_add_button(row, "Stay (inspect)", func(): chosen.emit(Choice.STAY), Color(0.75, 0.75, 0.8))
+
+	# Below the verdict, and it cannot back out: the three buttons above are the only ways off this
+	# card, and a note left unsubmitted when one is pressed is simply dropped. No focus grab either --
+	# the form is optional, and a focused note box would swallow the player's first keypress.
+	content.add_child(HSeparator.new())
+	form = ReportForm.new(self, BugReporter.Kind.FEEDBACK, false)
+	content.add_child(form)

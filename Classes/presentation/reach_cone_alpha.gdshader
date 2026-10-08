@@ -22,7 +22,9 @@ uniform vec4 beam_color : source_color = vec4(1.0, 0.55, 0.12, 0.95);
 uniform float cone_intensity = 1.0;
 
 void fragment() {
-	// COLOR.r is the baked facet shade -- see reach_cone.gdshader, which this reads identically.
-	ALBEDO = beam_color.rgb * COLOR.r * cone_intensity;
-	ALPHA = beam_color.a;
+	// COLOR is the baked facet shade TIMES the cone's own tint (#367: a membership moment's cones differ
+	// in colour and fade on one material). An untinted cone bakes (shade, shade, shade, 1), so this is
+	// exactly the COLOR.r read reach_cone.gdshader still makes.
+	ALBEDO = beam_color.rgb * COLOR.rgb * cone_intensity;
+	ALPHA = beam_color.a * COLOR.a;
 }

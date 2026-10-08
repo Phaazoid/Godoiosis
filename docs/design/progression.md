@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open questions flagged).** Decided 2026-06-15 with the developer; a couple of forks pending a co-dev chat. Not settled like the squad spec, but the core stance (no leveling, fixed stats) is firm. Supersedes the wiki's `Stats Overview.docx` leveling section (random stat-on-level-up — dead under Law #1).
 
-**Canon checked through #808 (2026-09-06).**
+**Canon checked through #808 (2026-09-06); #1174 (Will and WIL retired) folded in 2026-10-01.**
 
 ## Core stance
 
@@ -53,7 +53,7 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 - Proficiency "doing the thing" trigger + no-opportunity case. *(~~Momentum vs flat goals~~ — momentum RATIFIED at the 2026-07-06 jobs grill: pause-never-reset, the rate is the only thing switching costs — [jobs.md](jobs.md).)*
 - ~~Body-part granularity and which stat each part feeds~~ — **RESOLVED 2026-07-04/05: the limb-slot model** (arms→STR, legs→DEX, four slots — [will-and-death.md](will-and-death.md)).
 - Roguelike power-normalization for imported units.
-- See [will-and-death.md](will-and-death.md) for the Will / limb-loss forks.
+- See [will-and-death.md](will-and-death.md) for limb loss (Will, its old currency, retired 2026-10-01 — #1174).
 
 ## Captured ideas — wiki scratchpad (2026-06-17, unsorted)
 
@@ -69,8 +69,8 @@ Noted from `Scratchpad` during the #32 triage; not yet integrated decisions:
 Kept as the session's input record; the owner doc supersedes anything drifting below.
 
 - **Scope lean: squad-native and beyond** — between "doctrine" (squad-aware jobs) and "company" (jobs unified with training goals / between-battle tasks); the grill settles where exactly.
-- **Jobs are the sanctioned way to vary the ungrowable stats.** LDR and WIL (and MOV) take **bigger** job influence than the input stats, which get only slight nudges — since these stats can't grow, job choice is how they vary within a unit's life.
-- **Stats don't feed abilities.** Both stat differences AND abilities fall out of job choice / customization; WIL/LDR never gate or fuel the ability layer directly.
+- **Jobs are the sanctioned way to vary the ungrowable stats.** LDR (and MOV) take **bigger** job influence (WIL did too, until #1174 retired it) than the input stats, which get only slight nudges — since these stats can't grow, job choice is how they vary within a unit's life.
+- **Stats don't feed abilities.** Both stat differences AND abilities fall out of job choice / customization; LDR never gates or fuels the ability layer directly.
 - **Squad-relationship spectrum, not squad-mandate:** some jobs boost squad *leaders* (an incentive track for would-be leaders), some boost *team play* as a member, some push **solo/loner** play. Not every job reshapes a squad.
 - **Confirmed consumers:** counter-target policy (taunt/bodyguard abilities — squad-system C3), squad-leader doctrine influence, temperament linkage, roguelike drafting, the four-slot ability taxonomy (Action / Reaction / Passive / Movement — ability *sources* split between jobs and gear), job-gated squad verbs ("our squad is stronger with an X in it"), **unique story jobs** (also cover for Isaac's alkahest without tipping the player), **legibility** (an enemy's job telegraphs its *kit*, complementing AI archetypes telegraphing *behavior*; PER may reveal enemy jobs).
 - **Economy jobs: maybe** — only ever as a dev-authored dial (the faucet-free economy stands).

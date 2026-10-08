@@ -17,7 +17,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 7,
 2: 2,
-3: 3,
 4: 3,
 5: 3,
 6: 7,

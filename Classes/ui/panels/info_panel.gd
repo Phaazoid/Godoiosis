@@ -1,6 +1,6 @@
 extends VBoxContainer
 
-# The stats body of the inspect panel ("StatsSection" in UnitInfoPanel.tscn): HP/Will bars,
+# The stats body of the inspect panel ("StatsSection" in UnitInfoPanel.tscn): the HP bar,
 # limb readout, derived-stat grid (effective stats, MOV/WT/DEF/LDR/squad) and the live-ability
 # list, all with breakdown tooltips (#68, absorbing #66's display scope). Skeleton rows live
 # in the scene; per-unit rows are generated here. Tooltip text builders are static, which lets
@@ -12,7 +12,6 @@ extends VBoxContainer
 # reads the same short and long labels, and this file has no class_name for a second surface to
 # reach. What stays here is the CHIP -- the battle-scoped at-risk colour is not the card's question.
 
-const DIM_COLOR := Color(0.6, 0.62, 0.6)
 const NATURAL_COLOR := Color(0.75, 0.78, 0.75)
 const EMPTY_COLOR := Color(0.9, 0.3, 0.3)
 const PROSTHETIC_COLOR := Color(0.45, 0.8, 0.95)
@@ -24,20 +23,29 @@ const NO_TINT := Color(0, 0, 0, 0)                   # alpha 0 = leave the theme
 
 @onready var hp_bar: ProgressBar = $HPRow/HPBar
 @onready var hp_value: Label = $HPRow/HPValue
-@onready var will_bar: ProgressBar = $WillRow/WillBar
-@onready var will_value: Label = $WillRow/WillValue
 @onready var limbs_row: HBoxContainer = $LimbsRow
 @onready var stats_grid: GridContainer = $StatsGrid
 @onready var abilities_list: VBoxContainer = $AbilitiesList
+@onready var _muted_labels: Array[Label] = [$HPRow/HPTag, $AbilitiesHeader]
 
 var unit: Unit
 var board: BoardContext   # for board-dependent readouts (terrain Cover DEF); null = armor only
+
+# This panel sits on the dock's FRAME, which is dark under both palettes (#1105), so only its muted
+# text takes a palette role; the values and the semantic limb/state colours read on either.
+func restyle() -> void:
+	for label in _muted_labels:
+		label.add_theme_color_override("font_color", _dim())
+	if unit != null and is_instance_valid(unit):
+		_refresh()
+
+static func _dim() -> Color:
+	return QueueStyle.ink(QueueStyle.Role.FRAME_TEXT)
 
 func set_unit(target: Unit, context: BoardContext = null):
 	board = context
 	if unit != null and is_instance_valid(unit):
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
-		unit.unit_instance.will_changed.disconnect(_on_will_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
 		unit.downed_countdown_changed.disconnect(_on_countdown_changed)
 		unit.stats_changed.disconnect(_on_stats_changed)
@@ -45,10 +53,8 @@ func set_unit(target: Unit, context: BoardContext = null):
 	if unit == null:
 		_clear_dynamic()
 		hp_value.text = ""
-		will_value.text = ""
 		return
 	unit.unit_instance.hp_changed.connect(_on_hp_changed)
-	unit.unit_instance.will_changed.connect(_on_will_changed)
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.downed_countdown_changed.connect(_on_countdown_changed)
 	unit.stats_changed.connect(_on_stats_changed)
@@ -69,17 +75,13 @@ func _refresh_bars():
 	hp_bar.max_value = unit.get_max_hp()
 	hp_bar.value = unit.get_current_hp()
 	hp_value.text = "%d/%d" % [unit.get_current_hp(), unit.get_max_hp()]
-	will_bar.max_value = unit.unit_instance.get_max_will()
-	will_bar.value = unit.unit_instance.get_current_will()
-	will_value.text = "%d/%d" % [unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
 
 func _refresh_limbs():
 	for child in limbs_row.get_children():
 		child.queue_free()
 	var inst := unit.unit_instance
-	var at_risk: int = -1
-	if not inst.can_afford_down():
-		at_risk = inst.next_maim_slot()
+	# The next limb is AT RISK once the unit is wounded (#1174): an ordinary hit can take it from then on.
+	var at_risk: int = inst.next_maim_slot() if unit.wounded else -1
 	for slot in UnitInstance.LimbSlot.values():
 		limbs_row.add_child(_limb_chip(inst, slot, at_risk))
 	# A body wears the badge either way since #1002; only the clock is conditional.
@@ -90,9 +92,13 @@ func _refresh_limbs():
 		else:
 			limbs_row.add_child(_badge("DOWN", EMPTY_COLOR,
 				"Healed while down — no death clock, still needs a rescue"))
+	elif unit.wounded:
+		# Standing again after a down (#1174); a body's DOWN already says it.
+		limbs_row.add_child(_icon_badge(StateIcons.WOUNDED, "WOUNDED", AT_RISK_COLOR,
+			Glossary.short(Glossary.Term.WOUNDED)))
 	if unit.in_crisis:
 		limbs_row.add_child(_badge("CRISIS", CRISIS_COLOR,
-			"Will locked at 0 — another down this battle is death"))
+			"Another down this battle is death"))
 
 func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -> Label:
 	var chip := Label.new()
@@ -111,7 +117,7 @@ func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -
 			chip.tooltip_text = "%s: natural" % UnitInstance.LIMB_FULL[slot]
 	if slot == at_risk:
 		chip.add_theme_color_override("font_color", AT_RISK_COLOR)
-		chip.tooltip_text += " — NEXT AT RISK (Will can't cover another down)"
+		chip.tooltip_text += " — NEXT AT RISK"
 	chip.tooltip_text = UiText.wrap(chip.tooltip_text)
 	return chip
 
@@ -122,6 +128,21 @@ func _badge(text: String, color: Color, tip: String) -> Label:
 	lbl.tooltip_text = UiText.wrap(tip)
 	lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	return lbl
+
+# A badge with its status glyph in front of the word. Both halves carry the tooltip, since a hover can
+# land on either.
+func _icon_badge(tex: Texture2D, text: String, color: Color, tip: String) -> HBoxContainer:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	var icon := TextureRect.new()
+	icon.texture = tex
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.tooltip_text = UiText.wrap(tip)
+	icon.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.add_child(icon)
+	box.add_child(_badge(text, color, tip))
+	return box
 
 func _refresh_stats():
 	for child in stats_grid.get_children():
@@ -137,8 +158,9 @@ func _refresh_stats():
 	_add_stat("MOV", str(unit.get_mov()), Glossary.Term.MOV, mov_tooltip(
 		UnitInstance.JOBLESS_MOV_BASE,
 		Stats.dex_mov_band(unit.get_effective_stat(Stats.Stat.DEX)),
+		Stats.weight_band(unit.get_weight()),
 		inst.empty_leg_count()))
-	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_weight()))
+	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_effective_stat(Stats.Stat.BLD), unit.get_carried_weight()))
 	var armor_name := ""
 	var armor_power := 0
 	var armor_coverage := ""
@@ -199,7 +221,7 @@ func _add_stat(stat_name: String, value: String, term: Glossary.Term, provenance
 		value_color := NO_TINT):
 	var name_lbl := Label.new()
 	name_lbl.text = stat_name
-	name_lbl.add_theme_color_override("font_color", DIM_COLOR)
+	name_lbl.add_theme_color_override("font_color", _dim())
 	var value_lbl := Label.new()
 	value_lbl.text = value
 	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -221,7 +243,7 @@ func _refresh_abilities():
 		child.queue_free()
 	var live := unit.get_live_abilities()
 	if live.is_empty():
-		abilities_list.add_child(_badge("None", DIM_COLOR, ""))
+		abilities_list.add_child(_badge("None", _dim(), ""))
 		return
 	for ability in live:
 		abilities_list.add_child(_ability_row(ability))
@@ -236,16 +258,13 @@ func _ability_row(ability: AbilityData) -> HBoxContainer:
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var kind_lbl := Label.new()
 	kind_lbl.text = kind_name
-	kind_lbl.add_theme_color_override("font_color", DIM_COLOR)
+	kind_lbl.add_theme_color_override("font_color", _dim())
 	row.add_child(name_lbl)
 	row.add_child(kind_lbl)
 	return row
 
 func _on_hp_changed(_current, _max):
 	_refresh_bars()
-
-func _on_will_changed(_current, _max):
-	_refresh()   # a maim rides this signal — bars, limbs AND stats can all shift
 
 func _on_unit_died():
 	hp_bar.value = 0
@@ -257,8 +276,10 @@ func _on_countdown_changed(_turns: int):
 func _on_stats_changed():
 	_refresh()   # a stat move can shift bars (max HP), the limb row (a maim fired it) AND the grid
 
-static func mov_tooltip(base: int, dex_band: int, empty_legs: int) -> String:
+static func mov_tooltip(base: int, dex_band: int, weight_band: int, empty_legs: int) -> String:
 	var lines: Array[String] = ["Base %d %+d DEX band" % [base, dex_band]]
+	if weight_band > 0:   # #1176: a line only when weight actually costs a tile
+		lines.append("%+d weight band" % -weight_band)
 	match empty_legs:
 		1:
 			lines.append("Halved: one leg gone")
@@ -282,8 +303,8 @@ static func effect_source_text(source_name: String, delta: int, turns_remaining:
 	var plural := "" if turns_remaining == 1 else "s"
 	return "%s %+d (%d turn%s)" % [source_name, delta, turns_remaining, plural]
 
-static func weight_tooltip(carried: int) -> String:
-	return "Carried gear %d\nTracked only -- no effect yet" % carried
+static func weight_tooltip(body: int, carried: int) -> String:
+	return "Body %d + carried %d" % [body, carried]
 
 static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int, total: int, coverage: String = "") -> String:
 	# `total` is passed, not re-added: RulesService.def_breakdown already composed it, and a

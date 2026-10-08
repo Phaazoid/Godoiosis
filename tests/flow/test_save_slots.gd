@@ -139,11 +139,19 @@ func test_resume_aims_restart_at_the_origin_mission_not_the_slot() -> void:
 	assert_bool(manager.save_to_slot(1)).is_true()
 	manager.clear_board()
 	assert_str(manager.last_loaded_path).is_empty()
+	# The path as board_loaded's listeners read it: the dev header gates Update on it then (#967).
+	var seen: Array[String] = []
+	manager.board_loaded.connect(func() -> void: seen.append(manager.last_loaded_path))
 
 	var mc: MissionController = game.mission_controller
 	mc.resume_from_slot(1)
 	await await_idle_frame()
 
+	assert_bool(seen.is_empty()).override_failure_message(
+		"the resume never announced its board").is_false()
+	for path: String in seen:
+		assert_str(path).override_failure_message(
+			"board_loaded fired before the resume aimed the path at the origin mission").is_equal(FAKE_MISSION)
 	assert_str(manager.last_loaded_path).is_equal(FAKE_MISSION)
 	assert_bool(mc.can_restart()).is_true()
 

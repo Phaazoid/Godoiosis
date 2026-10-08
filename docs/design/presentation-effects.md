@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18).**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05.**
 
 ---
 
@@ -215,6 +215,14 @@ on any palette, heal or watch fill without a colour of its own.
 the pause menu stills both views at once. Five `GameKnobs` rows under Aiming: time between steps,
 flash length, rest before the loop repeats, brightness, and the still's brightness.
 
+**What the aim DROPS flashes too** ([#1058](https://github.com/Phaazoid/Godoiosis/issues/1058) D2b,
+ruling 52). A payload's tiles are INSET squares, the aim's yellow a size smaller, and each LEVEL
+flashes together one step after the level above it: level k at the aim's last step + k. They ride the
+same clock and the same one-channel rule: the steps arrive with an `insets` list beside them, and the
+flash whitens the inset square rather than the whole tile. In 3D they are their own layer
+(`Layer.PAYLOAD`), lit from the same `levels()` as AIM. A sixth Aiming row sizes the square; its colour
+is the footprint's own. The rule and the resolve behind it are in [weapons.md](weapons.md) → *Payloads*.
+
 **Photosensitivity (#217) holds it still, GRADED IN WHITE** (ruling 28): the first step palest, each
 later one less, the last step plain, and a true AoE plain throughout, since it has no order to show.
 The mockup first drew the grade as dimming the later tiles; that needed a second per-tile channel in
@@ -298,6 +306,19 @@ default size (the rows still EXPAND to fill a window with room) and degrades to 
 than to silent clipping when the window is dragged narrower. Measurement moved the fix: an
 `HSplitContainer` does **not** squeeze its first child, so the tool tree was never displaced and
 the split-offset clamp the report proposed would have fixed nothing.
+
+**A search box sits at the window's top right** ([#1184](https://github.com/Phaazoid/Godoiosis/issues/1184),
+2026-10-01), and it finds a page by reading the BUILT window, never the knob tables: a tab is a
+leaf or a sub-tab title, a section is a label `DevWidgets.add_heading` tagged, and a value is the
+first Label of a row that also holds an input (or a label/input pair in a grid, or a CheckBox's own
+text). So a new page is searchable with no entry anywhere, and a row the page HIDES is never
+offered (dev ruling: search offers what you would see if you went there). Its stated limit is the
+same fact from the other side: it finds what is built, so the Unit Editor offers nothing until a
+unit is clicked. `DevOverlay.reveal(control)` is the one door to bring a control into view. **And
+only the mouse changes the page**: the tool tree and every sub-tab bar take no keyboard focus,
+because a focused Tree moves its selection on the arrow keys and on letters (`allow_search`), so C,
+the brush's turn key, landed on Characters. `tests/dev/test_dev_page_keys.gd` walks the built
+window for anything that could.
 
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
@@ -506,9 +527,11 @@ The original contract locked **"yaw snapping in 90° steps"**. The dev asked the
 
 **So: yaw orbits freely and rests wherever the player leaves it; Q/E step to the next 90° detent, realigning in one press.** The crisp axis-aligned pose is now an affordance rather than a cage. A corollary the amendment forced: facing was only re-judged when a unit *moved*, so any rotation left standing sprites facing the old angle — snapping never protected against that either; the mirror now re-judges on camera turn.
 
-Bindings are knobs, not canon: `orbit_button` was built to default to middle-drag so right-click could keep its press-to-cancel meaning, with the click/drag threshold built so flipping it was an inspector change. **The dev flipped it to right-drag after playing it (2026-08-14)** — *"you don't need to drag the mouse when canceling orders, so the overlap is a non issue"* — which is the knob working as intended; cancel now fires on release-under-slop, and moving the binding back moves it back to press.
+Bindings are knobs, not canon: `orbit_button` was built to default to middle-drag so right-click could keep its press-to-cancel meaning, with the click/drag threshold built so flipping it was an inspector change. **The dev flipped it to right-drag after playing it (2026-08-14)** — *"you don't need to drag the mouse when canceling orders, so the overlap is a non issue"* — which is the knob working as intended; cancel now fires on release-under-slop, and moving the binding back moves it back to press. **Middle is no longer free since [#1037](https://github.com/Phaazoid/Godoiosis/issues/1037):** `pan_button` sits on it (the grab pan), and orbit wins a button both knobs name, so moving orbit back to middle also means moving `pan_button`, or the pan becomes unreachable while Controls still lists *Middle-drag: Pan*. **The overlap did cost something, in a place that quote was not about ([#1081](https://github.com/Phaazoid/Godoiosis/issues/1081), 2026-09-27):** a cancel on the RELEASE splits one physical right-click across two consumers. The action ring backs out on the press and frees itself, so nothing was left to catch the release; it reached a board at rest and undid the newest order, and whether it did depended on whether the player's PREVIOUS right-button gesture had been a click or a drag, since that was the travel the rig still held. The rule lives where the verdict is made: `CameraRig3D.last_gesture_was_click()` answers false for a release whose press the rig never received, so a press any surface consumed cannot come back as a board cancel. It is not a "the ring is open" gate on the board, for two reasons: by the time the release arrives the ring has already freed itself, and joining `menu_is_up()` would lock pan, orbit and zoom while the ring is up, which #471 rules out.
 
 Also settled here: **the camera follows the action by mirroring the 2D camera** (which `AIController` already pans to each acting squad) rather than growing a second follow seam — so `Pacing.AI_SQUAD_PAN` keeps one number and one reader, and the 3D inherits the 2D's easing exactly. The gate is `ai_locked`, deliberately *not* the broader board lock, which also covers menus. **Entering an AI turn also squares the camera up** to the nearest detent (dev call, 2026-08-14): free orbit is the player's, but an enemy phase reads on an axis-aligned board. It fires on the *edge* into the turn rather than every frame, so the day orbit is allowed to stay live under an AI turn it squares up once instead of fighting the drag.
+
+**The mirror reads the 2D camera UNCLAMPED** ([#974](https://github.com/Phaazoid/Godoiosis/issues/974), 2026-09-29). Under a 3D host the 2D camera is a publisher of where playback looks, not a view anyone sees, so `CameraController.clamp_target_position` stands down while `board_input_delegated` is set, and the one answer to *how far off the board may playback look* is the rig's own per-board `pan_limit`. Before that the 2D pan wall reached every playback aim, and since its bounds were refreshed only at boot and by the dev brush, a wall built for another board pinned a battle zoom four cells off its fight. The wall still binds wherever the 2D camera IS the view — F4's `FLAT_2D` and a bare `Main.tscn` — and there it is refreshed on every `board_loaded`, at the board's real 16 px pitch (it was built at 32, on the false premise that a board cell is two tiles wide). Declared residual on [#292](https://github.com/Phaazoid/Godoiosis/issues/292): the dev-only `CORNER` picture-in-picture can now look past the board edge while it follows an edge unit.
 
 ### The camera comes BACK when an order is committed ([#471](https://github.com/Phaazoid/Godoiosis/issues/471), 2026-08-22)
 
@@ -538,7 +561,7 @@ yank the camera too, and that is a knob to turn in play rather than a rule to gu
   so a queued move is followed rather than second-guessed. The 2D camera is written there and the 3D
   rig on the signal — one question, two cameras, no second answer about which cell.
 - **The 2D write stands down under a 3D host, and that is load-bearing.** `battle3d._update_pointer`
-  snaps that hidden camera on every motion purely to park the hover card, so writing it from here
+  snaps that hidden camera on every motion purely to park the info card, so writing it from here
   would mis-anchor the card and change nothing else. Same flag, same reason, as the WASD poll's.
 - **2D/3D** ([#292](https://github.com/Phaazoid/Godoiosis/issues/292)): both views answer it. `CORNER` deliberately does not — it is a debug PiP whose
   2D camera is already being dragged by the pointer.
@@ -630,7 +653,7 @@ written over it.
 
 **Save/resume: the authored start, every load** (dev call). The camera stays out of the #87 mid-battle snapshot, so a resumed save opens where the mission says rather than where the player left the view — which is #144's *"a menu arrival trusts the file"* read straight, since the file's only camera fact IS the authored start.
 
-**3D only, declared** ([#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s rule: a declared asymmetry is a design, an undeclared one is drift). The flat view has no opening shot to diverge *from* — nothing centres the 2D camera on a board load, and under `HD_2D` it is dragged around by the 3D pointer purely so the hover card parks against a live view. Serving 2D here would mean inventing a 2D opening shot, derived half included, which is that umbrella's work and not this one's.
+**3D only, declared** ([#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s rule: a declared asymmetry is a design, an undeclared one is drift). The flat view has no opening shot to diverge *from* — nothing frames the 2D camera on a board load (the flat view's bounds refresh only pulls it inside the new board's limits, #974), and under `HD_2D` it is dragged around by the 3D pointer purely so the hover card parks against a live view. Serving 2D here would mean inventing a 2D opening shot, derived half included, which is that umbrella's work and not this one's.
 
 Authored through the dev-tools **Scenario tab**: fly the camera, press Capture, save the board. Deliberately not typed in as numbers — and deliberately a field on the capture the tab already owns rather than a new tool. Out of scope but not precluded: the dev's slow orbit-and-descend that *lands* on the start, which is why the pose is one resource instead of three loose floats — a keyframe sequence extends it rather than re-homing three fields that had grown callers.
 
@@ -741,14 +764,18 @@ into one volley — played on screen as three unrelated lunges.
 **`AttackAction.impact` is that channel, and `OrderExecutor.volley_struck` re-publishes it.** Three
 things about its shape are the reusable part:
 
-- **It fires at the PAYLOAD moment**, after the lunge, not at the top of `execute()` — a bolt has to
-  arrive when the blow does, and a lunge is a wind-up.
+- **It fires at the PAYLOAD moment**, not at the top of `execute()` — a bolt has to arrive when the
+  blow does, and a lunge is a wind-up. Since [#480](https://github.com/Phaazoid/Godoiosis/issues/480)
+  that moment is the lunge's PEAK: `play_attack_lunge` returns there and its return leg plays on.
 - **It is ABOVE the target block**, so a cell attack (#47, target null) publishes too. Every shock
   rune touches the MAP, so a shock aimed at open water is a legal order that hits nobody and lights
   a whole river; an emit guarded on having a victim would go silent exactly when there is most to
   draw.
 - **One blast, one moment.** The `is_secondary_hit` gate lives on the action beside the readiness,
   vial and watch spends rather than at the subscriber, because it is the same rule they enforce.
+  A payload LEVEL (#1058, ruling 51) still emits once per payload volley, so each blast draws its own
+  bolt, but with nothing shoved it plays in one frame, and `AudioDirector.play` sounds the same cue
+  once per frame, so the level is one sound.
 
 The event carries the `AttackAction`, which is what makes it worth building once: everything an
 effect could want is already stamped on one — the aim, the attack, the footprint, and now the
@@ -780,7 +807,10 @@ settles that the next ribbon effect inherits:
 - **The per-bolt AGE rides in the VERTEX COLOUR**, which is the only channel that varies inside one
   draw. `sight_beam.gdshader` multiplies by it and a mesh with no colour array reads white, so the
   aim's own sight beam is untouched — the shader has two tenants now and the file name is the
-  first one's.
+  first one's. *(It has since taken the reach marks, the focus edge and the squad's lines, and
+  [#1109](https://github.com/Phaazoid/Godoiosis/issues/1109) round 2 gave the squad's lines a dark
+  CASING through two uniforms that are inert at zero width on every other tenant — see
+  visual-clarity.md → *Round 2: the casing*.)*
 - **`BoardOverlays.add_beam_strip` is the one spelling of the ribbon recipe**, static and appending,
   with `beam_tangents` beside it. The overlay's `set_line` is one caller of it.
 - **The STRIKE is the attack's own trajectory.** `Reach.sight_trace` already computes what the aim
@@ -1115,6 +1145,126 @@ a step the decal splits onto both tops where a patch would hang as a sheet.
 Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
 shatter, freeze) are their own follow-up.
 
+### Gas: the volume and the pixel puffs, mixed ([#508](https://github.com/Phaazoid/Godoiosis/issues/508), harness BUILT 2026-10-01, mixes 2026-10-02)
+
+Four rounds of throwaway probes narrowed the look to four candidates, and choosing between them
+"is going to take a lot of seeing" (dev), so the look harness built all four into the game behind
+the Experiments choice **Gas style**. He played them and ruled (2026-10-02): **the realistic volume
+mixed with the pixel puffs wins**, but with Pixel puffs' whole layer rather than one puff a tile
+("multiple, in different sizes, and they move around"), its snow crystals over the volume's glints,
+and pixel lightning with every glow in the cloud. The other styles were deleted and the switch now
+holds four MIXES in that direction, each differing from the first in one way. The store is
+terrain.md's `GasField`; nothing here is a rule.
+
+| Mix | What differs | Measured on round 4's zoo (1080p, RTX 2070 SUPER) |
+|---|---|---|
+| Puff field | the full puff layer over the full volume | +1.41 ms |
+| Drifting puffs | every puff also wanders a slow loop round its spot | +1.42 ms |
+| Haze + puffs | the volume at about half height and half density | +1.18 ms |
+| Puffs in the cloud | up to three puffs a tile, floating through the column | +1.39 ms |
+
+GPU timings wobble by several tenths of a millisecond run to run; the haze's saving is its shorter
+march boxes. The mixes are a `MIXES` const table in `GasMirror` (a slot table, a drift, a volume
+height and density scale), not knobs: a knob and a preset would fight over one value, and the
+winner's numbers become plain defaults when the experiment ends.
+
+**The pixel floor is a readout the player asks for** (dev, 2026-10-02: he likes the shaded tiles but
+not as the default on the board). It shows only while **Alt** (`show_gas_floor`, a held action) is
+down, and then the volume and its pool fade to `held_cloud_strength` and the puffs hide, because a
+floor under full-strength smoke and opaque puffs would still be covered. The mirror reads the key by
+polling `Input`, so a press is a visibility flip, never a rebuild; the floor mesh is built with
+every gas change whether or not anyone is holding the key. Round 1's *hold a key to see every unit
+through everything* belongs on this key when it is built.
+
+**`GasMirror` (`presentation/`, built by battle3d beside the arc) owns all of it** and polls rather
+than listens: the gas, heights and grid versions, the staging, the mix and the sun. A change
+rebuilds the board textures, the region boxes, the floor mesh and the puff instances; every frame
+only re-sends the camera, the light, the lamps, the lightning, the clock and the key. Its every value
+is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` under
+`Resources/GasLooks/`.
+
+- **The volume is the project's first CompositorEffect** (`GasVolumeEffect` + `gas_volume.glsl`,
+  two compute versions of one file). MARCH runs at the volume resolution and casts one ray per texel
+  through every region box it crosses; COMPOSITE runs at full resolution, upsamples depth-aware (a
+  nearest/farthest checkerboard in the march so a unit's edge has a tap on each side) and integrates
+  the **pool in closed form against full-res depth**, which is what keeps the cell edge crisp at half
+  resolution. Both cover only the boxes' screen rectangle. `GasRegions` keeps the boxes DISJOINT,
+  because the march takes them one after another and an overlap would count gas twice.
+- **`get_cam_projection()` is already reversed-Z and y-flipped** in a compositor callback; applying
+  `Projection.create_depth_correction` on top is what made the STOP-0 spike draw nothing.
+- **A changed `.glsl` needs a re-import.** The compute shader is an imported `RDShaderFile`, so a
+  worktree that edits it keeps running the OLD SPIR-V until `--import` runs again; round 6's first
+  measurement drew nothing for exactly that reason ("uniform buffer supplied (656) is smaller than
+  ... (672)"). The editor re-imports on focus, CI imports fresh.
+- **The ground under the gas is the true surface**: four corner heights and the centre per cell,
+  decoded in the shader as a fan round the centre. The centre is `Terrain.height_at_uv`'s answer and
+  lies on whichever diagonal that rule splits on, so the fan is exact on every corner form without
+  a second copy of the split rule. The fog floor's mesh is built the same way.
+- **The mix's height and density are folded into the packed looks**, so the march, the region boxes
+  and the puffs that rise with the column all read one scaled look rather than three.
+- **Layering is a second switch, `GAS_OVER_UNITS`**, because the probe and the round-1 ruling
+  disagreed in practice: unit sprites, markup, flames and health bars all draw in the TRANSPARENT
+  pass, so `POST_TRANSPARENT` (on, the default) veils all of them and `PRE_TRANSPARENT` (off) leaves
+  all of them crisp on top. The puffs are alpha-scissored, so they depth-sort with the units and the
+  volume veils the ones behind gas either way.
+- **Cost.** The march is two thirds of it and is spent on samples INSIDE the gas, spread evenly: an
+  exact empty-space skip (jumping whole steps through cells with no gas near, the picture provably
+  unchanged) bought nothing on the zoo and was reverted, and dropping detail noise or the exact
+  ground bought about 0.1 ms. Steps and resolution are the levers. The default stays half / 32 / 4,
+  the dev's call over a 1.2 ms budget after seeing the candidates side by side.
+- **The puffs are one MultiMesh**, billboarded, boiled, bobbed, wandered and given each gas's moving
+  extra by `gas_puff.gdshader` from the pushed clock; `GasPuffArt` draws them from each look's
+  palette into one Texture2DArray at startup (a sprite sheet replaces it once a mix wins). A cell's
+  slots lean toward neighbouring gas and tuck in from an empty edge; a mixed cell picks each slot's
+  gas by the levels. **The dummy renderer a headless run uses keeps no MultiMesh instance data**
+  (every transform and custom datum reads back zero), so `GasMirror.puff_entries()` is the readable
+  record of what the MultiMesh was handed.
+- **Three levels step the look** (#508 PR 2, 2026-10-03; the store holds thin, medium or thick
+  rather than 0-14). The volume's density is the level's third, so the existing `thin_floor` still
+  sets how much thin steam shows; the puffs COUNT the level -- a slot table's thresholds are levels
+  now, so thin shows one puff, medium three and thick every slot, each a size bigger. A first pass:
+  whether the three read apart is the dev's to judge in play.
+- **The fog floor** is a fan per cell lifted into the markup stack at `BoardOverlays.GAS_FLOOR_SORT`,
+  under every layer, and `gas_floor.gdshader` works out the shape per art pixel from the cell's
+  neighbour bits: rounded outer corners, square inner ones, ink, rim, pattern, and a mixed cell
+  dithered by its levels. Colours go to both shaders LINEAR, because a plain vec4 uniform is not
+  converted the way a texture's sRGB texels are.
+- **Holding the same key also outlines NEXT round** (#508 PR 2; the dev's pick, *"Alt shows next
+  round"*, against the worry that a creeping cloud must be readable from turn to turn). A second
+  copy of the floor, `GasForecast`, is built from `GasField.next_round` -- the round's own rule, so
+  the outline cannot show a round the board will not play -- and drawn by the same shader in its
+  `outline_only` mode: the region's ink edge alone, `forecast_width` art pixels per level, so thick
+  steam next round reads as a bolder border. It shares the floor's sort with a `sorting_offset` so
+  the two sheets never trade places. **It is not a markup layer, and that is measured**: the plan
+  was three dashed line layers in `BoardOverlays.LAYERS`, and every integer sort from 0 to 15 is
+  taken under the flame band at 16, so a new layer meant sharing a sort with layers whose cells it
+  overlaps or renumbering pinned ones.
+- **A tear-out's diorama carries its gas**: a lifted region reads the same field at the stage offset,
+  only from the cells that went up. Gas on cells IN FLIGHT is hidden until they land.
+- **Thunder has one CPU flash schedule** per 2x2 cluster, and a bolt belongs to a STRIKE, not a cell:
+  each cluster's glow point is where the volume lights and the one bolt stands, so the two cannot
+  drift apart. Under photosensitivity every cloud holds a steady dim glow and the bolts never show.
+- **Frost's sparkle is the pixel snow.** The volume's own glints (a distance-to-the-ray test per
+  falling grid cell) were deleted with their two knobs and `GasLook.sparkle`.
+- **3D only, declared** (#292's ledger): the flat 2D view has no drawing of gas at all, and the mirror
+  stands down in it. **One exception since 2026-10-03, the plan preview's ghost** (below): it rides
+  the shared deposit-preview layer, which is 2D-authored and mirrored, so it draws in both views
+  while the gas it promises draws in one.
+- **Where a pass WILL leave gas is ghosted before Execute** (#508 PR 1, Law #2). `ResolvedPlan.pending_deposits`
+  (the walk `game._preview_plan_effects` hands the board, and the Play API's preview prints, since #46)
+  adds a `{cell, gas}` entry per cell and kind beside the tile-state ones, `OverlayManager.show_terrain_preview`
+  draws it at the same ghost modulate as a pending fire or cover, and `OverlayMirror` carries it into
+  the diorama with every other deposit ghost. **The art is a PLACEHOLDER**: `GasPuffArt.icon(kind)`,
+  one small puff per kind baked from its `GasLook` on a tile-sized canvas and kept for the process.
+  Whether a flat ghost is even the right shape, against previewing the volume itself, is the dev's to
+  judge in play.
+
+What headless tests can see is the CPU half: the uniform block against the shader's own declaration,
+the dispatch rectangles, the region boxes, the board textures against the store, the floor's
+vertices on a corner cell, the puff counts per mix, one bolt per strike under its glow, the haze's
+lower boxes, and the real key showing the floor and fading the cloud. Nothing rendered. Not built
+here: a hovered unit shining through the gas, a tile-card line for gas, a live per-gas tuning page.
+
 ### Conventions the art commission must carry (pending look-dev experiments)
 
 Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments to run in the look-dev scene **before** any commission, then locked into #176's conventions list:
@@ -1325,7 +1475,7 @@ The tier nobody else can copy, because it renders systems Iosis alone has.
 - **Elemental states as materiality.** The paired-state pattern (marker + clock) gives clean enter/exit hooks for material transitions: WET darkens and sheens, FROZEN mirrors, CHILLED frosts outward with breath-puffs on units standing in it, SHOCK arcs across cell borders, a long-lived fire gets embers + smoke + haze. Thermal-loop reactions become staged set-pieces — temp-shock a crack-flash and steam burst, douse a hiss, grass ignition creeping tile to tile *in the direction it actually propagated* (the resolver knows).
 - **Render the future.** Law #2 means the resolver computes the exact post-execution world — every other tactics game's preview is RNG soup; ours is truth. A hold-to-peek "spectral diorama" of the resolved end state (ghost sprites, ghost fires, ghost outcomes staged on the board) is a marketing-grade feature whose data structure (`ResolvedPlan`) already exists. The strongest single idea on this wall.
 - **Alchemy as art direction.** Glowing ground sigils for channeled carvings (aura-colored, per-affinity palettes), channel-threads of light from alchemist to carving — and the thesis-level version: the classical alchemical stages are *color* stages (blackening → whitening → yellowing → **reddening: iosis itself**). A mission or campaign arc whose grading walks that sequence makes the game's name its visual spine. **This one has left the wall: `Opus 1 Nigredo` / `2 Albedo` / `3 Citrinitas` / `4 Rubedo` ship as real presets (#253 part 3), so the question is no longer "would it read" but "does it" — load them in order and look.** They are grades only; the per-affinity sigils and channel-threads above are untouched.
-- **Will and Crisis**: entering Crisis desaturates the world for a beat while the berserker alone stays vivid (screen grade + per-sprite exemption).
+- **Crisis**: entering Crisis desaturates the world for a beat while the berserker alone stays vivid (screen grade + per-sprite exemption).
 - **The downed clock** as a fading ring decal under the body — readable and moody. **It now has a plain
   readout to earn its way past** ([#322](https://github.com/Phaazoid/Godoiosis/issues/322),
   2026-08-21): the turns left are digits beside the downed glyph in the head channel. So this is the

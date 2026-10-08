@@ -7,6 +7,9 @@ class_name BoardPicker
 # heights (stage 2+ swaps in real board data; GridMap appears only in the
 # column_tops_from adapter) and tests headlessly end to end.
 #
+# The walk itself is `crossings` since #1132, which the shot clearance rides too: one answer to
+# which columns a ray crosses, asked by the pick and by the camera's sight lines.
+#
 # Semantics (stage-1 decisions, each a one-function change if play disagrees):
 # - Any hit — top face OR cliff side — returns the column's TOP cell, the
 #   standable, tactically meaningful one.
@@ -155,8 +158,6 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 	var rh := BoardSpace.ROW_HEIGHT
 
 	var extent := _extent(tops, plane)
-	var min_col := extent.position
-	var max_col := extent.end - Vector2i.ONE
 	var ceiling := max_top(tops)
 	if plane.has_area():
 		ceiling = maxi(ceiling, BoardSpace.FLAT_TOP_ROW)
@@ -172,28 +173,20 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 			return _top_cell(column, row)
 		return BoardSpace.NO_CELL
 
-	var col := Vector2i(floori(ray_origin.x / cs), floori(ray_origin.z / cs))
-	var step := Vector2i(_step_of(dir.x), _step_of(dir.z))
-	var t_max_x := _t_to_boundary(ray_origin.x, dir.x, col.x, step.x, cs)
-	var t_max_z := _t_to_boundary(ray_origin.z, dir.z, col.y, step.y, cs)
-	var t_delta_x := cs / absf(dir.x) if step.x != 0 else INF
-	var t_delta_z := cs / absf(dir.z) if step.y != 0 else INF
-	var t := 0.0
-
 	# A plane hit the walk is holding while it looks for a real column BELOW plane level (#582).
 	# NO_CELL means "none yet", and it doubles as the miss the walk falls out with -- the plane's
 	# answer only ever stands in for one that never came.
 	var pending := BoardSpace.NO_CELL
 
-	for i in _MAX_STEPS:
-		var y_enter := ray_origin.y + dir.y * t
+	for crossing: Crossing in crossings(ray_origin, dir, extent, INF):
+		var col := crossing.cell
+		var y_enter := ray_origin.y + dir.y * crossing.enter
 		if dir.y >= 0.0 and y_enter > ceiling * rh:
 			return pending  # level or rising, already above every top
-		var t_exit := minf(t_max_x, t_max_z)
 		var row := _top_row(col, tops, plane)
 		if row != NO_COLUMN:
 			var h: float = row * rh
-			var y_exit := ray_origin.y + dir.y * t_exit
+			var y_exit := ray_origin.y + dir.y * crossing.exit
 			if y_enter <= h or y_exit <= h:
 				# `tops` is the REAL board; anything else here came from the plane. Asked of the
 				# table rather than by comparing the row, because a real column may legitimately
@@ -205,6 +198,50 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 					return _top_cell(col, row)
 				else:
 					return pending   # solid ground at or above the floor: the held hole stands
+	return pending
+
+
+# One column a ray passes through, and the stretch of the ray inside it: `enter` and `exit` are
+# distances along the NORMALIZED direction, so `origin + dir * t` is the point.
+class Crossing:
+	var cell: Vector2i
+	var enter: float
+	var exit: float
+
+	func _init(at: Vector2i, from_t: float, to_t: float) -> void:
+		cell = at
+		enter = from_t
+		exit = to_t
+
+
+# Every column a ray crosses, IN ORDER, out to `max_t` or the edge of `extent` (#1132). The walk
+# pick_cell has always done, lifted out so a second question can ride it: pick_cell asks which
+# column the ray meets first, the shot clearance asks which columns a sight line passes inside.
+# One walk, two questions -- a copy of the DDA would be a second answer to "which cells does this
+# ray cross", and the two would disagree at exactly the boundary ties the walk already resolves.
+#
+# `dir` must be normalized. A vertical ray crosses the one column it starts in. The starting column
+# is always listed, even outside `extent`: a camera off the board still walks INTO it.
+static func crossings(origin: Vector3, dir: Vector3, extent: Rect2i, max_t: float) -> Array[Crossing]:
+	var out: Array[Crossing] = []
+	var cs := BoardSpace.CELL_SIZE
+	var col := Vector2i(floori(origin.x / cs), floori(origin.z / cs))
+	if absf(dir.x) < _EPS and absf(dir.z) < _EPS:
+		out.append(Crossing.new(col, 0.0, max_t))
+		return out
+	var min_col := extent.position
+	var max_col := extent.end - Vector2i.ONE
+	var step := Vector2i(_step_of(dir.x), _step_of(dir.z))
+	var t_max_x := _t_to_boundary(origin.x, dir.x, col.x, step.x, cs)
+	var t_max_z := _t_to_boundary(origin.z, dir.z, col.y, step.y, cs)
+	var t_delta_x := cs / absf(dir.x) if step.x != 0 else INF
+	var t_delta_z := cs / absf(dir.z) if step.y != 0 else INF
+	var t := 0.0
+	for i in _MAX_STEPS:
+		var t_exit := minf(t_max_x, t_max_z)
+		out.append(Crossing.new(col, t, minf(t_exit, max_t)))
+		if t_exit >= max_t:
+			break
 		if t_max_x < t_max_z:
 			t = t_max_x
 			t_max_x += t_delta_x
@@ -214,8 +251,8 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 			t_max_z += t_delta_z
 			col.y += step.y
 		if _departed(col, step, min_col, max_col):
-			return pending
-	return pending
+			break
+	return out
 
 
 # What the ray can hit in this column: the painted column's top row, else the plane's

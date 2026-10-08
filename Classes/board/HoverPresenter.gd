@@ -1,8 +1,9 @@
 extends Node
 class_name HoverPresenter
 
-# Turns "where is the mouse" into board feedback: cursor state/position, the hover info card,
-# range + preview overlays, and the queue panel's row-hover highlight. Pulled out of game.gd
+# Turns "where is the mouse" into board feedback: cursor state/position, range + preview overlays,
+# and the queue panel's row-hover highlight. It shows no card: since #1105 a card is asked for by a
+# click (dev: "Nothing on hover, at all"), so game's click paths and the ring own it. Pulled out of game.gd
 # 2026-07-26, where it lived as one 133-line per-state switch; holds a back-ref to the Game
 # coordinator (same pattern as DevController/AIController/MainActionMenu).
 #
@@ -76,12 +77,8 @@ func hovered_enemy() -> Unit:
 func update_hover_visuals(hovered_cell: Vector2i) -> void:
 	_clear_threat_markup()   # cleared on every cell change; the branch that wants it draws it back
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
-		# Off the map -- every mode draws nothing out there. CLEARING is part of drawing nothing
-		# (#582): a bare return left the last card standing, so the readout went on describing a
-		# cell the pointer had left, and while chasing an unclickable tile it insisted the cell was
-		# at height -1 when the board said -3. A card that cannot be trusted to be about NOW is
-		# worse than no card.
-		game.hover_info_panel.clear()
+		# Off the map -- every mode draws nothing out there. A card is left alone: it describes the
+		# cell that was clicked, not the one under the pointer (#1105).
 		return
 
 	# Only IDLE produces squad icons. They're collected rather than drawn inline because that
@@ -114,9 +111,9 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 		for icontype in icons_to_draw[unit]:
 			game.overlay_manager.create_unit_icon(unit, icontype)
 
-# CLEARS the card rather than filling it (#582). Dev mode never wrote it, so it held whatever the
-# last IDLE hover had left -- a card from before the mode was even entered, which is how a readout
-# for a cell at -3 came to say -1. Clearing rather than describing, because the dev-mode height
+# CLEARS the card rather than filling it (#582). Dev mode never wrote it, so it held whatever play
+# had left -- a card from before the mode was even entered, which is how a readout for a cell at
+# -3 came to say -1. Clearing rather than describing, because the dev-mode height
 # readout is HeightDebugOverlay's and a second voice for it is a second thing to keep in step.
 func _hover_dev_mode(cell: Vector2i) -> void:
 	game.hover_info_panel.clear()
@@ -134,7 +131,6 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 
 	var hovered: Unit = game.unit_at_pointer(cell)
 	if hovered == null:
-		_show_hover_panel(null, cell)   # every real tile carries a card (dev, #135 round 2)
 		game.overlay_manager.clear_selection_overlays()
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 		if game.squad_manager.active_squad == null:
@@ -151,9 +147,16 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	# cohesion bubble is a third picture of enemy movement that ThreatField deliberately ignores.
 	# The fork is the whole branch rather than one call, because every one of those three is the
 	# wrong question to ask about somebody you do not command.
+	#
+	# ITS SQUAD'S LINES CAME BACK (#1109, dev: "there's no good way to see the enemy's COH range at
+	# all") -- the range stroke and the tethers, in the ENEMY's colour. That is a readout of who is in
+	# the squad and how far its leash reaches, not a picture of where it will move, so the bubble's
+	# objection above does not reach it. Drawn while your own squad is mid-plan too, which is when a
+	# shove to split them gets planned; only the rings keep the gate below.
 	if Team.is_enemy(Team.Faction.PLAYER, hovered.get_faction()):
-		_show_hover_panel(hovered, cell)
 		game._redraw_enemy_ranges(hovered)
+		if hovered.has_squad():
+			game.draw_squad_cohesion(hovered.squad, hovered.squad.leader.get_projected_destination())
 		if hovered.has_squad() and game.squad_manager.active_squad == null:
 			return game.get_squad_icons(hovered.squad)
 		return {}
@@ -183,7 +186,6 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 		standable = split["green"]
 		blocked = split["blocked"]
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, standable, OverlayManager.ATLAS_COORDS)
-	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, blocked, OverlayManager.ATLAS_COORDS)
 
 	# Idle only: an active squad's own markers are already up, and a second set for whoever the
@@ -260,7 +262,7 @@ func _draw_stranding(leader: Unit, cell: Vector2i, moverange: Dictionary) -> voi
 # A ghost of `unit` standing on `cell` and nothing else -- no arrow, no re-validation -- for a tile the
 # player may look at but not take. The typed local is required through the untyped `game` ref.
 func _show_stand_in(unit: Unit, cell: Vector2i, moverange: Dictionary) -> void:
-	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+	var path: Array[Vector2i] = game.route_to(unit, moverange, cell)
 	var ghost := MoveAction.new()
 	ghost.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
 	var one: Array[MoveAction] = [ghost]
@@ -295,6 +297,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 
 	var preview_cells: Array[Vector2i] = []
 	var travel: Dictionary[Vector2i, Array] = {}
+	var insets: Array[Vector2i] = []
 	var victims: Array[Unit] = []
 	var trace_shown := false
 	if attacker != null:
@@ -321,17 +324,46 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# Every footprint flashes in the order the attack travels (#1057 part 2), whatever it
 			# targets -- the tiles say HOW it lands, the victims' own pulse says WHO.
 			travel = reach.steps
-			# A null pick is bare fists -- unit-only by definition, so it has no hits_units to ask and
-			# answers as UNIT.
-			if aiming == null or aiming.hits_units():
-				victims = reach.victims
+			# Whoever the sweep hits, with no targets gate of this hover's own: a map-only attack's own
+			# victims are already none (RulesService.is_attack_victim, #1135), and the ones its current
+			# catches are hit for real, so hiding them here would be a second answer to "who is hit".
+			victims = reach.victims
+			# ...and what it DROPS (#1058 D2b). A watch declares nothing here: its shot fires later, from
+			# wherever the crosser is, so there is no landing to show yet.
+			if aiming != null and aiming.payload != null and game.aim_intent != game.AimIntent.WATCH:
+				var candidate := AttackAction.declare(attacker, origin, cell)
+				var rows: Array[AttackAction] = game.squad_manager.preview_payloads(attacker.squad, candidate, board)
+				travel = travel.duplicate(true)
+				_add_payloads(rows, preview_cells, travel, insets, victims)
 
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
-	game.overlay_manager.set_aim_flash(travel)
+	game.overlay_manager.set_aim_flash(travel, insets)
 	game.overlay_manager.set_target_pulse(victims)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
+
+
+# The payload rows an aim would drop, folded into what its hover shows (ruling 52). Each LEVEL flashes
+# together, one step after the level above it -- level k at the aim's last step + k -- so an aim tile a
+# payload also covers flashes twice. A tile only a payload reaches is an INSET, whatever its depth; one
+# the aim reaches itself stays the aim's full tile. Whoever a payload hits pulses with the aim's own.
+func _add_payloads(rows: Array[AttackAction], aim_cells: Array[Vector2i],
+		travel: Dictionary[Vector2i, Array], insets: Array[Vector2i], victims: Array[Unit]) -> void:
+	var last := AimFlash2D.last_step(travel)
+	for row in rows:
+		var step := last + row.payload_depth
+		for tile in row.footprint:
+			if not travel.has(tile):
+				travel[tile] = []
+			if not travel[tile].has(step):
+				travel[tile].append(step)
+			if not aim_cells.has(tile) and not insets.has(tile):
+				insets.append(tile)
+		var hit := row.target
+		if hit != null and is_instance_valid(hit) and not victims.has(hit):
+			victims.append(hit)
+	insets.sort()
 
 func _hover_choosing_move(cell: Vector2i) -> void:
 	var unit: Unit = game.selected_unit
@@ -374,7 +406,7 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 
 	# Live preview: build the move this click WOULD queue and validate the plan against it, so
 	# the arrow and the queue panel show the real consequence before anything is committed.
-	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
+	var path: Array[Vector2i] = game.route_to(unit, moverange, cell)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
 
@@ -428,6 +460,12 @@ func _highlight_unit(unit: Unit, on: bool) -> void:
 	else:
 		unit.visuals.set_highlighted(on)
 
+# The objectives panel's zone rows (#955 part 3), the queue row's precedent one surface along: the
+# row under the pointer lights every drawn zone of its kind, in both views. MissionRules.NO_ZONE when
+# the pointer leaves, which lights nothing. Hover PAINT, not a hover card (#1105's ruling).
+func on_objective_row_hover_changed(kind: int) -> void:
+	game.overlay_manager.set_lit_zone_kind(kind)
+
 func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 	if previous_unit != null and is_instance_valid(previous_unit):
 		previous_unit.visuals.set_hovered(false)
@@ -466,91 +504,3 @@ func _set_cursor_for_preview(cell: Vector2i, valid: bool) -> void:
 	else:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 	game.cursor_controller.set_cursor_pos(cell)
-
-func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
-	# Inspect + hover must never overlap. The inspect panel is a docked left column (#68):
-	#   - hovering the inspected unit adds nothing -> suppress the hover card (tile card too)
-	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
-	# The card is a stack since #135, and the tile half shows for EVERY real tile (dev, round 2):
-	# icon + name header, then the tile's states, rules and possible interactions.
-	var board: BoardContext = game._board()
-	var kind: Terrain.Kind = board.terrain_kind_at(cell)
-	# The tile's OWN data names and pictures the card (2026-08-12): authored terrain_name first,
-	# kind name as the fallback, the tile's sprite as the picture -- the same policy the brush
-	# palette rows read (GridUtils.authored_tile_display_name / tile_sprite), so hover and palette
-	# cannot disagree. A bare unnamed NONE-kind tile stays headerless on purpose, and
-	# TERRAIN_ICONS stays the queue rows' pathing glyph, not a display read.
-	var data: TileData = game.grid.get_cell_tile_data(cell)
-	var authored: String = GridUtils.authored_tile_display_name(data)
-	var header: String = authored if authored != "" \
-		else (Terrain.kind_display_name(kind) if kind != Terrain.Kind.NONE else "")
-	var source: TileSetAtlasSource = game.grid.tile_set.get_source(game.grid.get_cell_source_id(cell)) as TileSetAtlasSource
-	var icon: Texture2D = GridUtils.tile_sprite(source, game.grid.get_cell_atlas_coords(cell))
-	var tile_lines: Array[String] = _tile_readout_lines(cell)
-	var world_pos: Vector2 = hovered.global_position if hovered != null \
-		else GridUtils.cell_world(game.grid, cell)
-	if game.unit_info_panel.is_showing():
-		if hovered != null and game.unit_info_panel.is_showing_unit(hovered):
-			game.hover_info_panel.clear()
-			return
-		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos,
-			int(game.unit_info_panel.panel_width()) + 8)
-	else:
-		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos)
-
-# The tile card's body (#135): each dynamic state (with its live clock), the ground rules worth
-# knowing (water's traversal gate, a move cost above the norm), then which elements can touch
-# this tile — filtered through the SAME predicate the resolver's deposit filter runs
-# (TerrainReaction.applies_to_tile, via Glossary.terrain_reactions_for). Meanings come from
-# Glossary short texts, numbers from the reads the rules make — the card can't disagree with
-# either. The kind itself is the card's header, composed in _show_hover_panel.
-func _tile_readout_lines(cell: Vector2i) -> Array[String]:
-	var lines: Array[String] = []
-	var board: BoardContext = game._board()
-	var held: Array[Terrain.TileState] = []
-	if board.terrain_states != null:
-		held = board.terrain_states.states_at(cell)
-	for state: Terrain.TileState in held:
-		var line: String = "%s — %s" % [Terrain.tile_state_display_name(state),
-			Glossary.short(Glossary.term_for_tile_state(state))]
-		var turns: int = board.terrain_states.turns_remaining(cell, state)
-		if turns > 0:
-			line += " %d left." % turns
-		lines.append(line)
-	var kind: Terrain.Kind = board.terrain_kind_at(cell)
-	if kind == Terrain.Kind.WATER:
-		# One Kind, two tiles (#116) — so the card asks the same question the rules ask: water you
-		# cannot stand on is the DEEP kind. Reading walkability rather than a second enum member is
-		# what makes a FROZEN cell read as the shallow line for free, since is_walkable knows state.
-		lines.append(Glossary.short(Glossary.Term.WATER_TILE if not board.is_walkable(cell)
-			else Glossary.Term.SHALLOW_WATER))
-	var data: TileData = game.grid.get_cell_tile_data(cell)
-	if data != null and data.has_custom_data("move_cost"):
-		var cost: int = data.get_custom_data("move_cost")
-		if cost > 1:
-			lines.append("Slow going — costs %d movement to enter." % cost)
-	# Elevation (#257). Only spoken when it is non-default, so a flat board's card reads exactly as
-	# it did before verticality existed — the same rule the move_cost line above follows.
-	var elevation: int = board.elevation_at(cell)
-	var corners: Vector4i = board.corners_at(cell)
-	var rise: Terrain.RampRise = Terrain.rise_of_corners(corners)
-	var climb: int = Terrain.climb_of_corners(corners)
-	if rise != Terrain.RampRise.NONE:
-		# BOTH ends, because a ramp's steepness is authored since #427 slice 2 — "rises east from 4"
-		# no longer says where it arrives, and which heights it joins is the whole rule.
-		#
-		# The sideways clause went with #427 slice 3: a step is refused when the shared edge does not
-		# meet, which still refuses this ramp's sides but no longer refuses a slope continuing
-		# alongside it. Saying "only along that slope" would now be a card describing a rule the
-		# board does not follow.
-		lines.append("Ramp — rises %s from height %d to height %d."
-			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation, elevation + climb])
-	elif climb > 0:
-		# A corner form: RampRise cannot name it, so the card says what it IS rather than reaching
-		# for a direction that does not exist (#427 slice 3).
-		lines.append("Corner slope — height %d rising to %d across part of the cell."
-			% [elevation, elevation + climb])
-	elif elevation != 0:
-		lines.append("Height %d — reached only by a ramp that climbs to it." % elevation)
-	lines.append_array(Glossary.terrain_reactions_for(kind, held))
-	return lines

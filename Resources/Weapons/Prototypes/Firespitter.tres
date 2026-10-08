@@ -7,11 +7,11 @@
 
 [resource]
 script = ExtResource("4_2vyln")
-mod_spaces = Array[int]([1, 2, 3])
 main_attack = ExtResource("3_5e6n5")
 weapon_type = 6
 is_prototype = true
 display_name = "Firespitter"
 icon = ExtResource("2_nbdbn")
 description = "burn baby burn"
+weight = 5
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

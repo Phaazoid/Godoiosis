@@ -33,7 +33,7 @@ static var chill_glint_glow := 1.0
 # The world half (slice 2): what a worn state throws off the body, and the damp patch a Wet unit
 # leaves under it (a ground-only Decal; UnitMirror spreads and dries it). Read by StatusWorld and
 # StatusParticles every frame, so these need no sweep either.
-static var wet_drip_rate := 2.4           # drips a second from a fully Wet unit
+static var wet_drip_rate := 1.2           # drips a second from a fully Wet unit
 static var wet_drip_fall_time := 0.36     # seconds from the overhang to the ground
 static var wet_drip_length := 3.0         # texels
 static var wet_drip_alpha := 0.81

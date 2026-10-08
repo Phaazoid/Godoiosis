@@ -24,6 +24,8 @@ extends GdUnitTestSuite
 # SCENE_PATH stays a STRING: the knob-coverage law below reads the .tscn as TEXT. The scene is
 # preloaded separately because a per-test load() reloads the 5 MB mesh library every case (#621).
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# Knob nodes battle3d BUILDS in _ready rather than the scene authoring them (#508's GasMirror).
+const BUILT_IN_CODE := ["GasMirror"]
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const H := preload("res://tests/support/squad_fixtures.gd")   # the guard-link sweep case needs units
 
@@ -115,6 +117,12 @@ func _nudged(knob: Dictionary, value: Variant) -> Variant:
 		TYPE_COLOR:
 			var color: Color = value
 			return Color(color.r, color.g, color.b, fposmod(color.a + 0.3, 1.0))
+		TYPE_INT:
+			# An int property truncates a fractional nudge, so a tenth of a small range writes the
+			# value it already had and a live knob reads as inert. Step at least one.
+			var step_whole := maxi(1, roundi((float(knob["max"]) - float(knob["min"])) * 0.1))
+			var whole: int = value
+			return whole - step_whole if whole + step_whole > int(knob["max"]) else whole + step_whole
 		_:
 			var low: float = knob["min"]
 			var high: float = knob["max"]
@@ -750,6 +758,12 @@ func test_the_scene_overrides_no_game_knob_property() -> void:
 	assert_str(scene).override_failure_message(
 		"could not read %s -- this law would pass vacuously" % SCENE_PATH).is_not_empty()
 	for knob: Dictionary in _declaration_tables():
+		if BUILT_IN_CODE.has(knob["node"]):
+			# No scene block, so nothing can override it -- but it must still exist, or a misspelt
+			# name would sail through here.
+			assert_object(_scene.get_node_or_null(NodePath(knob["node"]))).override_failure_message(
+				"battle3d builds no node '%s'" % knob["node"]).is_not_null()
+			continue
 		var section := _node_section(scene, knob["node"])
 		assert_bool(section.is_empty()).override_failure_message(
 			"Battle3D.tscn has no node '%s'" % knob["node"]).is_false()
@@ -1016,6 +1030,23 @@ func test_a_tick_rewires_the_live_board() -> void:
 		).is_not_null()
 
 
+# The terrain catalog CACHES its scan (#1213), and this page is the one runtime writer that changes
+# which reaction files exist. Driven through the real door a tick's create and delete both end on,
+# so no file is written: what is asserted is that the folder is read AGAIN, not what it holds.
+func test_a_ground_change_makes_the_terrain_catalog_read_its_folder_again() -> void:
+	var panel := _tiles_page()
+	var _filled := TerrainReactionCatalog.get_all()
+	var before := TerrainReactionCatalog.scans
+
+	panel._after_ground_change("x")
+
+	assert_int(TerrainReactionCatalog.scans).override_failure_message(
+		"a tick's create or delete left the catalog answering from the list it cached before the file "
+		+ "changed, so the board and the page go on seeing the old ground until a relaunch"
+		).is_greater(before)
+	await await_idle_frame()   # the rebuild's detached rows, or they read as orphans
+
+
 func _paint_a_grass_cell(game: Node2D) -> Vector2i:
 	for entry: Dictionary in ObjectKnobs.authorable_tiles(game.grid.tile_set):
 		if GridUtils.terrain_kind_of(entry["data"]) != Terrain.Kind.GRASS:
@@ -1088,6 +1119,30 @@ func test_a_movement_grid_knob_repaints_both_views() -> void:
 	var source := manager.move_overlay.tile_set.get_source(0) as TileSetAtlasSource
 	assert_float(_centre_alpha(source.texture)).override_failure_message(
 			"the flat view's tileset kept its old inner fill").is_equal_approx(0.9, 0.01)
+
+
+# ...and the payload inset (#1058 D2b), for the same reason: InsetSquare is one rule each view
+# rasterizes into a texture of its own. Asked at a texel inside the margin the new share opens.
+func test_the_payload_inset_knob_repaints_both_views() -> void:
+	var overlays := GameKnobs.overlays_of(_scene)
+	var manager := GameKnobs.overlay_manager_of(_scene)
+	overlays.inset_texture()   # built lazily, like the grid -- stand one up to be restyled
+	assert_object(manager.payload_inset_texture()).override_failure_message(
+			"the flat view generated no inset, so this case cannot see its claim").is_not_null()
+	var knob := _class_knob("static", "PAYLOAD_INSET")
+
+	GameKnobs.write_class(_scene, knob, 0.0)
+	GameKnobs.write_class(_scene, knob, 0.4)
+	assert_float(_edge_alpha(overlays.inset_texture())).override_failure_message(
+			"the diorama's payload square kept its old size").is_equal(0.0)
+	assert_float(_edge_alpha(manager.payload_inset_texture())).override_failure_message(
+			"the flat view's payload square kept its old size").is_equal(0.0)
+
+
+# A texel a quarter of the way in: inside any square a share of 0 leaves, outside one 0.4 leaves.
+func _edge_alpha(texture: Texture2D) -> float:
+	var img := texture.get_image()
+	return img.get_pixel(img.get_width() / 4, img.get_height() / 2).a
 
 
 func _centre_alpha(texture: Texture2D) -> float:

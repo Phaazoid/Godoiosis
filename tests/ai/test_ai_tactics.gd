@@ -12,6 +12,14 @@ const BB := preload("res://play/board_builder.gd")
 const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 8, 3)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -108,8 +116,8 @@ func test_attack_in_reach_queues_one_stamped_aim() -> void:
 	var queued: bool = AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)
 
 	assert_bool(queued).is_true()
-	assert_int(player.squad.action_queue.size()).is_equal(1)
-	var aim: AttackAction = player.squad.action_queue[0] as AttackAction
+	assert_int(H.given_orders(player.squad).size()).is_equal(1)
+	var aim: AttackAction = H.given_orders(player.squad)[0] as AttackAction
 	assert_object(aim).is_not_null()
 	assert_that(aim.target_cell).is_equal(enemy.movement.cell)
 	# The declare stamp (#78's fists bug): an AI aim carries its chosen attack exactly like a
@@ -135,7 +143,7 @@ func test_attack_respects_existing_main_action() -> void:
 	assert_bool(AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)).is_true()
 	# One main action per unit per turn: a second pass may not queue a duplicate order.
 	assert_bool(AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)).is_false()
-	assert_int(player.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(player.squad).size()).is_equal(1)
 
 
 # --- best_attack_destination ---

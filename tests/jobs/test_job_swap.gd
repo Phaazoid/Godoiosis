@@ -89,7 +89,7 @@ func test_a_job_the_catalogue_does_not_have_is_refused_and_says_so() -> void:
 # piece back on the way out -- so this is a one-way act reached by an ordinary click.
 func test_a_job_that_breaks_a_wear_gate_takes_the_armour_off_and_going_back_does_not_restore_it() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
-	var plate := _ceiling_plate(unit, Stats.Stat.DEX, Abilities.Id.INTIMIDATION)
+	var plate := _ceiling_plate(unit, Stats.Stat.DEX, Abilities.Id.BRACE)
 	_wear(unit, plate)
 	assert_int(unit.get_effective_def()).is_greater(0)
 	_tank.stat_nudges = {Stats.Stat.DEX: 1}
@@ -111,7 +111,7 @@ func test_a_job_that_breaks_a_wear_gate_takes_the_armour_off_and_going_back_does
 # this passing vacuously: a preview and a live read that BOTH miss the strip agree perfectly.
 func test_the_preview_is_exactly_what_the_change_turns_out_to_do() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
-	var plate := _ceiling_plate(unit, Stats.Stat.DEX, Abilities.Id.INTIMIDATION)
+	var plate := _ceiling_plate(unit, Stats.Stat.DEX, Abilities.Id.BRACE)
 	_wear(unit, plate)
 	_tank.stat_nudges = {Stats.Stat.DEX: 1}
 	_tank.ability_pool = [_ability(Abilities.Id.TAUNT)]
@@ -140,7 +140,7 @@ func test_the_preview_is_exactly_what_the_change_turns_out_to_do() -> void:
 # and the equipped one -- has to be exactly where it was, or the "preview" is a change.
 func test_asking_what_a_job_would_do_leaves_the_unit_untouched() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0))
-	var plate := _ceiling_plate(unit, Stats.Stat.DEX, Abilities.Id.INTIMIDATION)
+	var plate := _ceiling_plate(unit, Stats.Stat.DEX, Abilities.Id.BRACE)
 	_wear(unit, plate)
 	assert_str(unit.set_sole_job("scout")).is_empty()
 	_tank.stat_nudges = {Stats.Stat.DEX: 1}

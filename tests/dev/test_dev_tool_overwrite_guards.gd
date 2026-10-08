@@ -5,8 +5,13 @@
 # byte moves.
 #
 # No case writes to disk: refusal cases return before any save, the allowed direction is
-# asserted at reason level (a real allowed Update would re-save a tracked scenario), and the
-# Delete cases never emit `confirmed` at a tool (only cancel, or the helper wired to a flag).
+# asserted on the button without pressing it (a real allowed Update would re-save a tracked
+# scenario), and the Delete cases never emit `confirmed` at a tool (only cancel, or the helper
+# wired to a flag).
+#
+# The load gate's allowed direction is read after a BARE load, nothing between it and the
+# assertion: the header learns of a board only through board_loaded, as every door but its own
+# Load does (#967). The show-hook case refreshes on purpose; that refresh is what it tests.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -29,6 +34,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	await await_idle_frame()
+	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -57,22 +63,34 @@ func test_update_refuses_a_scenario_that_is_not_loaded() -> void:
 	assert_str(game.scenario_manager.last_loaded_path).is_empty()   # no save ever happened
 
 func test_update_allows_the_loaded_scenario() -> void:
-	# Reason level only -- an actual allowed press would re-save the tracked file.
+	# Never pressed -- an actual allowed press would re-save the tracked file.
 	var tool := _scenario_header()
 	game.scenario_manager.load_scenario(ScenarioManager.scenario_path(PROLOG))
-	tool.refresh_dropdown(PROLOG)
 
+	assert_bool(tool.update_button.disabled).override_failure_message(
+		"Update greyed on the board that was just loaded").is_false()
+	# Aimed, so the reason below is asked about PROLOG rather than an empty selection.
+	assert_str(DevWidgets.selected_name(tool.scenario_dropdown)).is_equal(PROLOG)
 	assert_str(tool._update_block_reason()).is_empty()
-	assert_bool(tool.update_button.disabled).is_false()
 
 func test_the_button_and_the_refusal_agree() -> void:
 	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)   # not loaded -> blocked
 	assert_bool(tool.update_button.disabled).is_true()
 
+	# Aimed at PROLOG and greyed, then PROLOG arrives: the report's own shape (#967).
 	game.scenario_manager.load_scenario(ScenarioManager.scenario_path(PROLOG))
-	tool.refresh_dropdown(PROLOG)   # loaded -> allowed
-	assert_bool(tool.update_button.disabled).is_false()
+	assert_bool(tool.update_button.disabled).override_failure_message(
+		"Update stayed greyed after the aimed scenario was loaded").is_false()
+
+func test_a_mission_select_load_leaves_update_live() -> void:
+	# Mission Select's door (#967). Prolog is only a real file to load; nothing about it is asserted.
+	var tool := _scenario_header()
+	game.mission_controller.begin_mission(ScenarioManager.scenario_path(PROLOG))
+
+	assert_bool(tool.update_button.disabled).override_failure_message(
+		"Update greyed on a board loaded through Mission Select").is_false()
+	assert_str(DevWidgets.selected_name(tool.scenario_dropdown)).is_equal(PROLOG)
 
 func test_a_cleared_board_has_no_loaded_scenario() -> void:
 	# Without clear_board wiping last_loaded_path, a sandbox board still counts the previous

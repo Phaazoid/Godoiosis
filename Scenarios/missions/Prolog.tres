@@ -99,6 +99,7 @@ size = 1
 inscriptions = Array[ExtResource("13_51bis")]([SubResource("Resource_rivbd")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_ek4ng"]
@@ -109,10 +110,10 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+8: 9
 })
 map_sprite = ExtResource("14_p4ex5")
 move_sprite = ExtResource("15_u2f6a")
@@ -128,14 +129,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_n3m7a")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -168,7 +167,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -185,18 +183,17 @@ cell = Vector2i(3, -8)
 squad_id = 1
 is_leader = true
 squad_archetype = 1
+ai_profile = "Easy"
 stats = Dictionary[int, int]({
 0: 10,
 1: 4,
 2: 5,
-3: 5,
 4: 4,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 10
-current_will = 0
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_2uafw")])
 equipped_index = 0
 affinity_saved = true
@@ -211,6 +208,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 "rev": 0
 }
 })
+wounded = true
 
 [sub_resource type="Resource" id="Resource_1vcu4"]
 script = ExtResource("4_sox22")
@@ -225,7 +223,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -242,18 +239,17 @@ cell = Vector2i(-4, -7)
 squad_id = 2
 is_leader = true
 squad_archetype = 1
+ai_profile = "Easy"
 stats = Dictionary[int, int]({
 0: 10,
 1: 4,
 2: 5,
-3: 5,
 4: 4,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_1vcu4")])
 equipped_index = 0
 affinity_saved = true
@@ -282,7 +278,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -299,18 +294,17 @@ cell = Vector2i(-12, -2)
 squad_id = 3
 is_leader = true
 squad_archetype = 1
+ai_profile = "Easy"
 stats = Dictionary[int, int]({
 0: 10,
 1: 4,
 2: 5,
-3: 5,
 4: 4,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_0ic5q")])
 equipped_index = 0
 affinity_saved = true
@@ -339,7 +333,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -356,18 +349,17 @@ cell = Vector2i(-12, 0)
 squad_id = 4
 is_leader = true
 squad_archetype = 1
+ai_profile = "Easy"
 stats = Dictionary[int, int]({
 0: 10,
 1: 4,
 2: 5,
-3: 5,
 4: 4,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_rv7wm")])
 equipped_index = 0
 affinity_saved = true
@@ -396,7 +388,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -413,18 +404,17 @@ cell = Vector2i(-4, 5)
 squad_id = 5
 is_leader = true
 squad_archetype = 1
+ai_profile = "Easy"
 stats = Dictionary[int, int]({
 0: 10,
 1: 4,
 2: 5,
-3: 5,
 4: 4,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_wfyk0")])
 equipped_index = 0
 affinity_saved = true
@@ -453,7 +443,6 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -470,18 +459,17 @@ cell = Vector2i(10, -3)
 squad_id = 6
 is_leader = true
 squad_archetype = 1
+ai_profile = "Easy"
 stats = Dictionary[int, int]({
 0: 10,
 1: 4,
 2: 5,
-3: 5,
 4: 4,
 5: 5,
 6: 5,
 7: 3
 })
 current_hp = 10
-current_will = 5
 inventory = Array[ExtResource("3_d7l08")]([SubResource("Resource_lu7lj")])
 equipped_index = 0
 affinity_saved = true

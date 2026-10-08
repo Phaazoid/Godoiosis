@@ -123,6 +123,7 @@ var _crawl_pushed := -2.0
 # is a hitch in the one moment this effect exists for.
 var _staging_dust: StagingDust = null
 var _arc: ArcLightning = null
+var _gas: GasMirror = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -157,6 +158,18 @@ var _held_drop := 0.0
 # transitions cannot carry this on their own.
 var _death_show_seen := false
 
+# THE SHOT CLEARANCE (#1132): which way the battle zoom turns, and what it hides, so nothing stands
+# between the lens and the action. The latch is its own; this scene builds the world it reads (the
+# mirrors' columns, props and bodies) and pushes what it decides back at them.
+var _clearance := ShotClearance.new()
+# Was the clearance live last frame -- the gate COMING ON is a fresh shot, since the off edge threw
+# away whatever search the last one owed. The aim line it last solved for; the SPAN walker it latched.
+var _clearance_on := false
+var _clearance_line: Array[Vector2i] = []
+var _span_walker_id := 0
+# What the trace last said was hidden, so a row is written when the counts move and not every frame.
+var _hidden_noted := Vector3i.ZERO
+
 
 func _ready() -> void:
 	game = _main.get_node("GameContainer/GameView/Game")
@@ -170,6 +183,21 @@ func _ready() -> void:
 	# line answers "what is the camera doing", the trace answers "what did it just do", and the two
 	# questions have two homes for the reason the report already keeps View and Look apart.
 	game.bug_reporter.trace_source = _describe_trace
+	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address
+	# it -- and built BEFORE the dev window is handed this host, which resolves those rows as it builds.
+	_gas = GasMirror.new()
+	_gas.name = "GasMirror"
+	_gas.field = game.gas_field
+	_gas.heights = game.board_heights
+	_gas.grid = game.grid
+	_gas.camera = _camera
+	_gas.sun = $Sun
+	_gas.environment = ($WorldEnvironment as WorldEnvironment).environment
+	_gas.lights_source = _board_mirror.lights
+	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
+	_gas.overlays = _overlays
+	_gas.board_source = func() -> BoardContext: return game._board()   # next round's forecast rules on it
+	add_child(_gas)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
@@ -191,6 +219,7 @@ func _ready() -> void:
 		get_viewport().size_changed.connect(_position_pip)
 	_board_mirror.board = $Board
 	_board_mirror.staged_board = $StagedBoard
+	_board_mirror.hidden_board = _make_hidden_board()
 	_unit_mirror.units_root = game.units_root
 	_unit_mirror.heights = game.board_heights
 	_unit_mirror.hovered_unit_source = _hovered_unit
@@ -373,9 +402,12 @@ func _puff_landings(cells: Array[Vector2i]) -> void:
 				StagingDust.burst_key(cell, BoardSpace.staging_version))
 
 
-# A shock landed (#887). The effect owns everything about what a bolt looks like; this owns the two
-# facts only the host has -- where a cell IS right now, and the shot's trajectory in world space.
+# A blow landed. A shock's (#887): the effect owns everything about what a bolt looks like; this owns
+# the two facts only the host has -- where a cell IS right now, and the shot's trajectory in world space.
 func _on_volley_struck(attack: AttackAction) -> void:
+	# Any blow's (#480): a shove's fall keeps its cubes standing until the body lands. Above the arc's
+	# early return, so every blow is asked, shock or not.
+	_unit_mirror.hold_falls(attack)
 	if _arc == null or not ArcLightning.draws(attack):
 		return
 	_arc.strike(attack, _shot_arc(attack))
@@ -465,6 +497,20 @@ func _drive_transition_camera() -> void:
 # One GridMap per tile in the air. Created on demand and freed the moment it lands, because a cell is
 # a COLUMN and only a node transform carries a whole stack -- and because one map is one offset, so
 # tiles arriving at different moments cannot share the landed lattice.
+# The lattice a hidden column goes to (#1132): the flight maps' recipe, drawn by nobody. Built in code
+# beside them rather than authored into Battle3D.tscn, so the editor never has a node of it to save.
+func _make_hidden_board() -> GridMap:
+	var map := GridMap.new()
+	map.name = "HiddenBoard"
+	map.mesh_library = $StagedBoard.mesh_library
+	map.cell_size = $StagedBoard.cell_size
+	map.collision_layer = 0
+	map.collision_mask = 0
+	map.visible = false
+	add_child(map)
+	return map
+
+
 func _sync_flight_maps() -> void:
 	var flying := BoardSpace.flying_cells()
 	var wanted: Dictionary[Vector2i, bool] = {}
@@ -778,7 +824,7 @@ func _describe_view() -> String:
 	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
 	return ("%s -- yaw %.0f deg, zoom %.1f, centred on %s [lift %.1f, drop %.1f->%.1f, dist->%.1f, "
 			+ "tscale %.2f, staged %d, flight %s] holds: lock %s, death show %s, following %s | "
-			+ "floor %.2f live / %.2f settled") % [
+			+ "floor %.2f live / %.2f settled | clearance turn %+.0f, hidden %d/%d/%d") % [
 		View.keys()[view],
 		_rig.rotation_degrees.y,
 		_camera.position.z,
@@ -794,6 +840,10 @@ func _describe_view() -> String:
 		trained.get_unit_name() if trained != null else "nobody",
 		_rig.frame_floor(CameraRig3D.When.LIVE),
 		_rig.frame_floor(CameraRig3D.When.SETTLED),
+		# ...and what the battle zoom turned and hid to see the action (#1132): columns/props/units.
+		_clearance.turn,
+		_clearance.hidden.columns.size(), _clearance.hidden.props.size(),
+		_clearance.hidden.units.size(),
 	]
 
 
@@ -928,10 +978,11 @@ func _process(_delta: float) -> void:
 	_sync_terrain_while_authoring()
 	_drive_transition(_delta)
 	_sync_staging()
-	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
+	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
-	# Same predicate that refuses their clicks — one question, one answer.
-	_rig.manual_input_enabled = demo_mode or not game._board_locked_for_player()
+	# Same predicate that refuses their clicks — one question, one answer. `live` joins it because
+	# a rig whose input is off cannot hear a release, so a drag held into a freeze is let go here.
+	_rig.manual_input_enabled = live and (demo_mode or not game._board_locked_for_player())
 	# The ZOOM half rejoined the same gate in #602 round 4 (dev, 2026-08-29: "we control the camera,
 	# fully. Their zoom gets overridden, period" -- restoring #520's own Done-when after the
 	# 2026-08-26 carve-out left the wheel live under playback). One predicate, both halves: whoever
@@ -979,19 +1030,23 @@ func _mirror_camera() -> void:
 	# The trained subject is read here rather than inside the director because validity is this
 	# scene's question: a void plummet ends in die(), and a freed Unit assigned into a typed slot
 	# dies on the type-check before any null test can run (#149). The director takes the ID.
-	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
-	var trained_id := trained.get_instance_id() if trained != null else 0
-	# ...and the death show, traced ABOVE the gate for the reason the depth below is: the show's flag
-	# clears in UnitMirror's own _process, so its END can land after playback has let go, and an edge
-	# polled below the return would never see it.
+	#
+	# The death show is read FIRST, since it decides whether an approach may stand in for the follow.
+	# Traced ABOVE the gate for the reason the depth below is: the show's flag clears in UnitMirror's
+	# own _process, so its END can land after playback has let go, and an edge polled below the return
+	# would never see it.
 	var show_live: bool = _unit_mirror.death_show_live()
 	if show_live != _death_show_seen:
 		_death_show_seen = show_live
 		_rig.note_event("death show %s" % ("BEGAN" if show_live else "ended"))
+	var trained := _shot_subject(cam, show_live)
+	var trained_id := trained.get_instance_id() if trained != null else 0
 	# The whole table runs ABOVE the early return, because the LOCK IS ITS GATE rather than a row in
 	# it: releasing the camera is a shot transition like any other (to NONE), and it is the one that
 	# must never be missed.
-	if _shots.update(cam.playback_locked, trained_id, cam.shot_cells, cam.framed_span, show_live):
+	var shot_edge := _shots.update(cam.playback_locked, trained_id, cam.shot_cells, cam.framed_span,
+			show_live)
+	if shot_edge:
 		_apply_shot(cam.shot_cells, cam.framed_span, trained)
 	# ABOVE the early return, deliberately: how far the ground has been torn out is a fact about the
 	# BOARD, not about who owns the camera (#521). The tiles thud back into their sockets INSIDE
@@ -1012,14 +1067,25 @@ func _mirror_camera() -> void:
 	# ...and how far below the board the rig has GOT, published back to playback (#602). ABOVE the
 	# gate for the same reason the lift is, and it is the whole point: the climb home finishes after
 	# playback lets go, so a poll below the return would freeze on the last value it saw and the
-	# exit transition would wait for ever. The one fact that travels rig -> playback down this
+	# exit transition would wait for ever. One of the two facts that travel rig -> playback down this
 	# channel; see CameraController.fall_depth for why it has to.
 	cam.fall_depth = _rig.drop_depth()
+	# ...and the other: whether the rig is still easing toward the shot it was given. A battle-zoom
+	# beat waits on it before its hold (#1132 follow-up), so the blow is watched from a camera that has
+	# stopped.
+	cam.view_arriving = _rig.is_arriving()
 	# ABOVE the early return for the same reason, and it is the whole point of the field: the readout
 	# has to learn when a pass ENDS, and everything below here stops being polled the moment the lock
 	# releases. Mirrored under the return -- where beat_profile sits -- it would hold the last pass's
 	# answer and leave every bar on the board up for ever.
 	_unit_mirror.cinematic_playback = cam.playback_cinematic
+	# THE CLEARANCE'S OFF EDGE (#1132), above the return for the release's reason: whatever the battle
+	# zoom turned or hid comes back the frame the lock lets go -- or the beat stops being a battle-zoom
+	# beat, or the board takes flight. Below the return it would never see the frame that ends it.
+	if not _clearance_live(cam):
+		_clearance_on = false
+		if _clearance.reset():
+			_push_hidden()
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
@@ -1047,11 +1113,243 @@ func _mirror_camera() -> void:
 	# beside the position for the same reason it is: this is the one block that already runs every
 	# frame under playback. Below the early return deliberately -- the release edge above restores
 	# the player's own yaw, and re-aiming after it would undo the return in the same frame.
-	_rig.aim_along(cam.directed_line)
+	# The clearance's turn rides on top (#1132) -- zero unless the side the line picks is blocked.
+	_rig.aim_along(cam.directed_line, _clearance.turn)
 	# ...and HOW BIG the beat is, the fourth of the same questions (#520 diff 2c). Polled beside the
 	# angle rather than edged like the widen below, because it must relax as well as push: a quiet
 	# beat publishes 0 and the camera eases back out on its own, with nothing to remember to undo.
 	_rig.dolly_to(cam.beat_emphasis)
+	# LAST, so every channel the frame wrote is in the settled lens it judges (#1132).
+	if _clearance_live(cam):
+		_clear_the_shot(cam, trained, shot_edge)
+
+
+# --- The shot clearance (#1132) -------------------------------------------------------------------
+
+# The battle zoom only (dev ruling 4): a pass that shows a fight -- #722's published answer -- on a
+# beat that plays cinematic, and never while the board is in the air, when the transition owns it.
+func _clearance_live(cam: CameraController) -> bool:
+	return cam.playback_locked and cam.playback_cinematic \
+			and cam.beat_profile == Pacing.Profile.CINEMATIC and not BoardSpace.flight_active()
+
+
+# One frame of the clearance: a fresh search on every edge, then the cheap hide-only check of the
+# angle held.
+func _clear_the_shot(cam: CameraController, trained: Unit, shot_edge: bool) -> void:
+	var line: Array[Vector2i] = cam.directed_line
+	var new_line := line != _clearance_line
+	if shot_edge or new_line or not _clearance_on:
+		_clearance_on = true
+		_clearance_line = line.duplicate()
+		if _shots.active == ShotDirector.Shot.SPAN:
+			_span_walker_id = _walker_id(cam.framed_span)
+		if _clearance.renew(new_line):
+			_push_hidden()
+	match _shots.active:
+		ShotDirector.Shot.DEATH_SHOW:
+			return   # the hold: nothing turns and nothing comes back while the cubes are in the air
+		ShotDirector.Shot.WIDE:
+			if _clearance.clear_hidden():
+				_push_hidden()
+			return
+	var subjects := _clearance_subjects(cam, trained)
+	var extras := _clearance_extras(cam)
+	var world := _clearance_world(cam, trained)
+	var before := _clearance.turn
+	var landing := _landing_aim(cam, trained)
+	var lens_of := func(turn: float) -> Vector3:
+		return _rig.lens_at(_lens_yaw(line, turn), CameraRig3D.When.SETTLED, landing)
+	# THE ANGLE CHANGES ON THE APPROACH AND NOWHERE ELSE (dev, 2026-10-07): only while a playback pan
+	# is still carrying the camera to its beat. Once it lands an action is about to play or playing,
+	# and a turn then is the mid-blow swing round 3 measured -- so a blocker that arrives later is hidden.
+	var can_turn := not is_nan(_rig.directed_yaw(line)) and cam.is_panning()
+	if not _clearance.step(world, subjects, extras, lens_of, can_turn):
+		return
+	if not is_equal_approx(before, _clearance.turn):
+		_rig.aim_along(line, _clearance.turn)
+		_rig.note_event("clearance: turned %+.0f" % _clearance.turn)
+	_push_hidden()
+
+
+# WHO THE SHOT IS OF: the followed unit -- or, on a battle-zoom beat, the one the camera is TRAVELLING
+# to (#1132 follow-up, dev 2026-10-07: "that first camera zoom should just be going to the correct
+# spot to watch the hit"). pan_to holds the follow back until its glide lands, so the follow alone
+# started the close-up, its zoom and the clearance's angle only once the camera had arrived -- a
+# second movement, and it ran into the blow. Standing in for the follow, the approach IS the shot.
+#
+# Never while a death show is live: DEATH_SHOW stands only while nobody is followed, and an approach
+# counting as one would pull the camera out of the pit with the cubes still in the air (#602 round
+# 8). Zoom off and Combat-Only walks keep the follow alone (ruling 4).
+func _shot_subject(cam: CameraController, show_live: bool) -> Unit:
+	if is_instance_valid(cam.follow_unit):
+		return cam.follow_unit
+	if show_live or not _clearance_live(cam) or not is_instance_valid(cam.pan_subject):
+		return null
+	return cam.pan_subject
+
+
+# Where the shot's aim will REST once the running pan lands, its trained drop applied -- so the
+# clearance chooses on the approach's first frame, from where the camera is going rather than from
+# where it is passing through. INF with no pan running, which hands lens_at the rig's own targets.
+func _landing_aim(cam: CameraController, trained: Unit) -> Vector3:
+	if not cam.is_panning():
+		return Vector3.INF
+	var flat := BoardSpace.of_pixels(cam.pan_destination, 0.0)
+	var aim := _aim_over(flat.x, flat.z)
+	if trained != null:
+		aim.y -= _depth_below(trained, cam, aim.y)
+	return aim
+
+
+# The yaw a candidate turn would settle at, or -- for a beat with no line to turn -- the one the
+# camera is already heading for.
+func _lens_yaw(line: Array[Vector2i], turn: float) -> float:
+	var yaw := _rig.directed_yaw(line, turn)
+	return _rig.target_yaw() if is_nan(yaw) else yaw
+
+
+# What the shot is OF: the fight on a close-up, everyone on the stage, the walker.
+#
+# A close-up watches BOTH ends of its aim line, not only the one it is trained on (round 4): looking
+# at the victim alone, the search happily turned end-on and parked the victim in front of the
+# attacker, which is a fight hidden behind a unit from the other direction.
+func _clearance_subjects(cam: CameraController, trained: Unit) -> Array[ShotClearance.Body]:
+	var units: Array[Unit] = []
+	match _shots.active:
+		ShotDirector.Shot.TRAINED:
+			if trained != null:
+				units.append(trained)
+			for unit in _units_on(cam.directed_line):
+				if not units.has(unit):
+					units.append(unit)
+		ShotDirector.Shot.STAGE:
+			units = _units_on(cam.shot_cells)
+		ShotDirector.Shot.SPAN:
+			var walker := _unit_by_id(_span_walker_id)
+			if walker != null:
+				units.append(walker)
+	var bodies: Array[ShotClearance.Body] = []
+	for unit in units:
+		var body := _unit_mirror.body_of(unit)
+		if body != null:
+			bodies.append(body)
+	return bodies
+
+
+# A SPAN also looks at where the walk ENDS, body-high over that ground, since that end is half of
+# what the shot was widened to hold.
+func _clearance_extras(cam: CameraController) -> Array[ShotClearance.Target]:
+	var extras: Array[ShotClearance.Target] = []
+	if _shots.active == ShotDirector.Shot.SPAN and cam.framed_span.size() == 2:
+		var cell: Vector2i = cam.framed_span[1]
+		var at := _board_mirror.surface_point(cell, game.board_heights) \
+				+ Vector3.UP * UnitSprite3D.body_middle()
+		extras.append(ShotClearance.Target.new(at, cell, 0))
+	return extras
+
+
+func _clearance_world(cam: CameraController, trained: Unit) -> ShotClearance.World:
+	var world := ShotClearance.World.new()
+	var floor_row := _board_mirror.floor_row_of(game.board_heights)
+	world.column_extent = func(cell: Vector2i) -> Vector2:
+		return _board_mirror.drawn_column(cell, floor_row)
+	world.prop_box = _board_mirror.prop_box
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit == null or unit.is_queued_for_deletion():
+			continue
+		var body := _unit_mirror.body_of(unit)
+		if body == null:
+			continue
+		var here: Array = world.bodies_at.get(body.cell, [])
+		here.append(body)
+		world.bodies_at[body.cell] = here
+	# THE ACTION'S OWN: never hidden, and the ground under them never hidden either. The trained
+	# subject, whoever stands on the beat's aim line, and on a walk everyone WALKING -- plus everyone
+	# on stage when the STAGE is the shot, since they are then what it is of.
+	#
+	# Every walker, not only the one the span frames (dev, 2026-10-07): once readouts counted, a
+	# squadmate walking in front of the framed walker was hidden mid-stride.
+	#
+	# Not everyone on stage on a CLOSE-UP (round 4): the tear-out keeps the stage published through
+	# every beat, so that clause made each bystander the action too, every block came out
+	# unclearable and nothing could ever be hidden -- the dev's "battles hiding behind units". A
+	# bystander may now be hidden; the ground under it stays protected, so a hidden column never
+	# leaves a unit we can still see standing on air.
+	var actors: Array[Unit] = []
+	if trained != null:
+		actors.append(trained)
+	actors.append_array(_units_on(cam.directed_line))
+	if _shots.active == ShotDirector.Shot.STAGE:
+		actors.append_array(_units_on(cam.shot_cells))
+	if _shots.active == ShotDirector.Shot.SPAN:
+		var walker := _unit_by_id(_span_walker_id)
+		if walker != null:
+			actors.append(walker)
+		for child in game.units_root.get_children():
+			var unit := child as Unit
+			if unit != null and unit.movement.moving:
+				actors.append(unit)
+	for unit in actors:
+		world.participants[unit.get_instance_id()] = true
+		world.protected[UnitMirror.cell_under(unit)] = true
+	for unit in _units_on(cam.shot_cells):
+		world.protected[UnitMirror.cell_under(unit)] = true
+	if _shots.active == ShotDirector.Shot.SPAN and cam.framed_span.size() == 2:
+		world.protected[cam.framed_span[1]] = true
+	return world
+
+
+# Push the latch's hidden sets at the two mirrors, and say so in the trace when the counts move.
+func _push_hidden() -> void:
+	var hidden := _clearance.hidden
+	_unit_mirror.camera_hidden = hidden.units.duplicate()
+	_board_mirror.set_camera_hidden(hidden.columns, hidden.props, game.grid, game.board_heights,
+			_board_mirror.floor_row_of(game.board_heights))
+	var counts := Vector3i(hidden.columns.size(), hidden.props.size(), hidden.units.size())
+	if counts != _hidden_noted:
+		_hidden_noted = counts
+		_rig.note_event("clearance: hiding %d cols / %d props / %d units" % [counts.x, counts.y,
+				counts.z])
+
+
+# The units standing on any of these cells -- the ONE answer to "who is on stage" (#1132 lifted it out
+# of _solve_stage_height, which asked it inline). Over cell_under, the cell a sprite is drawn over.
+func _units_on(cells: Array[Vector2i]) -> Array[Unit]:
+	var wanted: Dictionary[Vector2i, bool] = {}
+	for cell in cells:
+		wanted[cell] = true
+	var out: Array[Unit] = []
+	if wanted.is_empty():
+		return out
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and wanted.has(UnitMirror.cell_under(unit)):
+			out.append(unit)
+	return out
+
+
+# The walker a SPAN frames: whoever stands where the walk starts, or -- if it has already set off --
+# whoever is bound for where it ends.
+func _walker_id(span: Array[Vector2i]) -> int:
+	if span.size() != 2:
+		return 0
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and UnitMirror.cell_under(unit) == span[0]:
+			return unit.get_instance_id()
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and unit.movement.cell == span[1]:
+			return unit.get_instance_id()
+	return 0
+
+
+func _unit_by_id(id: int) -> Unit:
+	if id == 0:
+		return null
+	var found := instance_from_id(id)
+	return found as Unit if is_instance_valid(found) else null
 
 
 # The ONE place a distance or a framing is written under playback (#672). Every arm is a row of
@@ -1391,9 +1689,10 @@ func _center_on_pointer() -> void:
 #
 # surface_point carries the STAGED offset while _aim_over does not, so a call here while the board
 # is torn out would lift the rig twice -- once through the point and once through the rig's own lift
-# channel. Structurally unreachable rather than guarded: both callers are refused while playback
-# owns the board (SPACE by _unhandled_input's lock check, an order commit by there being no pass
-# running to commit during), and playback is the only thing that stages anything.
+# channel. Unreachable rather than guarded here: every caller is refused while playback owns the
+# board (SPACE by _unhandled_input's lock check, an order commit by there being no pass running to
+# commit during, an objectives-panel row by game.look_at_next_zone asking the lock itself -- that
+# panel stays up through the pass, #955 part 3), and playback is the only thing that stages anything.
 func _center_rig_on(cell: Vector2i) -> void:
 	_rig.glide_to(BoardSpace.surface_point(cell, game.board_heights))
 
@@ -1446,20 +1745,11 @@ func _aim_over(x: float, z: float) -> Vector3:
 # cell-effect deposit, or a body freed between the resolve and this frame. Non-empty cells are the
 # caller's contract (the edge only solves a published stage).
 func _solve_stage_height(cells: Array[Vector2i]) -> float:
-	var on_stage: Dictionary[Vector2i, bool] = {}
-	for cell in cells:
-		on_stage[cell] = true
 	var heights: BoardHeights = game.board_heights
 	var total := 0.0
 	var counted := 0
-	for child in game.units_root.get_children():
-		var unit := child as Unit
-		if unit == null:
-			continue
-		var cell := UnitMirror.cell_under(unit)
-		if not on_stage.has(cell):
-			continue
-		total += BoardSpace.surface_point(cell, heights).y
+	for unit in _units_on(cells):
+		total += BoardSpace.surface_point(UnitMirror.cell_under(unit), heights).y
 		counted += 1
 	if counted == 0:
 		for cell in cells:
@@ -1498,16 +1788,21 @@ func _solve_stage_height(cells: Array[Vector2i]) -> float:
 func _fall_below(cam: CameraController, aim_y: float) -> float:
 	if not is_instance_valid(cam.follow_unit):
 		return _death_show_depth()
-	var watched: Unit = cam.follow_unit
+	var depth := _depth_below(cam.follow_unit, cam, aim_y)
+	_held_drop = depth
+	return depth
+
+
+# The arithmetic alone, with no hold written (#1132 follow-up): the shot clearance asks it of where a
+# pan will LAND, before that body is followed, and a second spelling of it is how the two would part.
+func _depth_below(watched: Unit, cam: CameraController, aim_y: float) -> float:
 	var heights: BoardHeights = game.board_heights
 	var surface := BoardSpace.surface_point(UnitMirror.cell_under(watched), heights).y
 	var fall := minf(UnitMirror.fall_depth(watched, heights),
 			Pacing.CLIFF_FOLLOW_MAX * BoardSpace.CELL_SIZE)
 	var lift := Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE \
 			if not cam.shot_cells.is_empty() else 0.0
-	var depth := aim_y - (surface - fall + lift)
-	_held_drop = depth
-	return depth
+	return aim_y - (surface - fall + lift)
 
 
 # What the fall channel answers once its body is gone (#602 round 4): a void death frees the unit

@@ -8,15 +8,15 @@ class_name Stats
 # The canonical stat vocabulary. APPEND-ONLY: these serialize as ints in saved .tres
 # (UnitData.base_stats / WeaponData.scaling_blend keys). Reordering or deleting
 # a value silently corrupts existing resources — always add new stats at the END.
-# Roster + rationale: docs/design/stats.md. Input stats: STR/DEX/PER/CON. Capacity: MHP/WIL/LDR.
-# Squad: COH.
-enum Stat { MHP, STR, LDR, WIL, DEX, PER, CON, COH }
+# Roster + rationale: docs/design/stats.md. Input stats: STR/DEX/PER/CON. Capacity: MHP/LDR.
+# WIL is a TOMBSTONE (#1174): retired with Will, kept so every later value keeps its int. See RETIRED.
+# Squad: COH. Body: BLD, the body's own mass (#120) -- Unit.get_weight() is BLD plus what is carried.
+enum Stat { MHP, STR, LDR, WIL, DEX, PER, CON, COH, BLD }
 
 const STAT_DEFAULTS: Dictionary[Stat, int] = {
 	Stat.MHP: 20,
 	Stat.STR: 5,
 	Stat.LDR: 5,
-	Stat.WIL: 5,
 	Stat.DEX: 5,
 	Stat.PER: 5,
 	Stat.CON: 5,
@@ -26,7 +26,21 @@ const STAT_DEFAULTS: Dictionary[Stat, int] = {
 	# (#63): LDR buys squad capacity, COH buys leash length, and no band feeds either into the other.
 	Stat.COH: 4,   # playtest-tunable; 3 -> 4 on 2026-08-06 ahead of path-based cohesion (#151),
 				   # which is a strictly tighter leash at the same number (path >= Manhattan always)
+	# Body weight, on the same scale as Item.weight. The default sits well under WEIGHT_BAND_1, so a
+	# unit nobody authored reads as an ordinary body in band 0.
+	Stat.BLD: 10,  # playtest-tunable
 }
+
+# Stats gear may never modify (#120). BLD is the body's mass and gear's mass is Item.weight, so a
+# gear stat_modifier naming it would be a second spelling of one fact. Read by the law that guards it
+# (tests/law/test_gear_has_one_mass.gd) and by the editor that would otherwise offer it.
+const GEAR_EXCLUDED: Array[Stat] = [Stat.BLD]
+
+# Stats that no longer exist (#1174), kept in the enum only because it is append-only. Off
+# STAT_DEFAULTS, so every surface that lists stats drops them, and both loaders erase their keys
+# (UnitInstance.initialize, ScenarioUnitEntry.apply_unit_state): a save or a character file written
+# before the retirement still carries one.
+const RETIRED: Array[Stat] = [Stat.WIL]
 
 const CON_DEF_FACTOR := 0.2   # playtest-tunable: CON 5 wears armor at its printed value
 
@@ -39,6 +53,12 @@ const BAND_MID_MAX := 7    # 4-7 = mid rung (all defaults land here); 8+ = high
 # of investment buys the first MOV jump, four buy the second. # playtest-tunable
 const DEX_MOV_MID_MAX := 5    # 4-5 = +0
 const DEX_MOV_HIGH_MAX := 8   # 6-8 = +1; 9+ = +2
+
+# Weight bands (#120): how heavy a unit is, as a coarse rung off Unit.get_weight() (BLD + everything
+# carried). The ONE answer to "how heavy is this unit" -- a rule that cares asks the band, never the
+# raw number. static var: placeholder tuning the dev pokes freely.
+static var WEIGHT_BAND_1 := 20   # playtest-tunable; 20+ = band 1
+static var WEIGHT_BAND_2 := 28   # playtest-tunable; 28+ = band 2
 
 static func armor_def(def_power: int, con: int, flat_def: int = 0) -> int:
 	# DEF = flat term + (power x CON) (stats.md). The SCALED term is a multiplier with NO base,
@@ -117,3 +137,10 @@ static func per_ldr_band(per: int) -> int:
 	if per <= BAND_MID_MAX:
 		return 0
 	return 1
+
+static func weight_band(weight: int) -> int:
+	if weight >= WEIGHT_BAND_2:
+		return 2
+	if weight >= WEIGHT_BAND_1:
+		return 1
+	return 0

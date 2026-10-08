@@ -3,9 +3,12 @@ extends RefCounted
 # Owns the player's turn vocabulary, driving the REAL SquadManager / TurnManager /
 # PlanResolver / RulesService. No side channels (Law #3). Commands return structured
 # Dictionaries; play/board_view.gd renders them. The headless executor applies the
-# resolved plan's EFFECTS (move = teleport, attack = apply_damage + element states;
-# side-channel actions run their REAL execute() — it's pure synchronous logic) —
-# i.e. game.gd.execute_orders minus the animation awaits, so preview == execution (Law #2).
+# resolved plan's EFFECTS through the game's own state code (#46): a move teleports, the walk
+# phase plays ResolvedPlan.walk_moments, an attack runs AttackAction's state steps, the pass end
+# runs SquadManager.settle_downed and enforce_contact, and side-channel actions run their REAL
+# execute() — it's pure synchronous logic. OrderExecutor.execute_orders minus the animation
+# awaits, so preview == execution (Law #2); a shoved body teleports where the game slides it.
+# A mission is scored through the same MissionState the game's MissionController holds (#46).
 
 var grid: TileMapLayer
 var units_root: Node2D
@@ -14,13 +17,26 @@ var turn_manager: TurnManager
 var overlay_manager: OverlayManager
 var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
 var board_heights: BoardHeights           # twin of game.board_heights (#257); null board reads flat
-var scenario_data: ScenarioData           # authored scenario metadata (#612); null on fresh new boards
+var gas_field: GasField                   # twin of game.gas_field (#508); null on a board built without one
+var scenario_data: ScenarioData          # authored scenario metadata (#612); null on fresh new boards
+var reserve_root: Node2D                  # where a drawn roster waits off the board (#46); null on a board built without one
+var zone_manager: ZoneManager             # the zones the deployment cells are read from (#46)
 
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
-var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionController._contested)
+var _executing := false   # true while execute() plays the pass, up to its pass-end sweeps: a running pass owns its plan (#361)
+var _boundary_events: Array[String] = []   # what a turn's start did (a bleed-out), drained by end_turn after each hand-off (#46)
+# This mission's state and rules (#46) -- the SAME object the game's MissionController holds, so a
+# headless run scores objectives, the clock and every latch exactly as the game does.
+var mission: MissionState
+# The pre-mission phase (#46): the shared PreMissionPhase with this session as its host, whether the
+# phase is still open, and what the last Begin captured. A session lives as long as its board, so the
+# bridge takes `staged` from here and keeps it across boards (MissionController._staged's twin).
+var _phase: PreMissionPhase = null
+var _deploying := false
+var staged: PreMissionSnapshot = null
 
 const PLAYER_GLYPHS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ENEMY_GLYPHS := "abcdefghijklmnopqrstuvwxyz"
@@ -33,11 +49,30 @@ func _init(board: Dictionary) -> void:
 	overlay_manager = board.overlay_manager
 	terrain_states = board.get("terrain_states")
 	board_heights = board.get("board_heights")
+	gas_field = board.get("gas_field")
 	scenario_data = board.get("scenario")
-	if scenario_data != null and scenario_data.contested:
-		_mission_contested = true
+	reserve_root = board.get("reserve_root")
+	zone_manager = board.get("zone_manager")
+	mission = MissionState.new(zone_manager)
+	if scenario_data != null:
+		mission.apply_scenario(scenario_data)
 	for unit in live_units():
 		_register(unit)
+	# The turn boundary's signal-driven halves (#898), heard in the order game.gd hears them.
+	if not turn_manager.round_completed.is_connected(_on_round_completed):
+		turn_manager.round_completed.connect(_on_round_completed)
+	if not turn_manager.turn_started.is_connected(_on_turn_started):
+		turn_manager.turn_started.connect(_on_turn_started)
+	# Every change to a plan re-resolves it, off the queue signals game._wire_signals hangs
+	# refresh_action_queue on (#46): the next order is judged against the plan as it stands.
+	if not squad_manager.squad_action_queued.is_connected(_on_order_queued):
+		squad_manager.squad_action_queued.connect(_on_order_queued)
+	if not squad_manager.squad_action_cancelled.is_connected(_on_order_cancelled):
+		squad_manager.squad_action_cancelled.connect(_on_order_cancelled)
+	if not squad_manager.squad_became_active.is_connected(_on_plan_opened):
+		squad_manager.squad_became_active.connect(_on_plan_opened)
+	if not squad_manager.squad_became_empty.is_connected(_refresh_plan):
+		squad_manager.squad_became_empty.connect(_refresh_plan)
 
 func _register(unit: Unit) -> void:
 	if _handle_by_unit.has(unit):
@@ -54,7 +89,9 @@ func _register(unit: Unit) -> void:
 		unit.went_downed.connect(_on_unit_downed)
 
 func _on_unit_died(unit: Unit) -> void:
+	mission.note_unit_died(unit)   # FIRST, as game._on_unit_died: the mission may be protecting this one
 	squad_manager.handle_unit_death(unit)
+	_refresh_plan(squad_manager.active_squad)   # game._on_unit_died's last line, refresh_action_queue
 
 func _on_unit_downed(unit: Unit) -> void:
 	# The down fires INSIDE the attack/counter pass (take_damage -> _go_downed). Defer the
@@ -64,14 +101,36 @@ func _on_unit_downed(unit: Unit) -> void:
 		_downed_pending.append(unit)
 
 func _process_downed_pending() -> void:
-	# Twin of OrderExecutor._process_downed_pending: eject each survivor-but-downed unit into a solo
-	# squad. Skip any that got finished off (KILLED) later in the same pass — death already
-	# cleaned those up.
+	# OrderExecutor._process_downed_pending's loop, minus the overlays: each unit downed this pass goes
+	# through the one settle_downed both hosts call. Skip any that got finished off (KILLED) later in
+	# the same pass — death already cleaned those up.
 	for unit in _downed_pending:
 		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
 			continue
-		squad_manager.handle_unit_downed(unit)
+		squad_manager.settle_downed(unit)
 	_downed_pending.clear()
+	_refresh_plan(squad_manager.active_squad)   # the sweep's last line in the game, refresh_action_queue
+
+# game._on_unit_action_queued's rule half: a batch's orders are judged once, when queue_batch re-emits
+# at its close. A hold filler a batch move displaces is a cancel, and re-resolves as in the game.
+func _on_order_queued(squad: Squad, _action: BaseAction) -> void:
+	if not squad_manager.batching:
+		_refresh_plan(squad)
+
+func _on_order_cancelled(squad: Squad, _unit: Unit, _type: BaseAction.ActionType) -> void:
+	_refresh_plan(squad)
+
+func _on_plan_opened(squad: Squad, _action: BaseAction) -> void:
+	_refresh_plan(squad)
+
+# game.refresh_action_queue's rule half (#46). Refused while a pass executes (#361: a re-derive
+# mid-pass re-simulates attacks that already landed), and while the AI's threat preview queues and
+# rolls back, which every game handler on these signals sits out.
+func _refresh_plan(squad: Squad) -> void:
+	if squad == null or not is_instance_valid(squad) or _executing or squad_manager.previewing:
+		return
+	var plan := squad_manager.resolve_plan(squad, _board())
+	squad_manager.validate_squad_plan(squad, plan)
 
 # ---- queries ----
 
@@ -86,13 +145,24 @@ func handle_for(unit: Unit) -> String:
 	return _handle_by_unit.get(unit, "?")
 
 func unit_by_handle(h: String) -> Unit:
-	for unit in live_units():
+	for unit in live_units() + reserve_units():
 		if _handle_by_unit.get(unit, "") == h:
 			return unit
 	return null
 
+# The drawn roster still waiting off the board (#46) -- named so the driver can deploy them.
+func reserve_units() -> Array[Unit]:
+	var result: Array[Unit] = []
+	if reserve_root == null:
+		return result
+	for child in reserve_root.get_children():
+		if child is Unit and not child.is_queued_for_deletion():
+			result.append(child)
+	return result
+
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, null, board_heights)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+			mission)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -100,8 +170,13 @@ func active_faction() -> Team.Faction:
 func _faction_name(f: Team.Faction) -> String:
 	return Team.Faction.keys()[f]
 
-func _squad_id(squad: Squad) -> int:
-	return squad_manager.squads.find(squad)
+# What the text views call a squad (#46): "sq" + its leader's handle. It was the squad's index in
+# squad_manager.squads, which renumbered every squad behind one that was destroyed, so a driver's
+# "sq3" named a different squad a turn later. A declared second form beside BugReporter._squad_label,
+# which names a squad for a person; this one names it for a driver, and it CHANGES when a leader is
+# succeeded, which a squad's membership changing already tells the driver.
+func _squad_label(squad: Squad) -> String:
+	return "sq" + handle_for(squad.get_leader())
 
 func terrain_at(cell: Vector2i) -> Dictionary:
 	var data := grid.get_cell_tile_data(cell)
@@ -112,9 +187,7 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 		# rules about where a hole is -- the same reason `walkable` below comes from is_walkable.
 		var absent := "void" if _board().is_void_at(cell) else "offmap"
 		return {"exists": false, "walkable": false, "cost": 0, "type": absent}
-	var cost := 0
-	if data.has_custom_data("move_cost"):
-		cost = int(data.get_custom_data("move_cost"))
+	var cost := _board().move_cost_at(cell)   # ice included, as the rules charge it (#1223)
 	var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
 	var kind_name: String = Terrain.Kind.keys()[kind]
 	# Walkability comes from the board, never from a second read of the tile (#109). This used to
@@ -122,6 +195,29 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 	# in board_view while queue_move happily pathed across it — the headless VIEW contradicting the
 	# headless RULES, which is exactly the Law #2 failure the Play API exists to catch.
 	return {"exists": true, "walkable": _board().is_walkable(cell), "cost": cost, "type": kind_name.to_lower()}
+
+# A cell's height as the rules read it (#46): its elevation in half-levels (BoardHeights' lowest
+# corner) and its slope -- "n"/"e"/"s"/"w" for the side a ramp rises toward, "*" for a corner form,
+# "" for flat. A board built without heights reads flat, as the rules do.
+func height_at(cell: Vector2i) -> Dictionary:
+	if board_heights == null:
+		return {"elevation": 0, "slope": ""}
+	var corners := board_heights.corners_at(cell)
+	var slope := ""
+	if Terrain.climb_of_corners(corners) > 0:
+		var rise := Terrain.rise_of_corners(corners)
+		slope = "*" if rise == Terrain.RampRise.NONE else Terrain.RampRise.keys()[rise].substr(0, 1).to_lower()
+	return {"elevation": board_heights.elevation_at(cell), "slope": slope}
+
+# The gas lying on a cell (#508), one "kind level" string per kind, e.g. "Steam medium".
+func gas_at(cell: Vector2i) -> Array[String]:
+	var out: Array[String] = []
+	if gas_field == null:
+		return out
+	var packed := gas_field.packed_at(cell)
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		out.append("%s %s" % [Gas.display_name(kind), Gas.Level.keys()[Gas.level_in(packed, kind)].to_lower()])
+	return out
 
 # ---- affordances: what may this unit do RIGHT NOW (#613) ----
 #
@@ -143,24 +239,59 @@ func legal_moves(handle: String) -> Dictionary:
 	# THE set queue_move indexes -- not a copy of it. Both come back as Dictionaries keyed by cell
 	# (which is why the gate spells it `.has(dest)`), so the keys ARE the answer.
 	var range_info := RulesService.compute_move_range(unit, _board())
+	var reachable: Array[Vector2i] = []
+	reachable.assign(range_info.reachable.keys())
+	# A leader's destinations a squadmate could not follow to are held out the way queue_move refuses
+	# them (#1069) -- one sweep over the whole range, as the game's move mode paints it.
+	var stranded := _stranding(unit, reachable)
 	var cells: Array[Vector2i] = []
-	cells.assign(range_info.reachable.keys())
+	var stranding: Array[Vector2i] = []
+	for cell: Vector2i in reachable:
+		if (stranded.get(cell, []) as Array).is_empty():
+			cells.append(cell)
+		else:
+			stranding.append(cell)
 	# Reported separately rather than merged: these are reachable on foot and refused by cohesion,
 	# and "your leader is too far" is a different fix from "that is too far to walk".
 	var leashed: Array[Vector2i] = []
 	leashed.assign(range_info.squad_unreachable.keys())
-	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed}
+	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed,
+			"stranding": stranding}
+
+# Who a LEADER's move to each of `dests` would leave behind -- GroupMoveSolver.stranding, the sweep the
+# game's move modes grey out (#1069). Empty for anyone else: a member's leash is compute_move_range's.
+func _stranding(unit: Unit, dests: Array[Vector2i]) -> Dictionary:
+	if not (unit.is_leader() and unit.has_squad()):
+		return {}
+	return GroupMoveSolver.stranding(unit.squad, _board(), dests)
+
+func _handles(units: Array) -> String:
+	var names: Array[String] = []
+	for u: Unit in units:
+		names.append(handle_for(u))
+	return ", ".join(names)
 
 
-func legal_targets(handle: String) -> Dictionary:
+func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	# A watch attack's name is answered too (#46), through the overwatch verb's own lookup: a watch
+	# attack is never in the fire view (#590), so the fire pick below would call it unknown.
+	if attack_name != "" and unit.fire_attack_named(attack_name) == null:
+		var watch := unit.watch_attack_named(attack_name)
+		if watch != null:
+			return _legal_watch_aims(unit, handle, watch)
+	var pick := _fire_pick(unit, handle, attack_name)
+	if not pick.ok:
+		return pick
 	var origin := unit.get_projected_destination()
-	var aiming := unit.get_fired_attack()
+	var aiming: AttackData = pick.attack
+	# Armed for the loop's declare(), whose stamp the whiff policy reads -- queue_attack's arming.
+	unit.active_attack = aiming
 	var board := _board()
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
@@ -170,15 +301,99 @@ func legal_targets(handle: String) -> Dictionary:
 		if not Reach.can_hit_cell_from(unit, origin, aim, aiming, board):
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
-		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice.
+		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice. Whether
+		# hitting nobody is a whiff is the game's own policy (aim_whiffs): a map-hitting aim never is.
 		var victims := Conduction.sweep(unit, origin, aim, aiming, board).victims
-		if victims.is_empty():
-			continue   # queue_attack refuses an aim that hits nobody; so does this
+		if SquadPlanValidator.aim_whiffs(AttackAction.declare(unit, origin, aim), not victims.is_empty()):
+			continue
 		var names: Array[String] = []
 		for v: Unit in victims:
 			names.append(handle_for(v))
-		out.append({"cell": aim, "victims": names})
-	return {"ok": true, "unit": handle, "from": origin, "aims": out}
+		# No victims and not a whiff is an aim that lands on the ground alone, and says so (#46).
+		out.append(_with_facing({"cell": aim, "victims": names, "ground_only": names.is_empty()},
+				aiming, origin))
+	unit.active_attack = null
+	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
+
+
+# Where a watch may be set (#46), by overwatch's own click gate, each with the cells it would watch
+# (OverwatchAction.watched_paths_from, the resolver's footprint rule) and the hostiles standing in
+# them now -- who it would fire on the moment it is armed (#1003).
+func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Dictionary:
+	var reason := AttackAction.fire_block_reason(unit, watch)
+	if reason != "":
+		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
+	var origin := unit.get_projected_destination()
+	var board := _board()
+	var out: Array[Dictionary] = []
+	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, watch):
+		if not Reach.can_aim_at(unit, origin, aim, watch, board):
+			continue
+		var probe := OverwatchAction.new()
+		probe.init(unit, aim, watch)
+		var footprint: Array[Vector2i] = []
+		for path: Array in probe.watched_paths_from(origin, board):
+			for cell: Vector2i in path:
+				if not footprint.has(cell):
+					footprint.append(cell)
+		var standing: Array[String] = []
+		for cell in footprint:
+			var occupant := board.projected_unit_at_cell(cell)
+			if occupant != null and Team.is_enemy(unit.get_faction(), occupant.get_faction()):
+				standing.append(handle_for(occupant))
+		out.append(_with_facing({"cell": aim, "footprint": footprint, "standing": standing}, watch, origin))
+	return {"ok": true, "unit": handle, "attack": _attack_label(watch), "from": origin, "aims": out, "watch": true}
+
+
+# A directional aim is a FACING, whichever of its cells is named (#46): labelled N/E/S/W by
+# Reach.placement_dir, the rule that turns the stamp.
+static func _with_facing(entry: Dictionary, attack: AttackData, origin: Vector2i) -> Dictionary:
+	if attack != null and attack.is_directional():
+		entry["facing"] = FACING_NAMES.get(Reach.placement_dir(attack, origin, entry.cell), "?")
+	return entry
+
+const FACING_NAMES := {Vector2i.UP: "N", Vector2i.RIGHT: "E", Vector2i.DOWN: "S", Vector2i.LEFT: "W"}
+
+
+# The game's enemy ranges, the V key (#46), through the builder game.threat_field() calls. The viewer
+# is the ACTIVE faction, where the game hardcodes PLAYER: the two differ only in hotseat, when the side
+# on the move is the one asking. Subjects are every hostile unit, or the one named; each viewer unit is
+# judged where its plan leaves it, and with a subject named only that subject counts as a hitter.
+func ranges(enemy_handle := "") -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
+	var viewer := active_faction()
+	var subjects: Array[Unit] = []
+	if enemy_handle != "":
+		var enemy := unit_by_handle(enemy_handle)
+		if enemy == null:
+			return {"ok": false, "error": "no unit '%s'" % enemy_handle}
+		if not is_deployed(enemy) or not Team.is_enemy(viewer, enemy.get_faction()):
+			return {"ok": false, "error": "%s is not a unit hostile to %s on the board" % [enemy_handle, _faction_name(viewer)]}
+		subjects.append(enemy)
+	var field := ThreatField.for_viewer(squad_manager, viewer, not _executing)
+	var named: Array[Unit] = subjects.duplicate()
+	if named.is_empty():
+		named.assign(field.by_unit.keys())   # the field's own store: every hostile unit still standing
+	var rows: Array[Dictionary] = []
+	for unit: Unit in live_units():
+		if unit.get_faction() != viewer:
+			continue
+		var cell := unit.get_projected_destination()
+		var hitters: Array[String] = []
+		for attacker: Unit in field.attackers_of(cell):
+			if named.has(attacker):
+				hitters.append(handle_for(attacker))
+		hitters.sort()
+		rows.append({"unit": handle_for(unit), "cell": cell, "attackers": hitters})
+	var subject_names: Array[String] = []
+	for unit: Unit in named:
+		subject_names.append(handle_for(unit))
+	subject_names.sort()
+	# An empty list is every enemy, ThreatField's own union convention.
+	return {"ok": true, "viewer": _faction_name(viewer), "subjects": subject_names,
+			"move": field.move_cells_of(subjects), "reach": field.reach_cells_of(subjects), "units": rows}
 
 
 # The turn's own state, which the rendered board has never carried: whose turn it is, which squad
@@ -188,36 +403,402 @@ func legal_targets(handle: String) -> Dictionary:
 # already exists. Nothing is stored; this is a read.
 func status() -> Dictionary:
 	var active: Squad = squad_manager.active_squad
-	var acted: Array[int] = []
-	var free: Array[int] = []
+	var acted: Array[String] = []
+	var free: Array[String] = []
 	for squad: Squad in squad_manager.squads:
 		if squad.members.is_empty():
 			continue
 		if squad.members[0].get_faction() != turn_manager.active_faction():
 			continue
 		if squad.has_acted:
-			acted.append(_squad_id(squad))
+			acted.append(_squad_label(squad))
 		else:
-			free.append(_squad_id(squad))
+			free.append(_squad_label(squad))
 	return {
 		"faction": _faction_name(active_faction()),
-		"active_squad": -1 if active == null else _squad_id(active),
-		"queued": 0 if active == null else active.action_queue.size(),
+		"active_squad": "" if active == null else _squad_label(active),
+		"queued": 0 if active == null else _given_count(active),
 		"acted": acted,
 		"free": free,
+		"pre_mission": _deploying,
 	}
+
+# The orders somebody gave: the hold-position fillers a squad grows when its plan opens are nobody's.
+func _given_count(squad: Squad) -> int:
+	var count := 0
+	for action: BaseAction in squad.action_queue:
+		if not (action is MoveAction and (action as MoveAction).is_hold_position):
+			count += 1
+	return count
+
+
+# ---- the pre-mission phase (#46) ----
+#
+# The SAME PreMissionPhase the game runs, with this session as its host: the six calls below are
+# the headless twins of game.gd's spawn_reserve_unit / deploy_unit / undeploy_unit / is_deployed /
+# can_spawn_at / get_unit_at_cell. Placement is per host by design (PreMission.gd); every RULE is the
+# phase's, and tests/flow/test_pre_mission_two_hosts.gd holds the two hosts to one answer.
+
+func spawn_reserve_unit(data: UnitData) -> Unit:
+	var unit := UnitFactory.create_unit(data, null, Vector2i.ZERO)
+	reserve_root.add_child(unit)
+	_register(unit)
+	return unit
+
+# game.deploy_unit's steps, over this board.
+func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
+	if unit == null or reserve_root == null or unit.get_parent() != reserve_root:
+		push_error("deploy_unit: not a reserve unit")
+		return false
+	if not can_spawn_at(cell):
+		return false
+	reserve_root.remove_child(unit)
+	units_root.add_child(unit)
+	unit.movement.set_grid(grid)
+	unit.movement.set_cell(cell)   # after set_grid: set_cell push_errors without one
+	unit.movement.set_heights(board_heights)
+	squad_manager.create_squad(unit)
+	return true
+
+# game.undeploy_unit's steps: release (no re-solo) before the reparent, then drop the grid.
+func undeploy_unit(unit: Unit) -> void:
+	if not is_deployed(unit):
+		push_error("undeploy_unit: not a deployed unit")
+		return
+	squad_manager.release(unit)
+	units_root.remove_child(unit)
+	reserve_root.add_child(unit)
+	unit.movement.set_grid(null)
+
+func is_deployed(unit: Unit) -> bool:
+	return unit != null and unit.get_parent() == units_root
+
+func can_spawn_at(cell: Vector2i) -> bool:
+	return RulesService.can_spawn_at(_board(), cell)
+
+func get_unit_at_cell(cell: Vector2i) -> Unit:
+	return _board().unit_at_cell(cell)
+
+func is_deploying() -> bool:
+	return _deploying
+
+# The phase every load of a mission opens on (the bridge's `load` is the fresh-start door). Draws the
+# roster the scenario names; returns how many stood up, and the phase stays open only if someone did
+# and the board offers the screen (PreMissionPhase.opens) -- the game's own rule.
+#
+# `staged` is a buffer to replay instead of the authored walk (#763), MissionController.deploy_roster's
+# shape: the caller decides which buffer, through PreMissionPhase.replay_for / kept_by_restart.
+func start_pre_mission(staged_buffer: PreMissionSnapshot = null) -> int:
+	if scenario_data == null or scenario_data.roster == "":
+		return 0
+	var scenario := scenario_data
+	_phase = PreMissionPhase.new(self, zone_manager, squad_manager,
+			func() -> int: return scenario.deployment_cap)
+	var drawn := _phase.draw(scenario.roster, staged_buffer)
+	# The game's own rule (#46): a board whose box is unticked keeps the draw's placement and plays.
+	_deploying = PreMissionPhase.opens(scenario.offers_pre_mission, drawn)
+	return drawn
+
+func deployment_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	if _phase != null:
+		cells = _phase.open_deployment_cells()
+	return cells
+
+func deployed_count() -> int:
+	return _phase.deployed_count() if _phase != null else 0
+
+# The roster in ENTRY order, MissionController.roster_units()'s twin.
+func roster_units() -> Array[Unit]:
+	var units: Array[Unit] = []
+	if _phase != null:
+		units = _phase.units
+	return units
+
+# Why one more cannot be placed, or "" -- the phase's own sentence.
+func deploy_block_reason() -> String:
+	return _phase.deploy_block_reason() if _phase != null else ""
+
+func deployment_cap() -> int:
+	return _phase.cap() if _phase != null else PreMission.NO_CAP
+
+func deploy(handle: String, cell: Vector2i) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not unit.drawn_from_roster:
+		return {"ok": false, "error": "%s is not part of the roster" % handle}
+	if is_deployed(unit):
+		return {"ok": false, "error": "%s is already deployed" % handle}
+	var reason := _phase.deploy_block_reason()
+	if reason != "":
+		return {"ok": false, "error": reason}
+	if not _phase.open_deployment_cells().has(cell):
+		return {"ok": false, "error": "%s is not an open deployment cell" % str(cell)}
+	if not deploy_unit(unit, cell):
+		return {"ok": false, "error": "%s cannot be placed at %s" % [handle, str(cell)]}
+	return {"ok": true, "summary": "%s deployed to %s" % [handle, str(cell)]}
+
+func undeploy(handle: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not unit.drawn_from_roster:
+		return {"ok": false, "error": "%s is not part of the roster" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is already in reserve" % handle}
+	undeploy_unit(unit)
+	return {"ok": true, "summary": "%s back to the reserve" % handle}
+
+func reposition(handle: String, cell: Vector2i) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve -- deploy it instead" % handle}
+	if not _phase.reposition_cells(unit).has(cell):
+		return {"ok": false, "error": "%s cannot move to %s" % [handle, str(cell)]}
+	_phase.reposition(unit, cell)
+	return {"ok": true, "summary": "%s moved to %s" % [handle, str(cell)]}
+
+# The phase's one exit, refused in the game's own words. The snapshot is the commit's capture (#763),
+# held for slice 3's restart.
+func begin() -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var refusal := _phase.commit_block_reason()
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	staged = _phase.capture(scenario_data.resource_path if scenario_data != null else "")
+	_deploying = false
+	return {"ok": true, "summary": "mission begun with %d deployed" % _phase.deployed_count()}
+
+# ---- the loadout screen's writes (#46 slice 2a) ----
+# Gear, jobs and mods, each through the door the screen calls: Loadout.move, Loadout.set_job, and the
+# fitting card's own library plus WeaponInstance.fit_block_reason. Any roster unit, deployed or in
+# reserve, since the screen's cards cover both; STASH names the phase's stash at either end of a give.
+
+const STASH := "stash"
+
+func stash() -> Array[Item]:
+	var items: Array[Item] = []
+	if _phase != null:
+		items = _phase.loadout.stash
+	return items
+
+# The jobs this unit's picker would list -- the Loadout's answer, and none outside the phase.
+func offered_jobs_for(unit: Unit) -> Array[String]:
+	var ids: Array[String] = []
+	if _deploying:
+		ids = _phase.loadout.offered_jobs_for(unit)
+	return ids
+
+# The mods the fitting card's library would offer this weapon, keyed as the card keys them.
+func offered_mods_for(weapon: WeaponInstance) -> Dictionary:
+	if not _deploying or weapon == null or weapon.template == null:
+		return {}
+	return WeaponModCatalog.offerable_for(weapon.template.weapon_type, _phase.loadout.available_mods)
+
+# A fitted mod's name as the library keys it -- found by PATH, offerable_for's own match, since a
+# repaired load hands back a copy (#608). `mods` is WeaponModCatalog.get_mods(), passed in because
+# that call rescans the folder. A mod from outside the catalogue falls back to its own name.
+func mod_key(mod: WeaponModData, mods: Dictionary) -> String:
+	for key in mods:
+		var known: WeaponModData = mods[key]
+		if mod.resource_path != "" and known.resource_path == mod.resource_path:
+			return str(key)
+	return mod.display_name if mod.display_name != "" else mod.id
+
+func give(from_name: String, slot: int, to_name: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var source := _gear_holder(from_name)
+	if not source.ok:
+		return source
+	var target := _gear_holder(to_name)
+	if not target.ok:
+		return target
+	var from_unit: Unit = source.unit
+	var to_unit: Unit = target.unit
+	var item := _gear_at(from_unit, slot)
+	var refusal := _phase.loadout.move(item, from_unit, to_unit)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	return {"ok": true, "summary": "%s: %s -> %s" % [item.shown_name(), from_name, to_name]}
+
+func set_job(handle: String, job_id: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var who := _gear_holder(handle)
+	if not who.ok:
+		return who
+	var unit: Unit = who.unit
+	if unit == null:
+		return {"ok": false, "error": "the stash holds no job"}
+	var refusal := _phase.loadout.set_job(unit, job_id)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	return {"ok": true, "summary": "%s job: %s" % [handle, job_id if job_id != "" else "none"]}
+
+# `space` is 1-based, as every fit_block_reason sentence counts them.
+func fit(holder_name: String, slot: int, mod_name: String, space: int) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var held := _weapon_at(holder_name, slot)
+	if not held.ok:
+		return held
+	var weapon: WeaponInstance = held.weapon
+	var offered := offered_mods_for(weapon)
+	if not offered.has(mod_name):
+		return {"ok": false, "error": "this mission offers no mod '%s' for %s" % [mod_name, weapon.shown_name()]}
+	var mod: WeaponModData = offered[mod_name]
+	var refusal := weapon.fit_block_reason(space - 1, mod)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	weapon.fit(space - 1, mod)
+	return {"ok": true, "summary": "%s fitted to %s, space %d" % [mod_name, weapon.shown_name(), space]}
+
+# Coming off is never refused, as on the card: the library is not depleted by a fit.
+func unfit(holder_name: String, slot: int, mod_name: String) -> Dictionary:
+	var gate := _phase_gate()
+	if not gate.ok:
+		return gate
+	var held := _weapon_at(holder_name, slot)
+	if not held.ok:
+		return held
+	var weapon: WeaponInstance = held.weapon
+	var mods := WeaponModCatalog.get_mods()
+	for i in range(weapon.space_count()):
+		for mod: WeaponModData in weapon.space(i):
+			if mod_key(mod, mods) == mod_name:
+				weapon.unfit(mod)
+				return {"ok": true, "summary": "%s taken off %s" % [mod_name, weapon.shown_name()]}
+	return {"ok": false, "error": "%s has no mod '%s' fitted" % [weapon.shown_name(), mod_name]}
+
+# ---- the inspect dock (#46 slice 2b) ----
+# Its six verbs, in EITHER phase, through GearVerbs -- the rule the dock's buttons and the replay
+# viewer ask. Who may use the dock is game.can_control's rule (RulesService.command_block_reason); a
+# reserve unit is refused because the dock is reached from the board. A change re-resolves the active
+# squad, the twin of game.gd's loadout_changed wire: Equip swaps which weapon a queued attack fires with.
+func gear(handle: String, verb_name: String, slot: int) -> Dictionary:
+	var verb := GearVerbs.from_name(verb_name)
+	if verb == -1:
+		return {"ok": false, "error": "no gear verb '%s'" % verb_name}
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve -- the dock is reached from the board" % handle}
+	var reason := RulesService.command_block_reason(unit, turn_manager.active_faction())
+	if reason != "":
+		return {"ok": false, "error": reason}
+	var refusal := GearVerbs.perform(unit, verb as GearVerbs.Verb, slot)
+	if refusal != "":
+		return {"ok": false, "error": refusal}
+	_refresh_plan(squad_manager.active_squad)
+	return {"ok": true, "summary": "%s: %s" % [handle, verb_name]}
+
+# STASH or a roster unit's handle -> {ok, unit}, the unit null for the stash. The screen's cards are
+# the roster's, so an enemy or an authored unit has no gear to give.
+func _gear_holder(holder_name: String) -> Dictionary:
+	if holder_name == STASH:
+		return {"ok": true, "unit": null}
+	var unit := unit_by_handle(holder_name)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % holder_name}
+	if not unit.drawn_from_roster:
+		return {"ok": false, "error": "%s is not part of the roster" % holder_name}
+	return {"ok": true, "unit": unit}
+
+# What sits at that slot of a unit's inventory or the stash, or null -- which Loadout.move refuses in
+# its own words.
+func _gear_at(holder: Unit, slot: int) -> Item:
+	var items: Array[Item] = holder.inventory if holder != null else _phase.loadout.stash
+	if slot < 0 or slot >= items.size():
+		return null
+	return items[slot]
+
+func _weapon_at(holder_name: String, slot: int) -> Dictionary:
+	var who := _gear_holder(holder_name)
+	if not who.ok:
+		return who
+	var weapon := _gear_at(who.unit, slot) as WeaponInstance
+	if weapon == null:
+		return {"ok": false, "error": "%s slot %d holds no weapon" % [holder_name, slot]}
+	return {"ok": true, "weapon": weapon}
+
+func _phase_gate() -> Dictionary:
+	if not _deploying:
+		return {"ok": false, "error": "the pre-mission phase is not open"}
+	return {"ok": true}
+
+# Every battle verb refuses while the phase is open: the mission has not started.
+func _battle_gate() -> Dictionary:
+	if _deploying:
+		return {"ok": false, "error": "the mission has not begun -- deploy, then begin"}
+	return {"ok": true}
 
 
 # ---- commands (mutating) — all flow through the real SquadManager (Law #3) ----
 
 func _controllable(unit: Unit, handle: String) -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	if unit.get_faction() != turn_manager.active_faction():
 		return {"ok": false, "error": "%s is not on the active faction (%s)" % [handle, _faction_name(active_faction())]}
 	if unit.squad.has_acted:
 		return {"ok": false, "error": "%s's squad has already acted this turn" % handle}
+	# One squad plans at a time -- the menu's own rule, which the order chokepoint leaves to its
+	# callers (SquadManager.try_queue_action). Without it a second squad silently took the activation.
+	if squad_manager.is_another_squad_active(unit.squad):
+		return {"ok": false, "error": "%s has orders queued -- execute or cancel them before ordering %s" % [
+			_squad_label(squad_manager.active_squad), handle]}
 	return {"ok": true}
+
+# WHICH attack an aim fires (#615): the one NAMED, else the default -- the menu's pick, made
+# headlessly. An attack that cannot fire is refused in the menu's own words, so a refusal and a
+# greyed row cannot disagree (#166).
+func _fire_pick(unit: Unit, handle: String, attack_name: String) -> Dictionary:
+	var attack: AttackData = unit.get_default_attack()
+	if attack_name != "":
+		attack = unit.fire_attack_named(attack_name)
+		if attack == null:
+			return {"ok": false, "error": "%s has no attack named '%s' (can fire: %s)" % [
+				handle, attack_name, _names_of(unit.get_selectable_attacks())]}
+	elif attack == null:
+		# The ring offers no row here either (#1215); a null pick would resolve as bare fists.
+		return {"ok": false, "error": "%s has nothing it can fire" % handle}
+	var reason := unit.attack_block_reason(attack)
+	if reason != "":
+		return {"ok": false, "error": "%s can't fire %s: %s" % [handle, _attack_label(attack), reason]}
+	return {"ok": true, "attack": attack}
+
+static func _attack_label(attack: AttackData) -> String:
+	return attack.display_name if attack != null else "(unarmed)"
+
+static func _names_of(attacks: Array[AttackData]) -> String:
+	var names: Array[String] = []
+	for attack: AttackData in attacks:
+		names.append(_attack_label(attack))
+	return ", ".join(names) if not names.is_empty() else "nothing"
 
 func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -230,45 +811,98 @@ func queue_move(handle: String, dest: Vector2i) -> Dictionary:
 	if not range_info.reachable.has(dest):
 		var hint := " (reachable but outside leader range)" if range_info.squad_unreachable.has(dest) else ""
 		return {"ok": false, "error": "%s cannot reach %s%s" % [handle, str(dest), hint]}
-	var path := RulesService.reconstruct_path(range_info.came_from, unit.movement.cell, dest)
+	# A leader may not take a destination its squad cannot follow to -- the game refuses the click
+	# (game._click_choosing_move, #1069), so this refuses the order, naming who would be left behind.
+	var one: Array[Vector2i] = [dest]
+	var stranded: Array = _stranding(unit, one).get(dest, [])
+	if not stranded.is_empty():
+		return {"ok": false, "error": "%s can't move to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
+	var path := RulesService.route_to(unit, range_info, dest, _board())
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, dest))
-	if not squad_manager.queue_action(unit.squad, move):
-		return {"ok": false, "error": "another squad is already active this turn"}
+	var refusal := squad_manager.try_queue_action(unit.squad, move)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't move to %s: %s" % [handle, str(dest), refusal]}
 	return {"ok": true, "summary": "%s -> move %s" % [handle, str(dest)], "valid": move.is_valid}
 
-func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
+# Group Move (#46): the leader picks a destination and the squad follows in formation, through the
+# game's door -- MainActionMenu._can_group_move, then begin_group_move_planning's cancel, then
+# _click_choosing_group_move's two questions. Every gate is asked BEFORE anything is cancelled, so a
+# refusal leaves the plan as it was; queue_group_move's own rollback answers for a batch it refuses.
+func group_move(handle: String, dest: Vector2i) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not (unit.is_leader() and unit.has_squad()):
+		return {"ok": false, "error": "%s does not lead a squad" % handle}
+	var members: Array[Unit] = unit.squad.get_members()
+	for member: Unit in members:
+		if member.has_main_action_queued():
+			return {"ok": false, "error": "%s has a main action queued, and a move must come before it" % handle_for(member)}
+	if dest == unit.movement.cell:
+		return {"ok": false, "error": "%s is already at %s" % [handle, str(dest)]}
+	if not RulesService.compute_move_range(unit, _board()).reachable.has(dest):
+		return {"ok": false, "error": "%s cannot reach %s" % [handle, str(dest)]}
+	var one: Array[Vector2i] = [dest]
+	var stranded: Array = _stranding(unit, one).get(dest, [])
+	if not stranded.is_empty():
+		return {"ok": false, "error": "%s can't lead the squad to %s: %s could not follow" % [handle, str(dest), _handles(stranded)]}
+	for member: Unit in members:
+		if member.has_action_type_queued(BaseAction.ActionType.MOVE):
+			squad_manager.cancel_squad_moves(unit.squad)
+			break
+	if not squad_manager.queue_group_move(unit.squad, dest, _board()):
+		return {"ok": false, "error": "%s's squad could not take up a formation around %s" % [handle, str(dest)]}
+	var heading: Array[String] = []
+	for member: Unit in members:
+		heading.append("%s %s" % [handle_for(member), str(member.get_projected_destination())])
+	return {"ok": true, "summary": "%s -> group move %s (%s)" % [handle, str(dest), ", ".join(heading)]}
+
+func queue_attack(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	var pick := _fire_pick(unit, handle, attack_name)
+	if not pick.ok:
+		return pick
+	# The pick lives for this one aim, as the menu arms it and exit_current_mode clears it: left
+	# standing it would be the next unnamed aim's, and a rune's counter (RuneData.counter_attack).
+	unit.active_attack = pick.attack
+	var result := _queue_armed_attack(unit, handle, aim)
+	unit.active_attack = null
+	return result
+
+func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionary:
 	var origin := unit.get_projected_destination()
 	# Aiming: the live pick IS the question, and it is exactly what declare() stamps below (#102).
-	# Play never sets active_attack, so today this is always the weapon's main -- the headless
-	# side has no way to select a secondary at all (#110).
 	var aiming := unit.get_fired_attack()
 	# The board carries the elevations for the vertical-tolerance half of the gate (#258),
 	# mirroring the player's click exactly.
 	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	# The current is reach here too, matching legal_targets and the game's own queue gate.
+	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
+	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
+	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
+	# included), same as the player's click and the AI.
+	var order := AttackAction.declare(unit, origin, aim)
 	var victims := Conduction.sweep(unit, origin, aim, aiming, _board()).victims
-	if victims.is_empty():
+	if SquadPlanValidator.aim_whiffs(order, not victims.is_empty()):
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
 	# (#15), mirroring game.gd. Pre-expanding a volley here made resolve_plan re-expand each member
 	# -> N^2 hits for AoE weapons. `victims` above is used only to validate + describe the aim.
-	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
-	# included), same as the player's click and the AI.
-	var any_ok := squad_manager.queue_action(unit.squad, AttackAction.declare(unit, origin, aim))
-	if not any_ok:
-		return {"ok": false, "error": "another squad is already active this turn"}
+	var refusal := squad_manager.try_queue_action(unit.squad, order)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't attack %s: %s" % [handle, str(aim), refusal]}
 	var names: Array[String] = []
 	for v in victims:
 		names.append(handle_for(v))
-	return {"ok": true, "summary": "%s -> attack %s (hits %s)" % [handle, str(aim), ", ".join(names)]}
+	var hits: String = ", ".join(names) if not names.is_empty() else "nobody"
+	return {"ok": true, "summary": "%s -> attack %s with %s (hits %s)" % [handle, str(aim), _attack_label(aiming), hits]}
 
 func cancel(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -277,9 +911,27 @@ func cancel(handle: String) -> Dictionary:
 	squad_manager.remove_actions_for_unit(unit)
 	return {"ok": true, "summary": "cancelled %s's orders" % handle}
 
+# The ring's Wait (#1236): the squad spends its turn doing nothing, through the door the menu's arm
+# uses. Offered when the menu offers it: a squad that has not acted, with no plan open -- this one's
+# included, since Wait is a choice a squad makes instead of orders.
+func wait(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if squad_manager.active_squad == unit.squad:
+		return {"ok": false, "error": "%s has orders queued -- execute or cancel them to wait instead"
+				% _squad_label(unit.squad)}
+	squad_manager.set_has_acted(unit.squad, true)
+	return {"ok": true, "summary": "%s waits; its turn is spent" % _squad_label(unit.squad)}
+
 # ---- rescue + squad management (drives the same SquadManager / RescueAction as the player) ----
 
-func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
+# Rescue (#33): the same RescueAction the menu queues, gated on the menu's own candidate query with the
+# squad's last resolve, so a squadmate this pass will drop is a legal pickup (#124). A body that cannot
+# stand where it lies is hauled to a bank (#116): `landing` names one of rescue_landings (null or a
+# Vector2i); omitted, the first, like the AI -- and the summary names the others, since the game asks.
+func rescue(rescuer_handle: String, target_handle: String, landing: Variant = null) -> Dictionary:
 	var rescuer := unit_by_handle(rescuer_handle)
 	var gate := _controllable(rescuer, rescuer_handle)
 	if not gate.ok:
@@ -287,19 +939,58 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 	var target := unit_by_handle(target_handle)
 	if target == null:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
-	if not RulesService.adjacent_downed_allies(rescuer, _board()).has(target):
+	var board := _board()
+	if not RulesService.adjacent_downed_allies(rescuer, board, squad_manager.resolved_plan_for(rescuer.squad)).has(target):
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
-	# The headless API has no tile pick either, so it takes the first landing like the AI (#116) --
-	# the deterministic answer the rule gave before the player was handed the choice.
+	# Read BEFORE queueing: the queue's resolve publishes the haul, and the body then reads as standing.
+	var banks := RulesService.rescue_landings(rescuer, target, board)
+	var hauled := RulesService.rescue_needs_a_pick(target, board)
+	var bank: Vector2i = banks[0]
+	if landing != null:
+		if not (landing is Vector2i and banks.has(landing)):
+			return {"ok": false, "error": "%s can't be put down at %s (legal: %s)" % [target_handle, str(landing), _cells_text(banks)]}
+		bank = landing
 	var action := RescueAction.new()
-	action.init(rescuer, target, RulesService.rescue_landings(rescuer, target, _board())[0])
-	if not squad_manager.queue_action(rescuer.squad, action):
-		return {"ok": false, "error": "%s can't rescue now (already has a main action, or another squad is active)" % rescuer_handle}
-	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
+	action.init(rescuer, target, bank)
+	var refusal := squad_manager.try_queue_action(rescuer.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't rescue %s: %s" % [rescuer_handle, target_handle, refusal]}
+	var summary := "%s -> rescue %s" % [rescuer_handle, target_handle]
+	if hauled:
+		summary += " to %s" % str(bank)
+		if landing == null and banks.size() > 1:
+			var others: Array[Vector2i] = []
+			for cell: Vector2i in banks:
+				if cell != bank:
+					others.append(cell)
+			summary += " (other banks: %s)" % _cells_text(others)
+	return {"ok": true, "summary": summary}
+
+func _cells_text(cells: Array[Vector2i]) -> String:
+	var parts: Array[String] = []
+	for cell: Vector2i in cells:
+		parts.append(str(cell))
+	return ", ".join(parts)
+
+# Capture (#46): claim the unclaimed CAPTURE zone the unit will stand in -- the same CaptureAction the
+# menu queues, stamped with this session's mission, gated on the menu's own capturable_zone_at read
+# at the PROJECTED destination, so a capture queued behind a move claims where the move ends.
+func capture(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	# No pre-check of its own: CaptureAction.actor_block_reason is the one answer, read at the chokepoint.
+	var action := CaptureAction.new()
+	action.init(unit, unit.get_projected_destination(), mission)
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't capture: %s" % [handle, refusal]}
+	return {"ok": true, "summary": "%s -> capture %s" % [handle, action.zone_name]}
 
 # Guard (#414): become a nearby ally's bodyguard — the same GuardAction the menu queues, gated on the
 # same RulesService.guard_candidates query the menu's row is built from. Its own verb rather than a
-# queue_simple_action pass-through, for the reason rescue/intimidate have one: it takes a real unit.
+# queue_simple_action pass-through, for the reason rescue has one: it takes a real unit.
 func guard(handle: String, ward_handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
@@ -312,21 +1003,28 @@ func guard(handle: String, ward_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s is not an ally within %s's Guard range" % [ward_handle, handle]}
 	var action := GuardAction.new()
 	action.init(unit, ward)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't Guard now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't guard %s: %s" % [handle, ward_handle, refusal]}
 	return {"ok": true, "summary": "%s -> guard %s" % [handle, ward_handle]}
 
-# Overwatch (#413): aim an attack and hold fire — the same OverwatchAction the menu queues, gated on
-# the same two questions its ring row asks, the attack's own can_overwatch capability and whether the
-# aim is legal at all. Play never sets active_attack, so this watches with what the unit would fire.
-func overwatch(handle: String, aim: Vector2i) -> Dictionary:
+# Overwatch (#413): aim an attack and hold fire — the same OverwatchAction the menu queues, picking
+# from the list the menu's Overwatch rows read (#590 split it from the fire view, so the main is never
+# a watch unless it is watch-only), named or else the first -- normally the only one (#615).
+func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	var aiming := unit.get_fired_attack()
-	if aiming == null or not unit.attack_can_overwatch(aiming):
-		return {"ok": false, "error": "%s's attack cannot stand watch" % handle}
+	var watches := unit.overwatch_attacks()
+	if watches.is_empty():
+		return {"ok": false, "error": "%s has nothing to stand watch with" % handle}
+	var aiming: AttackData = watches[0]
+	if attack_name != "":
+		aiming = unit.watch_attack_named(attack_name)
+		if aiming == null:
+			return {"ok": false, "error": "%s has no watch named '%s' (can watch with: %s)" % [
+				handle, attack_name, _names_of(watches)]}
 	var origin := unit.get_projected_destination()
 	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
 	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
@@ -335,23 +1033,12 @@ func overwatch(handle: String, aim: Vector2i) -> Dictionary:
 		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
 	var action := OverwatchAction.new()
 	action.init(unit, aim, aiming)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't stand watch now (already has a main action, or another squad is active)" % handle}
-	return {"ok": true, "summary": "%s -> overwatch %s" % [handle, str(aim)]}
-
-# Rally: self-targeted Will restore (a main action) — the same RallyAction the menu queues.
-func rally(handle: String) -> Dictionary:
-	var unit := unit_by_handle(handle)
-	var gate := _controllable(unit, handle)
-	if not gate.ok:
-		return gate
-	if not unit.can_rally():
-		return {"ok": false, "error": "%s can't rally (Will full, in crisis, or nothing left to restore)" % handle}
-	var action := RallyAction.new()
-	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't rally now (already has a main action, or another squad is active)" % handle}
-	return {"ok": true, "summary": "%s -> rally" % handle}
+	# Whether this watch can fire at all is the order's own gate (OverwatchAction.actor_block_reason),
+	# answered by the chokepoint in the menu's words (#662).
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, aiming.display_name, refusal]}
+	return {"ok": true, "summary": "%s -> overwatch %s with %s" % [handle, str(aim), aiming.display_name]}
 
 # Reload: self-targeted weapon rearm (a main action, #73 as Spring Load, generalized #84) — the
 # same ReloadAction the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon()
@@ -363,13 +1050,11 @@ func reload(handle: String) -> Dictionary:
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	var refusal := unit.reload_block_reason()
-	if refusal != "":
-		return {"ok": false, "error": "%s can't reload: %s" % [handle, refusal]}
 	var action := ReloadAction.new()
 	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't reload now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't reload: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> %s" % [handle, unit.reload_label().to_lower()]}
 
 # Rev: self-targeted Chainsword rev-up (a main action, #84) — the same RevAction the menu
@@ -380,12 +1065,11 @@ func rev(handle: String) -> Dictionary:
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	if not unit.can_rev_weapon():
-		return {"ok": false, "error": "%s can't rev (no chainsword equipped)" % handle}
 	var action := RevAction.new()
 	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't rev now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't rev: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> rev" % handle}
 
 # Burrow: the Drill's self-targeted entrenchment (a main action, #84) — the same BurrowAction the
@@ -397,40 +1081,40 @@ func burrow(handle: String) -> Dictionary:
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
-	if not unit.can_burrow_weapon():
-		return {"ok": false, "error": "%s can't burrow (no drill equipped)" % handle}
 	var action := BurrowAction.new()
 	action.init(unit)
-	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't burrow now (already has a main action, or another squad is active)" % handle}
+	var refusal := squad_manager.try_queue_action(unit.squad, action)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't burrow: %s" % [handle, refusal]}
 	return {"ok": true, "summary": "%s -> burrow" % handle}
 
-# member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
-# "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
-# nothing has committed to acting yet.
+# member joins leader's squad — one join_squad call covers both of the game's doors onto that act:
+# Squad Up from the leader (the member must be solo) and Join Squad from the member (the leader must
+# lead a squad). Either open is enough, and a refusal is the game's own reason (SquadManager's
+# formation reasons, #46). The turn-flow checks above them stay the caller's, as in the game's menu.
 func join(member_handle: String, leader_handle: String) -> Dictionary:
 	var member := unit_by_handle(member_handle)
 	var leader := unit_by_handle(leader_handle)
 	if member == null:
 		return {"ok": false, "error": "no unit '%s'" % member_handle}
+	if not is_deployed(member):
+		return {"ok": false, "error": "%s is in reserve" % member_handle}
 	if leader == null:
 		return {"ok": false, "error": "no unit '%s'" % leader_handle}
-	if member == leader:
-		return {"ok": false, "error": "a unit can't join itself"}
-	if member.squad == leader.squad:
-		return {"ok": false, "error": "%s is already in %s's squad" % [member_handle, leader_handle]}
+	if not is_deployed(leader):
+		return {"ok": false, "error": "%s is in reserve" % leader_handle}
 	if leader.get_faction() != active_faction():
 		return {"ok": false, "error": "can only reorganize your own (%s) squads this turn" % _faction_name(active_faction())}
-	if member.get_faction() != leader.get_faction():
-		return {"ok": false, "error": "different factions can't squad up"}
 	var gate := _squad_change_gate(member.squad, leader.squad)
 	if not gate.ok:
 		return gate
 	if member.has_any_actions():
 		return {"ok": false, "error": "%s has queued orders — cancel them before squadding up" % member_handle}
-	var reach := leader.squad.get_max_squad_range()
-	if not SquadCohesion.in_range(leader.squad, leader.movement.cell, member, member.movement.cell, _board()):
-		return {"ok": false, "error": "%s is outside %s's leader range (%d)" % [member_handle, leader_handle, reach]}
+	var refusal := squad_manager.squad_up_block_reason(member, leader.squad)
+	if refusal != "" and leader.has_squad():
+		refusal = squad_manager.join_squad_block_reason(member, leader.squad)
+	if refusal != "":
+		return {"ok": false, "error": "%s can't join %s's squad: %s" % [member_handle, leader_handle, refusal]}
 	squad_manager.join_squad(member, leader.squad)
 	return {"ok": true, "summary": "%s joined %s's squad" % [member_handle, leader_handle]}
 
@@ -438,6 +1122,8 @@ func leave(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	if not unit.has_squad():
 		return {"ok": false, "error": "%s is already solo" % handle}
 	if unit.get_faction() != active_faction():
@@ -452,6 +1138,8 @@ func disband(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	if not unit.has_squad():
 		return {"ok": false, "error": "%s isn't in a multi-unit squad" % handle}
 	if not unit.is_leader():
@@ -476,6 +1164,9 @@ func _squad_change_gate(squad_a: Squad, squad_b: Squad) -> Dictionary:
 # ---- preview (pure look-ahead) ----
 
 func preview() -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return {"ok": false, "error": "no squad has queued orders"}
@@ -524,8 +1215,113 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 	var tile_hits: Array = []
 	for hit in plan.tile_hits:
 		tile_hits.append({"actor": handle_for(hit.actor), "description": hit.get_description()})
+	# Who the pass's own terrain drops into the water (#922), in the order they go under.
+	var sinks: Array = []
+	for sink in plan.sinks:
+		var lethality: String = ResolvedOutcome.Lethality.keys()[sink.resolved.lethality]
+		sinks.append({"actor": handle_for(sink.actor), "description": sink.get_description(),
+				"lethality": lethality})
 	return {"moves": moves, "attacks": attacks, "counters": counters,
-			"side_actions": side_actions, "tile_hits": tile_hits}
+			"side_actions": side_actions, "tile_hits": tile_hits, "sinks": sinks,
+			"rows": _plan_rows(squad, plan), "terrain": _describe_deposits(plan)}
+
+# The plan as the game's queue panel lays it out (#46): ActionQueueDisplayEntry.build_for's sections
+# and nesting -- the watch shots an order sets off under it, a payload under its hit, a sinking under
+# what melted the ice -- one dict per row, units by handle. What the panel hides (a skipped counter or
+# watch shot) is hidden here too; the structured keys above still carry it for code.
+func _plan_rows(squad: Squad, plan: ResolvedPlan) -> Array:
+	var rows: Array = []
+	var section := ""
+	for entry in ActionQueueDisplayEntry.build_for(squad, plan):
+		match entry.entry_type:
+			ActionQueueDisplayEntry.EntryType.HEADER:
+				section = entry.label
+			ActionQueueDisplayEntry.EntryType.ACTION:
+				rows.append(_describe_row(section, entry.action, entry.indent_level))
+	return rows
+
+# One row, read the way ActionQueueRow reads it: the HP readout only when the outcome READ hp, the
+# number through LethalityRules.displayed_hp, a heal as what it gave back.
+func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionary:
+	var row := {"section": section, "depth": depth, "type": action.get_action_name(),
+			"actor": handle_for(action.actor), "refused": action.is_refused(), "inert": action.is_inert()}
+	var aimed := action.aimed_at()
+	if aimed != null and aimed != action.actor:
+		row["target"] = handle_for(aimed)
+	if action is MoveAction:
+		row["hold"] = (action as MoveAction).is_hold_position
+		row["dest"] = (action as MoveAction).get_destination()
+	elif action is AttackAction:
+		var attack := action as AttackAction
+		row["attack"] = _attack_label(attack.fired_attack)
+		row["cell"] = attack.target_cell
+		if attack.blocked_for != null and is_instance_valid(attack.blocked_for):
+			row["guarding"] = handle_for(attack.blocked_for)
+	elif action is TileHitAction:
+		var hit := action as TileHitAction
+		row["source"] = Gas.display_name(hit.gas as Gas.Kind) if hit.gas >= 0 \
+				else Terrain.tile_state_display_name(hit.state)
+	elif action is SinkAction:
+		row["cell"] = (action as SinkAction).cell
+	var r := action.resolved_outcome()
+	if r == null:
+		return row
+	if r.reads_hp:
+		var heals := action is AttackAction and (action as AttackAction).fired_attack != null \
+				and (action as AttackAction).fired_attack.heals
+		if heals:
+			row["healed"] = r.hp_restored()
+		else:
+			row["dmg"] = r.damage
+		row["hp_before"] = r.hp_before
+		row["hp_after"] = LethalityRules.displayed_hp(r.target_hp_after, LethalityRules.lifecycle_for(r.lethality))
+	row["lethality"] = r.lethality
+	var gained: Array[String] = []
+	for state in r.states_added:
+		if state != Elemental.State.NONE:
+			gained.append(Elemental.state_display_name(state))
+	var lost: Array[String] = []
+	for state in r.states_removed:
+		if state != Elemental.State.NONE:
+			lost.append(Elemental.state_display_name(state))
+	row["gains"] = gained
+	row["loses"] = lost
+	var events: Array[String] = []
+	if r.knockback_applied:
+		events.append("shoved to %s" % str(r.knockback_to))
+	if r.knockback_held > 0:
+		events.append("holds %d" % r.knockback_held)
+	if r.fall_levels > 0:
+		events.append("falls %d" % r.fall_levels)
+	if r.drown_damage > 0:
+		events.append("drowns")
+	if r.removed:
+		events.append("into the void")
+	if r.insulated:
+		events.append("insulated")
+	if r.burned_vial != null:
+		events.append("burns %s" % r.burned_vial.display_name)
+	if r.charge_spent:
+		events.append("spends a charge")
+	if r.severed_limb != -1:
+		events.append("takes the %s" % _limb_name(r.severed_limb))
+	for reaction: ElementalReaction in r.fired_reactions:
+		if reaction.is_combo() and reaction.badge_name() != "":
+			events.append(reaction.badge_name())
+	for unit in r.splits:
+		if is_instance_valid(unit):
+			events.append("splits %s" % handle_for(unit))
+	row["events"] = events
+	return row
+
+# The pass's terrain deposits, as the board ghosts them (ResolvedPlan.pending_deposits).
+static func _describe_deposits(plan: ResolvedPlan) -> Array:
+	var out: Array = []
+	for deposit: Dictionary in plan.pending_deposits():
+		var what: String = Gas.display_name(deposit["gas"]) if deposit.has("gas") \
+				else Terrain.tile_state_display_name(deposit["state"])
+		out.append({"cell": deposit["cell"], "what": what})
+	return out
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
@@ -536,6 +1332,7 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 	return {
 		"actor": handle_for(atk.actor),
 		"target": handle_for(atk.target),
+		"attack": _attack_label(atk.fired_attack),   # the stamp, read back -- what the pick reached (#615)
 		"dmg": dmg,
 		"hp_after": hp_after,
 		"lethality": lethality,   # NONE / DOWNED / KILLED (mirrors Unit.take_damage — Law #2)
@@ -545,6 +1342,9 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 # ---- execute (headless application of the resolved plan) ----
 
 func execute() -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return {"ok": false, "error": "no squad has queued orders"}
@@ -555,21 +1355,33 @@ func execute() -> Dictionary:
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
 
+	_executing = true
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()
+	var moves: Array = []
 	for action in squad.action_queue.duplicate():
-		if action.action_type == BaseAction.ActionType.MOVE and action.is_valid and not action.is_hold_position:
+		if action.action_type != BaseAction.ActionType.MOVE:
+			continue
+		moves.append(action)
+		if action.is_valid and not action.is_hold_position:
 			var mv := action as MoveAction
 			mv.actor.movement.set_cell(mv.get_destination())
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
-	# 1b) the watches those walks walked into (#413), in trigger order — the twin of the move phase's
-	# own interrupts. Only the MID-WALK ones: a shot a shove set off belongs after the volley that
-	# threw somebody into it, and attack_playback() below is where it lands (#567). Headless there is
-	# no walk to halt, so this is the event log's order and nothing else.
-	for shot in plan.mid_walk_shots():
-		_apply_attack(shot, events)
+	# 1b) what those walks walked into (#413), through the one moment list the game's move phase plays
+	# (ResolvedPlan.walk_moments, #46): a walk's soaking where the resolve soaked it, when a shot lands on
+	# that walker after, and every watch shot in trigger order. Only the MID-WALK shots: one a shove set
+	# off belongs after the volley that threw somebody into it, and attack_playback() below is where it
+	# lands (#567). Headless there is no walk to halt, so this is the order things land and nothing else.
+	for moment in plan.walk_moments(moves):
+		if moment["soak"]:
+			_apply_walk_states(moment["move"] as MoveAction, events)
+		for shot: AttackAction in moment["shots"]:
+			_apply_attack(shot, events)
+	# ...and every other walk's soaking, as the walk ends.
+	for move: MoveAction in moves:
+		_apply_walk_states(move, events)
 
 	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
 	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
@@ -577,6 +1389,9 @@ func execute() -> Dictionary:
 	for atk in plan.attack_playback():
 		_apply_attack(atk, events)
 	_apply_cell_effects(plan.cell_effects, events)
+	# ...and whoever the melt took the floor from goes under (#922), before any counter -- MIRRORS
+	# OrderExecutor.execute_orders. SinkAction.execute is synchronous pure playback, so the real one runs.
+	_apply_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), events)
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
 
@@ -595,7 +1410,7 @@ func execute() -> Dictionary:
 			if action.resolved_actor_felled:
 				continue
 			action.execute()
-			events.append(action.get_description())
+			events.append(_side_line(action))
 			# ...then the shots THIS order set off (#1003) -- MIRRORS execute_orders' own interleave,
 			# which is the third and last playback partition. An Overwatch armed onto a cell an
 			# enemy already occupies fires here, after the counters, because that is where the
@@ -603,9 +1418,16 @@ func execute() -> Dictionary:
 			for shot in plan.shots_fired_during(action):
 				_apply_attack(shot, events)
 
-	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
-	_process_downed_pending()
+	# 4b) the melts only a counter or a tail shot made (#922) -- the pass has settled.
+	_apply_sinks(plan.sinks_at(SinkAction.Moment.PASS_END), events)
 
+	# The pass is over before the sweeps, as OrderExecutor drops executing_plan before them: the
+	# sweeps' and the clear's own refreshes re-resolve the plan.
+	_executing = false
+	# 5) eject units downed during the pass into solo squads, then the members a shove put out of
+	# contact (#151) -- execute_orders' two sweeps, in its order.
+	_process_downed_pending()
+	squad_manager.enforce_contact()
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
 	if is_instance_valid(squad):
 		for action in squad.action_queue.duplicate():
@@ -616,8 +1438,19 @@ func execute() -> Dictionary:
 	var mission := mission_tag()
 	if mission == "":
 		return {"ok": true, "events": events}
-	events.append("MISSION %s" % mission)
+	events.append(_mission_line(mission))
 	return {"ok": true, "events": events, "mission": mission}
+
+# The event line a finished mission logs, shared by execute() and end_turn so the dedupe matches.
+func _mission_line(tag: String) -> String:
+	return "MISSION %s" % tag
+
+# A walk's own states (#884), through MoveAction.apply_walk_states as the game's walk applies them.
+func _apply_walk_states(move: MoveAction, events: Array[String]) -> void:
+	if not move.apply_walk_states():
+		return
+	for state in move.resolved.states_added:
+		events.append("%s gains %s" % [handle_for(move.actor), Elemental.state_display_name(state)])
 
 # Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
 # the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
@@ -628,124 +1461,82 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 		terrain_states.apply(effect)
 		for state in effect.states_added:
 			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
+		if gas_field != null:
+			gas_field.apply(effect)
+		for kind: Gas.Kind in effect.gas_added:
+			events.append("%s gains %s %s" % [str(effect.cell), Gas.Level.keys()[effect.gas_added[kind]], Gas.name_of(kind)])
 
 
+func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
+	for sink in sinks:
+		sink.execute()
+		events.append("%s goes under at %s" % [handle_for(sink.actor), str(sink.cell)])
+
+
+# One attack's playback: AttackAction's own state steps, in the order execute() takes them (#46), so
+# a heal heals and a shot whose target vanished or that the pass skipped spends nothing, here as in
+# the game. This host's own are the event log and the knockback, which execute() slides along the
+# resolver's trail and this teleports to the landing the resolver picked (stopped at any
+# wall/unit/edge). execute()'s awaits -- the lunges, the slide, the hang and plummet -- have nothing
+# to stand for headless.
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
+	if not atk.open_playback():
+		return
 	var actor := atk.actor
 	var target := atk.target
-	# The watch absorbs its one trigger (#413) — MIRRORS AttackAction.execute, including its
-	# position: above every early-out, because a shot that whiffs or lands on an empty cell has
-	# still been taken. Lead volley member only.
-	if atk.is_watch_shot and not atk.is_secondary_hit and actor != null and is_instance_valid(actor):
-		actor.spend_watch()
-	# Post-fire economy, ABOVE the early-outs because that is where the twin puts it: execute()
-	# gates only the UNIT consequence on a target, so a cell attack with no victim still spends what
-	# firing costs. Returning first (as this did until #97) meant a headless cell shot rearmed itself
-	# for free -- a real divergence the Carbine already had and nothing had asked about.
-	if actor != null and is_instance_valid(actor):
-		_spend_firing_costs(atk, actor)
-	if actor == null or target == null:
-		return
-	if not is_instance_valid(actor) or not is_instance_valid(target):
-		return
-	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
-		return
 	var r := atk.resolved
-	if r == null:
-		return
-	if r.skipped:
-		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
-	# Guard (#414) — MIRRORS AttackAction.execute (the hand-copied twin): the resolver already moved
-	# the victim to the blocker, so the only thing left for execution is spending the live ward.
-	if atk.blocked_for != null:
-		target.spend_guard()
-	target.take_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
-	for s in r.states_removed:
-		target.remove_element_state(s)
-	for s in r.states_added:
-		target.add_element_state(s, r.state_turns.get(s, 0))
-	var dropped := " (payload)" if atk.dropped_by != null else ""
-	events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
-	# Knockback (#84): the headless stand-in for AttackAction.execute()'s shove — the resolver
-	# already picked the landing cell (stopped at any wall/unit/edge), so this just applies it.
-	if r.knockback_applied and is_instance_valid(target):
-		target.movement.set_cell(r.knockback_to)
-		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
-	# The void door (#259) — MIRRORS AttackAction.execute exactly (the hand-copied twin): a
-	# 0-damage take_damage cannot kill an ACTIVE unit, so removal is applied here or nowhere.
-	# The ONE thing deliberately not copied is that twin's plummet (#431): a headless session has
-	# no sprite to fall, and the rule outcome is identical either way.
-	if r.removed and is_instance_valid(target):
-		events.append("%s falls into the void" % handle_for(target))
-		target.die()
+	if atk.land():
+		var dropped := " (payload)" if atk.dropped_by != null else ""
+		if atk.fired_attack != null and atk.fired_attack.heals:
+			events.append("%s heals %s for %d%s" % [handle_for(actor), handle_for(target), r.hp_restored(), dropped])
+		else:
+			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
+			if r.severed_limb != -1:
+				events.append("%s loses %s" % [handle_for(target), _limb_name(r.severed_limb)])
+		if r.knockback_applied and is_instance_valid(target):
+			target.movement.set_cell(r.knockback_to)
+			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
+		if r.removed and is_instance_valid(target):
+			events.append("%s falls into the void" % handle_for(target))
+		# What the hit did to its target's states (#46), which the preview's chips promised.
+		if target != null:
+			for state in r.states_added:
+				if state != Elemental.State.NONE:
+					events.append("%s gains %s" % [handle_for(target), Elemental.state_display_name(state)])
+			for state in r.states_removed:
+				if state != Elemental.State.NONE:
+					events.append("%s loses %s" % [handle_for(target), Elemental.state_display_name(state)])
+		atk.remove()
+	atk.settle()
 
-	# The watch this blow broke (#810) — MIRRORS AttackAction.execute (the hand-copied twin). Here
-	# rather than in _spend_firing_costs beside the other post-fire hooks, deliberately: those are
-	# the ATTACKER's costs and are gated on is_secondary_hit, while this is the TARGET's watch and
-	# every volley member has its own. MARKS, never lapses — Unit.cancel_watch says why.
-	if r.cancels_watch and is_instance_valid(target):
-		target.cancel_watch()
-
-# Post-fire economy (#73/#84/#697/#97): mirrors AttackAction.execute()'s readiness/charge/vial/tank
-# hooks — the headless executor bypasses that method entirely, so without this the play path
-# diverges from the game (a fired Spring stays sprung; a Blowback keeps its charge; a cast draws on
-# an attunement and never burns it; a supercharged spray never empties its tank). Lead volley member
-# only. Counters DO reach here — they stamp main (CounterAttackAction.create_counter_volley), so a
-# family whose main spends is charged for reactive fire too, while a Stab/Smash main with
-# consumes_readiness = false is the no-op it always was.
-#
-# Every one of these is a SPEND the resolver already decided: it records a burn only when the
-# attunement changed the damage, and a charge only when the pass still had one to give. There is
-# nothing to judge here.
-#
-# A PAYLOAD spends nothing (#1058) -- MIRRORS AttackAction.execute: it was never fired, the hit that
-# dropped it was.
-func _spend_firing_costs(atk: AttackAction, actor: Unit) -> void:
-	if atk.is_secondary_hit or atk.dropped_by != null:
-		return
-	var r := atk.resolved
-	if atk.fired_attack is WeaponAttackData:
-		var weapon := actor.get_equipped_weapon() as WeaponInstance
-		if weapon != null:
-			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
-	if r == null:
-		return
-	if r.burned_vial != null:
-		actor.attunement = null
-	if r.charge_spent:
-		var tank := actor.get_equipped_weapon() as WeaponInstance
-		if tank != null:
-			tank.spend_charge()
+# A side-channel order's log line (#46): who and to whom by handle, then the game's own words, which
+# name units by name -- so "Warden guards Warden" says which Warden.
+func _side_line(action: BaseAction) -> String:
+	var aimed := action.aimed_at()
+	var whom := (" -> %s" % handle_for(aimed)) if aimed != null and aimed != action.actor else ""
+	return "%s %s%s: %s" % [handle_for(action.actor), action.get_action_name(), whom, action.get_description()]
 
 # ---- mission metadata & outcome (#96, #612) ----
+# Read off the mission and the zone store the scorer reads (#46), never the scenario a second time.
 
 func objectives() -> Array[MissionRules.Objective]:
-	var result: Array[MissionRules.Objective] = []
-	if scenario_data != null:
-		result.assign(scenario_data.objectives)
-	return result
+	return mission.objectives.duplicate()
 
 func zones() -> Dictionary:
-	return scenario_data.zones if scenario_data != null else {}
+	return zone_manager.to_dict() if zone_manager != null else {}
 
 func round_limit() -> int:
-	return scenario_data.round_limit if scenario_data != null else 0
+	return mission.round_limit
 
 func lose_conditions() -> Array[MissionRules.LoseCondition]:
-	var result: Array[MissionRules.LoseCondition] = []
-	if scenario_data != null:
-		result.assign(scenario_data.lose_conditions)
-	return result
+	return mission.lose_conditions.duplicate()
 
-# The headless twin of MissionController: the SAME MissionRules call the game makes, with the
-# same caller-held `contested` latch (see MissionRules.evaluate -- a live read could never end a
-# mission). The game's version also raises a banner and locks the board; headless has no use for
-# either, so this reports and nothing more.
+# MissionController.check()'s rule half: the SAME MissionState the game holds, which latches the
+# ending. Asked only where the board has settled -- the end of a pass, the end-of-turn burn, the
+# hand-off -- as the game asks it. The game also raises a banner and locks the board; headless has no
+# use for either, so this reports and nothing more.
 func mission_outcome() -> MissionRules.Outcome:
-	var board := _board()
-	if not _mission_contested:
-		_mission_contested = MissionRules.is_contested(board)
-	return MissionRules.evaluate(board, _mission_contested)
+	return mission.evaluate(_board())
 
 # "VICTORY" / "DEFEAT", or "" while the mission is ongoing -- so callers can test one string
 # instead of importing the enum.
@@ -758,18 +1549,28 @@ func mission_tag() -> String:
 		_:
 			return ""
 
+# The word a predicted rung prints as, in every headless readout: the logs here and the preview's
+# rows (BoardView._rung_tag). One table since #1236 -- the log kept its own copy, and it had dropped
+# CRISIS.
+const RUNG_WORDS := {
+	ResolvedOutcome.Lethality.DOWNED: "DOWNED",
+	ResolvedOutcome.Lethality.KILLED: "DIES",
+	ResolvedOutcome.Lethality.CRISIS: "CRISIS",
+}
+
+# A limb in the words the inspect panel's chips use (UnitInstance.LIMB_FULL), lower-cased for a line.
+static func _limb_name(slot: int) -> String:
+	return UnitInstance.LIMB_FULL[slot].to_lower()
+
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
-	match lethality:
-		ResolvedOutcome.Lethality.KILLED:
-			return " (DIES)"
-		ResolvedOutcome.Lethality.DOWNED:
-			return " (DOWNED)"
-		_:
-			return ""
+	return " (%s)" % RUNG_WORDS[lethality] if RUNG_WORDS.has(lethality) else ""
 
 # ---- turn flow ----
 
 func end_turn() -> Dictionary:
+	var phase := _battle_gate()
+	if not phase.ok:
+		return phase
 	# A finished mission does not hand off (mirrors game.end_turn's bail on mission_controller
 	# .is_over()). Refusing rather than silently passing keeps a headless run from grinding out
 	# turns on a board nobody can still win or lose.
@@ -777,14 +1578,25 @@ func end_turn() -> Dictionary:
 	if already != "":
 		return {"ok": false, "error": "mission is over (%s)" % already, "mission": already}
 
-	var board := _board()
-	turn_manager.end_turn(board.present_factions())
+	# The side that just played burns BEFORE it hands off, and a burn that ends the mission does not
+	# hand off at all -- both mirror game.end_turn (#898).
+	_boundary_events.clear()
+	var log: Array[String] = _end_of_turn_tiles(turn_manager.active_faction())
+	if mission_tag() != "":
+		return _turn_result(log)
+
+	# The hand-off runs the round tick and the turn-start ticks through the handlers wired in _init.
+	log.append_array(_hand_off())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
-	while not board.faction_has_active_units(turn_manager.active_faction()) and board.has_active_units():
-		turn_manager.end_turn(board.present_factions())
-	var faction := turn_manager.active_faction()
-	squad_manager.reset_faction_actions(faction)
+	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
+	# skips -- the round that just completed may have run the mission clock out (#46).
+	while mission_tag() == "":
+		var board := _board()
+		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
+			break
+		log.append_array(_hand_off())
+	squad_manager.reset_faction_actions(turn_manager.active_faction())
 
 	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
 	# stationary board: end_turn advanced the faction and nothing else, so every enemy sat still
@@ -797,19 +1609,85 @@ func end_turn() -> Dictionary:
 	#
 	# Loops, because several AI factions can follow one another, and re-reads the faction each pass
 	# rather than assuming one hand-off.
-	var log: Array[String] = []
 	while _is_ai_faction(turn_manager.active_faction()):
 		var acting := turn_manager.active_faction()
 		log.append_array(_take_ai_turn(acting))
 		if mission_tag() != "":
 			break
-		turn_manager.end_turn(_board().present_factions())
+		# The AI's own end of turn burns too -- AIController.take_faction_turn ends on game.end_turn.
+		log.append_array(_end_of_turn_tiles(acting))
+		if mission_tag() != "":
+			break
+		log.append_array(_hand_off())
 		var next := turn_manager.active_faction()
 		if next == acting:
 			break   # nobody else to hand to; do not spin
 		squad_manager.reset_faction_actions(next)
-	faction = turn_manager.active_faction()
-	return {"ok": true, "faction": _faction_name(faction), "ai_events": log}
+	return _turn_result(log)
+
+
+# One hand-off, and what the incoming faction's turn start did (#46): the ticks run inside it, through
+# _on_turn_started, which buffers rather than logs because it is a signal handler with no log to hand.
+func _hand_off() -> Array[String]:
+	turn_manager.end_turn(_board().present_factions())
+	var events := _boundary_events.duplicate()
+	_boundary_events.clear()
+	return events
+
+
+# What end_turn hands back. A mission the boundary ended (headlessly, only a burn can) is reported
+# the way execute() reports one; an AI pass that ended it has already logged the line.
+func _turn_result(events: Array[String]) -> Dictionary:
+	var mission := mission_tag()
+	if mission != "" and not events.has(_mission_line(mission)):
+		events.append(_mission_line(mission))
+	var result := {"ok": true, "faction": _faction_name(turn_manager.active_faction()), "ai_events": events}
+	if mission != "":
+		result["mission"] = mission
+	return result
+
+
+# One faction's end-of-turn tiles (#898, the soak since #508): the hits
+# OrderExecutor.apply_end_of_turn_tiles plays, minus the camera. TileHitAction.execute is synchronous,
+# so the real one runs.
+func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
+	var events: Array[String] = []
+	if terrain_states == null:
+		return events
+	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, faction):
+		hit.execute()
+		if hit.gas >= 0:
+			for gained in hit.resolved.states_added:
+				events.append("%s gains %s from %s" % [handle_for(hit.actor),
+						Elemental.state_display_name(gained), Gas.display_name(hit.gas as Gas.Kind)])
+			continue
+		events.append("%s takes %d from %s%s" % [handle_for(hit.actor), hit.resolved.damage,
+				Terrain.tile_state_display_name(hit.state), _lethality_tag(hit.resolved.lethality)])
+	_process_downed_pending()
+	return events
+
+
+# The two signal-driven halves of the boundary, connected in _init. round_completed fires before
+# turn_started, so a round's tile tick lands before the incoming faction's own ticks.
+func _on_round_completed() -> void:
+	if terrain_states != null:
+		terrain_states.tick_states()
+	if gas_field != null:
+		gas_field.tick(_board())   # game._on_round_completed's twin (#508)
+	mission.advance_round()   # the clock's ONE tick, LAST as the game orders it; the turn-start check sees it
+
+
+func _on_turn_started(faction: Team.Faction) -> void:
+	# The downed whose clock this start may run out, by handle, since a body that bleeds out is freed.
+	var bodies := {}
+	for unit in live_units():
+		if unit.is_downed() and unit.get_faction() == faction:
+			bodies[unit] = handle_for(unit)
+	TurnBoundary.turn_start_ticks(live_units(), faction)
+	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
+		if not is_instance_valid(unit) or (unit as Unit).is_dead():
+			_boundary_events.append("%s bleeds out" % bodies[unit])
+	squad_manager.enforce_contact()   # AFTER the ticks, as game._on_turn_started orders them
 
 
 func _is_ai_faction(faction: Team.Faction) -> bool:
@@ -821,6 +1699,7 @@ func _is_ai_faction(faction: Team.Faction) -> bool:
 # no pacing beat, and execute() rather than the animated OrderExecutor.
 func _take_ai_turn(faction: Team.Faction) -> Array[String]:
 	var events: Array[String] = []
+	AIController.regroup(faction, squad_manager, _board())   # #1230: the game's walk does the same
 	for squad: Squad in AIController.actable_squads(faction, squad_manager):
 		if mission_tag() != "":
 			break

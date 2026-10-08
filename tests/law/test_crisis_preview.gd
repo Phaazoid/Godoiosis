@@ -1,9 +1,9 @@
 # The CRISIS lethality preview (#57, Law #2; rebuilt by #158): Crisis is an EQUIPPED ability now,
-# so the rung is armed, never decided -- a full-Will unit holding the ability previews CRISIS
-# whatever its faction or archetype, and nobody else ever does. The per-archetype stance table this
+# so the rung is armed, never decided -- an unwounded unit holding the ability previews CRISIS
+# whatever its faction or archetype, and nobody else ever does (the Wounded gate, #1174). The per-archetype stance table this
 # suite used to pin is deleted; the player previewing their OWN Crisis is the case that was
 # impossible before (the old PLAYER fork existed to keep the live prompt unpredicted).
-# Companion to tests/law/test_maim_preview.gd (which pins the fully-maimed case on this same seam).
+# Companion to tests/law/test_maim_preview.gd, which pins the limb a Crisis entry also takes.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -36,8 +36,8 @@ func _resolve(attacks: Array[AttackAction]) -> void:
 	PlanResolver.resolve(plan)
 
 # The case that was impossible before #158: the player's own unit previews its own Crisis.
-func test_full_will_armed_player_unit_previews_crisis() -> void:
-	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 20})
+func test_an_armed_player_unit_previews_crisis() -> void:
+	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 10})
 	_arm(target)
 	var attack := _fatal_attack(target)
 	_resolve([attack])
@@ -46,8 +46,8 @@ func test_full_will_armed_player_unit_previews_crisis() -> void:
 
 # HOLD is the archetype whose stance used to DECLINE the gambit -- an armed one crises anyway,
 # which is what proves the stance table is really gone rather than merely bypassed.
-func test_full_will_armed_enemy_previews_crisis_whatever_its_archetype() -> void:
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 20})
+func test_an_armed_enemy_previews_crisis_whatever_its_archetype() -> void:
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10})
 	target.squad.archetype = AIArchetype.Type.HOLD
 	_arm(target)
 	var attack := _fatal_attack(target)
@@ -56,27 +56,32 @@ func test_full_will_armed_enemy_previews_crisis_whatever_its_archetype() -> void
 
 # RUSHDOWN used to auto-accept by personality. Unarmed, personality grants nothing -- Crisis
 # access is authored content now (the ability on the unit), not code on the archetype.
-func test_full_will_unarmed_unit_previews_downed_whatever_its_archetype() -> void:
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 20})
+func test_an_unarmed_unit_previews_downed_whatever_its_archetype() -> void:
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10})
 	target.squad.archetype = AIArchetype.Type.RUSHDOWN
 	var attack := _fatal_attack(target)
 	_resolve([attack])
 	assert_that(attack.resolved.lethality).is_equal(ResolvedOutcome.Lethality.DOWNED)
 
-func test_sub_gate_will_still_maims_despite_the_ability() -> void:
-	# Armed but Will below the full gate -> CRISIS never applies; the MAIMED/DOWNED rungs are
-	# untouched by the ability.
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 0})
+# The gate since #1174: a unit that has gone down this battle cannot fire the gambit, armed or not.
+# Wounded for REAL -- downed through take_damage and stood back up -- never by setting the flag. Armed
+# only AFTER that first down, or the first down would have been the gambit instead.
+func test_a_wounded_unit_downs_despite_the_ability() -> void:
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10})
+	target.take_damage(target.get_current_hp())
+	assert_bool(target.is_downed()).override_failure_message("fixture: the first down failed").is_true()
+	target.revive()
+	target.set_current_hp(target.get_max_hp())
 	_arm(target)
 	var attack := _fatal_attack(target)
 	_resolve([attack])
-	assert_that(attack.resolved.lethality).is_equal(ResolvedOutcome.Lethality.MAIMED)
+	assert_that(attack.resolved.lethality).is_equal(ResolvedOutcome.Lethality.DOWNED)
 
 func test_crisis_then_second_hit_previews_kill_no_safety_net() -> void:
 	# The thread: hit 1 enters Crisis (up at revive HP, no net). A second hit in the SAME
 	# pass, >= that revive HP, must preview KILLED -- dodging the first fatal counter doesn't
 	# save you from the second (will-and-death.md: "no safety net for the rest of the battle").
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 20})
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 10})
 	_arm(target)
 	var first := _fatal_attack(target)
 	var second := _fatal_attack(target)
@@ -89,7 +94,7 @@ func test_crisis_then_second_hit_previews_kill_no_safety_net() -> void:
 # It threaded its own subtraction until #1002, so a burn that fired the gambit previewed the unit
 # at zero while execution stood them up at CRISIS_REVIVE_HP -- one map, both writers, no clamp.
 func test_a_tile_burn_that_fires_the_gambit_previews_the_revive_hp() -> void:
-	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 10, Stats.Stat.WIL: 20})
+	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 10})
 	_arm(target)
 
 	var hit := TileHitAction.make(target, Terrain.TileState.BURNING,

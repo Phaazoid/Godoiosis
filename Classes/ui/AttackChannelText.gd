@@ -19,6 +19,11 @@ class_name AttackChannelText
 #
 # A LINE ONLY APPEARS WHEN IT HAS SOMETHING TO SAY, so a plain sword's readout stays exactly as short
 # as it was before any of this.
+#
+# THE ALLY LINE IS THE ONE THAT SPEAKS BOTH WAYS (#1083, dev ruling 2026-09-27): on an attack whose
+# footprint can hold an ally, silence was exactly what a player could not read, so it says Splashes
+# or Spares. It is also the ONE line the battle ring reads (dev, 2026-09-28: the ring stays succinct
+# and carries what nothing else in battle says before the aim), which is why it is its own function.
 
 
 static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.Element],
@@ -36,21 +41,45 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 			named.append(Elemental.display_name(element))
 		out.append("Carries %s" % " and ".join(named))
 
+	# The payload chain (#1058, ruling 53): one line per level. Read off the attack, since no mod
+	# composes a payload.
+	var dropper := attack
+	for payload in attack.payload_chain():
+		if dropper == attack:
+			out.append("Drops %s where it hits" % _name_of(payload))
+		else:
+			out.append("%s drops %s where it hits" % [_name_of(dropper), _name_of(payload)])
+		dropper = payload
+
+	if attack.gas_level != Gas.Level.NONE:
+		out.append("Leaves %s where it hits" % Gas.display_name(attack.gas))
+
 	if can_overwatch:
 		out.append("Watch only — declared as a standing watch, never fired directly")
-	if hits_allies:
-		out.append("Splashes allies")
+	var allies := ally_line(attack, hits_allies)
+	if allies != "":
+		out.append(allies)
 	if attack.hits_self:
 		out.append("Catches the attacker too")
 	if attack.pierces_guard:
 		out.append("Pierces guard")
 	# can_counter defaults TRUE, so the line is the EXCEPTION -- saying "can counter" on nearly every
-	# attack in the game would be noise wearing the shape of information.
-	if not attack.can_counter:
+	# attack in the game would be noise wearing the shape of information. Asked through the rule, so a
+	# heal or a map-only attack says so whatever its box holds (#1135).
+	if not attack.can_ever_counter():
 		out.append("Never counters")
 
 	out.append_array(_height_lines(attack))
 	return out
+
+
+# Whether this attack hits allies, or "" where that means nothing: a single cell (hitting an ally is a
+# choice of aim there, dev 2026-09-28) or an attack that hits no unit at all (#1135). `hits_allies` is
+# the COMPOSED answer, passed in for the reason the header gives.
+static func ally_line(attack: AttackData, hits_allies: bool) -> String:
+	if attack == null or not attack.hits_units() or attack.covers_one_cell():
+		return ""
+	return "Splashes allies" if hits_allies else "Spares allies"
 
 
 # What this attack reaches, in one line. Shared for the same reason the channels are: both cards draw
@@ -63,6 +92,13 @@ static func range_text(attack: AttackData) -> String:
 	var span := "Range %d" % attack.max_range if attack.min_range == attack.max_range \
 		else "Range %d-%d" % [attack.min_range, attack.max_range]
 	return "%s, bevelled corners" % span if attack.max_and_a_half else span
+
+
+# An attack's name as a card prints it, its file's name standing in for one never given.
+static func _name_of(attack: AttackData) -> String:
+	if attack.display_name != "":
+		return attack.display_name
+	return attack.resource_path.get_file().get_basename()
 
 
 # How this attack answers the height question. MELEE ignores the tolerances outright (AttackData's

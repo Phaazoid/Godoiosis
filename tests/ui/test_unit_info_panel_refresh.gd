@@ -182,6 +182,7 @@ func _def_value() -> String:
 # budget any future row has to fit in. That ticket's first attempt put a 160px wheel in the body and
 # overflowed by 92 -- the squad box and the states bar ran off the bottom of the screen, silently,
 # because a VBoxContainer simply lays its children past its own rect and nothing complains.
+# #966 then spent 38 of the rest on a one-column inventory: 698 of 720, 22px left.
 #
 # Asked as a PROPERTY against the panel's own height rather than a pixel count, which is what
 # tests/ui/test_title_screen_fits_the_viewport.gd learned: the design space is exactly 720 tall for
@@ -207,3 +208,154 @@ func test_the_inspect_panels_content_fits_the_column_it_is_anchored_to() -> void
 	assert_float(body.get_combined_minimum_size().y).override_failure_message(
 		"the inspect panel wants %d of the %d it has -- its bottom rows are off screen"
 			% [body.get_combined_minimum_size().y, panel.size.y]).is_less_equal(panel.size.y)
+
+
+# --- a rescue stands the body up on every open readout (#1009) ---
+
+# The two panels that draw the downed clock off downed_countdown_changed (the 3D bar polls instead)
+# redraw it only on that signal, and nothing else a revive touches reaches them. Driven through the
+# real revive() and asserted on what is drawn, never on the signal: the issue's own ask.
+
+func test_a_revive_takes_the_down_badge_off_the_open_inspect_panel() -> void:
+	var unit := _standing_unit()
+	assert_object(unit).override_failure_message("the sandbox stood nobody up").is_not_null()
+	unit.force_down()
+	var panel: UnitInfoPanelControl = game.unit_info_panel
+	panel.set_unit(unit, true, game._board())
+	assert_int(_down_badges().size()).override_failure_message(
+		"the panel drew no DOWN badge on a downed unit, so there is nothing to go stale").is_equal(1)
+
+	unit.revive()
+	await await_idle_frame()
+
+	assert_bool(unit.is_active()).override_failure_message("revive() left the body down").is_true()
+	assert_array(_down_badges()).override_failure_message(
+		"the open panel still reads %s over a unit that is standing" % [_down_badges()]).is_empty()
+
+
+func test_a_revive_takes_the_downed_glyph_off_the_unit_card() -> void:
+	var unit := _standing_unit()
+	assert_object(unit).override_failure_message("the sandbox stood nobody up").is_not_null()
+	unit.force_down()
+	game.show_unit_card(unit)
+	var card: HoverInfoPanelControl = game.hover_info_panel
+	assert_bool(card.is_showing_unit_card()).override_failure_message(
+		"the unit card did not open, so there is nothing to go stale").is_true()
+	assert_int(_downed_glyphs(card)).override_failure_message(
+		"the card drew no DOWNED glyph on a downed unit").is_equal(1)
+	assert_int(_clock_counts(card)).override_failure_message(
+		"the card drew no clock beside the DOWNED glyph").is_equal(1)
+
+	unit.revive()
+	await await_idle_frame()
+
+	assert_int(_downed_glyphs(card)).override_failure_message(
+		"the card still wears the DOWNED glyph over a unit that is standing").is_equal(0)
+	assert_int(_clock_counts(card)).override_failure_message(
+		"the card still counts a death clock for a unit that is standing").is_equal(0)
+
+
+# --- a rescued unit wears the Wounded glyph (#1174) ---
+
+# One readout per case, since the card stands down while the dock shows the same unit. Each drives
+# one real sequence: never down, then downed by a hit (so `wounded` is the flag _go_downed sets, never
+# one written by hand), then stood up through revive(), a rescue's own path. A body shows DOWN and no
+# bandage, since its DOWN glyph already says it.
+func test_a_rescued_unit_wears_the_wounded_glyph_on_the_inspect_panel() -> void:
+	var unit := _standing_unit()
+	assert_object(unit).override_failure_message("the sandbox stood nobody up").is_not_null()
+	var panel: UnitInfoPanelControl = game.unit_info_panel
+	panel.set_unit(unit, true, game._board())
+	var limbs: Node = panel.stats_section.limbs_row
+	await _down_then_rescue(unit, func() -> int: return _wounded_glyphs(limbs), "the inspect panel")
+	# The badge explains itself with the Glossary's own line, never a second copy of it.
+	var tips: Array[String] = []
+	for child in limbs.find_children("*", "Control", true, false):
+		var control := child as Control
+		if not control.is_queued_for_deletion() and control.tooltip_text != "":
+			tips.append(control.tooltip_text)
+	assert_array(tips).override_failure_message(
+		"the WOUNDED badge's tooltip is not the Glossary's Wounded line: %s" % [tips]
+		).contains([UiText.wrap(Glossary.short(Glossary.Term.WOUNDED))])
+
+
+func test_a_rescued_unit_wears_the_wounded_glyph_on_the_unit_card() -> void:
+	var unit := _standing_unit()
+	assert_object(unit).override_failure_message("the sandbox stood nobody up").is_not_null()
+	game.show_unit_card(unit)
+	var card: HoverInfoPanelControl = game.hover_info_panel
+	assert_bool(card.is_showing_unit_card()).override_failure_message(
+		"the unit card did not open, so there is nothing to read").is_true()
+	await _down_then_rescue(unit, func() -> int: return _wounded_glyphs(_status_row(card)), "the unit card")
+
+
+func _down_then_rescue(unit: Unit, glyphs: Callable, surface: String) -> void:
+	assert_int(int(glyphs.call())).override_failure_message(
+		"%s puts the bandage on a unit that never went down" % surface).is_equal(0)
+
+	unit.take_damage(unit.get_current_hp())
+	await await_idle_frame()
+	assert_bool(unit.is_downed()).override_failure_message(
+		"a hit for exactly its HP did not down the unit, so there is no down to be wounded by").is_true()
+	assert_int(int(glyphs.call())).override_failure_message(
+		"%s puts the bandage beside a body's DOWN" % surface).is_equal(0)
+
+	unit.revive()
+	await await_idle_frame()
+	assert_int(int(glyphs.call())).override_failure_message(
+		"%s shows no bandage on a unit that went down and was rescued" % surface).is_equal(1)
+
+
+# Live WOUNDED glyphs anywhere under `root`; the inspect badge nests its glyph beside the word.
+func _wounded_glyphs(root: Node) -> int:
+	var count := 0
+	for child in root.get_children():
+		if child.is_queued_for_deletion():
+			continue
+		var rect := child as TextureRect
+		if rect != null and rect.texture == StateIcons.WOUNDED:
+			count += 1
+		count += _wounded_glyphs(child)
+	return count
+
+
+func _standing_unit() -> Unit:
+	for unit in _live_units():
+		if unit.is_active():
+			return unit
+	return null
+
+
+# The live DOWN badge texts in the inspect panel's limb row; queue_free()d ones are skipped.
+func _down_badges() -> Array[String]:
+	var found: Array[String] = []
+	var row: HBoxContainer = game.unit_info_panel.stats_section.limbs_row
+	for child in row.get_children():
+		var label := child as Label
+		if label != null and not label.is_queued_for_deletion() and label.text.begins_with("DOWN"):
+			found.append(label.text)
+	return found
+
+
+func _downed_glyphs(card: HoverInfoPanelControl) -> int:
+	var count := 0
+	for child in _status_row(card).get_children():
+		var rect := child as TextureRect
+		if rect != null and not rect.is_queued_for_deletion() and rect.texture == StateIcons.DOWNED:
+			count += 1
+	return count
+
+
+# The clock is a bare number beside the glyph; a state with no art falls back to its NAME instead.
+func _clock_counts(card: HoverInfoPanelControl) -> int:
+	var count := 0
+	for child in _status_row(card).get_children():
+		var label := child as Label
+		if label != null and not label.is_queued_for_deletion() and label.text.is_valid_int():
+			count += 1
+	return count
+
+
+func _status_row(card: HoverInfoPanelControl) -> Node:
+	var row: Node = card.hover_gridcontainer.states_row
+	return row

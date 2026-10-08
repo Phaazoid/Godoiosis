@@ -4,7 +4,7 @@ extends WeaponInstance
 # Springspear's wind-up/recovery economy (#73). `ready` is deliberately NOT @export:
 # runtime-only battle state that lives on THIS INSTANCE so two spears in one inventory track
 # independently, and never serializes — make()/copy_for_grant() always hand back a fresh
-# `ready = true`, so it resets for free every mission (the same trick Unit.rally_count uses
+# `ready = true`, so it resets for free every mission (the same trick Unit.downed_turns_remaining uses
 # on the transient-node side of the persistence seam, just one layer down).
 var ready := true
 
@@ -25,6 +25,10 @@ func has_reload_verb() -> bool:
 func consume_readiness_for(attack: WeaponAttackData) -> void:
 	if attack.consumes_readiness:
 		ready = false
+
+# A one-deep stock: the spring is wound or it is not. The sentence below stays in words.
+func gauge() -> WeaponGauge:
+	return WeaponGauge.stock(1 if ready else 0, 1)
 
 func status_text() -> String:
 	return "Loaded" if ready else "Spent — needs Spring Load"

@@ -11,6 +11,34 @@ const OUT_OF_MAP_TILE := 999
 const UNREACHABLE := 999999   # path_hops' "no route to here"; any real hop count is far below
 const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 
+# May a unit be PLACED here? spawn_unit's gate, and the pre-mission phase's on both hosts (#46):
+# on the map, somewhere a unit may stand (unless it is a body, #116), and nobody already there.
+static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) -> bool:
+	if board.grid.get_cell_tile_data(cell) == null:
+		return false
+	if not is_body and not board.is_walkable(cell):
+		return false
+	return board.unit_at_cell(cell) == null
+
+# WHY this unit may not act at all -- "" means it is standing. Downed and dead units can't be
+# commanded (will-and-death.md). Its own question because the order chokepoint asks it without the
+# faction half: the AI's preview queues enemy orders on the player's turn (#662).
+static func standing_block_reason(unit: Unit) -> String:
+	if not unit.is_active():
+		return "%s is down." % unit.get_unit_name()
+	return ""
+
+# WHY this unit may not be commanded right now -- "" means it may. game.can_control's board half,
+# which the headless Play API's dock verbs ask too (#46): standing, and on the side whose turn it is.
+# Says nothing about whether its squad has acted -- the inspect dock works after that.
+static func command_block_reason(unit: Unit, active_faction: Team.Faction) -> String:
+	var down := standing_block_reason(unit)
+	if down != "":
+		return down
+	if unit.get_faction() != active_faction:
+		return "%s is not on the side whose turn it is." % unit.get_unit_name()
+	return ""
+
 # May THIS unit traverse this cell's TERRAIN? BoardContext.is_walkable answers the cell-only form
 # ("may a unit stand here", #109); this is the per-unit layer on top, and #115 made it the ONE
 # home for that layer — movement_cost and path_hops had been deciding separately,
@@ -31,7 +59,9 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 		and unit.has_live_ability(Abilities.Id.WATERWALK)
 
 # Does this cell DROWN this unit — water it cannot stand on (#116)? One answer for all three sites a
-# shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends.
+# shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends --
+# and for the fourth, since #922: whether the ground a pass's deposits leave has gone out from under
+# a unit standing on it (PlanResolver.settle_sinks, which hands it the landed board).
 #
 # It REPEALS #115's declared exception ("a shove asks the cell-level is_walkable, never the per-unit
 # can_traverse — being thrown is not walking"), which was harmless while water STOPPED a shove:
@@ -53,10 +83,12 @@ static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 #   Waterwalk -- the holder "stands on the surface instead" (Glossary's WATER_TILE entry). Asked of
 #                the ABILITY, not through can_traverse, which answers this for deep water and not
 #                for shallow -- shallow is walkable to everyone.
-#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read LIVE and never through a projection:
-#                cell effects apply after the whole attack phase (OrderExecutor), so a lake THIS
-#                pass froze is still water when this pass's shove lands in it. drowns_in reads live
-#                for the same reason.
+#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read the ground AS IT STANDS WHEN THE UNIT
+#                ARRIVES: cell effects apply after the whole attack phase (OrderExecutor), so a lake
+#                THIS pass froze is still water when this pass's shove lands in it, and a walk or a
+#                shove reads the live store. drowns_in reads live for the same reason. The one caller
+#                asking AT the deposits' moment -- a unit the melt sinks (#922) -- is handed the
+#                landed board instead, which is the same rule, not an exception to it.
 static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 	if board.terrain_kind_at(cell) != Terrain.Kind.WATER:
 		return false
@@ -138,14 +170,10 @@ static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: Boa
 	if not board.grid.get_used_rect().has_point(cell):
 		return OUT_OF_MAP_TILE
 
-	var cost: int = 0
-	if data.has_custom_data("move_cost"):
-		cost += data.get_custom_data("move_cost")
-
 	if blocks_passage(unit, board.unit_at_cell(cell)):
 		return CANNOT_WALK_TILE
 
-	return cost
+	return board.move_cost_at(cell)
 
 # The two occupancy questions, split because they have DIFFERENT answers and both already existed
 # inline (#127 pulled them out so AITactics can ask them instead of re-deriving them; each still has
@@ -241,6 +269,8 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 		"squad_unreachable": squad_unreachable
 	}
 
+# The one cheapest-route tree's walk back from `goal`. Production asks route_to, which falls back to
+# this when no watch is in play; a law keeps every other production caller off it (#920).
 static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
 	var path: Array[Vector2i] = []
 	var current := goal
@@ -252,10 +282,116 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 	path.push_front(start)
 	return path
 
+
+# THE ROUTE A MOVE WALKS (#920; ruling 8 on #117): the fewest hostile watches set off, then the
+# cheapest, then a fixed order -- over exactly the steps and the MOV budget compute_move_range
+# searched, so every cell it reached (`range_info`, its answer) has a route here and the range a unit
+# is shown never changes. A watch fires once, so what a route costs is WHICH watches it wakes, a fact
+# about the route and not about any step on it: the search runs over (cell, watches spent so far).
+# Entering a cell spends the first unspent watch that would fire on the mover there, in arm order --
+# PlanResolver.watch_fires_at, the resolve's own predicate -- and the start cell spends nothing. With
+# no watch able to fire anywhere in the range, it is the range's own tree, today's route exactly.
+#
+# Asked of the LIVE watches: a watch a squadmate's earlier walk in the same pass would spend still
+# counts here, so the route errs toward the detour. Whatever it picks, the resolve walks the path the
+# move stores, so the preview and the walk cannot disagree (Law #2).
+static func route_to(unit: Unit, range_info: Dictionary, goal: Vector2i, board: BoardContext,
+		safe := true) -> Array[Vector2i]:
+	var start := unit.movement.cell
+	var came_from: Dictionary = range_info.came_from
+	if not safe:   # #1230: an AI unit whose profile does not route around watches walks the shortest way
+		return reconstruct_path(came_from, start, goal)
+	var fires := _watch_entries(unit, came_from, board)
+	if fires.is_empty() or goal == start or not came_from.has(goal):
+		return reconstruct_path(came_from, start, goal)
+
+	var mov := unit.get_mov()
+	var bounds := board.grid.get_used_rect()
+	var origin := Vector3i(start.x, start.y, 0)
+	var best := {origin: 0}
+	var parent := {}
+	var at_goal := {}   # spent mask -> true, for the states that reached the goal
+	var frontier: Array[Vector3i] = [origin]
+	while not frontier.is_empty():
+		var state: Vector3i = frontier.pop_front()
+		var cell := Vector2i(state.x, state.y)
+		for dir in NEIGHBOURS:
+			var next: Vector2i = cell + dir
+			var step: int = movement_cost(cell, next, unit, board)
+			if step > CANNOT_WALK_TILE or not bounds.has_point(next):
+				continue
+			var cost: int = best[state] + step
+			if cost > mov:
+				continue
+			var spent: int = state.z
+			for bit: int in fires.get(next, []):
+				if spent & bit == 0:
+					spent |= bit
+					break
+			var key := Vector3i(next.x, next.y, spent)
+			if best.has(key) and cost >= best[key]:
+				continue
+			best[key] = cost
+			parent[key] = state
+			frontier.append(key)
+			if next == goal:
+				at_goal[spent] = true
+
+	var pick := -1
+	for spent: int in at_goal:
+		if pick < 0 or _route_beats(spent, best[Vector3i(goal.x, goal.y, spent)], pick,
+				best[Vector3i(goal.x, goal.y, pick)]):
+			pick = spent
+	var path: Array[Vector2i] = []
+	var at := Vector3i(goal.x, goal.y, pick)
+	while at != origin:
+		path.push_front(Vector2i(at.x, at.y))
+		at = parent[at]
+	path.push_front(start)
+	return path
+
+
+# Fewer watches set off > cheaper > the lower mask (Law #1: a fixed order, nothing else).
+static func _route_beats(spent: int, cost: int, b_spent: int, b_cost: int) -> bool:
+	var count := _bit_count(spent)
+	var b_count := _bit_count(b_spent)
+	if count != b_count:
+		return count < b_count
+	if cost != b_cost:
+		return cost < b_cost
+	return spent < b_spent
+
+
+static func _bit_count(bits: int) -> int:
+	var count := 0
+	while bits != 0:
+		bits &= bits - 1
+		count += 1
+	return count
+
+
+# Cell -> the watches that would fire on `unit` there, as bits in arm order (Watch.standing's order,
+# the order a resolve searches them in). Only the watches that can fire somewhere in the range get a
+# bit, so a board of watches the mover never meets costs nothing; empty means none can.
+static func _watch_entries(unit: Unit, cells: Dictionary, board: BoardContext) -> Dictionary:
+	var entries := {}
+	var bit := 1
+	for watch in Watch.standing(board.units):
+		var hit := false
+		for cell: Vector2i in cells:
+			if PlanResolver.watch_fires_at(watch, unit, cell, {}):
+				if not entries.has(cell):
+					entries[cell] = []
+				(entries[cell] as Array).append(bit)
+				hit = true
+		if hit:
+			bit <<= 1
+	return entries
+
 # `occupant_at` is gather_path_victims' parameter, for its reason: empty is the board's projected
 # answer, which every aim site wants, and a PAYLOAD (#1058) passes the resolver's threaded one,
 # since it goes off mid-pass where only the aims' shoves have been published.
-static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, allies_only := false, occupant_at := Callable()) -> Array[Unit]:
+static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, occupant_at := Callable()) -> Array[Unit]:
 	var victims: Array[Unit] = []
 	for cell in affected_cells:
 		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
@@ -264,7 +400,7 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 		var unit: Unit = occupant_at.call(cell) if occupant_at.is_valid() else board.projected_unit_at_cell(cell)
 		if unit == null or victims.has(unit):
 			continue
-		if is_attack_victim(attacker, unit, attack, allies_only):
+		if is_attack_victim(attacker, unit, attack):
 			victims.append(unit)
 	return victims
 
@@ -285,14 +421,14 @@ class PathHit extends RefCounted:
 # projected answer and a watch shot asks the resolver's threaded one, so one rule has two sources of
 # who is standing where and each caller states its own.
 static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: AttackData,
-		occupant_at: Callable, allies_only := false) -> Array[PathHit]:
+		occupant_at: Callable) -> Array[PathHit]:
 	var hits: Array[PathHit] = []
 	for path in paths:
 		var hit := PathHit.new()
 		for cell: Vector2i in path:
 			hit.cells.append(cell)
 			var unit: Unit = occupant_at.call(cell)
-			if is_attack_victim(attacker, unit, attack, allies_only):
+			if is_attack_victim(attacker, unit, attack):
 				hit.victim = unit
 				break
 		hits.append(hit)
@@ -302,17 +438,18 @@ static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: Att
 # SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
 # ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).
 #
-# allies_only is an OPT-IN each caller states, the path_hops(block_on_occupancy) shape from #127 --
-# and the default is the load-bearing half. Aiming a heal at an enemy stays legal on purpose (dev,
-# #148): it is a niche the player may want. What is never legal is a DERIVED reaction heal landing
-# on the attacker, so SquadManager's reaction expansion is the one caller that passes true.
-static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData, allies_only := false) -> bool:
+# A MAP-ONLY attack hits nobody (#1135), itself included -- asked ahead of hits_self so a map-only
+# blast cannot fell its own caster. This is the gather every unit hit goes through, so no damage,
+# state, shove or counter follows either. The one thing that still reaches a unit is a SHOCK's
+# current, which is Conduction.caught's and deliberately tag-blind (dev, 2026-09-28). A null attack
+# is bare fists, which hit units.
+static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData) -> bool:
 	if unit == null or not is_instance_valid(unit):
+		return false
+	if attack != null and not attack.hits_units():
 		return false
 	if unit == attacker:
 		return attack != null and attack.hits_self
-	if allies_only and can_target(attacker, unit):
-		return false
 	if can_target(attacker, unit):
 		return true
 	if attack == null:
@@ -421,24 +558,8 @@ static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext) -> A
 static func rescue_needs_a_pick(body: Unit, board: BoardContext) -> bool:
 	return not can_traverse(body.get_projected_destination(), body, board)
 
-# Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
-# adjacent_downed_allies above, projected on BOTH sides for the same reason (#126): intimidate is a
-# side-channel verb too, so it meets its victim at the cell every shove this pass has already moved it
-# to. Downed enemies stay legal intimidate targets on purpose: draining a body's Will can be worth a
-# main action.
-static func adjacent_enemies(unit: Unit, board: BoardContext) -> Array[Unit]:
-	var result: Array[Unit] = []
-	var origin := unit.get_projected_destination()
-	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
-		if cell == origin:
-			continue
-		var other := board.projected_unit_at_cell(cell)
-		if other != null and other != unit and not other.is_dead() and Team.is_enemy(unit.get_faction(), other.get_faction()):
-			result.append(other)
-	return result
-	
-# Who `unit` could become the bodyguard of right now (#414) — same shape as adjacent_enemies above,
-# projected on BOTH sides for the same reason (#126): Guard arms after the move phase, so it meets
+# Who `unit` could become the bodyguard of right now (#414) — same shape as adjacent_downed_allies
+# above, projected on BOTH sides for the same reason (#126): Guard arms after the move phase, so it meets
 # its ward at the cell every queued move and every shove this pass has already moved it to.
 #
 # Allies, never enemies, and never yourself. A DOWNED ally stays a legal ward on purpose: a body

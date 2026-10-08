@@ -124,10 +124,8 @@ func test_a_menu_takes_the_zoom_wheel_back() -> void:
 # player's own scroll away for the length of a pass -- so the move phase went from unframed-but-
 # scrollable to unframed-and-frozen.
 #
-# Asserted on follow_unit rather than a position: pan_to ends by handing over to follow(), and a
-# position would depend on the 2D camera's clamp against the board's own extent, i.e. on authored
-# content. Run inside a claimed camera (what an AI turn does) because the restore at the end of a
-# PLAYER pass clears follow_unit -- here the claim is put back, so the last pan survives to be read.
+# Run inside a claimed camera (what an AI turn does) because the restore at the end of a PLAYER pass
+# clears follow_unit -- here the claim is put back, so the last pan survives to be read.
 #
 # LIMIT, stated rather than implied: pan_to snaps headless, so this pins the WIRE, not the ordering.
 # That the pan precedes the walk is structural -- the await sits above the phase.
@@ -232,8 +230,8 @@ func test_the_move_phase_publishes_the_span_for_the_rig_to_widen_to() -> void:
 # and squad, because everything about codas was pinned at its two ENDS (the sheet builds them, the
 # schedule reads them) and nothing drove the wire between. #103's shape exactly.
 #
-# The camera is parked on ANOTHER unit first, so "it ended up on the rallier" cannot pass by the
-# camera simply never having moved. A rally is the cheapest coda to stage: no target, no terrain,
+# The camera is parked on ANOTHER unit first, so "it ended up on the rever" cannot pass by the
+# camera simply never having moved. A rev is the cheapest coda to stage: no target, no terrain,
 # and _queue_action is the raw door the beat sheet suite already uses.
 func test_a_side_channel_verb_takes_the_camera_too() -> void:
 	var unit := _player_unit()
@@ -241,12 +239,12 @@ func test_a_side_channel_verb_takes_the_camera_too() -> void:
 	assert_object(elsewhere).override_failure_message(
 			"fixture: this board has only one unit").is_not_null()
 
-	var rally := RallyAction.new()
-	rally.init(unit)
-	unit.squad._queue_action(rally)
+	var rev := RevAction.new()
+	rev.init(unit)
+	unit.squad._queue_action(rev)
 
 	# ZOOM OFF, and that is what keeps the wire observable since #602 round 4: with the zoom on, a
-	# rally stages and the tear-down's return pan clears the follow at the pass's end -- by design
+	# rev stages and the tear-down's return pan clears the follow at the pass's end -- by design
 	# (the WIDE shot back before the tiles drop) -- so the real coda pan and a deleted-subjects
 	# mutant would both read null here. Plain board: the coda's pan is the only camera writer, and
 	# the subjects wire it drives is the same code path in either profile.
@@ -678,6 +676,38 @@ func test_the_3d_camera_follows_the_ai_camera() -> void:
 
 	assert_that(_rig.position).override_failure_message(
 			"the 3D camera never followed the AI's pan").is_equal(expected)
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
+# #974: the playback aim sat four cells off the fight because the hidden 2D camera it mirrors was
+# pinned against a pan wall built for another board. Under a 3D host that camera only publishes where
+# playback looks, so no wall of its own may move it -- the rig's pan_limit is the one bound.
+#
+# The stale wall is set by hand and lies wholly off the board, BEYOND the unit on both axes, so any
+# clamp at all -- a wall or the narrow-board centring -- moves the camera off the unit. The reset door
+# (apply_scenario -> board_loaded) refreshes the bounds, so nothing here leaks to the next case.
+func test_a_stale_2d_pan_wall_never_moves_the_playback_aim() -> void:
+	assert_bool(_game.board_input_delegated).override_failure_message(
+			"precondition: the 3D host should own board input in this fixture").is_true()
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	var at: Vector2 = unit.global_position
+	_cam().min_world = at + Vector2(10000.0, 10000.0)
+	_cam().max_world = _cam().min_world + Vector2(4000.0, 4000.0)
+
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(unit)   # headless: lands on the unit, then follows it through _process
+	await _settle()
+	assert_vector(_cam().global_position).override_failure_message(
+			"the 2D camera's pan wall moved playback off the unit it panned to").is_equal(at)
+
+	_scene._mirror_camera()
+	var flat := BoardSpace.of_pixels(at, 0.0)
+	assert_vector(Vector2(_rig._aim.x, _rig._aim.z)).override_failure_message(
+			"the playback aim is not over the unit the 2D camera panned to").is_equal_approx(
+			Vector2(flat.x, flat.z), Vector2.ONE * 0.001)
 	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
 
@@ -1713,9 +1743,7 @@ func test_the_return_pan_waits_out_the_held_depth_before_it_moves_the_aim() -> v
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
 	BoardSpace.stage([unit.movement.cell], BoardSpace.lift_offset())
-	# Parked through the camera's own door, then measured by DISTANCE to the pan's destination:
-	# the 2D camera clamps and glides its position per frame, so an exact-position assert fights
-	# the camera's own housekeeping rather than the teardown's pan.
+	# Parked through the camera's own door, then measured by DISTANCE to the pan's destination.
 	var staged: Array[Vector2i] = [unit.movement.cell]
 	var centre: Vector2 = _game.order_executor._stage_centre(staged)
 	await _cam().pan_to_position(centre + Vector2(300.0, 0.0), 0.05)

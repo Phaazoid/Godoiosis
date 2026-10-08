@@ -6,8 +6,8 @@ class_name DevInfoTool
 # Two halves, and the second is why this exists. The BINDINGS half is a pure projection of
 # Classes/core/Controls.gd, the way GlossaryScreen is of Glossary: it reorders and styles, it never
 # authors an entry. The MACHINE half is read at display time from the thing that already owns each
-# fact -- the report folder from BugReporter, the version from Build, the branch from Checkout --
-# so it is a second RENDER of one fact, never a second source.
+# fact -- the report folder from BugReporter, the version from Build, the branch from Checkout, the
+# telemetry folders from TelemetryStore -- so it is a second RENDER of one fact, never a second source.
 #
 # The machine half is the reason the ticket was filed: onboarding a co-dev to the camera trace,
 # "where does my report land?" has no answer a markdown table can give, because the path differs
@@ -20,6 +20,8 @@ const NO_ACTION_TIP := "No Input Map action -- a hardcoded key check."
 const ACTION_TIP := "Input Map action: %s"
 const UPLOAD_ON := "configured -- F3 also reaches Discord"
 const UPLOAD_OFF := "not configured -- F3 writes locally only"
+const RUNS := "%d owed, %d sent, %d held back"
+const RUNS_TIP := "Owed: waiting to upload, retried at every launch until it lands. Sent: delivered, kept so the Replay tab can open it. Held back: will never be sent (empty, or recorded before runs had an id), kept for Replay too. A run that stays owed across launches is the thing to look into."
 const COPIED := "Copied"
 const COPY := "Copy"
 const LABEL_WIDTH := 150.0
@@ -27,7 +29,7 @@ const COPIED_SECONDS := 1.0
 
 var _game   # untyped back-ref: game.gd has no class_name
 var _rows: VBoxContainer
-# Rebuilt on show rather than written into: the machine rows are four reads, and a rebuild is the
+# Rebuilt on show rather than written into: the machine rows are a handful of reads, and a rebuild is the
 # same code path as the first build, so there is no second spelling to keep in step.
 var _machine: VBoxContainer
 
@@ -42,7 +44,8 @@ func init(game) -> void:
 
 
 # The window calls this when the page comes up. The checkout can change under a running game (he
-# merges while it is open), so the branch line is read again rather than snapshotted at wiring.
+# merges while it is open), and every mission moves a run between folders, so the machine rows are
+# read again rather than snapshotted at wiring.
 func refresh_on_show() -> void:
 	if _machine == null:
 		return
@@ -70,6 +73,12 @@ func _fill_machine() -> void:
 	var configured: bool = reporter != null and reporter.upload_configured()
 	_fact_row("Report upload", UPLOAD_ON if configured else UPLOAD_OFF,
 		"Whether a filed report is posted as well as written. Unconfigured is not a failure -- the folder above still fills.")
+	# #855: did anything actually GO. The folders are the state (TelemetryStore), so this is three
+	# listings and no file reads.
+	_path_row("Telemetry folder", ProjectSettings.globalize_path(TelemetryStore.root),
+		"Where recorded mission runs live, one folder per run, sorted into pending/, sent/ and held/.")
+	_fact_row("Recorded runs", RUNS % [TelemetryStore.pending_runs().size(),
+		TelemetryStore.sent_runs().size(), TelemetryStore.held_runs().size()], RUNS_TIP)
 
 
 func _build_bindings() -> void:

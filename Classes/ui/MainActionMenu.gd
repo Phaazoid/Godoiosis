@@ -20,8 +20,8 @@ class_name MainActionMenu
 #              plus its self-verbs (Reload/Rev/Burrow) and its Overwatch row (#413), or a rune's
 #              carvings. The slice is LABELLED "Weapon" or "Rune" after what is equipped, never
 #              "Attack" -- see category_display.
-#   ACT     -- the main actions that are not kit use (Guard, Rescue, Rally, Capture, the
-#              ability-driven verbs) plus Wait, which spends the squad's turn the same way.
+#   ACT     -- the main actions that are not kit use (Guard, Rescue, Capture) plus
+#              Wait, which spends the squad's turn the same way.
 #              Labelled "Action".
 #   SQUAD   -- Squad Up, Join, Leave, Disband
 #   INSPECT -- itself, and therefore a top-level slice; see Group below
@@ -39,14 +39,13 @@ class_name MainActionMenu
 # and AI see nothing.
 #
 # A category is drawn only when it has live children, which is the ring's compaction rule one level
-# up -- and it is also why has_weapon_actions()/has_transmutations()/ability_action_entries() are no
+# up -- and it is also why has_weapon_actions()/has_transmutations() are no
 # longer read as menu gates. populate() still answers the flat "what can this unit do" and the
 # grouping is applied on top of it; the only thing round 2 took out of it is the three verbs above,
 # whose clauses went with their rows.
 #
 # Adding a general verb touches ACTION_DATA (name, term, group); a weapon-specific one touches only
-# _weapon_children; an ability-driven one touches only ability_action_entries and its
-# _pick_ability_action arm -- see CLAUDE.md's new-action checklist.
+# _weapon_children -- see CLAUDE.md's new-action checklist.
 
 var game   # the Game coordinator (Node2D); set by game._ready()
 
@@ -54,6 +53,7 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 # #467 round 2 and their ids went with them: EXECUTE_ORDERS and CANCEL both have richer HUD doors
 # (the queue panel's Execute button and its per-row X, plus right-click's LIFO undo), and END TURN
 # has the corner button, which is now permanently on screen precisely because this row is gone.
+# Rally (13) and the Ability Action expander (15) left with Will (#1174).
 const MOVE := 0
 const ATTACK := 1
 const OTHER := 2
@@ -64,9 +64,7 @@ const LEAVESQUAD := 8
 const DISBAND_SQUAD := 9
 const INSPECT := 10
 const RESCUE := 12
-const RALLY := 13
 const GROUP_MOVE := 14
-const ABILITY_ACTION := 15
 const WEAPON_ACTION := 16
 const CAPTURE := 17
 const TRANSMUTATION := 18
@@ -119,10 +117,8 @@ const ACTION_DATA := {
 	ATTACK: {"name": "Attack", "term": Glossary.Term.ATTACK, "group": Group.ATTACK_GROUP, "expands": true},
 	WEAPON_ACTION: {"name": "Weapon Action", "term": Glossary.Term.WEAPON_ACTION, "group": Group.ATTACK_GROUP, "expands": true},
 	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION, "group": Group.ATTACK_GROUP, "expands": true},
-	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION, "group": Group.ACT_GROUP, "expands": true},
 	GUARD: {"name": "Guard", "term": Glossary.Term.GUARD, "group": Group.ACT_GROUP},
 	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE, "group": Group.ACT_GROUP},
-	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY, "group": Group.ACT_GROUP},
 	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE, "group": Group.ACT_GROUP},
 	WAIT: {"name": "Wait", "term": Glossary.Term.WAIT, "group": Group.ACT_GROUP},
 	SQUADUP: {"name": "Squad Up", "term": Glossary.Term.SQUAD_UP, "group": Group.SQUAD_GROUP},
@@ -141,9 +137,22 @@ const ACTION_DATA := {
 var _pick_by_id: Dictionary = {}
 var _next_synthetic_id := -1
 
+# The ring that is up, if one is (#1034). Nothing but the ring itself ever called dismiss(), so a ring
+# frozen under a card outlived the board it was built on -- held here so a door that can change the
+# board closes it first. A pick and a dismiss both free the controller, so a stale ref reads invalid.
+var _open_ring: ActionMenuController = null
+
 # ==============================================================================
 #  Opening menus
 # ==============================================================================
+
+# Close the ring if one is up, through dismiss() so _on_menu_cancelled still takes its unit card
+# down. Called by the doors that can change the board under it: Esc's pause menu, and the end of the
+# pre-mission phase.
+func close_ring() -> void:
+	if is_instance_valid(_open_ring) and not _open_ring.is_queued_for_deletion():
+		_open_ring.dismiss()
+	_open_ring = null
 
 # The one door: build the whole tree, hand it to one controller, place it at the cursor. The
 # controller owns every level from here -- there is no second open for a submenu, which is what
@@ -152,11 +161,13 @@ func show_main_menu(unit: Unit, pos: Vector2i) -> void:
 	var controller := ActionMenuController.new()
 	game.add_child(controller)
 	controller.setup(unit)
+	_open_ring = controller
 
 	controller.action_selected.connect(on_pressed)
 	controller.cancelled.connect(_on_menu_cancelled)
 
 	controller.open(build_tree(unit), Vector2(pos))
+	game.show_unit_card(unit)   # up exactly as long as the ring (#1105); _on_menu_cancelled takes it down
 
 
 # THE snapshot (#467): every ring the player can reach this open, built now. Categories in
@@ -245,8 +256,6 @@ func _expanded_children(unit: Unit, id: int) -> Array:
 			return _weapon_children(unit)
 		TRANSMUTATION:
 			return _transmutation_children(unit)
-		ABILITY_ACTION:
-			return _ability_children(unit)
 	push_error("MainActionMenu: no children builder for expander %s" % id)
 	return []
 
@@ -320,8 +329,9 @@ func _transmutation_children(unit: Unit) -> Array:
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		rows.append(_synthetic_leaf(
-			_entry(atk.display_name, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH)),
+		var row := _entry(atk.display_name, unit.attack_block_reason(atk),
+			_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, atk))
+		rows.append(_synthetic_leaf(_with_gauge(row, unit, atk),
 			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
 	return rows
 
@@ -330,14 +340,6 @@ func _pick_watch(unit: Unit, attack: AttackData) -> void:
 	unit.active_attack = attack
 	game.enter_overwatch_mode(unit)
 
-
-func _ability_children(unit: Unit) -> Array:
-	var children: Array = []
-	for ability_entry: Dictionary in ability_action_entries(unit):
-		var type: BaseAction.ActionType = ability_entry["type"]
-		children.append(_synthetic_leaf(_entry(ability_entry["name"]),
-			func(picking_unit: Unit) -> void: _pick_ability_action(picking_unit, type)))
-	return children
 
 # ONE menu row, and the catalogue law in one place (#166): an option the unit OWNS is listed
 # whether or not it can be used right now, and a greyed row always says why. A non-empty
@@ -362,14 +364,37 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 # One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
 # unchannelable carving, #166) stays LISTED but disabled — the menu shows it, it never hides it.
 func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
-	return _entry(attack.display_name, unit.attack_block_reason(attack), unit.attack_detail(attack))
+	return _with_gauge(_entry(attack.display_name, unit.attack_block_reason(attack),
+		_with_ally_line(unit.attack_detail(attack), unit, attack)), unit, attack)
+
+# Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring
+# carries (dev, 2026-09-28: the readout stays succinct; the full list is the item's card). COMPOSED
+# through the unit, the answer RulesService.is_attack_victim gives, so a fitted OFF mod reads here as
+# it plays. Both attack-row builders come through here, the watch's included: a watch is an attack.
+static func _with_ally_line(detail: String, unit: Unit, attack: AttackData) -> String:
+	var allies := AttackChannelText.ally_line(attack, unit.attack_hits_allies(attack))
+	if allies == "":
+		return detail
+	return allies if detail == "" else "%s\n%s" % [detail, allies]
+
+# The weapon's live count beside the attack's name (#1045) -- carried BESIDE `name`, never folded into
+# it, so the name stays the row's identity (_append_unique, the readout title). Both attack-row
+# builders come through here; the ring decides how it looks.
+func _with_gauge(entry: Dictionary, unit: Unit, attack: AttackData) -> Dictionary:
+	var gauge := unit.attack_gauge(attack)
+	if gauge != null:
+		entry["gauge"] = gauge
+	return entry
 
 # ActionMenuController emits `cancelled` before `action_selected` even on a PICK, which is what
 # pins the clear-then-act order (see its header). Both effects the old game.gd wired as two
-# separate connections happen here, in that same order.
+# separate connections happen here, in that same order. The ring's unit card goes with it; a tile
+# card is left alone, since the deploy menu closes through here too and a ring never opened one.
 func _on_menu_cancelled(_controller) -> void:
 	game.clear_selection()
 	game.hover_presenter.refresh()
+	if game.hover_info_panel.is_showing_unit_card():
+		game.hover_info_panel.clear()
 
 # ==============================================================================
 #  Which options a unit has right now
@@ -382,7 +407,7 @@ func _can_take_main_action(unit: Unit) -> bool:
 
 # Shared gate for BOTH movement entries. Same three clauses, and the main-action one carries the
 # rule from the other side: move-before-main, so a unit that locked its main cannot move after it
-# (MoveAction.actor_can_perform is the chokepoint that enforces it). Group Move used to carry its
+# (MoveAction.actor_block_reason is what the chokepoint enforces). Group Move used to carry its
 # own hand-copy of this, which had drifted -- missing the main-action clause, so the menu offered a
 # formation queue_group_move would then refuse the leader half of (#443). One gate now, so the next
 # clause added here reaches both rows.
@@ -438,12 +463,6 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)).is_empty() and unit.can_rescue_carry():
 		options.append(RESCUE)
 
-	if _can_take_main_action(unit) and unit.can_rally():
-		options.append(RALLY)
-
-	if _can_take_main_action(unit) and not ability_action_entries(unit).is_empty():
-		options.append(ABILITY_ACTION)
-
 	if _can_take_main_action(unit) and unit.has_transmutations():
 		options.append(TRANSMUTATION)
 
@@ -488,7 +507,7 @@ func populate(unit: Unit) -> Array:
 #
 # The squad verbs come through their OWN gates, unchanged. Their outer condition in populate() --
 # no queued orders, squad not acted, no squad active -- is trivially true on a board where nothing
-# has moved, which is exactly why #731 never had to split _formation_basics_ok.
+# has moved, which is exactly why #731 never had to split formation_block_reason.
 #
 # UNDEPLOY is gated on drawn_from_roster: an authored unit belongs to the board, and enemies are
 # units_root children too, so an ungated arm would lift either of them off it.
@@ -538,6 +557,7 @@ func show_deploy_menu(cell: Vector2i, pos: Vector2i) -> void:
 	var controller := ActionMenuController.new()
 	game.add_child(controller)
 	controller.setup(null)
+	_open_ring = controller
 	controller.action_selected.connect(on_pressed)
 	controller.cancelled.connect(_on_menu_cancelled)
 	controller.open(children, Vector2(pos))
@@ -597,7 +617,7 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			game.mission_log.record_squad_verb("leave", unit)
 			game.squad_manager.leave_squad(unit)
 		INSPECT:
-			game.unit_info_panel.set_unit(unit, game.can_control(unit), game._board())
+			game.inspect_unit(unit)
 		RESCUE:
 			# Same query as the populate gate above, plan included -- a predicted-down squadmate
 			# (#124) must be pickable exactly where the row said it would be. Picking the BODY no longer
@@ -609,8 +629,6 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			# Same query as the populate gate above — the pick layer must agree with the rule layer
 			# (the #126 lesson pinned by tests/ui/test_target_pick_projection.gd).
 			game.enter_target_pick_mode(RulesService.guard_candidates(unit, game._board()), func(target: Unit): game.queue_guard(unit, target))
-		RALLY:
-			game.queue_simple_action(unit, BaseAction.ActionType.RALLY)
 		CAPTURE:
 			game.queue_capture(unit)
 		GROUP_MOVE:
@@ -620,18 +638,6 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 func _pick_attack(unit: Unit, attack: AttackData) -> void:
 	unit.active_attack = attack
 	game.enter_attack_mode(unit)
-
-# Every ability-driven main action this unit could take RIGHT NOW (#88). ONE list, two readers:
-# populate() gates ABILITY_ACTION on it being non-empty, and _ability_children builds the ring's
-# leaves from it — so the group can never carry an option that was not live. Each entry is
-# {name, type}; the queued ActionType is unchanged, which is what keeps the resolver, the queue
-# panel and the AI untouched by the menu rework.
-func ability_action_entries(unit: Unit) -> Array[Dictionary]:
-	var entries: Array[Dictionary] = []
-	if unit.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
-		entries.append({"name": "Intimidate", "type": BaseAction.ActionType.INTIMIDATE})
-	return entries
-
 
 # STEP TWO of a rescue (#116, dev 2026-08-26): *"once rescue is chosen, I would like all of the valid
 # tiles to flash, and the user to select the tile to rescue to, and only once chosen does the rescue
@@ -651,14 +657,3 @@ func _pick_rescue_landing(rescuer: Unit, body: Unit) -> void:
 		game.queue_rescue(rescuer, body, cell)
 	# flash = true is the whole of what he asked to SEE; the mark is the same overlay every pick uses.
 	game.enter_cell_pick_mode(RulesService.rescue_landings(rescuer, body, board), on_cell, true, true)
-
-# Per-type dispatch, not one uniform queue call: an ability action can need a TARGET pick where a
-# weapon self-ability never does. Same reasoning that keeps queue_intimidate separate from
-# queue_simple_action — one signature would just move the branching into a parameter bag. An
-# unmatched type is loud, mirroring AITactics' builders.
-func _pick_ability_action(unit: Unit, type: BaseAction.ActionType) -> void:
-	match type:
-		BaseAction.ActionType.INTIMIDATE:
-			game.enter_target_pick_mode(RulesService.adjacent_enemies(unit, game._board()), func(target: Unit): game.queue_intimidate(unit, target))
-		_:
-			push_error("MainActionMenu: no dispatch for ability action %s" % BaseAction.ActionType.keys()[type])

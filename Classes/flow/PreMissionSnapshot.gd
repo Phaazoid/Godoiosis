@@ -5,7 +5,7 @@ class_name PreMissionSnapshot
 # they built, the gear and jobs and mods they set, and the stash they took it all out of. Captured
 # at the commit, replayed when they come back to the phase through a restart.
 #
-# Dumb data. MissionController._capture_staged writes it and _stand_staged reads it -- the same
+# Dumb data. PreMissionPhase.capture writes it and its _stand_staged reads it -- the same
 # split BoardSnapshot declares, and RefCounted for BoardSnapshot's reason: this is never saved,
 # never loaded and never referenced by a file. It lives as long as the session's interest in one
 # mission, and #731 ruling 3 still holds -- nothing here crosses a mission boundary.

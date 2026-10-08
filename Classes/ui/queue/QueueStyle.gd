@@ -72,6 +72,7 @@ enum Role {
 	READOUT_BENCHED,
 	EVENT_TINT,
 	RAIL_NEUTRAL,
+	EMPHASIS_TEXT,
 }
 
 # --- SLATE: the authored set, and DEFAULT's fall-through ------------------------------------------
@@ -166,6 +167,13 @@ const READOUT_ENEMY := Color(1.0, 0.541, 0.478)
 # screen and means commit.
 const READOUT_BENCHED := Color(0.831, 0.341, 0.290)
 
+# The one highlighted word on the Inspect dock: an equipped or worn item, a squad's count and leader
+# (#1105). CRIMSON IN BOTH PALETTES (dev, 2026-09-27, picked from drawn candidates): the adapted gold
+# it replaced read badly on paper, and "we don't want to communicate things differently in the slate
+# than in the parchment". Equal to READOUT_ENEMY today and a role of its own all the same -- what
+# marks your gear and what marks an enemy are two questions, so retuning one must not move the other.
+const EMPHASIS_TEXT := Color(1.0, 0.541, 0.478)
+
 # What the WORLD did, not what an element did -- "Fell 2!", "Drowning!", "Into the void!",
 # "Insulated!". These wore ElementPalette.NEUTRAL until the dev read them off the screen
 # (2026-09-03): that value is the RAIL's off state, a structural grey chosen to disappear, and text
@@ -238,6 +246,7 @@ const PALETTES := {
 		# The rail's OFF state, with the same job here: DISAPPEAR. A hair under the row, the way
 		# slate's sits a hair over it -- promoting either to text is the round-4 bug.
 		Role.RAIL_NEUTRAL: Color(0.910, 0.855, 0.773),
+		Role.EMPHASIS_TEXT: Color(0.659, 0.204, 0.165),
 	},
 }
 
@@ -256,6 +265,11 @@ const PALETTES := {
 # whole point of adapting rather than re-authoring.
 static var PARCHMENT_INK_DEPTH := 0.62
 static var PARCHMENT_INK_SATURATION := 1.5
+
+# How far a refused row swings when Execute is pressed over it (#1121), in design px. Only the SIZE
+# is the queue's own: the swing's length and count are the tether pluck's (SquadLines2D.SHAKE_SECONDS
+# / SHAKE_SWINGS), so the board's refusal and the queue's wobble alike.
+static var REFUSAL_SHAKE_PX := 3.0
 
 # --- reads ----------------------------------------------------------------------------------------
 
@@ -346,6 +360,7 @@ static func _authored(role: Role) -> Color:
 		Role.READOUT_BENCHED: return READOUT_BENCHED
 		Role.EVENT_TINT: return EVENT_TINT
 		Role.RAIL_NEUTRAL: return ElementPalette.NEUTRAL
+		Role.EMPHASIS_TEXT: return EMPHASIS_TEXT
 	push_error("QueueStyle: no authored colour for role %d" % role)
 	return Color.MAGENTA
 
@@ -356,6 +371,7 @@ static func _authored(role: Role) -> Color:
 # palette is a COLOUR decision, and a dock that changed shape under one would be a second layout.
 const HEADER_FONT_SIZE := 10
 const CONSEQUENCE_FONT_SIZE := 10
+const REFUSAL_FONT_SIZE := 10   # the refusal box's lines (#1121)
 const ROW_GAP := 2          # a row wrapper's own top/bottom margin inside its section
 const ROW_INSET := 3        # a row's clearance from its section's edges
 const CHIP_ICON := 16       # a state chip's icon, rendered size
@@ -472,6 +488,18 @@ static func execute_box() -> StyleBoxFlat:
 static func execute_hover_box() -> StyleBoxFlat:
 	return _cached("execute_hover", func() -> StyleBoxFlat:
 		return _flat(ink(Role.EXECUTE_HOVER_BG), ink(Role.EXECUTE_BORDER), 1, 5))
+
+
+# Why Execute was refused (#1121), in the refused ROW's own fill and border -- the dev's pick, so the
+# box reads as "the reasons for the red rows". Its text is NAME_TEXT then BODY_TEXT, the paper roles.
+static func refusal_box() -> StyleBoxFlat:
+	return _cached("refusal", func() -> StyleBoxFlat:
+		var box := _flat(ink(Role.ROW_REFUSED_BG), ink(Role.ROW_REFUSED_BORDER), 1, 4)
+		box.content_margin_left = 6.0
+		box.content_margin_right = 6.0
+		box.content_margin_top = 4.0
+		box.content_margin_bottom = 4.0
+		return box)
 
 
 # The pre-mission deploy toggle's three states (#978). A unit is COMING, STAYING, or cannot be placed

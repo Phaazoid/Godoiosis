@@ -8,7 +8,7 @@
 # That rule is TWO layers since #892 -- what the ground charges, and whether this unit pays it -- and
 # the fireproofing cases below are about the outer one.
 #
-# Needs the real game scene: apply_burning_tile_damage reads game.get_unit_at_cell and settles
+# Needs the real game scene: apply_end_of_turn_tiles reads game.get_unit_at_cell and settles
 # through _process_downed_pending. Fixture is tests/ui/test_game_scene_smoke.gd's.
 extends GdUnitTestSuite
 
@@ -67,7 +67,7 @@ func test_burning_damages_the_occupant_when_its_faction_turn_ends() -> void:
 	_deposit(CELL, Terrain.TileState.BURNING)
 	var hp_before: int = unit.get_current_hp()
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
 
@@ -80,7 +80,7 @@ func test_a_burning_cell_that_also_holds_cover_burns_once() -> void:
 	_deposit(CELL, Terrain.TileState.COVER)   # a fireball over a dug-in cell
 	var hp_before: int = unit.get_current_hp()
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
 
@@ -89,7 +89,7 @@ func test_fire_spares_the_faction_whose_turn_is_not_ending() -> void:
 	_deposit(CELL, Terrain.TileState.BURNING)
 	var hp_before: int = unit.get_current_hp()
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.ENEMY)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.ENEMY)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before)
 
@@ -109,7 +109,7 @@ func test_the_queue_forecasts_exactly_what_the_end_of_turn_pass_deals() -> void:
 	var predicted: int = LethalityRules.displayed_hp(forecast.resolved.target_hp_after,
 			LethalityRules.lifecycle_for(forecast.resolved.lethality))
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()).override_failure_message(
 			"the queue previewed one number and the turn end dealt another") \
@@ -124,7 +124,7 @@ func test_burning_finishes_a_downed_unit_standing_on_the_fire() -> void:
 	unit.force_down()
 	_deposit(CELL, Terrain.TileState.BURNING)
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_bool(unit.is_dead()) \
 		.override_failure_message("a downed unit standing in fire survived its faction's turn end") \
@@ -143,7 +143,7 @@ func test_a_fireproof_unit_takes_nothing_from_the_tile_it_stands_on() -> void:
 	_deposit(CELL, Terrain.TileState.BURNING)
 	var hp_before: int = unit.get_current_hp()
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()) \
 		.override_failure_message("fire insulation did not stop the end-of-turn burn") \
@@ -174,7 +174,7 @@ func test_a_fireproof_unit_does_not_spare_the_one_burning_beside_it() -> void:
 	var shrouded_before: int = shrouded.get_current_hp()
 	var bare_before: int = bare.get_current_hp()
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_int(shrouded.get_current_hp()).is_equal(shrouded_before)
 	assert_int(bare.get_current_hp()) \
@@ -200,7 +200,7 @@ func test_the_post_turn_pass_takes_the_camera_to_each_burning_unit() -> void:
 	_deposit(Vector2i(3, 0), Terrain.TileState.BURNING)
 	game.camera_controller.set_playback_locked(true)
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_object(game.camera_controller.follow_unit) \
 		.override_failure_message("the phase panned once, or not at all -- the camera did not reach the LAST burning unit") \
@@ -220,7 +220,7 @@ func test_a_post_turn_pass_on_the_players_own_turn_gives_the_camera_back() -> vo
 	assert_bool(game.camera_controller.playback_locked) \
 		.override_failure_message("precondition: nothing should own the camera here").is_false()
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_bool(game.camera_controller.playback_locked) \
 		.override_failure_message("the phase kept the camera it borrowed").is_false()
@@ -234,7 +234,7 @@ func test_a_turn_end_with_nothing_burning_never_claims_the_camera() -> void:
 	var bystander := _spawn(CELL, Team.Faction.PLAYER)
 	game.camera_controller.follow(bystander)
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_object(game.camera_controller.follow_unit) \
 		.override_failure_message("an empty post-turn phase claimed the camera and dropped what it was watching") \
@@ -265,7 +265,7 @@ func test_the_pass_names_every_unit_it_will_hit_before_it_reaches_any_of_them() 
 	doomed.unit_died.connect(func(_u: Unit) -> void:
 		probe.append(game.order_executor.effect_pass_subjects.has(later_id)))
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_array(probe).override_failure_message(
 			"the probe never fired -- the doomed unit did not die inside the phase") \
@@ -281,7 +281,7 @@ func test_the_pass_stops_naming_anyone_once_it_ends() -> void:
 	_spawn(CELL, Team.Faction.PLAYER)
 	_deposit(CELL, Terrain.TileState.BURNING)
 
-	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
 	assert_int(game.order_executor.effect_pass_subjects.size()) \
 		.override_failure_message("the phase left its readouts up after it had finished") \

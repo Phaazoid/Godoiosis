@@ -19,8 +19,11 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 		var goal := _nearest_cargo_cell(leader, cargo, board)
 		var approach := AITactics.closest_reachable_cell_to(leader, goal, board)
 		if approach != leader.movement.cell:
-			squad_manager.queue_group_move(squad, approach, board)
+			AITactics.group_move(squad, approach, board, squad_manager)
 		AITactics.queue_main_actions_for_squad(squad, board, squad_manager)
+		return
+	# A loose unit with nobody to fight walks back to a squad before it pursues anyone (#1230).
+	if AITactics.regroup_walk(squad, board, squad_manager):
 		return
 	var enemy := AITactics.choose_engagement_target(leader, board, squad_manager)
 	if enemy != null:

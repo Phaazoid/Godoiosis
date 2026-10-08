@@ -10,6 +10,35 @@ Cutting a release:
 2. Rewrite the player lines in review, merge it last, then run `tools/archive-build.ps1`. It refuses to build a version this file has no heading for.
 3. If something else merged first, the version has moved on and the build refuses. Fix the heading directly on main, since another PR would bump the version again, and run it again.
 
+## v0.221.1 (2026-09-28)
+
+- Click a tile to open a card about it, including any overwatch or zone on it.
+- Cards and the unit panel have a new slate and parchment look.
+- Zones have a bright edge and an emblem, so they stand out from the ground.
+- Hovering an objective lights up its zones, and clicking it moves the camera to them.
+- Hovering an enemy shows its squad's range and tethers.
+- Squad lines have a dark outline, so they are easier to see.
+- Tethers draw in when a unit joins a squad and reel in when it leaves. When an attack knocks a unit out of its squad, the tether snaps during the battle zoom.
+- When a squad member dies, its tether greys out and fades in one of four ways.
+- An order that will knock a unit out of its squad says Split in the queue. Hover it to see who.
+- Melting the ice under a unit drops it into the water.
+- A wet unit darkens the ground under it.
+- Unit pictures in the order queue are no longer shrunk.
+- End Turn is hidden during the enemy's turn and while you are planning a squad's orders.
+- Right-clicking to close the action wheel no longer undoes your last order.
+- Clicking the pause menu no longer advances the dialogue behind it, and Esc closes the action wheel.
+- An enemy that goes down at the start of a turn no longer shows its threat.
+- The What's new card has more space between items.
+
+### Internal
+
+- Tile cards: a click opens the tile card, the card and the unit dock follow the player's palette, and the giant-card bug is fixed (#1105 slice 1, PR #1106). Zones wear a rim, a wall and an emblem, picked from a three-look experiment (#955 part 1, PRs #1114 and #1119), and objective rows light and visit their zones (#955 part 3, PR #1129).
+- Squad lines: tethers draw in and reel in (#367 part 1, PR #1107), the Split forecast (#367 part 2A, PR #1112) and its five leftovers (PR #1116), and the tether break played at the blow in the zoom (#367 part 2B, PR #1115, closing #367 and #423). Death looks on the tether (#1104, PR #1131). An enemy squad's lines on hover (#1109, PR #1120) and a dark casing on every squad line (#1109 round 2, PR #1125).
+- Payload attacks: an attack drops another where it hits (#1058 D1, PR #1101), plays back one beat per level (D2a, PR #1113) and previews as inset squares (D2b, PR #1117, closing #1058, #1054 and #802). Left out of the player lines because no demo attack carries a payload yet.
+- Melting ice under a standing unit drops it into the water, predicted by the resolver (#922, PR #1134).
+- The damp blot under a Wet unit, a decal that ripples where drips land (#358 slice 2, PR #1100).
+- Fixes: What's new card spacing (#1102, PR #1103); a lifecycle change drops the cached threat field (#1108, PR #1110); queue-row sprites drawn at 1:1 (#1082, PR #1126); End Turn hidden on the AI's turn and while a squad is queuing (#541, PR #1127); right-click closing the wheel no longer undoes the last order (#1081, PR #1128); cards on their own CanvasLayer, a card pauses the dialogue, and Esc closes the wheel (#1034, PR #1133).
+
 ## v0.205.1 (2026-09-23)
 
 - The title screen has a What's new card listing what changed since the last build you played.

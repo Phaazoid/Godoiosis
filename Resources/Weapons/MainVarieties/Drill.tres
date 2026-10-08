@@ -10,4 +10,5 @@ main_attack = ExtResource("2_main")
 weapon_type = 2
 display_name = "Drill"
 icon = ExtResource("3_icon")
+weight = 6
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

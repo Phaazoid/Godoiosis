@@ -9,6 +9,10 @@ class_name ModalCard
 # onto it. NOT the in-world ActionMenuController (a positioned context menu on its own CanvasLayer,
 # a different surface entirely).
 #
+# EVERY CARD MOUNTS ON game.card_layer (#1034), its own CanvasLayer over the wheel and the dialogue.
+# They mounted in UILayer (layer 0) until then, where a z_index of 200 lost to both -- a z_index never
+# crosses a CanvasLayer, for the eye or for the mouse. Each factory spells the mount itself.
+#
 # WHY IT EXISTS: these surfaces hand-built the same chrome five times, which is why one mistake
 # (set_anchors_preset instead of set_anchors_and_offsets_preset, #132) rendered three of them in
 # the top-left corner at once. Sizing is now answered here, once.
@@ -55,7 +59,7 @@ func _input(event: InputEvent) -> void:
 
 # --- Styling ------------------------------------------------------------------------------------
 
-var card_z_index: int = UiLayers.MODAL_CARD
+var card_z_index: int = UiLayers.MODAL_CARD   # z within LAYER_CARDS: a card over a menu screen
 var backdrop_color: Color = Color(0, 0, 0, 0.70)   # a Color, not an alpha: a takeover needs RGB too
 var margin_h: int = 48
 var margin_v: int = 32
@@ -168,17 +172,24 @@ func _build_button_row(parent: Container, vertical: bool, separation: int) -> Bo
 
 func _add_button(row: Container, text: String, on_pressed: Callable,
 		tint: Color = Color.WHITE) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.custom_minimum_size = button_size
-	button.modulate = tint
-	button.pressed.connect(on_pressed)
+	var button := make_button(text, button_size, on_pressed, tint)
 	row.add_child(button)
 	return button
 
-# For a surface whose choices CHANGE while it is up (ReportPanel: collecting -> sending -> outcome).
+# The one way a card button is built, static so content that is not itself a card (ReportForm,
+# which two cards host) builds its buttons the same way.
+static func make_button(text: String, size: Vector2, on_pressed: Callable,
+		tint: Color = Color.WHITE) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = size
+	button.modulate = tint
+	button.pressed.connect(on_pressed)
+	return button
+
+# For a surface whose choices CHANGE while it is up (ReportForm: collecting -> sending -> outcome).
 # remove_child as well as queue_free, so a rebuild in the same frame does not briefly show both sets.
-func _clear_button_row(row: Container) -> void:
+static func clear_button_row(row: Container) -> void:
 	for child in row.get_children():
 		row.remove_child(child)
 		child.queue_free()

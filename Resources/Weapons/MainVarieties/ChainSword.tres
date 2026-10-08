@@ -11,4 +11,5 @@ main_attack = ExtResource("4_main")
 weapon_type = 1
 display_name = "Chainsword"
 icon = ExtResource("2_ujirt")
+weight = 4
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

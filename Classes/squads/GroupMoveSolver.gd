@@ -7,23 +7,40 @@ class_name GroupMoveSolver
 #
 # Member reach is measured against the leader's NEW cell (compute_move_range's leader_cell override)
 # rather than by queueing the leader first — the other half of staying non-committing.
+#
+# `pinned` (#760): Unit -> cell, members placed BEFORE the formation is solved, their cells taken from
+# everyone else. The AI's seek pins a member to the cell it found a removal or a squad break from;
+# no player caller passes any. A leader staying put moves only pinned members -- with nobody pinned
+# there is no formation to solve, exactly as before.
+#
+# `hazards` (#1220): Unit -> {cell: true} it should not end on while another candidate will do. Only
+# the AI passes it, so a player's formation is placed exactly as before.
+#
+# `direct` (#1230): Unit -> true for a unit whose AI profile does not route around watches, so its
+# walk is the shortest path. Only the AI passes it; every player route stays the safe one.
 
-static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> Array[MoveAction]:
+static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
+		pinned: Dictionary = {}, hazards: Dictionary = {}, direct: Dictionary = {}) -> Array[MoveAction]:
 	var moves: Array[MoveAction] = []
 	var leader := squad.get_leader()
 	var leader_start := leader.movement.cell
 	var displacement := leader_destination - leader_start
-
-	var leader_reach := RulesService.compute_move_range(leader, board)
-	# Both player callers check this first, but an unreachable goal makes reconstruct_path walk a
-	# came_from that has no entry for it — a cascade of engine errors and a null destination.
-	if not leader_reach.reachable.has(leader_destination):
+	var stays := leader_destination == leader_start
+	if stays and pinned.is_empty():
 		return moves
 
-	var leader_move := MoveAction.new()
-	leader_move.init(leader, RulesService.reconstruct_path(leader_reach.came_from, leader_start, leader_destination),
-		GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
-	moves.append(leader_move)
+	var leader_reach := RulesService.compute_move_range(leader, board)
+	# Both player callers check this first, but an unreachable goal makes route_to walk a
+	# came_from that has no entry for it — a cascade of engine errors and a null destination.
+	if not stays and not leader_reach.reachable.has(leader_destination):
+		return moves
+
+	if not stays:
+		var leader_move := MoveAction.new()
+		leader_move.init(leader, RulesService.route_to(leader, leader_reach, leader_destination, board,
+				not direct.has(leader)),
+			GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
+		moves.append(leader_move)
 
 	var followers: Array[Unit] = []
 	var candidates := {}   # Unit -> {cell: move cost}
@@ -39,11 +56,10 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		# validator then rejects. Per-member (#115): one shared field rejected a Waterwalker's own
 		# near-shore water cells. This retires the old `COH * 2` path-leash-as-preference and its
 		# drop-the-leash retry: with cohesion itself path-based, the preference IS the rule.
-		var leader_field := SquadCohesion.field(squad, leader_destination, member, board)
 		var reach := RulesService.compute_move_range(member, board, leader_destination)
 		var here: Vector2i = member.movement.cell
 
-		var options := _candidate_cells(reach, here, leader_field, allowed_cells)
+		var options := follow_cells(squad, member, leader_destination, board, allowed_cells, reach)
 		if options.is_empty():
 			continue
 		followers.append(member)
@@ -66,8 +82,17 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 
 	var assigned := {}   # Unit -> cell
 	var taken := { leader_destination: true }
+	for member: Unit in pinned:
+		var cell: Vector2i = pinned[member]
+		if not candidates.has(member) or not candidates[member].has(cell) or taken.has(cell):
+			push_error("GroupMoveSolver: %s cannot be pinned to %s" % [member.name, cell])
+			continue
+		taken[cell] = true
+		assigned[member] = cell
 	for member in order:
-		var best := _best_candidate(candidates[member], to_target[member], taken)
+		if assigned.has(member):
+			continue
+		var best := _best_candidate(candidates[member], to_target[member], taken, hazards.get(member, {}))
 		if best == GridUtils.NO_CELL:
 			continue
 		taken[best] = true
@@ -83,7 +108,8 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		if best == here:
 			continue
 		var member_move := MoveAction.new()
-		member_move.init(member, RulesService.reconstruct_path(reaches[member].came_from, here, best),
+		member_move.init(member, RulesService.route_to(member, reaches[member], best, board,
+				not direct.has(member)),
 			GridUtils.get_terrain_icon_at_cell(board.grid, best))
 		member_move.is_trailing = GridUtils.manhattan_distance(best, leader_destination) \
 			> GridUtils.manhattan_distance(here, leader_start)
@@ -162,6 +188,16 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 			named.append_array(followers)
 	return stranded
 
+# Where `member` may end if its leader ends on `leader_destination` -> move cost: reach, cohesion
+# field and allow-list together. plan()'s question, public for the AI's seek (#760) so the two ask it
+# once. `reach` is plan()'s own compute_move_range result when it already holds one.
+static func follow_cells(squad: Squad, member: Unit, leader_destination: Vector2i, board: BoardContext,
+		allowed_cells = null, reach: Dictionary = {}) -> Dictionary:
+	if reach.is_empty():
+		reach = RulesService.compute_move_range(member, board, leader_destination)
+	var leader_field := SquadCohesion.field(squad, leader_destination, member, board)
+	return _candidate_cells(reach, member.movement.cell, leader_field, allowed_cells)
+
 # Every cell this member may legally end on -> its move cost. Staying put counts at cost 0 when it
 # clears the bubble and the allow-list on its own. `leader_field` IS the cohesion rule (#151), so
 # there is no separate leash to drop any more: a member with no candidate genuinely cannot follow,
@@ -184,24 +220,34 @@ static func _candidate_cells(reach: Dictionary, here: Vector2i, leader_field: Di
 
 # Closest to the member's ideal offset cell, then cheapest to reach, then row-major — a total order,
 # so the solver never depends on dictionary iteration luck. NO_CELL when every option is spoken for.
-static func _best_candidate(candidates: Dictionary, to_target: Dictionary, taken: Dictionary) -> Vector2i:
+#
+# Safe ground comes before all of that when the AI names `hazard` cells (#1220): one is taken only
+# when every other option is spoken for.
+static func _best_candidate(candidates: Dictionary, to_target: Dictionary, taken: Dictionary,
+		hazard: Dictionary = {}) -> Vector2i:
 	var have_best := false
 	var best: Vector2i = GridUtils.NO_CELL
+	var best_hazard := false
 	var best_to_target := 0
 	var best_cost := 0
 	for cell in candidates.keys():
 		if taken.has(cell):
 			continue
+		var h := hazard.has(cell)
 		var d: int = to_target.get(cell, RulesService.UNREACHABLE)
 		var cost: int = candidates[cell]
-		if not have_best \
-			or d < best_to_target \
-			or (d == best_to_target and cost < best_cost) \
-			or (d == best_to_target and cost == best_cost and _cell_before(cell, best)):
-			have_best = true
-			best = cell
-			best_to_target = d
-			best_cost = cost
+		if have_best and h != best_hazard:
+			if h:
+				continue
+		elif have_best and not (d < best_to_target \
+				or (d == best_to_target and cost < best_cost) \
+				or (d == best_to_target and cost == best_cost and _cell_before(cell, best))):
+			continue
+		have_best = true
+		best = cell
+		best_hazard = h
+		best_to_target = d
+		best_cost = cost
 	return best
 
 static func _cell_before(a: Vector2i, b: Vector2i) -> bool:

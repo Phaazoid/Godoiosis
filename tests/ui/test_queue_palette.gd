@@ -227,7 +227,7 @@ func test_the_paper_roles_read_on_paper_in_both_palettes() -> void:
 	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
 		_pick(palette)
 		for ink_role: QueueStyle.Role in [QueueStyle.Role.BODY_TEXT, QueueStyle.Role.NAME_TEXT,
-				QueueStyle.Role.HEADER_TEXT]:
+				QueueStyle.Role.HEADER_TEXT, QueueStyle.Role.EMPHASIS_TEXT]:
 			var ink := QueueStyle.ink(ink_role)
 			for ground_role: QueueStyle.Role in [QueueStyle.Role.SECTION_BG, QueueStyle.Role.ROW_BG,
 					QueueStyle.Role.ROW_HOVER_BG]:
@@ -236,6 +236,19 @@ func test_the_paper_roles_read_on_paper_in_both_palettes() -> void:
 					"%s cannot be read on %s in palette %d -- %.2f against %.2f"
 					% [QueueStyle.Role.keys()[ink_role], QueueStyle.Role.keys()[ground_role],
 						palette, _luma(ink), _luma(ground)]).is_greater(CONTRAST_FLOOR)
+
+
+# The refused-Execute box (#1121) wears the refused ROW's fill, with a name and a reason on it.
+func test_the_refusal_box_reads_in_both_palettes() -> void:
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		_pick(palette)
+		var ground := QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BG)
+		for ink_role: QueueStyle.Role in [QueueStyle.Role.NAME_TEXT, QueueStyle.Role.BODY_TEXT]:
+			var ink := QueueStyle.ink(ink_role)
+			assert_float(_contrast(ink, ground)).override_failure_message(
+				"%s cannot be read on the refusal box in palette %d -- %.2f against %.2f"
+				% [QueueStyle.Role.keys()[ink_role], palette, _luma(ink), _luma(ground)]) \
+				.is_greater(CONTRAST_FLOOR)
 
 
 # ...and its mirror: the roles that sit on the dark outer frame, which does NOT invert. A region's

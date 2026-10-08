@@ -49,11 +49,12 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 
 
 # Put all four surfaces up, so no assertion below can pass vacuously. Three of the four have a
-# CONTENT gate that has to be satisfied first; End Turn is up on its own.
+# CONTENT gate that has to be satisfied first; End Turn is up on its own, since the raw queue door
+# activates no squad (#541 hides it while one is active).
 func _raise_the_hud(unit: Unit) -> void:
 	game.refresh_action_queue(unit.squad)
 	game.unit_info_panel.set_unit(unit, false, game._board())
-	game.hover_info_panel.show_hover(unit, null, "Ground", [] as Array[String], Vector2.ZERO)
+	game.hover_info_panel.show_unit(unit, Vector2.ZERO)
 	game.refresh_end_turn_button()
 	assert_bool(game.squad_action_queue_control.visible).override_failure_message(
 			"fixture: the queue panel was already down, so hiding it proves nothing").is_true()
@@ -154,28 +155,28 @@ func test_the_release_does_not_raise_a_surface_its_own_rule_had_taken_down() -> 
 			"a closed inspect panel was reopened by the end of a cinematic").is_false()
 
 
-# THE CASE THE OUTSIDE-WRITE IMPLEMENTATION FAILS. HoverPresenter re-runs this gate on every
-# cursor-CELL change, and a player's own Execute never leaves game_state IDLE -- so a one-shot
-# `visible = false` at the claim edge is undone by the first mouse move over the board.
-func test_the_hover_card_cannot_reappear_mid_cinematic() -> void:
+# THE CASE THE OUTSIDE-WRITE IMPLEMENTATION FAILS. Every show re-runs this gate -- and a tile card
+# beside the dock re-draws itself as its unit walks (#1105) -- while a player's own Execute never
+# leaves game_state IDLE, so a one-shot `visible = false` at the claim edge is undone by the next show.
+func test_the_info_card_cannot_reappear_mid_cinematic() -> void:
 	var unit := _unit_with_a_plan()
 	_raise_the_hud(unit)
 	game.camera_controller.playback_cinematic = true
 
-	game.hover_info_panel.show_hover(unit, null, "Ground", [] as Array[String], Vector2.ZERO)
+	game.hover_info_panel.show_unit(unit, Vector2.ZERO)
 
 	assert_bool(game.hover_info_panel.visible).override_failure_message(
-			"a hover during playback put the card back over the cinematic").is_false()
+			"a show during playback put the card back over the cinematic").is_false()
 
 	# ...and the content answer it was given survived, so the card returns when the pass does.
 	game.camera_controller.playback_cinematic = false
 	assert_bool(game.hover_info_panel.visible).override_failure_message(
-			"the hover the cinematic swallowed was lost rather than deferred").is_true()
+			"the show the cinematic swallowed was lost rather than deferred").is_true()
 
 
-# Hidden is not closed. HoverPresenter asks is_showing()/is_showing_unit() to decide where the
-# hover card parks and whether it would be a second card for the same unit, so a panel that
-# answered "no unit is open" while merely hidden would move the card mid-pass.
+# Hidden is not closed. game asks is_showing()/is_showing_unit() to decide where the info card
+# parks and whether it would be a second card for the same unit, so a panel that answered "no
+# unit is open" while merely hidden would move the card mid-pass.
 func test_a_hidden_inspect_panel_still_says_which_unit_it_holds() -> void:
 	var unit := _unit_with_a_plan()
 	_raise_the_hud(unit)
@@ -198,9 +199,10 @@ func test_a_hidden_inspect_panel_still_says_which_unit_it_holds() -> void:
 #
 # So RECORD the edges instead of racing them. `visibility_changed` fires on each real change (Godot
 # early-outs on an unchanged `visible`), which makes the transitions readable afterwards and does
-# not care whether the pass spanned a frame. End Turn is the surface watched because it has no
-# content rule of its own -- it is up unless a cinematic put it down, so a recording can never fill
-# up with someone else's writes.
+# not care whether the pass spanned a frame. End Turn is the surface watched because its content
+# rule (#541: the AI's turn, a squad mid-queue) cannot move here -- the player's faction is active
+# and these fixtures queue through the raw `_queue_action`, which never activates a squad -- so a
+# recording can never fill up with someone else's writes.
 func test_a_real_cinematic_pass_takes_the_hud_down_and_puts_it_back() -> void:
 	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
 	var attacker := _attacker_with_a_real_target()

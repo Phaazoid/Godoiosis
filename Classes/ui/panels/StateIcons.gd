@@ -20,6 +20,8 @@ const ICONS := {
 # lethality RUNG looks like, a different question that also needs kill and maim art no status row
 # has any use for.
 const DOWNED := preload("res://Art/Icons/StateIcons/Down.png")
+# A standing unit that has gone down this battle (#1174). PLACEHOLDER art, the dev's to replace.
+const WOUNDED := preload("res://Art/Icons/StateIcons/WoundedIcon.png")
 
 # The size every icon RENDERS at, not the size the source art happens to be — those disagree (the
 # wet drop is 32px, the ice tile 16px) and an unnormalised row shows one at half the other's size.

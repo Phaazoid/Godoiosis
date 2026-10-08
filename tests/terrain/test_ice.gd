@@ -78,8 +78,9 @@ func test_fire_on_a_frozen_tile_reverts_it() -> void:
 	assert_int(plan.cell_effects.size()).is_equal(1)
 	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.FROZEN)).is_true()
 
-func test_fire_on_unfrozen_water_does_nothing() -> void:
-	# required_tile_state FROZEN unmet (no live state) -> reaction skipped.
+func test_the_melt_skips_unfrozen_water() -> void:
+	# required_tile_state FROZEN unmet (no live state) -> reaction skipped. Only the melt is injected:
+	# fire on open water BOILS it (#508, test_gas_deposits.gd), so the old name stopped being true.
 	var attacker := _map_attacker(Elemental.Element.FIRE)
 	var reactions: Array[TerrainReaction] = [_fire_melts_ice()]
 	var board := _IceBoard.new(null, { WATER_CELL: Terrain.Kind.WATER })

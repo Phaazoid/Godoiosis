@@ -12,9 +12,9 @@
 # queued a ghost order: the tile was green, the plan was authored, the validator refused it, the
 # rollback undid it, and the squad was left active on a queue of hold rows.
 #
-# The real game scene, not play/board_builder.gd: the hold-position filler is queued by game.gd's
-# squad_became_active handler, and `active_squad` — what keeps the queue panel open — is state a
-# headless board never grows. Fixture is tests/ui/test_game_scene_smoke.gd's; the instanced root
+# The real game scene, not play/board_builder.gd: the overlay and the queue panel are the game's.
+# (The hold-position filler is no longer a reason -- SquadManager queues it for every host since
+# #46.) Fixture is tests/ui/test_game_scene_smoke.gd's; the instanced root
 # MUST be named "Main" under /root or game.gd's absolute /root/Main/DevOverlay lookup is null (#114).
 extends GdUnitTestSuite
 
@@ -636,3 +636,35 @@ func test_a_unit_with_no_squadmates_is_refused_nothing() -> void:
 	assert_object(_move_for(leader)).override_failure_message(
 			"a lone unit was refused its own move by a rule about squadmates it does not have") \
 		.is_not_null()
+
+
+# The ground a pass is ABOUT to leave (#367): SplitForecast judges the settle on a board with this
+# pass's deposits folded in. Ice a deposit freezes carries range across water; ice a deposit melts
+# no longer does -- and the live board the copy came from reads exactly as it did.
+func test_a_board_with_deposits_reads_the_ice_they_freeze_and_melt() -> void:
+	var board_setup: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board_setup.squad
+	var member: Unit = board_setup.member
+	var reach := squad.get_max_squad_range()
+	for y in range(-(reach + 1), reach + 2):
+		game.grid.set_cell(Vector2i(1, y), GRASS_SOURCE, WATER_ATLAS)
+	var across := Vector2i(2, 0)
+	var crossing := Vector2i(1, 0)
+
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = crossing
+	freeze.states_added.assign([Terrain.TileState.FROZEN])
+	var live: BoardContext = game._board()
+	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, live.with_deposits([freeze]))) \
+		.override_failure_message("range does not cross ice a deposit freezes").is_true()
+	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, live)) \
+		.override_failure_message("the live board read a deposit that has not landed").is_false()
+
+	game.terrain_states.apply(freeze)
+	var melt := ResolvedCellEffect.new()
+	melt.cell = crossing
+	melt.states_removed.assign([Terrain.TileState.FROZEN])
+	var frozen: BoardContext = game._board()
+	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, frozen.with_deposits([melt]))) \
+		.override_failure_message("range still crosses ice a deposit melts").is_false()
+	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, frozen)).is_true()

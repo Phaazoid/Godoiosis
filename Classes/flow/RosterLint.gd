@@ -90,7 +90,6 @@ static func _check_hollow_snapshot(entry: ScenarioUnitEntry, index: int, found: 
 		return
 	var captured: bool = not entry.stats.is_empty() \
 		or entry.current_hp != -1 \
-		or entry.current_will != -1 \
 		or not entry.inventory.is_empty() \
 		or not entry.jobs.is_empty() \
 		or not entry.weapon_proficiency.is_empty() \
@@ -119,8 +118,6 @@ static func _check_battle_state(entry: ScenarioUnitEntry, index: int, found: Arr
 		set_fields.append("crisis_surge_pending")
 	if entry.downed_turns_remaining != -1:
 		set_fields.append("downed_turns_remaining")
-	if entry.rally_count != 0:
-		set_fields.append("rally_count")
 	if not entry.element_states.is_empty():
 		set_fields.append("element_states")
 	if not entry.stat_effects.is_empty():

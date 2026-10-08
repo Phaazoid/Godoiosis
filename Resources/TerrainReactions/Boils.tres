@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_b0ils"]
+
+[resource]
+script = ExtResource("1_b0ils")
+incoming_element = 1
+required_kind = 5
+forbidden_tile_state = 2
+gas_level = 2
+equation = "F2 + W2 -> 2FW"
+popup = "Boils!"
+metadata/_custom_type_script = "uid://dxskrhe0srgid"

@@ -23,6 +23,7 @@ var terrain_states: Dictionary = {}  # TerrainStateManager.to_state_dict()
 # something an author sets. An empty one is the honest reading of a board that predates this.
 var terrain_state_turns: Dictionary = {}  # TerrainStateManager.to_turns_dict()
 var corner_heights: Dictionary = {}  # BoardHeights.to_corner_dict()
+var gas: Dictionary = {}             # GasField.to_dict() (#508)
 var zones: Dictionary = {}           # ZoneManager.to_dict()
 
 
@@ -39,6 +40,7 @@ func equals(other: BoardSnapshot) -> bool:
 		and terrain_states == other.terrain_states \
 		and terrain_state_turns == other.terrain_state_turns \
 		and corner_heights == other.corner_heights \
+		and gas == other.gas \
 		and zones == other.zones
 
 
@@ -54,6 +56,7 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 	snapshot.terrain_states = scenario.terrain_states
 	snapshot.terrain_state_turns = scenario.terrain_state_turns
 	snapshot.corner_heights = scenario.corner_heights
+	snapshot.gas = scenario.gas
 	snapshot.zones = scenario.zones
 	return snapshot
 
@@ -63,4 +66,5 @@ func write_into(scenario: ScenarioData) -> void:
 	scenario.terrain_states = terrain_states
 	scenario.terrain_state_turns = terrain_state_turns
 	scenario.corner_heights = corner_heights
+	scenario.gas = gas
 	scenario.zones = zones

@@ -28,9 +28,21 @@ func tick_rev() -> void:
 func ignores_def() -> bool:
 	return is_revved()
 
+# A TIMER, not a stock (dev, 2026-09-28: it must look different from an ammo count). None while idle.
+func gauge() -> WeaponGauge:
+	if revved_turns_remaining <= 0:
+		return null
+	return WeaponGauge.timer(revved_turns_remaining, REV_DURATION_TURNS)
+
+# Rev reaches every attack this weapon fires, not the flag-authored ones (ignores_def is asked per
+# weapon, PlanResolver's mitigation stage).
+func attack_gauge(_wielder: Unit, attack: AttackData) -> WeaponGauge:
+	return gauge() if attack is WeaponAttackData else null
+
 func status_text() -> String:
-	if revved_turns_remaining > 0:
-		return "Revved — %d turn(s) left (ignores DEF)" % revved_turns_remaining
+	var rev_left := gauge()
+	if rev_left != null:
+		return "Revved — %s left (ignores DEF)" % rev_left.label()
 	return "Not revved"
 
 # Battle-state seam (#87). The remaining COUNT rides along, not just "is it revved" — reloading

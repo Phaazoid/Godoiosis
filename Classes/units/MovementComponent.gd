@@ -245,7 +245,7 @@ func _step_off(unit: Node2D, to: Vector2, cells: float) -> void:
 	# The STEP still runs first, and in that order deliberately -- the leg is a real tween in every
 	# run, so "the body had finished its step before it started to drop" stays observable when the
 	# fall itself is not. That is the whole property this function exists for.
-	if SHOVE_FALL_SPEED <= 0.0 or DisplayServer.get_name() == "headless":
+	if SHOVE_FALL_SPEED <= 0.0 or Pacing.unwatched():
 		await _slide_leg(unit, to)
 		landing_fall_depth = cells
 		return
@@ -265,7 +265,7 @@ func _step_off(unit: Node2D, to: Vector2, cells: float) -> void:
 # suite awaits AttackAction.execute, so a real timer here would put wall clock on every void case.
 func plummet() -> void:
 	plummet_depth = 0.0
-	if VOID_PLUMMET_SECONDS <= 0.0 or DisplayServer.get_name() == "headless":
+	if VOID_PLUMMET_SECONDS <= 0.0 or Pacing.unwatched():
 		return
 	plummeting = true
 	var tween := create_tween()

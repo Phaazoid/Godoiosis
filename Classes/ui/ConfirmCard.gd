@@ -11,7 +11,7 @@ signal answered(yes: bool)
 
 static func ask(game_node: Node, question: String, yes_label := "Yes", no_label := "No") -> bool:
 	var card := ConfirmCard.new()
-	game_node.ui_layer.add_child(card)
+	game_node.card_layer.add_child(card)
 	card._build(question, yes_label, no_label, game_node)
 	var yes: bool = await card.answered
 	card.queue_free()

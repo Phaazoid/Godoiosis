@@ -9,35 +9,25 @@ extends GdUnitTestSuite
 const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
-const F := preload("res://tests/support/job_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 
 var _sm: SquadManager
-var _tank: JobData
-var _tank_snap: Dictionary
 
 
 func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
 	_sm = H.make_manager(self)
-	_tank = JobCatalog.get_job("tank")
-	_tank_snap = F.snapshot(_tank)
 
 
 func after_test() -> void:
-	F.restore(_tank, _tank_snap)
+	AIProfiles.clear_fixtures()
 
 
 func _board(units: Array[Unit]) -> BoardContext:
 	return BoardContext.new(_sm.grid, units, _sm)
-
-
-func _ability(id: Abilities.Id) -> AbilityData:
-	var a := AbilityData.new()
-	a.id = id
-	return a
 
 
 func _fireball(power: int) -> TransmutationData:
@@ -92,19 +82,37 @@ func test_ai_rune_attack_fires_the_carving_not_fists() -> void:
 	assert_int(plan.attacks[0].resolved.damage).is_equal(9)
 
 
-func test_unarmed_falls_back_to_fists_like_the_player() -> void:
-	# No weapon at all: the null pick IS the honest path (player parity -- _begin_attack with
-	# no choices leaves active_attack null and punches at Manhattan 1).
+# --- nothing to fire, nothing queued (#1215) ---
+#
+# The player's ring offers no attack row to a unit with nothing selectable, so the AI may not
+# punch either. Each case asks the player's own gate first, so parity is checked, not assumed.
+
+func test_an_unarmed_unit_queues_no_attack_like_the_player() -> void:
 	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {}, false)
 	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
+	assert_bool(attacker.can_fire_default_attack()).override_failure_message(
+		"fixture: an empty hand should get no attack row from the player's ring").is_false()
 
 	var units: Array[Unit] = [attacker, victim]
-	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).is_true()
-	var aim: AttackAction = attacker.squad.action_queue[0] as AttackAction
-	assert_object(aim.fired_attack).is_null()
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).override_failure_message(
+		"the AI attacked with an empty hand -- a null pick, which resolves as a bare-fist punch").is_false()
+	assert_array(attacker.squad.action_queue).is_empty()
 
-	var plan: ResolvedPlan = _resolve_aim(attacker, aim, units)
-	assert_int(plan.attacks[0].resolved.damage).is_equal(attacker.get_effective_stat(Stats.Stat.STR))
+
+# The shipped shape: an alchemist whose aura no longer arms its rune (The Quarry's maim tax).
+func test_an_aura_dry_alchemist_queues_no_attack_like_the_player() -> void:
+	var alch: Unit = _rune_alchemist(ENEMY, Vector2i(0, 0), _fireball(5))
+	alch.unit_instance.aura = {}
+	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
+	assert_array(alch.get_selectable_attacks()).override_failure_message(
+		"fixture: the rune should have nothing channelable once the aura is gone").is_empty()
+	assert_bool(alch.can_fire_default_attack()).override_failure_message(
+		"fixture: a dry rune should get no attack row from the player's ring").is_false()
+
+	var units: Array[Unit] = [alch, victim]
+	assert_bool(AITactics.queue_main_action(alch, _board(units), _sm, ATTACK_ONLY)).override_failure_message(
+		"the AI attacked with a dry rune -- a null pick, which resolves as a bare-fist punch").is_false()
+	assert_array(alch.squad.action_queue).is_empty()
 
 
 # --- attack selection (net-damage scoring, dev call 2026-07-22) ---
@@ -172,8 +180,13 @@ func test_clear_line_queues_the_same_attack() -> void:
 
 	var units: Array[Unit] = [attacker, victim]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, ATTACK_ONLY)).is_true()
-	var aim: AttackAction = attacker.squad.action_queue[0] as AttackAction
-	assert_that(aim.target_cell).is_equal(victim.movement.cell)
+	# A directional aim is a FACING (#1220): the queued cell is one step out the way it points, and
+	# what it must do is reach the victim down the line.
+	var plan := _sm.resolve_plan(attacker.squad, _board(units))
+	var hit := false
+	for a in plan.attacks:
+		hit = hit or a.target == victim
+	assert_bool(hit).override_failure_message("the line was not aimed down the victim's lane").is_true()
 
 
 # --- the priority walk + fallback builders ---
@@ -195,7 +208,7 @@ func test_sprung_weapon_falls_through_to_reload() -> void:
 	var units: Array[Unit] = [attacker, _victim]
 	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
-	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(attacker.squad).size()).is_equal(1)
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.RELOAD)
 
 
@@ -207,7 +220,7 @@ func test_rev_capable_weapon_revs_when_nothing_else_applies() -> void:
 	var units: Array[Unit] = [attacker]
 	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
-	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(attacker.squad).size()).is_equal(1)
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.REV)
 
 
@@ -233,7 +246,7 @@ func test_burrow_capable_weapon_burrows_when_nothing_else_applies() -> void:
 	var units: Array[Unit] = [attacker]
 	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
-	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(H.given_orders(attacker.squad).size()).is_equal(1)
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.BURROW)
 
 
@@ -295,46 +308,3 @@ func test_rescue_leaves_a_stabilised_body_for_the_one_still_on_a_clock() -> void
 	var rescue: RescueAction = rescuer.squad.action_queue[0] as RescueAction
 	assert_object(rescue).is_not_null()
 	assert_object(rescue.target).is_same(dying)
-
-
-func test_intimidate_targets_the_lowest_positive_will() -> void:
-	var bully: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 1))
-	var pool: Array[AbilityData] = [_ability(Abilities.Id.INTIMIDATION)]
-	_tank.ability_pool = pool
-	bully.unit_instance.add_job("tank")
-	var drained: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
-	var shaky: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 1))
-	var steady: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
-	drained.unit_instance.set_current_will(0)   # nothing to drain -- must be skipped
-	shaky.unit_instance.set_current_will(3)     # closest to the maim cliff -- the pick
-	steady.unit_instance.set_current_will(8)
-
-	var units: Array[Unit] = [bully, drained, shaky, steady]
-	assert_bool(AITactics.queue_main_action(bully, _board(units), _sm, [BaseAction.ActionType.INTIMIDATE])).is_true()
-	var action: IntimidateAction = bully.squad.action_queue[0] as IntimidateAction
-	assert_object(action).is_not_null()
-	assert_object(action.target).is_same(shaky)
-
-
-func test_intimidate_declines_when_every_adjacent_will_is_empty() -> void:
-	var bully: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
-	var pool: Array[AbilityData] = [_ability(Abilities.Id.INTIMIDATION)]
-	_tank.ability_pool = pool
-	bully.unit_instance.add_job("tank")
-	var hollow: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
-	hollow.unit_instance.set_current_will(0)
-
-	var units: Array[Unit] = [bully, hollow]
-	assert_bool(AITactics.queue_main_action(bully, _board(units), _sm, [BaseAction.ActionType.INTIMIDATE])).is_false()
-	assert_array(bully.squad.action_queue).is_empty()
-
-
-func test_intimidate_requires_the_live_ability() -> void:
-	# No job, no ability -> the builder declines even with a juicy adjacent target. (The
-	# queue_action chokepoint would refuse too -- the builder mirrors the menu's gate.)
-	var poser: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
-	var _victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
-
-	var units: Array[Unit] = [poser, _victim]
-	assert_bool(AITactics.queue_main_action(poser, _board(units), _sm, [BaseAction.ActionType.INTIMIDATE])).is_false()
-	assert_array(poser.squad.action_queue).is_empty()

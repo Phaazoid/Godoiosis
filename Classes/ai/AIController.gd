@@ -49,6 +49,36 @@ func set_ai_factions(factions: Array[Team.Faction]) -> void:
 #
 # The caller must STILL revalidate inside its loop: acting with one squad can kill another's
 # leader or disband it outright, so this is the starting list, not a promise about later.
+# REGROUPING (#1230): before any squad of this faction plans, each loose unit whose profile regroups
+# joins the squad AITactics.regroup_target names, in range only, through the player's own join door.
+# Repeated until a pass joins nobody, since every join changes which squads have room. Called at the
+# head of BOTH walks -- take_faction_turn and the Play API's -- after the hand-off reset that clears
+# has_acted; mission start and resume enter take_faction_turn directly, which is why it is not hung
+# off the turn signal. Returns how many joined.
+static func regroup(faction: Team.Faction, squad_manager: SquadManager, board: BoardContext) -> int:
+	var joins := 0
+	var joined := true
+	while joined:
+		joined = false
+		for squad: Squad in squad_manager.squads.duplicate():
+			if not is_instance_valid(squad) or squad.get_members().size() != 1:
+				continue
+			var stray := squad.get_leader()
+			if stray == null or stray.get_faction() != faction:
+				continue
+			var profile := AIProfiles.of(stray)
+			if not profile.regroups and not profile.squads_up:
+				continue
+			var target := AITactics.regroup_target(stray, squad_manager, board, true)
+			if target == null:
+				continue
+			squad_manager.join_squad(stray, target)
+			joins += 1
+			joined = true
+			break
+	return joins
+
+
 static func actable_squads(faction: Team.Faction, squad_manager: SquadManager) -> Array[Squad]:
 	var out: Array[Squad] = []
 	for squad: Squad in squad_manager.squads.duplicate():
@@ -123,12 +153,13 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 	previewed_squad_count = 0
 	sm.previewing = true
 
-	var doomed := _felled_by_viewer(viewer, sm)   # on the LIVE board, before anybody is moved
+	var plans := viewer_plans(viewer, sm)   # on the LIVE board, before anybody is moved
+	var doomed := _felled_by_viewer(viewer, plans)
 
 	var saved := stand_on_projected(sm)
 
 	var board: BoardContext = sm.board_source.call()   # fresh, so every read below sees the projected cells
-	var field := ThreatField.build(board, viewer)
+	var field := ThreatField.build(board, viewer, pending_hypo(plans))
 	for faction in factions:
 		if not Team.is_enemy(viewer, faction):
 			continue
@@ -160,26 +191,57 @@ static func preview_turn(viewer: Team.Faction, sm: SquadManager,
 # felled actor does nothing (#1005) -- not `plan_fells`, which also answers true for a unit entering
 # CRISIS. A unit in Crisis is emphatically still attacking, and dropping its line would UNDER-warn,
 # which is the one direction this feature must never err in.
-static func _felled_by_viewer(viewer: Team.Faction, sm: SquadManager) -> Array[Unit]:
+static func _felled_by_viewer(viewer: Team.Faction, plans: Array[ResolvedPlan]) -> Array[Unit]:
 	var doomed: Array[Unit] = []
-	var board: BoardContext = sm.board_source.call()
-	for squad: Squad in sm.squads.duplicate():
-		if not is_instance_valid(squad) or squad.leader == null:
-			continue
-		if squad.leader.get_faction() != viewer or squad.action_queue.is_empty():
-			continue
-		# resolve_hypothetical with NO candidate resolves the squad's real queue and deliberately
-		# does not write the plan cache, which resolve_plan would -- the queue panel's "already
-		# queued prefix" must not become a preview's by-product. _undress' own resolve at the end of
-		# preview_turn is what satisfies that function's finish-with-a-real-resolve contract.
-		var none: Array[BaseAction] = []
-		var plan := sm.resolve_hypothetical(squad, none, board)
+	for plan in plans:
 		for unit: Unit in plan.hypo:
 			if not is_instance_valid(unit) or not Team.is_enemy(viewer, unit.get_faction()):
 				continue
 			if not PlanResolver.actor_is_live(unit, plan.hypo) and not doomed.has(unit):
 				doomed.append(unit)
 	return doomed
+
+
+# THE VIEWER'S PENDING TURN: every squad of theirs holding orders, each resolved from its real queue.
+# Callers read it on the LIVE board, before anybody is stood on a projected cell, because that is the
+# board every other resolve runs on (a walk reads its own stored path, so this is the convention
+# rather than a measured necessity). Two readers: _felled_by_viewer, and the danger field's pending
+# soak (#1197, through pending_hypo), so both tiers ask one door.
+#
+# resolve_hypothetical with NO candidate resolves the real queue and differs from resolve_plan only
+# in never writing the cache -- the queue panel's "already queued prefix" must not become a preview's
+# by-product. NOT the cache itself either: game.gd drops the field on an order BEFORE the refresh
+# resolves it, so the cache is one order stale exactly when a wade has just been queued.
+#
+# THE ACTIVE SQUAD RESOLVES LAST, which is what lets ThreatField.for_viewer call this with no undress:
+# every resolve republishes its own plan's shoves, so the last one is what the board is left wearing,
+# and the active squad's plan is the one that was published to begin with.
+static func viewer_plans(viewer: Team.Faction, sm: SquadManager) -> Array[ResolvedPlan]:
+	var plans: Array[ResolvedPlan] = []
+	var board: BoardContext = sm.board_source.call()
+	var holding: Array[Squad] = []
+	for squad: Squad in sm.squads.duplicate():
+		if not is_instance_valid(squad) or squad.leader == null:
+			continue
+		if squad.leader.get_faction() != viewer or squad.action_queue.is_empty():
+			continue
+		if squad == sm.active_squad:
+			holding.push_back(squad)
+		else:
+			holding.push_front(squad)
+	var none: Array[BaseAction] = []
+	for squad in holding:
+		plans.append(sm.resolve_hypothetical(squad, none, board))
+	return plans
+
+
+# The hypo the danger field reads wetness through: the ACTIVE squad's, i.e. the last plan. One plan,
+# because one squad holds orders at a time -- MainActionMenu._can_take_main_action refuses a squad
+# while another is mid-activation -- so it is the viewer's whole pending turn.
+static func pending_hypo(plans: Array[ResolvedPlan]) -> Dictionary:
+	if plans.is_empty():
+		return {}
+	return plans.back().hypo
 
 
 static func _dropping(intents: Array[ThreatIntent], doomed: Array[Unit]) -> Array[ThreatIntent]:
@@ -227,7 +289,12 @@ static func _preview_squad(squad: Squad, board: BoardContext, sm: SquadManager, 
 
 	AIController.plan_squad(squad, board, sm)
 	var plan: ResolvedPlan = sm.resolve_plan(squad, board)
-	for attack: AttackAction in plan.attacks:
+	# The watch shots as well: a watch armed over somebody fires on the spot (#1003), and that shot
+	# lands in watch_shots, never in attacks (#1197).
+	var rows: Array[AttackAction] = []
+	rows.append_array(plan.attacks)
+	rows.append_array(plan.watch_shots)
+	for attack: AttackAction in rows:
 		var intent := _intent_for(attack, plan, saved)
 		if intent != null:
 			out.append(intent)
@@ -308,6 +375,14 @@ static func _undress(sm: SquadManager) -> void:
 		sm.resolve_plan(sm.active_squad, sm.board_source.call())
 
 
+# How many squads the LAST faction turn planned, and which one it planned inside the hand-off. The
+# hand-off plan's only headless observables: it changes WHEN the first squad decides and never WHAT
+# (a headless beat lasts no time), so without these a mutant that unwires it, or plans that squad a
+# second time, passes every behavioural case -- and brings the hitch back.
+var planned_squad_count := 0
+var handoff_squad: Squad = null
+
+
 # THE BOARD IS RE-DERIVED PER SQUAD, and it takes no board parameter for exactly that reason (#714).
 # This used to build one BoardContext for the whole turn while `execute_orders` between squads spans
 # frames, so a unit an earlier squad KILLED was genuinely freed by the time a later squad planned --
@@ -318,7 +393,17 @@ static func _undress(sm: SquadManager) -> void:
 # `play_session._take_ai_turn` has always called `_board()` inside its own loop, which is why the
 # headless API never reproduced it -- two live implementations of one walk, and the crash lived in
 # whichever one was not the model. This is now the same shape.
-func take_faction_turn(faction: Team.Faction) -> void:
+#
+# `handoff` is the turn hand-off beat (#1220 ruling 7). The first squad plans INSIDE it, one frame
+# after the banner draws, and the beat waits out whatever the planning left; zero is the plain loop.
+func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
+	planned_squad_count = 0
+	handoff_squad = null
+	regroup(faction, game.squad_manager, game._board())
+	var planned: Squad = null
+	if handoff > 0.0:
+		planned = await _plan_during_handoff(faction, handoff)
+		handoff_squad = planned
 	for squad in actable_squads(faction, game.squad_manager):
 		# The mission can end mid-turn -- this squad's pass may have wiped the player. Stop
 		# issuing orders behind the end-of-mission card (#96).
@@ -342,10 +427,32 @@ func take_faction_turn(faction: Team.Faction) -> void:
 		#
 		# board_source is the wired seam for "the board as it stands", the same Callable
 		# SquadManager's own validators resolve fresh per query.
-		var board: BoardContext = game.squad_manager.board_source.call()
-		plan_squad(squad, board, game.squad_manager)
+		if squad == planned:
+			planned = null
+		else:
+			var board: BoardContext = game.squad_manager.board_source.call()
+			plan_squad(squad, board, game.squad_manager)
+			planned_squad_count += 1
 		await game.order_executor.execute_orders(squad.get_leader())
 
 	if game.mission_controller.is_over():
 		return
 	await game.end_turn()
+
+
+# The first actable squad's plan, made while the hand-off banner is up; the squad it planned, or null.
+# The frame wait is what lets the banner draw before the planning stalls the frame.
+func _plan_during_handoff(faction: Team.Faction, handoff: float) -> Squad:
+	var started := Time.get_ticks_msec()
+	if DisplayServer.get_name() != "headless":
+		await get_tree().process_frame
+	var first: Squad = null
+	for squad in actable_squads(faction, game.squad_manager):
+		if is_squad_actable(squad, faction):
+			first = squad
+			break
+	if first != null:
+		plan_squad(first, game.squad_manager.board_source.call(), game.squad_manager)
+		planned_squad_count += 1
+	await Pacing.beat(game, maxf(0.0, handoff - (Time.get_ticks_msec() - started) / 1000.0))
+	return first

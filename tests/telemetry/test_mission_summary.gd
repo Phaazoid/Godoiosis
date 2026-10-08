@@ -46,7 +46,7 @@ static func _events() -> Array[Dictionary]:
 		"orders": [
 			{"unit": _ref(A, "Aldin"), "type": "MOVE", "hold": true},
 			{"unit": _ref(A, "Aldin"), "type": "ATTACK", "attack": "Slash"},
-			{"unit": _ref(A, "Aldin"), "type": "RALLY"},
+			{"unit": _ref(A, "Aldin"), "type": "RELOAD"},
 		],
 		"hits": [{"kind": "attack", "actor": _ref(A, "Aldin"), "target": _ref(B, "Brigand"),
 			"damage": 6, "heal": 0, "skipped": false}],
@@ -84,7 +84,7 @@ func test_usage_counts_resolved_player_orders_and_skips_the_hold_filler() -> voi
 	var s := MissionSummary.of(_events())
 	var usage: Dictionary = s.get("usage")
 	assert_int(int(usage.get("ATTACK", 0))).is_equal(1)
-	assert_int(int(usage.get("RALLY", 0))).is_equal(1)
+	assert_int(int(usage.get("RELOAD", 0))).is_equal(1)
 	assert_bool(usage.has("MOVE")).override_failure_message("a hold filler is not an order anyone gave").is_false()
 	assert_int(int((s.get("attacks_used") as Dictionary).get("Slash", 0))).is_equal(1)
 	assert_int(int((s.get("units_used") as Dictionary).get("Aldin", 0))).is_equal(2)
@@ -125,6 +125,23 @@ func test_every_written_hit_reconciles_against_the_snapshots() -> void:
 	assert_int(int(player.get("net_hp_loss"))).is_equal(5)
 	assert_int(int(player.get("attributed_damage"))).is_equal(5)
 	assert_int(int(player.get("unattributed"))).is_equal(0)
+
+
+# #922: the water a melt drops a unit into is damage no hit carries, recorded on the pass beside its
+# hits. It must reconcile like a burn, or every sinking reads as a hole in the log.
+func test_a_sinking_is_attributed_damage_not_a_gap() -> void:
+	var events := _events()
+	var pass_line: Dictionary = events[8]
+	pass_line["sinks"] = [{"unit": _ref(A, "Aldin"), "at": [3, 1], "moment": "DEPOSITS_LAND",
+		"damage": 15, "lethality": "DOWNED"}]
+	var ending: Dictionary = events[9]
+	ending["units"] = [_unit(A, "Aldin", "PLAYER", 0, 20, "DOWNED"), _unit(B, "Brigand", "ENEMY", 1, 10, "DOWNED")]
+	var s := MissionSummary.of(events)
+	var player: Dictionary = (s.get("reconciliation") as Dictionary).get("PLAYER")
+	assert_int(int(player.get("net_hp_loss"))).is_equal(20)
+	assert_int(int(player.get("attributed_damage"))).is_equal(20)   # 5 counter + 15 water
+	assert_int(int(player.get("unattributed"))).override_failure_message(
+		"a sinking the pass recorded reads as damage nobody accounted for").is_equal(0)
 
 
 func test_a_hit_the_log_dropped_shows_as_a_gap() -> void:

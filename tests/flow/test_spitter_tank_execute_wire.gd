@@ -1,14 +1,15 @@
 # The GAME's half of the tank spend (#97), on a real Main.tscn board through the real
 # OrderExecutor.
 #
-# WHY IT IS ITS OWN FILE, and this is the whole point of it. play_session._apply_attack is a
-# declared HAND-COPIED TWIN of AttackAction.execute, and the play path never calls execute() at all
-# -- measured, by mutation: deleting execute()'s tank spend leaves tests/play AND tests/weapons
-# entirely green, 326 of 326. So the twin's suite (tests/play/test_spitter_tank_spend.gd) cannot
-# cover this line however carefully it is written, and one mutant cannot cover both twins.
+# WHY IT IS ITS OWN FILE. The play path never calls execute() at all: play_session._apply_attack
+# calls AttackAction's state steps itself (#46), so the spend both hosts make is the one in
+# AttackAction.settle, but WHETHER execute() reaches settle() on this path is the game's alone.
+# Measured before #46, by mutation: deleting execute()'s tank spend left tests/play AND tests/weapons
+# entirely green, 326 of 326, and the headless suite (tests/play/test_spitter_tank_spend.gd) still
+# cannot see an execute() that stops calling the step.
 #
-# That is #697's finding pointed the other way: there, the twin was MISSING the spend and the play
-# case caught it. Here, the game is the side nothing else watches.
+# That is #697's finding pointed the other way: there, the headless copy was MISSING the spend and the
+# play case caught it. Here, the game is the side nothing else watches.
 #
 # Everything about the tank's RULES lives in tests/weapons/test_spitter_tank.gd. This file asserts
 # one thing: that firing through the game's own executor spends what the resolver stamped.

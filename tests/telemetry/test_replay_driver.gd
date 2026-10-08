@@ -124,6 +124,81 @@ func test_binding_does_not_depend_on_the_order_units_sit_in() -> void:
 			).is_same(before[recorded_id])
 
 
+# A RECORDED WATCH IS RE-ARMED FROM THE WATCH VIEW (#615). The log records a watch by NAME, and since
+# #590 a watch-only attack is never in the fire view -- so a lookup there missed every recorded
+# overwatch and replayed it with the MAIN. The outcome diff cannot see that (a watch nobody walks
+# into lands no hit), so this asks the board what the replayed watch fires.
+func test_a_recorded_watch_replays_with_its_own_attack() -> void:
+	var run_id := await _record_a_watch()
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+
+	assert_array(driver.notes.filter(func(n: String) -> bool: return n.contains("no longer has"))
+		).override_failure_message("the replay could not find the recorded watch: %s" % str(driver.notes)
+		).is_empty()
+	var watcher: Unit = null
+	for live: Unit in game.units_root.get_children():
+		if live.get_faction() == Team.Faction.PLAYER:
+			watcher = live
+	assert_object(watcher).is_not_null()
+	assert_object(watcher.watch).override_failure_message("the replay armed no watch at all").is_not_null()
+	var armed: AttackData = watcher.watch.attack
+	assert_str(armed.display_name if armed != null else "(none)").is_equal("Watch")
+
+
+# A gear act recorded off the dock's own handler replays through GearVerbs (#46), the rule the dock
+# asks -- and one the replayed board refuses is a disagreement with the run, never a silent no-op.
+func test_a_recorded_wear_replays_through_the_shared_door() -> void:
+	var run := ReplayRun.load_run(await _record_a_wear())
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	var wearer := _player_unit()
+	assert_object(wearer).is_not_null()
+	assert_object(wearer.worn_armor).override_failure_message("the replay never wore the recorded plate").is_not_null()
+	assert_str(wearer.worn_armor.display_name).is_equal(REPLAY_PLATE)
+	assert_int(driver.divergences.size()).override_failure_message(
+		"the replay diverged from the run: %s" % str(driver.divergences)).is_equal(0)
+
+
+func test_a_refused_gear_act_is_reported_as_a_divergence() -> void:
+	var run := ReplayRun.load_run(await _record_a_wear())
+	var doctored := false
+	for e: Dictionary in run.events:
+		if str(e.get("event", "")) == "gear":
+			e["index"] = Unit.MAX_INVENTORY_SIZE - 1   # an empty slot on the replayed board
+			doctored = true
+	assert_bool(doctored).override_failure_message("fixture: the run recorded no gear act").is_true()
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	assert_array(driver.divergences.filter(func(d: String) -> bool: return d.contains("was refused"))
+		).override_failure_message("a refused gear act went unreported: %s" % str(driver.divergences)
+		).is_not_empty()
+
+
+# A refused recorded ORDER names the chokepoint's reason (#662): the divergence is where someone
+# reading a replay finds out WHY today's rules turned it down. The aim is doctored onto bare ground,
+# which the plan-context gate refuses. The reason's wording is not pinned, only that one is there.
+func test_a_refused_order_is_reported_with_its_reason() -> void:
+	var run := ReplayRun.load_run(await _record_a_mission())
+	var doctored := false
+	for e: Dictionary in run.events:
+		for order: Dictionary in e.get("orders", []):
+			if str(order.get("type", "")) == "ATTACK":
+				order["at"] = [9, 9]   # nobody stands there on the replayed board
+				doctored = true
+	assert_bool(doctored).override_failure_message("fixture: the run recorded no attack order").is_true()
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	const MARK := "was refused: "
+	var refusals := driver.divergences.filter(func(d: String) -> bool: return d.contains(MARK))
+	assert_array(refusals).override_failure_message(
+		"a refused order went unreported, or carried no reason: %s" % str(driver.divergences)).is_not_empty()
+	var line: String = refusals[0]
+	assert_str(line.substr(line.find(MARK) + MARK.length()).strip_edges()).override_failure_message(
+		"the refusal named no reason: %s" % line).is_not_empty()
+
+
 # THE STAND-DOWN IS AFTER THE SEED, and that ordering is the whole of it: apply_scenario REPLACES
 # the AI set from the board it loads (#150), so a stand-down written first is overwritten by the
 # very next line. Every faction's orders are in the log, so the driver plays them; letting the AI
@@ -240,6 +315,184 @@ func test_a_run_folder_is_listed_and_headlined() -> void:
 
 
 # ==============================================================================
+#  The transport (#853)
+# ==============================================================================
+
+# A PAUSE LANDS BETWEEN EVENTS. Requested from the first progressed signal, it must stop play before
+# another step starts -- the cursor moves BEFORE an event is applied, so a step begun and abandoned
+# would leave it one past the last event that landed. Then play picks up from there and finishes clean.
+func test_pause_lands_on_an_event_boundary_and_play_picks_up_from_it() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(driver.seed(run)).is_true()
+	var landed: Array[int] = []
+	var on_step := func(_finished: bool) -> void:
+		landed.append(int(driver.report()["at"]))
+		if landed.size() == 1:
+			driver.pause()
+	driver.progressed.connect(on_step)
+
+	await driver.play()
+	assert_int(landed.size()).override_failure_message(
+		"play went on stepping after the pause: landed at %s" % [str(landed)]).is_equal(1)
+	assert_int(int(driver.report()["at"])).override_failure_message(
+		"the pause left a step begun past the last event that landed").is_equal(landed[0])
+	assert_bool(driver.is_finished()).override_failure_message(
+		"the pause stopped nothing: the replay ran to the end").is_false()
+	assert_bool(driver.is_playing()).is_false()
+
+	await driver.play()
+	assert_bool(driver.is_finished()).override_failure_message(
+		"play did not pick up where the pause left it").is_true()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"a paused and resumed replay diverged: %s" % [str(driver.divergences)]).is_equal(0)
+
+
+func test_the_next_readout_names_the_event_the_next_step_applies() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	assert_bool((driver.report()["next"] as Dictionary).is_empty()).override_failure_message(
+		"an unseeded driver names a next event").is_true()
+	assert_bool(driver.seed(run)).is_true()
+
+	var checked := 0
+	while not driver.is_finished():
+		var r := driver.report()
+		var at := int(r["at"])
+		var next: Dictionary = r["next"]
+		var expected: Dictionary = run.events[at]
+		assert_str(str(next.get("event", ""))).override_failure_message(
+			"at event %d the readout names the wrong event" % [at]).is_equal(str(expected.get("event")))
+		assert_int(int(next.get("round", -1))).override_failure_message(
+			"at event %d the readout names the wrong round" % [at]).is_equal(int(expected.get("round")))
+		checked += 1
+		await driver.step()
+	assert_int(checked).override_failure_message("fixture: the walk skipped events").is_equal(run.events.size())
+	assert_bool((driver.report()["next"] as Dictionary).is_empty()).override_failure_message(
+		"a finished replay still names a next event").is_true()
+
+
+# THE PER-STEP VERDICT, against the end-only diff it replaced. The doctored hit must show up on the
+# step that replays its pass and not before; and once the run ends, the list must be exactly what one
+# end-of-run comparison over the same two logs produces -- nothing skipped, nothing counted twice.
+func test_a_divergence_shows_at_the_step_that_made_it_and_the_list_matches_an_end_only_diff() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var doctored := _doctor_first_hit(run)
+	assert_int(doctored).override_failure_message("fixture: the run recorded no hit to doctor").is_greater_equal(0)
+	assert_bool(driver.seed(run)).is_true()
+
+	while int(driver.report()["at"]) < doctored:
+		await driver.step()
+	assert_array(driver.divergences).override_failure_message(
+		"a divergence arrived before the doctored pass was replayed: %s" % [str(driver.divergences)]).is_empty()
+	await driver.step()
+	assert_bool(driver.is_finished()).override_failure_message(
+		"fixture: the doctored pass is the last event, so this is not a mid-run verdict").is_false()
+	assert_str(" | ".join(driver.divergences)).override_failure_message(
+		"the step that replayed the doctored pass reported nothing about its damage: %s"
+		% [str(driver.divergences)]).contains("damage")
+
+	await driver.play()
+	var end_only := _end_only(run)
+	assert_int(end_only.size()).override_failure_message("fixture: the doctored run compares clean").is_greater(0)
+	assert_bool(driver.divergences == end_only).override_failure_message(
+		"per-step: %s\nend-only: %s" % [str(driver.divergences), str(end_only)]).is_true()
+
+
+func test_run_to_next_divergence_stops_just_past_the_divergent_record() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var doctored := _doctor_first_hit(run)
+	assert_int(doctored).override_failure_message("fixture: the run recorded no hit to doctor").is_greater_equal(0)
+	assert_int(doctored + 1).override_failure_message(
+		"fixture: the doctored pass is the last event, so stopping there reads the same as running out"
+		).is_less(run.events.size())
+	assert_bool(driver.seed(run)).is_true()
+
+	await driver.run_to_next_divergence()
+	assert_int(int(driver.report()["at"])).override_failure_message(
+		"it stopped somewhere other than just past the doctored pass (%d)" % [doctored]).is_equal(doctored + 1)
+	assert_int(driver.divergences.size()).is_greater(0)
+	assert_bool(driver.is_playing()).is_false()
+
+	# With nothing further to find it runs out rather than stopping early or hanging.
+	await driver.run_to_next_divergence()
+	assert_bool(driver.is_finished()).is_true()
+
+
+# THE LIST STOPS AT LIST_CAP AND THE STOP MUST NOT, or a heavily diverged run -- the one the button is
+# reached for -- turns it into Play. The list is filled by hand: this mission cannot diverge forty
+# times before its doctored pass.
+func test_run_to_next_divergence_still_stops_once_the_list_is_full() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var doctored := _doctor_first_hit(run)
+	assert_int(doctored).override_failure_message("fixture: the run recorded no hit to doctor").is_greater_equal(0)
+	assert_int(doctored + 1).override_failure_message(
+		"fixture: the doctored pass is the last event, so stopping there reads the same as running out"
+		).is_less(run.events.size())
+	assert_bool(driver.seed(run)).is_true()
+	for i in ReplayDriver.LIST_CAP:
+		driver.divergences.append("filler %d" % [i])
+
+	await driver.run_to_next_divergence()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"fixture: the doctored line was listed, so the list was never full").is_equal(ReplayDriver.LIST_CAP)
+	assert_int(int(driver.report()["at"])).override_failure_message(
+		"a full list hid the divergence: it did not stop just past the doctored pass (%d)" % [doctored]
+		).is_equal(doctored + 1)
+
+
+# THE PAGE'S STEP: one event under the play guard, and the guard let go once it lands.
+func test_step_once_lands_one_event_and_lets_go_of_the_play_guard() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	assert_int(run.events.size()).override_failure_message("fixture: a one-event run cannot tell one step from all").is_greater(1)
+	assert_bool(driver.seed(run)).is_true()
+
+	await driver.step_once()
+	assert_int(int(driver.report()["at"])).is_equal(1)
+	assert_bool(driver.is_playing()).is_false()
+
+
+# THE COUNT IS KNOWN ONLY AT THE END, so it is the one check the per-step diff cannot make on the way.
+# One extra recorded outcome past the last one the replay produces: every record that exists on both
+# sides matches, and only the count can say anything.
+func test_a_replay_one_record_short_of_the_run_says_so_at_the_end() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var last: Dictionary = run.events[run.events.size() - 1]
+	run.events.append(MissionLog.line(int(last.get("seq", 0)) + 1, int(last.get("t_ms", 0)),
+		int(last.get("round", 1)), "zone_captured", {"zone": "nowhere"}))
+	assert_bool(ReplayDriver.COMPARED.has("zone_captured")).override_failure_message(
+		"fixture: the appended record is not an outcome the diff compares").is_true()
+	assert_bool(driver.seed(run)).is_true()
+
+	await driver.play()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"expected the count line and nothing else: %s" % [str(driver.divergences)]).is_equal(1)
+
+
+# THE FINISH IS ALWAYS DIFFED, even when its seal writes nothing -- here, a recorded ending this build
+# does not know. The skip gate would otherwise pass it over and the page would read Clean.
+func test_a_finish_whose_seal_writes_nothing_is_still_compared() -> void:
+	var run_id := await _record_a_mission()
+	var run := ReplayRun.load_run(run_id)
+	var end := run.first("mission_end")
+	assert_bool(end.is_empty()).override_failure_message("fixture: the run was never sealed").is_false()
+	end["outcome"] = "NO_SUCH_ENDING"
+	assert_bool(driver.seed(run)).is_true()
+
+	await driver.play()
+	assert_str(" | ".join(driver.notes)).override_failure_message(
+		"fixture: the seal did not refuse the ending, so it wrote a record: %s" % [str(driver.notes)]
+		).contains("NO_SUCH_ENDING")
+	assert_int(driver.divergences.size()).override_failure_message(
+		"the recorded mission_end was never compared -- the finish was skipped").is_greater(0)
+
+
+# ==============================================================================
 #  Fixture
 # ==============================================================================
 
@@ -282,6 +535,108 @@ func _record_a_mission(lethal := false) -> String:
 	assert_bool(FileAccess.file_exists(TelemetryStore.run_dir(run_id) + ReplayRun.EVENTS_FILE)).override_failure_message(
 		"fixture: nothing was written to disk").is_true()
 	return run_id
+
+
+# A mission whose one order is a WATCH, taken through the menu's own steps: pick the Overwatch row's
+# attack, queue, execute. The weapon has the shipped Carbine's shape -- a fire main and a watch that
+# is an extra -- which is the shape the fire-view lookup could not replay.
+func _record_a_watch() -> String:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(5, 0))
+	hero.add_item(_carbine_shaped_weapon())
+	mc._begin_turn()
+	var run_id: String = mission_log.run_id()
+
+	hero.active_attack = hero.overwatch_attacks()[0]
+	game.queue_overwatch(hero, Vector2i(1, 0))
+	hero.active_attack = null
+	var queued := false
+	for action: BaseAction in hero.squad.action_queue:
+		queued = queued or action.action_type == BaseAction.ActionType.OVERWATCH
+	assert_bool(queued).override_failure_message("fixture: the watch never queued").is_true()
+	await game.order_executor.execute_orders(hero)
+
+	await game.end_turn()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	return run_id
+
+
+const REPLAY_PLATE := "Replay Test Plate"
+
+
+# A mission whose one act is WEARING a plate, taken through the dock's own handler so MissionLog
+# records it off the real signal.
+func _record_a_wear() -> String:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_spawn(Team.Faction.ENEMY, Vector2i(5, 0))
+	var plate := ArmorData.new()
+	plate.display_name = REPLAY_PLATE
+	hero.add_item(plate)
+	mc._begin_turn()
+	var run_id: String = mission_log.run_id()
+
+	game.unit_info_panel.set_unit(hero, true)
+	game.unit_info_panel.inventory_panel._do_wear(hero.inventory.find(plate))
+	assert_object(hero.worn_armor).override_failure_message("fixture: the dock never wore the plate").is_same(plate)
+
+	await game.end_turn()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	return run_id
+
+
+func _player_unit() -> Unit:
+	for live: Unit in game.units_root.get_children():
+		if live.get_faction() == Team.Faction.PLAYER:
+			return live
+	return null
+
+
+static func _carbine_shaped_weapon() -> WeaponInstance:
+	var shot := WeaponAttackData.new()
+	shot.display_name = "Shot"
+	shot.power = 4
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Watch"
+	watch.power = 4
+	watch.max_range = 2
+	watch.can_overwatch = true
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = shot
+	template.extra_attacks.assign([watch])
+	return WeaponInstance.make(template)
+
+
+# One recorded number moved: the first recorded hit's damage. Returns the index of the pass it sits
+# in, or -1 when the run recorded no hit.
+static func _doctor_first_hit(run: ReplayRun) -> int:
+	for i in run.events.size():
+		var e: Dictionary = run.events[i]
+		if str(e.get("event", "")) != "pass":
+			continue
+		var hits: Array = e.get("hits", [])
+		if hits.is_empty():
+			continue
+		var hit: Dictionary = hits[0]
+		hit["damage"] = int(hit.get("damage", 0)) + 999
+		return i
+	return -1
+
+
+# THE END-ONLY DIFF THE PER-STEP ONE REPLACED, as it stood, run once over the two finished logs on a
+# scratch driver holding the same binding. The reference the per-step verdict has to reproduce.
+func _end_only(run: ReplayRun) -> Array[String]:
+	var ref := ReplayDriver.new()
+	ref._live_id_of = driver._live_id_of
+	var a := ref._outcomes(run.events, true)
+	var b := ref._outcomes(mission_log.events(), false)
+	if a.size() != b.size():
+		ref.divergences.append("the replay produced %d outcome records where the run had %d" % [b.size(), a.size()])
+	for i in mini(a.size(), b.size()):
+		ref._diff_record(a[i], b[i], i)
+	var out: Array[String] = ref.divergences.duplicate()
+	ref.free()
+	return out
 
 
 static func _records_a_death(events: Array[Dictionary]) -> bool:

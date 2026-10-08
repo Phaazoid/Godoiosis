@@ -18,7 +18,7 @@ const InfoPanel := preload("res://Classes/ui/panels/info_panel.gd")
 # --- MOV ---
 
 func test_mov_tooltip_states_the_base_and_the_band() -> void:
-	var tip: String = InfoPanel.mov_tooltip(4, 1, 0)
+	var tip: String = InfoPanel.mov_tooltip(4, 1, 0, 0)
 	assert_str(tip).contains("4")     # the base it started from
 	assert_str(tip).contains("+1")    # the band's signed contribution
 	assert_str(tip).contains("DEX")   # ...and which stat bought it
@@ -26,33 +26,37 @@ func test_mov_tooltip_states_the_base_and_the_band() -> void:
 
 func test_mov_tooltip_shows_a_negative_band_as_negative() -> void:
 	# A penalty must not render as a bonus; the sign is the whole point of a band readout.
-	assert_str(InfoPanel.mov_tooltip(4, -1, 0)).contains("-1")
+	assert_str(InfoPanel.mov_tooltip(4, -1, 0, 0)).contains("-1")
 
 
-func test_mov_tooltip_never_mentions_weight() -> void:
-	# Weight is tracked but wired to nothing (2026-07-27): MOV's readout must not imply
-	# an encumbrance rule that no longer exists.
-	assert_str(InfoPanel.mov_tooltip(4, 0, 0)).not_contains("heavy load")
-	assert_str(InfoPanel.mov_tooltip(4, 0, 0)).not_contains("WT")
+# #1176 repealed "weight never touches MOV" (2026-07-27): each weight band costs a tile now, so the
+# readout names it -- and ONLY when it costs one, or every light unit's tooltip grows a +0 line.
+func test_mov_tooltip_names_the_weight_band_only_when_it_costs_a_tile() -> void:
+	assert_str(InfoPanel.mov_tooltip(4, 0, 0, 0)).not_contains("weight")
+	var tip: String = InfoPanel.mov_tooltip(4, 0, 1, 0)
+	assert_str(tip).contains("weight")
+	assert_str(tip).contains("-1")
 
 
 func test_mov_tooltip_leg_throttle() -> void:
-	assert_str(InfoPanel.mov_tooltip(4, 0, 1)).contains("Halved")
-	assert_str(InfoPanel.mov_tooltip(4, 0, 2)).contains("Pinned to 1")
+	assert_str(InfoPanel.mov_tooltip(4, 0, 0, 1)).contains("Halved")
+	assert_str(InfoPanel.mov_tooltip(4, 0, 0, 2)).contains("Pinned to 1")
 
 
 func test_mov_tooltip_says_nothing_about_legs_when_both_are_intact() -> void:
-	var tip: String = InfoPanel.mov_tooltip(4, 0, 0)
+	var tip: String = InfoPanel.mov_tooltip(4, 0, 0, 0)
 	assert_str(tip).not_contains("Halved")
 	assert_str(tip).not_contains("Pinned")
 
 
 # --- Weight ---
 
-func test_weight_tooltip_reports_carried_only() -> void:
-	# No CON body term (doctrine corrected 2026-07-27) -- weight is gear, full stop.
-	var tip: String = InfoPanel.weight_tooltip(5)
-	assert_str(tip).contains("Carried gear 5")
+func test_weight_tooltip_shows_the_body_and_the_carried_half() -> void:
+	# #120: weight is the body (BLD) plus what is carried, and the tooltip names both numbers. The
+	# words are the dev's, so only the numbers are pinned. CON is still not a term (2026-07-27).
+	var tip: String = InfoPanel.weight_tooltip(13, 11)
+	assert_str(tip).contains("13")
+	assert_str(tip).contains("11")
 	assert_str(tip).not_contains("CON")
 
 

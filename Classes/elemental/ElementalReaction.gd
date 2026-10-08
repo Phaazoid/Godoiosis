@@ -32,6 +32,11 @@ class_name ElementalReaction
 # order-independence holds.
 @export var add_state_turns: Dictionary[Elemental.State, int] = {}
 
+# The reaction as Deep Alchemy writes it, e.g. `F2 + W2 -> 2FW` (deep-alchemy.md). Read by
+# ReactionLint only; nothing in play reads it yet. Empty = not written yet, a gap the lint's
+# pending ledger declares.
+@export_placeholder("F2 + W2 -> 2FW") var equation: String = ""
+
 # Feedback hooks, surfaced in preview + playback.
 @export var popup: String = ""        # e.g. "Electrocuted!"
 @export var vfx_tag: String = ""

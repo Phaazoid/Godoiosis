@@ -31,6 +31,19 @@ static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.st
 # hop and a long one read at the same pace, which is what makes it a beat rather than a lurch.
 static var PLAYBACK_PAN := 0.5
 
+# The LONGEST playback waits for the 3D camera to finish easing onto its shot after a pan (#1132
+# follow-up). A CAP, NOT A BEAT -- nothing should ever reach it, since the eases close in about a
+# second; it exists so a channel whose target never settles cannot hang a pass. A const on that
+# reason: a slider here could only ever be set to "long enough", and the settle below is the beat.
+const CAMERA_ARRIVAL_CAP := 2.0
+
+# How long the camera sits STILL in its new position before anything plays, once a pan has landed
+# and every ease has arrived (dev, 2026-10-07: "playback should always give at least a half second
+# for the camera to settle in a new position"). A FLOOR, not an addition: a beat whose own hold is
+# longer keeps it. Every playback pan honours it -- the beats, the walk framing, the tear-out, the
+# way home and the burn -- because "always" was the ruling.
+static var CAMERA_SETTLE := 0.5
+
 # The END-OF-TURN EFFECT PASS -- today, units standing in fire (#534). TWO numbers of its own
 # rather than one scale over the beats above (dev, 2026-08-26: "I don't see controls for the camera
 # speed/linger for this post phase"): the fork is who may disagree about a value, and this phase is
@@ -105,19 +118,17 @@ static var CINEMATIC_ACTION := 0.4
 # hold_for seeds from it rather than from 0.0; it is not in coda_hold, which answers for side-channel
 # VERBS and must go on reporting ATTACK as undeclared.
 static var HOLD_ATTACK := 0.25     # a hit that just does damage -- the floor the rest are read against
-static var HOLD_DOWN := 0.9        # a unit goes down, is killed, maimed, or removed from the board
+static var HOLD_DOWN := 0.9        # a unit goes down, is killed, loses a limb, or is removed from the board
 static var HOLD_CRISIS := 0.8      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
-static var HOLD_KNOCKBACK := 0.75   # the hit shoved its target
+static var HOLD_KNOCKBACK := 0.7   # the hit shoved its target
 static var HOLD_TURNOVER := 0.8    # the act break: the defending line raises weapons
-static var HOLD_HEAL := 0.8       # HP came back -- the quiet beat this table had no row for
+static var HOLD_HEAL := 0.75       # HP came back -- the quiet beat this table had no row for
 
 # The side-channel tail (dev, 2026-08-26: "the side channel actions are going to need emphasis as
 # well"). PER VERB rather than one shared number, because a rescue and a reload are not the same
 # moment. coda_hold() below is the one lookup.
 static var HOLD_RESCUE := 0.5
-static var HOLD_RALLY := 0.5
-static var HOLD_INTIMIDATE := 0.5
 static var HOLD_RELOAD := 0.5
 static var HOLD_REV := 0.5
 static var HOLD_BURROW := 0.5
@@ -147,8 +158,6 @@ static var HOLD_OVERWATCH := 0.5
 static var LINGER_ATTACK := 0.45
 static var LINGER_DOWN := 1.0      # the whole grid goes at once -- the loudest thing to watch
 static var LINGER_RESCUE := 0.3
-static var LINGER_RALLY := 0.3
-static var LINGER_INTIMIDATE := 0.3
 static var LINGER_RELOAD := 0.2
 static var LINGER_REV := 0.2
 static var LINGER_BURROW := 0.3
@@ -289,6 +298,16 @@ static var CLIFF_RECOVER := 1.6
 # -- ending the tween and then waiting would have the rig climbing out during the very pause the
 # pause is for. A void fall only; a cliff drop lands and the slide carries on.
 static var PLUMMET_HOLD := 0.9
+# The beat at the TOP (#1104, dev: "hover over the ledge a moment, wile e coyote style, until the
+# tether snaps, then the unit falls"): how long a body shoved over a hole hangs there before it drops.
+# Counted from its ARRIVAL, not the blow, and only while a tether it broke is holding it -- the tether
+# snaps as the hang ends. A unit with no tether falls at once, as it always did.
+static var VOID_HANG := 0.5
+# ...and the beat AFTER the snap (#1171, dev: the fall and the camera went "before snapping animation
+# from the tethers has a chance to play and be seen"): how long the body stays up once its tether has
+# snapped, before it drops. Its own knob so the shiver and this gap tune apart -- the hang alone moved
+# both. Not tied to the break's own length on purpose, which would couple them again one knob over.
+static var VOID_SNAP_HOLD := 1.0
 # How far ABOVE the ground the units stand on the tear-out's shot sits, in cells (dev, 2026-08-29:
 # "the units need to be at the center"). Aiming at their feet is what the board's own recentre does
 # and it leaves a sprite sitting high in frame; this is the half-body lift that centres them, and it
@@ -297,10 +316,69 @@ static var PLUMMET_HOLD := 0.9
 # unit sits in frame.
 static var STAGE_AIM_LIFT := 0.5
 
+# --- fast-forward and skip (#545) ---------------------------------------------------------------
+#
+# Both change how fast playback runs, never which code runs: a skip is the headless escape switched
+# on at runtime (see unwatched()), so every pass still reaches _end_squad_turn and the view still
+# comes home. PlaybackControl decides; this file owns the one write to Engine.time_scale.
+static var FAST_FORWARD := 4.0   # held: how many times faster playback runs
+static var SKIP_SPEED := 16.0    # what is left of a skip's walks and lunges, under the fade
+static var SKIP_FADE := 0.25     # REAL seconds, each way
+
+static var _playback_speed := 1.0
+static var _skipping := false
+
 
 # What mode the player has the zoom in. ONE read of the setting, so nothing else names it.
 static func zoom_mode() -> PlayerSettings.BattleZoom:
 	return PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE) as PlayerSettings.BattleZoom
+
+
+# The player's base playback speed (#545). ONE read of the setting, beside zoom_mode for its reason.
+static func setting_speed() -> float:
+	return PlayerSettings.PLAYBACK_MULTIPLIERS[
+			PlayerSettings.choice_of(PlayerSettings.Setting.PLAYBACK_SPEED)]
+
+
+# Nobody is watching playback: a headless run, or a skip resolving under the fade (#545). The ONE
+# spelling every playback escape asks -- beat, hitstop, the pans, the rig's eases, the falls -- so a
+# skip collapses exactly what the suite already collapses, through paths the suite already runs.
+static func unwatched() -> bool:
+	return _skipping or DisplayServer.get_name() == "headless"
+
+
+static func skipping() -> bool:
+	return _skipping
+
+
+static func set_skipping(on: bool) -> void:
+	_skipping = on
+
+
+static func playback_speed() -> float:
+	return _playback_speed
+
+
+# Writes Engine.time_scale only on a change, so a frame that asks for what is already set touches
+# nothing -- including a test runner's own time factor.
+static func set_playback_speed(speed: float) -> void:
+	if is_equal_approx(speed, _playback_speed):
+		return
+	_playback_speed = speed
+	_apply_time_scale()
+
+
+# Back to 1x, unskipped. PlaybackControl's exit and a suite's teardown.
+static func reset_playback() -> void:
+	_playback_speed = 1.0
+	_skipping = false
+	_apply_time_scale()
+
+
+# THE one writer of Engine.time_scale: a hitstop's freeze outranks the speed, and its release comes
+# back to the speed rather than to a literal 1.0, so a freeze mid-fast-forward resumes fast.
+static func _apply_time_scale() -> void:
+	Engine.time_scale = 0.0 if _frozen_count > 0 else _playback_speed
 
 
 # WHICH PROFILE THIS BEAT RUNS UNDER (#647) -- the one collapse from (mode, beat) to a profile, and
@@ -383,7 +461,7 @@ static func emphasis_for(beat: BeatSheet.Beat) -> float:
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
-			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+			or beat.has_severed:
 		emphasis = maxf(emphasis, EMPHASIS_DOWN)
 	if beat.has_lethality(ResolvedOutcome.Lethality.CRISIS):
 		emphasis = maxf(emphasis, EMPHASIS_CRISIS)
@@ -399,23 +477,34 @@ static func emphasis_for(beat: BeatSheet.Beat) -> float:
 # ignore_time_scale TRUE, or it would be frozen by the very freeze it exists to end and hang the game
 # outright. Re-entry is counted rather than ignored: a volley that kills two fires twice, and without
 # the count the first restore would end the second freeze early and the two would race. And the
-# restore writes 1.0 literally, which is correct only while nothing else in the project writes
-# time_scale -- true today (grepped), and this comment is where to look the day it stops being.
+# restore goes back to the PLAYBACK SPEED, not to 1.0 (#545): _apply_time_scale is the one writer,
+# so a freeze during a fast-forward resumes at the fast-forward.
 #
-# Headless returns immediately, the escape beat() carries and for the same reason: nobody is watching,
+# The freeze is divided by that speed, so it lasts the same share of a pass at any speed -- the timer
+# ignores time scale, so an undivided one would grow relative to everything around it.
+#
+# Unwatched returns immediately, the escape beat() carries and for the same reason: nobody is watching,
 # and a real freeze would put wall clock on every suite that resolves a lethal plan.
 static var _frozen_count := 0
 
 static func hitstop(host: Node, seconds: float) -> void:
-	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
+	if seconds <= 0.0 or unwatched():
 		return
+	_freeze()
+	await host.get_tree().create_timer(seconds / _playback_speed, true, false, true).timeout
+	_unfreeze()
+
+
+# The hitstop's two edges, apart from its timer so a headless case can reach the release -- the one
+# line that decides what a freeze comes back to.
+static func _freeze() -> void:
 	_frozen_count += 1
-	Engine.time_scale = 0.0
-	await host.get_tree().create_timer(seconds, true, false, true).timeout
-	_frozen_count -= 1
-	if _frozen_count <= 0:
-		_frozen_count = 0
-		Engine.time_scale = 1.0
+	_apply_time_scale()
+
+
+static func _unfreeze() -> void:
+	_frozen_count = maxi(_frozen_count - 1, 0)
+	_apply_time_scale()
 
 
 # Whether the world is stopped right now. Nothing in the game reads it; it exists so a test can ask
@@ -438,7 +527,7 @@ static func hold_for(beat: BeatSheet.Beat) -> float:
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
-			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+			or beat.has_severed:
 		hold = maxf(hold, HOLD_DOWN)
 	if beat.has_lethality(ResolvedOutcome.Lethality.CRISIS):
 		hold = maxf(hold, HOLD_CRISIS)
@@ -457,8 +546,6 @@ static func hold_for(beat: BeatSheet.Beat) -> float:
 static func coda_hold(type: BaseAction.ActionType) -> float:
 	match type:
 		BaseAction.ActionType.RESCUE: return HOLD_RESCUE
-		BaseAction.ActionType.RALLY: return HOLD_RALLY
-		BaseAction.ActionType.INTIMIDATE: return HOLD_INTIMIDATE
 		BaseAction.ActionType.RELOAD: return HOLD_RELOAD
 		BaseAction.ActionType.REV: return HOLD_REV
 		BaseAction.ActionType.BURROW: return HOLD_BURROW
@@ -491,7 +578,7 @@ static func linger_for(beat: BeatSheet.Beat) -> float:
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
-			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+			or beat.has_severed:
 		linger = maxf(linger, LINGER_DOWN)
 	return linger
 
@@ -501,8 +588,6 @@ static func linger_for(beat: BeatSheet.Beat) -> float:
 static func coda_linger(type: BaseAction.ActionType) -> float:
 	match type:
 		BaseAction.ActionType.RESCUE: return LINGER_RESCUE
-		BaseAction.ActionType.RALLY: return LINGER_RALLY
-		BaseAction.ActionType.INTIMIDATE: return LINGER_INTIMIDATE
 		BaseAction.ActionType.RELOAD: return LINGER_RELOAD
 		BaseAction.ActionType.REV: return LINGER_REV
 		BaseAction.ActionType.BURROW: return LINGER_BURROW
@@ -530,8 +615,6 @@ static func coda_linger(type: BaseAction.ActionType) -> float:
 # play, red in the suite, the same bargain hold_for makes when it floors the -1.0.
 const CODA_EARNS_AN_AI_BEAT: Dictionary[BaseAction.ActionType, bool] = {
 	BaseAction.ActionType.RESCUE: true,
-	BaseAction.ActionType.RALLY: true,
-	BaseAction.ActionType.INTIMIDATE: true,
 	BaseAction.ActionType.RELOAD: true,
 	BaseAction.ActionType.REV: false,
 	BaseAction.ActionType.BURROW: true,
@@ -571,6 +654,6 @@ static func beat(host: Node, seconds: float) -> void:
 	var tree: SceneTree = host.get_tree()
 	while tree != null and ModalLock.any_open(tree):
 		await tree.process_frame
-	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
+	if seconds <= 0.0 or unwatched():
 		return
 	await host.get_tree().create_timer(seconds).timeout

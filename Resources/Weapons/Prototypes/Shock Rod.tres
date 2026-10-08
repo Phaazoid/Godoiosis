@@ -7,9 +7,9 @@
 
 [resource]
 script = ExtResource("4_w7f4y")
-mod_spaces = Array[int]([1, 2, 3])
 main_attack = ExtResource("3_oq54j")
 weapon_type = 5
 is_prototype = true
 display_name = "Shock Rod"
 icon = ExtResource("2_7kntj")
+weight = 3

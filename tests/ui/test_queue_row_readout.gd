@@ -322,6 +322,72 @@ func _collect_scrolls(node: Node, out: Array[ScrollContainer]) -> void:
 		_collect_scrolls(child, out)
 
 
+# A SPLIT (#367): a blow the forecast says knocks someone out of a squad wears the chip on ITS row,
+# in the tether's ink, with the names on hover. The ink is compared against the row's own answer
+# rather than a hex -- TETHER_COLOR is a knob the dev drags.
+func test_a_forecast_split_wears_the_tether_ink_on_the_row_that_causes_it() -> void:
+	var lead := _named(Team.Faction.ENEMY, Vector2i(1, 1), "Lead", {Stats.Stat.LDR: 10})
+	var stray := _named(Team.Faction.ENEMY, Vector2i(4, 1), "Stray", {})
+	game.squad_manager.join_squad(stray, lead.squad)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(3, 1))
+	var weapon := H.make_weapon(3)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 2
+	hero.equipped_weapon = weapon
+	game.squad_manager.active_squad = hero.squad
+	game.squad_manager.queue_action(hero.squad, H.stamped_attack(hero, stray))
+	game.refresh_action_queue(hero.squad)
+	await await_idle_frame()
+
+	var split := _entry(_attack_row(), ActionQueueRow.BADGE_SPLIT)
+	assert_bool(split.is_empty()).override_failure_message(
+			"a shove out of range queued and its row says nothing about the Split — got %s"
+			% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	assert_that(split["color"]).is_equal(ActionQueueRow.split_ink())
+	assert_str(String(split["tip"])).contains("Stray")
+
+
+# Two leave on one blow -- the downed leader and the member its successor cannot reach -- so the
+# chip counts, and the hover names both.
+func test_one_blow_that_splits_two_says_so() -> void:
+	var lead := _named(Team.Faction.ENEMY, Vector2i(4, 1), "Lead", {Stats.Stat.LDR: 10})
+	var heir := _named(Team.Faction.ENEMY, Vector2i(6, 1), "Heir", {Stats.Stat.LDR: 4})
+	var far := _named(Team.Faction.ENEMY, Vector2i(1, 1), "Far", {})
+	game.squad_manager.join_squad(heir, lead.squad)
+	game.squad_manager.join_squad(far, lead.squad)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(4, 2))
+	hero.equipped_weapon = H.make_weapon(3)
+	game.squad_manager.active_squad = hero.squad
+	game.squad_manager.queue_action(hero.squad, H.stamped_attack(hero, lead))
+	game.refresh_action_queue(hero.squad)
+	await await_idle_frame()
+	# Exactly what the blow deals, so it lands a down rather than a kill (test_downed_ejection's reason).
+	lead.set_current_hp((_attack_row().action as AttackAction).resolved_outcome().damage)
+	game.refresh_action_queue(hero.squad)
+	await await_idle_frame()
+
+	var split := _entry(_attack_row(), ActionQueueRow.BADGE_SPLITS % 2)
+	assert_bool(split.is_empty()).override_failure_message(
+			"a downed leader whose successor strands a member does not say Split 2 — got %s"
+			% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	assert_str(String(split["tip"])).contains("Lead").contains("Far")
+
+
+func _named(faction: Team.Faction, cell: Vector2i, display_name: String, stats: Dictionary) -> Unit:
+	var data := H.make_unit_data(stats, faction)
+	data.display_name = display_name
+	var unit: Unit = game.spawn_unit(data, cell)
+	assert_object(unit).is_not_null()
+	return unit
+
+
+func _entry(row: ActionQueueRow, text: String) -> Dictionary:
+	assert_object(row).override_failure_message("fixture: no attack row is showing").is_not_null()
+	for e in _consequence_entries(row):
+		if String(e["text"]) == text:
+			return e
+	return {}
+
+
 # A consequence the WORLD caused -- "Insulated!" here, and "Fell 2!" / "Drowning!" / "Into the void!"
 # on the same path -- must not wear the rail's structural grey. That value is chosen to DISAPPEAR,
 # which is exactly wrong for text: the dev read it off the screen as grey on grey (2026-09-03).
@@ -371,6 +437,79 @@ func test_a_world_event_pill_is_readable_against_the_row() -> void:
 
 func _luma(c: Color) -> float:
 	return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+
+
+# #120: a shove the target's weight holds outright draws no trail, so the row's badge is the queue's
+# WHOLE account of it (Law #2) -- a held shove that said nothing would read as a shove that never existed.
+func test_a_shove_the_targets_weight_holds_says_so_on_the_row() -> void:
+	var heavy := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var ballast := Item.new()
+	ballast.weight = Stats.WEIGHT_BAND_2
+	assert_bool(heavy.add_item(ballast)).is_true()
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var weapon := H.make_weapon(4)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 2
+	attacker.equipped_weapon = weapon
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, heavy))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var badge := ActionQueueRow.BADGE_HELD % 2
+	var entry := _entry(_attack_row(), badge)
+	assert_bool(entry.is_empty()).override_failure_message(
+		"the shove was held and the row said nothing about it -- got %s"
+		% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	if not entry.is_empty():
+		assert_str(String(entry["tip"])).contains(PlanResolver.HELD_POPUP % 2)
+
+
+# #1186: the BOARD marks a shove held outright too -- the hold icon under the target, from the same
+# refresh that badges the row, so the board and the queue cannot disagree about it (Law #2).
+func test_a_shove_the_targets_weight_holds_is_marked_under_it_on_the_board() -> void:
+	var heavy: Unit = await _held_shove_fixture(Stats.WEIGHT_BAND_2)
+	assert_array(_held_mark_cells()).override_failure_message(
+		"the held shove left no mark under its target").is_equal([Vector2i(2, 1)])
+	assert_bool(heavy.visuals.projected).override_failure_message(
+		"a unit that stays put was hidden behind a ghost").is_false()
+	assert_bool(_entry(_attack_row(), ActionQueueRow.BADGE_HELD % 2).is_empty()).override_failure_message(
+		"the board marked a hold the row does not report").is_false()
+
+
+# Held in PART, the shove still moves its target, and its shorter trail already says so: no mark.
+func test_a_partly_held_shove_draws_its_trail_and_no_mark() -> void:
+	await _held_shove_fixture(Stats.WEIGHT_BAND_1)
+	assert_bool(game.overlay_manager.knockback_preview_sprites.is_empty()).override_failure_message(
+		"the shortened shove drew nothing, so the case measures nothing").is_false()
+	assert_array(_held_mark_cells()).is_empty()
+
+
+# A two-tile shove from (1,1) into an enemy at (2,1) weighed to exactly `weight`, queued and refreshed
+# through the real door.
+func _held_shove_fixture(weight: int) -> Unit:
+	var heavy := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var ballast := Item.new()
+	ballast.weight = weight - heavy.get_weight()
+	assert_bool(heavy.add_item(ballast)).is_true()
+	assert_int(heavy.get_weight()).is_equal(weight)
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var weapon := H.make_weapon(4)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 2
+	attacker.equipped_weapon = weapon
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, heavy))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+	return heavy
+
+
+func _held_mark_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for node: Node2D in game.overlay_manager.knockback_preview_sprites:
+		var sprite := node as Sprite2D
+		if sprite != null and sprite.texture == OverlayManager.PATH_HELD:
+			cells.append(game.grid.local_to_map(game.grid.to_local(sprite.global_position)))
+	return cells
 
 
 # A unit that shrugs off `element` entirely, so the resolver records its INSULATED popup — the one
@@ -613,3 +752,106 @@ func test_the_damage_number_names_the_def_it_subtracted() -> void:
 	var outcome := (row.action as AttackAction).resolved
 	assert_int(outcome.mitigation).is_greater(0)   # premise: the jacket paid out
 	assert_str(row.readout.tooltip_text).contains("DEF %d subtracted" % outcome.mitigation)
+
+
+# ------------------------------------------------------------------------------------------------
+#  8. A unit fills its slot (#1082)
+# ------------------------------------------------------------------------------------------------
+
+# The #937 law in the queue: a unit's sheet is 64px holding a ~23x20 character, so fitting the whole
+# CELL into the 32px slot drew everyone at a third of it. Then the dev asked for the sprites to FILL
+# the slot: what a slot is handed is the square around that sprite's OWN ink, its longest side edge to
+# edge, feet on the floor. The ink is read off the sheet here by the same rule the code declares, so
+# re-cutting the art moves the expectation with it and no per-character number appears.
+func test_a_unit_in_a_row_fills_its_slot_with_its_own_ink() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	_assert_fills_slot(row.actor_texture, row.action.get_actor_texture(), "actor")
+	_assert_fills_slot(row.target_texture, row.action.get_target_texture(), "target")
+
+
+# The fill happens in the TextureRect, not the texture: portrait hands over a square SMALLER than the
+# slot and the slot stretches it. A headless run draws nothing, so the setting that does the stretching
+# is the one wire a green suite could otherwise miss -- a slot drawing its texture at native size would
+# pass every case above and show the player a small sprite in a big box.
+func test_both_sprite_slots_stretch_what_they_are_handed() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var row := _attack_row()
+	assert_object(row).is_not_null()
+	for pair: Array in [[row.actor_texture, "actor"], [row.target_texture, "target"]]:
+		var slot: TextureRect = pair[0]
+		assert_bool(slot.stretch_mode in [TextureRect.STRETCH_KEEP_ASPECT, TextureRect.STRETCH_KEEP_ASPECT_CENTERED]) \
+			.override_failure_message("the %s slot does not scale its texture to fit, so a portrait draws at native size"
+				% pair[1]) \
+			.is_true()
+		assert_int(slot.expand_mode).is_not_equal(TextureRect.EXPAND_KEEP_SIZE)
+
+
+# The volley header draws its lead's sprite through its own setup, so it gets its own case -- without
+# one, a header squeezing the sheet again would pass every case above.
+func test_a_volley_header_frames_its_lead_the_same_way() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var lead := _attack_row().action as AttackAction
+	var header: ActionQueueRow = (load("res://Scenes/ActionQueueRow.tscn") as PackedScene).instantiate()
+	_main.add_child(header)   # freed with _main in after_test
+	header.setup_volley_summary(lead, 2, false)
+	_assert_fills_slot(header.actor_texture, lead.get_actor_texture(), "volley header")
+
+
+# The target slot also shows a move's destination tile -- a 16px icon, not a unit. Only a map sheet
+# is cropped; anything else must come back as the very same texture.
+func test_a_terrain_icon_passes_through_the_portrait_whole() -> void:
+	var icon: Texture2D = MoveAction.GENERIC_TILE
+	assert_that(Vector2i(icon.get_size())) \
+		.override_failure_message("the tile icon is sheet-sized now, so this case no longer tells the two apart") \
+		.is_not_equal(Vector2i(MapSpriteInk.SHEET, MapSpriteInk.SHEET))
+	assert_object(MapSpriteInk.portrait(icon)).is_same(icon)
+
+
+func _assert_fills_slot(slot: TextureRect, sheet: Texture2D, which: String) -> void:
+	var sheet_px := Vector2i(MapSpriteInk.SHEET, MapSpriteInk.SHEET)
+	assert_object(sheet).override_failure_message("the %s has no sprite to frame" % which).is_not_null()
+	if sheet == null:
+		return
+	assert_that(Vector2i(sheet.get_size())) \
+		.override_failure_message("the %s's sprite is not a map sheet, so this case would pass vacuously" % which) \
+		.is_equal(sheet_px)
+
+	var shown := slot.texture as AtlasTexture
+	assert_object(shown) \
+		.override_failure_message("the %s slot is handed the whole %dpx sheet to squeeze -- the #1082 bug"
+			% [which, MapSpriteInk.SHEET]) \
+		.is_not_null()
+	if shown == null:
+		return
+	assert_object(shown.atlas).is_same(sheet)
+
+	var image := sheet.get_image()
+	if image.is_compressed():
+		image = image.duplicate()
+		image.decompress()
+	var ink := Rect2(BoardMirror.opaque_bounds(image, Rect2i(Vector2i.ZERO, image.get_size())))
+	# Non-vacuity: were this sprite's ink the median box, the shared answer and the per-sprite one
+	# would coincide and the "fills" check below could not tell them apart.
+	assert_bool(Rect2i(ink) == MapSpriteInk.INK_RECT) \
+		.override_failure_message("the %s's ink IS the median box, so this case cannot tell a per-sprite fit from the shared one"
+			% which) \
+		.is_false()
+
+	var region := shown.region
+	assert_float(region.size.x).override_failure_message("the %s window %s is not square" % [which, region]) \
+		.is_equal(region.size.y)
+	assert_bool(Rect2(Vector2.ZERO, Vector2(sheet_px)).encloses(region)) \
+		.override_failure_message("the %s window %s runs off the %dpx sheet" % [which, region, MapSpriteInk.SHEET]) \
+		.is_true()
+	assert_bool(region.encloses(ink)) \
+		.override_failure_message("the %s window %s cuts into the character's ink %s" % [which, region, ink]) \
+		.is_true()
+	assert_float(region.size.x) \
+		.override_failure_message("the %s window %s is wider than the ink's longest side %s, so the sprite does not fill its slot"
+			% [which, region, ink.size]) \
+		.is_equal(maxf(ink.size.x, ink.size.y))
+	assert_float(region.end.y) \
+		.override_failure_message("the %s window %s does not stand the feet (row %d) on its floor" % [which, region, ink.end.y]) \
+		.is_equal(ink.end.y)

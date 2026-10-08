@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #969 (2026-09-15).**
+**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01; #46's shared execute steps folded in 2026-10-04; #1228's `has_surface` folded in 2026-10-05.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -527,7 +527,7 @@ filters live in `Reach`, which already owned the sight trace.
 > there for later."*
 
 The resolver stamps `elevation_delta` (target height − attacker height) onto each `ResolvedOutcome`.
-No behaviour in v1; a future height-damage rule reads it, and the hover card can say "uphill"
+No behaviour in v1; a future height-damage rule reads it, and the tile card can say "uphill"
 immediately.
 
 **It must be FROZEN, not re-derived** — the same reason `fired_attack` is stamped at declare time.
@@ -691,8 +691,8 @@ copy), not rules. Boards saved before an `AttackData` field existed need a re-sa
 
 ### Two kinds of edge
 
-- **A vertical drop** deals **fall damage**, scaled by height fallen and modified by weight
-  ([#120](https://github.com/Phaazoid/Godoiosis/issues/120)).
+- **A vertical drop** deals **fall damage**, scaled by height fallen and raised by the faller's weight band
+  ([#120](https://github.com/Phaazoid/Godoiosis/issues/120), [weight.md](weight.md)).
 - **A void** — chasm, airship edge, train side — is **removal**, not damage. This is
   [#116](https://github.com/Phaazoid/Godoiosis/issues/116)'s original kill doctrine, intact.
 
@@ -708,7 +708,7 @@ untouched, because the level designer decides which edges exist.
 
 So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
 
-- **The flight** travels the knockback distance at the unit's STARTING elevation. A cell higher
+- **The flight** travels the knockback distance, less the target's weight band ([#120](https://github.com/Phaazoid/Godoiosis/issues/120), [weight.md](weight.md)), at the unit's STARTING elevation. A cell higher
   than that **braces** it ("you cannot be pushed uphill" — the flight stops before it); a **VOID
   cell is flown over**; walls, bodies and off-board stop it exactly as before. **WATER CATCHES it**
   ([#116](https://github.com/Phaazoid/Godoiosis/issues/116), 2026-08-26): the flight ENTERS the
@@ -724,7 +724,7 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
   lower =
   **fall damage** for the full levels dropped — `FallRules.damage_for`, which **bypasses DEF**
   (dev: armor does not stop gravity; it joins the total after mitigation, before the Iron Will cap
-  so the cap stays absolute) and carries the #120 weight term (inert until gear has mass). Ending
+  so the cap stays absolute) and adds +1 per level per weight band (#120, [weight.md](weight.md)). Ending
   on the doc's original tumble entry (a connected descending ramp — its high edge meets the flight
   level) = a free tumble, no fall. **Ending on any other ramp tumbles too**, down the slope's OWN
   downhill — after paying the drop, and possibly bending the shove's path once, which is why
@@ -899,7 +899,7 @@ promising a shorter drop than playback shows is a Law #2 divergence. The fall it
 `MovementComponent.plummet()`, awaited by `AttackAction.execute` before `die()`, so a unit shoved
 into a hole falls a long way instead of vanishing at the lip. It is 3D-ONLY by construction (the
 flat board has no height to fall through), a declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292)
-asymmetry, and `play_session`'s hand-copied twin deliberately skips it. Both the depth and the
+asymmetry, and the headless executor deliberately skips it. Both the depth and the
 duration are Game-tab knobs beside *Shove slide speed*.
 
 **THE BODY STEPS CLEAR OF THE EDGE BEFORE IT DROPS (dev, 2026-08-29).** #472 travelled a dropping
@@ -939,8 +939,8 @@ consumer.
 **A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
 up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the
 flag exists because execution needs its own door (a 0-damage `take_damage` cannot kill an ACTIVE
-unit), so **both** executors — `AttackAction.execute` and `play_session._apply_attack`, the
-hand-mirrored twins — call `Unit.die()` on it. A removed target publishes no projected knockback
+unit), so **both** executors call `Unit.die()` on it, through the one `AttackAction.remove` both
+run since #46. A removed target publishes no projected knockback
 and draws no landing ghost: its sprite stands where it is, the trail alone says where it goes, and
 nothing on a chasm cell is pickable. `Terrain.Kind.VOID` (append-only) is the authored vocabulary;
 the two `hole` tiles carry it, and the headless no-tile sentinel renamed to `"offmap"` to free the
@@ -956,9 +956,11 @@ word.
 > `movement_cost` and `compute_move_range` mean by *on the map* — **erasing a rim cell shrinks the
 > board, erasing an interior one digs a hole** — and `"offmap"` now means only *past that rect*.
 > `terrain_kind_at` is deliberately NOT widened: its other readers (`Materia.sources_at`,
-> `_resolve_cell_effect_at`, the hover card) ask what the AUTHOR wrote, and a derived VOID would leak
+> `_resolve_cell_effect_at`, the tile card) ask what the AUTHOR wrote, and a derived VOID would leak
 > into terrain reactions and alchemy sources. Same split as `GridUtils.walkable_of` against
-> `is_walkable` — two questions, not two answers to one.
+> `is_walkable` — two questions, not two answers to one. **[#1228](https://github.com/Phaazoid/Godoiosis/issues/1228)
+> named the pair it makes with `has_ground`: `GridUtils.has_surface`, a tile that is not a hole**, the
+> question an attack's footprint, the gas a cell may hold and a hole's lip walls all ask.
 >
 > Measured before it shipped, by `tools/audit_groundless.gd`: **66 groundless cells inside
 > `used_rect` across the shipped scenarios, every one of them interior**, so no board has an outline
@@ -1041,7 +1043,7 @@ Structurally it landed close to the prediction: the knockback stage still publis
 `knockback_from`/`knockback_to` and threads the hypo — but the landing had to be computed BEFORE
 the lethality rung is named (fall damage can change it), so `_resolve_knockback` split into a pure
 `_knockback_landing` called off a *provisional* rung (a hit that alone kills still shoves nothing)
-with the *final* `predict` feeding the Will-spend stage; and the trail gained
+with the *final* `predict` naming the rung (it fed the Will spend until #1174); and the trail gained
 `knockback_path`, since a landing tumble can bend a shove once.
 
 The declared placeholder that used to live at that call site — a shove asks the CELL-level
@@ -1121,8 +1123,8 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    AIRBORNE revision — see *Falls, shoves and tumbles* above, and the tumble-then-plummet reversal
    plus [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s drop pointer that followed it.
    The interlock closed as far as it can before content: the fall-damage **weight term is wired**
-   (`FallRules`) and inert at weight 0; #120's distance bands + the weight-authoring pass stay on
-   #120 — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
+   (`FallRules`), read through weight BANDS since #120 PR 1 (2026-10-01); #120 then built the shove-distance
+   bands and the weight-authoring pass (2026-10-01) — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
    the interlock is complete.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with

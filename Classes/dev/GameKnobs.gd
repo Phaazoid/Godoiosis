@@ -111,6 +111,15 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How thick a tether is, in cells. Its arrowhead is a multiple of this (Tether arrow width), so widening the line widens its head too. The range's outline has its own width below."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "cohesion_line_width", "label": "Range outline width (3D)", "min": 0.01, "max": 0.3, "step": 0.005,
 		"tip": "How thick the dashed stroke round the squad's range is, in cells. It lies on the ground, where it has more to compete with than a tether in the air does."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_casing_width", "label": "Casing width (3D)", "min": 0.0, "max": 0.08, "step": 0.005,
+		"tip": "How far the dark outline round every squad line reaches past the line, on each side, in cells -- dashes, arrowheads and a break's pieces alike. Zero takes the outline off. Its colour is Squad line casing below."},
+	# A death's Last pulse light (#1104): a soft stroke of its own, so its shape has 3D-only rows.
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "pulse_glow_width", "label": "Last pulse: light width (3D)", "min": 0.02, "max": 0.6, "step": 0.01,
+		"tip": "How wide a death's Last pulse light is at its middle, in cells. It narrows to nothing at both ends."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "pulse_glow_intensity", "label": "Last pulse: light glow (3D)", "min": 0.5, "max": 6.0, "step": 0.1,
+		"tip": "How bright the light is. Past the scene's glow threshold (1.2) it blooms, which is what makes it read as a light rather than a dash."},
+	{"group": "Squad lines", "node": "BoardOverlays", "prop": "pulse_glow_softness", "label": "Last pulse: light softness (3D)", "min": 0.3, "max": 4.0, "step": 0.1,
+		"tip": "How the light fades toward its edges. Higher is a brighter core and a softer rim."},
 	{"group": "Squad lines", "node": "BoardOverlays", "prop": "squad_line_intensity", "label": "Squad line glow (3D)", "min": 0.2, "max": 4.0, "step": 0.05,
 		"tip": "Brightness multiplier on the squad's lines. Around 1 draws them flat, which is what markup wants; past the scene's glow threshold (1.2) they bloom and start reading as an effect."},
 
@@ -392,6 +401,56 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water (shared)", "node": "BoardMirror", "prop": "water_shore_fade_range", "label": "Shore fade", "min": 1.0, "max": 8.0, "step": 0.1,
 		"tip": "How far from land, in cells, the two Shore darken dials take to reach full. Longer is a gentler gradient out to sea; it does nothing at all while both of those are 0."},
 
+	# The gas volume and puffs (#508). Every row is read each frame or rebuilds, so all are live. What
+	# one GAS looks like is its GasLook file under Resources/GasLooks/; these are what every gas shares.
+	# Measured on round 4's zoo at 1080p on an RTX 2070 SUPER: half / 32 / 4 costs about +1.5 ms.
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "resolution", "label": "Volume resolution",
+		"options": ["Full", "Half", "Quarter"],
+		"tip": "How many rays the volume casts: one per pixel, one per 2x2 or one per 4x4, upsampled with depth so units keep a crisp edge. The pool on the cells is drawn at full resolution whatever this says. Half costs about a third of Full; Quarter softens the billows."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "steps", "label": "Steps", "min": 4, "max": 96, "step": 1,
+		"tip": "Samples along each ray through a gas region. The biggest cost dial: on the zoo at half resolution 32 costs about +1.5 ms and 16 about +1.0. Fewer reads as grain inside the cloud."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "light_steps", "label": "Sun steps", "min": 0, "max": 8, "step": 1,
+		"tip": "Samples toward the sun from every lit sample, which is what gives a billow a bright top and a shaded underside. 0 lights the gas flat."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "light_step", "label": "First sun step", "min": 0.02, "max": 0.6, "step": 0.01,
+		"tip": "Length of the first sun sample in world units; each after it is half as long again. Longer reaches further for its shadow and sees through small gaps less."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "min_step", "label": "Shortest step", "min": 0.005, "max": 0.2, "step": 0.005,
+		"tip": "The smallest step a short ray may take, so a ray that only clips a region does not spend all its samples on a sliver."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "thin_floor", "label": "Thin gas floor", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "The least a held cell shows, as a fraction of a full one, so a cell with 1 of 14 is still visible rather than a faint wisp."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "contain_softness", "label": "Billow edge", "min": 0.0, "max": 0.4, "step": 0.005,
+		"tip": "How soft the billows are where a gas cell meets one without it. It widens with height, so the crown rounds off; the pool underneath is what marks the cell exactly."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "pool_softness", "label": "Pool edge", "min": 0.0, "max": 0.2, "step": 0.005,
+		"tip": "How soft the pool on the cells is at the cell border. Near 0 it is a crisp rounded shape that reads as which tiles hold gas."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "detail_scale", "label": "Erosion scale", "min": 0.2, "max": 4.0, "step": 0.05,
+		"tip": "Frequency of the fine noise that frays a billow's edge. Each gas sets how much it frays in its own look."},
+	{"group": "Gas: the march", "node": "GasMirror", "prop": "upsample_tolerance", "label": "Upsample depth tolerance", "min": 0.005, "max": 0.2, "step": 0.005,
+		"tip": "How different in depth (per unit of distance) a low-resolution sample may be before it stops counting toward a pixel. Lower keeps gas from bleeding across a unit's outline; too low shows the blocks."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "forward_scatter", "label": "Forward scatter", "min": 0.0, "max": 0.95, "step": 0.01,
+		"tip": "How strongly gas glows when looking toward the sun or a lamp through it: the silver lining."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "back_scatter", "label": "Back scatter", "min": 0.0, "max": 0.95, "step": 0.01,
+		"tip": "How strongly gas lights up with the sun behind the camera."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "back_mix", "label": "Back scatter share", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "The blend between the two scatter lobes above."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "powder", "label": "Powder", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Darkens the thin edges of dense gas, which is what makes a billow read as a rounded lump rather than a flat sheet."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "ambient_strength", "label": "Ambient", "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How much of the scene's ambient light the gas takes, on top of the sun and the board's lamps."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "flash_color", "label": "Lightning colour",
+		"tip": "The colour of a strike inside a gas whose look flashes (thunder). Under the photosensitivity setting every such cloud holds a steady dim glow instead."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "flash_energy", "label": "Lightning energy", "min": 0.0, "max": 40.0, "step": 0.5,
+		"tip": "How bright a strike is at its peak."},
+	{"group": "Gas: light", "node": "GasMirror", "prop": "flash_radius", "label": "Lightning reach", "min": 0.3, "max": 5.0, "step": 0.05,
+		"tip": "How far a strike's glow reaches through the cloud, in world units."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "held_cloud_strength", "label": "Cloud while floor held", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much of the cloud and its pool still draws while the floor key is held, which is what lets the floor underneath read. The puffs hide altogether. 1 leaves the cloud untouched."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "floor_corner_radius", "label": "Floor corner radius", "min": 0.0, "max": 16.0, "step": 1.0,
+		"tip": "How round the fog floor's outer corners are, in art pixels (a cell is 32). Inner corners stay square either way, so the shape still reads as whole tiles."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "puff_lean", "label": "Lean toward gas", "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far a corner puff sits toward a neighbouring cell that also holds gas, in cells, so neighbouring cells' puffs meet into one cloud."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "puff_tuck", "label": "Tuck from the edge", "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far a corner puff sits toward a neighbouring cell WITHOUT gas, in cells. Small keeps the puffs inside the cell's own border so the edge of the gas stays legible."},
+	{"group": "Gas: puffs and floor", "node": "GasMirror", "prop": "forecast_width", "label": "Next-round outline width", "min": 0.5, "max": 8.0, "step": 0.5,
+		"tip": "How wide next round's outline is while the floor key is held, in art pixels (a cell is 32) for each level of steam -- so thick steam next round draws three times as bold as thin."},
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A
@@ -422,6 +481,7 @@ const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
+const PRE_MISSION_SCREEN_SCRIPT := "res://Classes/ui/PreMissionScreen.gd"
 const ELEMENT_PALETTE_SCRIPT := "res://Classes/ui/ElementPalette.gd"
 const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
@@ -429,9 +489,12 @@ const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
 const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
+const INSET_SQUARE_SCRIPT := "res://Classes/board/InsetSquare.gd"
+const ZONE_MARKS_SCRIPT := "res://Classes/board/ZoneMarks.gd"
 const SQUAD_LINES_SCRIPT := "res://Classes/board/SquadLines2D.gd"
 const UNIT_VISUALS_SCRIPT := "res://Classes/units/UnitVisuals.gd"
 const MUSIC_DIRECTOR_SCRIPT := "res://Classes/audio/MusicDirector.gd"
+const LETHALITY_RULES_SCRIPT := "res://Classes/actions/resolution/LethalityRules.gd"
 const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
 const SHOCK_SPARKS_SCRIPT := "res://Classes/presentation/ShockSparks.gd"
@@ -459,6 +522,35 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "A painted zone your units must reach to extract. Also visible all battle."},
 	{"group": "Squads & zones", "label": "Deployment zone", "layer": BoardOverlays.Layer.ZONE_DEPLOYMENT,
 		"tip": "Where the force you bring may be placed before the mission starts. Unlike the two above it is gone the moment turn 1 begins, so this colour only has to read against the map for as long as you are choosing."},
+	# The zone marks (#955): the rim a zone's cells wear, and the wall standing on it. All six
+	# regenerate the art ZoneMarks holds, which both views redraw with.
+	{"group": "Zone marks", "label": "Edge outline", "static": "ZONE_EDGE_OUTLINE", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 1.0,
+		"tip": "The dark line along a zone's edge, in art pixels (16 to a tile). It is what keeps a green zone readable on green grass. 0 is none."},
+	{"group": "Zone marks", "label": "Rim width", "static": "ZONE_RIM_WIDTH", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.05, "max": 0.5, "step": 0.01,
+		"tip": "How far in from the edge the rim's glow reaches, as a fraction of a tile."},
+	{"group": "Zone marks", "label": "Inside fill", "static": "ZONE_FILL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 0.6, "step": 0.01,
+		"tip": "The faint wash left inside a zone past the rim, as an alpha. 0 leaves the rim alone."},
+	{"group": "Zone marks", "label": "Wall height", "static": "ZONE_WALL_HEIGHT", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.05, "max": 1.5, "step": 0.05,
+		"tip": "How tall the wall of light on a zone's edge stands, in tiles. 3D only."},
+	{"group": "Zone marks", "label": "Wall strength", "static": "ZONE_WALL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How strong the wall is at its foot; it fades to nothing at the top. 3D only."},
+	{"group": "Zone marks", "label": "Shimmer speed", "static": "ZONE_SHIMMER_SPEED", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How fast the shimmer rises up the wall, in cycles a second. 0 holds it still. 3D only."},
+	{"group": "Zone marks", "label": "Lit fill", "static": "ZONE_LIT_FILL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "The wash inside a LIT zone (its row in the objectives panel is under the pointer), as an alpha."},
+	{"group": "Zone marks", "label": "Lit wall height", "static": "ZONE_LIT_WALL_HEIGHT", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How tall a LIT zone's wall stands, in tiles. 3D only."},
+	{"group": "Zone marks", "label": "Lit wall strength", "static": "ZONE_LIT_WALL_ALPHA", "script": ZONE_MARKS_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How strong a LIT zone's wall is at its foot. 3D only."},
 	{"group": "Aiming", "label": "Attack reach (2D+3D)", "static": "ATTACK_MODULATE",
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
 	{"group": "Aiming", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
@@ -489,6 +581,11 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Aiming", "label": "Flash: still brightness", "static": "STILL_PEAK", "script": AIM_FLASH_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "With the photosensitivity setting on nothing moves: the first step holds this white and each later step less, down to plain on the last. This is the first step's."},
+	# The aim's PAYLOAD tiles (#1058 D2b): the footprint's yellow, a size smaller. Generated into one texture
+	# both views draw, so this is the only dial -- the colour is the footprint's own.
+	{"group": "Aiming", "label": "Payload inset (2D+3D)", "static": "PAYLOAD_INSET", "script": INSET_SQUARE_SCRIPT,
+		"min": 0.0, "max": 0.45, "step": 0.01,
+		"tip": "How far in from each edge a payload's tile is drawn, as a share of the tile -- the tiles an attack reaches only through what it DROPS. 0 is a full tile, which reads exactly like the aim's own footprint; larger leaves a smaller square with more ground showing round it."},
 
 	# The three tones of the range readout (#1066): your blue above (Move fill), your red, and the
 	# enemy's one field under both. Tune them as a STACK, never one at a time -- what the player
@@ -552,8 +649,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# SquadLines2D because both views draw them.
 	{"group": "Squad lines", "label": "Tether and range (2D+3D)", "static": "TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The tether from each member to its leader AND the dashed stroke round the squad's range -- one colour, because they are one system. Orange, the hue the cohesion fill always wore."},
+	{"group": "Squad lines", "label": "Enemy tether and range (2D+3D)", "static": "ENEMY_TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The same lines for an ENEMY squad, shown on enemy hover, and its breaks and draw-ins. Lightened from the enemy field's purple so it reads over that field and over bare ground alike; the strain red a break turns to is shared with yours."},
+	{"group": "Squad lines", "label": "Squad line casing (2D+3D)", "static": "CASING_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The dark outline round every squad line, yours and the enemy's: what keeps a line readable on a floor near its own colour. Its alpha is multiplied by the line's, so a ghost tether's outline is as see-through as the ghost. The 3D width is Casing width; the flat view's is one pixel."},
 	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,
-		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Dim the colour itself, not only its alpha -- the 3D arrowhead is solid and ignores alpha, so a ghost there reads as darker rather than see-through."},
+		"tip": "A tether that MIGHT be: every unit Squad Up could recruit, or every squad Join Squad could join. Its alpha fades the whole tether, arrowhead included, and the dark casing fades with it."},
 	{"group": "Squad lines", "label": "Strained tether (2D+3D)", "static": "TETHER_STRAIN_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The tether a hovered move would break -- a member past its leader's range, or a member the leader would strand. It is also the one that shakes when you click that tile anyway."},
 	{"group": "Squad lines", "label": "Dashes per tile", "static": "DASHES_PER_TILE", "script": SQUAD_LINES_SCRIPT,
@@ -583,6 +684,100 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Shake swings", "static": "SHAKE_SWINGS", "script": SQUAD_LINES_SCRIPT,
 		"min": 0.5, "max": 8.0, "step": 0.5,
 		"tip": "How many times it swings back and forth in that time."},
+	# The membership MOMENTS (#367): a join draws the tether in, a voluntary leave reels it in. Read
+	# every frame one plays, so a drag shows on the next join or leave.
+	{"group": "Squad lines", "label": "Join: draw-in time", "static": "DRAW_IN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long a new member's tether takes to grow from the member to the leader, in seconds. Zero draws it whole at once."},
+	{"group": "Squad lines", "label": "Join: pop size", "static": "POP_SCALE", "script": SQUAD_LINES_SCRIPT,
+		"min": 1.0, "max": 4.0, "step": 0.05,
+		"tip": "How big the arrowhead swells when the tether reaches the leader, as a multiple of its own size. 1.0 is no pop."},
+	{"group": "Squad lines", "label": "Join: pop time", "static": "POP_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How long the arrowhead takes to settle back to its size after the pop, in seconds."},
+	{"group": "Squad lines", "label": "Join: pop brighten", "static": "POP_BRIGHTEN", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the popping arrowhead whitens, 0 to 1. A flash, so the photosensitivity setting turns it off; the swell still plays."},
+	{"group": "Squad lines", "label": "Join: hold", "static": "DRAWN_HOLD_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "When nothing is selected afterwards (Join Squad closes its pick), how long the new tether stays up before it fades, in seconds. During Squad Up the squad's own tether takes over instead."},
+	{"group": "Squad lines", "label": "Join: fade", "static": "DRAWN_FADE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long that held tether takes to fade out, in seconds."},
+	{"group": "Squad lines", "label": "Leave: reel-in time", "static": "REEL_IN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long a leaving member's tether takes to be pulled into the leader, in seconds (Leave Squad, Disband). When a leader leaves, the new leader's tethers wait this long before they draw in."},
+	# The BREAK (#367 part 2B): a forced exit -- a shove out of range, a downing, a new leader unable to
+	# hold someone. Read every frame one plays; the pass also waits this long at the blow that causes it.
+	{"group": "Squad lines", "label": "Break: strain time", "static": "BREAK_STRAIN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long a breaking tether reddens and shivers before it snaps, in seconds."},
+	{"group": "Squad lines", "label": "Break: shatter time", "static": "BREAK_SHATTER_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long the snapped tether's pieces and arrowhead take to fall to the ground and fade, in seconds."},
+	{"group": "Squad lines", "label": "Break: kick", "static": "BREAK_KICK", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How fast the pieces fly apart from the snap, in cells per second."},
+	{"group": "Squad lines", "label": "Break: tumble", "static": "BREAK_TUMBLE_TURNS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.25,
+		"tip": "How many times each piece turns over on its way down."},
+	{"group": "Squad lines", "label": "Break: sparks", "static": "BREAK_SPARKS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 24.0, "step": 1.0,
+		"tip": "How many sparks fly from the snap. They brighten toward white unless the photosensitivity setting is on."},
+	{"group": "Squad lines", "label": "Break: spark speed", "static": "BREAK_SPARK_SPEED", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 8.0, "step": 0.1,
+		"tip": "How fast the sparks fly, in cells per second. A faster spark draws a longer streak."},
+	{"group": "Squad lines", "label": "Break: spark time", "static": "BREAK_SPARK_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.5, "step": 0.05,
+		"tip": "How long the sparks last, in seconds."},
+	# A DEATH (#1104): one of four looks per death, each turning the tether to ash. Read every frame one
+	# plays; the pass also waits for it at the blow that kills.
+	{"group": "Squad lines", "label": "Death look", "static": "DEATH_LOOK", "script": SQUAD_LINES_SCRIPT,
+		"options": ["Random", "Drain", "Slack", "Last pulse", "Ash motes"],
+		"tip": "Which look a dying squad member's tether plays. Random picks one per death and never the same one twice running; pick one to tune it on its own."},
+	{"group": "Squad lines", "label": "Death: ash colour", "static": "DEATH_ASH_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The grey every death look turns the tether to, whichever side it was."},
+	{"group": "Squad lines", "label": "Death: grey time", "static": "DEATH_GREY_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How long Last pulse and Ash motes take to turn grey, in seconds. Drain and Slack grey as they go."},
+	{"group": "Squad lines", "label": "Death: hold", "static": "DEATH_HOLD_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long Drain and Slack hold their ash before the fade, in seconds."},
+	{"group": "Squad lines", "label": "Death: fade", "static": "DEATH_FADE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the closing fade takes for Drain, Slack and Last pulse, in seconds."},
+	{"group": "Squad lines", "label": "Drain: run time", "static": "DRAIN_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long the ash takes to run from the dead end of the tether to the other, in seconds."},
+	{"group": "Squad lines", "label": "Slack: fall time", "static": "SLACK_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long a slack tether takes to sag and drop its dead end to the ground, in seconds."},
+	{"group": "Squad lines", "label": "Slack: sag", "static": "SLACK_SAG", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the middle of a slack tether sags below where it hung, in cells."},
+	{"group": "Squad lines", "label": "Last pulse: run time", "static": "PULSE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 3.0, "step": 0.05,
+		"tip": "How long the light takes to reach whoever is left, in seconds. They flash as it arrives."},
+	{"group": "Squad lines", "label": "Last pulse: colour", "static": "PULSE_COLOR", "script": SQUAD_LINES_SCRIPT,
+		"tip": "The light's colour, in both views. How bright it blooms in 3D is Last pulse: light glow."},
+	{"group": "Squad lines", "label": "Last pulse: length", "static": "PULSE_LENGTH", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.05, "max": 1.5, "step": 0.05,
+		"tip": "How long the light is along the tether, in cells."},
+	{"group": "Squad lines", "label": "Last pulse: survivor flash", "static": "LOSS_FLASH_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "How white whoever the light reaches flashes. It yields to an aim pulse and a pin flash, which already own that sprite's colour."},
+	{"group": "Squad lines", "label": "Last pulse: flash time", "static": "LOSS_FLASH_SECONDS",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.05, "max": 1.5, "step": 0.05,
+		"tip": "How long the survivor's flash takes, in seconds."},
+	{"group": "Squad lines", "label": "Ash motes: per dash", "static": "MOTES_PER_DASH", "script": SQUAD_LINES_SCRIPT,
+		"min": 1.0, "max": 8.0, "step": 1.0,
+		"tip": "How many motes each dash crumbles into."},
+	{"group": "Squad lines", "label": "Ash motes: rise", "static": "MOTE_RISE", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How far the motes drift up, in cells. The flat view has no height, so there they only drift and fade."},
+	{"group": "Squad lines", "label": "Ash motes: life", "static": "MOTE_SECONDS", "script": SQUAD_LINES_SCRIPT,
+		"min": 0.1, "max": 3.0, "step": 0.05,
+		"tip": "How long the longest-lived mote lasts, in seconds. Each one lasts between 60% of this and all of it."},
 	# The Squad Up count beside the leader's crown (#1070). On OverlayManager, the store both views
 	# read; its size, outline and colour are the HP digits' own rows, so it has none here.
 	{"group": "Squad lines", "label": "Squad Up count hold (2D+3D)", "static": "SQUAD_COUNT_HOLD",
@@ -684,6 +879,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Mission HUD", "label": "Clock urgency tint", "static": "URGENT_COLOR",
 		"script": MISSION_STATUS_SCRIPT,
 		"tip": "What the countdown turns once it is inside the threshold above. Reads against the plain white of an objective still pending, so it has to say urgent without reading as the red that means a mission cannot be won at all."},
+
+	# The roster grid's reorder (#1089). A static on PreMissionScreen, which is 2D UI on the card
+	# layer -- the Mission HUD case again, so a class row is the only form available.
+	{"group": "Pre-mission screen", "label": "Card slide", "static": "CARD_SLIDE_SECONDS",
+		"script": PRE_MISSION_SCREEN_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Seconds a card takes to glide to its new slot when a deploy toggle or Reset reorders the roster grid. Long enough to show which way a card went, short enough that a second click is not waiting on it. Zero snaps. Takes effect on the next reorder."},
 
 	# --- ELEMENT COLOURS (#685) ---------------------------------------------------------------
 	#
@@ -1001,6 +1202,10 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action queue", "label": "Parchment ink saturation", "static": "PARCHMENT_INK_SATURATION",
 		"script": QUEUE_STYLE_SCRIPT, "min": 1.0, "max": 3.0, "step": 0.05,
 		"tip": "How far the element colours are pushed toward pure hue before being inked onto parchment. The slate set is tuned to GLOW on a dark ground, so the palest of them (Ice, Air) go to mud at ink depth without this. A gain rather than a floor, so your relative choices stay in order -- it clamps at fully saturated, which is the one place they can flatten."},
+	# The refused-Execute shake (#1121). Read each time a shake starts, so it needs no sweep.
+	{"group": "Action queue", "label": "Refusal shake size", "static": "REFUSAL_SHAKE_PX",
+		"script": QUEUE_STYLE_SCRIPT, "min": 0.0, "max": 10.0, "step": 1.0,
+		"tip": "How far a red row swings side to side when you press Execute over it, in pixels of the dock. How long it rings and how many times it swings are the tether pluck's own (Squad lines: Shake length, Shake swings), so the two refusals wobble alike. Takes effect on the next refused press."},
 
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
@@ -1080,22 +1285,6 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"action": BaseAction.ActionType.CAPTURE,
 		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long the camera stays on a zone that has just changed hands."},
-	{"group": "Actions", "label": "Hold: a rally", "static": "HOLD_RALLY",
-		"action": BaseAction.ActionType.RALLY,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when Will comes back."},
-	{"group": "Actions", "label": "Linger: a rally", "static": "LINGER_RALLY",
-		"action": BaseAction.ActionType.RALLY,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
-		"tip": "How long the camera stays after Will comes back."},
-	{"group": "Actions", "label": "Hold: an intimidate", "static": "HOLD_INTIMIDATE",
-		"action": BaseAction.ActionType.INTIMIDATE,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when Will is drained out of someone."},
-	{"group": "Actions", "label": "Linger: an intimidate", "static": "LINGER_INTIMIDATE",
-		"action": BaseAction.ActionType.INTIMIDATE,
-		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
-		"tip": "How long the camera stays on the unit whose Will just went."},
 	{"group": "Actions", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
 		"action": BaseAction.ActionType.GUARD,
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
@@ -1167,6 +1356,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Camera travel", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
+	{"group": "Camera travel", "label": "Settle: still before anything plays", "static": "CAMERA_SETTLE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The least time the camera sits STILL in its new position before anything plays, in seconds -- counted from the moment every ease has arrived, after every playback pan (each blast, the walk, the tear-out, the way home, the burn). A floor: a beat whose own hold is longer keeps it."},
 	{"group": "Camera travel", "label": "Camera travel to a burning unit", "static": "ENVIRONMENT_PAN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long the camera takes to reach each unit in the end-of-turn effect pass -- today, everyone standing in fire. Its own number rather than a share of the blast travel above, because this phase is bookkeeping and paced against the others, not with them. Zero snaps."},
@@ -1330,6 +1522,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "The cliff follow", "label": "Hold: the bottom of a void fall", "static": "PLUMMET_HOLD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
 		"tip": "A beat down in the dark after a body stops falling, before it is removed -- which is the moment its health bricks burst up from under the frame, so this is also the wait before that show. The bricks themselves always land in shot; there is no slider that can lose them."},
+	{"group": "The cliff follow", "label": "Hang: over the edge before the fall", "static": "VOID_HANG",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long a body shoved over a hole hangs in the air before its tether snaps, counted from when it arrives over the hole. Only while a squad tether it broke is holding it: the tether strains red the whole time and snaps as the hang ends, and the body drops after the hold below. A unit with no tether falls at once. At 0 the tether snaps the moment the body arrives."},
+	{"group": "The cliff follow", "label": "Hold: after the snap, before the fall", "static": "VOID_SNAP_HOLD",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the body stays over the hole once its tether has snapped, so the break plays out before the body drops and the camera follows it down. Only a body a tether was holding waits here; one with no tether falls at once. At 0 it drops in the same instant the tether snaps."},
 	{"group": "The cliff follow", "label": "Shot sits above the units' feet", "static": "STAGE_AIM_LIFT",
 		"script": PACING_SCRIPT, "min": -2.0, "max": 4.0, "step": 0.05,
 		"tip": "How high above their feet the shot frames the people it is about, in cells -- the fighters on the torn-out diorama, and equally the one unit a trained shot is following. At 0 the shot is level with their feet, which leaves the sprites sitting high; raise it to bring them to the middle of the screen."},
@@ -1351,6 +1549,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Motion", "label": "Void fall time", "static": "VOID_PLUMMET_SECONDS",
 		"script": MOVEMENT_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long that fall takes, in seconds. Zero removes the unit at the lip with no fall at all -- the pre-#431 behaviour. Does not affect the preview arrow, only the playback."},
+
+	# Fast-forward and skip (#545). Speeds, not durations: each multiplies Engine.time_scale through
+	# Pacing's one writer, so they move every beat, pan and animation above together.
+	{"group": "Fast-forward and skip", "label": "Fast-forward speed", "static": "FAST_FORWARD",
+		"script": PACING_SCRIPT, "min": 1.0, "max": 10.0, "step": 0.5,
+		"tip": "How many times faster playback runs while the fast-forward key is held. If the player's Playback speed setting is faster, that wins -- the two never stack."},
+	{"group": "Fast-forward and skip", "label": "Skip speed", "static": "SKIP_SPEED",
+		"script": PACING_SCRIPT, "min": 1.0, "max": 32.0, "step": 1.0,
+		"tip": "How fast a skip runs what is left of the pass under the fade. Pauses and camera moves already take no time during a skip; this speeds up the walks, lunges and debris that remain, so it is the dial for how long the screen stays dark."},
+	{"group": "Fast-forward and skip", "label": "Skip fade", "static": "SKIP_FADE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How long the screen takes to go dark when a skip starts, and to come back when it ends, in real seconds. Zero cuts."},
 
 	# The action ring (#467). Statics on a TRANSIENT node, which is why they are class knobs: the
 	# menu exists only while the player holds it open, so there is no standing property for a KNOBS
@@ -1400,6 +1610,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Ring: readout", "label": "Readout detail", "static": "READOUT_DETAIL_COLOR",
 		"script": ACTION_MENU_SCRIPT,
 		"tip": "The explanation under that name -- what the option does, and why it is greyed when it is. Dimmer than the name, but still solid."},
+	{"group": "Ring: readout", "label": "Rev timer text", "static": "GAUGE_TIMER_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The turns-left count beside a revved Chainsword's attacks (\"Slash 2 turns\"). Tinted so a timer never reads as an ammo count, which wears the name's own colour."},
 	{"group": "Ring: shape", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
 		"script": ACTION_MENU_SCRIPT, "min": 20.0, "max": 360.0, "step": 1.0,
 		"tip": "Ceiling on how many degrees any one wedge PAINTS. Without it a submenu holding a single option balloons into a whole donut. It never moves a hit boundary -- the sectors still tile the circle, so the leftover angle belongs to the nearest wedge and the highlight says which."},
@@ -1434,6 +1647,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Music", "label": "Crossfade", "static": "CROSSFADE_SECONDS",
 		"script": MUSIC_DIRECTOR_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "Seconds for one track to replace another. The swap fires twice a round, so judge this against a whole mission rather than against one hand-off: short enough and it reads as a cut every turn, long enough and the two tracks are audibly playing over each other. Zero is a hard cut. Takes effect on the next swap."},
+
+	# What a blow must deal to take a limb (#1174). The first GAMEPLAY rules on this tab: statics on
+	# LethalityRules, read by the resolver and by Unit.take_damage alike, so a drag reaches the preview
+	# at the next resolve and never re-words a queue already resolved.
+	{"group": "Limb loss", "label": "Limb loss damage", "static": "LIMB_LOSS_DAMAGE",
+		"script": LETHALITY_RULES_SCRIPT, "min": 1, "max": 40, "step": 1,
+		"tip": "A single blow this big takes a limb, whether or not it downs the unit. The blow is the hit after armour, any fall included, after Iron Will's cap; never the drowning or the ground. A kill takes nothing."},
+	{"group": "Limb loss", "label": "Limb loss damage (wounded)", "static": "LIMB_LOSS_DAMAGE_WOUNDED",
+		"script": LETHALITY_RULES_SCRIPT, "min": 1, "max": 40, "step": 1,
+		"tip": "The same threshold once the unit has gone down this battle. Lower than the fresh one, so a unit that has been down is easier to maim."},
 ]
 
 
@@ -1509,6 +1732,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Arrows & trails": "Markers",
 	"Guard": "Markers",
 	"Squads & zones": "Markers",
+	"Zone marks": "Markers",
 	"Squad lines": "Markers",
 	"Tile pick": "Markers",
 	"Lift, brackets & icons": "Markers",
@@ -1524,9 +1748,17 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# a line of separation from the knobs that simply are what they say.
 	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
+	"Pre-mission screen": "Mission",
+	# The first gameplay RULES on this panel (#1174) -- a tab of their own, since nothing else here is one.
+	"Limb loss": "Rules",
 	# Its own tab with one row in it, which is thin today and is where the lethality stings and any
 	# ducking land next -- a crossfade length has nothing to do with any other tab's subject.
 	"Music": "Audio",
+	# Gas (#508): a tab of its own, since no other tab's subject is a volume. The floor and the puffs
+	# join it as a group.
+	"Gas: the march": "Gas",
+	"Gas: light": "Gas",
+	"Gas: puffs and floor": "Gas",
 	"Camera handling": "Camera",
 	"Playback framing": "Playback",
 	"World": "World",
@@ -1584,6 +1816,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# and only the first is cinematic-only.
 	"The cliff follow": "Playback",
 	"Motion": "Playback",
+	"Fast-forward and skip": "Playback",   # #545
 	"Ring: shape": "Action ring",
 	"Ring: slices": "Action ring",
 	"Ring: centre": "Action ring",
@@ -1702,11 +1935,23 @@ static func read_static(name: String) -> Variant:
 		"MARK_INSET": return ThreatLines2D.MARK_INSET
 		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
 		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
+		"PAYLOAD_INSET": return InsetSquare.PAYLOAD_INSET
 		"GRID_LINE_INSET": return MoveGrid.GRID_LINE_INSET
 		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
 		"GRID_FILL_GAP": return MoveGrid.GRID_FILL_GAP
 		"GRID_FILL_ALPHA": return MoveGrid.GRID_FILL_ALPHA
+		"ZONE_EDGE_OUTLINE": return ZoneMarks.ZONE_EDGE_OUTLINE
+		"ZONE_RIM_WIDTH": return ZoneMarks.ZONE_RIM_WIDTH
+		"ZONE_FILL_ALPHA": return ZoneMarks.ZONE_FILL_ALPHA
+		"ZONE_WALL_HEIGHT": return ZoneMarks.ZONE_WALL_HEIGHT
+		"ZONE_WALL_ALPHA": return ZoneMarks.ZONE_WALL_ALPHA
+		"ZONE_SHIMMER_SPEED": return ZoneMarks.ZONE_SHIMMER_SPEED
+		"ZONE_LIT_FILL_ALPHA": return ZoneMarks.ZONE_LIT_FILL_ALPHA
+		"ZONE_LIT_WALL_HEIGHT": return ZoneMarks.ZONE_LIT_WALL_HEIGHT
+		"ZONE_LIT_WALL_ALPHA": return ZoneMarks.ZONE_LIT_WALL_ALPHA
 		"TETHER_COLOR": return SquadLines2D.TETHER_COLOR
+		"ENEMY_TETHER_COLOR": return SquadLines2D.ENEMY_TETHER_COLOR
+		"CASING_COLOR": return SquadLines2D.CASING_COLOR
 		"TETHER_GHOST_COLOR": return SquadLines2D.TETHER_GHOST_COLOR
 		"TETHER_STRAIN_COLOR": return SquadLines2D.TETHER_STRAIN_COLOR
 		"DASHES_PER_TILE": return SquadLines2D.DASHES_PER_TILE
@@ -1718,6 +1963,36 @@ static func read_static(name: String) -> Variant:
 		"SHAKE_AMPLITUDE": return SquadLines2D.SHAKE_AMPLITUDE
 		"SHAKE_SECONDS": return SquadLines2D.SHAKE_SECONDS
 		"SHAKE_SWINGS": return SquadLines2D.SHAKE_SWINGS
+		"DRAW_IN_SECONDS": return SquadLines2D.DRAW_IN_SECONDS
+		"POP_SCALE": return SquadLines2D.POP_SCALE
+		"POP_SECONDS": return SquadLines2D.POP_SECONDS
+		"POP_BRIGHTEN": return SquadLines2D.POP_BRIGHTEN
+		"DRAWN_HOLD_SECONDS": return SquadLines2D.DRAWN_HOLD_SECONDS
+		"DRAWN_FADE_SECONDS": return SquadLines2D.DRAWN_FADE_SECONDS
+		"REEL_IN_SECONDS": return SquadLines2D.REEL_IN_SECONDS
+		"BREAK_STRAIN_SECONDS": return SquadLines2D.BREAK_STRAIN_SECONDS
+		"BREAK_SHATTER_SECONDS": return SquadLines2D.BREAK_SHATTER_SECONDS
+		"BREAK_KICK": return SquadLines2D.BREAK_KICK
+		"BREAK_TUMBLE_TURNS": return SquadLines2D.BREAK_TUMBLE_TURNS
+		"BREAK_SPARKS": return SquadLines2D.BREAK_SPARKS
+		"BREAK_SPARK_SPEED": return SquadLines2D.BREAK_SPARK_SPEED
+		"BREAK_SPARK_SECONDS": return SquadLines2D.BREAK_SPARK_SECONDS
+		"DEATH_LOOK": return SquadLines2D.DEATH_LOOK
+		"DEATH_ASH_COLOR": return SquadLines2D.DEATH_ASH_COLOR
+		"DEATH_GREY_SECONDS": return SquadLines2D.DEATH_GREY_SECONDS
+		"DEATH_HOLD_SECONDS": return SquadLines2D.DEATH_HOLD_SECONDS
+		"DEATH_FADE_SECONDS": return SquadLines2D.DEATH_FADE_SECONDS
+		"DRAIN_SECONDS": return SquadLines2D.DRAIN_SECONDS
+		"SLACK_SECONDS": return SquadLines2D.SLACK_SECONDS
+		"SLACK_SAG": return SquadLines2D.SLACK_SAG
+		"PULSE_SECONDS": return SquadLines2D.PULSE_SECONDS
+		"PULSE_COLOR": return SquadLines2D.PULSE_COLOR
+		"PULSE_LENGTH": return SquadLines2D.PULSE_LENGTH
+		"MOTES_PER_DASH": return SquadLines2D.MOTES_PER_DASH
+		"MOTE_RISE": return SquadLines2D.MOTE_RISE
+		"MOTE_SECONDS": return SquadLines2D.MOTE_SECONDS
+		"LOSS_FLASH_MODULATE": return UnitVisuals.LOSS_FLASH_MODULATE
+		"LOSS_FLASH_SECONDS": return UnitVisuals.LOSS_FLASH_SECONDS
 		"SQUAD_COUNT_HOLD": return OverlayManager.SQUAD_COUNT_HOLD
 		"SQUAD_COUNT_FADE": return OverlayManager.SQUAD_COUNT_FADE
 		"SQUAD_COUNT_GAP": return OverlayManager.SQUAD_COUNT_GAP
@@ -1842,6 +2117,7 @@ static func read_static(name: String) -> Variant:
 		"spark_gravity": return ShockSparks.spark_gravity
 		"spark_drag": return ShockSparks.spark_drag
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
+		"CAMERA_SETTLE": return Pacing.CAMERA_SETTLE
 		"TEAR_OUT_BRACE": return Pacing.TEAR_OUT_BRACE
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
 		"TEAR_OUT_SETTLE": return Pacing.TEAR_OUT_SETTLE
@@ -1849,6 +2125,11 @@ static func read_static(name: String) -> Variant:
 		"CLIFF_FOLLOW_MAX": return Pacing.CLIFF_FOLLOW_MAX
 		"CLIFF_RECOVER": return Pacing.CLIFF_RECOVER
 		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
+		"VOID_HANG": return Pacing.VOID_HANG
+		"VOID_SNAP_HOLD": return Pacing.VOID_SNAP_HOLD
+		"FAST_FORWARD": return Pacing.FAST_FORWARD
+		"SKIP_SPEED": return Pacing.SKIP_SPEED
+		"SKIP_FADE": return Pacing.SKIP_FADE
 		"STAGE_AIM_LIFT": return Pacing.STAGE_AIM_LIFT
 		"TRAINED_DISTANCE": return Pacing.TRAINED_DISTANCE
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
@@ -1893,8 +2174,6 @@ static func read_static(name: String) -> Variant:
 		"HOLD_TURNOVER": return Pacing.HOLD_TURNOVER
 		"HOLD_HEAL": return Pacing.HOLD_HEAL
 		"HOLD_RESCUE": return Pacing.HOLD_RESCUE
-		"HOLD_RALLY": return Pacing.HOLD_RALLY
-		"HOLD_INTIMIDATE": return Pacing.HOLD_INTIMIDATE
 		"HOLD_RELOAD": return Pacing.HOLD_RELOAD
 		"HOLD_REV": return Pacing.HOLD_REV
 		"HOLD_BURROW": return Pacing.HOLD_BURROW
@@ -1904,8 +2183,6 @@ static func read_static(name: String) -> Variant:
 		"LINGER_ATTACK": return Pacing.LINGER_ATTACK
 		"LINGER_DOWN": return Pacing.LINGER_DOWN
 		"LINGER_RESCUE": return Pacing.LINGER_RESCUE
-		"LINGER_RALLY": return Pacing.LINGER_RALLY
-		"LINGER_INTIMIDATE": return Pacing.LINGER_INTIMIDATE
 		"LINGER_RELOAD": return Pacing.LINGER_RELOAD
 		"LINGER_REV": return Pacing.LINGER_REV
 		"LINGER_BURROW": return Pacing.LINGER_BURROW
@@ -1921,6 +2198,7 @@ static func read_static(name: String) -> Variant:
 		"READOUT_BORDER_WIDTH": return ActionMenuController.READOUT_BORDER_WIDTH
 		"READOUT_TITLE_COLOR": return ActionMenuController.READOUT_TITLE_COLOR
 		"READOUT_DETAIL_COLOR": return ActionMenuController.READOUT_DETAIL_COLOR
+		"GAUGE_TIMER_COLOR": return ActionMenuController.GAUGE_TIMER_COLOR
 		"MAX_WEDGE_DEGREES": return ActionMenuController.MAX_WEDGE_DEGREES
 		"CENTRE_COLOR": return ActionMenuController.CENTRE_COLOR
 		"CENTRE_RIM_COLOR": return ActionMenuController.CENTRE_RIM_COLOR
@@ -1938,8 +2216,11 @@ static func read_static(name: String) -> Variant:
 		"SLICE_SELECTED_COLOR": return ActionMenuController.SLICE_SELECTED_COLOR
 		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
 		"CROSSFADE_SECONDS": return MusicDirector.CROSSFADE_SECONDS
+		"LIMB_LOSS_DAMAGE": return LethalityRules.LIMB_LOSS_DAMAGE
+		"LIMB_LOSS_DAMAGE_WOUNDED": return LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED
 		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
 		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
+		"CARD_SLIDE_SECONDS": return PreMissionScreen.CARD_SLIDE_SECONDS
 		"ELEMENT_FIRE": return ElementPalette.ELEMENT_FIRE
 		"ELEMENT_WATER": return ElementPalette.ELEMENT_WATER
 		"ELEMENT_SHOCK": return ElementPalette.ELEMENT_SHOCK
@@ -1951,6 +2232,7 @@ static func read_static(name: String) -> Variant:
 		"EVENT_TINT": return QueueStyle.EVENT_TINT
 		"PARCHMENT_INK_DEPTH": return QueueStyle.PARCHMENT_INK_DEPTH
 		"PARCHMENT_INK_SATURATION": return QueueStyle.PARCHMENT_INK_SATURATION
+		"REFUSAL_SHAKE_PX": return QueueStyle.REFUSAL_SHAKE_PX
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -2003,6 +2285,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			UnitVisuals.PIN_PULSE_HOLD = value
 			_restyle_pin_flashes(host)
 			return
+		# The payload inset (#1058 D2b): regenerates the one texture each view holds, like the grid below.
+		"PAYLOAD_INSET":
+			InsetSquare.PAYLOAD_INSET = value
+			_restyle_payload_inset(host)
+			return
 		# The movement grid (#1074). All four regenerate the one texture each view already holds.
 		"GRID_LINE_INSET":
 			MoveGrid.GRID_LINE_INSET = value
@@ -2020,14 +2307,36 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			MoveGrid.GRID_FILL_ALPHA = value
 			_restyle_move_grid(host)
 			return
+		# The zone marks (#955). The art is generated, so every one of them regenerates it: the mirror
+		# reads the new textures and the wall its new shape on its next frame, and the flat view rebuilds.
+		"ZONE_EDGE_OUTLINE", "ZONE_RIM_WIDTH", "ZONE_FILL_ALPHA", "ZONE_WALL_HEIGHT", \
+				"ZONE_WALL_ALPHA", "ZONE_SHIMMER_SPEED", "ZONE_LIT_FILL_ALPHA", "ZONE_LIT_WALL_HEIGHT", \
+				"ZONE_LIT_WALL_ALPHA":
+			_write_zone_mark(name, value)
+			ZoneMarks.restyle()
+			_restyle_zone_marks(host)
+			return
 		# The squad's lines (#1070). Every one re-applies to BOTH views through one door: the 3D beam
 		# params (the dashes are shader uniforms) and the store, which re-derives the tethers -- the
 		# inset is geometry -- and repaints the flat line.
-		"TETHER_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", "DASHES_PER_TILE", "DASH_FILL", \
+		"TETHER_COLOR", "ENEMY_TETHER_COLOR", "CASING_COLOR", "TETHER_GHOST_COLOR", "TETHER_STRAIN_COLOR", \
+				"DASHES_PER_TILE", "DASH_FILL", \
 				"DASH_SPEED", "TETHER_INSET", "ARROW_LENGTH", "ARROW_WIDTH_SCALE", "SHAKE_AMPLITUDE", 				"SHAKE_SECONDS", "SHAKE_SWINGS":
 			_write_squad_line(name, value)
 			_restyle_squad_lines(host)
 			return
+		# The membership moments (#367) read these every frame one plays, so the write is the apply.
+		"DRAW_IN_SECONDS", "POP_SCALE", "POP_SECONDS", "POP_BRIGHTEN", "DRAWN_HOLD_SECONDS", \
+				"DRAWN_FADE_SECONDS", "REEL_IN_SECONDS", "BREAK_STRAIN_SECONDS", "BREAK_SHATTER_SECONDS", \
+				"BREAK_KICK", "BREAK_TUMBLE_TURNS", "BREAK_SPARKS", "BREAK_SPARK_SPEED", "BREAK_SPARK_SECONDS", \
+				"DEATH_LOOK", "DEATH_ASH_COLOR", "DEATH_GREY_SECONDS", "DEATH_HOLD_SECONDS", "DEATH_FADE_SECONDS", \
+				"DRAIN_SECONDS", "SLACK_SECONDS", "SLACK_SAG", "PULSE_SECONDS", "PULSE_COLOR", "PULSE_LENGTH", \
+				"MOTES_PER_DASH", "MOTE_RISE", "MOTE_SECONDS":
+			_write_squad_line(name, value)
+			return
+		# The survivor's flash (#1104) is read as it starts, so the write is the apply.
+		"LOSS_FLASH_MODULATE": UnitVisuals.LOSS_FLASH_MODULATE = value
+		"LOSS_FLASH_SECONDS": UnitVisuals.LOSS_FLASH_SECONDS = value
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
@@ -2368,6 +2677,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
 			return
+		"CAMERA_SETTLE":
+			Pacing.CAMERA_SETTLE = value
+			return
 		"TEAR_OUT_BRACE":
 			Pacing.TEAR_OUT_BRACE = value
 		"TEAR_OUT_EMPTY_SKY":
@@ -2382,6 +2694,16 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.CLIFF_RECOVER = value
 		"PLUMMET_HOLD":
 			Pacing.PLUMMET_HOLD = value
+		"VOID_HANG":
+			Pacing.VOID_HANG = value
+		"VOID_SNAP_HOLD":
+			Pacing.VOID_SNAP_HOLD = value
+		"FAST_FORWARD":
+			Pacing.FAST_FORWARD = value
+		"SKIP_SPEED":
+			Pacing.SKIP_SPEED = value
+		"SKIP_FADE":
+			Pacing.SKIP_FADE = value
 		"STAGE_AIM_LIFT":
 			Pacing.STAGE_AIM_LIFT = value
 		"TRAINED_DISTANCE":
@@ -2505,12 +2827,6 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HOLD_RESCUE":
 			Pacing.HOLD_RESCUE = value
 			return
-		"HOLD_RALLY":
-			Pacing.HOLD_RALLY = value
-			return
-		"HOLD_INTIMIDATE":
-			Pacing.HOLD_INTIMIDATE = value
-			return
 		"HOLD_RELOAD":
 			Pacing.HOLD_RELOAD = value
 			return
@@ -2537,12 +2853,6 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"LINGER_RESCUE":
 			Pacing.LINGER_RESCUE = value
-			return
-		"LINGER_RALLY":
-			Pacing.LINGER_RALLY = value
-			return
-		"LINGER_INTIMIDATE":
-			Pacing.LINGER_INTIMIDATE = value
 			return
 		"LINGER_RELOAD":
 			Pacing.LINGER_RELOAD = value
@@ -2597,6 +2907,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"READOUT_DETAIL_COLOR":
 			ActionMenuController.READOUT_DETAIL_COLOR = value
 			return
+		"GAUGE_TIMER_COLOR":
+			ActionMenuController.GAUGE_TIMER_COLOR = value
+			return
 		"MAX_WEDGE_DEGREES":
 			ActionMenuController.MAX_WEDGE_DEGREES = value
 			return
@@ -2650,6 +2963,13 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"CROSSFADE_SECONDS":
 			MusicDirector.CROSSFADE_SECONDS = value
 			return
+		# Read at every resolve and every take_damage; nothing caches them, so no re-apply.
+		"LIMB_LOSS_DAMAGE":
+			LethalityRules.LIMB_LOSS_DAMAGE = int(value)
+			return
+		"LIMB_LOSS_DAMAGE_WOUNDED":
+			LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED = int(value)
+			return
 		# The mission clock (#101). These DO need a re-apply: the status panel is push-refreshed from
 		# MissionController's write points, so with nothing happening on the board -- which is exactly
 		# when the dev is dragging this -- the row would not repaint until the next turn. #324's rule.
@@ -2660,6 +2980,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"URGENT_COLOR":
 			MissionStatusPanel.URGENT_COLOR = value
 			_refresh_mission_status(host)
+			return
+		# Read at the start of each slide, so nothing needs re-applying.
+		"CARD_SLIDE_SECONDS":
+			PreMissionScreen.CARD_SLIDE_SECONDS = value
 			return
 		# The queue's rows read the palette when they are BUILT, so a dragged colour needs them
 		# rebuilt -- and through the panel's own UI-only re-render, never game.refresh_action_queue,
@@ -2708,6 +3032,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			QueueStyle.PARCHMENT_INK_SATURATION = value
 			_restyle_action_queue(host)
 			return
+		"REFUSAL_SHAKE_PX":
+			QueueStyle.REFUSAL_SHAKE_PX = value
+			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
 			return
@@ -2755,6 +3082,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 static func _write_squad_line(name: String, value: Variant) -> void:
 	match name:
 		"TETHER_COLOR": SquadLines2D.TETHER_COLOR = value
+		"ENEMY_TETHER_COLOR": SquadLines2D.ENEMY_TETHER_COLOR = value
+		"CASING_COLOR": SquadLines2D.CASING_COLOR = value
 		"TETHER_GHOST_COLOR": SquadLines2D.TETHER_GHOST_COLOR = value
 		"TETHER_STRAIN_COLOR": SquadLines2D.TETHER_STRAIN_COLOR = value
 		"DASHES_PER_TILE": SquadLines2D.DASHES_PER_TILE = roundi(value)
@@ -2766,6 +3095,47 @@ static func _write_squad_line(name: String, value: Variant) -> void:
 		"SHAKE_AMPLITUDE": SquadLines2D.SHAKE_AMPLITUDE = value
 		"SHAKE_SECONDS": SquadLines2D.SHAKE_SECONDS = value
 		"SHAKE_SWINGS": SquadLines2D.SHAKE_SWINGS = value
+		"DRAW_IN_SECONDS": SquadLines2D.DRAW_IN_SECONDS = value
+		"POP_SCALE": SquadLines2D.POP_SCALE = value
+		"POP_SECONDS": SquadLines2D.POP_SECONDS = value
+		"POP_BRIGHTEN": SquadLines2D.POP_BRIGHTEN = value
+		"DRAWN_HOLD_SECONDS": SquadLines2D.DRAWN_HOLD_SECONDS = value
+		"DRAWN_FADE_SECONDS": SquadLines2D.DRAWN_FADE_SECONDS = value
+		"REEL_IN_SECONDS": SquadLines2D.REEL_IN_SECONDS = value
+		"BREAK_STRAIN_SECONDS": SquadLines2D.BREAK_STRAIN_SECONDS = value
+		"BREAK_SHATTER_SECONDS": SquadLines2D.BREAK_SHATTER_SECONDS = value
+		"BREAK_KICK": SquadLines2D.BREAK_KICK = value
+		"BREAK_TUMBLE_TURNS": SquadLines2D.BREAK_TUMBLE_TURNS = value
+		"BREAK_SPARKS": SquadLines2D.BREAK_SPARKS = roundi(value)
+		"BREAK_SPARK_SPEED": SquadLines2D.BREAK_SPARK_SPEED = value
+		"BREAK_SPARK_SECONDS": SquadLines2D.BREAK_SPARK_SECONDS = value
+		"DEATH_LOOK": SquadLines2D.DEATH_LOOK = roundi(value)
+		"DEATH_ASH_COLOR": SquadLines2D.DEATH_ASH_COLOR = value
+		"DEATH_GREY_SECONDS": SquadLines2D.DEATH_GREY_SECONDS = value
+		"DEATH_HOLD_SECONDS": SquadLines2D.DEATH_HOLD_SECONDS = value
+		"DEATH_FADE_SECONDS": SquadLines2D.DEATH_FADE_SECONDS = value
+		"DRAIN_SECONDS": SquadLines2D.DRAIN_SECONDS = value
+		"SLACK_SECONDS": SquadLines2D.SLACK_SECONDS = value
+		"SLACK_SAG": SquadLines2D.SLACK_SAG = value
+		"PULSE_SECONDS": SquadLines2D.PULSE_SECONDS = value
+		"PULSE_COLOR": SquadLines2D.PULSE_COLOR = value
+		"PULSE_LENGTH": SquadLines2D.PULSE_LENGTH = value
+		"MOTES_PER_DASH": SquadLines2D.MOTES_PER_DASH = roundi(value)
+		"MOTE_RISE": SquadLines2D.MOTE_RISE = value
+		"MOTE_SECONDS": SquadLines2D.MOTE_SECONDS = value
+
+
+static func _write_zone_mark(name: String, value: Variant) -> void:
+	match name:
+		"ZONE_EDGE_OUTLINE": ZoneMarks.ZONE_EDGE_OUTLINE = value
+		"ZONE_RIM_WIDTH": ZoneMarks.ZONE_RIM_WIDTH = value
+		"ZONE_FILL_ALPHA": ZoneMarks.ZONE_FILL_ALPHA = value
+		"ZONE_WALL_HEIGHT": ZoneMarks.ZONE_WALL_HEIGHT = value
+		"ZONE_WALL_ALPHA": ZoneMarks.ZONE_WALL_ALPHA = value
+		"ZONE_SHIMMER_SPEED": ZoneMarks.ZONE_SHIMMER_SPEED = value
+		"ZONE_LIT_FILL_ALPHA": ZoneMarks.ZONE_LIT_FILL_ALPHA = value
+		"ZONE_LIT_WALL_HEIGHT": ZoneMarks.ZONE_LIT_WALL_HEIGHT = value
+		"ZONE_LIT_WALL_ALPHA": ZoneMarks.ZONE_LIT_WALL_ALPHA = value
 
 
 # The squad lines' re-apply (#1070): the diorama's beam params and the store's derived tethers, the
@@ -2788,6 +3158,24 @@ static func _restyle_move_grid(host: Node3D) -> void:
 	var manager := overlay_manager_of(host)
 	if manager != null:
 		manager.restyle_move_grid()
+
+
+# The zone marks' flat half (#955): the sprites hold the texture they were built with, so they are
+# rebuilt off the new art. The diorama needs no call -- the mirror reads ZoneMarks every frame.
+static func _restyle_zone_marks(host: Node3D) -> void:
+	var manager := overlay_manager_of(host)
+	if manager != null:
+		manager.restyle_zone_marks()
+
+
+# The payload inset's re-apply (#1058 D2b): both views, for _restyle_move_grid's reason.
+static func _restyle_payload_inset(host: Node3D) -> void:
+	var overlays := overlays_of(host)
+	if overlays != null:
+		overlays.restyle_inset()
+	var manager := overlay_manager_of(host)
+	if manager != null:
+		manager.restyle_payload_inset()
 
 
 # The mission-status HUD's re-apply. Its one door is game.refresh_mission_status (#134), which is

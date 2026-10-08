@@ -494,6 +494,22 @@ func test_a_short_drag_still_reads_as_a_click() -> void:
 	assert_bool(rig.last_gesture_was_click()).is_false()
 
 
+# A release the rig never saw pressed is not a click (#1081). The action ring eats the press and
+# frees itself on it, so the release arrives here alone -- and a verdict read off the PREVIOUS
+# gesture's travel undid an order whenever that gesture had been a click.
+func test_a_release_with_no_press_is_not_a_click() -> void:
+	var rig := _rig()
+	_drag(rig.orbit_button, Vector2(1.0, 0.0))
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"precondition: the gesture before it must read as a click, or this proves nothing").is_true()
+	_release(rig.orbit_button)
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"a stray release inherited the last gesture's verdict").is_false()
+	_drag(rig.orbit_button, Vector2(1.0, 0.0))
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"the next gesture the rig does see is no longer judged on its own").is_true()
+
+
 # --- Bounds and the manual gate ----------------------------------------------------
 
 func test_panning_is_clamped_to_the_framed_board() -> void:
@@ -838,3 +854,263 @@ func test_the_heartbeat_sees_a_channel_written_past_every_door() -> void:
 			"the trace still shows the rig deep in a pit it left -- a direct field write went "
 			+ "unrecorded, which is exactly what a door-hooked trace cannot see").is_equal_approx(
 			0.0, 0.001)
+
+
+# --- The grab pan (#1037) -----------------------------------------------------------------------
+#
+# Middle-drag moves the aim so the ground under the pointer follows the hand (dev ruling
+# 2026-09-29). That property is measured in PIXELS off the camera's own projection, so no knob --
+# fov, pitch, distance -- can move it. Orbit is read first: a button both knobs name orbits.
+
+func _assert_pan_is_its_own_button(rig: CameraRig3D) -> void:
+	assert_bool(rig.pan_button != rig.orbit_button).override_failure_message(
+			"precondition: the scene puts orbit and pan on one button, so no drag here can pan").is_true()
+
+
+func test_the_ground_under_a_pan_drag_follows_the_hand() -> void:
+	var rig := _rig()
+	var camera := _camera()
+	_assert_pan_is_its_own_button(rig)
+	# Off the scene's own yaw, so a pan that ignored the rig's turn would slide the ground sideways.
+	rig.rotation_degrees.y = 90.0
+	rig._target_yaw_degrees = 90.0
+	var drags: Array[Vector2] = [Vector2(12.0, 0.0), Vector2(0.0, 12.0), Vector2(-12.0, 0.0),
+			Vector2(0.0, -12.0)]
+	for drag: Vector2 in drags:
+		var grabbed: Vector3 = rig.position   # the point the camera is looking at
+		var before: Vector2 = camera.unproject_position(grabbed)
+		_drag(rig.pan_button, drag)
+		var moved: Vector2 = camera.unproject_position(grabbed) - before
+		assert_float(moved.distance_to(drag)).override_failure_message(
+				"a %s drag carried the grabbed ground by %s on screen -- it does not follow the hand"
+				% [drag, moved]).is_less_equal(drag.length() * 0.1)
+
+
+# A grab holds the view on screen, so a drag taken while a glide (a recentre, the pass-end return)
+# is still travelling must not first jump to where that glide was going.
+func test_a_pan_drag_mid_glide_grabs_the_view_on_screen() -> void:
+	var rig := _rig()
+	var camera := _camera()
+	_assert_pan_is_its_own_button(rig)
+	rig.glide_to(rig._target_aim + Vector3(20.0, 0.0, 0.0))   # no frame runs, so it stays in flight
+	assert_bool(rig._aim.is_equal_approx(rig._target_aim)).override_failure_message(
+			"precondition: nothing is gliding, so this proves nothing").is_false()
+	var grabbed: Vector3 = rig.position   # the point the camera is looking at now
+	var before: Vector2 = camera.unproject_position(grabbed)
+	var drag := Vector2(12.0, 0.0)
+	_drag(rig.pan_button, drag)
+	var moved: Vector2 = camera.unproject_position(grabbed) - before
+	assert_float(moved.distance_to(drag)).override_failure_message(
+			"a drag taken mid-glide carried the grabbed ground by %s on screen -- it jumped to the glide's end"
+			% [moved]).is_less_equal(drag.length() * 0.1)
+
+
+func test_a_pan_drag_does_nothing_while_manual_input_is_off() -> void:
+	var rig := _rig()
+	_assert_pan_is_its_own_button(rig)
+	var start: Vector3 = rig._target_aim
+	rig.manual_input_enabled = false
+	_drag(rig.pan_button, Vector2(40.0, 25.0))
+	assert_that(rig._target_aim).override_failure_message(
+			"a pan drag moved the camera while something else owned it").is_equal(start)
+
+	rig.manual_input_enabled = true
+	_drag(rig.pan_button, Vector2(40.0, 25.0))
+	assert_bool(rig._target_aim.is_equal_approx(start)).override_failure_message(
+			"precondition: the same drag with input on moved nothing, so the refusal proves nothing") \
+		.is_false()
+
+
+func test_a_button_both_knobs_name_orbits_and_does_not_pan() -> void:
+	# The tile brush's borrow: orbit steps aside onto MIDDLE while the brush owns RIGHT.
+	var rig := _rig()
+	rig.orbit_button = rig.pan_button
+	rig._target_yaw_degrees = 0.0
+	var start: Vector3 = rig._target_aim
+	_drag(rig.pan_button, Vector2(40.0, 0.0))
+	assert_float(rig._target_yaw_degrees).override_failure_message(
+			"the shared button did not orbit").is_not_equal(0.0)
+	assert_that(rig._target_aim).override_failure_message(
+			"the shared button panned as well -- orbit has to win it").is_equal(start)
+
+
+func test_losing_manual_input_mid_pan_releases_it() -> void:
+	var rig := _rig()
+	_assert_pan_is_its_own_button(rig)
+	var start: Vector3 = rig._target_aim
+	_press(rig.pan_button)
+	_move(Vector2(30.0, 0.0))
+	var mid: Vector3 = rig._target_aim
+	assert_bool(mid.is_equal_approx(start)).override_failure_message(
+			"precondition: the pan never started, so this proves nothing").is_false()
+	rig.manual_input_enabled = false
+	_release(rig.pan_button)   # swallowed by the gate, as it is under an AI turn
+	rig.manual_input_enabled = true
+	_move(Vector2(30.0, 0.0))
+	assert_that(rig._target_aim).override_failure_message(
+			"the pan outlived losing the camera -- every mouse move now drags the board").is_equal(mid)
+
+
+func test_rebinding_the_pan_button_mid_pan_releases_it() -> void:
+	var rig := _rig()
+	_assert_pan_is_its_own_button(rig)
+	var original: MouseButton = rig.pan_button
+	var start: Vector3 = rig._target_aim
+	_press(original)
+	_move(Vector2(30.0, 0.0))
+	var mid: Vector3 = rig._target_aim
+	assert_bool(mid.is_equal_approx(start)).override_failure_message(
+			"precondition: the pan never started, so this proves nothing").is_false()
+	var other: MouseButton = MOUSE_BUTTON_XBUTTON1 if original != MOUSE_BUTTON_XBUTTON1 \
+			else MOUSE_BUTTON_XBUTTON2
+	rig.pan_button = other
+	_release(original)   # no longer the pan button, so it releases nothing
+	_move(Vector2(30.0, 0.0))
+	assert_that(rig._target_aim).override_failure_message(
+			"the pan survived its own rebind -- every mouse move now drags the board").is_equal(mid)
+
+
+func test_orbit_taking_the_pan_button_mid_pan_releases_it() -> void:
+	var rig := _rig()
+	_assert_pan_is_its_own_button(rig)
+	var orbit: MouseButton = rig.orbit_button
+	var start: Vector3 = rig._target_aim
+	_press(rig.pan_button)
+	_move(Vector2(30.0, 0.0))
+	var mid: Vector3 = rig._target_aim
+	assert_bool(mid.is_equal_approx(start)).override_failure_message(
+			"precondition: the pan never started, so this proves nothing").is_false()
+	# The brush arms mid-pan, the orbit branch eats the release, and the brush disarms.
+	rig.orbit_button = rig.pan_button
+	_release(rig.pan_button)
+	rig.orbit_button = orbit
+	_move(Vector2(30.0, 0.0))
+	assert_that(rig._target_aim).override_failure_message(
+			"the pan outlived orbit taking its button -- every mouse move now drags the board") \
+		.is_equal(mid)
+
+
+# battle3d writes orbit_button and manual_input_enabled every frame, so a release that skipped the
+# setters' early-out would end a pan on the frame it began.
+func test_rewriting_the_same_values_does_not_cancel_a_live_pan() -> void:
+	var rig := _rig()
+	_assert_pan_is_its_own_button(rig)
+	_press(rig.pan_button)
+	_move(Vector2(30.0, 0.0))
+	var mid: Vector3 = rig._target_aim
+	var unchanged_orbit: MouseButton = rig.orbit_button
+	var unchanged_pan: MouseButton = rig.pan_button
+	rig.manual_input_enabled = true
+	rig.orbit_button = unchanged_orbit
+	rig.pan_button = unchanged_pan
+	_move(Vector2(30.0, 0.0))
+	assert_bool(rig._target_aim.is_equal_approx(mid)).override_failure_message(
+			"a no-op write killed the pan -- dragging is impossible under a per-frame host").is_false()
+
+
+# ---- the lens the shot clearance asks about (#1132) ----
+
+func test_the_live_lens_is_where_the_camera_actually_is() -> void:
+	# The clearance judges a sight line from lens_at, a COMPOSITION of the channels, because the
+	# yaw it asks about is one the camera has not turned to yet. So it must be the same sum the
+	# node tree performs: aim + lift - drop, then the yaw and the pitch, then the distance.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 1.0, 3.0))
+	rig.lift_to(Vector3(0.0, 2.0, 0.0))
+	rig.drop_to(0.5)
+	await await_idle_frame()
+	rig.rotation_degrees.y = 37.0
+	rig._target_yaw_degrees = 37.0
+	var camera := _camera()
+	assert_float(camera.global_position.distance_to(rig.global_position)).override_failure_message(
+			"the fixture put the camera on the rig's own point, so any lens formula would pass") \
+		.is_greater(1.0)
+	assert_vector(rig.lens_at(rig.rotation_degrees.y, CameraRig3D.When.LIVE)) \
+		.override_failure_message("lens_at disagrees with where the camera node actually is") \
+		.is_equal_approx(camera.global_position, Vector3(0.001, 0.001, 0.001))
+
+
+func test_the_settled_lens_reads_the_targets() -> void:
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 1.0, 3.0))
+	await await_idle_frame()
+	rig.lift_to(Vector3(0.0, 5.0, 0.0))
+	var live := rig.lens_at(0.0, CameraRig3D.When.LIVE)
+	var settled := rig.lens_at(0.0, CameraRig3D.When.SETTLED)
+	assert_float(settled.y - live.y).override_failure_message(
+			"the settled lens did not read the lift the rig is still heading for") \
+		.is_equal_approx(5.0, 0.001)
+
+
+func test_aim_along_writes_the_directed_yaw_and_a_turn_adds_to_it() -> void:
+	var saved := Pacing.CINEMATIC_DIRECTION
+	Pacing.CINEMATIC_DIRECTION = 1.0
+	var rig := _rig()
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	rig.align_to_detent()
+	# Diagonal, so the side-on yaw is not a detent the camera could already be sitting on.
+	var line: Array[Vector2i] = [Vector2i(2, 2), Vector2i(5, 4)]
+	rig.aim_along(line)
+	var plain := rig._target_yaw_degrees
+	assert_float(plain).override_failure_message(
+			"aim_along wrote a yaw directed_yaw does not answer -- two spellings of one sum") \
+		.is_equal_approx(rig.directed_yaw(line), 0.001)
+	rig.aim_along(line, 180.0)
+	assert_float(rig._target_yaw_degrees - plain).override_failure_message(
+			"the clearance's turn did not reach the yaw the camera heads for") \
+		.is_equal_approx(180.0, 0.001)
+	var none: Array[Vector2i] = []
+	assert_bool(is_nan(rig.directed_yaw(none, 180.0))).override_failure_message(
+			"a beat with no line answered a yaw, so the clearance would turn a shot that has none") \
+		.is_true()
+	Pacing.CINEMATIC_DIRECTION = saved
+
+
+func test_a_lens_asked_about_where_a_pan_lands_is_the_settled_lens_moved_there() -> void:
+	# The clearance asks this on a pan's FIRST frame (#1132 follow-up), of an aim the rig has not been
+	# handed yet. It must be the lens the rig WILL settle at once that aim is its own -- the caller's
+	# drop already applied, the rig's lift, pitch and distance kept.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 1.0, 3.0))
+	rig.lift_to(Vector3(0.0, 2.0, 0.0))
+	rig.drop_to(0.5)
+	await await_idle_frame()
+	var landing := Vector3(9.0, 3.0, -2.0)
+	var own := rig.lens_at(40.0, CameraRig3D.When.SETTLED)
+	var asked := rig.lens_at(40.0, CameraRig3D.When.SETTLED, landing)
+	assert_float(own.distance_to(asked)).override_failure_message(
+			"the override changed nothing, so any formula would pass").is_greater(1.0)
+	rig.hold_at(landing)
+	rig.drop_to(0.0)
+	assert_vector(asked).override_failure_message(
+			"the lens asked about a landing aim is not where the rig settles once it lands there") \
+		.is_equal_approx(rig.lens_at(40.0, CameraRig3D.When.SETTLED), Vector3(0.001, 0.001, 0.001))
+
+
+# Every eased channel put ON its target, so the next assertion moves exactly one of them.
+func _land(rig: CameraRig3D) -> void:
+	rig.rotation_degrees.y = rig._target_yaw_degrees
+	rig._pitch_degrees = rig._target_pitch_degrees
+	rig._camera.position.z = rig._dollied_distance()
+	rig._drop = rig._target_drop
+	rig._lift = rig._target_lift
+	rig._aim = rig._target_aim
+
+
+func test_the_camera_is_arriving_until_its_eased_channels_land() -> void:
+	# Playback waits on this before a battle-zoom beat's hold (#1132 follow-up), so the blow is
+	# watched from a camera that has stopped. A turn and a zoom are the two the dev saw arrive late.
+	var rig := _rig()
+	await await_idle_frame()
+	_land(rig)
+	assert_bool(rig.is_arriving()).override_failure_message(
+			"a rig on every target said it was still moving -- the wait would never end").is_false()
+	rig._target_yaw_degrees += 90.0
+	assert_bool(rig.is_arriving()).override_failure_message(
+			"a camera with a quarter turn still to go said it had arrived").is_true()
+	_land(rig)
+	rig.set_zoom(rig._target_distance - 3.0)   # IN, since a zoom out may already sit at the ceiling
+	assert_bool(rig.is_arriving()).override_failure_message(
+			"a camera still zooming said it had arrived").is_true()
+	_land(rig)
+	assert_bool(rig.is_arriving()).is_false()

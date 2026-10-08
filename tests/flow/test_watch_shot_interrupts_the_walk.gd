@@ -20,6 +20,7 @@ const GRASS_ATLAS := Vector2i(5, 0)
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
+const SHALLOW_WATER := Vector2i(6, 6)   # TestTiles' wadeable water (#116)
 
 var _main: Node
 var game: Node2D
@@ -42,6 +43,7 @@ func before_test() -> void:
 func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
+	ReactionCatalog.refresh()   # H.only_electrocution's catalog goes with the case
 
 
 func _spawn(faction: Team.Faction, cell: Vector2i, power := 4, mhp := 80) -> Unit:
@@ -73,9 +75,17 @@ func _queue_walk(unit: Unit, to_x: int) -> MoveAction:
 
 # Where `witness` was standing each time `subject` took a hit, in the order the hits landed. The
 # whole suite reduces to this list.
+#
+# A hit is the number FALLING, not the signal firing: a stat settle re-emits hp_changed at an
+# unchanged value (Unit.reclamp_hp), and since #1174 a limb-sized blow settles one on the cell it
+# struck. `last` is boxed in an Array because a lambda captures a plain local by value.
 func _record_hits(subject: Unit, witness: Unit, into: Array[Vector2i]) -> void:
+	var last: Array[int] = [subject.get_current_hp()]
 	subject.unit_instance.hp_changed.connect(
-			func(_current: Variant, _max: Variant) -> void: into.append(witness.movement.cell))
+			func(current: Variant, _max: Variant) -> void:
+				if int(current) < last[0]:
+					into.append(witness.movement.cell)
+				last[0] = int(current))
 
 
 # THE case. The shot fires at the crossing MOMENT, so the crosser is standing on the crossing cell
@@ -160,3 +170,95 @@ func test_a_shove_triggered_shot_plays_after_the_blow_that_caused_it() -> void:
 	assert_array(struck_at).override_failure_message(
 			"the triggered shot played before the shove that set it off") \
 		.is_equal([Vector2i(1, 0), Vector2i(2, 0)])
+
+
+# --- the soaking a walk does (#884), against the shots that walk sets off (#46) ------------------
+#
+# The resolve soaks a wader on the step it enters the water and BEFORE that step's shots, so a shock
+# that catches it there strips the soaking again (E4). Playback used to put the soaking on as the walk
+# ENDED, after every shot it had parked for, so the unit finished the pass wet where the preview said
+# dry. Each case reads the preview's own projection and holds the board to it, so no case pins what a
+# shock does to a soaked unit -- only that both sides agree.
+
+func _shock(unit: Unit) -> void:
+	(unit.get_equipped_weapon() as WeaponInstance).template.main_attack.elemental_damage_type = \
+		Elemental.Element.SHOCK
+
+
+func _queue_path(unit: Unit, path: Array[Vector2i]) -> MoveAction:
+	var move := MoveAction.new()
+	move.init(unit, path, null)
+	assert_bool(game.squad_manager.queue_action(unit.squad, move)) \
+		.override_failure_message("fixture failed to queue the walk").is_true()
+	return move
+
+
+func _sorted(states: Array[Elemental.State]) -> Array[Elemental.State]:
+	var copy: Array[Elemental.State] = states.duplicate()
+	copy.sort()
+	return copy
+
+
+# The crosser shape: the watch over the ford fires on the step that soaks the crosser.
+func test_a_crosser_shocked_mid_ford_ends_the_pass_as_the_preview_said() -> void:
+	H.only_electrocution()
+	game.grid.set_cell(Vector2i(2, 0), GRASS_SOURCE, SHALLOW_WATER)
+	var watcher := _spawn(ENEMY, Vector2i(2, 3))
+	_shock(watcher)
+	var crosser := _spawn(PLAYER, Vector2i(0, 0))
+	await await_idle_frame()
+	_arm(watcher, Vector2i(2, 0))
+	var move := _queue_walk(crosser, 4)
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(crosser.squad, game._board())
+	var predicted := _sorted(PlanResolver.projected_states(crosser, plan.hypo))
+	assert_bool(move.resolved != null and move.resolved.states_added.has(Elemental.State.WET)) \
+		.override_failure_message("fixture: the walk soaked nobody").is_true()
+	assert_int(plan.mid_walk_shots().size()).override_failure_message(
+			"fixture: the ford's watch never fired").is_greater(0)
+	assert_bool(predicted.has(Elemental.State.WET)).override_failure_message(
+			"fixture: the preview keeps the crosser wet, so the shot stripped nothing").is_false()
+
+	await game.order_executor.execute_orders(crosser.squad.get_leader())
+
+	assert_array(_sorted(crosser.element_states)).override_failure_message(
+			"the crosser ended the pass %s where the preview said %s" % [str(crosser.element_states), str(predicted)]) \
+		.is_equal(predicted)
+
+
+# The sibling shape: the earlier wader is still on its way when a later walker's shot sends the
+# current down the river to it. Queue order is resolve order, so the wader was soaked before that
+# shot -- and a long walk ends long after a short one's first step.
+func test_a_wader_a_later_walkers_shot_arcs_to_ends_the_pass_as_the_preview_said() -> void:
+	H.only_electrocution()
+	for y in range(3):
+		game.grid.set_cell(Vector2i(3, y), GRASS_SOURCE, SHALLOW_WATER)
+	var watcher := _spawn(ENEMY, Vector2i(3, 4))
+	_shock(watcher)
+	var wader := _spawn(PLAYER, Vector2i(0, 1))
+	var walker := _spawn(PLAYER, Vector2i(4, 2))
+	await await_idle_frame()
+	game.squad_manager.join_squad(walker, wader.squad)
+	_arm(watcher, Vector2i(3, 2))
+	var wade: Array[Vector2i] = [Vector2i(0, 1), Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	var wading := _queue_path(wader, wade)
+	var step_in: Array[Vector2i] = [Vector2i(4, 2), Vector2i(3, 2)]
+	_queue_path(walker, step_in)
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(wader.squad, game._board())
+	var predicted := _sorted(PlanResolver.projected_states(wader, plan.hypo))
+	assert_bool(wading.resolved != null and wading.resolved.states_added.has(Elemental.State.WET)) \
+		.override_failure_message("fixture: the wade soaked nobody").is_true()
+	var arced := false
+	for shot in plan.mid_walk_shots():
+		arced = arced or shot.target == wader
+	assert_bool(arced).override_failure_message(
+			"fixture: the later walker's shot never reached the wader").is_true()
+	assert_bool(predicted.has(Elemental.State.WET)).override_failure_message(
+			"fixture: the preview keeps the wader wet, so the current stripped nothing").is_false()
+
+	await game.order_executor.execute_orders(wader.squad.get_leader())
+
+	assert_array(_sorted(wader.element_states)).override_failure_message(
+			"the wader ended the pass %s where the preview said %s" % [str(wader.element_states), str(predicted)]) \
+		.is_equal(predicted)

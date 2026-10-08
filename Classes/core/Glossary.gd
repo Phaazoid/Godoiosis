@@ -5,10 +5,10 @@ class_name Glossary
 # is the one-line hover tooltip, `long_text` the glossary-page body. One entry carries both, so
 # the tooltips and the Glossary screen can never drift apart. Read by GlossaryScreen (the page),
 # MainActionMenu (menu-row hover text via ACTION_DATA "term" keys), info_panel (stat rows) and
-# StateIcons/HoverPresenter (state and tile hovers).
+# StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode).
 #
 # Two content rules, both Law #4:
-#   - Numbers are INTERPOLATED from the constants that rule them (DOWN_WILL_COST, COVER_DEF, ...),
+#   - Numbers are INTERPOLATED from the constants that rule them (DOWNED_TURNS, COVER_DEF, ...),
 #     never retyped — tuning a value re-words the glossary for free.
 #   - Elemental/terrain INTERACTIONS are composed from the authored reaction .tres data
 #     (reaction_lines/terrain_reaction_lines), never hand-written — the page cannot claim what
@@ -26,12 +26,12 @@ enum Term {
 	# Squads
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
-	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF, DAMAGE_KIND,
+	MHP, STR, LDR, DEX, PER, CON, COH, BLD, MOV, WEIGHT, DEF, DAMAGE_KIND,
 	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
-	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
-	GUARD, OVERWATCH, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
+	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION,
+	GUARD, OVERWATCH, RESCUE, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
 	# Elemental -- affinity then aura, in the order a reader needs them: which elements you can touch
@@ -39,11 +39,13 @@ enum Term {
 	ELEMENTS, AFFINITY, AURA, WET, CHILLED, REACTIONS,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
-	# Will & lifecycle
-	DOWNED, CRISIS, MAIM, PROSTHETIC,
+	# Lifecycle
+	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
+	# Missions (one per player-facing ZoneManager.Kind, #1105)
+	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE,
 }
 
-enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE }
+enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE, MISSIONS }
 
 # Player-facing category names, in page order.
 const CATEGORY_NAMES: Dictionary[Category, String] = {
@@ -52,7 +54,8 @@ const CATEGORY_NAMES: Dictionary[Category, String] = {
 	Category.ACTIONS: "Actions",
 	Category.ELEMENTAL: "Elemental",
 	Category.TERRAIN: "Terrain",
-	Category.LIFECYCLE: "Will & Lifecycle",
+	Category.LIFECYCLE: "Lifecycle",
+	Category.MISSIONS: "Missions",
 }
 
 # Built lazily rather than declared const so entry text can interpolate the constants that rule
@@ -91,9 +94,10 @@ static func terms_in(category: Category) -> Array[Term]:
 static func term_for_stat(stat: Stats.Stat) -> Term:
 	const MAP: Dictionary[Stats.Stat, Term] = {
 		Stats.Stat.MHP: Term.MHP, Stats.Stat.STR: Term.STR, Stats.Stat.LDR: Term.LDR,
-		Stats.Stat.WIL: Term.WIL, Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
-		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH,
+		Stats.Stat.DEX: Term.DEX, Stats.Stat.PER: Term.PER,
+		Stats.Stat.CON: Term.CON, Stats.Stat.COH: Term.COH, Stats.Stat.BLD: Term.BLD,
 	}
+	# Stats.RETIRED have no row, and test_glossary_coverage skips exactly those (#1174).
 	return MAP[stat]
 
 static func term_for_tile_state(state: Terrain.TileState) -> Term:
@@ -106,6 +110,16 @@ static func term_for_tile_state(state: Terrain.TileState) -> Term:
 	# silent wrong word. Terrain.RETIRED_STATES are the ones it skips, and they never reach a
 	# reader -- TerrainStateManager.load_state_dict drops them at the door.
 	return MAP[state]
+
+# ZoneManager.AUTHORING_KINDS have no row, and test_glossary_coverage skips exactly those.
+static func term_for_zone_kind(kind: ZoneManager.Kind) -> Term:
+	const MAP: Dictionary[ZoneManager.Kind, Term] = {
+		ZoneManager.Kind.CAPTURE: Term.CAPTURE_ZONE,
+		ZoneManager.Kind.EXTRACTION: Term.EXTRACTION_ZONE,
+		ZoneManager.Kind.DEPLOYMENT: Term.DEPLOYMENT_ZONE,
+		ZoneManager.Kind.DEFEND: Term.DEFEND_ZONE,
+	}
+	return MAP[kind]
 
 static func term_for_element_state(state: Elemental.State) -> Term:
 	const MAP: Dictionary[Elemental.State, Term] = {
@@ -155,12 +169,19 @@ static func _terrain_reaction_line(r: TerrainReaction) -> String:
 		trigger += " on %s" % Terrain.kind_display_name(r.required_kind)
 	if r.required_tile_state != Terrain.TileState.NONE:
 		trigger += " on a %s tile" % Terrain.tile_state_display_name(r.required_tile_state)
+	return _assemble_line(trigger, _terrain_effects(r), r.popup)
+
+
+# What a terrain reaction DOES, worded once for the glossary page and the tile card.
+static func _terrain_effects(r: TerrainReaction) -> Array[String]:
 	var effects: Array[String] = []
 	for state: Terrain.TileState in r.add_tile_states:
 		effects.append("sets %s" % Terrain.tile_state_display_name(state))
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
-	return _assemble_line(trigger, effects, r.popup)
+	if r.gas_level != Gas.Level.NONE:
+		effects.append("releases %s" % Gas.display_name(r.gas))
+	return effects
 
 # The interactions that can touch ONE tile — the tile hover card's list (#135 round 2). The
 # kind/state gate is TerrainReaction.applies_to_tile, the same predicate the resolver's deposit
@@ -171,11 +192,7 @@ static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.Tile
 	for reaction in TerrainReactionCatalog.get_all():
 		if not reaction.applies_to_tile(kind, states):
 			continue
-		var effects: Array[String] = []
-		for state: Terrain.TileState in reaction.add_tile_states:
-			effects.append("sets %s" % Terrain.tile_state_display_name(state))
-		for state: Terrain.TileState in reaction.remove_tile_states:
-			effects.append("clears %s" % Terrain.tile_state_display_name(state))
+		var effects := _terrain_effects(reaction)
 		if effects.is_empty():
 			continue
 		lines.append("%s → %s" % [Elemental.display_name(reaction.incoming_element), ", ".join(effects)])
@@ -230,7 +247,7 @@ static func _build_entries() -> Dictionary:
 	e[Term.MHP] = {"category": Category.STATS, "title": "Max HP (MHP)",
 		"short": "The health pool. CON's band shifts the ceiling.",
 		"long": "Hit points. Reaching 0 does not simply kill. What actually happens is decided by "
-			+ "the stakes ladder: see Downed, Crisis and Maim under Will & Lifecycle."}
+			+ "the stakes ladder: see Downed, Crisis and Maim under Lifecycle."}
 	e[Term.STR] = {"category": Category.STATS, "title": "Strength (STR)",
 		"short": "Raw power. Weapon damage draws on it through each weapon's scaling blend.",
 		"long": "Every weapon blends its damage from STR, DEX, PER and CON in its own proportions, "
@@ -240,14 +257,6 @@ static func _build_entries() -> Dictionary:
 		"long": "A leader's effective LDR sets how many units their squad can hold (%d per member "
 			% Squad.MEMBER_LDR_COST
 			+ "beyond the leader). PER's band nudges effective LDR up or down."}
-	e[Term.WIL] = {"category": Category.STATS, "title": "Will (WIL)",
-		"short": "The survival pool: a down costs %d Will; a full pool can arm Crisis."
-			% UnitInstance.DOWN_WILL_COST,
-		"long": "Will is what stands between a felled unit and permanent harm. Surviving a down "
-			+ "spends %d Will; when the pool can't pay, the unit is maimed instead. A full pool "
-			% UnitInstance.DOWN_WILL_COST
-			+ "(%d) plus the Crisis ability turns a would-be down into a last stand."
-			% UnitInstance.MAX_WILL}
 	e[Term.DEX] = {"category": Category.STATS, "title": "Dexterity (DEX)",
 		"short": "Agility. Its band adds or removes MOV, and weapon blends draw on it.",
 		"long": "Feeds weapon scaling blends, and its band shifts movement range. A point or two "
@@ -263,15 +272,21 @@ static func _build_entries() -> Dictionary:
 	e[Term.COH] = {"category": Category.STATS, "title": "Cohesion (COH)",
 		"short": "Leash length as a leader: how far squadmates may stand, in path distance.",
 		"long": "Read off the leader only. See Cohesion under Squads for how the leash works."}
+	e[Term.BLD] = {"category": Category.STATS, "title": "Build (BLD)",
+		"short": "A unit's weight",
+		"long": "A unit's weight. This plus what the unit is carrying add to get a unit's total weight."}
 	e[Term.MOV] = {"category": Category.STATS, "title": "Movement (MOV)",
-		"short": "Tiles per move: base %d shifted by DEX's band." % UnitInstance.JOBLESS_MOV_BASE,
-		"long": "How far a unit walks in one move order. Base %d, shifted by DEX's band. Losing a "
-			% UnitInstance.JOBLESS_MOV_BASE
-			+ "leg halves it; losing both pins it to 1."}
+		"short": "Tiles per move: base %d, shifted by DEX's band, and one fewer for each weight band."
+			% UnitInstance.JOBLESS_MOV_BASE,
+		"long": ("How far a unit walks in one move order. Base %d, shifted by DEX's band, and one tile "
+			+ "fewer for each weight band the unit reaches. Losing a leg halves it; losing both pins it to 1.")
+			% UnitInstance.JOBLESS_MOV_BASE}
 	e[Term.WEIGHT] = {"category": Category.STATS, "title": "Weight (WT)",
-		"short": "The mass of everything the unit carries.",   # the row's own tooltip already says "no effect yet"
-		"long": "The summed weight of everything in the unit's inventory. Tracked but not yet fed "
-			+ "into any rule."}
+		"short": "A total of a unit's BLD and the weight of what they are carrying.",
+		"long": ("Build plus the weight of every item in the inventory, equipped or not. Weight is "
+			+ "counted in bands, at %d and at %d. Each band a unit reaches adds 1 damage per level it falls. "
+			+ "Heavier units are harder to push, but can't move as far and take more fall damage.")
+			% [Stats.WEIGHT_BAND_1, Stats.WEIGHT_BAND_2]}
 	e[Term.DEF] = {"category": Category.STATS, "title": "Defense (DEF)",
 		"short": "Subtracted from incoming damage: armor scaled by CON, plus terrain cover.",
 		"long": "Damage mitigation. Worn armor contributes its power scaled by CON, dug-in Cover "
@@ -301,7 +316,7 @@ static func _build_entries() -> Dictionary:
 	e[Term.ATTACK] = {"category": Category.ACTIONS, "title": "Attack",
 		"short": "Fire the equipped weapon's main attack.",
 		"long": "Aims and queues the equipped weapon's main attack. Each unit gets one main action "
-			+ "per turn, so attack, rescue, rally and the other mains are exclusive."}
+			+ "per turn, so attack, rescue and the other mains are exclusive."}
 	e[Term.ATTACK_TARGETING] = {"category": Category.ACTIONS, "title": "Attack Targeting",
 		"short": "Every attack strikes units, tiles, or both. Its readout says which in parentheses.",
 		"long": "Every attack's hover readout ends with its targeting channel. (unit): hits whoever "
@@ -324,15 +339,11 @@ static func _build_entries() -> Dictionary:
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
 			+ "aura. A carving the wielder cannot pay for is listed greyed, with the reason."}
-	e[Term.ABILITY_ACTION] = {"category": Category.ACTIONS, "title": "Ability Action",
-		"short": "Verbs granted by a unit's abilities, like Intimidate.",
-		"long": "Actions a unit's abilities unlock. Intimidate, draining an adjacent enemy's Will, "
-			+ "is the first; more arrive with new abilities."}
 	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
 	# terms of the same name; these two name a grouping the game had no word for before the ring.
 	# A third, "Turn", died in round 2 along with the category — the turn's verbs are the HUD's.
 	e[Term.ACTION] = {"category": Category.ACTIONS, "title": "Action",
-		"short": "Spending the turn on something other than an attack: guard, rescue, rally, capture, wait.",
+		"short": "Spending the turn on something other than an attack: guard, rescue, capture, wait.",
 		"long": "A unit spends its turn on one main action. Act gathers the ones that are not "
 			+ "swinging a weapon, plus Wait, which spends the squad's turn on nothing at all."}
 	e[Term.SQUAD_ACTIONS] = {"category": Category.ACTIONS, "title": "Squad",
@@ -360,11 +371,6 @@ static func _build_entries() -> Dictionary:
 		"short": "Stand an adjacent downed ally back up.",
 		"long": "Revives an adjacent downed ally before their clock runs out, at whatever health "
 			+ "they have. The rescued unit is out of formation and spent for the turn, but alive."}
-	e[Term.RALLY] = {"category": Category.ACTIONS, "title": "Rally",
-		"short": "Steel yourself: restore %d Will, less each rally after the first." % Unit.RALLY_BASE,
-		"long": "Restores the rallying unit's own Will. %d the first time this battle, %d less "
-			% [Unit.RALLY_BASE, Unit.RALLY_FALLOFF]
-			+ "with each repetition. It stops being offered once the returns run out."}
 	e[Term.CAPTURE] = {"category": Category.ACTIONS, "title": "Capture Point",
 		"short": "Claim the capture zone this unit stands on, or will stand on after its move.",
 		"long": "Claims the objective zone at the unit's destination. Only available when the "
@@ -502,31 +508,49 @@ static func _build_entries() -> Dictionary:
 			% Terrain.COVER_DEF
 			+ "never expires, but a destructive hit removes it."}
 
-	# Will & lifecycle
+	# Lifecycle.
 	e[Term.DOWNED] = {"category": Category.LIFECYCLE, "title": "Downed",
 		"short": "Felled, not dead: %d turns to be rescued before dying. A hit that meets their health kills."
 			% Unit.DOWNED_TURNS,
-		"long": "A hit that would fell a unit downs it instead when its Will can pay (%d Will). A "
-			% UnitInstance.DOWN_WILL_COST
+		"long": "A hit that would fell a unit downs it instead. A "
 			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and a hit that "
 			% Unit.DOWNED_TURNS
 			+ "meets the health it has left finishes it early. Rescue stands it back up."}
+	e[Term.WOUNDED] = {"category": Category.LIFECYCLE, "title": "Wounded",
+		"short": "This unit injures more easily",
+		"long": "After going down once, a unit becomes wounded.  A wounded unit can be maimed more easily."}
 	e[Term.CRISIS] = {"category": Category.LIFECYCLE, "title": "Crisis",
-		"short": "Full Will plus the Crisis ability turns a would-be down into a last stand, up at %d HP and surged."
-			% Abilities.CRISIS_REVIVE_HP,
-		"long": "A unit holding the Crisis ability at full Will refuses its down: it stands back up "
-			+ "at %d HP with +%d STR/DEX/PER for %d turns. The price is everything. Will locks at "
-			% [Abilities.CRISIS_REVIVE_HP, Abilities.CRISIS_SURGE, Abilities.CRISIS_SURGE_TURNS]
-			+ "0 for the rest of the battle, and the next would-be down is death."}
-	e[Term.MAIM] = {"category": Category.LIFECYCLE, "title": "Maim",
-		"short": "When Will can't pay for a down, a limb is lost instead. Permanently.",
-		"long": "A down the Will pool cannot cover (%d Will) takes a limb instead, permanently. "
-			% UnitInstance.DOWN_WILL_COST
-			+ "Lost arms cost stats; one lost leg halves MOV, both pin it to 1. The inspect panel "
-			+ "marks the limb next at risk."}
+		"short": "Last stand.  Boosted stats, but next down kills",
+		"long": "Crisis mode.  Instead of going down, take a last stand.  A unit in crisis mode gains "
+			+ "boosted stats at the cost of their safety net - for the rest of the battle, going down "
+			+ "means instant death."}
+	# One sentence serves both lengths (dev, 2026-10-02). The numbers are the live knobs.
+	var maim: String = ("Hits of %d damage or over take a limb, %d while wounded."
+		% [LethalityRules.LIMB_LOSS_DAMAGE, LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED])
+	e[Term.MAIM] = {"category": Category.LIFECYCLE, "title": "Maim", "short": maim, "long": maim}
 	e[Term.PROSTHETIC] = {"category": Category.LIFECYCLE, "title": "Prosthetic",
 		"short": "A built replacement for a lost limb, with its own stat value.",
 		"long": "A crafted limb installed in place of a lost one, carrying its own stat value, "
 			+ "usually weaker than what it replaces, occasionally not."}
+
+	# Missions (#1105). PLACEHOLDER text, the dev's to rewrite. The capture line reads the verb's
+	# name off its own entry, built above, so renaming the action renames this.
+	e[Term.CAPTURE_ZONE] = {"category": Category.MISSIONS, "title": "Capture zone",
+		"short": "An objective. Move a unit inside and use %s to claim the whole zone."
+			% e[Term.CAPTURE]["title"],
+		"long": "Taking it is a main action. One unit standing anywhere inside claims the whole "
+			+ "zone for good, even with enemies nearby. The objective list counts how many you hold."}
+	e[Term.EXTRACTION_ZONE] = {"category": Category.MISSIONS, "title": "Extraction zone",
+		"short": "An objective. It is met once every unit of yours still alive stands inside.",
+		"long": "Every one of your surviving units has to be inside an extraction zone. A downed "
+			+ "unit inside counts. If the map has more than one, any of them will do."}
+	e[Term.DEPLOYMENT_ZONE] = {"category": Category.MISSIONS, "title": "Deployment zone",
+		"short": "Where you may place your units before the battle begins.",
+		"long": "Before the first turn your units can be placed and moved anywhere inside it. It "
+			+ "stops being shown once the battle starts."}
+	e[Term.DEFEND_ZONE] = {"category": Category.MISSIONS, "title": "Defended point",
+		"short": "If an enemy stands anywhere in here, the mission is lost.",
+		"long": "The mission fails when a hostile unit ends up on any tile of a defended point. "
+			+ "Keep them out."}
 
 	return e

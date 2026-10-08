@@ -219,6 +219,31 @@ func test_must_survive_survives_a_snapshot_save() -> void:
 	assert_bool(_sole_unit().must_survive).is_true()
 
 
+# #1230: the AI profile rides the same lane as must_survive, for its reason -- a REFERENCE entry
+# never calls apply_unit_state, so a profile carried in that block would vanish from an authored save.
+func test_an_ai_profile_survives_an_authored_reference_save() -> void:
+	var unit := _spawn_cast(Vector2i(1, 1))
+	unit.ai_profile = "Easy"
+
+	var snap: ScenarioData = sm.capture_scenario("__band", true)
+	var entry: ScenarioUnitEntry = snap.unit_entries[0]
+	assert_bool(entry.state_saved) 		.override_failure_message("the fixture is not a REFERENCE entry, so the fork is not being crossed") 		.is_false()
+	assert_str(entry.ai_profile).is_equal("Easy")
+
+	sm.apply_scenario(snap)
+	await await_idle_frame()
+	assert_str(_sole_unit().ai_profile) 		.override_failure_message("a reference entry came back unassigned -- apply_unit_state never runs for one") 		.is_equal("Easy")
+
+
+func test_an_unassigned_unit_round_trips_unassigned() -> void:
+	_spawn_cast(Vector2i(1, 1))
+	var snap: ScenarioData = sm.capture_scenario("__no_band", true)
+	assert_str(snap.unit_entries[0].ai_profile).is_empty()
+	sm.apply_scenario(snap)
+	await await_idle_frame()
+	assert_str(_sole_unit().ai_profile).is_empty()
+
+
 # The default matters as much as the flag: every board that predates #572, and every ordinary
 # soldier on one that does not, must come back unprotected. A default of true would end every
 # mission on its first casualty.

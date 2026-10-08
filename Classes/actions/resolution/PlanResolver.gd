@@ -8,11 +8,12 @@ const INSULATED_POPUP := "Insulated!"
 const FELL_POPUP := "Fell %d!"
 const DROWNING_POPUP := "Drowning!"
 const VOID_POPUP := "Into the void!"
+const HELD_POPUP := "Held %d!"   # #120: tiles of a shove the target's weight absorbed
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
-# hypothetical {position, element states, HP, Will-slot} per unit forward (R4). Per hit:
-# base damage -> elemental (-> Will in Phase 3). Writes one ResolvedOutcome per action
+# hypothetical {position, element states, HP, lifecycle, limbs} per unit forward (R4). Per hit:
+# base damage -> elemental -> the rung and the limb. Writes one ResolvedOutcome per action
 # (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
 
 static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
@@ -113,9 +114,11 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 # faction alone, so an enemy shoved into fire correctly grows no row here — that happens at the end
 # of THEIR turn. The cell comes from get_projected_destination (the halt, the shove and the rescue
 # haul all land in it), the states from the store WITH this pass's own deposits folded in — your own
-# fireball igniting a squadmate's cell is a burn the queue has to show.
+# fireball igniting a squadmate's cell is a burn the queue has to show. The gas the same way (#508):
+# dousing a squadmate's fire steams them, and the soak reads the states the pass leaves them holding.
+# A unit's soak is listed before its burn, matching TurnBoundary.tile_hits.
 static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
-	if board == null or board.terrain_states == null or squad == null:
+	if board == null or squad == null:
 		return
 	var revived := _rescued_this_pass(actions, hypo)
 	for unit in squad.get_members():
@@ -130,8 +133,13 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 			situation.lifecycle = Unit.LifecycleState.ACTIVE
 		if situation.lifecycle == Unit.LifecycleState.DEAD:
 			continue
-		var states := board.terrain_states.projected_states_at(
-				unit.get_projected_destination(), plan.cell_effects)
+		var destination := unit.get_projected_destination()
+		if board.gas != null:
+			plan.tile_hits.append_array(TileHitAction.gas_hits(unit, projected_states(unit, hypo),
+					board.gas.projected_packed_at(destination, plan.cell_effects)))
+		if board.terrain_states == null:
+			continue
+		var states := board.terrain_states.projected_states_at(destination, plan.cell_effects)
 		var damage := RulesService.occupant_damage_for(unit, states)
 		if damage <= 0:
 			continue
@@ -245,6 +253,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		return
 	action.resolved_stop_index = -1   # a re-resolve must not inherit last pass's halt
 	action.resolved = null            # ...nor last pass's soaking, if the walk has left the water
+	action.resolved_soak_step = -1    # ...nor where it happened
 	var walk := action.path
 	# A hold crosses nothing and a one-cell path never leaves its origin: no entry either way.
 	if action.is_hold_position or walk.size() < 2:
@@ -273,7 +282,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		# crosser mid-ford electrocutes them. The walk is already this pass's clock, which is what
 		# makes ONE cell-by-cell loop answer both.
 		if board != null and RulesService.wets_in(walk[i], mover, board):
-			_soak(mover, hypo, action)
+			_soak(mover, hypo, action, i)
 		# ...and THIS step is the moment the shot plays back at (#567): the walk halts here, the
 		# shot fires, the walk resumes. The moment is stamped where the shots are made because
 		# nothing downstream can recover it — a crosser who walks on leaves no trace of the step.
@@ -292,19 +301,22 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 # Soak the mover: threaded so a SHOCK hit later in this same pass sees it (E4, the whole of the
 # water-then-shock combo), and STAMPED on the order so execution applies it and the queue row shows
 # the chip. Both halves are required -- the hypo alone never reaches the board, the stamp alone never
-# reaches the preview.
+# reaches the preview. The step is stamped too, so playback can soak the mover where this did (#46).
 #
 # Idempotent, and that is the row's rule rather than an optimisation: a four-cell ford is one
 # soaking, and a mover who was ALREADY wet grows no chip at all, because the row says what CHANGED.
-static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction) -> void:
+# A Chilled mover is never soaked (#1092).
+static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction, step: int) -> void:
 	var mover_hypo := _hypo_for(mover, hypo)
-	if mover_hypo.states.has(Elemental.State.WET):
+	if mover_hypo.states.has(Elemental.State.WET) \
+			or Elemental.is_blocked(mover_hypo.states, Elemental.State.WET):
 		return
 	mover_hypo.states.append(Elemental.State.WET)
 	if action.resolved == null:
 		action.resolved = ResolvedOutcome.new()
 		action.resolved.reads_hp = false   # a walk hits nobody; the row must not print an HP arrow
 	action.resolved.states_added.append(Elemental.State.WET)
+	action.resolved_soak_step = step
 
 
 # Every watch these entrants trigger, plus every watch the resulting shots' shoves trigger in turn.
@@ -405,13 +417,23 @@ static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Diction
 # five clauses asked of one NAMED watch rather than searched for across the list — Watch.is_armed()'s
 # shape, one question up.
 static func _watch_fires_on(watch: Watch, entrant: Unit, hypo: Dictionary) -> bool:
+	if entrant == null or not is_instance_valid(entrant):
+		return false
+	return watch_fires_at(watch, entrant, projected_position(entrant, hypo), hypo)
+
+
+# The same five clauses, asked of a CELL the entrant would stand in rather than the one the pass has
+# it in. Public because two readers ask it ahead of any resolve (#1220): the safe route, which must
+# avoid exactly the watches a walk would spend, and the AI's hazard destinations. One predicate, so
+# the arrow and the resolver cannot disagree about which cells a watch makes dangerous.
+static func watch_fires_at(watch: Watch, entrant: Unit, cell: Vector2i, hypo: Dictionary) -> bool:
 	if watch == null or entrant == null or not is_instance_valid(entrant):
 		return false
 	# A downed body does not trip a watch (the doc's accepted cut: you cannot spend a watch by
 	# throwing a corpse through it), and neither does the watcher's own side.
 	if projected_lifecycle(entrant, hypo) != Unit.LifecycleState.ACTIVE:
 		return false
-	if not watch.is_armed() or not watch.covers(projected_position(entrant, hypo)):
+	if not watch.is_armed() or not watch.covers(cell):
 		return false
 	if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
 		return false
@@ -453,7 +475,7 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
 	var paths := watch.paths()
 	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
-	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo, false,
+	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo,
 			PlanResolver._unit_threaded_at.bind(board, hypo), arrival)
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():
@@ -685,9 +707,20 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	for s in adds:
 		if not removes.has(s):
 			net_added.append(s)
-	outcome.states_added = net_added
-	outcome.states_removed = removes
+	# Exclusive states (#1092), judged on what the hit LEAVES so the fold stays order-free (E8): an
+	# add the result would block is dropped, and an admitted add strips what it overrides.
+	var leaves := _states_after(target_hypo.states, removes, net_added)
+	var admitted: Array[Elemental.State] = []
 	for s in net_added:
+		if Elemental.is_blocked(leaves, s):
+			continue
+		admitted.append(s)
+		for beaten in Elemental.overridden_by(s):
+			if target_hypo.states.has(beaten) and not removes.has(beaten):
+				removes.append(beaten)
+	outcome.states_added = admitted
+	outcome.states_removed = removes
+	for s in admitted:
 		if add_turns.get(s, 0) > 0:
 			outcome.state_turns[s] = add_turns[s]
 
@@ -707,9 +740,15 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# Falls (#259): the landing must be known BEFORE the rung is named, because fall damage can
 	# change it -- so the landing computes here, off a PROVISIONAL rung (a hit that alone kills
 	# leaves nothing to shove, the pre-#259 rule preserved), and only the FINAL predict below
-	# feeds the Will-spend stage. predict is pure; the second call is the one that counts.
+	# names the rung. predict is pure; the second call is the one that counts.
 	var landing: _Landing = null
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
+		outcome.knockback_held = _shove_against(action, target, target_hypo).y
+		# Where the shove found its target: the launch cell when it lands, and the cell a fully held
+		# shove leaves it on (#1186 marks it there).
+		outcome.knockback_from = target_hypo.position
+		if outcome.knockback_held > 0:
+			outcome.popups.append(HELD_POPUP % outcome.knockback_held)
 		landing = _knockback_landing(action, target, target_hypo, board)
 	if landing != null:
 		# The landing measures in height UNITS; the outcome reports LEVELS, since that is what the
@@ -738,11 +777,12 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# Iron Will above IRON_WILL_DAMAGE_CAP simply could not drown.
 	#
 	# DAMAGE rather than a lifecycle door of its own, which is what makes a drowning an ORDINARY down:
-	# the ladder below names the rung, so the Will cost, the maim when Will cannot pay it, the Crisis
-	# gambit, and finishing a body that is already DOWNED all arrive for free. A hit that alone downs
-	# its target leaves nothing to take (the clamp to 0), so the water can never promote a down into a
-	# kill -- and drowning is deliberately not the void's outright removal: it is a clock a rescuer can
-	# answer (RescueAction hauls the body out), which is what the two are meant to read as.
+	# the ladder below names the rung, so the down, the Crisis gambit and finishing a body that is
+	# already DOWNED all arrive for free. It is NOT part of the blow, so it never takes a limb (#1174).
+	# A hit that alone downs its target leaves nothing to take (the clamp to 0), so the water can never
+	# promote a down into a kill -- and drowning is deliberately not the void's outright removal: it is
+	# a clock a rescuer can answer (RescueAction hauls the body out), which is what the two are meant
+	# to read as.
 	if landing != null and landing.drowned:
 		outcome.drown_damage = maxi(0, target_hypo.hp - outcome.damage)
 		outcome.damage += outcome.drown_damage
@@ -754,41 +794,32 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# the flight is airborne and passes over water the way it passes over a void.
 	#
 	# Deep water included, so a drowning body comes up wet and goes on conducting for whatever shock
-	# touches the lake it went under in. That is the intended reading, not an oversight.
+	# touches the lake it went under in. That is the intended reading, not an oversight. A body the
+	# hit leaves Chilled stays dry (#1092).
 	if landing != null and board != null and RulesService.wets_in(landing.cell, target, board) \
-			and not outcome.states_added.has(Elemental.State.WET):
+			and not outcome.states_added.has(Elemental.State.WET) \
+			and not Elemental.is_blocked(_states_after(target_hypo.states, outcome.states_removed,
+				outcome.states_added), Elemental.State.WET):
 		outcome.states_added.append(Elemental.State.WET)
 
 	# --- thread the hypothetical forward (R4) ---
-	for s in outcome.states_removed:
-		target_hypo.states.erase(s)
-	for s in outcome.states_added:
-		if not target_hypo.states.has(s):
-			target_hypo.states.append(s)
+	target_hypo.states = _states_after(target_hypo.states, outcome.states_removed, outcome.states_added)
 
-	# Will/death stage (R7): pick the rung from the now-final damage (fall included) so the queue
-	# previews it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same
-	# call Unit.take_damage makes at execution time — one ladder, two callers.
+	# Lethality stage (R7): pick the rung from the now-final damage (fall included) so the queue
+	# previews it (Law #2). Reads pre-hit HP and lifecycle, so it runs BEFORE the subtraction below.
+	# Same call Unit.take_damage makes at execution time — one ladder, two callers.
 	outcome.lethality = LethalityRules.predict(target_hypo, outcome.damage)
 	if landing != null and landing.removed:
-		# A void removal (#259) outranks the ladder: gone regardless of HP or Will. KILLED so
+		# A void removal (#259) outranks the ladder: gone regardless of HP. KILLED so
 		# every reader threads DEAD; the flag is execution's own die() door.
 		outcome.lethality = ResolvedOutcome.Lethality.KILLED
 		outcome.removed = true
 		outcome.popups.append(VOID_POPUP)
-	# The lifecycle a rung leaves behind is ONE map (#313) — a preview holding only an outcome reads
-	# the same one, and since #1002 the HP it leaves behind is its sibling. What a rung SPENDS stays
-	# here: it differs per rung and it is spent from the hypo.
-	target_hypo.lifecycle = LethalityRules.lifecycle_for(outcome.lethality, target_hypo.lifecycle)
-	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
-		target_hypo.will -= UnitInstance.DOWN_WILL_COST
-	elif outcome.lethality == ResolvedOutcome.Lethality.MAIMED:
-		target_hypo.will = 0
-	elif outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
-		target_hypo.in_crisis = true                          # the gambit: no safety net from here on
-		target_hypo.will = 0
-
-	target_hypo.hp = LethalityRules.hp_after(outcome.lethality, target_hypo.hp, outcome.damage)
+	# The limb (#1174), judged on the pre-hit state like the rung, and on the BLOW: what the water added
+	# is not one. Popped off the threaded rotation so a second big hit this pass takes the NEXT limb.
+	if LethalityRules.severs(target_hypo, outcome.damage - outcome.non_blow(), outcome.lethality):
+		outcome.severed_limb = target_hypo.limb_order.pop_front()
+	_land_rung(target_hypo, outcome.lethality, outcome.damage)
 	outcome.target_hp_after = target_hypo.hp
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
@@ -796,13 +827,88 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# source (a landing tumble can bend it); from/to stay the endpoints execute reads.
 	if landing != null and landing.path.size() > 1:
 		outcome.knockback_applied = true
-		outcome.knockback_from = landing.path[0]
 		outcome.knockback_to = landing.cell
 		outcome.knockback_path = landing.path
 		outcome.knockback_landing_index = landing.landing_index
 		target_hypo.position = landing.cell
 
 	action.resolved = outcome
+
+# The states a unit holds once a hit's removes and then its adds have landed: the thread (R4) and
+# #1092's judge both read it.
+static func _states_after(held: Array[Elemental.State], removed: Array[Elemental.State],
+		added: Array[Elemental.State]) -> Array[Elemental.State]:
+	var after: Array[Elemental.State] = []
+	for s in held:
+		if not removed.has(s):
+			after.append(s)
+	for s in added:
+		if not after.has(s):
+			after.append(s)
+	return after
+
+# Thread a named rung onto the hypo: the lifecycle it leaves, what it MARKS, the HP it leaves. The
+# lifecycle a rung leaves behind is ONE map (#313) -- a preview holding only an outcome reads the same
+# one, and since #1002 the HP it leaves behind is its sibling. A down WOUNDS (#1174), so a later
+# hit this pass is held to the lower limb threshold. Shared by the hit and the sinking (#922), the
+# two paths that name a rung here.
+static func _land_rung(h: _Hypo, rung: ResolvedOutcome.Lethality, damage: int) -> void:
+	h.lifecycle = LethalityRules.lifecycle_for(rung, h.lifecycle)
+	if rung == ResolvedOutcome.Lethality.DOWNED:
+		h.wounded = true
+	elif rung == ResolvedOutcome.Lethality.CRISIS:
+		h.in_crisis = true                          # the gambit: no safety net from here on
+	h.hp = LethalityRules.hp_after(rung, h.hp, damage)
+
+
+# --- The floor leaving (#922) ---------------------------------------------------------------
+#
+# Everyone this pass's own terrain deposits leave standing on water they cannot stand on goes under
+# -- ice melted beneath them. Asked of the deposits as a WHOLE against the live ground, one comparison
+# and no FROZEN clause: "the landed board drowns you and the live one did not". A refreeze in the same
+# pass nets to nothing, a Waterwalker and shallow water never drown, and a unit shoved INTO water this
+# pass already drowned on the live board, so none of them is asked twice.
+#
+# Called at the two moments a sinking plays (SinkAction.Moment): once the attack walk has resolved,
+# with the deposits known then -- the ice melts straight after the volley, before any counter, so a
+# sunk unit does not counter -- and once the pass has settled, for the melts only a counter or a tail
+# shot made and for anyone moved onto melted ice after the first call. A unit sinks at most once.
+static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardContext,
+		moment: SinkAction.Moment) -> void:
+	if board == null or board.terrain_states == null or plan.cell_effects.is_empty():
+		return
+	var landed := board.with_deposits(plan.cell_effects)
+	for unit in board.units:
+		if not is_instance_valid(unit) or plan.has_sunk(unit):
+			continue
+		if projected_lifecycle(unit, hypo) == Unit.LifecycleState.DEAD:
+			continue
+		var cell := projected_position(unit, hypo)
+		if not RulesService.drowns_in(cell, unit, landed) or RulesService.drowns_in(cell, unit, board):
+			continue
+		var h := _hypo_for(unit, hypo)
+		var wets := RulesService.wets_in(cell, unit, landed) \
+				and not Elemental.is_blocked(h.states, Elemental.State.WET)
+		var sink := SinkAction.make(unit, h, cell, _floor_taken_by(cell, unit, board, plan.cell_effects),
+				moment, wets)
+		_land_rung(h, sink.resolved.lethality, sink.resolved.damage)
+		for s in sink.resolved.states_added:
+			if not h.states.has(s):
+				h.states.append(s)
+		plan.sinks.append(sink)
+
+
+# Which deposit took the floor away: the first after which this cell drowns this unit. Its attack is
+# where the queue hangs the sinking's row.
+static func _floor_taken_by(cell: Vector2i, unit: Unit, board: BoardContext,
+		deposits: Array[ResolvedCellEffect]) -> AttackAction:
+	var so_far: Array[ResolvedCellEffect] = []
+	for effect in deposits:
+		so_far.append(effect)
+		if effect.cell == cell and RulesService.drowns_in(cell, unit, board.with_deposits(so_far)):
+			return effect.cause
+	return null
+
 
 # Elements that survive the target's gear. A blocked element is erased from the hit entirely, so
 # no reaction keyed on it can fire -- canon calls this shape "immune to SHOCK reactions"
@@ -966,6 +1072,20 @@ static func _source_knockback(action: AttackAction) -> int:
 	# the authored number on the shared AttackData base is only the starting point.
 	return action.actor.get_attack_knockback(action.fired_attack)
 
+# The shove this hit delivers to THIS target (#120), as [tiles delivered, tiles its weight held]:
+# the attack's knockback, mods included, less the target's weight band, floored at 0. The ONE place
+# weight meets a shove -- the landing walks the first number and the outcome reports the second. Read
+# off the TARGET, so a Guard's substitution has the blocker's weight answer, and off live gear like
+# _source_knockback, since nothing inside a pass changes what anyone carries.
+static func _shove_against(action: AttackAction, target: Unit, target_hypo: _Hypo) -> Vector2i:
+	var authored := _source_knockback(action)
+	if authored <= 0 or target == null:
+		return Vector2i.ZERO
+	if GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position) == Vector2i.ZERO:
+		return Vector2i.ZERO   # a payload stuck to its victim shoves nobody, so nothing is held either
+	var held := mini(authored, Stats.weight_band(target.get_weight()))
+	return Vector2i(authored - held, held)
+
 # One shove's full result (#259): where it ends, every cell it crosses, and what the landing does.
 class _Landing:
 	var cell: Vector2i
@@ -982,7 +1102,7 @@ class _Landing:
 # distance ran out or a blocker halted it early. Pure -- reads the hypo position, mutates nothing;
 # _resolve_one applies the result after the rung is named.
 static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> _Landing:
-	var distance := _source_knockback(action)
+	var distance := _shove_against(action, target, target_hypo).x
 	if distance <= 0 or board == null:
 		return null
 	var dir := GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position)
@@ -1227,8 +1347,7 @@ static func projected_situation(unit: Unit, hypo: Dictionary) -> LethalityRules.
 	return LethalityRules.situation_for(unit)
 
 # Does this pass MOVE the unit's rung -- the alarm's question (#313), re-asked against the hypo's own
-# baseline rather than the live unit (#354). DOWNED and MAIMED move the lifecycle, KILLED moves it
-# further, and CRISIS moves neither (it is never DOWNED, #158), which is why crisis is asked
+# baseline rather than the live unit (#354). DOWNED moves the lifecycle, KILLED moves it further, and CRISIS moves neither (it is never DOWNED, #158), which is why crisis is asked
 # separately. A unit already down, or already in Crisis, stays put and does not alarm.
 static func plan_fells(unit: Unit, hypo: Dictionary) -> bool:
 	if unit == null or not is_instance_valid(unit) or not hypo.has(unit):
@@ -1261,10 +1380,10 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.start_hp = unit.get_current_hp()
 		h.lifecycle = unit.lifecycle_state
 		h.start_lifecycle = unit.lifecycle_state
-		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
 		h.start_in_crisis = unit.in_crisis
-		h.can_maim = unit.unit_instance.next_maim_slot() != -1
+		h.wounded = unit.wounded
+		h.limb_order = unit.unit_instance.maim_order()
 		h.crisis_armed = LethalityRules.crisis_armed_for(unit)
 		var held := unit.get_equipped_weapon() as WeaponInstance
 		h.charges = held.tank_charges() if held != null else 0
@@ -1282,9 +1401,9 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 #   * Every stat-derived number (base damage, DEF mitigation) is computed ONCE here at plan time
 #     and frozen onto the ResolvedOutcome; AttackAction.execute is pure playback (R3).
 #   * The one thing execution DOES recompute — LethalityRules.predict, via Unit.take_damage — reads
-#     hp/will/lifecycle/limbs and no effective stat at all.
+#     hp/lifecycle/limbs and no effective stat at all.
 #
-# So a stat change landing mid-pass (today only a maim's forced unequip, Unit._settle_stat_change)
+# So a stat change landing mid-pass (today only a lost limb's forced unequip, Unit._settle_stat_change)
 # cannot make preview and execution disagree. It is un-modelled identically by both halves — a
 # fidelity gap, not a Law #2 break. Both bullets are pinned by tests/law/test_resolution_laws.gd.
 #
@@ -1309,25 +1428,44 @@ class _Hypo extends LethalityRules.Situation:
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
 # hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->
-# BURNING). Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect
-# per reacting cell. Empty when nothing fires: a unit-only attack, no element, or no cell reacts.
+# BURNING), and may release gas; an attack that authors gas leaves it on every struck cell too (#508).
+# Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
+# that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
 		return effects
-	if not _source_hits_map(action):
-		return effects                                  # unit-only attack -> deposits nothing
-	var elements := _source_elements(action)
-	if elements.is_empty():
+	# Two halves with different gates. The ELEMENT reacts with the ground only on a map-hitting attack;
+	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gas_level's note).
+	var elements: Array[Elemental.Element] = []
+	if _source_hits_map(action):
+		elements = _source_elements(action)
+	var fired := action.fired_attack
+	var gas_level: int = fired.gas_level if fired != null else Gas.Level.NONE
+	if elements.is_empty() and gas_level == Gas.Level.NONE:
 		return effects
 	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
 	# victim, and who that was is this pass's answer, gone by the time anything could re-ask; and a
 	# watch shot's geometry was frozen when it armed. Once per tile, however often a path revisits it.
 	for cell in action.struck_cells:
-		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
+		var effect: ResolvedCellEffect = null
+		if not elements.is_empty():
+			effect = _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
+		if gas_level != Gas.Level.NONE:
+			if effect == null:
+				effect = ResolvedCellEffect.new()
+				effect.cell = cell
+			effect.add_gas(fired.gas, gas_level)
+		# Gas lies only where it could travel (GasSpread.holds_gas), whoever released it -- so the
+		# preview never promises gas the board would not hold (Law #2).
+		if effect != null and not effect.gas_added.is_empty() and not GasSpread.holds_gas(cell, board):
+			effect.gas_added.clear()
+			if effect.states_added.is_empty() and effect.states_removed.is_empty():
+				effect = null
 		if effect != null:
+			effect.cause = action
 			effects.append(effect)
 	return effects
 
@@ -1354,6 +1492,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 		for s in reaction.remove_tile_states:
 			if not effect.states_removed.has(s):
 				effect.states_removed.append(s)
+		effect.add_gas(reaction.gas, reaction.gas_level)
 		if reaction.popup != "":
 			effect.popups.append(reaction.popup)
 		if reaction.icon != null:

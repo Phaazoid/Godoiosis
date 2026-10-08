@@ -63,14 +63,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_vk2ak")])
 equipped_index = 0
 affinity_saved = true
@@ -108,6 +106,7 @@ size = 1
 inscriptions = Array[ExtResource("16_qhv3w")]([SubResource("Resource_j83om")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_ynwst"]
@@ -116,6 +115,7 @@ flat_def = 2
 covered_kinds = Array[int]([3])
 granted_abilities = Array[ExtResource("11_jweqb")]([ExtResource("20_qiv5i")])
 display_name = "Asbestos Shroud"
+weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
 
 [sub_resource type="Resource" id="Resource_mh666"]
@@ -146,14 +146,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_qcx71"), SubResource("Resource_ynwst")])
 equipped_index = 0
 worn_armor_index = 1
@@ -193,14 +191,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_1t43s")])
 equipped_index = 0
 affinity_saved = true
@@ -246,14 +242,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 6,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_nsc22")])
 equipped_index = 0
 affinity_saved = true
@@ -293,14 +287,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_frf67")])
 equipped_index = 0
 affinity_saved = true
@@ -339,6 +331,7 @@ size = 1
 inscriptions = Array[ExtResource("16_qhv3w")]([SubResource("Resource_oh8q3")])
 temper = 1
 display_name = "Electric Rune"
+weight = 1
 
 [sub_resource type="Resource" id="Resource_qiv5i"]
 script = ExtResource("15_frf67")
@@ -364,14 +357,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_en6ks")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -410,14 +401,12 @@ stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 20
-current_will = 5
 inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_aoega")])
 equipped_index = 0
 affinity_saved = true

@@ -6,7 +6,9 @@
 
 **Format:** *Name (posture · lean)* — fantasy. Starter = day-one ability; Main = main-tier; Sub = sub-tier; ceilings/MOV where they define the job. Taxonomy tags: [A]ction [R]eaction [P]assive [M]ovement.
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #699 (2026-09-02); #120's weight bands folded in 2026-10-01.**
+
+**Will, Rally and Intimidation were retired by [#1174](https://github.com/Phaazoid/Godoiosis/issues/1174) (2026-10-01).** Every idea below that spends, restores or drains Will (the Banneret, the Agitator, the Counselor) needs re-homing before it is built; they stay as ideas, not deleted.
 
 ---
 
@@ -38,7 +40,7 @@
 
 19. **Drillmaster** *(leader · —)* — (Advance Wars CO / FE tactician) doctrine passives. Main: **Coordinated Assault** [P] (leader-gated: each later squad hit against the same target this pass +1 cumulative — rides sequential resolution; the order-lever made a build). Sub: **Drill** [P] (squad training-rate nudge).
 20. **Springheel** *(any · mech)* — (FF Dragoon, steampunk'd: piston legs). Starter: **Vault** [M] (jump over units/1-tile obstacles). Main: **Crash Landing** [A] (leap move + small landing shove). Leg-prosthetic synergy; ⚠ AoE-on-landing may belong weapon-side.
-21. **Wrangler** *(team · —)* — (Into the Breach's forced movement) hook and chain. Starter: **Hook Pull** [A] (pull a target 1–2 tiles; Weight-gated — physics teeth). Main: **Long Haul** [A] (pull *allies* — repositioning combos), **Anchor Toss** [A]. Combinatrix gold: pull into fire, off ice, out of zones.
+21. **Wrangler** *(team · —)* — (Into the Breach's forced movement) hook and chain. Starter: **Hook Pull** [A] (pull a target 1–2 tiles; Weight-gated — physics teeth. #120 built the shove half of that gate on 2026-10-01: a target's weight band takes tiles off every shove. Pulls do not exist yet). Main: **Long Haul** [A] (pull *allies* — repositioning combos), **Anchor Toss** [A]. Combinatrix gold: pull into fire, off ice, out of zones.
 22. **Filcher** *(loner · —)* — (FFT Thief, de-RNG'd). Starter: **Slip** [M] (move through enemy-occupied cells, can't stop there). Main: **Strip** [A] (take a weapon/item from an adjacent DOWNED unit — deterministic theft, dark and fitting). Sub: **Cutpurse**.
 23. **Signal Officer** *(team · —)* — (FE Dancer, de-magic'd). Main: **Semaphore** [A] (one squadmate who has already moved may queue a second *move* — never a second main action). ⚠ Watch-list: action-economy manipulation; queue idempotency must hold.
 24. **Landwright** *(any · —)* — (FFT Geomancer, de-magic'd): terrain literacy without aura. Main: **Read the Ground** [P] (+damage from elevation/favorable tile states), **Shovel Work** [A] (mundane tile flips only — mud↔dust; ⚠ fence: real transmutation stays alchemy's monopoly). Sub: **Surefoot** [M].

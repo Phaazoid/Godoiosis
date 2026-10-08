@@ -56,6 +56,8 @@ var _stamp := 0
 var _buses: Dictionary[PlayerSettings.Setting, int] = {}
 # What each bus was last set to, so _process writes only on a change rather than every frame.
 var _applied: Dictionary[PlayerSettings.Setting, float] = {}
+# The frame each stream last started on, for play()'s one-per-frame rule.
+var _started_on: Dictionary[AudioStream, int] = {}
 
 
 func _ready() -> void:
@@ -87,6 +89,10 @@ static func _resolve_bus(bus_name: String) -> int:
 func _process(_delta: float) -> void:
 	for setting: PlayerSettings.Setting in _buses:
 		var level := PlayerSettings.level_of(setting)
+		# A skip resolves a whole turn's blows in about a second under the fade (#545); the effects
+		# go quiet for it rather than arriving as one burst. Music plays on.
+		if setting == PlayerSettings.Setting.SFX_VOLUME and Pacing.skipping():
+			level = 0.0
 		if is_equal_approx(level, _applied.get(setting, -1.0)):
 			continue
 		_applied[setting] = level
@@ -135,7 +141,15 @@ static func plays_impact(attack: AttackAction) -> bool:
 	return not fired.heals and not fired.deals_no_damage
 
 
+# THE SAME CUE TWICE IN ONE FRAME PLAYS ONCE (#1058, ruling 51). A level of payloads goes off in one
+# frame, each volley's lead publishing its own blow, so nine blasts would be nine copies of one clip
+# stacked on the pool; one blast is one sound however many go off. Nothing else reaches it -- every
+# other beat holds between its leads.
 func play(stream: AudioStream) -> void:
+	var frame := Engine.get_process_frames()
+	if _started_on.get(stream, -1) == frame:
+		return
+	_started_on[stream] = frame
 	var chosen := _free_player()
 	if chosen == -1:
 		chosen = _oldest_player()

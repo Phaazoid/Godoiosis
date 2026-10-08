@@ -22,6 +22,14 @@ const ZONE := "post"
 const STURDY := {Stats.Stat.MHP: 40}   # nothing here fells it, so the choice is about the line and the disarm
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 8, 4)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -85,7 +93,7 @@ func _hold(unit: Unit) -> Squad:
 
 func _types(squad: Squad) -> Array[int]:
 	var out: Array[int] = []
-	for action in squad.action_queue:
+	for action in H.given_orders(squad):   # the orders given, not the hold fillers (#46)
 		out.append(action.action_type)
 	return out
 

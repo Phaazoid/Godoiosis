@@ -112,7 +112,7 @@ static func _walk(root: Node) -> Array[Node]:
 
 
 func _screen() -> PreMissionScreen:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child
 	return null
@@ -242,17 +242,63 @@ func test_picking_another_carving_moves_what_is_drawn() -> void:
 
 # The shared enumeration has to be WIRED here, not merely available: AttackChannelText exists so this
 # card and the weapon one cannot drift, and a card that never called it would look exactly like one
-# that had, until the first pair of near-identical carvings.
+# that had, until the first pair of near-identical carvings. The two carvings that differ are SHAPED,
+# because a one-cell carving says nothing about allies either way (#1083).
 func test_a_carvings_own_channels_reach_the_readout() -> void:
-	var splash := _circle([FIRE], "Splash")
+	var splash := _shaped(_circle([FIRE], "Splash"))
 	splash.hits_allies = true
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Plain"), splash]
+	var carvings: Array[TransmutationData] = [_shaped(_circle([FIRE], "Plain")), splash]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
 
 	card._on_carving_picked(0)
 	assert_str(_channel_text(card)).not_contains("Splashes allies")
 	card._on_carving_picked(1)
 	assert_str(_channel_text(card)).contains("Splashes allies")
+
+
+# The ally line speaks BOTH ways on an area carving and NEITHER way on a one-cell one (#1083, dev
+# rulings 2026-09-27 and 2026-09-28). The single-target carving authors hits_allies on purpose: that
+# is the state that used to print "Splashes allies" for an attack that can only hit an ally you aim at.
+func test_the_ally_line_speaks_for_an_area_carving_and_not_for_a_single_target_one() -> void:
+	var zap := _circle([FIRE], "Zap")
+	zap.hits_allies = true
+	var carvings: Array[TransmutationData] = [_shaped(_circle([FIRE], "Sweep")), zap]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	card._on_carving_picked(0)
+	assert_str(_channel_text(card)).contains("Spares allies")
+	card._on_carving_picked(1)
+	var single := _channel_text(card)
+	assert_str(single).override_failure_message(
+		"a single-target carving still speaks about allies:\n%s" % single).not_contains("allies")
+
+
+# A three-cell row around the aimed cell -- enough footprint for an ally to stand in.
+func _shaped(carving: TransmutationData) -> TransmutationData:
+	var stamp: Array[Vector2i] = [Vector2i(-1, 0), Vector2i.ZERO, Vector2i(1, 0)]
+	var shape := AttackShape.new()
+	shape.stamp = stamp
+	carving.attack_shape = shape
+	return carving
+
+
+# A payload reaches the card too (#1058, ruling 53), one line per level of the chain -- the deeper
+# line is the one a readout that only looked at `payload` would drop.
+func test_a_carvings_payload_chain_reaches_the_readout() -> void:
+	var blast := _circle([FIRE], "Blast")
+	blast.payload = _circle([FIRE], "Spring")
+	var lob := _circle([FIRE], "Lob")
+	lob.payload = blast
+	var carvings: Array[TransmutationData] = [_circle([FIRE], "Plain"), lob]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	card._on_carving_picked(0)
+	assert_str(_channel_text(card)).not_contains("where it hits")
+	card._on_carving_picked(1)
+	var text := _channel_text(card)
+	assert_str(text).contains("Drops Blast where it hits")
+	assert_str(text).override_failure_message(
+		"the chain's second level never reached the card:\n%s" % text).contains("Blast drops Spring where it hits")
 
 
 # The ring is the element half of that same wire. Asserted through rows() rather than through pixels,
@@ -466,7 +512,7 @@ func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void
 	await await_idle_frame()
 
 	var opened: RuneDetailCard = null
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is RuneDetailCard:
 			opened = child
 		assert_bool(child is ModFittingCard).override_failure_message(

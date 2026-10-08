@@ -25,6 +25,14 @@ const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _build_board(size := Rect2i(0, 0, 10, 10)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -64,6 +72,22 @@ func test_when_both_are_attackable_this_turn_the_one_that_cannot_answer_wins() -
 	assert_object(_choose(board, leader)).override_failure_message(
 			"the squad went for the nearer target that can hit back").is_same(harmless)
 	assert_object(_choose(board, leader)).is_not_same(answerer)
+
+
+# #1230: a leader whose profile does not weigh the trade takes the closest in reach -- the same board,
+# so the answerer wins on hops. Named on the LEADER, who decides whom the squad fights.
+func test_a_leader_whose_profile_ignores_the_trade_takes_the_closest() -> void:
+	var careless := AIProfile.new()
+	careless.picks_best_trade = false
+	AIProfiles.use_fixtures({"": AIProfile.new(), "Careless": careless})
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, PLAYER, Vector2i(2, 2))
+	leader.ai_profile = "Careless"
+	var answerer: Unit = _spawn(board, ENEMY, Vector2i(3, 2))
+	var _harmless: Unit = _spawn(board, ENEMY, Vector2i(5, 2), false)
+
+	assert_object(_choose(board, leader)).override_failure_message(
+			"a leader that ignores the trade still went past the closest target").is_same(answerer)
 
 
 # ...and the other system, untouched. Nobody is reachable this turn (MOV 4, and both sit well

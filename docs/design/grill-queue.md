@@ -23,7 +23,7 @@
 
 ## Parked — real sessions with prerequisites
 
-8. **Between-battle recovery (Will)** — rest + the task-assignment metagame; the **temperament** idea rides this (and needs an owner doc). Source: [will-and-death.md](will-and-death.md) Generation.
+8. **Between-battle recovery (limbs and wounds; Will retired, #1174)** — rest + the task-assignment metagame; the **temperament** idea rides this (and needs an owner doc). Source: [will-and-death.md](will-and-death.md) Generation.
 10. **Story canon conflicts** — parked for co-dev review since the story pass. Source: [../story/appendix/open-questions.md](../story/appendix/open-questions.md).
 11. **Transmutation content passes** — the naming pass (register-tracks-depth as the filter), the mark-lexicon roster + day-one availability; playtest-gated numbers (capacity 1/3/6, strain curve, the ⚠ twins watch-list). Source: [transmutation-model-proposal.md](transmutation-model-proposal.md). *2026-07-11 co-dev rider (Stop 5 verdict): run this pass effects-first — author the effects we actually want as unit tools before completing any combination matrix ([transmutation-model-proposal.md](transmutation-model-proposal.md) status).*
 13. **Familiarity costs** — the per-member LDR-cost discount as squad relationships grow (touches invariants I5/I6/V3). Source: [squad-system.md](squad-system.md) banner. *(Split 2026-07-16: this parked item used to also cover "the redesign's actual numbers" — those shipped as [#63](https://github.com/Phaazoid/Godoiosis/issues/63), a static range of 3 / `MEMBER_LDR_COST = 2`, feel-tested and closed — the range became the per-unit `COH` stat in [#142](https://github.com/Phaazoid/Godoiosis/issues/142). Familiarity itself is the only piece still parked.)*

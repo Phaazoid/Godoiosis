@@ -2,11 +2,11 @@ extends RefCounted
 class_name ResolvedOutcome
 
 # One action's resolved consequences — the single source of truth for its damage (R8).
-# Every stage annotates this same object: base damage -> elemental (-> Will, Phase 3).
+# Every stage annotates this same object: base damage -> elemental -> the lethality rung and limb.
 
 var base_damage: int = 0
 var damage: int = 0                              # final, post-elemental
-var heal_amount: int = 0                          # final HP restored this hit (0 for a damage attack)
+var heal_amount: int = 0                          # the heal's whole size, UNCAPPED (0 for a damage attack); hp_restored() is what landed
 var states_added: Array[Elemental.State] = []
 var states_removed: Array[Elemental.State] = []
 # Authored duration overrides for states_added entries (max across fired reactions). Absent = the
@@ -26,7 +26,7 @@ var fired_reactions: Array[ElementalReaction] = []
 var elements: Array[Elemental.Element] = []
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
 var knockback_applied: bool = false               # #84: this hit shoved the target (Kinetic Mace Blowback)
-var knockback_from: Vector2i = Vector2i.ZERO       # the cell it was standing on BEFORE this shove
+var knockback_from: Vector2i = Vector2i.ZERO       # the cell it stood on when this hit's shove was judged
 var knockback_to: Vector2i = Vector2i.ZERO         # the cell it lands in — previewed and applied verbatim (Law #2)
 # Every cell of the shove, start included — the flight plus any landing tumble (#259). The TRAIL's
 # one source: a tumble down a sideways ramp bends the path once, so the endpoints above cannot
@@ -36,6 +36,9 @@ var knockback_path: Array[Vector2i] = []
 # void removal) happens on; cells after it are the landing tumble. The resolver's own split — the
 # shove animation and the 3D trail read it here rather than re-deriving (Law #2).
 var knockback_landing_index: int = 0
+# Tiles of this hit's shove the target's weight band absorbed (#120). Non-zero whether the shove was
+# shortened or stopped outright; a fully held one draws no trail, and held_in_place() marks it instead.
+var knockback_held: int = 0
 # The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
 # and the attack did not pierce DEF. Already folded into the mitigation; recorded so the queue row
 # can name it without re-deriving (Law #2's spirit applied to a readout).
@@ -86,17 +89,47 @@ var drown_damage: int = 0
 # both executors call Unit.die() on it. Preview-side it also suppresses the landing ghost and the
 # projected-knockback publish (nothing stands in a hole, and nothing there may be pickable).
 var removed: bool = false
+# The units that leave a squad of two or more BECAUSE of this blow (#367): the victim going down, a
+# successor unable to hold someone, a shove out of range. Stamped after the pass resolves, by
+# SplitForecast in SquadManager.resolve_plan; a death is never counted -- it is not a split, and its
+# tether plays a look of its own (#1104). The queue's "Split" chip reads it, and the pass-end settle
+# must agree with it (Law #2).
+var splits: Array[Unit] = []
+# ...and the member -> leader LINKS this blow ends or begins (#367 part 2B), stamped beside `splits`
+# by the same walk: a leader's leaving ends every member's link and begins the survivors' links to
+# its successor. What the tether presenter plays at the blow, and where the zoom lifts the far end.
+var relinks: Array[Relink] = []
 # Both ends are recorded because a unit can be shoved MORE THAN ONCE in a plan (#105): the second
 # hit starts where the first one left it, not at its live board cell. The preview used to
 # reconstruct the start from `target.movement.cell`, which is a second answer to a question this
 # outcome already holds — and which produced a two-tile "direction" the arrow atlas can't name.
 
 # Predicted lifecycle result for this hit's TARGET (R8's "lifecycle result"). Mirrors
-# Unit.take_damage + _go_downed so the queue previews down/maim/kill (Law #2). MAIMED is a
-# DOWN the target can't pay for in Will (will-and-death.md 2026-06-24) — same lifecycle as
-# DOWNED, flagged separately so the preview can say so.
-enum Lethality { NONE, DOWNED, KILLED, MAIMED, CRISIS }
+# Unit.take_damage + _go_downed so the queue previews down/kill/Crisis (Law #2). Not persisted --
+# telemetry writes the NAME -- so a retired rung is deleted, never tombstoned (MAIMED, #1174).
+enum Lethality { NONE, DOWNED, KILLED, CRISIS }
 var lethality: Lethality = Lethality.NONE
+
+# The limb slot this hit TAKES (#1174), or -1. Beside the rung rather than a rung of its own, because
+# a standing hit can take one too: LethalityRules.severs decides it, the resolver pops the slot off
+# its threaded limb_order, and execution takes the same slot by the same rotation.
+var severed_limb: int = -1
+
+# How much of `damage` is NOT a blow (#1174), so can never take a limb: the drowning top-up, or all of
+# it when the void took the unit (a removal is a kill, and a kill takes nothing). One answer for the
+# resolver and both execution twins -- execution re-asks the ladder, which cannot see a removal.
+func non_blow() -> int:
+	return damage if removed else drown_damage
+
+# The HP a heal actually gave back (#46): heal_amount is the heal's whole size, and the max-HP cap ate
+# the rest, so a readout of what happened reads this. The field stays uncapped for its other readers.
+func hp_restored() -> int:
+	return maxi(0, target_hp_after - hp_before)
+
+# The target's weight held this hit's whole shove, so it stays on knockback_from (#1186). The board
+# marks that cell; a shove held only in part already draws its shorter trail.
+func held_in_place() -> bool:
+	return knockback_held > 0 and not knockback_applied
 
 # R7: the pass felled this action's actor before its turn to act came round. A no-op at execution
 # on both twins, and dropped from the BeatSheet so the camera never frames it. What it does to the
@@ -127,3 +160,15 @@ var reads_hp: bool = true
 # fired_attack: stamped from origin_cell + the threaded hypo position, never re-derived later, since
 # a shove earlier in the pass can change the target's level (Law #2). 0 with no board.
 var elevation_delta: int = 0
+
+
+# One link a blow changes (#367 part 2B). `cause` is the SquadManager.LeaveCause that ended it -- the
+# member's own if the member left, else its leader's -- and -1 on a link that begins. The cells are
+# where the two stand at that blow.
+class Relink:
+	var member: Unit
+	var leader: Unit
+	var ends: bool
+	var cause: int = -1
+	var member_cell: Vector2i
+	var leader_cell: Vector2i

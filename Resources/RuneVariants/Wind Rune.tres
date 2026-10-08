@@ -19,3 +19,4 @@ script = ExtResource("3_ithun")
 inscriptions = Array[ExtResource("1_2qayi")]([SubResource("Resource_gyx2t")])
 temper = 6
 display_name = "Wind Rune"
+weight = 1

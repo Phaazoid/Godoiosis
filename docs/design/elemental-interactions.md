@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
-**Canon checked through #199 (2026-08-12).** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -34,7 +34,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 - **Counter-denial (gated)**: STAGGERED (big SOUND), FROZEN, or shocking conductive-armor → can't counter.
 - **AIRBORNE** — and it's applied by *weapons* too (the kinetic mace), not just elements. Combos with AIR/EARTH.
 - **Aether** as a versatile medium: a *status-cleaner* (a prestidigitation cantrip) **and** action-at-a-distance combo carrier.
-- **Azoth** & **Galvanic** revive — *pick up a downed unit at a heavy Will cost* (alchemic vs mechanist flavors).
+- **Azoth** & **Galvanic** revive — *pick up a downed unit at a heavy Will cost* *(Will retired by #1174 — the cost needs a new currency)* (alchemic vs mechanist flavors).
 - **Coagula** (lock a state on) — love the concept/name; the element-tie is open (see Rework).
 - **Sympathetic link** (correspondence) — bind two units, mirror effects.
 - **Transmutation of tile/unit states** — promoted to a *core* alchemist verb, not a wild swing.
@@ -105,11 +105,11 @@ Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT �
 
 | State | Role | Does (deterministic) |
 |---|---|---|
-| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike). ⚗ −1 move unbuilt |
+| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike). **Never beside CHILLED, which wins in both orders ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092))** — see the CHILLED row. ⚗ −1 move unbuilt |
 | ~~★ CONDUCTIVE~~ | — | **FOLDED INTO WET, NOT BUILT ([#884](https://github.com/Phaazoid/Godoiosis/issues/884), 2026-09-10).** The conductor set is *a water tile (unless FROZEN) or a WET unit*, so a second state with its own source to author would be a duplicate seam for a fact WET already carries (Law #4). It comes back only if something must conduct while dry — FERROUS armour is the candidate, and it would join `Conduction.conducts` as a clause rather than as a state |
 | ★ OILED | S,e | FIRE → big bonus + BURNING; ⚗ knockback travels +1 |
 | ★ BURNING | P,e🔗 | loses fixed HP each activation; spreads to flammable; doused by WATER/ICE |
-| ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built |
+| ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built. **EXCLUDES WET, and wins in both orders ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092), dev 2026-09-22):** a Chilled unit is not wetted by a WATER hit, a ford, a shove into water or a melt's sinking, and CHILLED arriving on a Wet unit strips the WET whether or not a reaction consumes it. One declared rule, `Elemental.OVERRIDES`, asked wherever a unit gains a state — the reaction fold judges it on what the hit LEAVES, so WATER+FIRE on a Chilled unit (Temperature Shock ending the chill) still wets it. Shock needs no special case: live water under a Chilled unit still carries the current to it, while on dry ground it relays nothing and Electrocuted! (which needs WET) cannot fire. Pre-rule saves holding both load as-is |
 | ★ FROZEN | P,i | can't move **or counter** next activation; +EARTH/SOUND (shatter); FIRE → WET. *Gate behind CHILLED→FROZEN*. **Its look is pre-ruled (dev, 2026-09-23): a block of ice AROUND the unit** — Chilled already wears the frost sheen (#358), so encasement is what reads as the next step |
 | ★ SHOCKED | S/P,i | +next SHOCK; relays chains while adjacent |
 | ★ AIRBORNE | P,i | launched — can't counter, +EARTH (slam); AIR/EARTH **reposition** it. *Also from the kinetic mace (weapon-applied)* |
@@ -152,13 +152,13 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | BURNING | Douse | −dmg, BURNING → WET |
 | ⚗ OILED | Slick Spread | spread OILED to adjacent (water carries oil) 🔗 |
 | SHOCKED | Conduct | +dmg, arc to adjacent (live water) |
-| *(applies WET / CONDUCTIVE)* | | |
+| *(applies WET / CONDUCTIVE)* | | never to a CHILLED unit ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092)) |
 
 ### SHOCK
 | × state | reaction | effect |
 |---|---|---|
 | ◆★ WET | Electrocuted | **[BUILT 2026-06-19]** ++dmg, remove WET (`shock_wet_electrocute.tres`) |
-| ★ *(water or a wet body)* | Chain Lightning | **[BUILT 2026-09-10, #884]** the current FLOODS from whatever conductor the shot touched, orthogonally, `Conduction.SHOCK_ARC_RANGE` cells, through water (unless FROZEN) and through WET units, which RELAY. Everything standing in it is caught and resolves as an ordinary volley member — so each wet victim electrocutes on its own row. **It does not check tags**: allies and a shooter standing in the water are caught. Not a per-attack field: the reach is a game constant, since arcing through water is a property of electricity. That line held when #900 made the LOOK per-attack: an attack may author what its shock looks like (a shared `EffectLook`) and may not author how far it travels. FERROUS is the unbuilt half |
+| ★ *(water or a wet body)* | Chain Lightning | **[BUILT 2026-09-10, #884]** the current FLOODS from whatever conductor the shot touched, orthogonally, `Conduction.SHOCK_ARC_RANGE` cells, through water (unless FROZEN) and through WET units, which RELAY. Everything standing in it is caught and resolves as an ordinary volley member — so each wet victim electrocutes on its own row. **It does not check tags**: allies and a shooter standing in the water are caught. **Nor `targets`** (dev, 2026-09-28, [#1135](https://github.com/Phaazoid/Godoiosis/issues/1135)): a MAP-only shock hits no unit itself, but the water it lights still catches whoever is in it — a soaked body on the aimed cell included, since a wet body conducts wherever it stands. Not a per-attack field: the reach is a game constant, since arcing through water is a property of electricity. That line held when #900 made the LOOK per-attack: an attack may author what its shock looks like (a shared `EffectLook`) and may not author how far it travels. FERROUS is the unbuilt half |
 | FERROUS / **conductive armor** | Overload | ++dmg, **STAGGERED** (can't counter — the gated counter-denial) |
 | ⚗ OILED | Spark | small dmg, apply BURNING (sparks light it) |
 | MAGNETIZED | Arc Magnet | +dmg, pull 1 tile |
@@ -203,7 +203,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | ★ AETHER | friendly state | Cleanse | strip negative states (prestidigitation cantrip) |
 | ★ AETHER | distant stated unit | Conduction | complete a combo **at range** (no adjacency) |
 | ⚗ AZOTH | any matching state | Quintessence | re-fire the matching reaction stack once more (busted, fun) |
-| AZOTH/GALVANIC | downed ally | Revive | pick them up — **heavy Will cost** ([will-and-death.md](will-and-death.md)) |
+| AZOTH/GALVANIC | downed ally | Revive | pick them up — **heavy Will cost** *(Will retired, #1174 — needs a new cost)* ([will-and-death.md](will-and-death.md)) |
 | VITRIOL | armored/metal | Corrode | CORRODED + −target offense |
 | VITRIOL | WET | Dilute | −dmg (watered down) |
 | SOUND | FROZEN/BRITTLE/CORRODED | Shatter | ++dmg |
@@ -219,7 +219,7 @@ Concise riffs on the ✅ items; they lean on states/reactions above.
 - **Vision & command denial.** Smoke/fog on the enemy **leader** collapses their LDR range — their squad can't stay tethered and scatters into solo units (cohesion attack, straight at [squad-system.md](squad-system.md)). The non-lethal way to break a squad.
 - **Counter-denial (gated).** STAGGERED (a big enough SOUND hit), FROZEN, or Overload (SHOCK into conductive armor) → the target can't counter. Then the squad alpha-strikes freely. Strong → always behind a setup beat, never one cheap hit (Axiom 3).
 - **Transmutation (core alchemist verb).** Alchemists convert tile/unit states as a *baseline* ability: WET→ICE (instant bridge / freeze a swimmer), FIRE→STEAM, STONE→SAND, mud↔dust. Battlefield reshaping, not a wild swing.
-- **Revive (heavy Will).** Downed ally pickup: **Azoth** (alchemic — "shock them back to life" with aura) or **Galvanic** (mechanist — a jolt). Costs a big chunk of Will; ties straight into the stakes ladder. *Reanimating the actually-dead is ⚗⚗ far-future.*
+- **Revive (heavy Will).** Downed ally pickup: **Azoth** (alchemic — "shock them back to life" with aura) or **Galvanic** (mechanist — a jolt). Costs a big chunk of Will; *(Will retired by #1174 — the cost needs a new currency)* ties straight into the stakes ladder. *Reanimating the actually-dead is ⚗⚗ far-future.*
 - **Sympathetic link.** Bind two units (correspondence — "as above, so below"); a state or a share of damage mirrors between them. Combo delivery at range; or a sacrifice/share-the-pain tool.
 
 ---
@@ -316,7 +316,7 @@ Peak alchemists — named for the father of the Tria Prima. The dread mechanic, 
 - **But it's telegraphed (Law #2 / Axiom 2):** the ritual visibly builds, stage by stage, over several turns. The player disrupts it — break line-of-sight, kill or displace a council member, **Aether-cleanse a stage off the victim**, or interrupt before Rubedo. The scariest thing in the game is something done *to* you that you can see coming and must race to stop.
 - ⚗ Flavor: each councillor embodies a principle (Sulfur / Mercury / Salt) or an Opus color — kill order and which stage they own becomes the puzzle.
 
-(Other boss seeds: an **Exact-Lethal** machine that forces Crisis Mode — see [will-and-death.md](will-and-death.md); an **Intimidator** that drains Will at range.)
+(Other boss seeds: an **Exact-Lethal** machine that forces Crisis Mode — see [will-and-death.md](will-and-death.md); an **Intimidator** that drains Will at range, moot since #1174 retired Will.)
 
 ---
 

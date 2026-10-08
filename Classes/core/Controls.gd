@@ -136,6 +136,9 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "V", "context": Context.BOARD, "when": "",
 		"does": "Enemy ranges",
 		"action": "toggle_enemy_ranges"},
+	{"key": "Alt (hold)", "context": Context.BOARD, "when": "",
+		"does": "Gas tiles",
+		"action": "show_gas_floor"},
 	# A PLAYER BINDING SINCE #1050. It was a dev key for its whole life, which meant a shipped build
 	# had no hotkey for the one thing a stranger most needs to do -- and this page is half the point
 	# of promoting it, the other half being that a key nobody is told about is not a door.
@@ -157,6 +160,13 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Left-click", "context": Context.BOARD, "when": "Deploying",
 		"does": "Unit options, or place a unit",
 		"action": HARDCODED},
+	# #545. Placeholder labels; the wording is the dev's.
+	{"key": "Shift (hold)", "context": Context.BOARD, "when": "During playback",
+		"does": "Speed up",
+		"action": "fast_forward"},
+	{"key": "Space", "context": Context.BOARD, "when": "During playback",
+		"does": "Skip",
+		"action": "skip_playback"},
 	{"key": "Click / Space / Enter", "context": Context.BOARD, "when": "In dialog",
 		"does": "Advance",
 		"action": "dialogic_default_action"},
@@ -172,6 +182,9 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "D / Right", "context": Context.CAMERA, "when": "",
 		"does": "Pan right",
 		"action": "cam_right"},
+	{"key": "Middle-drag", "context": Context.CAMERA, "when": "",
+		"does": "Pan",
+		"action": HARDCODED},
 	{"key": "Right-drag", "context": Context.CAMERA, "when": "",
 		"does": "Orbit and tilt",
 		"action": HARDCODED},

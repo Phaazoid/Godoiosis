@@ -16,7 +16,7 @@ const WATER_ATLAS := Vector2i(5, 6)   # walkable=false (Waterwalk-only), move_co
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "InvalidMoveOverlay",
-	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay", "DeploymentOverlay", "DefendOverlay",
+	"ZoneOverlay",
 ]
 
 # Build the node graph under `parent` (a node already in the SceneTree). Returns refs by name.
@@ -36,6 +36,17 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	var units_root := Node2D.new()
 	units_root.name = "Units"
 	root.add_child(units_root)
+
+	# The pre-mission phase's two board pieces (#46): where a drawn roster waits off the board (the
+	# twin of game.reserve_root, #738), and the zones its DEPLOYMENT cells are read from.
+	var reserve_root := Node2D.new()
+	reserve_root.name = "Reserve"
+	reserve_root.visible = false
+	root.add_child(reserve_root)
+
+	var zone_manager := ZoneManager.new()
+	zone_manager.name = "ZoneManager"
+	root.add_child(zone_manager)
 
 	var overlay := OverlayManager.new()
 	overlay.name = "OverlayManager"
@@ -73,6 +84,12 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	# disagree about whether a move is legal, which is exactly the split #103 was.
 	var board_heights := BoardHeights.new()
 
+	# The atmosphere (#508), the twin of game.gas_field: attacks and reactions deposit into it, so the
+	# headless board carries it -- a store the third load path drops is #103's shape. Gas needs ground,
+	# by the tile states' own rule.
+	var gas_field := GasField.new()
+	gas_field.ground_source = terrain_states.ground_source
+
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
 	# units scanned off units_root so mid-test spawns are seen. Sits below terrain_states because a
 	# lambda captures what exists at creation.
@@ -81,17 +98,20 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		for child in units_root.get_children():
 			if child is Unit:
 				units.append(child)
-		return BoardContext.new(grid, units, squad_manager, terrain_states, null, board_heights)
+		return BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field)
 
 	return {
 		"root": root,
 		"grid": grid,
 		"units_root": units_root,
+		"reserve_root": reserve_root,
+		"zone_manager": zone_manager,
 		"overlay_manager": overlay,
 		"squad_manager": squad_manager,
 		"turn_manager": turn_manager,
 		"terrain_states": terrain_states,
 		"board_heights": board_heights,
+		"gas_field": gas_field,
 	}
 
 static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
@@ -102,7 +122,8 @@ static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 static func paint_cell(grid: BoardGrid, cell: Vector2i, atlas: Vector2i) -> void:
 	grid.paint(cell, GRASS_SOURCE, atlas)
 
-# Spawn a unit onto the board in its own solo squad (mirrors game.spawn_unit's contract).
+# Spawn a unit onto the board in its own solo squad (game.spawn_unit's contract minus its gate, which
+# apply_scenario asks first -- fixtures place freely).
 static func spawn(board: Dictionary, data: UnitData, cell: Vector2i) -> Unit:
 	var unit := UnitFactory.create_unit(data, board.grid, cell)
 	board.units_root.add_child(unit)     # triggers _ready -> unit_instance + movement wired to grid
@@ -138,19 +159,28 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		board.terrain_states.load_state_dict(scenario.terrain_states, scenario.terrain_state_turns)   # mirrors ScenarioManager
 	if board.get("board_heights") != null:
 		board.board_heights.load_corner_dict(scenario.corner_heights)   # mirrors ScenarioManager
+	if board.get("gas_field") != null:
+		board.gas_field.load_dict(scenario.gas)   # mirrors ScenarioManager
+	if board.get("zone_manager") != null:
+		board.zone_manager.load_dict(scenario.zones)   # every zone: the phase's deployment, a Sentry's patrol, the mission's own (#46)
 
 	var spawned: Array[Unit] = []
-	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry
+	var unit_of_entry := {}            # ScenarioUnitEntry -> the Unit it spawned, ScenarioManager's map
 	var leaders := {}                  # squad_id -> Unit
 	var members := {}                  # squad_id -> Array[Unit]
 
-	for entry in scenario.unit_entries:
-		if entry.unit_data == null:
-			push_warning("Play: scenario entry with null unit_data; skipping")
+	for entry in ScenarioManager.valid_entries(scenario):
+		# The game's spawn gate (#46), asked BEFORE spawn() builds: spawn itself stays ungated so
+		# fixtures place freely, and a refused entry is dropped with a warning, as the game drops it.
+		var here: BoardContext = board.squad_manager.board_source.call()
+		if not RulesService.can_spawn_at(here, entry.cell, entry.spawns_as_body()):
+			push_warning("Play: could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
-		var unit := spawn(board, entry.unit_data.duplicate(true), entry.cell)
+		# Un-duplicated, as the game hands it (#177): UnitFactory copies, and keeps the provenance.
+		var unit := spawn(board, entry.unit_data, entry.cell)
+		entry.apply_placement(unit)   # the VIP flag and a leader's AI squad fields -- ScenarioManager's own call (#46)
 		spawned.append(unit)
-		entry_by_unit[unit] = entry
+		unit_of_entry[entry] = unit
 		if entry.squad_id != -1:
 			if entry.is_leader:
 				leaders[entry.squad_id] = unit
@@ -162,9 +192,9 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	# Nodes added this frame haven't run _ready yet; wait one so unit_instance/inventory exist.
 	await board.root.get_tree().process_frame
 
-	for unit in spawned:
-		var entry: ScenarioUnitEntry = entry_by_unit[unit]
-		# The whole UnitInstance-side snapshot — stats/HP/Will/inventory/limbs/proficiency/
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		var unit: Unit = unit_of_entry[entry]
+		# The whole UnitInstance-side snapshot — stats/HP/inventory/limbs/proficiency/
 		# aura/jobs (#83); mirrors ScenarioManager.load_scenario, including the reference
 		# gate (#177): a reference entry captured nothing, so the spawn's initialize + kit stand.
 		if entry.state_saved:
@@ -179,10 +209,12 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 
 	# has_acted after the rebuild, same order ScenarioManager.apply_scenario uses (#87). Mirrored
 	# here so the two loaders cannot disagree about whether a spent squad reloads spent.
-	for unit in spawned:
-		var entry: ScenarioUnitEntry = entry_by_unit[unit]
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		var unit: Unit = unit_of_entry[entry]
 		if entry.is_leader and entry.squad_has_acted:
 			board.squad_manager.set_has_acted(unit.squad, true)
+
+	ScenarioManager.relink_guards(scenario, unit_of_entry)   # armed Guards (#414), the game's own door and moment
 
 	board.turn_manager.set_active_faction(scenario.active_faction)
 	board["scenario"] = scenario

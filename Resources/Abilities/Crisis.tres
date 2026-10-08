@@ -7,5 +7,5 @@ script = ExtResource("1_crisis")
 id = 6
 display_name = "Crisis"
 kind = 1
-description = "At full Will, a would-be-down becomes Crisis: rise surged, Will locks at 0, and there is no safety net for the rest of the battle"
+description = "A would-be-down becomes Crisis: rise surged, and there is no safety net for the rest of the battle"
 metadata/_custom_type_script = "uid://7w7ajveltxx5"

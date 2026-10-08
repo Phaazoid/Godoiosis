@@ -173,3 +173,164 @@ func test_the_gates_sentence_names_a_derived_generic_by_its_template() -> void:
 	assert_bool(unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, arm)).is_true()
 
 	assert_str(unit.remove_block_reason(unit.inventory.find(arm))).contains("Iron Arm")
+
+
+# --- Inspect (#1152) ----------------------------------------------------------------------------
+
+# A carbine whose main shoves, with one mod fitted: each half of the read-only card has something to
+# show, so a card that dropped a half is visible.
+func _readable_weapon() -> WeaponInstance:
+	var template := WeaponData.new()
+	template.display_name = "Test Carbine"
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.display_name = "Shot"
+	template.main_attack.knockback = 1
+	var weapon := WeaponInstance.make(template)
+	var lug := WeaponModData.new()
+	lug.display_name = "Test Lug"
+	assert_bool(weapon.fit(0, lug)).override_failure_message("fixture: the mod must actually fit").is_true()
+	return weapon
+
+
+static func _label_texts(root: Node) -> Array[String]:
+	var out: Array[String] = []
+	for node: Node in _walk(root):
+		var label := node as Label
+		if label != null:
+			out.append(label.text)
+	return out
+
+
+static func _button_texts(root: Node) -> Array[String]:
+	var out: Array[String] = []
+	for button: Button in _buttons(root):
+		out.append(button.text)
+	return out
+
+
+func _press_inspect(panel: Node) -> void:
+	var inspect := _button_starting(panel, "Inspect")
+	assert_object(inspect).override_failure_message("the popup offers no Inspect row").is_not_null()
+	if inspect != null:
+		inspect.pressed.emit()
+	await await_idle_frame()
+
+
+# THE WIRE, end to end: the popup's button, through the dock and the game, to a card on the card layer.
+# Every half of "read-only" is asked of what was DRAWN -- no library, no wired zone, no carried row --
+# and the zone and row counts keep those loops from passing over nothing.
+func test_Inspect_opens_the_weapons_card_read_only() -> void:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(1, 0))
+	var carbine := _readable_weapon()
+	assert_bool(unit.add_item(carbine)).is_true()
+	var panel = await _open_popup_on(unit, carbine)
+
+	await _press_inspect(panel)
+	assert_object(panel.action_popup).override_failure_message(
+		"the popup stayed open under the card").is_null()
+	var card: ModFittingCard = null
+	for child: Node in game.card_layer.get_children():
+		if child is ModFittingCard:
+			card = child
+	assert_object(card).override_failure_message("Inspect opened no weapon card").is_not_null()
+	if card == null:
+		return
+
+	var texts := _label_texts(card)
+	assert_bool(texts.has("MODS THAT FIT")).override_failure_message(
+		"the battle's card still offers the mod library").is_false()
+	assert_bool(texts.has("Test Lug")).override_failure_message(
+		"the fitted mod is missing from its space: %s" % [texts]).is_true()
+	assert_bool(texts.has("Shoves 1 tile")).override_failure_message(
+		"the card never printed the attack's channels: %s" % [texts]).is_true()
+
+	var zones := 0
+	var rows := 0
+	for node: Node in _walk(card):
+		var row := node as GearRow
+		if row != null:
+			rows += 1
+			assert_object(row.item).override_failure_message(
+				"a row on the read-only card can still be picked up").is_null()
+			continue
+		var zone := node as GearDropZone
+		if zone != null:
+			zones += 1
+			assert_bool(zone.judge.is_valid()).override_failure_message(
+				"a space on the read-only card still takes a drop").is_false()
+	assert_int(zones).override_failure_message("fixture: the card drew no space at all").is_greater(0)
+	assert_int(rows).override_failure_message("fixture: the card drew no fitted mod row").is_greater(0)
+	card._on_close()
+	await await_idle_frame()
+
+
+func test_Inspect_opens_a_runes_card() -> void:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(1, 0))
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	rune.display_name = "Test Rune"
+	assert_bool(unit.add_item(rune)).is_true()
+	var panel = await _open_popup_on(unit, rune)
+
+	await _press_inspect(panel)
+	var card: RuneDetailCard = null
+	for child: Node in game.card_layer.get_children():
+		if child is RuneDetailCard:
+			card = child
+	assert_object(card).override_failure_message("Inspect opened no rune card").is_not_null()
+	if card != null:
+		card._on_close()
+		await await_idle_frame()
+
+
+# An enemy's weapon (dev, 2026-09-28: any unit you can inspect) -- driven through the slot's own click,
+# because the gate that used to refuse this popup outright lives in the click, not in the builder.
+func test_a_unit_you_cannot_command_offers_Inspect_and_nothing_that_changes_its_kit() -> void:
+	var enemy: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(1, 0))
+	var carbine := _readable_weapon()
+	assert_bool(enemy.add_item(carbine)).is_true()
+	game.unit_info_panel.set_unit(enemy, false, game._board())
+	await await_idle_frame()
+	var panel = game.unit_info_panel.inventory_panel
+
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	panel._on_slot_gui_input(click, enemy.inventory.find(carbine))
+	await await_idle_frame()
+
+	assert_object(panel.action_popup).override_failure_message(
+		"an enemy's weapon slot opened no popup").is_not_null()
+	var texts := _button_texts(panel)
+	assert_bool(texts.has("Inspect")).is_true()
+	assert_bool(texts.has("Cancel")).is_true()
+	for text: String in texts:
+		assert_bool(text.begins_with("Equip") or text.begins_with("Unequip") or text.begins_with("Toss")) \
+			.override_failure_message("a unit you cannot command offered '%s'" % text).is_false()
+
+
+# Armour and vials have no card, so they offer no Inspect -- the Wear and Use rows are there to prove
+# the popup was built at all.
+func test_items_without_a_card_offer_no_Inspect() -> void:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(1, 0))
+	var plate := ArmorData.new()
+	plate.display_name = "Test Plate"
+	var vial := VialData.new()
+	vial.element = Elemental.Element.FIRE
+	vial.display_name = "Test Vial"
+	assert_bool(unit.add_item(plate)).is_true()
+	assert_bool(unit.add_item(vial)).is_true()
+
+	var panel = await _open_popup_on(unit, plate)
+	assert_object(_button_starting(panel, "Wear")).override_failure_message(
+		"fixture: the armour popup was never built").is_not_null()
+	assert_object(_button_starting(panel, "Inspect")).override_failure_message(
+		"armour offered Inspect, and armour has no card").is_null()
+
+	panel._show_action_popup(unit.inventory.find(vial))
+	await await_idle_frame()
+	assert_object(_button_starting(panel, "Use")).override_failure_message(
+		"fixture: the vial popup was never built").is_not_null()
+	assert_object(_button_starting(panel, "Inspect")).override_failure_message(
+		"a vial offered Inspect, and a vial has no card").is_null()

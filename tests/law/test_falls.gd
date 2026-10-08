@@ -196,19 +196,31 @@ func test_a_drop_can_change_the_rung() -> void:
 	assert_bool(_resolve(s).lethality != ResolvedOutcome.Lethality.NONE).is_true()   # the fall tips it
 
 
-func test_the_weight_hook_raises_fall_damage() -> void:
+func test_a_heavier_band_raises_fall_damage() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 4)
 	heights.set_cell(Vector2i(2, 0), 4)
-	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	# A shove strong enough to still reach the drop once the ballast's band holds part of it (#120).
+	var s := _setup(heights, 1 + Stats.weight_band(Stats.WEIGHT_BAND_2), Vector2i(1, 0), Vector2i(2, 0))
+	var unladen := _resolve(s).fall_damage
 	var ballast := H.make_weapon()
-	ballast.weight = 2 * FallRules.WEIGHT_PER_BONUS_DAMAGE
+	ballast.weight = Stats.WEIGHT_BAND_2
 	(s.d as Unit).add_item(ballast)
-	# The scaling property, never the numbers: carried mass raises the same drop's cost, and the
-	# resolver reads the loaded unit. Inert at weight 0 -- the #120 interlock's fall-damage wire.
+	# The scaling property, never the numbers: loading the faller into a heavier band raises the
+	# same drop's cost, and the resolver reads the loaded unit.
 	var laden := _resolve(s).fall_damage
 	assert_int(laden).is_equal(FallRules.damage_for(4, s.d))
-	assert_bool(laden > FallRules.damage_for(4, null)).is_true()
+	assert_bool(laden > unladen).is_true()
+
+
+# The BAND is FallRules' unit of weight (#120), not the raw number: every unit carries a body
+# weight, so a raw term would raise every fall in the game. Mass short of the next band is free.
+func test_mass_within_a_band_costs_nothing_extra() -> void:
+	var empty := H.spawn_unit(self, ENEMY, Vector2i(0, 0), {Stats.Stat.BLD: 0}, false)
+	var near := H.spawn_unit(self, ENEMY, Vector2i(1, 0), {Stats.Stat.BLD: Stats.WEIGHT_BAND_1 - 1}, false)
+	assert_int(Stats.weight_band(near.get_weight())).override_failure_message(
+		"the near-band unit is already in band 1, so this case measures nothing").is_equal(0)
+	assert_int(FallRules.damage_for(4, near)).is_equal(FallRules.damage_for(4, empty))
 
 
 # A HALF level is free (#427 ruling, dev 2026-08-23: "no fall damage for a half level fall") --
@@ -462,8 +474,7 @@ func test_a_tumble_stops_at_the_boards_edge_rather_than_falling_off() -> void:
 #
 # What the drown COSTS is asserted as a property, never as a number: the water takes whatever the
 # blow left, so the fixture's own HP is the expectation and nothing here pins a tuning value. The
-# rung is read through lifecycle_for so a fixture whose Will cannot pay (a MAIM) still passes -- a
-# maim IS a down, and what this ticket rules on is that the unit goes DOWN rather than which flavour.
+# rung is read through lifecycle_for, the one map every reader of a rung shares.
 
 func _lifecycle(outcome: ResolvedOutcome) -> Unit.LifecycleState:
 	return LethalityRules.lifecycle_for(outcome.lethality)
@@ -483,6 +494,52 @@ func test_a_shove_into_deep_water_takes_everything_the_blow_left() -> void:
 	# resolver threads that rather than the raw subtraction, so this is Law #2 rather than arithmetic.
 	assert_int(outcome.target_hp_after).is_equal(1)
 	assert_int(outcome.drown_damage).is_greater(0)
+
+
+# The water is not a BLOW (#1174, Iron Will's own "a lake is not a blow"). A small shove into a lake
+# drowns the unit whole and takes no limb, however much health the water took. Executed through the
+# real AttackAction.execute, because that is where the blow and the water are split for take_damage.
+func test_a_drowning_takes_no_limb_from_a_small_blow() -> void:
+	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	var d: Unit = s.d
+	var attack := H.stamped_attack(s.a, d)
+	var plan := ResolvedPlan.new()
+	var attacks: Array[AttackAction] = [attack]
+	plan.attacks = attacks
+	var sm: SquadManager = s.sm
+	PlanResolver.resolve(plan, _no_reactions, sm.board_source.call())
+	var outcome := attack.resolved
+	assert_int(outcome.damage - outcome.drown_damage) \
+		.override_failure_message("fixture blow is already limb-sized; the water cannot be told apart") \
+		.is_less(LethalityRules.LIMB_LOSS_DAMAGE)
+	assert_int(outcome.damage) \
+		.override_failure_message("fixture: blow plus water must reach the limb threshold") \
+		.is_greater_equal(LethalityRules.LIMB_LOSS_DAMAGE)
+	assert_int(outcome.severed_limb) \
+		.override_failure_message("the preview counted the water as a blow").is_equal(-1)
+
+	await attack.execute()
+
+	assert_bool(d.is_downed()).override_failure_message("fixture: the water did not down the unit").is_true()
+	assert_bool(d.unit_instance.is_maimed()) \
+		.override_failure_message("execution counted the water as a blow and took a limb").is_false()
+
+
+# ...and a blow that is limb-sized on its own still takes the limb when the water finishes the job.
+func test_a_big_blow_that_also_drowns_takes_the_limb() -> void:
+	# Headroom, so the blow alone leaves something for the water -- test_a_fall_into_water's reason.
+	var sm := H.make_manager(self)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0), {}, true, LethalityRules.LIMB_LOSS_DAMAGE)
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 200})
+	(a.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	var grid := sm.get_node("../Grid") as TileMapLayer
+	grid.set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	var outcome := _resolve({"sm": sm, "a": a, "d": d, "grid": grid})
+	assert_int(outcome.damage - outcome.drown_damage) \
+		.override_failure_message("fixture blow is not limb-sized").is_greater_equal(LethalityRules.LIMB_LOSS_DAMAGE)
+	assert_int(outcome.drown_damage).override_failure_message("fixture: the blow alone downed the unit").is_greater(0)
+	assert_int(outcome.severed_limb).is_not_equal(-1)
 
 
 func test_the_flight_stops_in_the_FIRST_water_cell() -> void:

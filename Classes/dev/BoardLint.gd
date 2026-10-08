@@ -49,6 +49,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_fittings(board, found)
 	_check_look_preset(game, found)
 	_check_roster(game, found)
+	_check_ai_profiles(board, found)
 	_check_deployment(game, found)
 	_check_dialog(game, board, found)
 	_check_repaired_content(found)
@@ -242,6 +243,20 @@ static func _check_roster(game, found: Array[Dictionary]) -> void:
 		+ "to offer.") % roster)
 
 
+# A unit naming an AI profile that no longer resolves (#1230). BLOCKS, the roster rule one field
+# along: AIProfiles.of falls back to Hard, and substituting Hard for a band (or a boss's bespoke
+# profile) hands the player a different mission. names() rather than resolve(), so the dropdown and
+# the lint ask one question.
+static func _check_ai_profiles(board: BoardContext, found: Array[Dictionary]) -> void:
+	var known := AIProfiles.names()
+	for unit in board.units:
+		if not is_instance_valid(unit) or unit.ai_profile == "" or known.has(unit.ai_profile):
+			continue
+		_add(found, Severity.BLOCKS,
+			"%s names AI profile '%s', which does not exist -- it would play Hard."
+				% [unit.get_unit_name(), unit.ai_profile])
+
+
 # The roster's other half (#736): a board that offers a pool has to say where that pool may stand,
 # and how much of it may come. Both faults are one rule because they are one question asked at two
 # depths, and the roster gate is what makes either mean anything -- a cap on a board with no pool
@@ -292,7 +307,17 @@ static func _check_deployment(game, found: Array[Dictionary]) -> void:
 # reachable from the surface that misbehaves -- a check against a saved file would miss the
 # unsaved edits the dev-tools page makes.
 static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -> void:
-	for beat: DialogBeat in game.scenario_manager.current_dialog_beats:
+	var scenario_manager: ScenarioManager = game.scenario_manager
+	# A BRIEFING (#882) plays when the pre-mission phase opens, so a board with no phase -- no roster,
+	# or the screen box unticked (#46) -- has one that can never play. DEGRADES: the mission plays,
+	# minus the lines the author wrote for it.
+	var no_phase := scenario_manager.current_roster == "" or not scenario_manager.current_offers_pre_mission
+	for beat: DialogBeat in scenario_manager.current_dialog_beats:
+		if no_phase and beat.trigger == DialogBeat.Trigger.PRE_MISSION_START:
+			_add(found, Severity.DEGRADES,
+				"A briefing (PRE_MISSION_START) is authored, but this board opens no pre-mission screen "
+					+ "(no roster, or the Pre-mission screen box is unticked) -- it never plays.")
+	for beat: DialogBeat in scenario_manager.current_dialog_beats:
 		if beat.timeline == null:
 			_add(found, Severity.DEGRADES,
 				"A dialog beat (%s) has no timeline -- it fires into nothing."

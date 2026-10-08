@@ -7,7 +7,7 @@ class_name GuardAction
 # (PlanResolver._guard_for / _apply_guards); this order only ARMS the ward.
 #
 # A basic action everyone has (the doc's working model, and the one fork it left deliberately open),
-# so actor_can_perform is the inherited `true`; what kit grants is the brace bonus, not the verb.
+# so actor_block_reason is the inherited `""`; what kit grants is the brace bonus, not the verb.
 
 # THE board's ward shield, not a second cut of one (#450, dev call): the row and the decal under the
 # defendee are now one texture, so a player who learns the shield on the board reads the queue with

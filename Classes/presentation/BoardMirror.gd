@@ -130,7 +130,7 @@ const FLAME_FRAMES := 8
 # Frames per second, and how hard the light breathes (0 = a steady lamp). Both live: the animation
 # loop re-reads them every frame, so they need no rebuild.
 @export var flame_fps := 10.0
-@export var flame_flicker := 0.18
+@export var flame_flicker := 0.17
 
 # How far each flame is pushed TOWARD THE CAMERA, in cells (#298). A unit sprite and a flame on one
 # cell are both Y-billboards through the same point, i.e. the same plane, and Y is the one axis that
@@ -166,9 +166,9 @@ const FLAME_FRAMES := 8
 # Nothing blooms below the mood's Glow HDR threshold — turn these up under a high threshold and the
 # flame gets brighter without ever glowing.
 @export var flame_glow_color := Color(1, 0.55, 0.15): set = _set_flame_glow_color
-@export var flame_glow_energy := 2.5: set = _set_flame_glow_energy
+@export var flame_glow_energy := 2.45: set = _set_flame_glow_energy
 
-@export var flame_light_energy := 2.0
+@export var flame_light_energy := 1.95
 # Range and colour are baked into the OmniLight3D at build and _animate_flames refreshes ENERGY
 # alone, so both need the sweep or they move nothing on a board already alight — #264's born-dead
 # slider, which flame_light_range had shipped with. Energy deliberately keeps no setter: the
@@ -354,7 +354,7 @@ var _lip_mat: StandardMaterial3D = null
 # The same, for the mud bumps a Burrow's COVER state stands up (#326). A SECOND knob rather than
 # a shared one, on the lantern-vs-flame rule: cover and grass are different objects drawn at
 # different sizes, so one number would force whoever tunes the second to un-tune the first.
-@export var cover_scale := 0.98: set = _set_cover_scale
+@export var cover_scale := 0.97: set = _set_cover_scale
 
 var board: GridMap
 # The tear-out's second lattice (#521): same mesh library, same cell_size, same cell coordinates,
@@ -367,6 +367,15 @@ var staged_board: GridMap
 # is one offset, so tiles arriving at different moments cannot share a lattice the way the landed
 # ones do. The 3D host owns the nodes and their lifetime; this map only ROUTES to them.
 var flight_maps: Dictionary[Vector2i, GridMap] = {}
+# The lattice a column goes to while the battle zoom HIDES it (#1132): one GridMap drawn by nobody
+# (visible = false), so hiding a column is the tear-out's own move -- route it to another map --
+# rather than a per-cell toggle a GridMap does not have. Its position is never read: a hidden column
+# is drawn nowhere. Null outside Battle3D, where nothing hides.
+var hidden_board: GridMap
+# What the camera has hidden, by cell. A COLUMN takes everything standing on its cell with it; a
+# PROP alone leaves the ground. Written only by set_camera_hidden, and emptied by rebuild().
+var _hidden_columns: Dictionary[Vector2i, bool] = {}
+var _hidden_props: Dictionary[Vector2i, bool] = {}
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
 # crossing N cells inside one frame must cost one pass, not N.
@@ -543,6 +552,12 @@ func rebuild(grid: TileMapLayer, heights: BoardHeights, burning: Array[Vector2i]
 	board.clear()
 	if staged_board != null:
 		staged_board.clear()
+	# A board swap ends every shot, so nothing it hid belongs to the board arriving -- left in place,
+	# the new board's cells at those coordinates would be routed into the invisible lattice (#1132).
+	if hidden_board != null:
+		hidden_board.clear()
+	_hidden_columns.clear()
+	_hidden_props.clear()
 	sync(grid, heights)
 	refresh_states(heights, burning, covered)
 
@@ -578,6 +593,110 @@ func reseat_cell(cell: Vector2i, heights: BoardHeights) -> void:
 	# no cell centre to stand at, built in world vertices instead (see _reconcile_lip).
 	if _lips.has(cell):
 		_lips[cell].position = BoardSpace.staged_offset(cell)
+
+
+# --- What the camera hides (#1132) -------------------------------------------------------------
+#
+# The battle zoom's ONE door onto this mirror. A column moves to hidden_board through _map_for, so
+# the move is reconcile_cell's ordinary routing; what stands on the cell is hidden at its ROOT,
+# which the tuft-density sweep (it writes the blades) cannot collide with. Every builder asks
+# _prop_shown / _hidden_columns as well, so a rebuild -- a tear-out landing, a fire knob -- cannot
+# bring back something the camera hid.
+#
+# Diffed, so the caller may hand the same sets every frame. Each changed cell goes through
+# reconcile_cell rather than sync_cells: a hide changes no ground a lip reads and no water, so the
+# whole-board water mask sync_cells rebuilds would be paid for nothing.
+func set_camera_hidden(columns: Dictionary[Vector2i, bool], props: Dictionary[Vector2i, bool],
+		grid: TileMapLayer, heights: BoardHeights, floor_row: int) -> void:
+	if columns == _hidden_columns and props == _hidden_props:
+		return
+	var moved: Dictionary[Vector2i, bool] = {}
+	for cell: Vector2i in _hidden_columns:
+		if not columns.has(cell):
+			moved[cell] = true
+	for cell: Vector2i in columns:
+		if not _hidden_columns.has(cell):
+			moved[cell] = true
+	var touched := moved.duplicate()
+	for cell: Vector2i in _hidden_props:
+		touched[cell] = true
+	for cell: Vector2i in props:
+		touched[cell] = true
+	_hidden_columns = columns.duplicate()
+	_hidden_props = props.duplicate()
+	for cell: Vector2i in moved:
+		reconcile_cell(grid, cell, heights, floor_row)
+	for cell: Vector2i in touched:
+		_dress_hidden(cell)
+
+
+func _dress_hidden(cell: Vector2i) -> void:
+	var ground := not _hidden_columns.has(cell)
+	if _props.has(cell):
+		_props[cell].visible = _prop_shown(cell)
+	if _fire_markers.has(cell):
+		_fire_markers[cell].visible = ground
+	if _cover_markers.has(cell):
+		_cover_markers[cell].visible = ground
+
+
+func _prop_shown(cell: Vector2i) -> bool:
+	return not _hidden_columns.has(cell) and not _hidden_props.has(cell)
+
+
+func is_column_hidden(cell: Vector2i) -> bool:
+	return _hidden_columns.has(cell)
+
+
+func is_prop_hidden(cell: Vector2i) -> bool:
+	return not _prop_shown(cell)
+
+
+func hidden_counts() -> Vector2i:
+	return Vector2i(_hidden_columns.size(), _hidden_props.size())
+
+
+# A cell's column as DRAWN, world-space bottom and top (#1132) -- the underside every column reaches
+# down to, and the top of the highest occupied row, a slope's invisible fill rows included, exactly
+# as BoardPicker reads a column. Read off whichever lattice holds the column, so a hidden one still
+# answers; the stage's offset is added from BoardSpace rather than read off a map's node, because
+# the hidden lattice's own position means nothing. NAN components when the cell has no column.
+func drawn_column(cell: Vector2i, floor_row: int) -> Vector2:
+	var top := BoardPicker.top_of(_map_for(cell), cell, floor_row)
+	if top == BoardPicker.NO_COLUMN:
+		return Vector2(NAN, NAN)
+	var lift := BoardSpace.staged_offset(cell).y
+	return Vector2(BoardSpace.board_underside(floor_row) + lift, top * BoardSpace.ROW_HEIGHT + lift)
+
+
+# The world box a cell's standing prop is drawn in (#1132), or a zero box. Read off each child's OWN
+# visible flag, never visible-in-tree: the tuft density hides blades that way, while the camera
+# hides the ROOT -- and a prop the camera hid must still answer, or the next frame would call it
+# clear and the hide would flicker. A billboard turns to face the lens, so its flat quad is squared
+# across both board axes; and every box is padded a hair, since a fence is a plane with no depth.
+func prop_box(cell: Vector2i) -> AABB:
+	var root: Node3D = _props.get(cell)
+	if root == null:
+		return AABB()
+	var box := AABB()
+	var found := false
+	for node in root.find_children("*", "GeometryInstance3D", true, false):
+		var geometry := node as GeometryInstance3D
+		if geometry == null or not geometry.visible:
+			continue
+		var local := geometry.get_aabb()
+		if local.size == Vector3.ZERO:
+			continue
+		var world := geometry.global_transform * local
+		var sprite := geometry as SpriteBase3D
+		if sprite != null and sprite.billboard != BaseMaterial3D.BILLBOARD_DISABLED:
+			var half := maxf(world.size.x, world.size.z) * 0.5
+			var centre := world.get_center()
+			world = AABB(Vector3(centre.x - half, world.position.y, centre.z - half),
+					Vector3(half * 2.0, world.size.y, half * 2.0))
+		box = world if not found else box.merge(world)
+		found = true
+	return box.grow(0.02) if found else AABB()
 
 
 # The live terrain diff: write only what differs, erase what the 2D no longer paints.
@@ -625,7 +744,7 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	# It belongs HERE rather than in a walk down from _write_column because a raised floor can leave
 	# an orphan separated from it by a gap -- the rows the old, shorter column never filled -- so any
 	# rule of the form "clear until the first gap" stops short. A row test cannot.
-	var sweeping: Array[GridMap] = [board, staged_board]
+	var sweeping: Array[GridMap] = [board, staged_board, hidden_board]
 	sweeping.append_array(_flight_maps_list())
 	for map: GridMap in sweeping:
 		if map == null:
@@ -709,10 +828,19 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 # BOTH maps, because a cell that loses its ground may have been torn out at the time (#521) -- and
 # because "clear this column" must mean the same thing wherever the column happens to live.
 func _clear_column(cell: Vector2i, floor_row: int) -> void:
-	_clear_column_on(board, cell, floor_row)
-	_clear_column_on(staged_board, cell, floor_row)
+	for map: GridMap in _lattices(cell):
+		_clear_column_on(map, cell, floor_row)
+
+
+# Every lattice a column of this cell could be drawn in, null ones dropped -- the ONE list (#1132),
+# where four sites spelled it by hand before and a site that missed a map drew a column twice.
+func _lattices(cell: Vector2i) -> Array[GridMap]:
+	var maps: Array[GridMap] = []
 	var flying: GridMap = flight_maps.get(cell)
-	_clear_column_on(flying, cell, floor_row)
+	for map: GridMap in [board, staged_board, hidden_board, flying]:
+		if map != null:
+			maps.append(map)
+	return maps
 
 
 func _flight_maps_list() -> Array[GridMap]:
@@ -747,6 +875,11 @@ func _map_for(cell: Vector2i) -> GridMap:
 	var flying: GridMap = flight_maps.get(cell)
 	if flying != null:
 		return flying
+	# Hidden by the camera (#1132), and AFTER the flight: nothing hides while the board is in the
+	# air, so the order only matters if that rule is ever broken -- and then a tile in flight should
+	# still be seen to fly.
+	if hidden_board != null and _hidden_columns.has(cell):
+		return hidden_board
 	if staged_board != null and BoardSpace.is_staged(cell):
 		return staged_board
 	return board
@@ -757,9 +890,8 @@ func _map_for(cell: Vector2i) -> GridMap:
 # have been a tile drawn in two places at once.
 func _maps_besides(cell: Vector2i, keep: GridMap) -> Array[GridMap]:
 	var others: Array[GridMap] = []
-	var flying: GridMap = flight_maps.get(cell)
-	for map: GridMap in [board, staged_board, flying]:
-		if map != null and map != keep:
+	for map: GridMap in _lattices(cell):
+		if map != keep:
 			others.append(map)
 	return others
 
@@ -931,6 +1063,7 @@ func _reconcile_state(markers: Dictionary[Vector2i, Node3D], cells: Array[Vector
 			# ignores it — a shared loop is worth one unused parameter.
 			var built: Node3D = make.call(cell, surface_point(cell, heights))
 			if built != null:
+				built.visible = not _hidden_columns.has(cell)   # born under a hidden column (#1132)
 				markers[cell] = built
 	for cell: Vector2i in markers.keys():
 		if not wanted.has(cell):
@@ -1258,7 +1391,9 @@ func _rebuild_fires() -> void:
 		var standing: Node3D = _fire_markers[cell]
 		var at := standing.position
 		standing.queue_free()
-		_fire_markers[cell] = _make_fire(cell, at)
+		var rebuilt := _make_fire(cell, at)
+		rebuilt.visible = not _hidden_columns.has(cell)   # a knob drag must not show a hidden fire
+		_fire_markers[cell] = rebuilt
 
 
 # --- Water (#552) ------------------------------------------------------------------------------
@@ -1772,6 +1907,18 @@ func prop_at(cell: Vector2i) -> Node3D:
 	return _props.get(cell)
 
 
+# Every lamp the board's own things cast, lit props and burning tiles both -- for an effect that
+# lights itself rather than being lit by the renderer (#508: the gas volume marches its own lamps).
+func lights() -> Array[OmniLight3D]:
+	var out: Array[OmniLight3D] = []
+	for root: Node3D in _props.values() + _fire_markers.values():
+		for child in root.get_children():
+			var light := child as OmniLight3D
+			if light != null and light.is_visible_in_tree():
+				out.append(light)
+	return out
+
+
 # Build the prop this cell wants, or leave the standing one alone when it is already the right
 # tile ON the same ground. The tile comparison is what makes REPLACEMENT work: painting a rock onto
 # a tree keeps the cell in the wanted-set, so a cell-only check would leave the tree standing. The
@@ -1796,6 +1943,9 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 		return
 	built.set_meta(PROP_TILE_META, tile)
 	built.set_meta(PROP_CORNERS_META, corners)
+	# Every tear-out bump drops and rebuilds a staged cell's prop, so a hide written only when the
+	# set changed would come back on the next landing (#1132) -- the builder asks too.
+	built.visible = _prop_shown(cell)
 	_props[cell] = built
 
 
@@ -1880,7 +2030,7 @@ func lip_key(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights, floor_ro
 		# another hole is contiguous shaft and is left open, which is what makes a wide chasm one
 		# pit (dev ruling 6) -- the same mask as slice 1, applied below the board rather than at
 		# the neighbour's own surface.
-		if GridUtils.is_void_at(grid, near) or not GridUtils.has_ground(grid, near):
+		if not GridUtils.has_surface(grid, near):
 			continue
 		# THE DIRECTION AND THE NEIGHBOUR'S TWO CORNER HEIGHTS AS ONE ENTRY, never two arrays kept
 		# side by side: the shaft reads the direction and the rim reads the heights, and a pair that

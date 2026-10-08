@@ -22,6 +22,7 @@ class_name CameraRig3D
 # a gesture travelled so its host can tell a click from a drag either way. Rebinding it --
 # or losing manual input -- mid-drag RELEASES the orbit, because the matching release event
 # would otherwise never arrive and a stranded gesture kills pointing permanently (#231).
+# pan_button (#1037) is the grab-the-world pan, read after orbit and released the same ways.
 #
 # frame() is the framing authority: only this node knows fov/aspect/pitch, so callers
 # pass the volume they want seen and this solves the distance (Law #4 -- pass, don't
@@ -88,6 +89,8 @@ class_name CameraRig3D
 # with them; the day the transition wants its own rate, this is the line that forks.
 @export var glide_smoothing := 6.0
 @export var orbit_button: MouseButton = MOUSE_BUTTON_RIGHT: set = _set_orbit_button
+# Orbit is read first, so a button both name orbits -- which is how the tile brush borrows MIDDLE.
+@export var pan_button: MouseButton = MOUSE_BUTTON_MIDDLE: set = _set_pan_button
 # Stood down by a host that needs the wheel for something else (#285: the elevation brush paints
 # at the wheel's level). Declarative, exactly like orbit_button above -- and it has to be a knob
 # rather than the host consuming the event, because this rig is a CHILD of the host and therefore
@@ -304,6 +307,11 @@ var pan_limit := Rect2()
 
 var _orbiting := false
 var _orbit_travel_px := 0.0
+# This gesture's press reached the rig and its release has not. Separate from _orbiting, which
+# release_orbit() clears while the physical press is still down.
+var _press_held := false
+# A pan_button press reached the rig and its release has not.
+var _drag_panning := false
 
 # The camera's black box (#669), dumped into report.md beside the View line. It lives HERE rather
 # than on the host because the rig is the one place every channel is readable at once -- so a trace
@@ -351,6 +359,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_orbiting = button.pressed
 		if button.pressed:
 			_orbit_travel_px = 0.0
+		elif not _press_held:
+			# A release whose press never reached us (#1081): a UI surface ate the press and freed
+			# itself on it -- the action ring backing out of its last level -- so nothing was left
+			# to eat the release. That gesture was not ours, so it is never a click.
+			_orbit_travel_px = INF
+		_press_held = button.pressed
 		return
 
 	if _orbiting:
@@ -372,6 +386,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			# pan_limit clamp states for the aim.
 			_target_pitch_degrees = clampf(_target_pitch_degrees - drag.relative.y * sensitivity,
 					min_pitch_degrees, max_pitch_degrees)
+			return
+
+	# Below the orbit branch on purpose: when both knobs name one button, that button orbits.
+	if button != null and button.button_index == pan_button:
+		_drag_panning = button.pressed
+		return
+
+	if _drag_panning:
+		var slide := event as InputEventMouseMotion
+		if slide != null:
+			# From the live aim, not a glide's destination: the grab holds what is on screen.
+			hold_at(_aim + _grab_offset(slide.relative))
 			return
 
 	var key := event as InputEventKey
@@ -411,12 +437,32 @@ func _next_detent(direction: int) -> float:
 	return (ceilf(steps) - 1.0) * yaw_step
 
 
+# The aim's move for a pan drag of `relative` pixels, sized so the ground under the pointer follows
+# the hand -- 1:1 by construction, so the player's CAMERA_PAN_SPEED step deliberately does not apply.
+func _grab_offset(relative: Vector2) -> Vector3:
+	var height := _camera.get_viewport().get_visible_rect().size.y
+	var proj := _camera.get_camera_projection()
+	if height <= 0.0 or proj.y.y <= 0.0:
+		return Vector3.ZERO
+	var per_pixel := 2.0 * _camera.position.z / (proj.y.y * height)
+	# A pitched camera sees ground recede as well as rise, so a forward drag spans 1/sin(pitch) more.
+	var along := per_pixel / maxf(absf(sin(deg_to_rad(_pitch_degrees))), 0.05)
+	return _on_ground(Vector2(-relative.x * per_pixel, -relative.y * along))
+
+
+# A screen-plane pan (x = right, y = toward the camera) as a ground offset under the rig's yaw.
+# Both pans ask this, so they cannot disagree about which way is "right".
+func _on_ground(pan: Vector2) -> Vector3:
+	return Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y))
+
+
 func is_orbiting() -> bool:
 	return _orbiting
 
 
 # Did the gesture that just ended stay inside the click slop? Only meaningful to a
-# host that shares orbit_button with a click verb (Battle3D's right-click cancel).
+# host that shares orbit_button with a click verb (Battle3D's right-click cancel). A
+# release the rig never saw pressed answers false.
 func last_gesture_was_click() -> bool:
 	return _orbit_travel_px <= orbit_click_slop_px
 
@@ -440,10 +486,21 @@ func _set_orbit_button(value: MouseButton) -> void:
 		return
 	orbit_button = value
 	release_orbit()
+	# ...and a live pan on that button, whose release the orbit branch would now eat.
+	if value == pan_button:
+		_drag_panning = false
 
 
-# Same strand, second trigger: something else taking the camera (an AI turn, a menu) while
-# the player is mid-drag. MUST early-out on an unchanged write — battle3d._process assigns
+# The pan's twin of the strand above: its release would arrive on the old button.
+func _set_pan_button(value: MouseButton) -> void:
+	if value == pan_button:
+		return
+	pan_button = value
+	_drag_panning = false
+
+
+# Same strand, second trigger: something else taking the camera (an AI turn, a menu, a modal
+# freeze) while the player is mid-drag. MUST early-out on an unchanged write — battle3d._process assigns
 # this EVERY frame, and an unguarded release would cancel a live orbit sixty times a second.
 func _set_manual_input_enabled(value: bool) -> void:
 	if value == manual_input_enabled:
@@ -451,6 +508,7 @@ func _set_manual_input_enabled(value: bool) -> void:
 	manual_input_enabled = value
 	if not value:
 		release_orbit()
+		_drag_panning = false
 
 
 # Re-seeds the live tilt, which is the whole reason this is a setter (#586). A mood applying its
@@ -508,8 +566,9 @@ func widen_to_fit(volume: AABB) -> void:
 # Move the aim OUTRIGHT: the snap. Every writer that already has the camera where it wants it comes
 # through here -- WASD (a held key is already continuous, so easing it would only put lag between the
 # press and the board moving), frame()/pose() (a rig still lerping unprojects at one distance and
-# picks at another, desyncing every screen-space read on the way in), and the playback mirror, whose
-# 2D twin is already tweening the travel it reports.
+# picks at another, desyncing every screen-space read on the way in), the playback mirror, whose
+# 2D twin is already tweening the travel it reports, and the grab pan (#1037), which an ease would
+# slip out from under the hand.
 func hold_at(aim: Vector3) -> void:
 	_target_aim = aim
 	_aim = aim
@@ -937,15 +996,15 @@ func align_to_detent() -> void:
 #
 # An EMPTY line leaves the yaw alone rather than returning to square-on -- absence means "the camera
 # does not move", which is already the schedule's idiom for a beat with nobody to frame.
-func aim_along(line: Array[Vector2i]) -> void:
-	if line.size() != 2:
-		return
-	var side_on := BoardSpace.side_on_yaw(line[0], line[1], _squared_up_yaw)
-	if is_nan(side_on):
+#
+# `turn` is the shot clearance's (#1132): degrees added to the directed yaw when the side the line
+# picks has something standing between the lens and the action. Zero is today's shot exactly.
+func aim_along(line: Array[Vector2i], turn := 0.0) -> void:
+	var yaw := directed_yaw(line, turn)
+	if is_nan(yaw):
 		return
 	var strength := Pacing.direction_of(beat_profile)
-	_target_yaw_degrees = _squared_up_yaw + rad_to_deg(
-			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength
+	_target_yaw_degrees = yaw
 	# ...and the same published line drives the PITCH (#520 diff 2b). DERIVED here rather than
 	# published as a second field: a directed beat IS the shot that earns both, so one fact answers
 	# for two channels and there is nothing to keep in step.
@@ -957,6 +1016,72 @@ func aim_along(line: Array[Vector2i]) -> void:
 	# It is also why the claim edge does NOT square the tilt up: see align_to_detent.
 	_target_pitch_degrees = clampf(board_pitch_degrees + Pacing.PITCH_DIVE * strength,
 			min_pitch_degrees, max_pitch_degrees)
+
+
+# The yaw aim_along writes for this line and turn, or NAN when the line has no direction. The ONE
+# spelling of that sum (#1132): the clearance search asks it of every candidate turn before the
+# camera commits to one, and a second copy of the arithmetic is how the two would come to disagree.
+func directed_yaw(line: Array[Vector2i], turn := 0.0) -> float:
+	if line.size() != 2:
+		return NAN
+	var side_on := BoardSpace.side_on_yaw(line[0], line[1], _squared_up_yaw)
+	if is_nan(side_on):
+		return NAN
+	var strength := Pacing.direction_of(beat_profile)
+	return _squared_up_yaw + rad_to_deg(
+			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength + turn
+
+
+# Where the LENS would be at this yaw, every other channel LIVE or SETTLED (#1132) -- #670's axis,
+# asked of the camera's position rather than of its frame edge. The clearance search asks it of a
+# yaw the camera has not turned to yet, so it is composed from the channels, never read off the node.
+# The flourish is left out on both sides, as frame_floor leaves it out: a shake is transient and is
+# not a place the camera is going.
+#
+# `aim` asks about an aim the rig has not been handed yet -- where a pan LANDS, while the tween is
+# still carrying the camera there (#1132 follow-up). Its drop is the caller's to apply, since only the
+# caller knows whose body the shot will train on; the lift, pitch and distance stay the rig's.
+func lens_at(yaw_degrees: float, when: When, aim := Vector3.INF) -> Vector3:
+	var settled := when == When.SETTLED
+	var lift: Vector3 = _target_lift if settled else _lift
+	var pitch: float = _target_pitch_degrees if settled else _pitch_degrees
+	var distance: float = _dollied_distance() if settled else _camera.position.z
+	if not aim.is_finite():
+		var drop: float = _target_drop if settled else _drop
+		aim = (_target_aim if settled else _aim) + Vector3(0.0, -drop, 0.0)
+	var turn := Basis(Vector3.UP, deg_to_rad(yaw_degrees)) * Basis(Vector3.RIGHT, deg_to_rad(pitch))
+	var local := aim + lift + turn * Vector3(0.0, 0.0, distance)
+	var parent := get_parent_node_3d()
+	return parent.global_transform * local if parent != null else local
+
+
+# The yaw the camera is HEADED for -- the clearance search's answer for a beat with no line to turn.
+func target_yaw() -> float:
+	return _target_yaw_degrees
+
+
+# How close an eased channel must be to its target for the camera to count as ARRIVED (#1132
+# follow-up). A stillness threshold rather than a feel value: an exponential ease never lands, and
+# the residue left inside these drifts too slowly to see. Consts on that reason, the way Pacing's
+# arrival cap is one. They were 1 degree and 0.05 until the round-3 probe showed a camera "arrived"
+# at 1 degree is still turning at 8 degrees a second -- the ease's speed is its rate times what is
+# left, so the threshold has to be small enough that what is left is not visibly MOVING.
+const ARRIVED_DEGREES := 0.1
+const ARRIVED_UNITS := 0.01
+
+# Whether the camera is still travelling to the shot it was given: any eased channel short of its
+# target. Playback waits on this before a battle-zoom beat's hold, so the blow is watched from a
+# camera that has stopped (dev, 2026-10-07). The sway and the shake are not channels -- they are
+# addends with no target -- so neither keeps this true.
+func is_arriving() -> bool:
+	var yaw_left := absf(rad_to_deg(angle_difference(deg_to_rad(rotation_degrees.y),
+			deg_to_rad(_target_yaw_degrees))))
+	return yaw_left > ARRIVED_DEGREES \
+			or absf(_pitch_degrees - _target_pitch_degrees) > ARRIVED_DEGREES \
+			or absf(_camera.position.z - _dollied_distance()) > ARRIVED_UNITS \
+			or absf(_drop - _target_drop) > ARRIVED_UNITS \
+			or _lift.distance_to(_target_lift) > ARRIVED_UNITS \
+			or _aim.distance_to(_target_aim) > ARRIVED_UNITS
 
 
 # --- the view playback borrows (#520 follow-up) ------------------------------------------------
@@ -1083,20 +1208,20 @@ func _process(delta: float):
 			pan.x += 1.0
 		if pan != Vector2.ZERO:
 			pan = pan.normalized() * effective_pan_speed() * delta
-			hold_at(_target_aim + Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y)))
+			hold_at(_target_aim + _on_ground(pan))
 
 	# The two eased channels (#520). Headless, land now: nobody is watching, the asymptotic lerp
 	# never settles, and a suite sampling the rig must read the DECISION rather than frame timing.
 	# Fourth member of the escape Pacing.beat, CameraController.pan_to and CameraController._process
 	# already keep, and kept for the same reason.
-	var glide := 1.0 if DisplayServer.get_name() == "headless" else 1.0 - exp(-glide_smoothing * delta)
+	var glide := 1.0 if Pacing.unwatched() else 1.0 - exp(-glide_smoothing * delta)
 	_aim = _aim.lerp(_target_aim, glide)
 	_lift = _lift.lerp(_target_lift, glide)
 	# ...and the drop, on its OWN rate (#602) rather than the glide above: this one is asymmetric, and
 	# the climb back out of a pit is a slower, more deliberate move than a pan across the board. Same
 	# headless escape, so a case sampling the rig reads the decision instead of frame timing; one that
 	# wants to watch the curve supplies the blend and calls recovered() directly.
-	var recover := 1.0 if DisplayServer.get_name() == "headless" \
+	var recover := 1.0 if Pacing.unwatched() \
 			else 1.0 - exp(-Pacing.CLIFF_RECOVER * delta)
 	_drop = recovered(_drop, _target_drop, recover)
 
@@ -1106,7 +1231,7 @@ func _process(delta: float):
 	# asserts a coordinate can be moved by a jolt it was never meant to see. Headless refuses to
 	# SPEND time, exactly as Pacing.beat does; a case that wants to watch a curve supplies the
 	# elapsed time itself and reads flourish().
-	if DisplayServer.get_name() != "headless":
+	if not Pacing.unwatched():
 		_shake_elapsed += delta
 		_sway_elapsed += delta
 

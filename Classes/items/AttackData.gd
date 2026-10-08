@@ -159,6 +159,13 @@ enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
 # OFF = board north, as a placed shape lands.
 @export var payload_turns := true
 
+# GAS this attack LEAVES on every tile it strikes (#508), its levels added to what is there. Read
+# whatever `targets` says: Targets is whether the attack's ELEMENT reacts with the map and whether it
+# may aim at a cell, and a sword slash leaving steam should need neither. NONE is the off switch --
+# STEAM is the kind enum's zero, so the level carries it. TerrainReaction carries the same pair.
+@export var gas: Gas.Kind = Gas.Kind.STEAM
+@export var gas_level: Gas.Level = Gas.Level.NONE
+
 # What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
 # the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
 # field, WeaponInstance.effective_kind for the field with a mod's override composed on top.
@@ -210,6 +217,15 @@ func hits_map() -> bool:
 
 func hits_units() -> bool:
 	return targets == EquippableData.TargetMode.UNIT or targets == EquippableData.TargetMode.BOTH
+
+# May this attack ever answer a hit? A counter strikes back at a UNIT, so an attack that touches none
+# has nothing to answer with (#1135), and a heal is never a counter (#148 repealed, dev 2026-09-28).
+# Unit.attack_source_can_counter reads it; hidden_fields hides the can_counter box when it is moot.
+func can_ever_counter() -> bool:
+	return can_counter and not _counter_is_moot()
+
+func _counter_is_moot() -> bool:
+	return heals or not hits_units()
 
 # The attacks this one's chain fires, one per LEVEL below it -- its payload, that payload's payload,
 # and so on to the end. The resolver walks it level by level and the editor's fan-out readout reads
@@ -291,6 +307,13 @@ func is_directional() -> bool:
 func is_single_target_swing() -> bool:
 	return swing and attack_shape != null and attack_shape.is_path_shape()
 
+# Does this attack's footprint cover ONE cell -- the aimed one, nothing beside it? A null shape is the
+# anchor alone, and so is a one-tile stamp. A single-target swing does NOT: its paths cross cells an
+# ally can stand on, and hits_allies decides whether that ally is struck or passed through (#1054
+# ruling 8). Asked by the friendly-fire line (#1083): on one cell, hitting an ally is a choice of aim.
+func covers_one_cell() -> bool:
+	return attack_shape == null or attack_shape.tiles().size() <= 1
+
 # The sentence under the Attack Editor's stamp grid, which has to say what the CENTRE is -- and
 # that is the ANCHOR rule, so the attack answers it rather than the widget or the shape. The SHAPE
 # cannot: it holds no range, which is the whole reason this lives here after #808. Reads through
@@ -331,7 +354,7 @@ static func property_sections() -> Array[Dictionary]:
 		# "On hit" was "Payload" until #1058 gave that word to the attack a hit DROPS, which is the
 		# section right under it: what a hit does, then what it leaves behind.
 		{"title": "On hit", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
-		{"title": "Payload", "fields": PackedStringArray(["payload", "payload_turns"])},
+		{"title": "Payload", "fields": PackedStringArray(["payload", "payload_turns", "gas_level", "gas"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
 		# LAST because it is the biggest: one picker plus every look row the element has, which for
 		# SHOCK is thirty-five. Placed above "How it is used" it would push two checkboxes off the
@@ -378,6 +401,9 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #                           delivered. deliver() is that rule's one home.
 #   payload_turns        -- read only when THIS attack has no shape (a shaped one always turns its
 #                           payloads onward) and the payload HAS one (a single cell has no facing).
+#   can_counter          -- read only through can_ever_counter, which a heal or a map-only attack
+#                           answers false whatever the box says.
+#   gas                  -- read only when gas_level is above NONE (PlanResolver's deposit).
 # `scaling_blend` is named from here though only WeaponAttackData has it: the RULE is this class's
 # (deals_no_damage suppresses scaling, per its own comment), and a name matching no row is ignored.
 #
@@ -397,6 +423,10 @@ func hidden_fields() -> PackedStringArray:
 		hidden.append("damage_kind")
 	if attack_shape != null or payload == null or payload.attack_shape == null:
 		hidden.append("payload_turns")
+	if gas_level == Gas.Level.NONE:
+		hidden.append("gas")
+	if _counter_is_moot():
+		hidden.append("can_counter")
 	# ...and the look section is absent unless this attack carries an element that HAS one (#900).
 	# Its heading goes with it: a section drawn as a bare title over nothing is worse than no
 	# section, and _draw_sections derives that rather than being told (see its own note).
@@ -426,7 +456,7 @@ static func property_tips() -> Dictionary:
 		"attack_shape": "The SHAPE this attack covers once aimed, picked from the shared library. Shapes are shared BY REFERENCE: editing one changes every attack that uses it. No shape at all = the aimed cell alone.",
 		"swing": "Does this attack STOP at what it meets?\nON, it travels: a shape on the attacker is cut short wherever a lane cannot reach, and one placed at range spreads outward from where it lands -- so a wall shields whatever stands behind it. That is what every shaped attack did before this box existed.\nOFF, it is a TRUE AoE: every cell of the shape lands at once, straight through walls.\nON with a shape drawn as PATHS, it is a single-target swing: each path takes the first valid target it reaches and stops there.\nHeight applies either way -- a cell outside this attack's up/down tolerance is missed whichever way this is set.",
 		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
-		"hits_allies": "Splash reaches your own side too, not just enemies.",
+		"hits_allies": "Splash reaches your own side too, not just enemies. On a single-target attack it lets the attack be aimed at an ally (a heal needs it).",
 		"hits_self": "The attacker is a legal victim of its own attack.",
 		"targets": "What an aim may land on -- a unit, a tile, or either.",
 		"knockback": "Tiles the target is shoved directly away from the attacker, stopping at the first wall, unit or board edge. 0 = no shove.",
@@ -441,5 +471,7 @@ static func property_tips() -> Dictionary:
 		"effect_looks": "A named LOOK for this attack's elemental effect, shared with every other attack that names it -- so a family of shock weapons can share one feel and one of them can differ.\nEach row inherits the Game tab's value until you untick it. Leave the look empty and nothing changes; pick (none) and the effect plays exactly as the Game tab has it tuned.\nThe RULE is never in here: how far a current arcs is a property of electricity, not of an attack.",
 		"payload": "Another attack this one DROPS where it hits, which then goes off as a whole attack of its own: its own damage, element, shove and shape, with the thrower still the attacker.\nA unit attack drops one per unit it hits (a miss drops nothing). A tile attack drops one per tile it strikes, whether anyone is there or not.\nOn a unit it goes off where they LAND, after this hit's shove. A payload may carry a payload of its own, to any depth, but never back round to an attack already in the chain.",
 		"payload_turns": "Which way the payload's shape faces. On, it faces the way this attack was going. Off, it lands as drawn, top of the grid to board north.\nOnly asked of an attack with no shape of its own: a shaped attack always turns its payloads the way it was travelling.",
+		"gas_level": "How thick a GAS this attack leaves on every tile it strikes: thin, medium or thick, added to what is already there and capped at thick. None leaves no gas.\nIt lands whatever Targets says, on empty tiles and occupied ones alike, but never where gas cannot be -- no ground, a hole, or a tile a unit could not stand on that is not water.",
+		"gas": "Which gas the attack leaves. Only steam has rules so far; the others are looks only.",
 		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

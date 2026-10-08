@@ -10,3 +10,4 @@ script = ExtResource("4_wkoxx")
 display_name = "Line Sniper"
 power_delta = 5
 granted_attacks = Array[ExtResource("2_8p4f5")]([ExtResource("3_uje83")])
+weight = 1

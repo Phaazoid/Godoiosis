@@ -14,11 +14,14 @@ var _scene: Node3D
 # MoveGrid's four statics as they stood before the case (#1074). The grid cases set them explicitly
 # so they assert the RULE rather than the dev's tuned defaults, and a static outlives its case.
 var _grid_saved: Array[float] = []
+# ...and InsetSquare's one static (#1058 D2b), for the same reason.
+var _inset_saved := 0.0
 
 
 func before_test() -> void:
 	_grid_saved = [MoveGrid.GRID_LINE_INSET, MoveGrid.GRID_LINE_WIDTH, MoveGrid.GRID_FILL_GAP,
 		MoveGrid.GRID_FILL_ALPHA]
+	_inset_saved = InsetSquare.PAYLOAD_INSET
 	_scene = SCENE.instantiate() as Node3D
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
@@ -29,6 +32,7 @@ func after_test() -> void:
 	MoveGrid.GRID_LINE_WIDTH = _grid_saved[1]
 	MoveGrid.GRID_FILL_GAP = _grid_saved[2]
 	MoveGrid.GRID_FILL_ALPHA = _grid_saved[3]
+	InsetSquare.PAYLOAD_INSET = _inset_saved
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -665,6 +669,23 @@ func test_the_picked_zone_highlight_sorts_above_the_zones_it_highlights() -> voi
 		.is_equal(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_CAPTURE]["sort"])
 
 
+func test_the_zone_marks_sit_over_the_zone_band_and_under_every_range_tone() -> void:
+	# #955, a RELATIONSHIP: a zone's edge replaces its kind's wash and its emblem stands on the edge,
+	# so both sort above the zone band and the picked-zone highlight -- and under every range tone,
+	# because a zone is ground and the interaction reads over it (#346).
+	var marks: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_MARKS]["sort"]
+	var emblems: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_EMBLEMS]["sort"]
+	for below: BoardOverlays.Layer in [BoardOverlays.Layer.ZONE_PATROL, BoardOverlays.Layer.ZONE_CAPTURE,
+			BoardOverlays.Layer.ZONE_EXTRACTION, BoardOverlays.Layer.ZONE_DEPLOYMENT,
+			BoardOverlays.Layer.ZONE_DEFEND, BoardOverlays.Layer.ZONE_HIGHLIGHT]:
+		assert_int(marks).is_greater(BoardOverlays.LAYERS[below]["sort"])
+	assert_int(emblems).override_failure_message(
+			"the emblem shares or sits under the edge it stands on -- a z-fight").is_greater(marks)
+	for above: BoardOverlays.Layer in [BoardOverlays.Layer.THREAT, BoardOverlays.Layer.REACH,
+			BoardOverlays.Layer.MOVE]:
+		assert_int(emblems).is_less(BoardOverlays.LAYERS[above]["sort"])
+
+
 func test_no_overlay_layer_can_sort_over_a_unit() -> void:
 	# The structural half, and the one that covers planning ghosts: a ghost is a UnitSprite3D,
 	# so board markup must sit below UNIT_RENDER_PRIORITY by construction — not because the
@@ -736,6 +757,8 @@ func test_the_lowest_markup_plane_still_clears_the_tile_it_lies_on() -> void:
 	var lowest := 9999
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		lowest = mini(lowest, BoardOverlays.LAYERS[layer]["sort"])
+	# The gas's fog floor lies in the same stack, below every layer (#508).
+	lowest = mini(lowest, BoardOverlays.GAS_FLOOR_SORT)
 	# Non-vacuity: a non-negative floor would make the assert below trivially true.
 	assert_int(lowest).override_failure_message(
 			"no layer sorts below zero, so this case proves nothing").is_less(0)
@@ -1120,7 +1143,8 @@ func test_only_the_reach_lines_carry_a_bead() -> void:
 # --- The squad's lines (#1070) --------------------------------------------------------------------
 
 const SQUAD_LINE_LAYERS: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.COHESION_EDGE,
-	BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST, BoardOverlays.Layer.TETHER_STRAIN]
+	BoardOverlays.Layer.TETHERS, BoardOverlays.Layer.TETHER_GHOST, BoardOverlays.Layer.TETHER_STRAIN,
+	BoardOverlays.Layer.TETHER_MOMENT]
 
 
 # The marching DASHES are the squad's lines' and nobody else's: the range's stroke and the three
@@ -1135,7 +1159,7 @@ func test_only_the_squad_lines_are_dashed() -> void:
 	]]
 	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
 	var solid: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.REACH_LINES,
-		BoardOverlays.Layer.SIGHT_TRACE, BoardOverlays.Layer.ENEMY_FOCUS_EDGE]
+		BoardOverlays.Layer.SIGHT_TRACE, BoardOverlays.Layer.ENEMY_FOCUS_EDGE, BoardOverlays.Layer.TETHER_GLOW]
 	for layer: BoardOverlays.Layer in SQUAD_LINE_LAYERS + solid:
 		overlays.set_marks(layer, marks, Color.WHITE, [], cones)
 
@@ -1168,6 +1192,145 @@ func test_the_range_outline_and_the_tethers_each_take_their_own_width() -> void:
 		.override_failure_message("the tethers moved off their own width").is_equal_approx(0.03, 0.0001)
 
 
+# --- The CASING (#1109 round 2) -------------------------------------------------------------------
+
+# Every LINE layer, drawn once with a cone, so each has its ribbon material and (where it draws one) its
+# arrowhead built.
+func _draw_every_line_layer(overlays: BoardOverlays) -> void:
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] == BoardOverlays.Kind.LINE:
+			overlays.set_marks(layer, marks, Color.WHITE, [], cones)
+
+
+# THE LAW: a line wears a casing exactly when its table entry DECLARES one. The dev asked for the squad's
+# lines, both sides; the sight bead, the reach marks, the focus edge and the arc's bolts share the shader
+# and must stay exactly what they were -- which zero width guarantees, and only a zero width.
+func test_only_the_layers_that_declare_a_casing_wear_one() -> void:
+	var overlays := _bare_overlays()
+	_draw_every_line_layer(overlays)
+	var cased := 0
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] != BoardOverlays.Kind.LINE:
+			continue
+		var name: String = BoardOverlays.Layer.keys()[layer]
+		var width := float(overlays.beam_parameter(layer, &"casing_width"))
+		if BoardOverlays.LAYERS[layer].get("casing", false):
+			cased += 1
+			assert_float(width).override_failure_message("%s declares a casing and draws none" % name) \
+				.is_greater(0.0)
+		else:
+			assert_float(width).override_failure_message("%s wears a casing it never declared" % name) \
+				.is_equal_approx(0.0, 0.00001)
+	assert_int(cased).override_failure_message("no layer declares a casing, so the law above checked nothing") \
+		.is_greater(0)
+	# ...and every squad line is one of them, both sides' and every state's.
+	for layer: BoardOverlays.Layer in SQUAD_LINE_LAYERS + [BoardOverlays.Layer.TETHER_SHARDS]:
+		assert_bool(BoardOverlays.LAYERS[layer].get("casing", false)).override_failure_message(
+				"%s is a squad line without a casing" % BoardOverlays.Layer.keys()[layer]).is_true()
+
+
+# The WIRE from both knobs to a line that is already standing -- the width on the node, the colour on
+# SquadLines2D -- through the re-apply the Game tab calls. A width set and never pushed is #264's slider.
+func test_the_casing_follows_its_two_knobs_onto_a_standing_line() -> void:
+	var saved := SquadLines2D.CASING_COLOR
+	var overlays := _bare_overlays()
+	_draw_every_line_layer(overlays)
+	var width := overlays.squad_casing_width + 0.017
+	var color := Color(0.2, 0.4, 0.6, 0.7)
+	# The width is read BEFORE the restyle below, which re-pushes every beam and would hide a setter
+	# that never re-applied its own knob.
+	overlays.squad_casing_width = width
+	var ribbon_width := float(overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"casing_width"))
+	SquadLines2D.CASING_COLOR = color
+	overlays.restyle_squad_lines()
+	var ribbon_color: Color = overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"casing_color")
+	var hull_color: Color = overlays.hull_material_of(BoardOverlays.Layer.TETHERS) \
+		.get_shader_parameter(&"casing_color")
+	SquadLines2D.CASING_COLOR = saved
+
+	assert_float(ribbon_width).override_failure_message("the width knob never reached a standing tether") \
+		.is_equal_approx(width, 0.0001)
+	assert_bool(ribbon_color.is_equal_approx(color)).override_failure_message(
+			"the casing colour never reached a standing tether").is_true()
+	assert_bool(hull_color.is_equal_approx(color)).override_failure_message(
+			"the casing colour never reached a standing arrowhead's outline").is_true()
+
+
+# Distance from a point INSIDE a cone to its surface -- the nearer of the slanted face and the base cap.
+func _depth_inside(point: Vector3, cone: Dictionary) -> float:
+	var base: Vector3 = cone["base"]
+	var tip: Vector3 = cone["tip"]
+	var length := base.distance_to(tip)
+	var down := (base - tip) / length
+	var half_angle := atan2(float(cone["radius"]), length)
+	var along := (point - tip).dot(down)
+	var out := (point - tip - down * along).length()
+	return minf(along * sin(half_angle) - out * cos(half_angle), length - along)
+
+
+# The arrowhead's outline is a cone that WRAPS its own by the casing width all round: every point of the
+# arrowhead -- the tip, the base ring -- sits exactly that deep inside it, at the same apex angle. Asked
+# of the pure builder, so the geometry is checked rather than photographed.
+func test_the_casing_cone_wraps_its_cone_by_the_width_all_round() -> void:
+	var base := Vector3(3, 1, 0)
+	var tip := Vector3(3.6, 1.2, 0.3)
+	var radius := 0.07
+	var width := 0.025
+	var hull := BoardOverlays.casing_cone(base, tip, radius, width)
+	var axis := (tip - base).normalized()
+	var seed := axis.cross(Vector3.UP).normalized()
+	var points: Array[Vector3] = [tip]
+	for i in 6:
+		points.append(base + seed.rotated(axis, TAU * float(i) / 6.0) * radius)
+	for p in points:
+		assert_float(_depth_inside(p, hull)).override_failure_message(
+				"%s on the arrowhead is not the casing width inside its outline" % p) \
+			.is_equal_approx(width, 0.0001)
+	var hull_base: Vector3 = hull["base"]
+	var hull_tip: Vector3 = hull["tip"]
+	assert_float(atan2(float(hull["radius"]), hull_base.distance_to(hull_tip))) \
+		.override_failure_message("the outline is not the arrowhead's own shape") \
+		.is_equal_approx(atan2(radius, base.distance_to(tip)), 0.0001)
+	# ...and no width is the arrowhead it was handed.
+	var same := BoardOverlays.casing_cone(base, tip, radius, 0.0)
+	assert_bool((same["base"] as Vector3).is_equal_approx(base) and (same["tip"] as Vector3).is_equal_approx(tip)
+			and is_equal_approx(float(same["radius"]), radius)).is_true()
+
+
+# The outline DRAWS with a cased layer's arrowhead, UNDER it, and carries each cone's own fade; an uncased
+# layer's arrowhead builds none, and a zero width takes it away.
+func test_a_cased_arrowhead_draws_its_outline_beneath_it_and_an_uncased_one_none() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1,
+		"tint": Color(1, 1, 1, 0.4)}]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones)
+	overlays.set_marks(BoardOverlays.Layer.REACH_LINES, marks, Color.WHITE, [], cones)
+
+	var hull := overlays.hull_vertices_of(BoardOverlays.Layer.TETHERS)
+	assert_int(hull.size()).override_failure_message("a cased arrowhead drew no outline").is_greater(0)
+	for vertex: Dictionary in hull:
+		assert_float((vertex["color"] as Color).a).override_failure_message(
+				"the outline did not take its cone's own fade").is_equal_approx(0.4, 1.5 / 255.0)
+	assert_int(overlays.hull_material_of(BoardOverlays.Layer.TETHERS).render_priority) \
+		.override_failure_message("the outline sorts level with its arrowhead, so its far side can land on top") \
+		.is_less(overlays.cone_material_of(BoardOverlays.Layer.TETHERS).render_priority)
+	assert_object(overlays.hull_material_of(BoardOverlays.Layer.REACH_LINES)) \
+		.override_failure_message("the reach mark's arrowhead grew an outline it never declared").is_null()
+
+	overlays.squad_casing_width = 0.0
+	assert_array(overlays.hull_vertices_of(BoardOverlays.Layer.TETHERS)).override_failure_message(
+			"a zero casing width left the arrowhead's outline standing").is_empty()
+
+
 # The PLUCK reaches the strained tethers and no other line (#1070): a refused click shakes the tether
 # it would break, and the solid tethers beside it hold still. That is the whole reason STRAIN is a
 # layer of its own -- a layer is one material, and the shake is a uniform.
@@ -1184,6 +1347,109 @@ func test_the_pluck_reaches_only_the_strained_tethers() -> void:
 	var still: Variant = overlays.beam_parameter(BoardOverlays.Layer.TETHERS, &"shake")
 	assert_float(0.0 if still == null else float(still)).override_failure_message(
 			"a tether the move does not break shook too").is_equal_approx(0.0, 0.0001)
+
+
+# --- Membership moments (#367) --------------------------------------------------------------------
+
+# Every strip vertex of one mark, off the layer's one pooled mesh: its colour and its dash measure.
+func _strip_vertices(overlays: BoardOverlays, layer: BoardOverlays.Layer, surface: int) -> Dictionary:
+	var arrays := (_one_marker(overlays, layer).mesh as ImmediateMesh).surface_get_arrays(surface)
+	return {"colors": arrays[Mesh.ARRAY_COLOR], "uv2": arrays[Mesh.ARRAY_TEX_UV2]}
+
+
+# Several moments play at once, at different colours and ages, on ONE material -- so a mark's tint rides
+# its own vertices and reaches no other mark's.
+func test_a_marks_tint_reaches_its_own_vertices_and_no_other_marks() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [
+		[PackedVector3Array([Vector3(0, 1, 0), Vector3(2, 1, 0)])],
+		[PackedVector3Array([Vector3(0, 1, 1), Vector3(2, 1, 1)])],
+	]
+	var tints: Array[Color] = [Color(1, 0.5, 0, 0.9), Color(0.2, 0.4, 1, 0.3)]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], [], tints)
+	for m in 2:
+		var colors: PackedColorArray = _strip_vertices(overlays, BoardOverlays.Layer.TETHER_MOMENT, m)["colors"]
+		assert_int(colors.size()).override_failure_message("mark %d drew no vertices" % m).is_greater(0)
+		for color in colors:
+			assert_bool(_same_colour(color, tints[m])).override_failure_message(
+					"mark %d wore %s, not its own tint %s" % [m, color, tints[m]]).is_true()
+
+
+# A vertex colour is stored at EIGHT BITS a channel (measured: 0.5 reads back 0.498), so two colours
+# are the same one when every channel agrees to within a step.
+func _same_colour(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) <= 1.5 / 255.0 and absf(a.g - b.g) <= 1.5 / 255.0 \
+			and absf(a.b - b.b) <= 1.5 / 255.0 and absf(a.a - b.a) <= 1.5 / 255.0
+
+
+# A part-drawn tether keeps its dashes where the whole one's would be: `starts` is where along its line
+# a mark BEGINS, and the dash measure counts on from there rather than from zero.
+func test_a_marks_start_offsets_its_dash_measure() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[PackedVector3Array([Vector3(1.5, 1, 0), Vector3(3, 1, 0)])]]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], [], [],
+			PackedFloat32Array([1.5]))
+	var uv2: PackedVector2Array = _strip_vertices(overlays, BoardOverlays.Layer.TETHER_MOMENT, 0)["uv2"]
+	assert_float(uv2[0].x).override_failure_message("the mark's measure restarted at zero") \
+		.is_equal_approx(1.5, 0.0001)
+	assert_float(uv2[uv2.size() - 1].x).is_equal_approx(3.0, 0.0001)
+
+
+# A cone's tint multiplies INTO its baked facet shade, so a moment's arrowhead fades and colours with
+# its shaft while its facets still read as a volume.
+func test_a_cone_tint_multiplies_into_the_facet_shade() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var tint := Color(1.0, 0.5, 0.25, 0.4)
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones)
+	var plain := overlays.cone_vertices_of(BoardOverlays.Layer.TETHER_MOMENT)
+	cones[0]["tint"] = tint
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones)
+	var tinted := overlays.cone_vertices_of(BoardOverlays.Layer.TETHER_MOMENT)
+	assert_int(tinted.size()).is_equal(plain.size())
+	assert_int(plain.size()).override_failure_message("no cone was emitted").is_greater(0)
+	for i in plain.size():
+		var shade: float = plain[i]["shade"]
+		var want := Color(shade * tint.r, shade * tint.g, shade * tint.b, tint.a)
+		assert_bool(_same_colour(tinted[i]["color"], want)).override_failure_message(
+				"vertex %d is %s, not its shade %.3f times the tint" % [i, tinted[i]["color"], shade]).is_true()
+
+
+# WHITE CHANGES NOTHING, and that is what keeps every standing tether, reach mark and sight bead
+# exactly as it was: none of them passes a tint, and the defaults must be the untinted build.
+func test_a_white_tint_and_no_tint_build_the_same_mesh() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones)
+	var bare_strip := _strip_vertices(overlays, BoardOverlays.Layer.TETHERS, 0)
+	var bare_cone := overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS)
+	var white: Array[Color] = [Color.WHITE]
+	cones[0]["tint"] = Color.WHITE
+	overlays.set_marks(BoardOverlays.Layer.TETHERS, marks, Color.WHITE, [], cones, white,
+			PackedFloat32Array([0.0]))
+	assert_that(_strip_vertices(overlays, BoardOverlays.Layer.TETHERS, 0)).is_equal(bare_strip)
+	assert_that(overlays.cone_vertices_of(BoardOverlays.Layer.TETHERS)).is_equal(bare_cone)
+
+
+func test_the_moment_layer_draws_the_see_through_cone() -> void:
+	var overlays := _bare_overlays()
+	var marks: Array[Array] = [[
+		PackedVector3Array([Vector3(0, 1, 0), Vector3(3, 1, 0)]),
+		PackedVector3Array([Vector3(3, 1, 0), Vector3(3.5, 1, 0)]),
+	]]
+	var cones: Array[Dictionary] = [{"base": Vector3(3, 1, 0), "tip": Vector3(3.5, 1, 0), "radius": 0.1}]
+	overlays.set_marks(BoardOverlays.Layer.TETHER_MOMENT, marks, Color.WHITE, [], cones)
+	assert_str(overlays.cone_material_of(BoardOverlays.Layer.TETHER_MOMENT).shader.resource_path) \
+		.override_failure_message("a moment's arrowhead is on the solid cone, so it cannot fade") \
+		.is_equal(BoardOverlays.REACH_CONE_ALPHA_SHADER_PATH)
 
 
 # --- The SOLID cone (#1069) ---------------------------------------------------------------------
@@ -1471,6 +1737,52 @@ func test_restyling_the_grid_repaints_every_standing_move_marker() -> void:
 	assert_float((newest.material_override as StandardMaterial3D).albedo_texture.get_image() \
 			.get_pixel(mid, mid).a).override_failure_message(
 			"a marker built after the restyle came up with the old grid").is_equal_approx(0.8, 0.01)
+
+
+# --- A payload's tile is an INSET (#1058 D2b) --------------------------------------------------
+
+# The rule, at a share this case sets rather than the dev's tuned one: a clear margin of that share of
+# the tile on every side, solid inside it. Asked at the diorama's 32 texels and the flat view's 16.
+func test_the_inset_square_is_solid_inside_a_clear_margin() -> void:
+	InsetSquare.PAYLOAD_INSET = 0.25
+	for size: int in [MoveGrid.ART_TEXELS, MoveGrid.ART_TEXELS / 2]:
+		var img := InsetSquare.image(size)
+		var margin := size / 4
+		var mid := size / 2
+		for texel: Vector2i in [Vector2i(margin - 1, mid), Vector2i(size - margin, mid),
+				Vector2i(mid, margin - 1), Vector2i(mid, size - margin)]:
+			assert_float(img.get_pixelv(texel).a).override_failure_message(
+					"texel %s is drawn inside the %d-texel tile's margin" % [texel, size]).is_equal(0.0)
+		for texel: Vector2i in [Vector2i(margin, mid), Vector2i(size - margin - 1, mid), Vector2i(mid, mid)]:
+			assert_float(img.get_pixelv(texel).a).override_failure_message(
+					"texel %s is not part of the %d-texel tile's square" % [texel, size]).is_equal(1.0)
+
+
+# The payload layer wears that square, not the aim's full wash -- the whole difference between a tile
+# the aim strikes and one only what it drops reaches.
+func test_the_payload_layer_draws_the_inset_and_not_the_aims_wash() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.AIM, cells)
+	overlays.set_cells(BoardOverlays.Layer.PAYLOAD, cells)
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.PAYLOAD)).override_failure_message(
+			"the payload layer is not drawn with the inset square").is_same(overlays.inset_texture())
+	assert_object(_albedo_of(overlays, BoardOverlays.Layer.AIM)).is_same(overlays.fill_texture)
+
+
+func test_restyling_the_inset_repaints_every_standing_payload_marker() -> void:
+	var overlays := _bare_overlays()
+	var cells: Array[Vector3i] = [Vector3i(0, 0, 0), Vector3i(1, 0, 0)]
+	overlays.set_cells(BoardOverlays.Layer.PAYLOAD, cells)
+	var before := overlays.inset_texture()
+
+	InsetSquare.PAYLOAD_INSET = 0.1
+	overlays.restyle_inset()
+	assert_object(overlays.inset_texture()).is_not_same(before)
+	for node: Node3D in overlays._markers[BoardOverlays.Layer.PAYLOAD]:
+		var art := ((node as MeshInstance3D).material_override as StandardMaterial3D).albedo_texture
+		assert_object(art).override_failure_message(
+				"a standing payload marker still wears the old square").is_same(overlays.inset_texture())
 
 
 func _grid(inset: float, width: float, gap: float, fill: float) -> void:

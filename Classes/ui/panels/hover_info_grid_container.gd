@@ -1,5 +1,9 @@
 extends GridContainer
 
+# The unit face of the info card (HoverInfoPanelControl): portrait, name with its state icons, and
+# HP, shown while that unit's ring is up (#1105). It sits on the card's dark frame in both palettes,
+# so its inks are QueueStyle's frame roles.
+
 const SEVERED_ARM := preload("res://Art/Icons/StateIcons/SeveredArm.png")
 const SEVERED_LEG := preload("res://Art/Icons/StateIcons/SeveredLeg.png")
 const STATUS_ICON_SIZE := Vector2i(16, 16)
@@ -11,11 +15,15 @@ var unit: Unit
 @onready var states_row = $NameRow/StatesRow
 @onready var hp_label = $HPLabel
 
+func restyle() -> void:
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	hp_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+
 func set_unit(target: Unit):
 	if unit:
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
-		unit.unit_instance.will_changed.disconnect(_on_will_changed)
+		unit.stats_changed.disconnect(_on_stats_changed)
 		unit.downed_countdown_changed.disconnect(_on_countdown_changed)
 	unit = target
 
@@ -33,7 +41,7 @@ func set_unit(target: Unit):
 
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.unit_instance.hp_changed.connect(_on_hp_changed)
-	unit.unit_instance.will_changed.connect(_on_will_changed)
+	unit.stats_changed.connect(_on_stats_changed)
 	unit.downed_countdown_changed.connect(_on_countdown_changed)
 
 	_refresh()
@@ -53,9 +61,7 @@ func _refresh():
 func _refresh_hp():
 	if unit == null:
 		return
-	hp_label.text = "%d/%d  WIL %d/%d" % [
-		unit.get_current_hp(), unit.get_max_hp(),
-		unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
+	hp_label.text = "%d/%d" % [unit.get_current_hp(), unit.get_max_hp()]
 
 # Element states first (this CLEARS the row), then lifecycle/maim status icons appended after.
 func _refresh_status_icons():
@@ -68,6 +74,9 @@ func _refresh_status_icons():
 		_add_status_icon(StateIcons.DOWNED)
 		if unit.downed_turns_remaining > 0:
 			_add_status_count(unit.downed_turns_remaining)
+	elif unit.wounded:
+		# Standing again after a down (#1174); a body's DOWN glyph already says it.
+		_add_status_icon(StateIcons.WOUNDED)
 	if unit.unit_instance.is_maimed():
 		_add_status_icon(_maim_icon())
 	if unit.in_crisis:
@@ -96,9 +105,11 @@ func _add_status_count(n: int):
 func _on_hp_changed(_current, _max):
 	_refresh_hp()
 
-func _on_will_changed(_current, _max):
+# A lost limb settles through Unit._settle_stat_change, which emits this (#1174) -- the one repaint a
+# STANDING maim gets, since no lifecycle signal fires for it.
+func _on_stats_changed():
 	_refresh_hp()
-	_refresh_status_icons()   # a maim sets Will->0 via this signal — repaint so the severed icon appears
+	_refresh_status_icons()
 
 func _on_countdown_changed(_turns: int):
 	_refresh_status_icons()

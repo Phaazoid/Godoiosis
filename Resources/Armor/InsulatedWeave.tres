@@ -8,4 +8,5 @@
 script = ExtResource("1_armor")
 granted_abilities = Array[ExtResource("2_ability")]([ExtResource("3_insulation")])
 display_name = "Insulated Weave"
+weight = 1
 metadata/_custom_type_script = "uid://dj0617uewvdny"

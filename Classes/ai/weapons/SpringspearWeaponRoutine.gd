@@ -16,10 +16,10 @@ class_name SpringspearWeaponRoutine
 static var SPRING_LINE_MINIMUM := 2   # playtest-tunable: enemies a Spring must catch to be worth the disarm
 
 
-func defers_candidate(unit: Unit, candidate: AttackAction, plan: ResolvedPlan, score: Vector3i) -> bool:
+func defers_candidate(unit: Unit, candidate: AttackAction, plan: ResolvedPlan, score: AIScore) -> bool:
 	if not _disarms(unit, candidate.fired_attack):
 		return false
-	if score.x > 0:
+	if score.mission > 0 or score.removals > 0:
 		return false
 	return _enemy_victims_of(unit, candidate, plan) < SPRING_LINE_MINIMUM
 

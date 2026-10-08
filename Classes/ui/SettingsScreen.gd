@@ -89,18 +89,25 @@ func _init() -> void:
 # picked here would not show until the player queued their next order -- and its chrome would have
 # waited for a relaunch. `restyle` is likewise the door those knobs already use.
 #
-# Both cost one call at a moment the board is frozen anyway, rather than a poll on surfaces that have
+# The INSPECT DOCK and the INFO CARD (#1105) are built once and restyled the same way, since a tile
+# card or the dock can be up behind this page.
+#
+# Each costs one call at a moment the board is frozen anyway, rather than a poll on surfaces that have
 # no _process by design (every draw here is RETAINED -- OverlayMirror polls THEM). A freeze stops
 # callbacks, not method calls, so ModalLock does not block either.
 static func show_screen(game_node: Node) -> void:
 	var screen := SettingsScreen.new()
-	game_node.ui_layer.add_child(screen)
+	game_node.card_layer.add_child(screen)
 	screen._build(game_node)
 	await screen.closed
 	var overlays: OverlayManager = game_node.overlay_manager
 	overlays.refresh_aim_colors()
 	var queue: SquadActionQueueControl = game_node.squad_action_queue_control
 	queue.restyle()
+	var dock: UnitInfoPanelControl = game_node.unit_info_panel
+	dock.restyle()
+	var card: HoverInfoPanelControl = game_node.hover_info_panel
+	card.restyle()
 	screen.queue_free()
 
 func _build(game_node: Node) -> void:

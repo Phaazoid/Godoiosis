@@ -19,14 +19,8 @@ signal went_downed(unit: Unit)
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
 
-# --- Rally (in-fight Will relief, will-and-death.md). rally_count is BATTLE-scoped — diminishing
-# returns must restart each mission — so it lives here on the transient Unit, not on UnitInstance. ---
-const RALLY_BASE := 6       # Will restored by the first rally this battle
-const RALLY_FALLOFF := 2    # each further rally restores this much less; below 1 it's not offered
-
 const DOWNED_TURNS := 3     # turns a downed unit survives unrescued; Glossary interpolates it
 
-var rally_count: int = 0
 var unit_instance: UnitInstance
 # Provenance (#177): the standalone character FILE this unit was spawned from, when there is one.
 # Set by UnitFactory (null for form-built or scenario-embedded UnitData). Authored saves read it
@@ -50,6 +44,15 @@ var drawn_from_roster := false
 # ScenarioUnitEntry at spawn and written back on save. Not @export'd, for drawn_from_roster's reason:
 # a Unit is never serialized directly, and ScenarioManager is the one writer and one reader.
 var must_survive := false
+# The AI profile this unit plays when its faction is AI-controlled (#1230): a FILE NAME under
+# AIProfiles.PROFILE_DIR, "" = unassigned (plays Hard). must_survive's shape and must_survive's
+# reason -- authored per placement, carried here at spawn, written back on save; and per UNIT, so it
+# survives joining and leaving squads.
+var ai_profile := ""
+# The squad this unit last left while staying on the board (#1230): SquadManager.eject stamps it, and
+# an AI unit regrouping tries it first. Battle-scoped and never saved -- after a load a stray simply
+# joins the nearest squad. Untyped and checked with is_instance_valid, because the squad may be freed.
+var left_squad = null
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
@@ -99,23 +102,28 @@ signal stats_changed
 
 # --- Lifecycle (docs/design/will-and-death.md) ---
 # State is battle-scoped: it resets each mission, like element_states, so it lives on the
-# transient Unit. (Will — the PERSISTENT resource — lives on UnitInstance. Different sides
-# of the persistence seam.)
+# transient Unit. (Limb loss is the PERSISTENT half and lives on UnitInstance -- different sides of
+# the persistence seam.)
 enum LifecycleState { ACTIVE, DOWNED, DEAD }
 var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 
 # Which rung a would-be-fatal hit lands on is decided by LethalityRules.predict(), NOT here —
 # the resolver has to ask the same question at plan time (Law #2), so the ladder and its tuning
-# (OVERKILL_CEILING, CRISIS_WILL_GATE) live in one shared place. Unit owns only what happens
-# NEXT: take_damage carries the named rung out.
+# (OVERKILL_CEILING, the limb thresholds) live in one shared place. Unit owns only what happens
+# NEXT: take_damage carries the named rung out, and takes the limb.
 
-# --- Crisis Mode (will-and-death.md; an equipped ability since #158). A FULL-Will unit holding
+# Went down this battle (#1174): a smaller blow takes a limb from now on, and the Crisis gambit is
+# spent. Battle-scoped like the downed clock; a rescue or a heal does not clear it. Losing a limb
+# while STANDING does not wound -- only a down does.
+var wounded := false
+
+# --- Crisis Mode (will-and-death.md; an equipped ability since #158). An UNWOUNDED unit holding
 # the Crisis ability answers a would-be-down by standing straight back up surged — deterministic,
-# previewed, no prompt (the gambit's acceptance happened at loadout). Will locks at 0 and there is
-# no safety net (a would-be-down is death) for the rest of the battle. The arming read and the
-# gambit's tuning live with the ability roster (Abilities.CRISIS_*); the battle-scoped STATE
-# lives here on the transient Unit. ---
-var in_crisis: bool = false              # afflicted (skull icon, Will locked, die-on-down) for the battle
+# previewed, no prompt (the gambit's acceptance happened at loadout). There is no safety net (a
+# would-be-down is death) for the rest of the battle. The arming read and the gambit's tuning live
+# with the ability roster (Abilities.CRISIS_*); the battle-scoped STATE lives here on the transient
+# Unit. ---
+var in_crisis: bool = false              # afflicted (skull icon, die-on-down) for the battle
 var crisis_surge_pending: bool = false   # apply the surge at this unit's next turn start
 
 # Turns remaining before a downed unit dies without rescue. Starts at 3 when
@@ -244,7 +252,7 @@ func can_reseed_kit() -> bool:
 # its file.
 #
 # GEAR only: jobs and proficiency come along because the file authors them as part of the kit, but
-# HP, Will, limb STATE, element states and lifecycle are this unit's battle, not its loadout.
+# HP, limb STATE, wounds, element states and lifecycle are this unit's battle, not its loadout.
 # Battle state (ammo, rev, spring load) resets with the weapons — the grant is a fresh
 # copy_for_grant, exactly what a spawn hands back.
 #
@@ -378,7 +386,7 @@ func has_stat_effect_from(source: String) -> bool:
 			return true
 	return false
 
-# One turn of decay, at the OWNING FACTION's turn start (game._run_turn_start_ticks), so a 3-turn
+# One turn of decay, at the OWNING FACTION's turn start (TurnBoundary.turn_start_ticks), so a 3-turn
 # effect covers three of THIS unit's turns rather than three passes of everyone.
 func tick_stat_effects() -> void:
 	var kept: Array[StatEffect] = []
@@ -523,16 +531,18 @@ func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
 
 func get_mov() -> int:
-	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX))
+	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX), get_weight())
 
-# Everything carried, equipped or not: armor and the equipped weapon both live in `inventory`,
-# so one sweep covers them. No body term -- weight is gear only.
+# The body plus everything carried (#120). BLD is read EFFECTIVE so a job or a temporary effect can
+# move it; armor and the equipped weapon both live in `inventory`, so one sweep covers the gear.
+# CON is never a term (retracted 2026-07-27), and gear's mass is Item.weight alone --
+# tests/law/test_gear_has_one_mass.gd refuses a piece that names BLD in its stat_modifiers.
 func get_weight() -> int:
-	var total := 0
-	for item in inventory:
-		if item != null:
-			total += item.get_effective_weight()
-	return total
+	return get_effective_stat(Stats.Stat.BLD) + get_carried_weight()
+
+# The gear half of get_weight, for a readout that shows the two apart. A rule asks get_weight.
+func get_carried_weight() -> int:
+	return Item.total_weight(inventory)
 
 # --- preview-at-decision (#745) ---------------------------------------------------------------
 #
@@ -561,6 +571,12 @@ func previewed_weight(candidate: Item, incoming: bool) -> int:
 	if candidate == null or not incoming:
 		return get_weight()
 	return get_weight() + candidate.get_effective_weight()
+
+
+# MOV reads both of the answers above (#1176): a piece can move DEX through its modifiers AND add mass,
+# so each goes through its own preview rather than this re-deriving either.
+func previewed_mov(candidate: Item, incoming: bool) -> int:
+	return unit_instance.get_mov(previewed_stat(Stats.Stat.DEX, candidate), previewed_weight(candidate, incoming))
 
 
 # The substitution itself: [armor, weapons] with the candidate in whichever slot it fills. A weapon
@@ -659,6 +675,11 @@ func previewed_stat_for_jobs(stat: Stats.Stat, job_ids: Array[String]) -> int:
 
 func previewed_def_for_jobs(job_ids: Array[String]) -> int:
 	var value: int = with_jobs(job_ids, get_effective_def)
+	return value
+
+# A job can nudge DEX and BLD alike, and the swap already answers both.
+func previewed_mov_for_jobs(job_ids: Array[String]) -> int:
+	var value: int = with_jobs(job_ids, get_mov)
 	return value
 
 func previewed_abilities_for_jobs(job_ids: Array[String]) -> Array[AbilityData]:
@@ -807,7 +828,7 @@ func lapse_watch() -> void:
 	watch = null
 
 # A STANDING WATCH IS YOUR REACTION, SPENT (#810, dev 2026-09-09): a unit that took Overwatch does
-# not counter and does not reactively heal. SquadManager's two reaction gates are the readers.
+# not counter. SquadManager.can_counter is the reader.
 #
 # THE BARE OBJECT, deliberately. Not is_intact() — arm_watch refuses a null attack and an empty
 # footprint, so for the owner asking about its OWN watch that clause cannot fail. Not spent, not
@@ -824,9 +845,12 @@ func is_standing_watch() -> bool:
 # restore paths (ScenarioUnitEntry.apply_unit_state, restore_stat_effects) bypass these doors on
 # purpose — a restore replays the RESULT, and both sides round-trip verbatim.
 # `turns` overrides the state's default clock (0 = default); only paired states read it.
+# An exclusive state (#1092) is refused while its winner is held, and strips its loser on arrival.
 func add_element_state(state: Elemental.State, turns: int = 0) -> void:
-	if state == Elemental.State.NONE:
+	if state == Elemental.State.NONE or Elemental.is_blocked(element_states, state):
 		return
+	for beaten in Elemental.overridden_by(state):
+		remove_element_state(beaten)
 	if not element_states.has(state):
 		element_states.append(state)
 	_apply_paired_effect(state, turns)
@@ -871,12 +895,19 @@ func die():
 	unit_died.emit(self)
 	queue_free()
 
-func take_damage(damage: int):
+func take_damage(damage: int, non_blow := 0):
 	# Lifecycle-aware damage entry -- every damage source calls this. LethalityRules names the
-	# rung (the same call PlanResolver makes at plan time, so the preview cannot disagree —
-	# Law #2); this function is the only thing that CARRIES it out. Raw HP math stays on
-	# UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
-	match LethalityRules.predict(LethalityRules.situation_for(self), damage):
+	# rung and whether a limb goes (the same calls PlanResolver makes at plan time, so the preview
+	# cannot disagree — Law #2); this function is the only thing that CARRIES them out. Raw HP math
+	# stays on UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
+	# `non_blow` is the part of `damage` that is not a blow (#1174): the drowning top-up, or the whole
+	# of a tile burn or a sinking. Both are judged on the PRE-hit situation, read once.
+	var s := LethalityRules.situation_for(self)
+	var rung := LethalityRules.predict(s, damage)
+	if LethalityRules.severs(s, damage - non_blow, rung):
+		unit_instance.sever_next_limb()
+		_settle_stat_change()                # a lost limb moves STR/DEX, which can drop the wearer under a gate
+	match rung:
 		ResolvedOutcome.Lethality.NONE:
 			if lifecycle_state != LifecycleState.DEAD:
 				unit_instance.apply_damage(damage, get_max_hp())   # survivable hit — ordinary HP loss
@@ -889,12 +920,10 @@ func take_damage(damage: int):
 				unit_instance.apply_damage(damage, get_max_hp())   # HP -> 0 -> died -> _on_instance_died -> die()
 		ResolvedOutcome.Lethality.CRISIS:
 			# The armed gambit (#158): stand straight back up, never DOWNED — no went_downed, no
-			# ejection queueing, no Will down-spend. Exactly what the resolver's hypo threads for
-			# this rung, which is what keeps preview and execution one thing with no offer step.
+			# ejection queueing, no wound. Exactly what the resolver's hypo threads for this rung,
+			# which is what keeps preview and execution one thing with no offer step.
 			enter_crisis()
-		_:
-			# DOWNED and MAIMED are the same execution: go down. spend_will_for_down picks
-			# clean-vs-maimed.
+		ResolvedOutcome.Lethality.DOWNED:
 			_go_downed()
 
 func heal(amount: int) -> void:
@@ -908,26 +937,25 @@ func heal(amount: int) -> void:
 		downed_turns_remaining = -1
 		downed_countdown_changed.emit(downed_turns_remaining)
 
-# The downed STATE. Its PRICE is the one opt-out: spend_will_for_down is the only source of a
-# maim-on-down, so skipping it is the whole of what a costless down means.
-func _go_downed(pay_will_cost := true):
+# The downed STATE, and the wound it leaves (#1174). The limb is take_damage's, not this function's:
+# a blow decides it, and the dev force_down below is not a blow.
+func _go_downed():
 	lifecycle_state = LifecycleState.DOWNED
+	wounded = true
 	set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
-	if pay_will_cost:
-		unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
-		_settle_stat_change()                # a maim moves STR/DEX, which can drop the wearer under a gate
 	downed_turns_remaining = DOWNED_TURNS
 	_show_downed_sprite(true)
 	went_downed.emit(self)
 	downed_countdown_changed.emit(downed_turns_remaining)
 
 # Dev bypass (#156), the inverse of revive(): straight into DOWNED with none of the ladder's
-# consequences — no Will spend, no maim, no Crisis however the unit is armed. take_damage stays the
-# only rule-governed way down. The guard keeps a second press from reseeding a downed unit's clock.
+# consequences — no limb, no Crisis however the unit is armed. It still WOUNDS, being a down.
+# take_damage stays the only rule-governed way down. The guard keeps a second press from reseeding
+# a downed unit's clock.
 func force_down() -> void:
 	if lifecycle_state != LifecycleState.ACTIVE:
 		return
-	_go_downed(false)
+	_go_downed()
 
 func tick_downed_countdown():
 	if lifecycle_state != LifecycleState.DOWNED:
@@ -1110,12 +1138,18 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 	equipped_weapon = weapon
 	return true
 
-func can_wield_equipped() -> bool:
-	# Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected.
+# Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected. The reason is
+# the rule (#662); can_wield_equipped is derived from it.
+func wield_block_reason() -> String:
 	var weapon := get_equipped_weapon() as WeaponInstance
 	if weapon == null or weapon.template == null or not weapon.template.two_handed:
-		return true
-	return not unit_instance.has_missing_arm()
+		return ""
+	if not unit_instance.has_missing_arm():
+		return ""
+	return "%s is missing an arm and cannot wield the two-handed %s." % [get_unit_name(), weapon.shown_name()]
+
+func can_wield_equipped() -> bool:
+	return wield_block_reason() == ""
 
 func can_rescue_carry() -> bool:
 	return not unit_instance.has_missing_arm()
@@ -1162,33 +1196,18 @@ func revive():
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
+	downed_countdown_changed.emit(downed_turns_remaining)
 
-func next_rally_amount() -> int:
-	return RALLY_BASE - RALLY_FALLOFF * rally_count
-
-func can_rally() -> bool:
-	# Offered while the next rally restores >= 1 Will and there's room to restore into.
-	# Crisis locks Will at 0 for the battle, so Rally is refused outright.
-	return is_active() and not in_crisis and next_rally_amount() >= 1 and unit_instance.get_current_will() < unit_instance.get_max_will()
-
-func rally() -> void:
-	var amount := next_rally_amount()
-	if amount < 1:
-		return
-	unit_instance.set_current_will(unit_instance.get_current_will() + amount)
-	rally_count += 1
-	
 func enter_crisis():
-	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, Will locked
-	# at 0, surge primed for next turn, no safety net for the rest of the battle. Called on a unit
-	# that never went DOWNED, so the lifecycle/clock/sprite resets are usually no-ops — kept because
-	# they make this function total over any state it could ever be reached from.
+	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, surge primed
+	# for next turn, no safety net for the rest of the battle. Called on a unit that never went DOWNED,
+	# so the lifecycle/clock/sprite resets are usually no-ops — kept because they make this function
+	# total over any state it could ever be reached from.
 	in_crisis = true
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
 	set_current_hp(Abilities.CRISIS_REVIVE_HP)
-	unit_instance.set_current_will(0)                         # locked: can_rally() refuses while in_crisis
 	crisis_surge_pending = true
 
 func advance_crisis_surge():
@@ -1296,6 +1315,23 @@ func overwatch_attacks() -> Array[AttackData]:
 		return []
 	return equipped_weapon.watch_attacks(self)
 
+# An attack picked by NAME, the way a recorded run and the Play API name one (#615). Each searches
+# the view its verb fires from: a watch attack is never in the fire view (#590), so a watch looked
+# up there misses. Null when nothing matches.
+func fire_attack_named(attack_name: String) -> AttackData:
+	return _attack_named(get_selectable_attacks(), attack_name)
+
+func watch_attack_named(attack_name: String) -> AttackData:
+	return _attack_named(overwatch_attacks(), attack_name)
+
+static func _attack_named(attacks: Array[AttackData], attack_name: String) -> AttackData:
+	if attack_name == "":
+		return null
+	for attack: AttackData in attacks:
+		if attack != null and attack.display_name == attack_name:
+			return attack
+	return null
+
 # Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
 # reload), a fireable secondary attack, OR a watchable attack it could fire right now -- #413 made
 # Overwatch a weapon action, so the slice has to open for it. Mere existence isn't enough -- a
@@ -1369,10 +1405,11 @@ func attack_can_overwatch(attack: AttackData) -> bool:
 # never the live selection — see that method's header for why. Since #84 the counter attack must
 # also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
 # Stab requires_readiness) can't counter with an attack the menu already refuses. A counter that
-# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook.
+# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal or a
+# map-only attack never counters (AttackData.can_ever_counter, #1135).
 func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
-	return atk != null and atk.can_counter and is_attack_fireable(atk)
+	return atk != null and atk.can_ever_counter() and is_attack_fireable(atk)
 
 # Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
 # can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers
@@ -1388,11 +1425,17 @@ func attack_detail(attack: AttackData) -> String:
 		return ""
 	return equipped_weapon.attack_detail(self, attack)
 
+# The live count this attack's menu row prints (#1045). Same delegation; null = nothing to print.
+func attack_gauge(attack: AttackData) -> WeaponGauge:
+	if attack == null or equipped_weapon == null:
+		return null
+	return equipped_weapon.attack_gauge(self, attack)
+
 # Readiness seam (#73), widened to aura by #166 — and DERIVED from the reason above rather than
 # re-asking, so a greyed menu row and a refused order can never disagree about what is fireable.
 # Note it now answers false for an unchannelable carving, which it could not before: the rune's
 # list was pre-filtered, so the question never reached here. That makes the queue-time gate
-# (AttackAction.actor_can_perform) refuse one too, which is the correct reading of strict queueing.
+# (AttackAction.actor_block_reason) refuse one too, which is the correct reading of strict queueing.
 func is_attack_fireable(attack: AttackData) -> bool:
 	return attack_block_reason(attack).is_empty()
 
@@ -1467,7 +1510,7 @@ func can_burrow_weapon() -> bool:
 
 # --- Restoring battle state from a mid-battle save (#87) ---
 # Replays the RESULT, never the EVENT: the normal entry points (_go_downed, apply_stat_effect)
-# have side effects a restore must not repeat (squad ejection, Will spend, countdown reseed).
+# have side effects a restore must not repeat (squad ejection, countdown reseed).
 
 func restore_lifecycle(state: LifecycleState, turns_remaining: int) -> void:
 	lifecycle_state = state

@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02).**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -43,7 +43,7 @@ position = _aim + _lift + Vector3(0.0, -_drop, 0.0) + flourish()
 | **drop** | how far below the board the shot has ridden a falling body | `_drop` / `_target_drop` | `drop_to` |
 | **distance** | how far the camera sits back from the aim | `_camera.position.z` / `_target_distance` | `set_zoom` — the ONE distance door |
 | **dolly** | the director's push-in for the beat now playing, an ADDEND on distance | `_dolly` | `dolly_to` |
-| **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` · `align_to_detent` · orbit |
+| **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` (carrying the clearance **turn**) · `align_to_detent` · orbit |
 | **pitch** | the tilt | `_pitch_degrees` / `_target_pitch_degrees` | drag · `board_pitch_degrees` |
 | **flourish** | the impact shake plus resting sway, a DISPLACEMENT over where the camera looks | `_shake_amplitude`, `_sway_elapsed` | `shake` |
 
@@ -138,6 +138,52 @@ the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neit
   `PLUMMET_BURST_UNDER` below the SETTLED floor so the cubes assemble off-screen and erupt upward.
 - **on / off picture** — whether a point is inside the frustum. See *Don't re-derive these*.
 
+### Clearance words ([#1132](https://github.com/Phaazoid/Godoiosis/issues/1132))
+
+- **sight line** — a segment from the SETTLED lens (`CameraRig3D.lens_at`) to a point on the action.
+  While a pan is running it is the lens over where the pan LANDS (`lens_at`'s `aim`, fed by
+  `CameraController.pan_destination`), so the angle is chosen on the approach's first frame rather
+  than after the camera arrives.
+- **the approach** — a battle-zoom beat's pan, which IS that beat's shot: `pan_to` publishes
+  `pan_subject`, and `battle3d._shot_subject` lets it stand in for the follow while the glide runs, so
+  the close-up, its zoom and the clearance's angle start with the travel. Never while a death show is
+  live, and never off the battle zoom.
+- **arrived** — every eased channel within `CameraRig3D.ARRIVED_*` (0.1° / 0.01 units) of its
+  target (`CameraRig3D.is_arriving`). At 1° the camera was still turning about 8° a second, so
+  "arrived" has to mean invisible drift, not nearly there. The resting sway and the impact shake are
+  addends, not channels, so they never hold an arrival open.
+- **settle** — `OrderExecutor._settle_then`: after EVERY playback pan, wait for arrival and then at
+  least `Pacing.CAMERA_SETTLE` (0.5s, a Game-tab knob) before anything plays. That covers each beat in
+  both profiles, the walk framing, the tear-out's brace, the way home and each burn hit. The beat's
+  own hold still applies when it is longer, because the settle is a floor and not an addition (dev,
+  2026-10-07: *"playback should always give at least a half second for the camera to settle in a new
+  position"*).
+- **held angle** — the turn is chosen on the approach and NOWHERE else. Once a pan has landed,
+  nothing turns the camera until the next pan; whatever then comes into the way (a lunge's peak, a
+  tumble) is HIDDEN. `battle3d._clear_the_shot` passes `can_turn = cam.is_panning()`, and the
+  per-frame step in `ShotClearance.step` can only hide.
+- **blocker** — a terrain column, a prop or a unit a sight line passes through. A column is a box
+  from the board's underside to its drawn top, never "everything below the top". A unit is its art
+  AND its health readout, as two boxes (`ShotClearance.Body.blocks`), because from the battle zoom's
+  pitch the readout over a head is what buries the fighter behind it (round 4).
+- **the action** — never hidden, and the ground under it never hidden either. Depends on the shot:
+  - On a close-up, the trained subject and both ends of the aim line. Both ends are also what the
+    close-up looks AT, so an angle that parks one behind the other counts as blocked.
+  - On the stage's wide shot, everyone on stage.
+  - On a walk, everyone walking.
+
+  A bystander on stage may be hidden during a close-up. The ground under it stays protected, so a
+  hidden column never leaves a visible unit on air.
+- **turn** — degrees added to the beat's directed yaw (`CameraRig3D.directed_yaw`) to reach a clear
+  side; zero is the shot exactly as it always was.
+- **hidden** — what no turn could clear, taken out of the frame outright: a column moved to the
+  invisible lattice, a prop or a unit made invisible. Not a camera mover and not a sixth door --
+  it moves nothing -- so its writers are `BoardMirror.set_camera_hidden` and
+  `UnitMirror.camera_hidden`, both fed by `battle3d._push_hidden`.
+
+`ShotClearance` owns the rule and the latch; the history is in `visual-clarity.md` -> *The battle
+zoom sees past what stands in the way*.
+
 ### Two words that caused rounds
 
 - **zoom** is the PLAYER'S WHEEL, never the director's push-in. The push-in is the **dolly**. The
@@ -159,16 +205,25 @@ camera, and on what occasion — because an ungated mover is the bug class the w
 |---|---|---|
 | `battle3d._mirror_camera()` | every frame under playback, polling `cam.*` causes | `hold_at`, `drop_to`, `lift_to`, `set_zoom`, `aim_along`, `dolly_to` |
 | `battle3d._on_impact()` | a blow lands — an EVENT | `shake` |
-| `battle3d._center_rig_on()` | recentre / the return pan — an EVENT | `glide_to` |
+| `battle3d._center_rig_on()` | recentre / the return pan / an objective row's click — an EVENT | `glide_to` |
 | `battle3d.fit_camera()` | a board loads | `frame` / `pose` |
-| `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD |
+| `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD, the middle-drag pan (`hold_at`, #1037) |
 
 The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`, `directed_line`,
-`beat_emphasis`, `beat_profile`, plus its own position. **One fact travels the other way** —
-`CameraController.fall_depth`, the rig telling playback how far under the board it has got, so the
-teardown can wait for the climb.
+`beat_emphasis`, `beat_profile`, `pan_subject` and `pan_destination`, plus its own position. **Two
+facts travel the other way** — `CameraController.fall_depth`, the rig telling playback how far under
+the board it has got, so the teardown can wait for the climb; and `view_arriving`, the rig telling
+playback it is still easing onto the shot, so every playback pan's settle waits for it (#1132 follow-up,
+widened to every pan in round 3).
 
 Adding a sixth door is a decision worth stating out loud.
+
+**The recentre door has no lock of its own**, and that is why a new caller is not a new door. SPACE
+and an order's return pan cannot fire while playback owns the board, so the door never needed one.
+Clicking a zone row in the objectives panel ([#955](https://github.com/Phaazoid/Godoiosis/issues/955)
+part 3, `game.look_at_next_zone` → `focus_view_on_cell`) CAN fire then, since that panel stays up
+through enemy turns, the pass and the mission's end, so it asks `_board_locked_for_player()` itself
+before it glides. A caller that can fire while the board is locked asks first.
 
 **#672 narrowed the FIRST door rather than adding one.** `_mirror_camera` still polls every frame,
 but every distance and framing it writes now goes through `battle3d._apply_shot`, one `match` with

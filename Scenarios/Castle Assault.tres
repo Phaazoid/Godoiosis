@@ -77,6 +77,7 @@ size = 2
 inscriptions = Array[ExtResource("25_facq7")]([SubResource("Resource_8ihxj"), SubResource("Resource_3peij")])
 temper = 1
 display_name = "Lightning Tome"
+weight = 2
 
 [sub_resource type="Resource" id="Resource_dfmft"]
 script = ExtResource("8_1v4i7")
@@ -86,7 +87,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -107,14 +107,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 6
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_d0hyj")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -144,7 +142,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -163,14 +160,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_md83g")])
 equipped_index = 0
 affinity_saved = true
@@ -200,7 +195,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -219,14 +213,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_3su2r")])
 equipped_index = 0
 affinity_saved = true
@@ -256,7 +248,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -275,14 +266,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_n1xpj")])
 equipped_index = 0
 affinity_saved = true
@@ -310,7 +299,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -329,14 +317,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_64uc1")])
 equipped_index = 0
 affinity_saved = true
@@ -374,6 +360,7 @@ size = 1
 inscriptions = Array[ExtResource("25_facq7")]([SubResource("Resource_a1ncn")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_dkftm"]
@@ -384,7 +371,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -402,14 +388,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_f8j6y")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -446,6 +430,7 @@ size = 1
 inscriptions = Array[ExtResource("25_facq7")]([SubResource("Resource_tnex3")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_ej0nd"]
@@ -456,7 +441,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -474,14 +458,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_0lehi")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -509,7 +491,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -527,14 +508,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_pxvdd")])
 equipped_index = 0
 affinity_saved = true
@@ -563,7 +542,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -583,14 +561,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_jfiwm")])
 equipped_index = 0
 affinity_saved = true
@@ -619,7 +595,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -637,14 +612,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_g0pgd")])
 equipped_index = 0
 affinity_saved = true
@@ -673,7 +646,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -693,14 +665,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_wh38c")])
 equipped_index = 0
 affinity_saved = true
@@ -729,7 +699,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -747,14 +716,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_li2yd")])
 equipped_index = 0
 affinity_saved = true
@@ -783,7 +750,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -801,14 +767,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_yt1ub")])
 equipped_index = 0
 affinity_saved = true
@@ -846,6 +810,7 @@ size = 1
 inscriptions = Array[ExtResource("25_facq7")]([SubResource("Resource_n2b8h")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_2wcgg"]
@@ -856,7 +821,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -874,14 +838,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_4fepy")])
 equipped_index = 0
 aura = Dictionary[int, int]({
@@ -918,6 +880,7 @@ size = 1
 inscriptions = Array[ExtResource("25_facq7")]([SubResource("Resource_3efpw")])
 temper = 1
 display_name = "Fire Rune"
+weight = 1
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
 
 [sub_resource type="Resource" id="Resource_il7i7"]
@@ -928,7 +891,6 @@ base_stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5
@@ -946,14 +908,12 @@ stats = Dictionary[int, int]({
 0: 30,
 1: 5,
 2: 5,
-3: 5,
 4: 5,
 5: 5,
 6: 5,
 7: 4
 })
 current_hp = 30
-current_will = 5
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_bssrp")])
 equipped_index = 0
 aura = Dictionary[int, int]({

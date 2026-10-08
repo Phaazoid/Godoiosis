@@ -42,6 +42,8 @@ func test_no_category_page_is_empty() -> void:
 func test_every_stat_is_bridged() -> void:
 	for value: int in Stats.Stat.values():
 		var stat: Stats.Stat = value
+		if Stats.RETIRED.has(stat):
+			continue   # a tombstone is off every stat list, so it owes the player nothing (#1174)
 		var term: Glossary.Term = Glossary.term_for_stat(stat)
 		assert_str(Glossary.short(term)) \
 			.override_failure_message("Stats.Stat.%s bridges to an empty glossary entry" % Stats.Stat.keys()[stat]) \
@@ -68,6 +70,22 @@ func test_every_element_state_is_bridged() -> void:
 		assert_str(Glossary.short(term)) \
 			.override_failure_message("Elemental.State.%s bridges to an empty glossary entry" % Elemental.State.keys()[state]) \
 			.is_not_empty()
+
+
+# Every zone kind a player can meet is explained where the tile Inspect names it (#1105). The
+# authoring-only kinds are the declared skip -- no player surface names them.
+func test_every_zone_kind_is_bridged() -> void:
+	var bridged := 0
+	for value: int in ZoneManager.Kind.values():
+		var kind: ZoneManager.Kind = value
+		if ZoneManager.AUTHORING_KINDS.has(kind):
+			continue
+		var term: Glossary.Term = Glossary.term_for_zone_kind(kind)
+		assert_str(Glossary.short(term)) \
+			.override_failure_message("ZoneManager.Kind.%s bridges to an empty glossary entry" % ZoneManager.Kind.keys()[kind]) \
+			.is_not_empty()
+		bridged += 1
+	assert_int(bridged).override_failure_message("no zone kind was checked at all").is_greater(0)
 
 
 # Both tables, because since #467 a menu row is either a verb or one of the ring's CATEGORIES, and

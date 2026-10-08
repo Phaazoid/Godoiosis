@@ -10,10 +10,9 @@ class_name AITactics
 # forecast), so a candidate is priced by what it adds to what the squad is already doing (#117).
 #
 # (_REMOVAL_TIERS -- the DOWNED/MAIMED/KILLED rung list -- is gone with that change: a removal is
-# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading
-# via PlanResolver.plan_fells, which covers the same three rungs and cannot double-count
-# a second hit on the same body -- and, since #708, the fresh CRISIS the ladder does not move a
-# lifecycle for. See _score_plan.)
+# now a CHANGE OF STANDING across the plan, read off LethalityRules.lifecycle_for's own threading,
+# which covers the same three rungs and cannot double-count a second hit on the same body. Whether a
+# fresh CRISIS counts as one is the acting unit's profile since #1230. See _score_plan.)
 
 # WHO THE SQUAD FIGHTS -- and it is TWO SYSTEMS, forked on one question: is anybody attackable
 # this turn? (Dev ruling, 2026-09-02, from playtest.)
@@ -41,27 +40,35 @@ class_name AITactics
 # every comparison it entered. Ordered this way it wins only what nobody upright is competing for.
 #
 # The exchange term is a BOOLEAN -- can they answer me from the cell I would attack from -- and not
-# a scored one, because scoring an attack from a cell nobody has moved to is structurally
-# impossible today (SquadManager._resolve_actions reads positions off the LIVE queue, so a
-# hypothetical move moves nobody). That is why this layer and the ATTACK pick judge an exchange
-# differently: this one cannot resolve, _score_plan can and would be throwing information away.
-# Declared in ai-tactics.md rather than left to be discovered.
+# a scored one. A hypothetical MOVE moves nobody (SquadManager._resolve_actions reads positions off
+# the LIVE queue), so this layer cannot resolve the fight it is choosing; the ATTACK pick can, and
+# would be throwing information away. Scoring a cell IS possible by standing the unit on it, which
+# is what seek_positions does (#760) -- but only for a removal or a squad break, by ruling, so who
+# to fight stays this boolean. Declared in ai-tactics.md rather than left to be discovered.
 static func choose_engagement_target(leader: Unit, board: BoardContext, squad_manager: SquadManager,
 		within = null, allowed = null) -> Unit:
 	var engageable := _engageable_enemies(leader, board, within, allowed)
 	if engageable.is_empty():
 		return nearest_enemy(leader, board, within)   # pursuit: nobody in reach, distance is the answer
+	return _best_exchange(leader, engageable, board, squad_manager)
 
+
+# The best exchange among the enemies this leader could fight this turn (`engageable`, from
+# _engageable_enemies) -- the ranking both moving archetypes and Balanced share.
+static func _best_exchange(leader: Unit, engageable: Dictionary, board: BoardContext,
+		squad_manager: SquadManager) -> Unit:
 	var best: Unit = null
 	var best_standing := false
 	var best_safe := false
 	var best_hops := 0
+	# #1230: with picks_best_trade off, nobody is "safe", so the key never speaks and the closest wins.
+	var weighs_answers := AIProfiles.of(leader).picks_best_trade
 	for enemy: Unit in engageable:
 		var plan: _Engagement = engageable[enemy]
 		# Asked at the cell we would attack FROM, so this layer and the approach cannot disagree
 		# about where the fight happens.
 		var standing := enemy.is_active()
-		var safe := not squad_manager.can_counter(enemy, leader, board, plan.from)
+		var safe := weighs_answers and not squad_manager.can_counter(enemy, leader, board, plan.from)
 		if best == null or _engagement_beats(standing, safe, plan.hops, best_standing, best_safe, best_hops):
 			best = enemy
 			best_standing = standing
@@ -87,16 +94,16 @@ static func _engagement_beats(standing: bool, safe: bool, hops: int,
 # an enemy standing OUTSIDE its zone because a cell inside the zone can reach it, i.e. a lured
 # sentry, which is the one thing that archetype exists to refuse.
 #
-# OPTIMISTIC for a leader with squadmates, and declared rather than fixed: this is the leader's own
-# unclamped move range, but cohesion (V3) can refuse the group move to a cell the leader alone
-# could stand on, in which case the squad stays put. best_attack_destination has carried the
-# identical optimism since #29, so nothing new is introduced here.
+# A leader with squadmates engages only from a cell its squad can FOLLOW it to (#1220) -- the same
+# refusal the player's Move overlay paints grey (#1069). It was optimistic until then: the leader's
+# unclamped range, so cohesion could refuse the group move and the squad stood still.
 class _Engagement:
 	var from: Vector2i   # the cell we would attack from -- the same one the approach will route to
 	var hops: int        # route to it, the tie-break
 
 
 static func _engageable_enemies(leader: Unit, board: BoardContext, within, allowed) -> Dictionary:
+	allowed = _leader_allowed(leader, board, allowed)
 	var aiming := leader.get_fired_attack()
 	var reach_set: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
 	reach_set[leader.movement.cell] = true   # standing still counts; compute_move_range omits the start cell
@@ -164,7 +171,12 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 # PURSUIT wants a body (it is an ordinary target, #720); a WATCH cannot use one, because a corpse
 # never enters anything and _watch_triggered_by refuses a non-ACTIVE entrant outright. Left false so
 # every existing caller is unchanged.
-static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, active_only := false) -> Unit:
+#
+# `hypo` is the squad's plan so far, for the WATCH caller (#1209): it runs after the squad's attacks
+# are queued, so "standing" has to mean standing once those land. Empty is the live board, which is
+# every other caller -- the movement layer runs before the squad queues anything.
+static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, active_only := false,
+		hypo: Dictionary = {}) -> Unit:
 	var route := _approach_distances(from_unit, board)
 	var nearest: Unit = null
 	var best_hops := 0
@@ -173,7 +185,9 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, a
 	for unit in board.units:
 		if not is_instance_valid(unit):
 			continue
-		if not (unit.is_active() or (unit.is_downed() and not active_only)):
+		var life := PlanResolver.projected_lifecycle(unit, hypo)
+		var standing := life == Unit.LifecycleState.ACTIVE
+		if not (standing or (life == Unit.LifecycleState.DOWNED and not active_only)):
 			continue
 		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
 			continue
@@ -182,7 +196,6 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, a
 		if within != null and not within.has(unit.movement.cell):
 			continue
 		var hops: int = route.get(unit, RulesService.UNREACHABLE)
-		var standing := unit.is_active()
 		var d := GridUtils.manhattan_distance(from_unit.movement.cell, unit.movement.cell)
 		if nearest == null or _pursuit_beats(hops, standing, d, best_hops, best_standing, best_dist):
 			nearest = unit
@@ -220,6 +233,17 @@ static func _pursuit_beats(hops: int, standing: bool, dist: int,
 # no route to one) is absent -> UNREACHABLE -> it falls to the distance tie-break, the same
 # degradation the sealed-room case has always had.
 static func _approach_distances(from_unit: Unit, board: BoardContext) -> Dictionary:
+	var result := {}
+	var firing := _approach_firing(from_unit, board)
+	for unit: Unit in firing:
+		result[unit] = firing[unit][0]
+	return result
+
+
+# _approach_distances with the firing cell kept beside the hops: enemy -> [hops, cell], the cell being
+# the nearest one it could be fought from (GridUtils.NO_CELL when it has none). Balanced asks whether
+# the enemy could answer it from THAT cell (#1220).
+static func _approach_firing(from_unit: Unit, board: BoardContext) -> Dictionary:
 	# One hoisted pick, matching _best_approach's own v1 approximation (docs/design/ai-tactics.md).
 	var aiming := from_unit.get_fired_attack()
 	var per_enemy := {}
@@ -239,12 +263,43 @@ static func _approach_distances(from_unit: Unit, board: BoardContext) -> Diction
 	var result := {}
 	for unit in per_enemy:
 		var best := RulesService.UNREACHABLE
+		var from := GridUtils.NO_CELL
 		for cell in per_enemy[unit]:
 			var hops: int = field.get(cell, RulesService.UNREACHABLE)
 			if hops < best:
 				best = hops
-		result[unit] = best
+				from = cell
+		result[unit] = [best, from]
 	return result
+
+
+# BALANCED's target (#1220, rulings 13 and 14): with anybody in reach, the best exchange -- the same
+# pick Rushdown makes. With nobody, the nearest enemy that could NOT answer it from the cell it would
+# fight from; only when every enemy could, the nearest at all. Asked fresh every turn.
+static func choose_balanced_target(leader: Unit, board: BoardContext, squad_manager: SquadManager) -> Unit:
+	var engageable := _engageable_enemies(leader, board, null, null)
+	if not engageable.is_empty():
+		return _best_exchange(leader, engageable, board, squad_manager)
+	var firing := _approach_firing(leader, board)
+	var best: Unit = null
+	var best_hops := 0
+	var best_standing := false
+	var best_dist := 0
+	for unit in board.units:
+		if not is_instance_valid(unit) or not firing.has(unit) or not (unit.is_active() or unit.is_downed()):
+			continue
+		var hops: int = firing[unit][0]
+		var from: Vector2i = firing[unit][1]
+		if hops >= RulesService.UNREACHABLE or squad_manager.can_counter(unit, leader, board, from):
+			continue
+		var standing := unit.is_active()
+		var d := GridUtils.manhattan_distance(leader.movement.cell, unit.movement.cell)
+		if best == null or _pursuit_beats(hops, standing, d, best_hops, best_standing, best_dist):
+			best = unit
+			best_hops = hops
+			best_standing = standing
+			best_dist = d
+	return best if best != null else nearest_enemy(leader, board)
 
 # Walks the archetype's priority list (AIArchetype.MAIN_ACTION_PRIORITY); first type that
 # yields a buildable candidate queues and wins. Everything funnels through queue_action,
@@ -258,7 +313,7 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 		# The family's own say on its own verbs (#726): a weapon routine may refuse a preparation
 		# that is not worth it right now -- the same shape as can_reload() answering false, a
 		# builder gate rather than a skip of the walk. Asked about the weapon self-abilities only;
-		# rescue/intimidate/rally are not a weapon's to veto.
+		# rescue is not a weapon's to veto.
 		if AIWeaponRoutine.WEAPON_VERBS.has(verb) and not routine.allows_preparation(unit, verb, board):
 			continue
 		var queued := false
@@ -267,10 +322,6 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 				queued = _try_best_attack(unit, board, squad_manager)
 			BaseAction.ActionType.RESCUE:
 				queued = _try_rescue(unit, board, squad_manager)
-			BaseAction.ActionType.RALLY:
-				queued = _try_rally(unit, squad_manager)
-			BaseAction.ActionType.INTIMIDATE:
-				queued = _try_intimidate(unit, board, squad_manager)
 			BaseAction.ActionType.RELOAD:
 				queued = _try_reload(unit, squad_manager)
 			BaseAction.ActionType.REV:
@@ -293,13 +344,14 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	if not unit.can_wield_equipped() or unit.squad == null:
 		return false
-	var reactions := ReactionCatalog.get_all()   # hoisted -- both catalogs dir-scan per call, and
-	var terrain := TerrainReactionCatalog.get_all()   # a scoring pass resolves many times
+	var reactions := ReactionCatalog.get_all()   # hoisted -- a scoring pass resolves many times, and
+	var terrain := TerrainReactionCatalog.get_all()   # each call copies the cached list (#1213)
 	var squad := unit.squad
 	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
 	var alone: Array[Unit] = [unit]
+	var stakes := _stakes_for(squad, board, base_plan)
 	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true,
-			_candidates_by_member(alone, board, base_plan))
+			_candidates_by_member(alone, board, base_plan, stakes), stakes)
 	var queued := false
 	if pick != null:
 		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
@@ -327,84 +379,228 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 # below cannot drift about who is still choosing. Rebuilt per ROUND by the caller, because
 # `has_main_action_queued` changes as the round queues and the entry must go with it; within a
 # round nothing is committed until the single queue, so no entry can go stale before it is used.
-static func _candidates_by_member(members: Array[Unit], board: BoardContext, base_plan: ResolvedPlan) -> Dictionary:
+static func _candidates_by_member(members: Array[Unit], board: BoardContext, base_plan: ResolvedPlan,
+		stakes: _Stakes = null) -> Dictionary:
 	var out := {}
 	for member in members:
 		if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
 			continue
-		out[member] = _attack_candidates(member, board, member.get_projected_destination(), base_plan.hypo)
+		out[member] = _attack_candidates(member, board, member.get_projected_destination(), base_plan.hypo, stakes)
 	return out
 
 
-# Every attack `unit` could declare from `origin`: each selectable+fireable attack crossed with
-# every enemy it can reach and legally aim at. Built as REAL declared orders through
-# AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued
-# are the same object rather than two descriptions of one.
+# Every attack `unit` could declare from `origin`, built as REAL declared orders through
+# AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued are
+# the same object rather than two descriptions of one.
 #
-# ONE LIST, standing and downed alike (#720, dev 2026-09-03). It was two passes, a body offered only
-# once nothing upright had produced a candidate -- #57's precedence as a hard gate. The score already
-# says everything that rule was protecting: the overkill clamp prices finishing a body at exactly
-# +1, which loses to any real swing and wins only when nothing else is there. That +1 was the cling
-# at 1 HP until #1002 let a heal raise a body, and the clamp caps one at 1 outright now. The gate on
-# top of that was what made a body an ABSOLUTE last resort.
+# WHERE IT AIMS (#1220): a DIRECTIONAL attack tries all four facings, aimed one step out the way the
+# watch lanes are, because a facing is what the player picks -- aiming "at an enemy" asked the
+# cardinal between two cells, which named the wrong facing for a spread's side lane. A POINT attack
+# tries every cell of its ring, so a placed blast can be dropped beside a target rather than on it.
+# An aim is kept only when its sweep pays: a hostile victim, or for a HEAL a heal target (an ally
+# below full HP, or a body nobody can rescue this turn -- rulings 3 and 16). A heal is therefore
+# never AIMED at an enemy; an enemy its splash catches is priced against it by the score. Aims that
+# reach the same victims across the same cells are one candidate.
 #
-# WHAT THE PLAN HAS ALREADY KILLED IS NOT A TARGET (#719). Planning does not execute, so a unit a
-# squadmate felled THIS round is still standing on the live board -- the base plan's hypo is the only
-# honest answer, and the pass-2 filter never asked it. That is how a leader queued her 6-long line
-# through her own party at a corpse: it was the one candidate she had left, and with no bar (#711)
-# the one candidate is taken however bad it is. DOWNED in the hypo is still a target (finishing is
-# intended); DEAD is not, because there is nobody there to finish.
+# A MAP-ONLY attack hits no unit (#1135), so its aim is kept only for what it does THIS pass: the
+# current it carries, the payloads it drops, or the ice it melts under a hostile. Ground it merely
+# leaves burning or soaked for later is not priced, declared on #117.
+#
+# The sweep reads wetness LIVE, as the queue's whiff gate does (SquadPlanValidator.aim_finds_a_target),
+# so a candidate is never one the gate would refuse.
+#
+# ONE LIST, standing and downed alike (#720): the overkill clamp prices finishing a body at +1, so a
+# body wins only when nothing upright is offered. WHAT THE PLAN HAS ALREADY KILLED IS NOT A TARGET
+# (#719): planning does not execute, so a unit a squadmate felled this round is still on the live
+# board, and the base plan's hypo is the honest answer. DOWNED in the hypo is still a target; DEAD is
+# nobody. `victims_out`, when given, receives each candidate's paying victims.
 static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i,
-		base_hypo: Dictionary) -> Array[AttackAction]:
+		base_hypo: Dictionary, stakes: _Stakes = null, victims_out = null) -> Array[AttackAction]:
 	var out: Array[AttackAction] = []
-	var candidates: Array[AttackData] = unit.get_selectable_attacks()
-	if candidates.is_empty():
-		candidates = [null]   # unarmed (or aura-dry rune): null pick = bare-fist Manhattan-1, the resolver's STR fallback
-	for attack in candidates:
+	var seen := {}
+	var hostiles := {}   # cell -> true where a hostile the plan has not killed stands
+	var patients := {}   # cell -> true where a heal target stands
+	var stabilise := AIProfiles.of(unit).stabilises_bodies
+	for other in board.units:
+		if not is_instance_valid(other):
+			continue
+		var at := PlanResolver.projected_position(other, base_hypo)
+		if Team.is_enemy(unit.get_faction(), other.get_faction()):
+			if PlanResolver.projected_lifecycle(other, base_hypo) != Unit.LifecycleState.DEAD:
+				hostiles[at] = true
+		elif _is_heal_target(other, base_hypo, stakes, stabilise):
+			patients[at] = true
+	# Nothing selectable (unarmed, an aura-dry rune) means no candidate, as the player's ring offers
+	# none (#1215) -- never a null pick, which the resolver would read as bare fists.
+	for attack in unit.get_selectable_attacks():
 		if not unit.is_attack_fireable(attack):
 			continue
-		# The candidate is passed straight to the geometry (#102) -- active_attack is written only
-		# for declare()'s stamp, immediately before it, and cleared again below.
-		var reach := Reach.get_all_attack_cells_from(unit, origin, attack)
-		for other in board.units:
-			if not is_instance_valid(other):
+		var marks: Dictionary = patients if attack.heals else hostiles
+		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
+			continue
+		for aim in _aim_cells(unit, origin, attack, board, marks):
+			var sweep := Conduction.sweep(unit, origin, aim, attack, board)
+			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes, stabilise)
+			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo):
 				continue
-			if not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			var key := _aim_key(attack, sweep)
+			if seen.has(key):
 				continue
-			if not (other.is_active() or other.is_downed()):
-				continue
-			if PlanResolver.projected_lifecycle(other, base_hypo) == Unit.LifecycleState.DEAD:
-				continue   # a squadmate already finished them this pass -- see the header
-			# WHERE THE PLAN PUTS THEM, not where they stand (#709). Sibling of the lifecycle read
-			# directly above, answered off the same dict: a squadmate's queued shove has already
-			# moved this target, and gather_attack_victims below has resolved occupants through
-			# PROJECTED cells since #105 -- so a live aim did not merely mis-point, it built a
-			# footprint holding nobody and the candidate was dropped at that guard. The direction
-			# that was invisible is the other one: a shove that pulls a target INTO reach.
-			var at := PlanResolver.projected_position(other, base_hypo)
-			if not reach.has(at):
-				continue
-			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
-			# is refused at the click, so the AI must not author one. A DIRECTIONAL attack is judged
-			# by the footprint below instead (#756) — it aims a facing, so "is this cell too high"
-			# is answered per spread cell by the truncation, and asking it of the aim would refuse
-			# a whole spread over one unreachable target.
-			if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, at, board):
-				continue
-			# The current counts as reach: an aim into water whose only casualties arrive by the arc
-			# is a real candidate, and one that would fry the AI's own side is priced by the ordinary
-			# score, since the arc's victims resolve as volley members like any other.
-			if Conduction.sweep(unit, origin, at, attack, board).victims.is_empty():
-				continue
-			unit.active_attack = attack
-			out.append(AttackAction.declare(unit, origin, at))
+			seen[key] = true
+			unit.active_attack = attack   # declare()'s stamp only (#102)
+			var action := AttackAction.declare(unit, origin, aim)
+			out.append(action)
+			if victims_out != null:
+				victims_out[action] = paying
 	unit.active_attack = null   # no probe left behind (#102)
 	return out
 
 
-# Score a whole RESOLVED PLAN -> Vector3i(x = net removals, y = net damage dealt, z = -damage taken
-# from reactions); compared lexicographically (_beats). The MARGINAL a candidate adds is what ranks
-# it, and since #711 there is no bar it has to clear -- the score orders, it never gates.
+# Who a heal may be aimed for: our side, and either standing below full HP or a body the clock is
+# still running on that nobody can rescue this turn (ruling 16) -- the second only for a healer whose
+# profile stabilises bodies (#1230).
+static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes, stabilise := true) -> bool:
+	match PlanResolver.projected_lifecycle(other, hypo):
+		Unit.LifecycleState.ACTIVE:
+			return PlanResolver.projected_hp(other, hypo) < other.get_max_hp()
+		Unit.LifecycleState.DOWNED:
+			return stabilise and other.is_downed() and other.downed_turns_remaining >= 0 \
+					and (stakes == null or not stakes.rescuable.has(other))
+	return false
+
+
+# Can this aim pay FAR from anybody it could pay on? A payload goes off where the hit lands and a
+# current runs through water; everything else pays only on a body inside its own footprint.
+static func _may_pay_unmarked(unit: Unit, attack: AttackData) -> bool:
+	return attack.payload != null or PlanResolver.elements_of(unit, attack, false).has(Elemental.Element.SHOCK)
+
+
+# The cells worth sweeping. A facing for a directional attack; for a point attack the ring, narrowed
+# to cells near a mark whenever only a body in the footprint can pay: within the shape's own reach of
+# one, which is exact for a one-cell attack and a superset for a blast.
+static func _aim_cells(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext,
+		marks: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if Reach.is_directional_attack(attack):
+		for dir in GridUtils.CARDINAL_DIRECTIONS:
+			if Reach.can_aim_at(unit, origin, origin + dir, attack, board):
+				out.append(origin + dir)
+		return out
+	var narrow := not _may_pay_unmarked(unit, attack)
+	var radius := 0
+	if attack.attack_shape != null:
+		for offset in attack.attack_shape.tiles():
+			radius = maxi(radius, absi(offset.x) + absi(offset.y))
+	var ring := Reach.get_all_attack_cells_from(unit, origin, attack)
+	if narrow and radius == 0:
+		# A one-cell attack pays only ON a mark, so it is aimed at the marks in board order -- the order
+		# this builder always offered them in, which is what equal candidates fall back to.
+		for mark: Vector2i in marks:
+			if ring.has(mark) and Reach.vertical_aim_ok(attack, origin, mark, board):
+				out.append(mark)
+		return out
+	for cell in ring:
+		if narrow and not _near_a_mark(cell, marks, radius):
+			continue
+		# The player's vertical gate, mirrored (#258): an aim the click would refuse is never authored.
+		if not Reach.vertical_aim_ok(attack, origin, cell, board):
+			continue
+		out.append(cell)
+	return out
+
+
+static func _near_a_mark(cell: Vector2i, marks: Dictionary, radius: int) -> bool:
+	if radius == 0:
+		return marks.has(cell)
+	for mark: Vector2i in marks:
+		if absi(mark.x - cell.x) + absi(mark.y - cell.y) <= radius:
+			return true
+	return false
+
+
+# The victims that make this aim worth anything: hostiles the plan has not killed, or for a heal the
+# heal targets it reaches.
+static func _paying_victims(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, hypo: Dictionary,
+		stakes: _Stakes, stabilise := true) -> Array[Unit]:
+	var out: Array[Unit] = []
+	for victim in sweep.victims:
+		if not is_instance_valid(victim) or out.has(victim):
+			continue
+		if attack.heals:
+			if not Team.is_enemy(unit.get_faction(), victim.get_faction()) and _is_heal_target(victim, hypo, stakes, stabilise):
+				out.append(victim)
+		elif Team.is_enemy(unit.get_faction(), victim.get_faction()) \
+				and PlanResolver.projected_lifecycle(victim, hypo) != Unit.LifecycleState.DEAD:
+			out.append(victim)
+	return out
+
+
+# What a map-only aim does this pass with no victim of its own: a payload that catches a hostile, or
+# a deposit that takes the ice from under one. Geometry only -- the resolve prices it.
+static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, board: BoardContext,
+		hypo: Dictionary) -> bool:
+	if not attack.hits_map():
+		return false
+	if attack.payload != null:
+		for cell in sweep.struck:
+			var drop := Conduction.sweep_payload(unit, cell, attack.payload, board, hypo,
+					sweep.struck_facings.get(cell, Vector2i.ZERO))
+			for victim in drop.victims:
+				if is_instance_valid(victim) and Team.is_enemy(unit.get_faction(), victim.get_faction()):
+					return true
+	var elements := PlanResolver.elements_of(unit, attack, false)
+	if elements.is_empty() or board.terrain_states == null:
+		return false
+	var terrain := TerrainReactionCatalog.get_all()
+	for cell in sweep.struck:
+		var standing := board.projected_unit_at_cell(cell)
+		if standing == null or not Team.is_enemy(unit.get_faction(), standing.get_faction()):
+			continue
+		var effect := PlanResolver._resolve_cell_effect_at(cell, elements, board, terrain)
+		if effect == null:
+			continue
+		var deposits: Array[ResolvedCellEffect] = [effect]
+		if RulesService.drowns_in(cell, standing, board.with_deposits(deposits)) \
+				and not RulesService.drowns_in(cell, standing, board):
+			return true
+	return false
+
+
+static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
+	var ids: Array[int] = []
+	for victim in sweep.victims:
+		if is_instance_valid(victim):
+			ids.append(victim.get_instance_id())
+	ids.sort()
+	var cells := sweep.cells.duplicate()
+	cells.sort()
+	return "%d|%s|%s" % [attack.get_instance_id(), str(ids), str(cells)]
+
+
+# Score a whole RESOLVED PLAN -> an AIScore: (mission, removals, squad breaks, saves, damage,
+# damage taken), compared lexicographically (#1220 widened it from four terms). The MARGINAL a
+# candidate adds is what ranks it, and since #711 there is no bar it has to clear -- the score
+# orders, it never gates.
+#
+# A MISSION-ENDING KILL RANKS ABOVE EVERYTHING (#1220 ruling 2): a unit the mission says must survive,
+# killed by this plan while the mission's lose conditions hold PROTECTED_UNIT_LOST. Read off the hypo,
+# so a downed escort finished and a standing one felled in a single blow both count. The sign is the
+# PLAYER's loss, since the mission is the player's: good for anyone hostile to the player.
+#
+# A HEAL IS PRICED LIKE DAMAGE (ruling 3): the HP it actually restores joins the damage term for our
+# side and against us on an enemy's, so overheal is worth nothing by the same arithmetic that makes
+# overkill worth nothing. A heal on a BODY is a SAVE instead (ruling 16) -- it stops the clock -- and
+# counts only when nobody could rescue that body this turn (stakes.rescuable), once per body, ranked
+# above damage and below a squad break.
+#
+# A UNIT THE PASS'S OWN MELT DROWNS (#922) is a victim like any other: plan.sinks seeds the ledger,
+# so the removal and the damage are priced through the ordinary rules below.
+#
+# A SQUAD BREAK SITS ABOVE DAMAGE AND BELOW A REMOVAL (#761, dev 2026-10-03), so a shove that knocks
+# somebody out of their squad beats a harder hit that does not. Counted off SplitForecast -- the
+# forecast behind the queue's Split chip, so the AI prices the settle execution runs -- per unit,
+# enemy +1 and ours -1. A unit the plan also REMOVES is skipped: splits lists a downed unit's
+# ejection, and the removal already paid for it.
 #
 # The rule is #78's, widened from one throwaway volley to the squad's whole plan, and the widening
 # is what buys squad play: the plan holds every squadmate's queued swing (so a finishing blow is
@@ -413,41 +609,38 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 #
 # ONE sign rule covers all three lists: a victim hostile to `faction` counts FOR, anyone else counts
 # AGAINST. That is the net-damage doctrine (dev, 2026-07-22), and it lands the derived rows
-# correctly with no second clause -- an enemy AoE counter splashing its own side adds. Heals
-# contribute nothing: heal_amount is not damage, and scoring it would start AI healers healing,
-# which is its own behaviour and its own ticket.
+# correctly with no second clause -- an enemy AoE counter splashing its own side adds.
 #
-# A REACTION'S DAMAGE NEVER JOINS y -- ONLY ITS REMOVALS (dev ruling, 2026-09-02). Priced at par
+# A REACTION'S DAMAGE NEVER JOINS z -- ONLY ITS REMOVALS (dev ruling, 2026-09-02). Priced at par
 # it cancels exactly: two units with the same weapon trade 3 for 3, every even exchange scores
 # (0,0), and an AI facing mirror-statted enemies declines every attack and reloads instead. That is
 # not caution, it is a parked squad, and it is the common matchup. So a counter that FELLS one of
 # ours is a real loss and lands in x, while chip damage taken is the price of engaging.
 #
-# ...BUT IT IS THE TIE-BREAK z (dev, 2026-09-02, from playtest): "when all else is even, they
+# ...BUT IT IS THE TIE-BREAK w (dev, 2026-09-02, from playtest): "when all else is even, they
 # should go for optimal exchanges." Sitting strictly BELOW damage dealt is what keeps it from
-# reviving the parked squad -- a mirror matchup still scores (0, 8, -8) and beats (0,0,0), because
-# z only ever speaks when both higher terms tie exactly. It is also what stops the ATTACK pick
-# undoing the TARGET pick: once the squad has walked to the harmless target, the dangerous one may
-# still be in reach from the settled cell, and without z that choice ties on damage and falls to
+# reviving the parked squad -- a mirror matchup still scores (0, 0, 8, -8) and beats (0,0,0,0),
+# because w only ever speaks when every higher term ties exactly. It is also what stops the ATTACK
+# pick undoing the TARGET pick: once the squad has walked to the harmless target, the dangerous one
+# may still be in reach from the settled cell, and without w that choice ties on damage and falls to
 # board order. See choose_engagement_target for the other half.
 #
-# THE AI IS BLIND TO CRISIS (dev ruling, 2026-09-04, explicitly provisional): a hit the ladder
-# sentences to CRISIS is priced at the damage AND the removal it would have earned if the gambit did
-# not exist. His words: "the ai simply won't see crisis mode until they have to react to a unit
-# currently in it." It counted as NOTHING before -- the damage was skipped here and CRISIS threads
-# ACTIVE so no removal followed -- which under #711's no-bar rule is not a refusal but a LOSING
-# candidate, so a full-Will Berserker was the last thing an AI would swing at. (#708, whose own
-# "a neutral verdict means never" reading died with the bar.)
+# CRISIS, BY PROFILE (#1230, reversing #708's blindness, which was a scope call at the time). A unit
+# that SEES Crisis prices a hit that sets the gambit off as what it really does: the HP it takes
+# (hp_before - target_hp_after, the revive HP), and no removal, since the target stands straight back
+# up. A unit already IN Crisis stays an ordinary target -- its next drop is a kill, and a kill is a
+# removal (dev, 2026-10-05). The same pricing reaches every list, counters and sinks included, so
+# what a counter costs us is measured the same way.
 #
-# Neither half needs new arithmetic. The damage is the raw pre-Crisis number (the resolver fixes
-# outcome.damage before the rung is named and the Crisis branch rewrites only hp/will/in_crisis),
-# and the overkill clamp below caps it at the HP they had going in -- which a would-be-down met by
-# definition. The removal comes from _plan_removes asking PlanResolver.plan_fells.
+# A unit BLIND to it (#708, dev 2026-09-04: "the ai simply won't see crisis mode until they have to
+# react to a unit currently in it") prices the hit at the damage AND the removal it would have
+# earned if the gambit did not exist -- the raw pre-Crisis number, capped by the overkill clamp, and
+# the removal from PlanResolver.plan_fells, which counts a fresh Crisis as a fall.
 #
 # BLIND TO THE GAMBIT, SIGHTED TO WHAT IT DRAWS (dev, same day). A Crisis'd defender is still ACTIVE
-# and so COUNTERS where a downed one cannot, and that counter's damage still lands in z -- so
+# and so COUNTERS where a downed one cannot, and that counter's damage still lands in w -- so
 # between two otherwise identical targets the AI prefers the one that cannot answer. Declared rather
-# than accidental: blinding z too is a different edit in the reaction loop, and "it takes the
+# than accidental: blinding w too is a different edit in the reaction loop, and "it takes the
 # finishing blow, even into a Crisis" is the sentence the predictability contract wants.
 
 #
@@ -467,25 +660,47 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # outrank a real swing -- and _plan_removes answers false for a body, so it cannot earn a removal
 # either. That +1 came from the body CLINGING at 1 HP until #1002 let a heal raise one, and the
 # clamp now caps a body at 1 outright so the ruling survives the state that would have broken it.
-static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
+#
+# THE ACTING UNIT'S PROFILE DECIDES WHICH TERMS SPEAK (#1230): a term its profile switches off scores
+# zero, so a marginal measured against a base scored the same way never sees it. Null is the full AI.
+static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stakes = null,
+		profile: AIProfile = null) -> AIScore:
+	if profile == null:
+		profile = AIProfile.new()
+	var sees_crisis := profile.sees_crisis
 	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
+	var restored := {}   # Unit -> HP a heal actually gave them (a standing unit; a body is a save)
+	var stabilised := {}   # body -> true
 	for a in plan.attacks:
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
-		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
+		if a.fired_attack != null and a.fired_attack.heals:
+			var gained := maxi(a.resolved.target_hp_after - a.resolved.hp_before, 0)
+			if not victim.is_downed():
+				restored[victim] = int(restored.get(victim, 0)) + gained
+			elif gained > 0 and victim.downed_turns_remaining >= 0 \
+					and (stakes == null or not stakes.rescuable.has(victim)):
+				stabilised[victim] = true
+			continue
+		dealt[victim] = int(dealt.get(victim, 0)) + _hp_cost(a.resolved, sees_crisis)
+	for sink in plan.sinks:
+		var drowned: Unit = sink.actor
+		if drowned == null or sink.resolved == null or not is_instance_valid(drowned):
+			continue
+		dealt[drowned] = int(dealt.get(drowned, 0)) + _hp_cost(sink.resolved, sees_crisis)
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
-	# the removal ledger, and what they land on OUR side accumulates as the z tie-break. Damage a
+	# the removal ledger, and what they land on OUR side accumulates as the w tie-break. Damage a
 	# reaction deals to an ENEMY (an AoE counter splashing its own party) is deliberately outside
-	# the term rather than counted as a bonus, so z means exactly one thing: what engaging costs us.
+	# the term rather than counted as a bonus, so w means exactly one thing: what engaging costs us.
 	var taken := 0
 	for a in _reaction_rows(plan):
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
 		if not Team.is_enemy(faction, victim.get_faction()):
-			taken += a.resolved.damage
+			taken += _hp_cost(a.resolved, sees_crisis)
 		if not dealt.has(victim):
 			dealt[victim] = 0
 
@@ -506,6 +721,13 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 		var cap: int = 1 if victim.is_downed() else maxi(victim.get_current_hp(), 0)
 		var counted: int = mini(int(dealt[victim]), cap)
 		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
+	for patient: Unit in restored:
+		var gained: int = restored[patient]
+		net += -gained if Team.is_enemy(faction, patient.get_faction()) else gained
+	var saves := 0
+	if profile.stabilises_bodies:
+		for body: Unit in stabilised:
+			saves += -1 if Team.is_enemy(faction, body.get_faction()) else 1
 
 	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the
 	# lethality rung of each row instead double-pays: the ladder answers KILLED on a body once the
@@ -515,10 +737,44 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan) -> Vector3i:
 	# off them after -- so it is the plan's effect on a person, which is what a removal means.
 	var removals := 0
 	for victim: Unit in dealt:
-		if not _plan_removes(victim, plan):
+		if not _plan_removes(victim, plan, profile):
 			continue
 		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
-	return Vector3i(removals, net, -taken)
+
+	var splits := 0
+	if profile.values_splits:
+		for unit: Unit in SplitForecast.leavers(plan):
+			if _plan_removes(unit, plan, profile):
+				continue
+			splits += 1 if Team.is_enemy(faction, unit.get_faction()) else -1
+
+	if not profile.weighs_counters:
+		taken = 0
+
+	# LIMBS (#1230, dev 2026-10-05): a hit that takes a limb ranks above damage, and a counter or watch
+	# shot that takes one of OURS counts against the plan. Only a victim STANDING at plan start counts:
+	# a body takes a limb at a Wounded 8, and a limb on a body must not outrank damage on someone still
+	# standing (#720) -- while a freshly downed one clings at 1 HP, so any further hit is a kill, which
+	# severs nothing. A kill never severs (LethalityRules.severs); a Crisis entry that severs does.
+	var limbs := 0
+	if profile.values_limbs:
+		var rows: Array[AttackAction] = []
+		rows.append_array(plan.attacks)
+		rows.append_array(_reaction_rows(plan))
+		for a in rows:
+			if a.resolved == null or a.resolved.severed_limb < 0 or a.target == null or not is_instance_valid(a.target):
+				continue
+			if not a.target.is_active():
+				continue
+			limbs += 1 if Team.is_enemy(faction, a.target.get_faction()) else -1
+
+	var mission := 0
+	if stakes != null and stakes.protected_counts and profile.goes_for_mission_kill:
+		for victim: Unit in dealt:
+			if victim.must_survive and not victim.is_dead() \
+					and PlanResolver.projected_lifecycle(victim, plan.hypo) == Unit.LifecycleState.DEAD:
+				mission += 1 if Team.is_enemy(faction, Team.Faction.PLAYER) else -1
+	return AIScore.of(mission, removals, splits, saves, limbs, net, taken)
 
 
 # The DERIVED rows: counters the plan drew, plus any watch shots it set off. Deliberately NOT
@@ -533,24 +789,87 @@ static func _reaction_rows(plan: ResolvedPlan) -> Array[AttackAction]:
 
 
 # Does this plan take `victim` off its feet? Standing now (the live board IS plan-start) and not
-# standing once the plan resolves. A CRISIS prediction lands ACTIVE, so the gambit falls out here
-# too rather than needing a clause of its own.
-static func _plan_removes(victim: Unit, plan: ResolvedPlan) -> bool:
+# standing once the plan resolves. For a unit that sees Crisis that is a change of LIFECYCLE alone, so a
+# fresh Crisis -- which lands ACTIVE -- is no removal, while killing a unit already in Crisis is. A unit
+# blind to it asks PlanResolver.plan_fells, which counts a fresh Crisis as the fall it would have been.
+static func _plan_removes(victim: Unit, plan: ResolvedPlan, profile: AIProfile = null) -> bool:
 	if not victim.is_active():
 		return false
+	if profile == null or profile.sees_crisis:
+		return PlanResolver.projected_lifecycle(victim, plan.hypo) != Unit.LifecycleState.ACTIVE
 	return PlanResolver.plan_fells(victim, plan.hypo)
 
 
-# Lexicographic, and the ORDER is the design: removals are the currency, damage dealt is the
-# tie-break, and damage taken from reactions only speaks when both of those tie exactly -- which is
-# what "when all else is even, go for optimal exchanges" means, and what keeps a counter from ever
-# talking the AI out of a trade.
-static func _beats(a: Vector3i, b: Vector3i) -> bool:
-	if a.x != b.x:
-		return a.x > b.x
-	if a.y != b.y:
-		return a.y > b.y
-	return a.z > b.z
+# What a row really takes off its victim. A hit that sets Crisis off leaves the target at the revive
+# HP, so for a unit that sees the gambit its cost is the HP it actually removes -- never below zero,
+# since a unit under the revive HP comes back HIGHER. Every other row is its damage.
+static func _hp_cost(outcome: ResolvedOutcome, sees_crisis: bool) -> int:
+	if sees_crisis and outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
+		return maxi(0, outcome.hp_before - outcome.target_hp_after)
+	return outcome.damage
+
+
+# What a squad's scoring knows beyond the plan itself (#1220), built once per squad decision: whether
+# the mission ends on a protected unit's death, and which bodies a squadmate could rescue this turn
+# (a heal on one of those saves nothing). Null scores a plan with neither -- a sandbox board.
+class _Stakes:
+	var protected_counts := false
+	var rescuable := {}   # body -> true
+
+
+static func _stakes_for(squad: Squad, board: BoardContext, plan: ResolvedPlan) -> _Stakes:
+	var out := _Stakes.new()
+	out.protected_counts = board.mission != null \
+			and board.mission.lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
+	if squad == null or not AIArchetype.main_action_priority(squad.archetype).has(BaseAction.ActionType.RESCUE):
+		return out
+	for member in squad.get_members():
+		if not member.is_active() or not member.can_rescue_carry():
+			continue
+		for body in RulesService.adjacent_downed_allies(member, board, plan):
+			out.rescuable[body] = true
+	return out
+
+
+# Does this candidate's own work fell somebody on our side (#1220 ruling 1: the AI never fells its
+# own)? Its own rows are the volley it derived and any unit its deposits drowned; a COUNTER it draws is
+# not its work, so "a free finish beats a suicidal swing" stands. Measured against `base` -- the plan
+# without it -- so a squadmate a counter was already going to fell is not laid at this candidate's
+# door. A predicted CRISIS on our own counts as a fall whatever the profile sees: knocking a
+# squadmate into the gambit spends its one safety net.
+#
+# The notch is the acting unit's profile (#1230): NEVER_KILLS refuses only a unit it would KILL, so a
+# sloppier unit may down a squadmate. Knocking one of its own into Crisis is refused at every notch.
+static func _fells_own(aims: Array, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan,
+		friendly_fire := AIProfile.FriendlyFire.NEVER_DOWNS) -> bool:
+	var kills_only := friendly_fire == AIProfile.FriendlyFire.NEVER_KILLS
+	for a in plan.attacks:
+		if not aims.has(a.source_aim) or a.resolved == null:
+			continue
+		if _newly_felled(a.target, faction, base, plan, kills_only) \
+				or (a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS and _own_side(a.target, faction)):
+			return true
+	for sink in plan.sinks:
+		if sink.cause == null or not (aims.has(sink.cause) or aims.has(sink.cause.source_aim)):
+			continue
+		if _newly_felled(sink.actor, faction, base, plan, kills_only):
+			return true
+	return false
+
+
+static func _own_side(unit: Unit, faction: Team.Faction) -> bool:
+	return unit != null and is_instance_valid(unit) and not Team.is_enemy(faction, unit.get_faction())
+
+
+static func _newly_felled(unit: Unit, faction: Team.Faction, base: ResolvedPlan, plan: ResolvedPlan,
+		kills_only := false) -> bool:
+	if not _own_side(unit, faction):
+		return false
+	var after := PlanResolver.projected_lifecycle(unit, plan.hypo)
+	var before := PlanResolver.projected_lifecycle(unit, base.hypo)
+	if kills_only:
+		return after == Unit.LifecycleState.DEAD and before != Unit.LifecycleState.DEAD
+	return after > before
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -564,11 +883,14 @@ static func _rescue_urgency(body: Unit) -> int:
 	return body.downed_turns_remaining
 
 
+# A body the squad's own pass is about to make counts (#1220): asked of the plan as it stands, so a
+# squadmate a counter fells this pass is rescued in the same pass -- the player's rule (#124).
 static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	if not unit.can_rescue_carry():
 		return false
 	var target: Unit = null
-	for ally in RulesService.adjacent_downed_allies(unit, board):
+	var plan := squad_manager.resolve_plan(unit.squad, board)
+	for ally in RulesService.adjacent_downed_allies(unit, board, plan):
 		if target == null or _rescue_urgency(ally) < _rescue_urgency(target):
 			target = ally   # most urgent clock first; ties keep the earliest
 	if target == null:
@@ -580,28 +902,6 @@ static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadMan
 	var rescue := RescueAction.new()
 	rescue.init(unit, target, landings[0])
 	return squad_manager.queue_action(unit.squad, rescue)
-
-static func _try_rally(unit: Unit, squad_manager: SquadManager) -> bool:
-	if not unit.can_rally():
-		return false
-	var rally := RallyAction.new()
-	rally.init(unit)
-	return squad_manager.queue_action(unit.squad, rally)
-
-static func _try_intimidate(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	if not unit.has_live_ability(Abilities.Id.INTIMIDATION):
-		return false
-	var target: Unit = null
-	for enemy in RulesService.adjacent_enemies(unit, board):
-		if enemy.unit_instance.get_current_will() <= 0:
-			continue   # nothing left to drain -- a wasted action
-		if target == null or enemy.unit_instance.get_current_will() < target.unit_instance.get_current_will():
-			target = enemy   # lowest Will = closest to the maim cliff; ties keep the earliest
-	if target == null:
-		return false
-	var action := IntimidateAction.new()
-	action.init(unit, target)
-	return squad_manager.queue_action(unit.squad, action)
 
 static func _try_reload(unit: Unit, squad_manager: SquadManager) -> bool:
 	if not unit.can_reload_weapon():
@@ -637,29 +937,62 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 # preparation is a legible sentence, and the predictability contract prefers one to a score term.
 # What the change is worth knowing for is that `_watch_aim` floods FROM the enemy's own cell, so a
 # lane containing it scores zero hops and wins -- the AI already prefers aiming where the enemy is
-# standing, and that aim is now a shot. ATTACK sitting above this is what keeps it rare.
+# standing, and that aim is now a shot. ATTACK sitting above this keeps it rare ONLY where the two
+# cover the same cells, which since #590 they need not: the Carbine's Shot is range exactly 2 and its
+# watch lane runs 1 to 4, so the watch is that unit's shot at 1, 3 and 4 (#1197; whether it should
+# be is #752's). ThreatField draws these lanes for that reason.
 #
 # THE AIM MUST BE ACTIVE-ONLY, and this is #720's pathology one door over. `nearest_enemy` ranks a
 # BODY as an ordinary target, but `PlanResolver._watch_triggered_by` refuses a non-ACTIVE entrant and
 # a corpse never moves -- so a watcher beside a downed enemy would aim at its "approach" every quiet
 # turn for the rest of the battle, watching something that can never arrive.
+#
+# ON THE BOARD THE SQUAD'S PLAN LEAVES (#1209). This runs after the squad's attacks are queued, so the
+# live board is the wrong one: an enemy a squadmate fells is no target, and one a squadmate shoves
+# comes from where it lands. Every unit is stood on its planned cell for the decision (#710's
+# snapshot) and put back before the queue, which must never see a teleported board.
 static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	var watchable := unit.overwatch_attacks()
-	if watchable.is_empty():
-		return false
-	var attack: AttackData = watchable[0]   # one watch per weapon (dev, 2026-08-26); first is the deterministic pick
-	if unit.attack_block_reason(attack) != "":
-		return false   # the menu's own gate -- a dry Carbine cannot watch either, Overwatch requires readiness
-	var enemy := nearest_enemy(unit, board, null, true)
-	if enemy == null:
+	var attack := watch_attack_for(unit)
+	if attack == null:
 		return false
 	var origin := unit.get_projected_destination()   # the fallback walk runs AFTER the group move is queued
-	var aim := _watch_aim(unit, origin, attack, enemy, board)
+	var plan := squad_manager.resolve_plan(unit.squad, board)
+	var saved := AIController.stand_on_projected(squad_manager)
+	var aim := origin
+	var enemy := nearest_enemy(unit, board, null, true, plan.hypo)
+	if enemy != null:
+		aim = _watch_aim(unit, origin, attack, enemy, board)
+	AIController.restore_cells(saved)
 	if aim == origin:
-		return false   # no facing covers a cell the enemy can reach -- see _watch_aim
+		return false   # nobody left to watch for, or no facing covers a cell the enemy can reach -- see _watch_aim
 	var action := OverwatchAction.new()
 	action.init(unit, aim, attack)
 	return squad_manager.queue_action(unit.squad, action)
+
+
+# The attack this unit would watch with right now, or null. One watch per weapon (dev, 2026-08-26),
+# so the first is the deterministic pick; and the menu's own gate, so a dry Carbine cannot watch
+# either -- Overwatch requires readiness. ThreatField asks this too (#1197), so the lanes it draws
+# are the lanes this builder could arm.
+static func watch_attack_for(unit: Unit) -> AttackData:
+	var watchable := unit.overwatch_attacks()
+	if watchable.is_empty():
+		return null
+	var attack: AttackData = watchable[0]
+	if unit.attack_block_reason(attack) != "":
+		return null
+	return attack
+
+
+# The cells each facing's watch would cover from `origin` (dir -> cells), truncation included
+# (#756). A facing that covers nothing is absent. _watch_aim ranks these; ThreatField unions them.
+static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext) -> Dictionary:
+	var lanes := {}
+	for dir in GridUtils.CARDINAL_DIRECTIONS:
+		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
+		if not cells.is_empty():
+			lanes[dir] = cells
+	return lanes
 
 
 # Which cell to aim the watch at -- a FACING for a directional attack (Overwatch.tres is
@@ -714,14 +1047,10 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 # WHO STANDS IN THE LANE IS NOT ASKED (dev, 2026-09-05: "the overwatch is an attack"). An
 # ally-hitting watch shoots its own squad, and that is the attack behaving as authored.
 static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: Unit, board: BoardContext) -> Vector2i:
-	var footprints := {}   # dir -> the cells that facing actually covers, truncation included
+	var footprints := watch_lanes(unit, origin, attack, board)
 	var wanted := {}       # their union, and the hop field's `until`
-	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
-		if cells.is_empty():
-			continue
-		footprints[dir] = cells
-		for cell in cells:
+	for dir in footprints:
+		for cell: Vector2i in footprints[dir]:
 			wanted[cell] = true
 	if footprints.is_empty():
 		return origin
@@ -776,18 +1105,24 @@ static func _lane_can_be_entered(lane: Array[Vector2i], enemy: Unit, board: Boar
 # somebody else's turn, so it is a rule for the same reason Overwatch is.
 #
 # ZERO EXPOSURE REFUSES. "Shields whoever is most exposed" presumes exposure above zero -- without
-# the refusal a Guard would pre-empt INTIMIDATE with a purposeless ward whenever any ally happened to
-# be standing beside it, and menacing somebody is the better use of that action.
+# the refusal a Guard would spend the action on a purposeless ward whenever any ally happened to
+# be standing beside it.
 #
 # A DOWNED ally is in `guard_candidates` by design, but RESCUE sits above GUARD in the walk and
 # rescue adjacency IS the guard range, so a body is normally carried before this is asked.
 #
 # Ties keep guard_candidates' own order (Law #1), which walks cells_within_manhattan_range.
+#
+# Exposure is counted on the board the squad's plan leaves (#1209), _try_overwatch's reason: an enemy a
+# squadmate fells this turn reaches nobody, and one it shoves reaches from where it lands.
 static func _try_guard(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
 	var candidates := RulesService.guard_candidates(unit, board)
 	if candidates.is_empty():
 		return false
-	var exposure := _exposure_counts(candidates, board, unit.get_faction())
+	var plan := squad_manager.resolve_plan(unit.squad, board)
+	var saved := AIController.stand_on_projected(squad_manager)
+	var exposure := _exposure_counts(candidates, board, unit.get_faction(), plan.hypo)
+	AIController.restore_cells(saved)
 	var ward: Unit = null
 	var most := 0
 	for ally in candidates:
@@ -805,18 +1140,21 @@ static func _try_guard(unit: Unit, board: BoardContext, squad_manager: SquadMana
 # How many enemies could reach AND hit each of these allies -- one move-range search per enemy,
 # reused across every candidate, rather than one per pair.
 #
-# DECLARED APPROXIMATIONS, both inherited from the seams this composes: the search reads LIVE
-# occupancy (a squadmate about to move still blocks it) and honours the enemy's own cohesion leash,
-# so an enemy that could only reach the ally by breaking formation does not count. The cost is one
-# search per ACTIVE enemy, paid only once a unit has reached GUARD in the walk -- second to last, so
-# after every other verb has declined.
-static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: Team.Faction) -> Dictionary:
+# DECLARED APPROXIMATION, inherited from the seam this composes: the search honours the enemy's own
+# cohesion leash, so an enemy that could only reach the ally by breaking formation does not count.
+# Occupancy is whatever board the caller stood up -- _try_guard's is the plan's (#1209). The cost is
+# one search per enemy left ACTIVE by `hypo`, paid only once a unit has reached GUARD in the walk --
+# second to last, so after every other verb has declined.
+static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: Team.Faction,
+		hypo: Dictionary = {}) -> Dictionary:
 	var counts := {}
 	for other in board.units:
-		if not is_instance_valid(other) or not other.is_active():
+		if not PlanResolver.actor_is_live(other, hypo):
 			continue
 		if not Team.is_enemy(faction, other.get_faction()):
 			continue
+		if other.get_selectable_attacks().is_empty():
+			continue   # it can fire nothing, so it threatens nobody (#1215)
 		var walk: Dictionary = RulesService.compute_move_range(other, board)
 		var reachable: Dictionary = walk["reachable"]
 		var aiming := other.get_fired_attack()
@@ -832,22 +1170,623 @@ static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: 
 # Where the leader should stand to fight `enemy`: a cell it can already attack from, else the cell
 # furthest along the ROUTE to it. The route targets the nearest STANDABLE firing position, not
 # enemy.movement.cell itself (#127) -- see _nearest_standable_attack_cell for why that distinction
-# is load-bearing.
-static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardContext, allowed = null) -> Vector2i:
+# is load-bearing. Only cells its squad can follow it to (#1220).
+static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardContext, allowed = null,
+		weigh_safety := false) -> Vector2i:
 	var aiming := leader.get_fired_attack()
 	var route_target := _nearest_standable_attack_cell(leader, enemy.movement.cell, aiming, board)
-	return _best_approach(leader, enemy.movement.cell, board, allowed, true, route_target)
+	return _best_approach(leader, enemy.movement.cell, board, _leader_allowed(leader, board, allowed), true,
+			route_target, weigh_safety)
 
 
-# Fights `target`: destination pick -> conditional group move -> every member tries a main
-# action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
-# hand-duplicated in both files with no third caller (AI generalization sweep, finding #2).
-static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null) -> void:
+# The leader cells a squad can follow to, as `allowed` narrowed by them; `allowed` itself for a squad
+# of one, which can stand anywhere its leader can.
+static func _leader_allowed(leader: Unit, board: BoardContext, allowed):
+	var follow = _followable(leader.squad, board)
+	if follow == null:
+		return allowed
+	if allowed == null:
+		return follow
+	var both := {}
+	for cell: Vector2i in follow:
+		if allowed.has(cell):
+			both[cell] = true
+	return both
+
+
+# GroupMoveSolver.followable_destinations over the leader's whole range, plus where it stands -- asked
+# ONCE per squad decision and shared by the engagement pick, the approach and the seek, since it is
+# a sweep per member. Kept for the board it was asked on and the cells the squad stood on; a squad of
+# one answers null.
+static var _follow_key := ""
+static var _follow_cells := {}
+
+
+static func _followable(squad: Squad, board: BoardContext):
+	if squad == null or squad.get_members().size() <= 1:
+		return null
 	var leader := squad.get_leader()
-	var destination := best_attack_destination(leader, target, board, allowed)
-	if destination != leader.movement.cell:
-		squad_manager.queue_group_move(squad, destination, board, allowed)
+	var key := "%d|%d" % [squad.get_instance_id(), board.get_instance_id()]
+	for member in squad.get_members():
+		key += "|%s" % [member.movement.cell]
+	if key != _follow_key:
+		var cells: Array = RulesService.compute_move_range(leader, board).reachable.keys()
+		cells.append(leader.movement.cell)
+		_follow_cells = GroupMoveSolver.followable_destinations(squad, board, cells)
+		_follow_cells[leader.movement.cell] = true
+		_follow_key = key
+	return _follow_cells
+
+
+# Fights `target`: destination pick -> the seek -> conditional group move -> every member tries a
+# main action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
+# hand-duplicated in both files with no third caller (AI generalization sweep, finding #2).
+# `within` is a Sentry's zone: the seek only goes looking for an intruder. `weigh_safety` is Balanced's
+# tie-break on the approach (#1220 ruling 11).
+static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null,
+		within = null, weigh_safety := false) -> void:
+	var leader := squad.get_leader()
+	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed, weigh_safety), board,
+			squad_manager, allowed, within)
+	if seek.destination != leader.movement.cell or not seek.pins.is_empty():
+		group_move(squad, seek.destination, board, squad_manager, allowed, seek.pins, seek.hazards)
 	queue_main_actions_for_squad(squad, board, squad_manager)
+
+
+# --- Regrouping (#1230) -----------------------------------------------------------------------------
+#
+# Which squad a LOOSE unit would join (dev rulings, 2026-10-05): its old squad first, else the nearest
+# with room, by route. Same archetype unless its profile joins any. Joining another lone unit's squad
+# FORMS one, which both units' profiles must allow and the higher leadership leads -- board order
+# breaking a tie, so two strays never pick each other. With `in_range` it is the join itself, asked
+# through the player's own formation gate (SquadManager.can_squad_up); without, the squad a stray
+# walks back towards. Candidates come from the LIVE squad list, which a squad leaves the moment its last
+# member does (destroy_empty_squad erases before it frees) -- so a stray remembering a dying squad is
+# never offered it, though the instance stays valid until the frame ends.
+static func regroup_target(stray: Unit, squad_manager: SquadManager, board: BoardContext, in_range: bool) -> Squad:
+	if stray.squad == null or stray.squad.get_members().size() != 1 or not stray.is_active():
+		return null
+	var profile := AIProfiles.of(stray)
+	var eligible: Array[Squad] = []
+	for squad: Squad in squad_manager.squads:
+		if _may_regroup_into(stray, profile, squad, squad_manager, board, in_range):
+			eligible.append(squad)
+	if eligible.is_empty():
+		return null
+	var old: Variant = stray.left_squad
+	if is_instance_valid(old) and eligible.has(old):
+		return old as Squad
+	var leaders := {}
+	for squad in eligible:
+		leaders[squad.get_leader().movement.cell] = true
+	var hops := RulesService.path_hops(stray.movement.cell, board, stray, -1, leaders)
+	var best: Squad = null
+	var best_hops := RulesService.UNREACHABLE
+	for squad in eligible:
+		var h: int = hops.get(squad.get_leader().movement.cell, RulesService.UNREACHABLE)
+		if best == null or h < best_hops:
+			best = squad
+			best_hops = h
+	return best
+
+
+static func _may_regroup_into(stray: Unit, profile: AIProfile, squad: Squad, squad_manager: SquadManager,
+		board: BoardContext, in_range: bool) -> bool:
+	if not is_instance_valid(squad) or squad == stray.squad:
+		return false
+	var members := squad.get_members()
+	if members.size() >= squad.max_size():
+		return false
+	var leader := squad.get_leader()
+	if leader == null or not leader.is_active() or leader.get_faction() != stray.get_faction():
+		return false
+	if not profile.joins_any_archetype \
+			and AIArchetype.effective(squad.archetype) != AIArchetype.effective(stray.squad.archetype):
+		return false
+	if members.size() == 1:
+		if not profile.squads_up or not AIProfiles.of(leader).squads_up or not _leads_over(leader, stray, board):
+			return false
+	elif not profile.regroups:
+		return false
+	return not in_range or squad_manager.can_squad_up(stray, squad)
+
+
+# Would `a` lead a squad formed with `b`? successor_among's rule: the higher effective leadership, and
+# board order on a tie.
+static func _leads_over(a: Unit, b: Unit, board: BoardContext) -> bool:
+	if a.get_effective_ldr() != b.get_effective_ldr():
+		return a.get_effective_ldr() > b.get_effective_ldr()
+	return board.units.find(a) < board.units.find(b)
+
+
+# The walk back: a loose unit with nobody it can fight this turn heads for the squad it would join, then
+# takes its fallback actions. A stray that can attack still attacks -- this answers only when
+# _engageable_enemies is empty. The moving archetypes ask it in place of pursuit; true when it acted.
+static func regroup_walk(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> bool:
+	var stray := squad.get_leader()
+	if stray == null or squad.get_members().size() != 1:
+		return false
+	var profile := AIProfiles.of(stray)
+	if not profile.regroups and not profile.squads_up:
+		return false
+	if not _engageable_enemies(stray, board, null, null).is_empty():
+		return false
+	var target := regroup_target(stray, squad_manager, board, false)
+	if target == null:
+		return false
+	var destination := closest_reachable_cell_to(stray, target.get_leader().movement.cell, board)
+	if destination != stray.movement.cell:
+		group_move(squad, destination, board, squad_manager)
+	queue_main_actions_for_squad(squad, board, squad_manager)
+	return true
+
+
+# THE AI's ONE GROUP-MOVE DOOR (#1230). Every archetype's move goes through here so each member's
+# route follows its own profile: one that does not route around watches walks the shortest path,
+# leader included. The player's group move never comes here, so its routes stay safe.
+static func group_move(squad: Squad, destination: Vector2i, board: BoardContext, squad_manager: SquadManager,
+		allowed = null, pins: Dictionary = {}, hazards: Dictionary = {}) -> bool:
+	var direct := {}
+	for member in squad.get_members():
+		if not AIProfiles.of(member).routes_around_watches:
+			direct[member] = true
+	return squad_manager.queue_group_move(squad, destination, board, allowed, pins, hazards, direct)
+
+
+# WHERE THE SQUAD STANDS TO TAKE A REMOVAL OR A SQUAD BREAK it can reach this turn (#760; dev rulings
+# 2026-10-03, on the issue) -- and, since #1220, a mission-ending kill above both.
+#
+# THEN THE MEMBERS NOBODY PLACED (#1220, rulings 5, 9, 12): formation plus pins. A member whose
+# formation cell gives it nobody to hit steps to the nearest follow cell that does -- DAMAGE MOVES A
+# MEMBER now, inside the leash only, judged by geometry with no resolve. One with nobody to hit from
+# any follow cell walks beside the most urgent body if its archetype rescues and it can carry. One
+# with NOTHING TO FIRE does that too, or else falls back to the follow cell the fewest enemies reach.
+# A leader with nothing to fire keeps leading an armed squad; leading nobody armed, it falls back the
+# same way. The leader is otherwise never moved by damage.
+#
+# NO CELL IS ENDED ON A HAZARD WHILE A SAFE ONE OFFERS THE SAME (rulings 15, 19): end-of-turn damage,
+# or a hostile watch the cell would trip. Safe cells are searched first, so a kill from a burning
+# tile still beats a scratch from safe ground, and the solver places the formation by the same rule.
+#
+# THE SQUAD IS ONE UNIT, and the priority is the search order: the leader first (its cell decides
+# everyone's cohesion), then in rounds the CLOSEST member that can do something, each scored against
+# what the earlier ones will already do. A unit's own default cell is asked first and the first
+# removal ends its search; a squad break is only kept while a removal is still being looked for.
+#
+# A CELL IS SCORED BY STANDING THERE -- the positional snapshot the threat preview opens, through the
+# same teleport door -- and it is the only way: the resolve re-expands every aim from its ACTOR's
+# projected cell (#15), not from the origin the aim was declared with, so an aim "from" a cell its
+# actor is not on resolves as nothing. With the queue empty a unit set on a cell projects to it, so
+# the volley, the counters and the lethality all read the cell it would really fire from. Every cell
+# is put back and the real plan re-resolved before anything is queued. The attack itself is still
+# the joint pass's to choose; this decides only where people stand.
+class SeekResult:
+	var destination: Vector2i
+	var pins := {}      # Unit -> cell, for GroupMoveSolver.plan
+	var hazards := {}   # Unit -> {cell: true} it avoids ending on, for GroupMoveSolver.plan
+
+
+# What a seeker found, best first: ending the mission (#1220), a removal, a squad break.
+enum Tier { BREAK, REMOVAL, MISSION }
+
+
+class _Opportunity:
+	var unit: Unit
+	var cell: Vector2i
+	var cost: int
+	var action: AttackAction
+	var tier: Tier
+
+
+static func seek_positions(squad: Squad, default_destination: Vector2i, board: BoardContext,
+		squad_manager: SquadManager, allowed = null, within = null) -> SeekResult:
+	var out := SeekResult.new()
+	out.destination = default_destination
+	var leader := squad.get_leader()
+	# Honest only with nothing queued: a queued move would out-project the cell the unit is set on.
+	if leader == null or not squad.action_queue.is_empty():
+		return out
+	var reactions := ReactionCatalog.get_all()
+	var terrain := TerrainReactionCatalog.get_all()
+	var live := {}
+	for member in squad.get_members():
+		live[member] = member.movement.cell
+	var watches := _hostile_watches(leader.get_faction(), board)
+	for member in squad.get_members():
+		out.hazards[member] = _hazards_of(member, board, watches)
+	var wins: Array[BaseAction] = []
+	var stakes := _stakes_for(null, board, null)
+	var threat: Array = []   # the ThreatField the dry fall-back reads, built the first time it is asked
+	var claimed := {}        # body -> true: one rescuer walks to each
+
+	var lead_cells := _leader_cells(squad, leader, default_destination, board, allowed, out.hazards[leader])
+	if _is_dry(leader) and not _squad_armed(squad) and AIProfiles.of(leader).backs_off_when_dry:
+		var fallback := _rescue_cell(leader, squad, lead_cells, board, claimed)
+		if fallback == GridUtils.NO_CELL:
+			fallback = _least_threatened(leader, lead_cells, board, threat, out.hazards[leader])
+		if fallback != GridUtils.NO_CELL:
+			out.destination = fallback
+	elif _can_seek(leader):
+		var lead := _first_opportunity(leader, lead_cells, squad, board, squad_manager, wins, within, reactions,
+				terrain, stakes)
+		if lead != null:
+			out.destination = lead.cell
+			wins.append(lead.action)
+
+	var waiting: Array[Unit] = []
+	for member in squad.get_members():
+		if member != leader and _can_seek(member):
+			waiting.append(member)
+	while not waiting.is_empty():
+		AIController.restore_cells(live)
+		var placed := _formation(squad, out.destination, board, allowed, out.pins, out.hazards)
+		var options := {}
+		for member in waiting:
+			options[member] = _member_cells(squad, member, out.destination, board, allowed, placed,
+					out.hazards[member])
+		_stand(squad, leader, out.destination, placed)
+		var best: _Opportunity = null
+		for member in waiting:
+			var found := _first_opportunity(member, options[member], squad, board, squad_manager, wins, within,
+					reactions, terrain, stakes)
+			if found != null and (best == null or _opportunity_beats(found, best)):
+				best = found
+		if best == null:
+			break
+		out.pins[best.unit] = best.cell
+		wins.append(best.action)
+		waiting.erase(best.unit)
+
+	AIController.restore_cells(live)
+	for member in squad.get_members():
+		if member == leader or not member.is_active() or out.pins.has(member):
+			continue
+		var placed := _formation(squad, out.destination, board, allowed, out.pins, out.hazards)
+		var cells := _member_cells(squad, member, out.destination, board, allowed, placed, out.hazards[member])
+		var at: Vector2i = placed.get(member, member.movement.cell)
+		if not _is_dry(member):
+			if _hits_from(member, at, board, within):
+				continue
+			var step := GridUtils.NO_CELL
+			for entry: Array in cells:
+				if _hits_from(member, entry[0], board, within):
+					step = entry[0]
+					break
+			if step != GridUtils.NO_CELL:
+				out.pins[member] = step
+				continue
+		var fallback := _rescue_cell(member, squad, cells, board, claimed)
+		if fallback == GridUtils.NO_CELL and _is_dry(member) and AIProfiles.of(member).backs_off_when_dry:
+			fallback = _least_threatened(member, cells, board, threat, out.hazards[member])
+		if fallback != GridUtils.NO_CELL and fallback != at:
+			out.pins[member] = fallback
+
+	AIController.restore_cells(live)
+	squad_manager.resolve_plan(squad, board, reactions, terrain)
+	return out
+
+
+static func _is_dry(unit: Unit) -> bool:
+	return unit.get_selectable_attacks().is_empty()
+
+
+# Does anyone but the leader carry something to fire? A dry leader of such a squad keeps leading.
+static func _squad_armed(squad: Squad) -> bool:
+	for member in squad.get_members():
+		if member != squad.get_leader() and member.is_active() and not _is_dry(member):
+			return true
+	return false
+
+
+# Would `unit` have a hostile to hit from `cell`? Geometry only: the candidate builder's own answer,
+# with no resolve. A Sentry asks only about intruders.
+static func _hits_from(unit: Unit, cell: Vector2i, board: BoardContext, within) -> bool:
+	var paying := {}
+	for candidate in _attack_candidates(unit, board, cell, {}, null, paying):
+		for victim: Unit in paying.get(candidate, []):
+			if Team.is_enemy(unit.get_faction(), victim.get_faction()) \
+					and (within == null or within.has(victim.movement.cell)):
+				return true
+	return false
+
+
+# The rescue walk (ruling 12): the first of `cells` beside the most urgent body nobody else is walking
+# to, for a unit whose archetype rescues and who can carry. NO_CELL otherwise.
+static func _rescue_cell(unit: Unit, squad: Squad, cells: Array, board: BoardContext, claimed: Dictionary) -> Vector2i:
+	if not AIProfiles.of(unit).rescue_walk or not unit.can_rescue_carry() \
+			or not AIArchetype.main_action_priority(squad.archetype).has(BaseAction.ActionType.RESCUE):
+		return GridUtils.NO_CELL
+	var bodies: Array[Unit] = []
+	for other in board.units:
+		if is_instance_valid(other) and other != unit and other.is_downed() and not claimed.has(other) \
+				and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			bodies.append(other)
+	bodies.sort_custom(func(a: Unit, b: Unit) -> bool: return _rescue_urgency(a) < _rescue_urgency(b))
+	for body in bodies:
+		var at := body.get_projected_destination()
+		for entry: Array in cells:
+			var cell: Vector2i = entry[0]
+			if GridUtils.manhattan_distance(cell, at) == 1:
+				claimed[body] = true
+				return cell
+	return GridUtils.NO_CELL
+
+
+# The dry fall-back (ruling 5): the cell the fewest enemies could attack next turn, safe ground first,
+# then the search order. The field is the viewer's own danger field, built once per squad decision.
+static func _least_threatened(unit: Unit, cells: Array, board: BoardContext, threat: Array,
+		hazards: Dictionary) -> Vector2i:
+	if threat.is_empty():
+		threat.append(ThreatField.build(board, unit.get_faction()))
+	var field: ThreatField = threat[0]
+	var best := GridUtils.NO_CELL
+	var best_hazard := false
+	var best_count := 0
+	for entry: Array in cells:
+		var cell: Vector2i = entry[0]
+		var hazard := hazards.has(cell)
+		var count := field.attackers_of(cell).size()
+		if best == GridUtils.NO_CELL or (hazard != best_hazard and not hazard) \
+				or (hazard == best_hazard and count < best_count):
+			best = cell
+			best_hazard = hazard
+			best_count = count
+	return best
+
+
+# The hostile watches standing on the board, in the order a resolve searches them.
+static func _hostile_watches(faction: Team.Faction, board: BoardContext) -> Array[Watch]:
+	var out: Array[Watch] = []
+	for watch in Watch.standing(board.units):
+		if Team.is_enemy(watch.watcher.get_faction(), faction):
+			out.append(watch)
+	return out
+
+
+# Every cell `unit` could end on that would hurt it there (rulings 15, 19) -- none for a unit whose
+# profile does not avoid hazards (#1230), so every reader of this set treats all ground alike.
+static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) -> Dictionary:
+	if not AIProfiles.of(unit).avoids_hazards:
+		return {}
+	var walk: Dictionary = RulesService.compute_move_range(unit, board)
+	var cells: Array = (walk["reachable"] as Dictionary).keys()
+	cells.append_array((walk["squad_unreachable"] as Dictionary).keys())
+	cells.append(unit.movement.cell)
+	var out := {}
+	for cell: Vector2i in cells:
+		if _is_hazard(unit, cell, board, watches):
+			out[cell] = true
+	return out
+
+
+# A cell that hurts whoever ends on it: end-of-turn damage, or a hostile watch it would trip on the way
+# in (PlanResolver.watch_fires_at, the resolver's own trigger). The cell a unit already stands on trips
+# nothing -- a watch fires on ENTRY.
+static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch]) -> bool:
+	if board.terrain_states != null \
+			and RulesService.occupant_damage_for(unit, board.terrain_states.states_at(cell)) > 0:
+		return true
+	if cell == unit.movement.cell:
+		return false
+	for watch in watches:
+		if PlanResolver.watch_fires_at(watch, unit, cell, {}):
+			return true
+	return false
+
+
+static func _can_seek(unit: Unit) -> bool:
+	return unit.is_active() and unit.can_wield_equipped()
+
+
+# The higher tier wins; then the closest -- the cheaper move -- does it; ties keep member order.
+static func _opportunity_beats(a: _Opportunity, b: _Opportunity) -> bool:
+	if a.tier != b.tier:
+		return a.tier > b.tier
+	return a.cost < b.cost
+
+
+# The leader's cells in search order, as [cell, cost] pairs: safe ground first, then the default
+# destination, then cheapest, then row-major. Only cells its squad can follow it to, inside the leash,
+# and nobody else's.
+static func _leader_cells(squad: Squad, leader: Unit, default_destination: Vector2i, board: BoardContext,
+		allowed, hazards: Dictionary = {}) -> Array:
+	var costs: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
+	costs[leader.movement.cell] = 0
+	var cells: Array = []
+	for cell: Vector2i in costs:
+		if allowed != null and not allowed.has(cell):
+			continue
+		var occupant := board.unit_at_cell(cell)
+		if occupant != null and occupant != leader:
+			continue
+		cells.append(cell)
+	var followable = _followable(squad, board)
+	if followable != null:
+		cells = cells.filter(func(c: Vector2i) -> bool: return followable.has(c))
+	return _search_order(cells, costs, default_destination, hazards)
+
+
+# A member's cells for this leader destination, as [cell, cost] pairs: safe ground first, then its
+# formation cell, then cheapest. Never the leader's cell, a pinned cell or another member's formation
+# cell.
+static func _member_cells(squad: Squad, member: Unit, leader_destination: Vector2i, board: BoardContext,
+		allowed, placed: Dictionary, hazards: Dictionary = {}) -> Array:
+	var costs := GroupMoveSolver.follow_cells(squad, member, leader_destination, board, allowed)
+	var held := { leader_destination: true }
+	for other: Unit in placed:
+		if other != member:
+			held[placed[other]] = true
+	var cells: Array = []
+	for cell: Vector2i in costs:
+		if not held.has(cell):
+			cells.append(cell)
+	return _search_order(cells, costs, placed.get(member, member.movement.cell), hazards)
+
+
+static func _search_order(cells: Array, costs: Dictionary, first: Vector2i, hazards: Dictionary = {}) -> Array:
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if hazards.has(a) != hazards.has(b):
+			return hazards.has(b)
+		if (a == first) != (b == first):
+			return a == first
+		var ca: int = costs.get(a, 0)
+		var cb: int = costs.get(b, 0)
+		if ca != cb:
+			return ca < cb
+		return a.y < b.y or (a.y == b.y and a.x < b.x))
+	var out: Array = []
+	for cell: Vector2i in cells:
+		out.append([cell, int(costs.get(cell, 0))])
+	return out
+
+
+# Where everyone else ends for this leader destination: the solver's placements (pins included), and
+# a member it moves nowhere stays where it stands. Asked on the LIVE board -- the solver walks from
+# where members really are.
+static func _formation(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed,
+		pins: Dictionary, hazards: Dictionary = {}) -> Dictionary:
+	var placed := {}
+	for member in squad.get_members():
+		placed[member] = member.movement.cell
+	for move in GroupMoveSolver.plan(squad, leader_destination, board, allowed, pins, hazards):
+		placed[move.actor] = move.destination
+	placed[squad.get_leader()] = leader_destination
+	return placed
+
+
+static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, placed: Dictionary) -> void:
+	for member in squad.get_members():
+		member.movement.set_cell(placed.get(member, member.movement.cell))
+	leader.movement.set_cell(leader_destination)
+
+
+# The first cell in `cells` from which `unit` ends the mission, else the first that takes a removal,
+# else the first that breaks a squad. The mission tier is looked for only while the mission can end
+# on a kill -- otherwise a removal ends the search as it always has. Each cell is scored by standing
+# there, as a marginal over what `wins` already does; `unit` is put back where it started. A
+# candidate that would fell our own side is never an opportunity (#1220 ruling 1).
+#
+# One resolve stands for a GROUP of cells: see _group_key. A group whose first resolve shows its
+# single victim neither removed nor broken is skipped from then on, since every cell in it hands that
+# victim the same fate. A good fate that still nets a loss -- a counter fells us -- tries the next
+# cell, because counters are the one thing that differs inside a group.
+static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: BoardContext,
+		squad_manager: SquadManager, wins: Array[BaseAction], within,
+		reactions: Array[ElementalReaction], terrain: Array[TerrainReaction], stakes: _Stakes) -> _Opportunity:
+	var profile := AIProfiles.of(unit)
+	if profile.seeks == AIProfile.Seek.NONE:
+		return null
+	var start := unit.movement.cell
+	var faction := unit.get_faction()
+	var base_plan := squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
+	var stale := false
+	var dead := {}
+	var top: Tier = Tier.MISSION if stakes.protected_counts and profile.goes_for_mission_kill else Tier.REMOVAL
+	var found: _Opportunity = null
+	for entry: Array in cells:
+		var cell: Vector2i = entry[0]
+		unit.movement.set_cell(cell)
+		# A trial leaves its shove PUBLISHED, and the candidate builder reads published positions
+		# (#709), so the base goes back before the next cell's candidates are built. With earlier
+		# seekers' attacks in it, the base is re-read anyway: standing here can make this unit their
+		# counter target, or the cell one of their shoves lands on.
+		if stale or not wins.is_empty():
+			base_plan = squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
+			stale = false
+		var paying := {}
+		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo, stakes, paying)
+		if candidates.is_empty():
+			continue
+		var base := _score_plan(faction, base_plan, stakes, profile)
+		for candidate in candidates:
+			if within != null and not _reaches_into(paying.get(candidate, []), within, base_plan.hypo):
+				continue
+			var key := _group_key(candidate, board)
+			if dead.has(key):
+				continue
+			var trial: Array[BaseAction] = wins.duplicate()
+			trial.append(candidate)
+			var plan := squad_manager.resolve_hypothetical(squad, trial, board, reactions, terrain)
+			stale = true
+			if _fells_own([candidate], faction, base_plan, plan, profile.friendly_fire):
+				continue
+			var tier := _tier_of(_score_plan(faction, plan, stakes, profile).minus(base))
+			if tier == Tier.BREAK and profile.seeks == AIProfile.Seek.KILLS:
+				continue
+			if tier < 0:
+				if not _fate_can_pay(candidate, plan, profile):
+					dead[key] = true
+				continue
+			if found == null or tier > found.tier:
+				found = _opportunity(unit, cell, int(entry[1]), candidate, tier as Tier)
+			if found.tier == top:
+				break
+		if found != null and found.tier == top:
+			break
+	unit.movement.set_cell(start)
+	return found
+
+
+# A Sentry seeks only an intruder: does this candidate pay on somebody standing inside its zone?
+static func _reaches_into(victims: Array, within, hypo: Dictionary) -> bool:
+	for victim: Unit in victims:
+		if within.has(PlanResolver.projected_position(victim, hypo)):
+			return true
+	return false
+
+
+# Which seek tier a marginal reaches, or -1 when it reaches none. A removal or a mission win that a
+# loss elsewhere in the same plan cancels (a counter fells us) is not one.
+static func _tier_of(score: AIScore) -> int:
+	if score.mission > 0:
+		return Tier.MISSION
+	if score.mission < 0:
+		return -1
+	if score.removals > 0:
+		return Tier.REMOVAL
+	if score.removals == 0 and score.splits > 0:
+		return Tier.BREAK
+	return -1
+
+
+static func _opportunity(unit: Unit, cell: Vector2i, cost: int, action: AttackAction, tier: Tier) -> _Opportunity:
+	var out := _Opportunity.new()
+	out.unit = unit
+	out.cell = cell
+	out.cost = cost
+	out.action = action
+	out.tier = tier
+	return out
+
+
+# Cells that hand a candidate's victim the same fate share a key. What the resolver reads off an
+# attacker's cell is exactly three things -- the shove direction, the height, and a carving's
+# empowerment -- so those, plus the attack and the aim, are the key. A DIRECTIONAL attack's footprint
+# moves with the origin, so its cell joins the key outright. A rule that ever reads more of the origin
+# (backstrike) has to join it here, or the seek skips a real opportunity without a word.
+static func _group_key(candidate: AttackAction, board: BoardContext) -> String:
+	var attack := candidate.fired_attack
+	var origin := candidate.origin_cell
+	var empowered := ""
+	if attack is TransmutationData:
+		empowered = str(Materia.empowered_at(origin, board))
+	var anchor := str(origin) if Reach.is_directional_attack(attack) else ""
+	return "%d|%s|%s|%d|%s|%s" % [attack.get_instance_id() if attack != null else 0, candidate.target_cell,
+			GridUtils.cardinal_direction_i_between(origin, candidate.target_cell), board.elevation_at(origin),
+			empowered, anchor]
+
+
+# Could another cell of this candidate's group still pay? Only a single-victim volley is shareable --
+# a wider one's other victims are shoved in directions the key does not pin -- and then only if that
+# victim was removed or knocked out of its squad here.
+static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan, profile: AIProfile) -> bool:
+	var victims: Array[Unit] = []
+	for a in plan.attacks:
+		if a.source_aim == candidate and a.target != null and is_instance_valid(a.target) and not victims.has(a.target):
+			victims.append(a.target)
+	if victims.size() != 1:
+		return true
+	return _plan_removes(victims[0], plan, profile) or SplitForecast.leavers(plan).has(victims[0])
 
 
 # Every member takes a main action. The tail of engage() and the whole of HoldArchetype's turn --
@@ -855,7 +1794,7 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 #
 # TWO PASSES, and the split is the point (#117). ATTACK is decided for the squad JOINTLY, because
 # an attack's worth depends on what the rest of the squad is already doing; the remaining verbs
-# stay the ratified per-unit priority walk (dev, 2026-07-22 -- rescue/reload/rev/intimidate are a
+# stay the ratified per-unit priority walk (dev, 2026-07-22 -- rescue/reload/rev are a
 # lexical order, not a score). The fallback list therefore has ATTACK REMOVED: leaving it in would
 # let a member the joint pass deliberately declined re-decide alone and undo that judgement.
 static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
@@ -899,11 +1838,12 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		# a plan nobody gave. Rebuilt each round, which is what keeps it as fresh as the base plan:
 		# nothing is committed within a round, so no candidate can go stale before the single queue
 		# below, and the next round sees the commitment through its own base resolve.
-		var by_member := _candidates_by_member(squad.get_members(), board, base_plan)
+		var stakes := _stakes_for(squad, board, base_plan)
+		var by_member := _candidates_by_member(squad.get_members(), board, base_plan, stakes)
 		var best: _Scored = null
 		for member in squad.get_members():
-			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member)
-			if pick != null and (best == null or _beats(pick.score, best.score)):
+			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member, stakes)
+			if pick != null and (best == null or pick.score.beats(best.score)):
 				best = pick
 		if best == null:
 			break
@@ -934,7 +1874,7 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 
 class _Scored:
 	var action: AttackAction
-	var score: Vector3i
+	var score: AIScore
 
 
 # One member's best candidate, or null when it has nothing it can legally aim.
@@ -955,22 +1895,20 @@ class _Scored:
 #
 # The one corner where the two rulings disagree is a body in reach beside a standing target whose
 # counter would FELL the attacker, and the score decides it (dev, 2026-09-03): a free finish at
-# (0,+1,0) beats a suicidal swing at (-1,d,-x). That is the only comparison a body wins.
-#
-# THE SCORE ORDERS, IT NEVER GATES (#711, dev ruling 2026-09-02): "the AI should ALWAYS attack if
-# there is an option to, and if all the options are weighed bad, it has to pick its least bad
-# option." So there is no bar to beat and the argmax wins at any sign -- a squad frozen by a
-# counter bill it could not net positive against is the shape that deleted the bar.
+# (0,0,+1,0) beats a suicidal swing at (-1,0,d,-x). That is the only comparison a body wins.
 #
 # REFUSAL still removes a candidate before it can count: one `queue_action` turned down is skipped,
-# so it was never a real option. That is the surviving half of "pass 2 needs an empty pass 1".
+# so it was never a real option. That is the surviving half of "pass 2 needs an empty pass 1". So
+# does a candidate that would fell our own side (#1220 ruling 1): never an option, not a bad one.
 static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
 		squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool,
-		by_member: Dictionary) -> _Scored:
+		by_member: Dictionary, stakes: _Stakes) -> _Scored:
 	if not by_member.has(member):
 		return null   # the eligibility gate ran when the table was built -- _candidates_by_member
-	var base := _score_plan(member.get_faction(), base_plan)
+	var faction := member.get_faction()
+	var profile := AIProfiles.of(member)
+	var base := _score_plan(faction, base_plan, stakes, profile)
 	var routine := AIWeaponRoutine.for_unit(member)
 	var best: _Scored = null
 	var last_resort: _Scored = null   # the best of what the family DEFERRED -- see below
@@ -980,31 +1918,34 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 			continue
 		var one: Array[BaseAction] = [candidate]
 		var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
-		var score := _score_plan(member.get_faction(), plan) - base
+		if _fells_own([candidate], faction, base_plan, plan, profile.friendly_fire):
+			continue
+		var score := _score_plan(faction, plan, stakes, profile).minus(base)
 		# A SET-UP is worth nothing by itself and everything to the swing behind it: Splash deals
 		# no damage, so soaking a target scores (0,0) and a greedy chooser could never OPEN a
 		# combo. One step of lookahead prices it by what a squadmate could then do (dev call,
 		# pairs in v1, 2026-09-02), FLOORED AT ITS OWN SOLO SCORE -- see _lookahead for why
 		# inventing a zero there inverts the ranking now that a negative score can still win.
-		if not _beats(score, Vector3i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
-			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member)
+		if not score.beats(AIScore.zero()) and allow_lookahead and profile.sets_up_combos \
+				and _applies_state_to_an_enemy(faction, plan):
+			score = _lookahead(member, candidate, score, squad, board, base_plan, squad_manager, reactions, terrain, refused, by_member, stakes)
 		# A DEFERRED candidate is the family's own last resort (#726): it loses to every candidate
 		# this member has NOT deferred and is still taken when it has nothing else, so #711 stays
 		# literal -- the AI always attacks. MEMBER-LOCAL on purpose: decided here, never carried on
 		# _Scored into the joint loop, where it would become a precedence across members (the
 		# two-tier shape #720 deleted) and let one family's routine reorder another family's swing.
 		if routine.defers_candidate(member, candidate, plan, score):
-			if last_resort == null or _beats(score, last_resort.score):
+			if last_resort == null or score.beats(last_resort.score):
 				last_resort = _scored(candidate, score)
 			continue
-		if best == null or _beats(score, best.score):
+		if best == null or score.beats(best.score):
 			best = _scored(candidate, score)
 	if best != null:
 		return best
 	return last_resort
 
 
-static func _scored(action: AttackAction, score: Vector3i) -> _Scored:
+static func _scored(action: AttackAction, score: AIScore) -> _Scored:
 	var out := _Scored.new()
 	out.action = action
 	out.score = score
@@ -1018,16 +1959,18 @@ static func _scored(action: AttackAction, score: Vector3i) -> _Scored:
 # Bounded by its trigger rather than by a depth counter: only a candidate that scores nothing alone
 # AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
 #
-# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at Vector3i.ZERO (#711). A zero floor
+# THE ACCUMULATOR STARTS AT THE SET-UP'S OWN SOLO SCORE, never at a zero score (#711). A zero floor
 # was invisible while a candidate had to BEAT zero to queue -- it only ever turned a refusal into a
 # refusal. With no bar it LAUNDERS: a set-up really worth (-1, 0, -5) came back (0,0,0) and then
 # outranked an honest plain swing at (-1, 8, -4) on the first term, so a member facing a lethal
 # counter soaked instead of hitting and died dealing nothing. A set-up is worth the better of what
 # it does alone and what it enables; zero is not one of those two and must not be invented here.
-static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, squad: Squad, board: BoardContext,
+static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: AIScore, squad: Squad, board: BoardContext,
 		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
-		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary) -> Vector3i:
-	var base := _score_plan(setup_unit.get_faction(), base_plan)
+		terrain: Array[TerrainReaction], refused: Dictionary, by_member: Dictionary, stakes: _Stakes) -> AIScore:
+	var faction := setup_unit.get_faction()
+	var profile := AIProfiles.of(setup_unit)   # the pair is the set-up's idea, so it is scored its way
+	var base := _score_plan(faction, base_plan, stakes, profile)
 	var best := solo
 	for mate in squad.get_members():
 		if mate == setup_unit or not by_member.has(mate):
@@ -1038,8 +1981,10 @@ static func _lookahead(setup_unit: Unit, setup: AttackAction, solo: Vector3i, sq
 				continue
 			var pair: Array[BaseAction] = [setup, follow]
 			var plan := squad_manager.resolve_hypothetical(squad, pair, board, reactions, terrain)
-			var score := _score_plan(setup_unit.get_faction(), plan) - base
-			if _beats(score, best):
+			if _fells_own(pair, faction, base_plan, plan, profile.friendly_fire):
+				continue
+			var score := _score_plan(faction, plan, stakes, profile).minus(base)
+			if score.beats(best):
 				best = score
 	return best
 
@@ -1139,7 +2084,8 @@ static func _standable_attack_cells(unit: Unit, goal: Vector2i, aiming: AttackDa
 # gets fooled by a body parked on the nearest geometric firing position. Defaults to `goal`, so
 # closest_reachable_cell_to (a post is a plain cell, no firing-position question to ask) is unchanged.
 # The can_attack / straight-line terms below still test against the real `goal` either way.
-static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allowed, prefer_attack: bool, route_target = null) -> Vector2i:
+static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allowed, prefer_attack: bool,
+		route_target = null, weigh_safety := false) -> Vector2i:
 	var range := RulesService.compute_move_range(unit, board)
 	var here: Vector2i = unit.movement.cell
 	# Read once, like a player's aim -- destination-per-candidate-attack is still the #78 v1
@@ -1159,11 +2105,20 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	# the route the unit will really walk. Sentry's walk home has the same shape (an enemy holding a
 	# corridor), which is why this is unconditional rather than keyed off route_target.
 	var route := RulesService.path_hops(hop_target, board, unit, -1, wanted, true)
+	var watches := _hostile_watches(unit.get_faction(), board)
+	# Balanced's tie-break (#1220): how many enemies could attack the cell next turn, from the
+	# viewer's own danger field. Zero for everyone else, so it never speaks for them.
+	var danger: ThreatField = ThreatField.build(board, unit.get_faction()) if weigh_safety else null
 
 	var best := here
 	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
+	var avoids := AIProfiles.of(unit).avoids_hazards   # #1230: off, every cell reads as safe
+	var best_safe := not avoids or not _is_hazard(unit, here, board, watches)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
+	var best_threat: int = danger.attackers_of(here).size() if danger != null else 0
+	if danger != null and best_can_attack:
+		best_hops = 0
 	var best_dist: int = GridUtils.manhattan_distance(here, goal)
 	var best_cost := 0
 
@@ -1172,32 +2127,44 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 			continue
 		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, cell, aiming).has(goal) \
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
+		var safe := not avoids or not _is_hazard(unit, cell, board, watches)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
+		var threat: int = danger.attackers_of(cell).size() if danger != null else 0
+		if danger != null and can_attack:
+			hops = 0   # nothing left to walk once it can attack, so safety speaks before the route
 		var dist: int = GridUtils.manhattan_distance(cell, goal)
 		var cost: int = range.reachable[cell]
-		if _approach_beats(can_attack, hops, dist, cost, best_can_attack, best_hops, best_dist, best_cost):
+		if _approach_beats(can_attack, safe, hops, threat, dist, cost, best_can_attack, best_safe, best_hops,
+				best_threat, best_dist, best_cost):
 			best = cell
 			best_can_attack = can_attack
+			best_safe = safe
 			best_hops = hops
+			best_threat = threat
 			best_dist = dist
 			best_cost = cost
 
 	return best
 
 
-# Ranked, best first: can I attack from here > fewer hops of route left > nearer in a straight line
-# > cheaper to reach. Ties keep the earlier cell (Law #1: reachable's key order is the move-range
-# search's own, so it is stable).
+# Ranked, best first: can I attack from here > safe ground (#1220: a hazard only when no safe cell
+# offers the same) > fewer hops of route left > fewer enemies able to reach it (Balanced only; zero
+# for everyone else) > nearer in a straight line > cheaper to reach. Ties keep the earlier cell (Law
+# #1: reachable's key order is the move-range search's own, so it is stable).
 #
 # The straight-line term earns its place in exactly one case: when the goal is sealed off entirely,
 # every candidate scores UNREACHABLE and the ladder falls through to it -- so the squad crowds the
 # nearest shore instead of reading "no route" as "stay home".
-static func _approach_beats(can_attack: bool, hops: int, dist: int, cost: int,
-		b_can_attack: bool, b_hops: int, b_dist: int, b_cost: int) -> bool:
+static func _approach_beats(can_attack: bool, safe: bool, hops: int, threat: int, dist: int, cost: int,
+		b_can_attack: bool, b_safe: bool, b_hops: int, b_threat: int, b_dist: int, b_cost: int) -> bool:
 	if can_attack != b_can_attack:
 		return can_attack
+	if safe != b_safe:
+		return safe
 	if hops != b_hops:
 		return hops < b_hops
+	if threat != b_threat:
+		return threat < b_threat
 	if dist != b_dist:
 		return dist < b_dist
 	return cost < b_cost

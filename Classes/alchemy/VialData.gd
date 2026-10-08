@@ -25,11 +25,16 @@ extends Item
 # alkahest vial needs no element authored on it.
 @export var is_alkahest := false
 
+# What the vial holds, as Deep Alchemy names it (deep-alchemy.md). Read by nothing in play yet; empty
+# where the substance has no formula, which tests/law/test_substance_map.gd declares per vial.
+@export var substance: Substance
+
 
 static func property_tips() -> Dictionary:
 	var tips := Item.property_tips()
 	tips["element"] = "Which element this vial attunes its user to. Ignored entirely when Alkahest is on."
 	tips["is_alkahest"] = "Alkahest-pure: attunes to EVERY element at once. The rare kind -- authored sparingly."
+	tips["substance"] = "The Deep Alchemy substance the vial holds, e.g. Sulfur (FE). Flavour for now: nothing in play reads it."
 	return tips
 
 

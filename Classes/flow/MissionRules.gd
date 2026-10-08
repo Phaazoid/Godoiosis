@@ -3,7 +3,7 @@ class_name MissionRules
 
 # The win/lose predicate for a mission (#96 slice 1, docs/design/missions.md). Pure and static,
 # in LethalityRules' shape: it reads a BoardContext and returns an answer, holding no state, so
-# the in-game MissionController, the headless Play API and the tests all ask ONE question and
+# both hosts (through the MissionState each holds, #46) and the tests all ask ONE question and
 # cannot drift into three.
 #
 # Slice 1 has exactly one objective and it is authored nowhere: wipe every hostile faction,
@@ -45,6 +45,30 @@ enum LoseCondition {
 # members are a decision, not an accident of a loop's shape.
 const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT, LoseCondition.POINT_LOST,
 		LoseCondition.PROTECTED_UNIT_LOST]
+
+# Which painted zone kind a briefing row is ABOUT -- the one spelling of the pairing, read by the
+# missing-geometry check and by the objectives panel that lights and visits those zones (#955 part 3).
+# NO_ZONE for a row that names no place (a rout, a clock, a protected unit).
+const NO_ZONE := -1
+const OBJECTIVE_ZONE_KIND: Dictionary[Objective, ZoneManager.Kind] = {
+	Objective.CAPTURE: ZoneManager.Kind.CAPTURE,
+	Objective.EXTRACT: ZoneManager.Kind.EXTRACTION,
+}
+const LOSE_ZONE_KIND: Dictionary[LoseCondition, ZoneManager.Kind] = {
+	LoseCondition.POINT_LOST: ZoneManager.Kind.DEFEND,
+}
+
+
+static func zone_kind_of_objective(objective: Objective) -> int:
+	if OBJECTIVE_ZONE_KIND.has(objective):
+		return OBJECTIVE_ZONE_KIND[objective]
+	return NO_ZONE
+
+
+static func zone_kind_of_lose(condition: LoseCondition) -> int:
+	if LOSE_ZONE_KIND.has(condition):
+		return LOSE_ZONE_KIND[condition]
+	return NO_ZONE
 
 # The banner's body text for a defeat. One answer, one reader (MissionEndBanner).
 static func defeat_reason(condition: LoseCondition) -> String:
@@ -101,7 +125,7 @@ static func breaching_unit(board: BoardContext, zone_names: Array[String],
 # Who this mission is protecting, still standing (#572). NOT the answer to "has one died" -- a dead
 # unit is FREED (Unit.die queue_frees), so it is not absent from this list, it is absent from the
 # BOARD, and the two are indistinguishable from a unit that was never placed. That question is a
-# latch on MissionController; this one is the HUD's readout and the setup guard's.
+# latch on MissionState; this one is the HUD's readout and the setup guard's.
 static func protected_units(board: BoardContext) -> Array[Unit]:
 	var protected: Array[Unit] = []
 	for unit in board.units:
@@ -125,7 +149,7 @@ static func active_hostile_count(board: BoardContext) -> int:
 	return count
 
 # Both sides commandable right now -- i.e. this board is a mission in progress and not a dev
-# scratchpad. MissionController latches this; see the `contested` note on evaluate().
+# scratchpad. MissionState latches this; see the `contested` note on evaluate().
 static func is_contested(board: BoardContext) -> bool:
 	return board.faction_has_active_units(Team.Faction.PLAYER) and has_active_hostiles(board)
 
@@ -133,7 +157,7 @@ static func is_contested(board: BoardContext) -> bool:
 # routing the enemy on a capture map does not win it. Locking yourself out is a level-design
 # problem, solved by building the map so it can't happen -- not by adding a consolation win.
 #
-# `failure` is handed in the way `progress` is: MissionController computes it, this stays pure.
+# `failure` is handed in the way `progress` is: MissionState computes it, this stays pure.
 # ORDER (#101): the squad wipe is asked FIRST, so mutual destruction stays a DEFEAT and reports
 # SQUAD_LOST rather than whatever else fired that instant. Every VICTORY path is asked BEFORE an
 # authored failure -- finishing on the last allowed round is finishing in time, and a clock must

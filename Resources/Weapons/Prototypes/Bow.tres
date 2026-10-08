@@ -7,11 +7,11 @@
 
 [resource]
 script = ExtResource("4_8usy4")
-mod_spaces = Array[int]([1, 2, 3])
 main_attack = ExtResource("3_awciv")
 weapon_type = 1
 is_prototype = true
 display_name = "Bow"
 icon = ExtResource("2_nnsar")
 description = "Vroom Vroom"
+weight = 2
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

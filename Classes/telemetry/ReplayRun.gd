@@ -38,12 +38,13 @@ var problems: Array[String] = []
 var degraded: Array[String] = []
 
 
-# EVERY run this machine can replay, newest first -- BOTH folders since #53 slice 5, because
-# whether a run has been sent has nothing to do with whether it can be replayed. The listing
+# EVERY run this machine can replay, newest first -- EVERY folder (#53 slice 5, `held/` since #852),
+# because whether a run has been sent has nothing to do with whether it can be replayed. The listing
 # mechanism is TelemetryStore's (it owns the paths); the MERGE is this question's own answer.
 static func list_runs() -> PackedStringArray:
 	var ids := TelemetryStore.pending_runs()
 	ids.append_array(TelemetryStore.sent_runs())
+	ids.append_array(TelemetryStore.held_runs())
 	ids.sort()
 	ids.reverse()
 	return ids
@@ -172,6 +173,9 @@ func headline() -> Dictionary:
 	return {
 		"run_id": run_id,
 		"scenario": str(start.get("scenario_name", start.get("scenario", "(unknown)"))),
+		# WHO played it (#1155) -- recorded on every run's first line; "" on a run older than either.
+		"install_id": str(start.get("install_id", "")),
+		"player_name": str(start.get("player_name", "")),
 		"outcome": str(end.get("outcome", "UNSEALED")),
 		"rounds": rounds(),
 		"sandbox": bool(start.get("sandbox", false)),
@@ -182,6 +186,7 @@ func headline() -> Dictionary:
 		# this was found: it froze the tab on every swept run.
 		"dev_touched": end.get("dev_touched", false),
 		# Read off WHERE THE FOLDER IS, never off a stored flag (#53 slice 5) -- the move is the
-		# state, so this cannot go stale the way a marker could.
+		# state, so this cannot go stale the way a marker could. Neither sent nor held is owed.
 		"sent": TelemetryStore.is_sent(run_id),
+		"held": TelemetryStore.is_held(run_id),
 	}

@@ -12,9 +12,8 @@ extends RefCounted
 # gear through copy_for_grant(). The stash simply never got the same treatment, because until this
 # ticket nothing could move it.
 #
-# So the stash here is COPIES, and the phase owns them. MissionController builds one in deploy_roster
-# -- where the Roster is already in hand -- and drops it in reset(), the same pair of edges
-# _roster_units lives on.
+# So the stash here is COPIES, and the phase owns them. PreMissionPhase builds one in its draw --
+# where the Roster is already in hand -- and dies with the phase, on the same edges as its roster.
 #
 # ONE RULE, TWO INPUTS. Clicking and dragging both ask move_block_reason and both act through move();
 # a drag that judged for itself would be a second answer to "may this move", which is the exact shape
@@ -121,3 +120,42 @@ func move(item: Item, from: Unit, to: Unit) -> String:
 	else:
 		stash.append(item)
 	return ""
+
+
+# --- jobs (#742, #964) ---------------------------------------------------------------------------
+
+# WHICH JOBS THIS UNIT MAY PICK: the mission's own list (#964), plus whatever the unit already holds.
+# Here rather than on the card since #46, because the headless Play API refuses a pick the card's
+# picker would never have listed, and two copies of the list would be two answers.
+#
+# The union is not politeness. A character authoring a starting_job, or a state_saved roster entry,
+# can arrive holding a job the mission does not offer — and without it that unit falls into the
+# card's unknown-id branch, which prints the raw id and leaves the job un-re-pickable once dropped.
+# Offered ∪ held reads right and stays reversible.
+func offered_jobs_for(unit: Unit) -> Array[String]:
+	var ids: Array[String] = []
+	for id: String in available_jobs:
+		if id != "" and not ids.has(id):
+			ids.append(id)
+	for id: String in unit.unit_instance.jobs:
+		if id != "" and not ids.has(id):
+			ids.append(id)
+	return ids
+
+
+# WHY this unit cannot take that job here -- "" means it can, and "" (no job) always can. The offer
+# clause never speaks on the card, whose picker lists only what offered_jobs_for answers; every other
+# sentence is the unit's own.
+func job_block_reason(unit: Unit, job_id: String) -> String:
+	if job_id != "" and not offered_jobs_for(unit).has(job_id):
+		return "This mission does not offer the job '%s'." % job_id
+	return unit.job_change_block_reason(job_id)
+
+
+# Performs the pick, or says why not -- "" on success. move()'s shape: the reason is asked first and
+# the act is the same call's second half. set_sole_job settles the stats the job moves.
+func set_job(unit: Unit, job_id: String) -> String:
+	var refusal := job_block_reason(unit, job_id)
+	if refusal != "":
+		return refusal
+	return unit.set_sole_job(job_id)

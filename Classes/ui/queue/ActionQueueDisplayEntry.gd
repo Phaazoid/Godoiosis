@@ -63,13 +63,13 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 		_add_section(entries, BaseAction.ActionType.keys()[type], side_channel.get(type, []), plan)
 
 	# Reactions last, in their own section — derived, not stored (Law #2). A skipped one (the
-	# reactor went down/dead this pass) is hidden. Headed REACTION rather than COUNTER since #148:
-	# the section holds both kinds, and a heal row reading "Alia heals Bern" under COUNTER lies.
+	# reactor went down/dead this pass) is hidden. Headed REACTION since #148 gave it a heal kind; that
+	# kind is repealed (2026-09-28) and only counters land here now, but the header is player-facing.
 	var live_reactions: Array[BaseAction] = []
 	for reaction in plan.counters:
 		if not reaction.resolved.skipped:
 			live_reactions.append(reaction)
-	_add_section(entries, "REACTION", live_reactions)
+	_add_section(entries, "REACTION", live_reactions, plan)
 
 	# LAST, because it happens last (#419). Its own section rather than a row indented under MOVE:
 	# the queue's order is the pass's clock, and a tile's damage lands after every order in it —
@@ -81,7 +81,9 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 # Appends a header plus its rows, preceded by a divider unless this is the first section on the
 # panel. An empty batch contributes nothing at all — no header, no divider.
 #
-# A row is followed by a row per watch shot THAT order set off (#413/#592) — see _watch_shots_for.
+# A row is followed by a row per watch shot THAT order set off (#413/#592) — see _watch_shots_for —
+# and any row is followed by the sinkings its deposit caused (#922): a unit the melt took the floor
+# from, hung under the attack that melted it. A watch shot can melt ice too, so its rows get theirs.
 static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String, batch: Array,
 		plan: ResolvedPlan = null) -> void:
 	if batch.is_empty():
@@ -90,9 +92,18 @@ static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String,
 		entries.append(divider())
 	entries.append(header(title))
 	for action in batch:
-		entries.append(action_row(action, _depth_of(action)))
+		_add_with_sinks(entries, action, _depth_of(action), plan)
 		for shot: AttackAction in _watch_shots_for(plan, action):
-			entries.append(action_row(shot, 1 + _depth_of(shot)))
+			_add_with_sinks(entries, shot, 1 + _depth_of(shot), plan)
+
+
+static func _add_with_sinks(entries: Array[ActionQueueDisplayEntry], action: BaseAction, depth: int,
+		plan: ResolvedPlan) -> void:
+	entries.append(action_row(action, depth))
+	if plan == null:
+		return
+	for sink in plan.sinks_caused_by(action):
+		entries.append(action_row(sink, depth + 1))
 
 
 # How far in a row sits: a PAYLOAD (#1058) one step per drop under the hit that dropped it, which is

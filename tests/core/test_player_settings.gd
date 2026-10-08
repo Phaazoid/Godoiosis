@@ -27,6 +27,7 @@ func _choice_enum_sizes() -> Dictionary:
 	return {
 		PlayerSettings.Setting.HEALTH_BARS: PlayerSettings.HealthBars.size(),
 		PlayerSettings.Setting.BATTLE_ZOOM_MODE: PlayerSettings.BattleZoom.size(),
+		PlayerSettings.Setting.PLAYBACK_SPEED: PlayerSettings.PlaybackSpeed.size(),
 		PlayerSettings.Setting.AIM_PALETTE: PlayerSettings.AimPalette.size(),
 		PlayerSettings.Setting.QUEUE_PALETTE: PlayerSettings.QueuePalette.size(),
 		# Three rows over ONE enum (#394) -- they are three preferences sharing a three-step
@@ -109,6 +110,29 @@ func test_the_battle_zoom_still_ships_on_for_everything() -> void:
 		.is_equal(PlayerSettings.BattleZoom.ALWAYS)
 	assert_int(PlayerSettings.choice_of(ZOOM_SETTING)) \
 		.is_equal(PlayerSettings.BattleZoom.ALWAYS)
+
+func test_every_playback_speed_label_says_its_own_multiplier() -> void:
+	# #545. The multipliers are a const beside a label list, a DECLARED duplicate: a "2x" running at
+	# 2.5 would be a setting that lies, and nothing else reads the two together.
+	var labels: Array = PlayerSettings.options_of(PlayerSettings.Setting.PLAYBACK_SPEED)
+	assert_int(PlayerSettings.PLAYBACK_MULTIPLIERS.size()).override_failure_message(
+			"PLAYBACK_MULTIPLIERS no longer covers the PlaybackSpeed enum") \
+		.is_equal(PlayerSettings.PlaybackSpeed.size())
+	for i in labels.size():
+		var multiplier: float = PlayerSettings.PLAYBACK_MULTIPLIERS[i]
+		var spelled := ("%d" % int(multiplier)) if is_equal_approx(multiplier, roundf(multiplier)) \
+				else str(multiplier)
+		assert_str(str(labels[i])).override_failure_message(
+				"option %d is labelled %s but runs at %s" % [i, labels[i], multiplier]) \
+			.is_equal(spelled + "x")
+
+
+func test_playback_ships_at_normal_speed() -> void:
+	# A player who never opens the menu watches at the pace the dev tuned.
+	assert_int(PlayerSettings.default_value(PlayerSettings.Setting.PLAYBACK_SPEED)) \
+		.is_equal(PlayerSettings.PlaybackSpeed.NORMAL)
+	assert_float(PlayerSettings.PLAYBACK_MULTIPLIERS[PlayerSettings.PlaybackSpeed.NORMAL]).is_equal(1.0)
+
 
 func test_health_bars_are_hover_only_until_asked_otherwise() -> void:
 	# The ticket's own default, unchanged by #418 adding a third value: #229's hover-only behaviour

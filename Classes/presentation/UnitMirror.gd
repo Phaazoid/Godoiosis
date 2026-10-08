@@ -23,9 +23,10 @@ class_name UnitMirror
 # needs to, that is the bug.
 #
 # #354 split that second reason in two. WHO wears one is PlanResolver.plan_changes, asked of the
-# plan's own hypothetical; WHAT it draws is the live HP under a frozen prediction. Only the fill
-# tracks the board, so a bar drains down to its notch as the hit lands instead of vanishing at the
-# moment of impact — and the readout leaves when the PASS does, because the plan does.
+# plan's own hypothetical; WHAT it draws is the live HP (plus a shove's fall, held until it lands,
+# #480) under a frozen prediction. Only the fill tracks the board, so a bar drains down to its notch
+# as the hit lands instead of vanishing at the moment of impact — and the readout leaves when the
+# PASS does, because the plan does.
 #
 # #350 adds the THIRD and last reason: a player who has asked for every bar, always. That one is a
 # PREFERENCE rather than a derivation, so it comes off PlayerSettings rather than off anything on
@@ -238,6 +239,11 @@ var water_at: Callable
 # purpose, so it says CINEMATIC for ever after the first clash.
 var cinematic_playback := false
 
+# Units the battle zoom has HIDDEN because they stand between the lens and the action (#1132),
+# keyed by instance id. Written by battle3d every frame (cinematic_playback's shape), and read as one
+# more conjunct on the sprite's gate and one veto on the bar's -- never as a second writer of either.
+var camera_hidden: Dictionary[int, bool] = {}
+
 # Where an IMPACT is reported, injected by battle3d beside the three sources above (#520 diff 2b).
 # A verb rather than a `*_source` noun because it PUSHES: this node is the only thing that observes
 # the instant a blow lands (the HP poll below, and unit_died for a killing one), and the camera is
@@ -281,6 +287,11 @@ var _camera_right := Vector3.ZERO   # last camera basis facing was judged agains
 # stale the moment one hides, and the next time it appears the whole hidden loss reads as damage
 # taken this frame and bursts.
 var _last_hp: Dictionary[int, int] = {}
+# A shove's FALL keeps its cubes standing until the body touches down (#480) -- the READOUT only, HP
+# fell at the hit. Armed per blow off the outcome's fall_damage, held at the HP drop, freed on landing.
+var _fall_armed: Dictionary[int, int] = {}
+var _fall_held: Dictionary[int, int] = {}
+var _was_falling: Dictionary[int, bool] = {}   # landing_falling last frame: its drop is the touchdown
 var _debris: HealthBlockDebris
 # Element-state fade levels per unit (#358), keyed like _mirrored: x = wet, y = chill, z = icicles,
 # w = the damp blot underfoot, which dries on its own clock and so outlives the rest. A unit wearing
@@ -392,19 +403,26 @@ func reconcile(delta := 0.0) -> void:
 			# Guarded because a unit can now LEAVE units_root and come back without dying (#739's
 			# undeploy/redeploy): the bar is freed on the way out and rebuilt on the way in, and
 			# the bound callable compares equal, so an unguarded re-connect errors on every
-			# re-placement. Death is still the one signal this node listens to.
+			# re-placement. Death is still the one signal this node listens to (#480's blow is
+			# handed in by the host -- see hold_falls).
 			if not unit.unit_died.is_connected(_on_unit_died.bind(id)):
 				unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
+		# Before the bar, so the readout draws the hold on the very frame it starts and ends.
+		var held_before := _settle_fall_hold(unit, id)
+		var held: int = _fall_held.get(id, 0)
 		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars,
-				unhovered_numbers)
-		_settle_health_change(unit, id, _bars[id])
+				unhovered_numbers, held)
+		_settle_health_change(unit, id, _bars[id], held_before)
 		_sync_status(unit, id, _mirrored[id], delta)
 	for id: int in _mirrored.keys():
 		if not live.has(id):
 			_mirrored[id].queue_free()
 			_mirrored.erase(id)
 			_last_hp.erase(id)
+			_fall_armed.erase(id)
+			_fall_held.erase(id)
+			_was_falling.erase(id)
 			_status.erase(id)
 			if _bars.has(id):
 				_bars[id].queue_free()
@@ -449,6 +467,8 @@ func _is_water(cell: Vector2i) -> bool:
 # or the ghost that replaced it -- the LAST one tagged with the unit, since a shove's landing ghost
 # follows its move ghost and is where the plan leaves it. Null while neither is up.
 func _standing_sprite(unit: Unit, id: int, sprite: UnitSprite3D) -> UnitSprite3D:
+	if camera_hidden.has(id):
+		return null   # hidden by the battle zoom (#1132): nothing drips off a body nobody can see
 	if not unit.visuals.projected:
 		return sprite
 	var standing: UnitSprite3D = null
@@ -510,6 +530,37 @@ func mirrored_count() -> int:
 
 func sprite_for(unit: Unit) -> UnitSprite3D:
 	return _mirrored.get(unit.get_instance_id())
+
+
+# A unit as the shot clearance sees it (#1132), or null before it has a sprite. Off the DRAWN sprite,
+# lunge and tear-out included, because the question is what stands in the frame; the width is that
+# sprite's own ink and the height its own art top, so a tall unit blocks more than a short one.
+#
+# ...and its health readout while one is up (round 4): the battle zoom puts one on every unit, and
+# from its pitch the readout, not the head, is what hides the fighter behind. Placed where the bar
+# IS and sized by the bar itself, never re-derived from hud_lift. A square column, because the bar
+# turns to face the camera and the clearance asks from every candidate angle.
+func body_of(unit: Unit) -> ShotClearance.Body:
+	var sprite := sprite_for(unit)
+	if sprite == null:
+		return null
+	var body := ShotClearance.Body.new()
+	body.unit_id = unit.get_instance_id()
+	body.feet = sprite.global_position
+	body.cell = cell_under(unit)
+	var ink: Rect2i = MapSpriteInk.ink_of(sprite.texture) if sprite.texture != null \
+			else MapSpriteInk.INK_RECT
+	body.half_width = float(ink.size.x) * 0.5 / UnitSprite3D.texels_per_unit
+	body.height = sprite.art_top_height()
+	body.heights.append(UnitSprite3D.body_middle())
+	body.heights.append(body.height * ShotClearance.HEAD_SAMPLE)
+	var bar := bar_for(unit)
+	if bar != null and bar.visible:
+		var half := bar.half_extents()
+		var at := bar.global_position
+		body.hud = AABB(at - Vector3(half.x, half.y, half.x),
+				Vector3(half.x * 2.0, half.y + bar.top_extent(), half.x * 2.0))
+	return body
 
 
 func bar_for(unit: Unit) -> UnitHealthBar:
@@ -659,8 +710,14 @@ func ghost_count() -> int:
 # cells, and reading the destination would pop the sprite to the new level before it arrives.
 # Derived from the same pixels that place X and Z, so it steps up as the sprite crosses the edge.
 static func cell_under(unit: Unit) -> Vector2i:
-	return Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
-			floori(unit.position.y / PIXELS_PER_CELL))
+	var at := board_xz(unit)
+	return Vector2i(floori(at.x), floori(at.y))
+
+
+# Where a unit's PIXELS are, in cells (x, z) -- the one conversion that places the sprite's X and Z,
+# and that a tether riding a shoved body to the ledge reads too (#1104), so the two cannot part.
+static func board_xz(unit: Unit) -> Vector2:
+	return unit.position / PIXELS_PER_CELL
 
 
 # Where the unit is STANDING in world Y -- the surface under those pixels, unless one of the three
@@ -695,8 +752,8 @@ static func stand_height(unit: Unit, heights: BoardHeights) -> float:
 		if m.airborne:
 			stand_y = BoardSpace.surface_point(m.slide_origin, heights).y
 		else:
-			stand_y = BoardSpace.surface_height_at(over, unit.position.x / PIXELS_PER_CELL,
-					unit.position.y / PIXELS_PER_CELL, heights)
+			var at := board_xz(unit)
+			stand_y = BoardSpace.surface_height_at(over, at.x, at.y, heights)
 	return stand_y
 
 
@@ -715,8 +772,8 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	var previous := sprite.position - sprite.art_offset
 	var over := cell_under(unit)
 	var stand_y := stand_height(unit, heights)
-	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
-			stand_y, unit.position.y / PIXELS_PER_CELL)
+	var at := board_xz(unit)
+	var stand := Vector3(at.x, stand_y, at.y)
 	# Half a ROW down, not half a cell (#427 slice 2): the standing point sits exactly on a row
 	# boundary, and the cell wanted is the one BELOW it — dropping a whole row would name the one
 	# under that.
@@ -748,7 +805,8 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# one line after set_downed above had correctly mirrored it. Never is_visible_in_tree
 	# either: 3D hosting hides the whole board subtree, which must not read as every unit
 	# hidden.
-	sprite.visible = not unit.visuals.projected
+	# ...or while the battle zoom has it out of the way (#1132).
+	sprite.visible = not unit.visuals.projected and not camera_hidden.has(unit.get_instance_id())
 	# The PRODUCT, because 2D modulate multiplies down the tree and the faction tint lives
 	# on the Unit node while the effects (pulse, highlight, flash) live on its sprite. The
 	# child alone is what left enemies un-reddened in 3D.
@@ -800,7 +858,7 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
 		plan: ResolvedPlan, marked: bool, bars: PlayerSettings.HealthBars,
-		unhovered_numbers: bool) -> void:
+		unhovered_numbers: bool, held: int) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -828,7 +886,11 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# FOUR reasons again (#1069). #710 slice 3 added a fifth -- the enemy intends to hit this unit --
 	# and it went with the intent readout it belonged to; a reach line answers who could reach a
 	# cell, which is not a claim about any particular unit's HP and so has nothing to put on a bar.
-	var shown := hovered or foretold or marked or preferred
+	# ...and one VETO (#1132): a unit the battle zoom hid takes its readout with it. Not a fifth reason
+	# -- it can only take a bar down -- and on the gate rather than beside it, so the cube bursts and
+	# the crown height that read bar.visible follow without being told.
+	var shown := (hovered or foretold or marked or preferred) \
+			and not camera_hidden.has(unit.get_instance_id())
 	bar.set_shown(shown)
 	if not shown:
 		return
@@ -839,7 +901,8 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)
 	bar.set_cube_style(hp_block_recess_shrink, hp_block_recess_shade, hp_block_top_shade)
 	bar.set_pop(block_pop_time, hp_pop_lift_texels, hp_pop_stagger)
-	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
+	# The held fall still stands (#480): those cubes have not been knocked out yet.
+	bar.set_hp(unit.get_current_hp() + held, unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_numbers)
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
 	# rides THE gate rather than growing one — and the art comes from StateIcons, which stays the
@@ -903,7 +966,11 @@ func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
 # gated on the readout actually being up: cubes are pieces of a thing you can see, and a burst over
 # a unit wearing no readout would be cubes materialising out of empty air. Damage taken with no
 # readout up is #188's gap, and it wants a shake on the SPRITE, which is visible either way.
-func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
+#
+# What the readout SHOWS is HP plus the held fall (#480), so the cubes thrown are the difference in
+# that between frames: the hit's share at the hit, the fall's at the landing. `held_before` is the
+# hold that stood going into this frame, as _settle_fall_hold returns it.
+func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar, held_before: int) -> void:
 	var current := unit.get_current_hp()
 	var previous: int = _last_hp.get(id, current)
 	_last_hp[id] = current
@@ -911,16 +978,61 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 	# 2b). The cubes are a health READOUT and rightly go when the readout is hidden; a camera jolt is
 	# not a readout, and HEALTH_BARS ships HOVERED -- so reporting it below would make the
 	# DEFAULT settings the ones with no impact in them at all, which is exactly the hole #534 shipped
-	# and the dev found in play. Sharing the diff with the burst is also what keeps the two in step:
-	# one observation, so the jolt and the cubes can never disagree about when the blow landed.
+	# and the dev found in play. The jolt and the HIT's cubes share this one observation; a shove's
+	# fall cubes wait for the touchdown (#480), which reports no jolt of its own.
 	if current < previous and report_impact.is_valid():
 		report_impact.call(Impact.HIT)
-	if previous == current or not bar.visible:
+	var was_shown := previous + held_before
+	var shown: int = current + _fall_held.get(id, 0)
+	if was_shown == shown or not bar.visible:
 		return
-	if current > previous:
-		bar.play_heal_from(previous)   # the restored cubes rise out of the dents they were in
+	if shown > was_shown:
+		bar.play_heal_from(was_shown)   # the restored cubes rise out of the dents they were in
 		return
-	_burst_lost(bar, previous, current, 1.0)
+	_burst_lost(bar, was_shown, shown, 1.0)
+
+
+# A blow landed (#480), handed in by the host off OrderExecutor.volley_struck. Every unit it struck
+# whose shove ends in a FALL arms that fall's damage -- the outcome's own number, never re-derived.
+func hold_falls(attack: AttackAction) -> void:
+	var members: Array[AttackAction] = attack.volley
+	if members.is_empty():
+		members = [attack]
+	for member in members:
+		var outcome := member.resolved
+		if outcome == null or outcome.skipped or outcome.fall_damage <= 0:
+			continue
+		if member.target == null or not is_instance_valid(member.target):
+			continue
+		_fall_armed[member.target.get_instance_id()] = outcome.fall_damage
+
+
+# The fall's share of a loss, held back from the burst until the body TOUCHES DOWN (#480). Run for
+# every unit above the visibility gate, as the baseline is, so a hidden readout holds and lets go too.
+# An arm is spent by the unit's next HP change; the hold ends at the landing edge, or once the shove
+# is over with no fall ever flagged (headless, where the drop is instant). Returns the hold as it
+# stood going into this frame.
+func _settle_fall_hold(unit: Unit, id: int) -> int:
+	var standing: int = _fall_held.get(id, 0)
+	var current := unit.get_current_hp()
+	var previous: int = _last_hp.get(id, current)
+	var held := standing
+	if current != previous and _fall_armed.has(id):
+		var armed: int = _fall_armed[id]
+		_fall_armed.erase(id)
+		if current < previous:
+			held += mini(armed, previous - current)
+	var movement := unit.movement
+	var falling := movement.landing_falling
+	var touched_down: bool = _was_falling.get(id, false) and not falling
+	_was_falling[id] = falling
+	if touched_down or not (movement.sliding or falling):
+		held = 0
+	if held > 0:
+		_fall_held[id] = held
+	else:
+		_fall_held.erase(id)
+	return standing
 
 
 # A death detonates the WHOLE grid — the red cubes go too (dev, 2026-08-22: "On a killing hit, even

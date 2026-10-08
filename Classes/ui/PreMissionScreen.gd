@@ -25,6 +25,11 @@ class_name PreMissionScreen
 # EVERY REGION THAT CAN GROW BOUNDS ITS OWN BODY (#418's law): the card grid, the stash, the contract
 # list and the deployed force each scroll inside a fixed region rather than pushing the layout. The
 # contract's is the one he asked for by name -- a board may author any number of conditions.
+#
+# THE GRID ORDERS ITSELF (#1089): deployed first, opening A-Z. A toggle moves a card only as far as the
+# line between the two groups, so the deployed line keeps deploy order -- a stable partition of the
+# order already on screen, never a re-sort. The order is the screen's alone: the controller's roster
+# stays in entry order, which the restart buffer indexes by.
 
 # THE BAND'S HEIGHT IS WHAT THE ROSTER DOES NOT GET, and that makes it the roster's row budget as
 # much as the band's own (#977). What is left after the screen's margins, this, and the region chrome
@@ -32,10 +37,11 @@ class_name PreMissionScreen
 # exactly the 2 px of a deployed card's outline, so the second row read as drawn wrong rather than as
 # scrolled past. The window is the gap between rows: the viewport has to seat two whole rows and stop
 # before the third starts, i.e. land in [2*pitch - sep, 3*pitch - sep) where a pitch is a card plus
-# the grid's v_separation. 202 puts it in the middle of that window rather than flush against an
-# edge, because CARD_HEIGHT is a MINIMUM the card's own content has already grown past once.
+# the grid's v_separation. 202 put it in the middle of that window rather than flush against an
+# edge, because CARD_HEIGHT is a MINIMUM the card's own content has already grown past once; 194
+# since #1089, whose Reset order button makes the roster header 8 px taller (dev: the band pays it).
 # tests/ui/test_pre_mission_screen.gd is where that constraint is a law rather than this comment.
-const BAND_HEIGHT := 202
+const BAND_HEIGHT := 194
 const STASH_WIDTH := 260
 const CONTRACT_WIDTH := 296
 const GRID_COLUMNS := 3
@@ -54,9 +60,18 @@ const RING_WINDOW := 24
 # The words on this screen are the dev's to change; this identity is not.
 const SQUAD_TITLE_NODE := "SquadTitle"
 
+# How long a card glides to its new slot when the grid reorders (#1089). A GameKnobs row (Mission
+# tab); zero snaps.
+static var CARD_SLIDE_SECONDS := 0.2
+
 var _controller: MissionController
+# The DISPLAY order, and the one store of it -- the grid's child order is its render (#1089).
 var _cards: Array[PreMissionCard] = []
 var _grid: GridContainer
+var _reset_order_button: Button
+# Where each card stood before the last reorder, held until the grid lays the new order out.
+var _slide_origin: Dictionary[PreMissionCard, Vector2] = {}
+var _slide: Tween
 var _stash_box: VBoxContainer
 var _stash_zone: GearDropZone
 var _stash_hint: Label
@@ -86,7 +101,7 @@ func _init() -> void:
 static func open(game_node: Node, controller: MissionController) -> PreMissionScreen:
 	var screen := PreMissionScreen.new()
 	screen._controller = controller
-	game_node.ui_layer.add_child(screen)
+	game_node.card_layer.add_child(screen)
 	screen._build(game_node)
 	return screen
 
@@ -167,7 +182,7 @@ func _region(title: String, width: int = 0) -> Array:
 	header.add_child(count)
 	column.add_child(header)
 	column.add_child(HSeparator.new())
-	return [panel, column, count]
+	return [panel, column, count, header]
 
 
 # A scroll box that fills whatever room its region has left. THE growth law in one place: a list
@@ -196,6 +211,14 @@ func _build_roster() -> Control:
 	var panel: PanelContainer = parts[0]
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_force_count = parts[2]
+
+	_reset_order_button = Button.new()
+	_reset_order_button.text = "Reset order"
+	_reset_order_button.tooltip_text = UiText.wrap(
+		"Put the cards back in alphabetical order, deployed first.")
+	_reset_order_button.add_theme_font_size_override("font_size", 11)
+	_reset_order_button.pressed.connect(_on_reset_order)
+	(parts[3] as HBoxContainer).add_child(_reset_order_button)
 
 	_grid = GridContainer.new()
 	_grid.columns = GRID_COLUMNS
@@ -335,10 +358,86 @@ func _refresh_cards() -> void:
 			card.selected_item = _selected_item if _selected_owner == unit else null
 			_cards.append(card)
 			_grid.add_child(card)
+		_cards = _default_order()
+		_settle_order(false)   # nothing to slide from: these cards have never been drawn
 		return
 	for card in _cards:
 		card.selected_item = _selected_item if _selected_owner == card.unit else null
 		card.refresh()
+	_settle_order(true)
+
+
+# A-Z by name, roster order breaking a tie -- sort_custom is not stable, so the order has to be total.
+func _default_order() -> Array[PreMissionCard]:
+	var roster: Array[Unit] = _controller.roster_units()
+	var order: Array[PreMissionCard] = []
+	order.assign(_cards)
+	order.sort_custom(func(a: PreMissionCard, b: PreMissionCard) -> bool:
+		var by_name: int = a.unit.get_unit_name().naturalnocasecmp_to(b.unit.get_unit_name())
+		if by_name != 0:
+			return by_name < 0
+		return roster.find(a.unit) < roster.find(b.unit))
+	return order
+
+
+# Deployed first, each group keeping the order it already has. That one partition IS the toggle's
+# rule: a deploy lands at the end of the deployed line and an undeploy at the head of the reserve,
+# so a card moves only as far as the line between them -- and a toggle made on the board settles
+# the same way when the screen comes back.
+#
+# The cards MOVE, never rebuild, so each keeps its own state through the shuffle.
+func _settle_order(slide: bool) -> void:
+	var placed: Array[PreMissionCard] = []
+	var waiting: Array[PreMissionCard] = []
+	for card in _cards:
+		if _controller.game.is_deployed(card.unit):
+			placed.append(card)
+		else:
+			waiting.append(card)
+	_cards = placed
+	_cards.append_array(waiting)
+
+	var moved := false
+	for i in _cards.size():
+		if _cards[i].get_index() != i:
+			moved = true
+			break
+	if not moved:
+		return
+	if slide and CARD_SLIDE_SECONDS > 0.0:
+		var first := _slide_origin.is_empty()
+		for card in _cards:
+			if not _slide_origin.has(card):
+				_slide_origin[card] = card.position   # mid-flight, if a slide is still running
+		if first:
+			_grid.sort_children.connect(_slide_in, CONNECT_ONE_SHOT)
+	if _slide != null:
+		_slide.kill()
+		_slide = null
+	for i in _cards.size():
+		_grid.move_child(_cards[i], i)
+
+
+# Run by the grid's own sort, so every card already stands on the slot the container gave it: take
+# each back to where it was and glide it home. The container stays the one answer to where a slot is.
+func _slide_in() -> void:
+	var origin := _slide_origin
+	_slide_origin = {}
+	for key in origin:   # untyped: a typed loop variable dies on a freed card before any check runs
+		if not is_instance_valid(key):
+			continue
+		var card := key as PreMissionCard
+		var home := card.position
+		if home.is_equal_approx(origin[card]):
+			continue
+		if _slide == null:
+			_slide = create_tween().set_parallel(true)
+		card.position = origin[card]
+		_slide.tween_property(card, "position", home, CARD_SLIDE_SECONDS) \
+				.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if _slide != null:
+		# A re-sort mid-slide leaves a card on a stale target; one more sort at the end puts it right.
+		_slide.finished.connect(_grid.queue_sort)
 
 
 func _refresh_stash() -> void:
@@ -484,7 +583,7 @@ func _refresh_contract() -> void:
 	for child in _objectives_box.get_children():
 		_objectives_box.remove_child(child)
 		child.free()
-	for row: Label in MissionStatusPanel.briefing_rows(_controller, _controller.game._board()):
+	for row: Label in MissionStatusPanel.briefing_rows(_controller.mission, _controller.game._board()):
 		_objectives_box.add_child(row)
 
 
@@ -523,6 +622,11 @@ func _on_begin() -> void:
 	_controller.confirm_and_commit()
 
 
+func _on_reset_order() -> void:
+	_cards = _default_order()
+	_settle_order(true)
+
+
 # A detail card (#732, widened to runes at #1019) stacks over this screen and claims the modal lock,
 # which is what stops Tab swapping the board in behind it. WHICH card, and whether the screen redraws
 # on the way out, are both ItemDetail's -- one fork, in one place, beside the chip that raised it.
@@ -538,8 +642,10 @@ func _on_detail_requested(item: Item, owner_unit: Unit) -> void:
 # The card offers the job; the screen performs it, the same division every gear move keeps. Deferred
 # like every other mutation here so that one place decides when the screen redraws -- and the redraw
 # is real work either way: the ability chips, the stat grid and the derived strip all follow a job.
+#
+# Through the Loadout, the one door a pick takes on this screen and in the headless Play API (#46).
 func _on_job_picked(target: Unit, job_id: String) -> void:
-	_last_refusal = target.set_sole_job(job_id)
+	_last_refusal = _controller.loadout().set_job(target, job_id)
 	_hover_note = ""
 	_redraw()
 

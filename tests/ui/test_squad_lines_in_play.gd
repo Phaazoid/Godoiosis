@@ -1,6 +1,6 @@
 # The squad's lines in play (#1070): hovering and choosing a move draw the tethers and the grey
 # out-of-range tiles through the real doors, a refused click shakes instead of leaving, and Squad Up
-# works from a leader and stays open. The geometry itself is test_squad_lines; this is the wire.
+# works from a leader and stays open. Hovering an ENEMY draws its squad's lines too (#1109). The geometry itself is test_squad_lines; this is the wire.
 #
 # The real game scene, because every claim here is about what a hover or a click DOES -- which mode it
 # leaves the board in, which cache it reads -- and a case that set game_state directly would be blind to
@@ -48,8 +48,8 @@ func _open_ground() -> void:
 			game.grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
 
 
-func _spawn(dex: int, cell: Vector2i) -> Unit:
-	var unit: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.DEX: dex}, Team.Faction.PLAYER), cell)
+func _spawn(dex: int, cell: Vector2i, faction := Team.Faction.PLAYER) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.DEX: dex}, faction), cell)
 	assert_object(unit).is_not_null()
 	return unit
 
@@ -220,11 +220,20 @@ func test_a_leaders_stranding_tile_strains_exactly_the_members_it_strands() -> v
 # An enemy placed so its field covers tiles a squad's move can reach, and blocks none of them: the
 # reach LINES are drawn only where an enemy's field covers the hovered tile, so without one the
 # "no reach lines" half of the cases below could not fail.
+# ARMED, because a unit with nothing to fire reaches nothing (#1215): these cases need an enemy whose
+# reach covers a tile, and a unit of yours whose red can be seen. The pattern-less fixture weapon is
+# adjacency, the same geometry the bare fist used to stand in for, and weighs nothing, so no MOV moves.
 func _enemy_at(cell: Vector2i) -> Unit:
 	var enemy: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), cell)
 	assert_object(enemy).is_not_null()
+	enemy.equipped_weapon = H.make_weapon()
 	game.drop_threat_field()
 	return enemy
+
+
+func _arm(unit: Unit) -> void:
+	unit.equipped_weapon = H.make_weapon()
+	game.drop_threat_field()
 
 
 func _red() -> Array:
@@ -238,6 +247,7 @@ func _red() -> Array:
 func test_a_tile_past_the_leaders_range_draws_the_ghost_and_the_tether_and_nothing_else() -> void:
 	var board: Dictionary = await _squad(5, [{"dex": DEX_FAST, "cell": Vector2i(-1, 0)}])
 	var member: Unit = board.members[0]
+	_arm(member)
 	_enemy_at(Vector2i(-9, 0))
 	await await_idle_frame()
 	var reach: Dictionary = game.compute_move_range(member)
@@ -278,6 +288,7 @@ func test_a_tile_past_the_leaders_range_draws_the_ghost_and_the_tether_and_nothi
 func test_a_leaders_stranding_tile_draws_no_reach_and_no_reach_lines() -> void:
 	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_SLOW, "cell": Vector2i(-3, 0)}])
 	var leader: Unit = board.leader
+	_arm(leader)
 	_enemy_at(Vector2i(10, 0))
 	await await_idle_frame()
 	game.selected_unit = leader
@@ -311,6 +322,7 @@ func test_a_leaders_stranding_tile_draws_no_reach_and_no_reach_lines() -> void:
 func test_a_group_moves_stranding_tile_clears_the_red_the_last_tile_drew() -> void:
 	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_SLOW, "cell": Vector2i(-3, 0)}])
 	var leader: Unit = board.leader
+	_arm(leader)
 	game.selected_unit = leader
 	game.enter_group_move_mode(leader)
 	var followable := GridUtils.NO_CELL
@@ -340,6 +352,7 @@ func test_a_group_moves_stranding_tile_clears_the_red_the_last_tile_drew() -> vo
 func test_hovering_off_the_range_puts_the_red_back_where_move_opened_it() -> void:
 	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
 	var member: Unit = board.members[0]
+	_arm(member)
 	game.selected_unit = member
 	game.enter_move_mode(member)
 	var opened := _red()
@@ -472,3 +485,216 @@ func test_the_join_that_fills_the_squad_holds_its_count_then_fades_it() -> void:
 			"the full count never faded out").is_null()
 	OverlayManager.SQUAD_COUNT_HOLD = hold
 	OverlayManager.SQUAD_COUNT_FADE = fade
+
+
+# --- Membership moments (#367) -------------------------------------------------------------------
+# What a join or a leave DOES on the real board: the presenter hears the real SquadManager, the store
+# plays the moment, and a draw-in holds its pair's standing tether back. This fixture clears the board
+# rather than landing a mission, so each case arms the presenter itself -- except the one that pins
+# the landing doing it.
+
+# A Squad Up pick draws the recruit's tether IN, and the squad's redraw one line later -- which puts
+# the recruit's tether up whole -- must find it already held back. Asked the moment the click returns,
+# which is the frame the player would see it in.
+func test_a_squad_up_pick_draws_the_recruit_in_and_holds_its_standing_tether_back() -> void:
+	var saved := [SquadLines2D.DRAW_IN_SECONDS, SquadLines2D.POP_SECONDS]
+	SquadLines2D.DRAW_IN_SECONDS = 30.0
+	var board: Dictionary = await _squad(5, [])
+	var leader: Unit = board.leader
+	var first := _spawn(5, Vector2i(1, 0))
+	_spawn(5, Vector2i(0, 1))
+	await await_idle_frame()
+	game.squad_tether_presenter.arm()
+
+	game.create_squad(leader)
+	game._click_picking_target(first.movement.cell)
+	var moments: Array[Dictionary] = _om().squad_tether_moments.duplicate()
+	var drawn := _om().drawn_squad_tethers.size()
+	var standing := _om().squad_tethers.size()
+	var recruit_standing := _tether_state_of(first)
+
+	SquadLines2D.DRAW_IN_SECONDS = 0.0
+	SquadLines2D.POP_SECONDS = 0.0
+	await await_idle_frame()
+	await await_idle_frame()
+	var after_moments := _om().squad_tether_moments.size()
+	var after_drawn := _om().drawn_squad_tethers.size()
+	SquadLines2D.DRAW_IN_SECONDS = saved[0]
+	SquadLines2D.POP_SECONDS = saved[1]
+
+	assert_int(moments.size()).override_failure_message(
+			"the pick played %d moments the moment it returned" % moments.size()).is_equal(1)
+	assert_int(int(moments[0]["moment"])).is_equal(SquadLines2D.Moment.DRAW_IN)
+	assert_that(moments[0]["from"]).override_failure_message("the draw-in is not the recruit's") \
+		.is_equal(first.get_projected_destination())
+	assert_that(moments[0]["to"]).is_equal(leader.get_projected_destination())
+	assert_int(recruit_standing).override_failure_message(
+			"fixture: the reopened pick did not put the recruit's tether up").is_equal(SquadLines2D.Strain.SOLID)
+	assert_int(drawn).override_failure_message(
+			"the recruit's whole tether drew under its own draw-in").is_equal(standing - 1)
+	assert_int(after_moments).override_failure_message("the draw-in never finished").is_equal(0)
+	assert_int(after_drawn).override_failure_message(
+			"the recruit's tether was not handed back after its draw-in").is_equal(_om().squad_tethers.size())
+
+
+# The menu's Leave Squad reels the member's tether into its leader -- the cause is the verb's, so a
+# forced-exit door answering here would reel nothing.
+func test_leave_squad_from_the_menu_reels_the_tether_in() -> void:
+	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(1, 0)}])
+	var leader: Unit = board.leader
+	var member: Unit = board.members[0]
+	var from := member.get_projected_destination()
+	var to := leader.get_projected_destination()
+	game.squad_tether_presenter.arm()
+
+	game.main_action_menu.on_pressed(MainActionMenu.LEAVESQUAD, member)
+	await await_idle_frame()   # a leave settles at the end of the frame, after any cascade
+
+	var reels: Array[Dictionary] = []
+	for entry: Dictionary in _om().squad_tether_moments:
+		if entry["moment"] == SquadLines2D.Moment.REEL_IN:
+			reels.append(entry)
+	assert_bool(member.squad == leader.squad).override_failure_message("fixture: the member did not leave") \
+		.is_false()
+	assert_int(reels.size()).override_failure_message("Leave Squad reeled in %d tethers" % reels.size()) \
+		.is_equal(1)
+	assert_that(reels[0]["from"]).is_equal(from)
+	assert_that(reels[0]["to"]).is_equal(to)
+
+
+# LOADING IS INERT, and the landing is what says so: the squads a board arrives with are the baseline,
+# and only what changes after the battle begins plays. Driven through the real landing door.
+func test_the_battle_landing_arms_the_moments_and_the_board_it_lands_on_plays_nothing() -> void:
+	var board: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(1, 0)}])
+	var leader: Unit = board.leader
+	assert_bool(game.squad_tether_presenter.is_live()).override_failure_message(
+			"fixture: a cleared board is already armed").is_false()
+
+	game.mission_controller._begin_turn(false)
+	await await_idle_frame()
+	var on_landing := _om().squad_tether_moments.size()
+	var late := _spawn(5, Vector2i(0, 1))
+	game.squad_manager.join_squad(late, leader.squad)
+
+	assert_int(on_landing).override_failure_message(
+			"the squads the board landed with played as moments").is_equal(0)
+	assert_int(_om().squad_tether_moments.size()).override_failure_message(
+			"a join after the battle began played nothing -- the landing never armed the moments") \
+		.is_equal(1)
+
+
+# --- An enemy squad's lines, on enemy hover (#1109) ---------------------------------------------
+
+# An enemy squad whose first member stands on `member_cell` -- beside the player fixture's leader,
+# so one of ours can reach it -- with its leader two cells on and a second member off to the side.
+func _enemy_squad(member_cell: Vector2i) -> Dictionary:
+	var leader := _spawn(5, member_cell + Vector2i(2, 0), Team.Faction.ENEMY)
+	leader.unit_instance.stats[Stats.Stat.COH] = FIXTURE_COH
+	leader.unit_instance.stats[Stats.Stat.LDR] = 8 * Squad.MEMBER_LDR_COST
+	await await_idle_frame()
+	var members: Array[Unit] = []
+	for cell: Vector2i in [member_cell, member_cell + Vector2i(2, 2)]:
+		var member := _spawn(5, cell, Team.Faction.ENEMY)
+		game.squad_manager.join_squad(member, leader.squad)
+		members.append(member)
+	await await_idle_frame()
+	return {"leader": leader, "members": members}
+
+
+# Queues a bare-handed swing from `hero` at `target` through the real door -- which is also what makes
+# the hero's squad the ACTIVE one, the mid-plan state these cases need.
+func _queue_swing(hero: Unit, target: Unit) -> void:
+	var action := AttackAction.declare(hero, hero.movement.cell, target.movement.cell)
+	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
+			"fixture: the swing never queued (%s)" % ", ".join(action.validation_errors)).is_true()
+
+
+# The dev: "there's no good way to see the enemy's COH range at all." Hovering a MEMBER draws its
+# whole squad's lines round the leader, in the enemy colour; your own squad after it is yours again,
+# and bare ground takes them down.
+func test_hovering_an_enemy_member_draws_its_squads_lines_in_the_enemy_colour() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	var theirs: Dictionary = await _enemy_squad(Vector2i(1, 0))
+	var member: Unit = theirs.members[1]
+
+	game.hover_presenter.update_hover_visuals(member.movement.cell)
+	assert_int(_om().squad_tether_chords.size()).override_failure_message(
+			"hovering an enemy member did not draw one tether per member of its squad").is_equal(2)
+	assert_bool(_om().squad_outline.is_empty()).override_failure_message(
+			"hovering an enemy member drew no range stroke").is_false()
+	assert_bool(_om().squad_lines_hostile).override_failure_message(
+			"an enemy squad's lines were stored as the player's").is_true()
+	var flat := _om().get_node("SquadLines2D") as SquadLines2D
+	assert_bool(flat.hostile).override_failure_message(
+			"the flat view was never told the lines are an enemy's").is_true()
+
+	game.hover_presenter.update_hover_visuals(mine.leader.movement.cell)
+	assert_bool(_om().squad_lines_hostile).override_failure_message(
+			"your own squad, hovered next, kept the enemy colour").is_false()
+
+	game.hover_presenter.update_hover_visuals(Vector2i(-6, -6))
+	assert_bool(_om().squad_tether_chords.is_empty() and _om().squad_outline.is_empty()) \
+		.override_failure_message("hovering bare ground left a squad's lines up").is_true()
+
+
+# Mid-plan is when a shove to split them gets planned, so the lines draw while your squad is active
+# (dev, 2026-09-27) -- only the rings keep that gate.
+func test_an_enemy_squads_lines_draw_while_your_squad_is_mid_plan() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	var theirs: Dictionary = await _enemy_squad(Vector2i(1, 0))
+	var target: Unit = theirs.members[0]
+	_queue_swing(mine.leader, target)
+	assert_object(game.squad_manager.active_squad).override_failure_message(
+			"fixture: queueing did not make the squad active, so this is not mid-plan") \
+		.is_same(mine.leader.squad)
+
+	game.hover_presenter.update_hover_visuals(target.movement.cell)
+	assert_int(_om().squad_tether_chords.size()).override_failure_message(
+			"an enemy's squad lines were withheld while your squad is mid-plan").is_equal(2)
+	assert_bool(_om().squad_lines_hostile).is_true()
+
+
+# A lone enemy has no squadmates and so no lines -- and hovering it takes down what was up.
+func test_hovering_a_lone_enemy_draws_no_squad_lines() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	var loner := _spawn(5, Vector2i(4, 4), Team.Faction.ENEMY)
+	game.hover_presenter.update_hover_visuals(mine.leader.movement.cell)
+	assert_bool(_om().squad_tether_chords.is_empty()).override_failure_message(
+			"fixture: your squad's lines were not up to be taken down").is_false()
+
+	game.hover_presenter.update_hover_visuals(loner.movement.cell)
+	assert_bool(_om().squad_tether_chords.is_empty() and _om().squad_outline.is_empty()) \
+		.override_failure_message("a lone enemy drew squad lines").is_true()
+
+
+# A pass takes the hover's lines down before it plays: the pointer stops polling once the board locks,
+# so a tether left up would stand intact beside its own break at the blow. Read AT the blow, through
+# the pass's own mid-pass signal -- after the pass, other doors clear the lines anyway.
+#
+# The pointer is the 3D picker's shape, a SOURCE that holds its cell: battle3d stops picking while the
+# board is locked. Hovering through the flat scene's own mouse instead is blind to the fault -- the
+# pass pans the camera, the mouse lands on another cell, and the hover's own repaint clears the lines
+# by accident (measured: the mutant without the clear passed that way).
+func test_a_pass_takes_the_hover_lines_down_before_its_first_blow() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	var theirs: Dictionary = await _enemy_squad(Vector2i(1, 0))
+	var hero: Unit = mine.leader
+	var target: Unit = theirs.members[0]
+	_queue_swing(hero, target)
+	var pointed := target.movement.cell
+	game.hover_presenter.pointer_source = func() -> Vector2i: return pointed
+	await await_idle_frame()   # the real poll lands the hover
+	assert_bool(_om().squad_tether_chords.is_empty()).override_failure_message(
+			"fixture: the enemy's lines were not up when the pass began").is_false()
+
+	var at_the_blow: Array[int] = []
+	var record := func(_attack: AttackAction) -> void:
+		at_the_blow.append(_om().squad_tether_chords.size())
+	game.order_executor.volley_struck.connect(record)
+	await game.order_executor.execute_orders(hero)
+	game.order_executor.volley_struck.disconnect(record)
+
+	assert_bool(at_the_blow.is_empty()).override_failure_message(
+			"fixture: no blow landed, so nothing was read at one").is_false()
+	assert_int(at_the_blow[0]).override_failure_message(
+			"the hover's squad lines were still up at the blow").is_equal(0)

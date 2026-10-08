@@ -129,6 +129,22 @@ func ignores_def() -> bool:
 func status_text() -> String:
 	return ""
 
+# The family's live count as numbers (#1045) -- the structured half of status_text, which a family
+# with a count words its sentence from. null = this family keeps none.
+func gauge() -> WeaponGauge:
+	return null
+
+# Which attack rows print gauge(): the ones whose authored readiness flags tie them to the economy
+# (#108 -- the flags are the only thing a family may consult). A family whose count reaches its
+# attacks some other way (a tank, a rev timer) overrides this.
+func attack_gauge(_wielder: Unit, attack: AttackData) -> WeaponGauge:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return null
+	if not (weapon_attack.requires_readiness or weapon_attack.consumes_readiness or weapon_attack.builds_readiness):
+		return null
+	return gauge()
+
 # Battle-state seam (#87): this family's signature-mechanic runtime state, non-@export so a
 # mission boundary still resets it for free. Dict, not one int -- families may need >1 field.
 func capture_battle_state() -> Dictionary:

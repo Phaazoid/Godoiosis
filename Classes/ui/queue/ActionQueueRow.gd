@@ -5,7 +5,8 @@ class_name ActionQueueRow
 # sprite, an hp->hp readout, the cancel X -- and, when the hit had elemental consequences, a second
 # CONSEQUENCE line under them. Draws whatever BaseAction it is handed and asks the ORDER every
 # question about itself (icon, description, validity, whether it may be dragged), so a new action
-# type needs nothing here. Built by SquadActionQueueControl, which owns the drag and the sectioning.
+# type needs nothing here. Built by SquadActionQueueControl, which owns the drag, the click (#1122)
+# and the sectioning.
 #
 # EVERY FACT GETS ITS OWN SLOT (#685). The row used to stack four of them into three 32px squares
 # through `show_behind_parent`: state icons under the verb, the hp readout over it, reaction art
@@ -32,9 +33,12 @@ class_name ActionQueueRow
 const BADGE_FELL := "Fell %d"
 const BADGE_DROWNED := "Drown"
 const BADGE_VOID := "Void"
+const BADGE_HELD := "Held %d"       # #120: tiles of a shove the target's weight absorbed
 const BADGE_INSULATED := "Shrug"
 const BADGE_VIAL := "Vial"
 const BADGE_TANK := "Tank"
+const BADGE_SPLIT := "Split"        # the dev's word (#367); one unit leaves its squad
+const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -53,15 +57,16 @@ var _hovered := false
 
 signal cancel_requested(action: BaseAction)
 signal hover_changed(action: BaseAction, hovering: bool)
-signal drag_requested(row: ActionQueueRow)
+signal pressed(row: ActionQueueRow)          # the left press; the panel decides drag or click on release
+signal expand_toggled(row: ActionQueueRow)   # a volley header's readout (#1122)
 
 func setup(action_ref: BaseAction):
 	action = action_ref
 
-	actor_texture.texture = action.get_actor_texture()
+	_show_in(actor_texture, action.get_actor_texture())
 	actor_texture.modulate = action.get_actor_modulate()
 	action_icon.texture = action.get_action_icon()
-	target_texture.texture = action.get_target_texture()
+	_show_in(target_texture, action.get_target_texture())
 	description_label.text = action.get_description()
 
 	var outcome := action.resolved_outcome()
@@ -163,6 +168,9 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	# out which popup belonged to which reaction, because the two channels no longer share one list.
 	if outcome.insulated:
 		_add_event(BADGE_INSULATED, PlanResolver.INSULATED_POPUP)
+	# A fully held shove draws no trail, so this badge is the queue's whole account of it (Law #2).
+	if outcome.knockback_held > 0:
+		_add_event(BADGE_HELD % outcome.knockback_held, PlanResolver.HELD_POPUP % outcome.knockback_held)
 	if outcome.fall_levels > 0:
 		_add_event(BADGE_FELL % outcome.fall_levels, PlanResolver.FELL_POPUP % outcome.fall_levels)
 	if outcome.drown_damage > 0:
@@ -184,6 +192,16 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	if outcome.charge_spent:
 		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), BADGE_TANK,
 			UiText.wrap("Spends a supercharged shot")))
+	# A SPLIT (#367): this blow knocks someone out of a squad, forecast by SplitForecast. Tether
+	# orange because it is about the squad link; the hover names who, and nothing more -- the
+	# wording is the dev's to add.
+	if not outcome.splits.is_empty():
+		var word: String = BADGE_SPLIT if outcome.splits.size() == 1 else BADGE_SPLITS % outcome.splits.size()
+		var names: Array[String] = []
+		for unit in outcome.splits:
+			if is_instance_valid(unit):
+				names.append(unit.get_unit_name())
+		consequence.add_child(_chip(split_ink(), word, UiText.wrap(", ".join(names))))
 	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
 	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
 	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
@@ -191,9 +209,10 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 # One tinted pill. The tooltip goes on the pill AND its label: a Label defaults to
 # MOUSE_FILTER_IGNORE, so the viewport never picks it and the text is dead however right it is.
 func _chip(tint: Color, text: String, tip: String) -> Control:
+	# PASS, not STOP: picked for the tooltip, and the press still reaches the row's click (#1122).
 	var pill := PanelContainer.new()
 	pill.add_theme_stylebox_override("panel", QueueStyle.tint_box(tint))
-	pill.mouse_filter = Control.MOUSE_FILTER_STOP
+	pill.mouse_filter = Control.MOUSE_FILTER_PASS
 	pill.tooltip_text = tip
 
 	var label := Label.new()
@@ -201,11 +220,16 @@ func _chip(tint: Color, text: String, tip: String) -> Control:
 	label.add_theme_font_size_override("font_size", QueueStyle.CONSEQUENCE_FONT_SIZE)
 	label.add_theme_color_override("font_color", tint)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
 	label.tooltip_text = tip
 	pill.add_child(label)
 	return pill
 
+
+# The Split chip's ink (#367): the tether's own orange, adapted to the palette like any authored
+# tint. Opaque, because the chip builds its own translucent fill from it.
+static func split_ink() -> Color:
+	return QueueStyle.adapted_ink(Color(SquadLines2D.TETHER_COLOR, 1.0))
 
 # A world-event pill: this panel's short badge, with the resolver's dramatic word on hover.
 func _add_event(badge: String, spoken: String) -> void:
@@ -231,7 +255,7 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	var tip := damage_tip(outcome, subject)
 	readout.tooltip_text = tip
 	readout_card.tooltip_text = tip
-	readout.mouse_filter = Control.MOUSE_FILTER_STOP
+	readout.mouse_filter = Control.MOUSE_FILTER_PASS   # the chips' reason, see _chip
 
 	# Team-color the readout: green when a friendly is losing HP, red for an enemy.
 	var friendly := true
@@ -269,18 +293,32 @@ func is_reorderable_row() -> bool:
 	return action != null and action.is_reorderable()
 
 func _gui_input(event: InputEvent) -> void:
-	# Draggable single attacks AND volley headers (collapsed header: drag to reorder / click to expand).
-	if not (draggable or is_volley_header):
+	# EVERY row takes the press since #1122, because a click on any row means something. Which it
+	# was, a drag or a click, is only known on the release, so that call is the panel's.
+	if action == null:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		drag_requested.emit(self)
+		pressed.emit(self)
 		accept_event()
+
+# A volley header's readout is its expand toggle (#1122): a click on the row requeues the volley like
+# any other order, so expanding needed a target of its own. STOP keeps this press from the row.
+func _on_readout_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		expand_toggled.emit(self)
+		readout_card.accept_event()
+
+# A unit's sheet is 64px holding a ~23x20 character, so fitting the whole CELL into a 32px slot drew
+# everyone at a third of the slot (#1082, the #937 law). The slot is handed the square around the
+# sprite's own ink and stretches it, so every unit fills its slot on its own scale (dev ruling).
+func _show_in(slot: TextureRect, texture: Texture2D) -> void:
+	slot.texture = MapSpriteInk.portrait(texture)
 
 func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> void:
 	action = lead
 	is_volley_header = true
 
-	actor_texture.texture = lead.get_actor_texture()
+	_show_in(actor_texture, lead.get_actor_texture())
 	actor_texture.modulate = lead.get_actor_modulate()
 
 	# Plain attack icon (not the lead's lethality icon — the group has many outcomes).
@@ -293,6 +331,8 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 	# and this is the slot that is free rather than one to draw over (#685).
 	readout.text = ("[-] x%d" if expanded else "[+] x%d") % count
 	_show_readout(QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	readout_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	readout_card.gui_input.connect(_on_readout_input)
 	_apply_row_style()
 
 	# Cancelling the summary cancels the whole volley (it's one aim) — keep the X live.

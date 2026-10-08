@@ -21,6 +21,14 @@ const WATCH_ONLY: Array = [BaseAction.ActionType.OVERWATCH]
 const GUARD_ONLY: Array = [BaseAction.ActionType.GUARD]
 
 
+func before_test() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # #1230: this suite owns its AI profile
+
+
+func after_test() -> void:
+	AIProfiles.clear_fixtures()
+
+
 func _board_of(size := Rect2i(0, 0, 8, 8)) -> Dictionary:
 	var board: Dictionary = BB.build(self)
 	auto_free(board.root)
@@ -315,8 +323,7 @@ func test_a_guard_wards_the_ally_the_most_enemies_can_reach() -> void:
 
 
 # ZERO EXPOSURE REFUSES. "Most exposed" presumes exposure above zero -- without the refusal a Guard
-# would pre-empt INTIMIDATE (the verb directly below it) with a purposeless ward every time an ally
-# happened to be standing next to it. Same board, no enemy on it at all.
+# would spend the action on a purposeless ward every time an ally happened to be standing next to it. Same board, no enemy on it at all.
 func test_a_guard_refuses_when_nobody_can_be_reached() -> void:
 	var board := _board_of()
 	var guard: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
@@ -326,6 +333,23 @@ func test_a_guard_refuses_when_nobody_can_be_reached() -> void:
 	assert_bool(AITactics.queue_main_action(guard, _context(board), board.squad_manager, GUARD_ONLY)) \
 		.override_failure_message("the guard warded an ally nothing threatens, spending an action on nothing"
 			).is_false()
+	assert_object(_queued_guard(guard)).is_null()
+
+
+# AN ENEMY WITH NOTHING TO FIRE THREATENS NOBODY (#1215). The exposure count aimed with the enemy's
+# fired attack, which is null for an empty hand, and Reach reads a null as bare-fist adjacency -- so
+# an unarmed foe one step from the ally counted as a threat the player's own rules say it is not.
+func test_a_guard_ignores_an_enemy_with_nothing_to_fire() -> void:
+	var board := _board_of()
+	var guard: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	var ally: Unit = _spawn(board, PLAYER, Vector2i(4, 3))
+	board.squad_manager.join_squad(ally, guard.squad)
+	var bare: Unit = _spawn(board, ENEMY, Vector2i(4, 1), false)   # one step from standing beside the ally
+	assert_bool(bare.can_fire_default_attack()).override_failure_message(
+			"fixture: an empty hand should have nothing to fire").is_false()
+
+	assert_bool(AITactics.queue_main_action(guard, _context(board), board.squad_manager, GUARD_ONLY)) \
+		.override_failure_message("the guard warded an ally against an enemy with nothing to fire").is_false()
 	assert_object(_queued_guard(guard)).is_null()
 
 
@@ -419,3 +443,110 @@ func test_the_same_watcher_one_cell_back_still_faces_the_enemy() -> void:
 		return
 	assert_vector(watch.target_cell).override_failure_message(
 			"with no route to rank, the watch should simply face the enemy").is_equal(Vector2i(3, 4))
+
+
+# --- #1209: both builders decide on the board the squad's plan leaves -----------------------------
+# Each runs AFTER the squad's attacks are queued, so these queue a squadmate's attack for real first.
+
+func _queue_hit(board: Dictionary, attacker: Unit, target: Unit) -> void:
+	assert_bool(board.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, target))
+			).override_failure_message("the fixture's own attack was refused -- the case would prove nothing").is_true()
+
+
+# The corpse case above, one step earlier: the nearest enemy is still STANDING on the live board, but
+# a squadmate's queued blow fells it, so it can never enter the watch. The watch faces the next living
+# enemy instead. The mutant is the live lifecycle read, which faces the doomed one at (5, 4).
+func test_a_watcher_skips_the_enemy_its_squadmate_fells_this_turn() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon()
+	var killer: Unit = _spawn(board, PLAYER, Vector2i(6, 4))
+	killer.equipped_weapon = H.make_weapon(99)
+	board.squad_manager.join_squad(killer, watcher.squad)
+	var doomed: Unit = _spawn(board, ENEMY, Vector2i(5, 4))
+	_spawn(board, ENEMY, Vector2i(4, 0))
+	_queue_hit(board, killer, doomed)
+	var ctx := _context(board)
+	assert_bool(PlanResolver.actor_is_live(doomed, board.squad_manager.resolve_plan(watcher.squad, ctx).hypo)
+			).override_failure_message("fixture is vacuous: the squadmate's blow leaves the nearest enemy standing").is_false()
+
+	assert_bool(AITactics.queue_main_action(watcher, ctx, board.squad_manager, WATCH_ONLY)).is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"the watch faces an enemy the squad's own plan has already felled").is_equal(Vector2i(4, 3))
+
+
+# A squadmate's queued shove carries the enemy from the watcher's north lane to its east side. Live,
+# the enemy stands IN the north lane (0 hops); where the plan puts it, the east lane is 3 hops off and
+# the north one 4 -- the lane length is 3 so those two do not tie.
+func _shoved_board() -> Dictionary:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(2, 4))
+	watcher.equipped_weapon = _watch_weapon(3)
+	var shover: Unit = _spawn(board, PLAYER, Vector2i(1, 2))
+	shover.equipped_weapon = H.make_weapon(1)
+	(shover.equipped_weapon as WeaponInstance).template.main_attack.knockback = 4
+	board.squad_manager.join_squad(shover, watcher.squad)
+	var enemy: Unit = _spawn(board, ENEMY, Vector2i(2, 2))
+	_queue_hit(board, shover, enemy)
+	board["watcher"] = watcher
+	board["shover"] = shover
+	board["enemy"] = enemy
+	return board
+
+
+func test_a_watcher_faces_where_its_squadmate_shoves_the_enemy() -> void:
+	var board := _shoved_board()
+	var watcher: Unit = board.watcher
+	var enemy: Unit = board.enemy
+	var ctx := _context(board)
+	assert_vector(PlanResolver.projected_position(enemy, board.squad_manager.resolve_plan(watcher.squad, ctx).hypo)
+			).override_failure_message("fixture is vacuous: the shove does not carry the enemy east").is_equal(Vector2i(6, 2))
+
+	assert_bool(AITactics.queue_main_action(watcher, ctx, board.squad_manager, WATCH_ONLY)).is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"the watch faces the cell the squad's own shove empties").is_equal(Vector2i(3, 4))
+
+
+# The decision stands every unit on its planned cell; the queue must see them back where they are.
+func test_the_watch_builder_hands_the_board_back() -> void:
+	var board := _shoved_board()
+	var before := {}
+	for child in board.units_root.get_children():
+		before[child] = (child as Unit).movement.cell
+	assert_bool(AITactics.queue_main_action(board.watcher, _context(board), board.squad_manager, WATCH_ONLY)).is_true()
+	for unit: Unit in before:
+		assert_vector(unit.movement.cell).override_failure_message(
+				"%s was left on its planned cell" % unit.get_unit_name()).is_equal(before[unit])
+
+
+# The ally's one threat is felled by a squadmate's queued blow, so nothing reaches the ally and the
+# guard refuses (zero exposure refuses). The precondition is the same ally counting that threat on the
+# live board, so the refusal cannot be a fixture where the foe never reached it.
+func test_a_guard_refuses_once_its_squadmate_fells_the_only_threat() -> void:
+	var board := _board_of()
+	var guard: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	var ally: Unit = _spawn(board, PLAYER, Vector2i(4, 5))
+	var killer: Unit = _spawn(board, PLAYER, Vector2i(5, 7))
+	killer.equipped_weapon = H.make_weapon(99)
+	board.squad_manager.join_squad(ally, guard.squad)
+	board.squad_manager.join_squad(killer, guard.squad)
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(4, 7))
+	var ctx := _context(board)
+	var candidates: Array[Unit] = [ally]
+	assert_int(int(AITactics._exposure_counts(candidates, ctx, PLAYER).get(ally, 0))).override_failure_message(
+			"fixture is vacuous: the foe cannot reach the ally even standing").is_equal(1)
+	_queue_hit(board, killer, foe)
+
+	assert_bool(AITactics.queue_main_action(guard, ctx, board.squad_manager, GUARD_ONLY)).override_failure_message(
+			"the guard warded an ally whose only threat the squad's own plan fells").is_false()
+	assert_object(_queued_guard(guard)).is_null()

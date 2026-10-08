@@ -113,6 +113,61 @@ func test_a_counter_spends_a_shot() -> void:
 	assert_int(weapon.shots_remaining).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE - 1)
 
 
+# A counter the pass SKIPS spends nothing (#46). The foe's swing fells the hero first, so the hero's
+# counter is marked skipped (R7) and never fires. The headless executor spent firing costs ABOVE its
+# skipped check, so a felled carbine paid a round for a shot it never took; AttackAction.execute has
+# always returned before any spend, and both hosts now pass the same open_playback.
+func test_a_counter_the_pass_skips_spends_no_round() -> void:
+	var s := _board(Vector2i(0, 0), Vector2i(2, 0))
+	var sess = s.sess
+	var hero: Unit = s.hero
+	var foe: Unit = s.foe
+	var weapon: CarbineWeaponInstance = s.weapon
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	t.main_attack = WeaponAttackData.new()
+	t.main_attack.power = 3
+	P.point(t.main_attack, 2)
+	foe.add_item(WeaponInstance.make(t))
+	hero.set_current_hp(1)   # any blow fells it before it can answer
+
+	sess.end_turn()   # hand the turn to ENEMY
+	assert_bool(sess.queue_attack(sess.handle_for(foe), hero.movement.cell).ok).is_true()
+	var prev: Dictionary = sess.preview()
+	assert_int(prev.plan.counters.size()).override_failure_message(
+			"fixture: the carbine drew no counter, so there is nothing for the pass to skip").is_greater(0)
+	assert_bool(prev.plan.counters[0].skipped).override_failure_message(
+			"fixture: the felled hero's counter was not skipped").is_true()
+
+	sess.execute()
+	assert_int(weapon.shots_remaining).override_failure_message(
+			"a counter the pass skipped spent a round headlessly -- the game spends nothing for it").is_equal(
+			CarbineWeaponInstance.MAGAZINE_SIZE)
+
+
+# ...and the other side of that gate: a shot at open ground has no victim and STILL spends (#97,
+# kept by #46). A cell attack (target null, #47) passes open_playback and lands on nobody, and what
+# firing costs is paid hit or whiff.
+func test_a_shot_at_open_ground_still_spends_a_round() -> void:
+	var s := _board()
+	var sess = s.sess
+	var hero: Unit = s.hero
+	var weapon: CarbineWeaponInstance = s.weapon
+	weapon.template.main_attack.targets = EquippableData.TargetMode.BOTH   # may be aimed at the ground
+	var ground := Vector2i(0, 2)
+
+	assert_bool(sess.queue_attack(sess.handle_for(hero), ground).ok).override_failure_message(
+			"fixture: the shot at open ground was refused").is_true()
+	var plan: ResolvedPlan = sess.squad_manager.resolve_plan(hero.squad, sess._board())
+	assert_object((plan.attacks[0] as AttackAction).target).override_failure_message(
+			"fixture: the shot found a victim, so this is not a cell attack").is_null()
+
+	sess.execute()
+	assert_int(weapon.shots_remaining).override_failure_message(
+			"a shot at open ground spent nothing headlessly -- a cell attack rearmed itself for free").is_equal(
+			CarbineWeaponInstance.MAGAZINE_SIZE - 1)
+
+
 func test_an_empty_carbine_does_not_counter() -> void:
 	var s := _board(Vector2i(0, 0), Vector2i(2, 0))
 	var sess = s.sess

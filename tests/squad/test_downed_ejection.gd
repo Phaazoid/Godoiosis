@@ -199,7 +199,7 @@ func test_a_same_pass_rescue_revives_ejects_and_spends() -> void:
 func test_an_armed_squadmate_enters_crisis_mid_pass_and_keeps_its_squad() -> void:
 	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, Team.Faction.PLAYER), Vector2i(1, 0))
 	leader.equipped_weapon = H.make_weapon()
-	var victim: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.WIL: 20}, Team.Faction.PLAYER), Vector2i(2, 0))
+	var victim: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(2, 0))
 	victim.unit_instance.jobs.append("berserker")
 	var _bystander := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
 	await await_idle_frame()
@@ -270,3 +270,33 @@ func test_a_priest_the_watch_downs_mid_pass_does_not_heal_itself() -> void:
 	assert_int(priest.get_current_hp()) \
 		.override_failure_message("the downed priest healed itself -- down, but with health (#1005)") \
 		.is_equal(1)
+
+
+# #1196, the reported shape: a Hold squad rescues its own downed member, and the revived unit used
+# to play its fresh solo squad as Rushdown and walk at the player. Asserted as what it DOES on its
+# next plan. The second half re-plans the same unit as a Rushdown, so the case cannot pass on a
+# board where nobody would have moved anyway.
+func test_a_rescued_guard_keeps_guarding() -> void:
+	var leader := _spawn(Team.Faction.ENEMY, Vector2i(1, 0))
+	var guard := _spawn(Team.Faction.ENEMY, Vector2i(2, 0))
+	var target := _spawn(Team.Faction.PLAYER, Vector2i(5, 0))   # in walking range, out of reach
+	await await_idle_frame()
+	game.squad_manager.join_squad(guard, leader.squad)
+	leader.squad.archetype = AIArchetype.Type.HOLD
+
+	_down(guard)
+	await _settle(target)
+	guard.revive()
+	assert_object(guard.squad).override_failure_message("fixture: the down did not eject the guard") \
+		.is_not_same(leader.squad)
+
+	AIController.plan_squad(guard.squad, game._board(), game.squad_manager)
+	assert_that(guard.get_projected_destination()) \
+		.override_failure_message("a rescued Hold unit walked off its cell (#1196)").is_equal(Vector2i(2, 0))
+
+	game.squad_manager.shed_orders(guard.squad)
+	guard.squad.archetype = AIArchetype.Type.RUSHDOWN
+	AIController.plan_squad(guard.squad, game._board(), game.squad_manager)
+	assert_that(guard.get_projected_destination()) \
+		.override_failure_message("fixture: a Rushdown here would not have moved either") \
+		.is_not_equal(Vector2i(2, 0))

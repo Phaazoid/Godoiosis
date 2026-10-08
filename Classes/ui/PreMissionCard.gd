@@ -76,8 +76,8 @@ const JOB_PICKER_MIN_W := 84
 const CHIP_MAX_W := JOB_PICKER_MIN_W
 const NO_JOB_LABEL := "— none —"
 
-# The eight, in Stats.Stat declaration order, two columns of four. Read off the enum rather than
-# listed here, so a ninth stat appears without an edit.
+# Every stat, in Stats.Stat declaration order, in two columns. Read off the enum rather than listed
+# here, so a new stat appears without an edit -- #120's BLD did, as the ninth.
 const STAT_COLUMNS := 2
 
 var unit: Unit
@@ -226,23 +226,6 @@ func _build_unit_half() -> Control:
 
 # --- the job picker (#742) ------------------------------------------------------------------------
 
-# WHAT THIS CARD MAY OFFER: the mission's own list (#964), plus whatever this unit already holds.
-#
-# The union is not politeness. A character authoring a starting_job, or a state_saved roster entry,
-# can arrive holding a job the mission does not offer — and without it that unit falls into the
-# unknown-id branch of _refresh_job below, which prints the raw id and leaves the job un-re-pickable
-# once dropped. Offered ∪ held reads right and stays reversible.
-func _offered_job_ids() -> Array[String]:
-	var ids: Array[String] = []
-	for id: String in _controller.loadout().available_jobs:
-		if id != "" and not ids.has(id):
-			ids.append(id)
-	for id: String in unit.unit_instance.jobs:
-		if id != "" and not ids.has(id):
-			ids.append(id)
-	return ids
-
-
 # BUILT ONCE AND NEVER REBUILT. _refresh_job below only moves the selection, because the refresh that
 # follows a pick would otherwise replace the very control the pick came out of.
 #
@@ -253,8 +236,10 @@ func _offered_job_ids() -> Array[String]:
 # fit_to_longest_item is the knob that matters here, not clip_text: it defaults TRUE, which makes an
 # OptionButton's minimum width its widest ITEM — one long job name and the card's column walks out of
 # the region, which is the law in this file's header and the #685 failure one surface over.
+#
+# What it lists is Loadout.offered_jobs_for: the mission's offer plus what this unit holds (#964).
 func _build_job_picker() -> Control:
-	var ids := _offered_job_ids()
+	var ids := _controller.loadout().offered_jobs_for(unit)
 	if ids.is_empty():
 		return null
 
@@ -339,6 +324,10 @@ func job_option_text(job_id: String) -> String:
 	var def_then := unit.previewed_def_for_jobs(ids)
 	if def_now != def_then:
 		deltas.append("DEF %d → %d" % [def_now, def_then])
+	var mov_now := unit.get_mov()
+	var mov_then := unit.previewed_mov_for_jobs(ids)
+	if mov_now != mov_then:
+		deltas.append("MOV %d → %d" % [mov_now, mov_then])
 	lines.append(", ".join(deltas) if not deltas.is_empty() else "No change to the numbers.")
 
 	for piece: EquippableData in unit.gear_lost_under_jobs(ids):
@@ -483,9 +472,9 @@ func _refresh_job() -> void:
 			break
 	if not matched:
 		# A BACKSTOP since #964, no longer the ordinary path: a held job is in the list by construction
-		# now (_offered_job_ids unions it in), including one no catalogue file answers, which lists under
-		# its raw id. This survives for a job assigned after the picker was built -- nothing does that
-		# today -- and says the raw id rather than claiming "none".
+		# now (Loadout.offered_jobs_for unions it in), including one no catalogue file answers, which
+		# lists under its raw id. This survives for a job assigned after the picker was built --
+		# nothing does that today -- and says the raw id rather than claiming "none".
 		_job_picker.select(-1)
 		_job_picker.text = held
 	_job_picker.tooltip_text = UiText.wrap(
@@ -540,12 +529,14 @@ func _refresh_items() -> void:
 
 
 func _refresh_foot() -> void:
-	# WEIGHT IS INERT TODAY and shipping it anyway is the dev's call (2026-09-05): Item.weight and
-	# Unit.get_weight() both work, but every authored weight is 0 until #120's pass, so this reads
-	# WT 0 for everyone. Showing the slot is what makes the gap visible rather than forgotten.
-	_derived_label.text = "WT %d  ·  DEF %d" % [unit.get_weight(), unit.get_effective_def()]
+	# Weight is the body (BLD) plus what is carried (#120), and its band costs MOV (#1176) -- so MOV
+	# leads the row: picking gear changes how far the unit walks, and this is the one place that says so
+	# before the battle. One row fits the narrowest card with ~12px spare (measured 2026-10-01).
+	_derived_label.text = "MOV %d  ·  WT %d  ·  DEF %d" % [
+		unit.get_mov(), unit.get_weight(), unit.get_effective_def()]
 	_derived_label.tooltip_text = UiText.wrap(
-		"Weight is the whole inventory's; every item currently weighs 0 until weight is authored. "
+		"MOV is how many tiles the unit can move, after its weight. "
+		+ "WT is a total of a unit's BLD and the weight of what they are carrying. "
 		+ "DEF is the effective value, armour included.")
 
 	var deployed: bool = _controller.game.is_deployed(unit)   # game is untyped: no inference
@@ -591,12 +582,7 @@ func _refresh_frame() -> void:
 
 
 func _deploy_block_reason() -> String:
-	if not _controller.can_deploy_another():
-		return "Your force is full — %d of %d placed. Take someone off first." % [
-			_controller.deployed_roster_count(), _controller.game.scenario_manager.current_deployment_cap]
-	if _controller.open_deployment_cells().is_empty():
-		return "The deployment zone has no free cell left."
-	return ""
+	return _controller.deploy_block_reason()   # the phase's sentence, shared with the Play API (#46)
 
 
 # --- small builders ------------------------------------------------------------------------------
@@ -746,7 +732,8 @@ func show_preview(candidate: Item, incoming: bool) -> void:
 		label.text = "%d → %d" % [now, then]
 		label.add_theme_color_override("font_color", QueueStyle.ink(
 			QueueStyle.Role.READOUT_ALLY if then > now else QueueStyle.Role.READOUT_ENEMY))
-	_derived_label.text = "WT %d → %d  ·  DEF %d → %d" % [
+	_derived_label.text = "MOV %d → %d  ·  WT %d → %d  ·  DEF %d → %d" % [
+		unit.get_mov(), unit.previewed_mov(candidate, incoming),
 		unit.get_weight(), unit.previewed_weight(candidate, incoming),
 		unit.get_effective_def(), unit.previewed_def(candidate)]
 

@@ -390,7 +390,8 @@ func test_an_element_state_toggle_marks_the_scenario_and_diverges_the_unit() -> 
 	assert_object(unit).override_failure_message("Prolog spawned no units; the case is vacuous").is_not_null()
 	overlay.unit_editor.edit_unit(unit)
 	await await_idle_frame()
-	overlay.unit_editor._on_element_state_toggled(unit, Elemental.State.WET, true)
+	var no_boxes: Dictionary[Elemental.State, CheckBox] = {}
+	overlay.unit_editor._on_element_state_toggled(unit, Elemental.State.WET, true, no_boxes)
 	assert_bool(overlay.scenario_header.is_modified()).is_true()
 	assert_bool(unit.dev_edited).is_true()
 

@@ -26,9 +26,11 @@ var _main: Node
 var game: Node2D
 var sm: ScenarioManager
 var mc: MissionController
+var _slide_seconds: float
 
 
 func before_test() -> void:
+	_slide_seconds = PreMissionScreen.CARD_SLIDE_SECONDS
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -48,6 +50,7 @@ func after_test() -> void:
 	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
+	PreMissionScreen.CARD_SLIDE_SECONDS = _slide_seconds
 	if FileAccess.file_exists(SCRATCH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
 
@@ -90,7 +93,7 @@ func _enter_phase(cap := 2) -> bool:
 
 
 func _screen() -> PreMissionScreen:
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child
 	return null
@@ -105,6 +108,51 @@ func _cards() -> Array[PreMissionCard]:
 		if node is PreMissionCard:
 			found.append(node)
 	return found
+
+
+# The grid's own order, which is what the player sees (#1089). _cards() walks the tree and would
+# agree, but naming the grid says which order is being asked about.
+func _grid_cards() -> Array[PreMissionCard]:
+	var found: Array[PreMissionCard] = []
+	var screen := _screen()
+	if screen == null:
+		return found
+	for child in screen._grid.get_children():
+		found.append(child as PreMissionCard)
+	return found
+
+
+# The order the grid OPENS in, derived from the units' own names rather than any authored order:
+# deployed first, each group A-Z, roster order breaking a tie.
+func _open_order() -> Array[Unit]:
+	var roster: Array[Unit] = mc.roster_units()
+	var by_name: Array[Unit] = []
+	by_name.assign(roster)
+	by_name.sort_custom(func(a: Unit, b: Unit) -> bool:
+		var c: int = a.get_unit_name().naturalnocasecmp_to(b.get_unit_name())
+		return c < 0 if c != 0 else roster.find(a) < roster.find(b))
+	var placed: Array[Unit] = []
+	var waiting: Array[Unit] = []
+	for unit: Unit in by_name:
+		if game.is_deployed(unit):
+			placed.append(unit)
+		else:
+			waiting.append(unit)
+	placed.append_array(waiting)
+	return placed
+
+
+static func _units_of(cards: Array[PreMissionCard]) -> Array[Unit]:
+	var units: Array[Unit] = []
+	for card in cards:
+		units.append(card.unit)
+	return units
+
+
+# The toggle's real Button, so the wire from the press to the reorder is what gets exercised.
+func _press_deploy(card: PreMissionCard) -> void:
+	card._deploy_button.pressed.emit()
+	await await_idle_frame()
 
 
 static func _walk(root: Node) -> Array[Node]:
@@ -172,7 +220,7 @@ func test_beginning_the_mission_from_the_screen_closes_it() -> void:
 	_screen()._on_begin()
 	await await_idle_frame()
 	# #774 put a confirm in front of the commit, on all three of its doors.
-	for child in game.ui_layer.get_children():
+	for child in game.card_layer.get_children():
 		if child is ConfirmCard:
 			child.answered.emit(true)
 	await await_idle_frame()
@@ -214,18 +262,17 @@ func test_a_board_swap_closes_the_screen() -> void:
 
 # --- the card grid ---
 
-func test_the_grid_draws_one_card_per_roster_member() -> void:
+func test_the_grid_opens_one_card_per_roster_member_deployed_first_each_group_a_to_z() -> void:
 	if not await _enter_phase():
 		return
 	var roster: Array[Unit] = mc.roster_units()
 	assert_array(roster).is_not_empty()
 
-	var cards := _cards()
+	var cards := _grid_cards()
 	assert_int(cards.size()).override_failure_message(
 		"the grid and the roster disagree about who exists").is_equal(roster.size())
-	for i in range(cards.size()):
-		assert_object(cards[i].unit).override_failure_message(
-			"card %d is not the %d'th roster entry" % [i, i]).is_same(roster[i])
+	assert_array(_units_of(cards)).override_failure_message(
+		"the grid did not open deployed first, each group in alphabetical order").is_equal(_open_order())
 
 
 # THE case the entry-order store exists for, and the one an obvious version of it cannot see.
@@ -235,11 +282,8 @@ func test_the_grid_draws_one_card_per_roster_member() -> void:
 # moment such a case looks. They diverge only once the player CHANGES THEIR MIND -- undeploying
 # somebody reparents them to the end of the reserve -- which is what this drives before asking.
 #
-# (Measured: a mutant deriving roster_units() from node order passes an assert-at-start version of
-# this, and passes it twice over, because _refresh_cards rebuilds only when the roster's SIZE
-# changes, so the grid's order is settled at build time whatever the store says. The store is
-# therefore belt-and-braces for the grid TODAY and the real contract underneath it -- kept and
-# declared rather than deleted to make a mutant tidy.)
+# (The grid stopped reading this ORDER at #1089 -- it orders itself, A-Z with deployed first -- so
+# the contract this guards is the restart buffer's, whose rows are indexed by it.)
 func test_the_roster_keeps_its_entry_order_after_the_player_changes_their_mind() -> void:
 	if not await _enter_phase(2):
 		return
@@ -290,6 +334,141 @@ func test_a_deploy_toggle_puts_its_unit_on_the_board_and_takes_it_off_again() ->
 		"the unit landed somewhere it should not have").is_false()
 
 
+# --- the grid's order (#1089) ---
+#
+# One rule under all of these: a toggle moves a card only as far as the line between the deployed
+# and the waiting, so the deployed line keeps DEPLOY order and nothing snaps back to its A-Z slot.
+
+func test_deploying_sends_the_same_card_to_the_end_of_the_deployed_line() -> void:
+	if not await _enter_phase(3):
+		return
+	await _press_deploy(_grid_cards()[0])   # make room under the cap
+	var cards := _grid_cards()
+	var placed: Array[PreMissionCard] = []
+	for card in cards:
+		if game.is_deployed(card.unit):
+			placed.append(card)
+	var far: PreMissionCard = cards[cards.size() - 1]
+	assert_bool(game.is_deployed(far.unit)).override_failure_message(
+		"precondition: the last card should be waiting").is_false()
+
+	await _press_deploy(far)
+
+	var after := _grid_cards()
+	assert_int(after.size()).is_equal(cards.size())
+	assert_object(after[placed.size()]).override_failure_message(
+		"a deployed card did not join the END of the deployed line -- or it was rebuilt rather "
+		+ "than moved, which throws away whatever the card was holding").is_same(far)
+	assert_array(after.slice(0, placed.size())).override_failure_message(
+		"deploying someone moved the cards already deployed").is_equal(placed)
+
+
+func test_undeploying_moves_a_card_only_as_far_as_the_line_between_the_groups() -> void:
+	if not await _enter_phase(3):
+		return
+	var before := _grid_cards()
+	var first: PreMissionCard = before[0]
+	var middle: PreMissionCard = before[1]
+	var last: PreMissionCard = before[2]
+	assert_bool(game.is_deployed(last.unit) and not game.is_deployed(before[3].unit)) \
+			.override_failure_message("precondition: the first three cards should be the deployed").is_true()
+
+	await _press_deploy(middle)
+	var after := _grid_cards()
+	var expected: Array[PreMissionCard] = [first, last, middle]
+	expected.append_array(before.slice(3))
+	assert_array(after).override_failure_message(
+		"undeploying from the middle of the line should move the card to the first waiting slot "
+		+ "and nothing else").is_equal(expected)
+
+	await _press_deploy(last)   # now the END of the deployed line
+	assert_array(_grid_cards()).override_failure_message(
+		"undeploying the last deployed card should leave it exactly where it is").is_equal(after)
+
+
+func test_a_redeploy_joins_the_end_of_the_line_rather_than_its_old_slot() -> void:
+	if not await _enter_phase(3):
+		return
+	var before := _grid_cards()
+	await _press_deploy(before[0])
+	await _press_deploy(before[1])
+	await _press_deploy(before[0])
+
+	var after := _grid_cards()
+	assert_object(after[0]).is_same(before[2])
+	assert_object(after[1]).override_failure_message(
+		"a card deployed again went back to its old slot -- the line is meant to keep deploy order")\
+			.is_same(before[0])
+	assert_object(after[2]).is_same(before[1])
+
+
+func test_a_change_made_on_the_board_is_settled_when_the_screen_comes_back() -> void:
+	if not await _enter_phase(3):
+		return
+	var before := _grid_cards()
+	var leaving: PreMissionCard = before[0]
+	var arriving: PreMissionCard = before[before.size() - 1]
+
+	mc.toggle_deployment_menu()   # Tab: the board preview
+	await await_idle_frame()
+	game.undeploy_unit(leaving.unit)
+	game.deploy_unit(arriving.unit, mc.open_deployment_cells()[0])
+	mc.toggle_deployment_menu()
+	await await_idle_frame()
+
+	var expected: Array[PreMissionCard] = [before[1], before[2], arriving, leaving]
+	expected.append_array(before.slice(3, before.size() - 1))
+	assert_array(_grid_cards()).override_failure_message(
+		"a deploy and an undeploy made on the board were not settled into the grid on the way back")\
+			.is_equal(expected)
+
+
+func test_reset_order_puts_the_grid_back_the_way_it_opens() -> void:
+	if not await _enter_phase(3):
+		return
+	var before := _grid_cards()
+	await _press_deploy(before[0])
+	await _press_deploy(before[1])
+	await _press_deploy(before[0])
+	assert_array(_units_of(_grid_cards())).override_failure_message(
+		"precondition: the toggles should have left the grid out of its opening order")\
+			.is_not_equal(_open_order())
+
+	_screen()._reset_order_button.pressed.emit()
+	await await_idle_frame()
+	assert_array(_units_of(_grid_cards())).override_failure_message(
+		"Reset did not put the grid back in its opening order for the force as it stands")\
+			.is_equal(_open_order())
+
+
+# What the player SEES of a reorder is continuity: the card leaves from where it stood rather than
+# appearing at its new slot. Asked the moment the grid has laid the new order out, before a single
+# tween step. The duration is a knob and nothing here pins it.
+func test_a_moved_card_slides_from_where_it_stood() -> void:
+	PreMissionScreen.CARD_SLIDE_SECONDS = 0.25   # restored in after_test; it only has to be non-zero
+	if not await _enter_phase(3):
+		return
+	var screen := _screen()
+	var mover: PreMissionCard = _grid_cards()[1]
+	var stood := mover.position
+
+	mover._deploy_button.pressed.emit()
+	await screen._grid.sort_children
+	assert_int(mover.get_index()).override_failure_message(
+		"precondition: the card should have changed slot").is_not_equal(1)
+	assert_vector(mover.position).override_failure_message(
+		"the card jumped to its new slot instead of leaving from where it stood")\
+			.is_equal_approx(stood, Vector2.ONE)
+	assert_bool(screen._slide != null and screen._slide.is_running()).override_failure_message(
+		"nothing is carrying the card to its new slot").is_true()
+	if screen._slide == null:
+		return
+
+	await screen._slide.finished
+	assert_vector(mover.position).override_failure_message(
+		"the slide ended where it started").is_not_equal(stood)
+
+
 func test_a_cards_deploy_button_is_refused_once_the_cap_is_full_and_says_why() -> void:
 	if not await _enter_phase(2):
 		return
@@ -338,7 +517,7 @@ func test_the_contract_renders_the_same_briefing_the_hud_does() -> void:
 		"the contract drew nothing for a board with a declared objective").is_not_empty()
 
 	var expected: Array[String] = []
-	for row: Label in MissionStatusPanel.briefing_rows(mc, game._board()):
+	for row: Label in MissionStatusPanel.briefing_rows(mc.mission, game._board()):
 		expected.append(row.text)
 		row.free()
 	assert_array(drawn).override_failure_message(
@@ -826,3 +1005,32 @@ func test_a_weapon_with_no_pet_name_of_its_own_lists_as_its_family() -> void:
 	assert_object(_label_reading(card, GENERIC_FAMILY.display_name)).override_failure_message(
 		"the card lists the generic with a blank name instead of \"%s\""
 		% GENERIC_FAMILY.display_name).is_not_null()
+
+
+# #1176: weight costs MOV, so the card's foot names MOV beside WT and previews it -- the one place a
+# player picking gear can see that a piece will cost a tile before the battle shows it. Driven through
+# the card's real preview door with a plain item sized to tip this unit into its next band, so the
+# expectation is derived from the unit in front of it rather than from any authored number.
+func test_the_foot_shows_mov_and_previews_the_tile_a_heavy_piece_costs() -> void:
+	if not await _enter_phase():
+		return
+	var cards := _cards()
+	assert_int(cards.size()).is_greater(0)
+	var card: PreMissionCard = cards[0]
+	var unit := card.unit
+	var mov := unit.get_mov()
+	assert_str(card._derived_label.text).starts_with("MOV %d" % mov)
+
+	var weight := unit.get_weight()
+	var next_band := Stats.WEIGHT_BAND_1 if weight < Stats.WEIGHT_BAND_1 else Stats.WEIGHT_BAND_2
+	assert_int(weight).override_failure_message(
+		"this roster unit is already in the heaviest band, so no piece can cost it a tile") \
+		.is_less(Stats.WEIGHT_BAND_2)
+	var plate := Item.new()
+	plate.display_name = "Ballast"
+	plate.weight = next_band - weight
+
+	card.show_preview(plate, true)
+	assert_str(card._derived_label.text).starts_with("MOV %d → %d" % [mov, mov - 1])
+	card.clear_preview()
+	assert_str(card._derived_label.text).starts_with("MOV %d  ·" % mov)

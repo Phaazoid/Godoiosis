@@ -18,6 +18,21 @@ func before_test() -> void:
 		"swings": SquadLines2D.SHAKE_SWINGS, "cone": ThreatLines2D.CONE_LENGTH,
 		"arrow": SquadLines2D.ARROW_LENGTH,
 		"photo": PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY),
+		"draw_in": SquadLines2D.DRAW_IN_SECONDS, "pop_scale": SquadLines2D.POP_SCALE,
+		"pop_secs": SquadLines2D.POP_SECONDS, "hold": SquadLines2D.DRAWN_HOLD_SECONDS,
+		"fade": SquadLines2D.DRAWN_FADE_SECONDS, "reel": SquadLines2D.REEL_IN_SECONDS,
+		"brighten": SquadLines2D.POP_BRIGHTEN,
+		"strain": SquadLines2D.BREAK_STRAIN_SECONDS, "shatter": SquadLines2D.BREAK_SHATTER_SECONDS,
+		"kick": SquadLines2D.BREAK_KICK, "turns": SquadLines2D.BREAK_TUMBLE_TURNS,
+		"sparks": SquadLines2D.BREAK_SPARKS, "spark_speed": SquadLines2D.BREAK_SPARK_SPEED,
+		"spark_secs": SquadLines2D.BREAK_SPARK_SECONDS,
+		"death_look": SquadLines2D.DEATH_LOOK, "ash": SquadLines2D.DEATH_ASH_COLOR,
+		"grey": SquadLines2D.DEATH_GREY_SECONDS, "death_hold": SquadLines2D.DEATH_HOLD_SECONDS,
+		"death_fade": SquadLines2D.DEATH_FADE_SECONDS, "drain": SquadLines2D.DRAIN_SECONDS,
+		"slack": SquadLines2D.SLACK_SECONDS, "sag": SquadLines2D.SLACK_SAG,
+		"pulse": SquadLines2D.PULSE_SECONDS, "pulse_len": SquadLines2D.PULSE_LENGTH,
+		"motes": SquadLines2D.MOTES_PER_DASH, "mote_rise": SquadLines2D.MOTE_RISE,
+		"mote_secs": SquadLines2D.MOTE_SECONDS,
 	}
 
 
@@ -32,6 +47,33 @@ func after_test() -> void:
 	ThreatLines2D.CONE_LENGTH = _saved["cone"]
 	SquadLines2D.ARROW_LENGTH = _saved["arrow"]
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, _saved["photo"])
+	SquadLines2D.DRAW_IN_SECONDS = _saved["draw_in"]
+	SquadLines2D.POP_SCALE = _saved["pop_scale"]
+	SquadLines2D.POP_SECONDS = _saved["pop_secs"]
+	SquadLines2D.DRAWN_HOLD_SECONDS = _saved["hold"]
+	SquadLines2D.DRAWN_FADE_SECONDS = _saved["fade"]
+	SquadLines2D.REEL_IN_SECONDS = _saved["reel"]
+	SquadLines2D.POP_BRIGHTEN = _saved["brighten"]
+	SquadLines2D.BREAK_STRAIN_SECONDS = _saved["strain"]
+	SquadLines2D.BREAK_SHATTER_SECONDS = _saved["shatter"]
+	SquadLines2D.BREAK_KICK = _saved["kick"]
+	SquadLines2D.BREAK_TUMBLE_TURNS = _saved["turns"]
+	SquadLines2D.BREAK_SPARKS = _saved["sparks"]
+	SquadLines2D.BREAK_SPARK_SPEED = _saved["spark_speed"]
+	SquadLines2D.BREAK_SPARK_SECONDS = _saved["spark_secs"]
+	SquadLines2D.DEATH_LOOK = _saved["death_look"]
+	SquadLines2D.DEATH_ASH_COLOR = _saved["ash"]
+	SquadLines2D.DEATH_GREY_SECONDS = _saved["grey"]
+	SquadLines2D.DEATH_HOLD_SECONDS = _saved["death_hold"]
+	SquadLines2D.DEATH_FADE_SECONDS = _saved["death_fade"]
+	SquadLines2D.DRAIN_SECONDS = _saved["drain"]
+	SquadLines2D.SLACK_SECONDS = _saved["slack"]
+	SquadLines2D.SLACK_SAG = _saved["sag"]
+	SquadLines2D.PULSE_SECONDS = _saved["pulse"]
+	SquadLines2D.PULSE_LENGTH = _saved["pulse_len"]
+	SquadLines2D.MOTES_PER_DASH = _saved["motes"]
+	SquadLines2D.MOTE_RISE = _saved["mote_rise"]
+	SquadLines2D.MOTE_SECONDS = _saved["mote_secs"]
 
 
 # --- The range's stroke -------------------------------------------------------------------------
@@ -195,3 +237,630 @@ func test_the_photosensitivity_setting_stills_the_pluck() -> void:
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
 	assert_float(SquadLines2D.shake_now(stamp)).override_failure_message(
 			"the tether shook with the photosensitivity setting on").is_equal_approx(0.0, 0.0001)
+
+
+# --- Membership moments (#367) -------------------------------------------------------------------
+
+const _CHORD_MEMBER := Vector3(0.5, 1.0, 0.5)
+const _CHORD_LEADER := Vector3(4.5, 1.0, 0.5)
+
+
+func _moment_times(draw_in: float, pop: float, hold: float, fade: float, reel: float) -> void:
+	SquadLines2D.TETHER_INSET = 0.25
+	SquadLines2D.ARROW_LENGTH = 0.4
+	SquadLines2D.DRAW_IN_SECONDS = draw_in
+	SquadLines2D.POP_SCALE = 1.8
+	SquadLines2D.POP_SECONDS = pop
+	SquadLines2D.DRAWN_HOLD_SECONDS = hold
+	SquadLines2D.DRAWN_FADE_SECONDS = fade
+	SquadLines2D.REEL_IN_SECONDS = reel
+
+
+func _at(moment: int, elapsed: float, standing := false) -> Dictionary:
+	return SquadLines2D.moment_at(moment, PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER]), elapsed,
+			standing)
+
+
+# A draw-in GROWS from the member: the shaft's far end only ever advances, it never passes where the
+# cone begins, and the cone appears only once the shaft has reached it -- then grows to the full tip.
+func test_a_draw_in_grows_from_the_member_and_the_cone_follows_the_shaft() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var m := SquadLines2D.measure(PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER]))
+	var last := -1.0
+	var cone_seen := false
+	for i in 41:
+		var drawn := _at(SquadLines2D.Moment.DRAW_IN, 0.4 * float(i) / 40.0)
+		var u1: float = drawn["u1"]
+		assert_float(float(drawn["u0"])).override_failure_message("a draw-in did not start at the member") \
+				.is_equal_approx(0.0, 0.0001)
+		assert_bool(u1 >= last).override_failure_message("the draw-in's front went backwards").is_true()
+		assert_bool(u1 <= float(m["shaft_end"]) + 0.0001).override_failure_message(
+				"the shaft ran into the cone").is_true()
+		if float(drawn["cone_grow"]) > 0.0:
+			cone_seen = true
+			assert_float(u1).override_failure_message("the cone appeared before the shaft reached it") \
+					.is_equal_approx(float(m["shaft_end"]), 0.0001)
+		last = u1
+	assert_bool(cone_seen).override_failure_message("the cone never appeared").is_true()
+	assert_float(float(_at(SquadLines2D.Moment.DRAW_IN, 0.4)["cone_grow"])).override_failure_message(
+			"the cone never reached the full tip").is_equal_approx(1.0, 0.0001)
+	assert_float(float(_at(SquadLines2D.Moment.DRAW_IN, -0.1)["u1"])).override_failure_message(
+			"a draw-in waiting its turn drew something").is_equal_approx(0.0, 0.0001)
+
+
+# The pop: the cone swells past its own size the moment the tether arrives, then settles back.
+func test_the_pop_swells_the_cone_then_settles_it() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var at_arrival := float(_at(SquadLines2D.Moment.DRAW_IN, 0.4)["cone_scale"])
+	var settled := float(_at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2)["cone_scale"])
+	var before := float(_at(SquadLines2D.Moment.DRAW_IN, 0.3)["cone_scale"])
+	assert_float(at_arrival).override_failure_message("the cone did not pop").is_greater(1.0)
+	assert_float(settled).override_failure_message("the pop never settled").is_equal_approx(1.0, 0.0001)
+	assert_float(before).override_failure_message("the cone popped before the tether arrived") \
+			.is_equal_approx(1.0, 0.0001)
+
+
+# With a standing tether for the pair (mid-Squad Up) the draw-in hands over as soon as it has popped;
+# with none (Join Squad just closed) it holds, fades to nothing, and only then is done.
+func test_a_draw_in_hands_over_to_a_standing_tether_or_holds_and_fades() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var popped := 0.4 + 0.2 + 0.01
+	assert_bool(bool(_at(SquadLines2D.Moment.DRAW_IN, popped, true)["done"])).override_failure_message(
+			"a draw-in did not hand over to the standing tether").is_true()
+	assert_bool(bool(_at(SquadLines2D.Moment.DRAW_IN, popped, false)["done"])).override_failure_message(
+			"a draw-in with nothing to hand to ended instead of holding").is_false()
+	var held: Color = _at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2 + 0.4, false)["tint"]
+	assert_float(held.a).override_failure_message("the held tether had already started fading") \
+			.is_equal_approx(SquadLines2D.TETHER_COLOR.a, 0.0001)
+	var fading: Color = _at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2 + 0.5 + 0.15, false)["tint"]
+	assert_bool(fading.a < SquadLines2D.TETHER_COLOR.a and fading.a > 0.0).override_failure_message(
+			"the held tether was not fading halfway through its fade").is_true()
+	var gone := _at(SquadLines2D.Moment.DRAW_IN, 0.4 + 0.2 + 0.5 + 0.3 + 0.01, false)
+	assert_bool(bool(gone["done"])).override_failure_message("the faded tether never finished").is_true()
+
+
+# A reel-in is pulled INTO the leader: the member end only ever advances, the shaft is gone before the
+# cone starts to shrink, and the moment is over when the reel is.
+func test_a_reel_in_pulls_the_tether_into_the_leader() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var last := -1.0
+	var shaft_gone_at := -1.0
+	var shrink_at := -1.0
+	for i in 41:
+		var t := 0.4 * float(i) / 40.0
+		var drawn := _at(SquadLines2D.Moment.REEL_IN, t)
+		var u0: float = drawn["u0"]
+		assert_bool(u0 >= last).override_failure_message("the reel-in's member end went backwards").is_true()
+		last = u0
+		if shaft_gone_at < 0.0 and u0 >= float(drawn["u1"]):
+			shaft_gone_at = t
+		if shrink_at < 0.0 and float(drawn["cone_scale"]) < 1.0:
+			shrink_at = t
+	assert_bool(shrink_at >= shaft_gone_at and shaft_gone_at >= 0.0).override_failure_message(
+			"the cone shrank while the shaft was still there").is_true()
+	assert_bool(bool(_at(SquadLines2D.Moment.REEL_IN, 0.4)["done"])).override_failure_message(
+			"the reel-in did not end with the reel").is_true()
+	assert_bool(bool(_at(SquadLines2D.Moment.REEL_IN, 0.3)["done"])).is_false()
+
+
+# The times are the knobs', as RATIOS: doubling the draw-in time doubles when the cone first shows.
+func test_a_moments_timing_follows_its_knob() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	var first := _first_cone_time()
+	SquadLines2D.DRAW_IN_SECONDS = 0.8
+	var doubled := _first_cone_time()
+	assert_float(doubled).override_failure_message("the draw-in ignored its time knob") \
+			.is_equal_approx(first * 2.0, 0.02)
+
+
+func _first_cone_time() -> float:
+	for i in 400:
+		var t := 2.0 * float(i) / 400.0
+		if float(_at(SquadLines2D.Moment.DRAW_IN, t)["cone_grow"]) > 0.0:
+			return t
+	return -1.0
+
+
+# #217: the pop's whitening is a flash, so the setting drops it -- and nothing else. The swell stays.
+func test_the_photosensitivity_setting_drops_the_pop_flash_but_not_the_swell() -> void:
+	_moment_times(0.4, 0.2, 0.5, 0.3, 0.4)
+	SquadLines2D.POP_BRIGHTEN = 0.8
+	var chord := PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER])
+	var lit := SquadLines2D.moment_at(SquadLines2D.Moment.DRAW_IN, chord, 0.4, false, true)
+	var still := SquadLines2D.moment_at(SquadLines2D.Moment.DRAW_IN, chord, 0.4, false, false)
+	assert_bool((lit["cone_tint"] as Color).is_equal_approx(SquadLines2D.TETHER_COLOR)) \
+			.override_failure_message("fixture: the pop did not flash").is_false()
+	assert_bool((still["cone_tint"] as Color).is_equal_approx(SquadLines2D.TETHER_COLOR)) \
+			.override_failure_message("the pop flashed with the photosensitivity setting on").is_true()
+	assert_float(float(still["cone_scale"])).override_failure_message(
+			"the setting stilled the swell as well as the flash").is_greater(1.0)
+
+
+# --- The break (#367 part 2B) --------------------------------------------------------------------
+
+func _break_times(strain: float, shatter: float, sparks: int, spark_secs: float) -> void:
+	SquadLines2D.TETHER_INSET = 0.25
+	SquadLines2D.ARROW_LENGTH = 0.4
+	SquadLines2D.DASHES_PER_TILE = 3
+	SquadLines2D.DASH_FILL = 0.55
+	SquadLines2D.SHAKE_AMPLITUDE = 0.12
+	SquadLines2D.SHAKE_SWINGS = 3.0
+	SquadLines2D.BREAK_STRAIN_SECONDS = strain
+	SquadLines2D.BREAK_SHATTER_SECONDS = shatter
+	SquadLines2D.BREAK_KICK = 0.8
+	SquadLines2D.BREAK_TUMBLE_TURNS = 1.0
+	SquadLines2D.BREAK_SPARKS = sparks
+	SquadLines2D.BREAK_SPARK_SPEED = 2.5
+	SquadLines2D.BREAK_SPARK_SECONDS = spark_secs
+
+
+func _chord() -> PackedVector3Array:
+	return PackedVector3Array([_CHORD_MEMBER, _CHORD_LEADER])
+
+
+# The drawing a break makes `seconds` in, as moment_drawing hands it to both views.
+func _break(seconds: float, flash := false) -> Dictionary:
+	var entry := {"chord": _chord(), "moment": SquadLines2D.Moment.BREAK, "start_msec": 0, "standing": false}
+	return SquadLines2D.moment_drawing(entry, roundi(seconds * 1000.0), flash)
+
+
+func _middle(piece: Dictionary) -> Vector3:
+	var points: PackedVector3Array = piece["points"]
+	return (points[0] + points[1]) * 0.5
+
+
+# Before it snaps a breaking tether is WHOLE and turns steadily toward the strain red, shivering; it
+# has no pieces yet.
+func test_a_break_strains_red_and_shivers_before_it_snaps() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	assert_bool(SquadLines2D.TETHER_COLOR.is_equal_approx(SquadLines2D.TETHER_STRAIN_COLOR)) \
+			.override_failure_message("fixture: the tether and strain colours are one colour").is_false()
+	var red := SquadLines2D.TETHER_STRAIN_COLOR
+	var last := INF
+	var shivered := false
+	for i in 20:
+		var drawing := _break(0.4 * float(i) / 20.0, true)
+		assert_int((drawing["shaft"] as PackedVector3Array).size()).override_failure_message(
+				"a straining tether was not whole").is_greater_equal(2)
+		assert_bool((drawing["pieces"] as Array).is_empty()).override_failure_message(
+				"the tether shattered before it snapped").is_true()
+		var tint: Color = drawing["tint"]
+		var to_red := Vector4(tint.r - red.r, tint.g - red.g, tint.b - red.b, tint.a - red.a).length()
+		assert_bool(to_red <= last + 0.0001).override_failure_message(
+				"the strain turned away from the red").is_true()
+		last = to_red
+		shivered = shivered or not is_zero_approx(float(drawing["bend"]))
+	assert_bool(shivered).override_failure_message("the straining tether never shivered").is_true()
+
+
+# At the snap the whole shaft becomes PIECES, and they are exactly the dashes on screen then.
+func test_at_the_snap_the_pieces_are_the_dashes_on_screen() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var drawing := _break(0.4)
+	assert_bool((drawing["shaft"] as PackedVector3Array).is_empty()).override_failure_message(
+			"the shaft outlived the snap").is_true()
+	var m := SquadLines2D.measure(_chord())
+	var spans := SquadLines2D.dash_spans(float(m["shaft_end"]), 0.0)
+	var pieces: Array = drawing["pieces"]
+	assert_int(pieces.size()).override_failure_message("the pieces are not the dashes").is_equal(spans.size())
+	for i in spans.size():
+		var points: PackedVector3Array = (pieces[i] as Dictionary)["points"]
+		assert_vector(points[0]).is_equal_approx(SquadLines2D.point_along(_chord(), spans[i].x),
+				Vector3(0.001, 0.001, 0.001))
+		assert_vector(points[1]).is_equal_approx(SquadLines2D.point_along(_chord(), spans[i].y),
+				Vector3(0.001, 0.001, 0.001))
+
+
+# The pieces and the arrowhead FALL: only ever downward, landing on the ground under the chord (its
+# body-middle height taken back off) as the shatter ends, faded out -- and the moment ends there.
+func test_the_pieces_and_the_arrowhead_fall_to_the_ground() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var ground := _CHORD_MEMBER.y - SquadLines2D.body_middle_rule()
+	var last: Array[float] = []
+	var cone_last := INF
+	for i in 21:
+		var drawing := _break(0.4 + 0.6 * float(i) / 20.0)
+		var pieces: Array = drawing["pieces"]
+		for p in pieces.size():
+			var y := _middle(pieces[p]).y
+			if last.size() <= p:
+				last.append(INF)
+			assert_bool(y <= last[p] + 0.0001).override_failure_message("a piece rose").is_true()
+			last[p] = y
+		var cone: Dictionary = drawing["cone"]
+		assert_bool(cone.is_empty()).override_failure_message(
+				"the arrowhead did not fall with the pieces").is_false()
+		var cone_y := ((cone["base"] as Vector3) + (cone["tip"] as Vector3)).y * 0.5
+		assert_bool(cone_y <= cone_last + 0.0001).override_failure_message("the arrowhead rose").is_true()
+		cone_last = cone_y
+	var landed := _break(1.0)
+	for piece: Dictionary in landed["pieces"]:
+		assert_float(_middle(piece).y).override_failure_message("a piece did not land on the ground") \
+				.is_equal_approx(ground, 0.001)
+		assert_float((piece["tint"] as Color).a).override_failure_message("a landed piece had not faded") \
+				.is_equal_approx(0.0, 0.001)
+	assert_bool(bool(landed["done"])).override_failure_message("the break outlived its shatter").is_true()
+	assert_bool(bool(_break(0.9)["done"])).is_false()
+
+
+# The sparks start AT the snap and fly out of it; each streak is no longer than the way it has flown;
+# and they are gone once their time is up.
+func test_the_sparks_fly_out_of_the_snap() -> void:
+	_break_times(0.4, 0.6, 6, 0.3)
+	var m := SquadLines2D.measure(_chord())
+	var snap := SquadLines2D.point_along(_chord(), float(m["shaft_end"]) * 0.5)
+	var dashes := SquadLines2D.dash_spans(float(m["shaft_end"]), 0.0).size()
+	var early: Array = _break(0.41)["pieces"]
+	assert_int(early.size()).override_failure_message("the sparks did not fly").is_equal(dashes + 6)
+	for i in range(dashes, early.size()):
+		var points: PackedVector3Array = (early[i] as Dictionary)["points"]
+		var flown := snap.distance_to(points[1])
+		assert_float(flown).override_failure_message("a spark did not start at the snap").is_less(0.1)
+		assert_bool(points[0].distance_to(points[1]) <= flown + 0.0001).override_failure_message(
+				"a spark's streak was longer than the way it had flown").is_true()
+	assert_int((_break(0.4 + 0.31)["pieces"] as Array).size()).override_failure_message(
+			"the sparks outlived their time").is_equal(dashes)
+
+
+# #217: the shiver is motion and the sparks' whitening a flash, so the setting stills both -- and
+# nothing else. The tether still reddens, snaps and falls.
+func test_the_photosensitivity_setting_stills_the_shiver_and_the_spark_flash_but_not_the_fall() -> void:
+	_break_times(0.4, 0.6, 4, 0.3)
+	var bent := 0.0
+	for i in 20:
+		bent = maxf(bent, absf(float(_break(0.4 * float(i) / 20.0, false)["bend"])))
+	assert_float(bent).override_failure_message("the tether shivered with the setting on") \
+			.is_equal_approx(0.0, 0.0001)
+	var lit: Array = _break(0.45, true)["pieces"]
+	var still: Array = _break(0.45, false)["pieces"]
+	var spark_lit: Color = (lit[lit.size() - 1] as Dictionary)["tint"]
+	var spark_still: Color = (still[still.size() - 1] as Dictionary)["tint"]
+	assert_float(spark_lit.r + spark_lit.g + spark_lit.b).override_failure_message(
+			"the sparks did not whiten without the setting").is_greater(spark_still.r + spark_still.g + spark_still.b)
+	var fallen: Array = _break(0.9, false)["pieces"]
+	var fresh: Array = _break(0.41, false)["pieces"]
+	assert_float(_middle(fallen[0]).y).override_failure_message("the setting stopped the pieces falling") \
+			.is_less(_middle(fresh[0]).y)
+
+
+# The times are the knobs', as ratios: doubling the strain doubles when it snaps, and the break lasts
+# its strain plus the longer of its shatter and its sparks.
+func test_a_breaks_timing_follows_its_knobs() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var first := _snap_time()
+	SquadLines2D.BREAK_STRAIN_SECONDS = 0.8
+	assert_float(_snap_time()).override_failure_message("the strain ignored its time knob") \
+			.is_equal_approx(first * 2.0, 0.02)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.BREAK)).is_equal_approx(0.8 + 0.6, 0.0001)
+	SquadLines2D.BREAK_SPARK_SECONDS = 1.0
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.BREAK)).is_equal_approx(0.8 + 1.0, 0.0001)
+
+
+func _snap_time() -> float:
+	for i in 400:
+		var t := 2.0 * float(i) / 400.0
+		if not (_break(t)["pieces"] as Array).is_empty():
+			return t
+	return -1.0
+
+
+# The drawing a break whose entry says when it snaps (#1104, the ledge) makes `seconds` in.
+func _held_break(seconds: float, snap: float, flash := false) -> Dictionary:
+	var entry := {"chord": _chord(), "moment": SquadLines2D.Moment.BREAK, "start_msec": 0, "standing": false,
+			"snap": snap}
+	return SquadLines2D.moment_drawing(entry, roundi(seconds * 1000.0), flash)
+
+
+# At the LEDGE (#1104, the dev's wile e coyote hang) a break snaps when the hang ends, which can be
+# long after its strain: until then it is WHOLE, full strain red, and still shivering (stilled by #217
+# like the strain's own shake); then it snaps and falls exactly as an ordinary break does, only later.
+func test_a_break_that_snaps_late_holds_whole_and_red_until_its_snap() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var red := SquadLines2D.TETHER_STRAIN_COLOR
+	var snap := 1.2
+	var shivered := false
+	var still := 0.0
+	for i in 10:
+		var t := 0.4 + (snap - 0.4) * float(i) / 10.0
+		var drawing := _held_break(t, snap, true)
+		assert_int((drawing["shaft"] as PackedVector3Array).size()).override_failure_message(
+				"a break still holding was not whole").is_greater_equal(2)
+		assert_bool((drawing["pieces"] as Array).is_empty()).override_failure_message(
+				"a break shattered while it was still holding").is_true()
+		assert_bool((drawing["tint"] as Color).is_equal_approx(red)).override_failure_message(
+				"a holding break was not at full strain red").is_true()
+		assert_bool(bool(drawing["done"])).override_failure_message("a holding break ended").is_false()
+		shivered = shivered or not is_zero_approx(float(drawing["bend"]))
+		still = maxf(still, absf(float(_held_break(t, snap, false)["bend"])))
+	assert_bool(shivered).override_failure_message("the held tether stopped shivering").is_true()
+	assert_float(still).override_failure_message("the held tether shivered with the setting on") \
+			.is_equal_approx(0.0, 0.0001)
+	var snapped := _held_break(snap, snap)
+	assert_bool((snapped["shaft"] as PackedVector3Array).is_empty()).override_failure_message(
+			"the held break did not snap at its snap").is_true()
+	var late: Array = _held_break(snap + 0.3, snap)["pieces"]
+	var ordinary: Array = _break(0.4 + 0.3)["pieces"]
+	assert_int(late.size()).override_failure_message("the late snap shattered differently").is_equal(ordinary.size())
+	for i in mini(late.size(), ordinary.size()):
+		assert_vector(_middle(late[i])).override_failure_message("a late piece fell differently") \
+				.is_equal_approx(_middle(ordinary[i]), Vector3(0.001, 0.001, 0.001))
+	assert_bool(bool(_held_break(snap + 0.59, snap)["done"])).override_failure_message(
+			"the late break ended before its shatter did").is_false()
+	assert_bool(bool(_held_break(snap + 0.6, snap)["done"])).override_failure_message(
+			"the late break outlived its shatter").is_true()
+
+
+# A break held with no snap yet (INF) never snaps or ends on its own: only the hang's end does.
+func test_a_held_break_never_snaps_on_its_own() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	var drawing := _held_break(60.0, INF)
+	assert_bool((drawing["pieces"] as Array).is_empty()).override_failure_message(
+			"a held break snapped on its own").is_true()
+	assert_bool(bool(drawing["done"])).override_failure_message("a held break ended on its own").is_false()
+
+
+# --- A death's own moment (#1104) ---------------------------------------------------------------
+
+func _death_times() -> void:
+	_break_times(0.4, 0.6, 0, 0.3)
+	SquadLines2D.DEATH_LOOK = 0
+	SquadLines2D.DEATH_ASH_COLOR = Color(0.5, 0.5, 0.5, 1.0)
+	SquadLines2D.DEATH_GREY_SECONDS = 0.2
+	SquadLines2D.DEATH_HOLD_SECONDS = 0.25
+	SquadLines2D.DEATH_FADE_SECONDS = 0.45
+	SquadLines2D.DRAIN_SECONDS = 0.55
+	SquadLines2D.SLACK_SECONDS = 0.5
+	SquadLines2D.SLACK_SAG = 0.2
+	SquadLines2D.PULSE_SECONDS = 0.55
+	SquadLines2D.PULSE_LENGTH = 0.35
+	SquadLines2D.MOTES_PER_DASH = 3
+	SquadLines2D.MOTE_RISE = 0.5
+	SquadLines2D.MOTE_SECONDS = 0.9
+	assert_bool(_rgb(SquadLines2D.TETHER_COLOR).is_equal_approx(_rgb(SquadLines2D.DEATH_ASH_COLOR))) \
+			.override_failure_message("fixture: the tether is already the ash colour").is_false()
+
+
+# The drawing a death look makes `seconds` in. `leader_died` says which end is gone.
+func _death(look: int, seconds: float, leader_died := false, flash := true) -> Dictionary:
+	var entry := {"chord": _chord(), "moment": look, "start_msec": 0, "standing": false,
+			"leader_died": leader_died}
+	return SquadLines2D.moment_drawing(entry, roundi(seconds * 1000.0), flash)
+
+
+func _rgb(color: Color) -> Color:
+	return Color(color, 1.0)
+
+
+func _is_ash(tint: Color) -> bool:
+	return _rgb(tint).is_equal_approx(_rgb(SquadLines2D.DEATH_ASH_COLOR))
+
+
+func _is_side(tint: Color) -> bool:
+	return _rgb(tint).is_equal_approx(_rgb(SquadLines2D.TETHER_COLOR))
+
+
+# When each look has greyed through: DRAIN's ash has run the length, SLACK has fallen, PULSE and MOTES
+# have taken their grey.
+func _greyed_at(look: int) -> float:
+	match look:
+		SquadLines2D.Moment.DRAIN:
+			return SquadLines2D.DRAIN_SECONDS
+		SquadLines2D.Moment.SLACK:
+			return SquadLines2D.SLACK_SECONDS
+	return SquadLines2D.DEATH_GREY_SECONDS
+
+
+# Every look ends where its knobs say, turns the dashes on screen to ash on the way, and leaves nothing
+# standing at its end.
+func test_every_death_look_turns_to_ash_and_ends_on_its_time() -> void:
+	_death_times()
+	var dashes := SquadLines2D.dash_spans(float(SquadLines2D.measure(_chord())["shaft_end"]), 0.0).size()
+	for look: int in SquadLines2D.DEATH_LOOKS:
+		var name: String = SquadLines2D.Moment.keys()[look]
+		var seconds := SquadLines2D.moment_seconds(look)
+		assert_bool(bool(SquadLines2D.moment_at(look, _chord(), seconds - 0.01, true)["done"])) \
+				.override_failure_message("%s ended before its time" % name).is_false()
+		assert_bool(bool(SquadLines2D.moment_at(look, _chord(), seconds, true)["done"])) \
+				.override_failure_message("%s outlived its time" % name).is_true()
+		var greyed: Array = _death(look, _greyed_at(look))["pieces"]
+		assert_bool(greyed.is_empty()).override_failure_message("%s drew no dashes" % name).is_false()
+		for i in mini(greyed.size(), dashes):
+			assert_bool(_is_ash((greyed[i] as Dictionary)["tint"])).override_failure_message(
+					"%s did not turn its dashes to ash" % name).is_true()
+		var last := _death(look, seconds)
+		for piece: Dictionary in last["pieces"]:
+			assert_float((piece["tint"] as Color).a).override_failure_message(
+					"%s left a piece standing at its end" % name).is_equal_approx(0.0, 0.001)
+		var cone: Dictionary = last["cone"]
+		if not cone.is_empty():
+			assert_float((cone["tint"] as Color).a).override_failure_message(
+					"%s left its arrowhead standing at its end" % name).is_equal_approx(0.0, 0.001)
+
+
+# DRAIN: the ash runs FROM the end that died. Part way, the dashes at the dead end are ash while the
+# far end's are still the side's colour -- and the other way round when the leader is the one gone.
+func test_the_drain_runs_the_ash_from_the_dead_end() -> void:
+	_death_times()
+	var part_way := SquadLines2D.DRAIN_SECONDS * 0.4
+	var member_died: Array = _death(SquadLines2D.Moment.DRAIN, part_way, false)["pieces"]
+	assert_bool(_is_ash((member_died[0] as Dictionary)["tint"])).override_failure_message(
+			"the dead member's end was not ash yet").is_true()
+	assert_bool(_is_side((member_died[member_died.size() - 1] as Dictionary)["tint"])) \
+			.override_failure_message("the ash reached the living leader's end at once").is_true()
+	var leader_died: Array = _death(SquadLines2D.Moment.DRAIN, part_way, true)["pieces"]
+	assert_bool(_is_side((leader_died[0] as Dictionary)["tint"])).override_failure_message(
+			"the ash reached the living member's end at once").is_true()
+	assert_bool(_is_ash((leader_died[leader_died.size() - 1] as Dictionary)["tint"])) \
+			.override_failure_message("the dead leader's end was not ash yet").is_true()
+
+
+# SLACK: once the fall is done the DEAD end lies on the ground and the living end still hangs where it
+# did; nothing sinks below the ground anywhere between. Both ways round, through the drawing both views
+# read.
+func test_the_slack_drops_the_dead_end_to_the_ground() -> void:
+	_death_times()
+	var chord := _chord()
+	var ground := _CHORD_MEMBER.y - SquadLines2D.body_middle_rule()
+	var length := (chord[1] - chord[0]).length()
+	for leader_died: bool in [false, true]:
+		var dead_u := length if leader_died else 0.0
+		var live_u := 0.0 if leader_died else length
+		assert_float(SquadLines2D.slack_point(chord, dead_u, 1.0, leader_died).y).override_failure_message(
+				"the dead end did not reach the ground (leader died: %s)" % leader_died) \
+				.is_equal_approx(ground, 0.001)
+		assert_float(SquadLines2D.slack_point(chord, live_u, 1.0, leader_died).y).override_failure_message(
+				"the living end dropped too (leader died: %s)" % leader_died) \
+				.is_equal_approx(chord[0].y, 0.001)
+		for i in 21:
+			var y := SquadLines2D.slack_point(chord, length * float(i) / 20.0, 1.0, leader_died).y
+			assert_bool(y >= ground - 0.0001).override_failure_message("the slack sank below the ground") \
+					.is_true()
+		var fallen: Array = _death(SquadLines2D.Moment.SLACK, SquadLines2D.SLACK_SECONDS, leader_died)["pieces"]
+		var near_dead: Dictionary = fallen[fallen.size() - 1] if leader_died else fallen[0]
+		var near_live: Dictionary = fallen[0] if leader_died else fallen[fallen.size() - 1]
+		assert_float(_middle(near_dead).y).override_failure_message(
+				"the drawing did not drop the dead end (leader died: %s)" % leader_died) \
+				.is_less(_middle(near_live).y)
+
+
+# PULSE: the light runs AWAY from the end that died, toward whoever is left, and the tether behind it is
+# gone; with the photosensitivity setting on there is no light at all (#217), only the grey and the fade.
+func test_the_pulse_runs_to_whoever_is_left_and_empties_the_tether_behind_it() -> void:
+	_death_times()
+	var early := SquadLines2D.PULSE_SECONDS * 0.3
+	var late := SquadLines2D.PULSE_SECONDS * 0.9
+	for leader_died: bool in [false, true]:
+		var first := _glow_x(_death(SquadLines2D.Moment.PULSE, early, leader_died))
+		var then := _glow_x(_death(SquadLines2D.Moment.PULSE, late, leader_died))
+		var toward := _CHORD_MEMBER.x if leader_died else _CHORD_LEADER.x
+		assert_bool(absf(then - toward) < absf(first - toward)).override_failure_message(
+				"the light did not run toward whoever is left (leader died: %s)" % leader_died).is_true()
+		var before: Array = _death(SquadLines2D.Moment.PULSE, early, leader_died)["pieces"]
+		var after: Array = _death(SquadLines2D.Moment.PULSE, late, leader_died)["pieces"]
+		assert_int(after.size()).override_failure_message(
+				"the tether behind the light was not emptied (leader died: %s)" % leader_died) \
+				.is_less(before.size())
+		for piece: Dictionary in after:
+			var x := _middle(piece).x
+			var behind := x > then if leader_died else x < then
+			assert_bool(behind and absf(x - then) > SquadLines2D.PULSE_LENGTH) \
+					.override_failure_message("a piece stood well behind the light").is_false()
+	assert_bool((_death(SquadLines2D.Moment.PULSE, early, false, false)["glow"] as Dictionary).is_empty()) \
+			.override_failure_message("the light ran with the photosensitivity setting on").is_true()
+	assert_bool((_death(SquadLines2D.Moment.PULSE, SquadLines2D.PULSE_SECONDS, false)["glow"] as Dictionary) \
+			.is_empty()).override_failure_message("the light outlived its run").is_true()
+
+
+func _glow_x(drawing: Dictionary) -> float:
+	var glow: Dictionary = drawing["glow"]
+	assert_bool(glow.is_empty()).override_failure_message("fixture: no light to follow").is_false()
+	var points: PackedVector3Array = glow["points"]
+	return (points[0].x + points[1].x) * 0.5
+
+
+# MOTES: once greyed the tether crumbles, every dash and the arrowhead leaving MOTES_PER_DASH motes that
+# rise and fade -- and none is left when the moment ends.
+func test_the_motes_rise_and_fade() -> void:
+	_death_times()
+	var m := SquadLines2D.measure(_chord())
+	var ranges := SquadLines2D.dash_spans(float(m["shaft_end"]), 0.0).size() + 1
+	var crumbled := SquadLines2D.DEATH_GREY_SECONDS + SquadLines2D.CRUMBLE_SECONDS
+	var soon: Array = _death(SquadLines2D.Moment.MOTES, crumbled + 0.05)["pieces"]
+	var later: Array = _death(SquadLines2D.Moment.MOTES, crumbled + 0.3)["pieces"]
+	assert_int(soon.size()).override_failure_message("the tether did not crumble into its motes") \
+			.is_equal(ranges * SquadLines2D.MOTES_PER_DASH)
+	assert_int(later.size()).override_failure_message("fixture: motes died before the later look") \
+			.is_equal(soon.size())
+	for i in soon.size():
+		assert_float(_middle(later[i]).y).override_failure_message("a mote did not rise") \
+				.is_greater(_middle(soon[i]).y)
+		assert_float(((later[i] as Dictionary)["tint"] as Color).a).override_failure_message(
+				"a mote did not fade").is_less(((soon[i] as Dictionary)["tint"] as Color).a)
+	var ended: Array = _death(SquadLines2D.Moment.MOTES,
+			SquadLines2D.moment_seconds(SquadLines2D.Moment.MOTES))["pieces"]
+	assert_bool(ended.is_empty()).override_failure_message("a mote outlived the moment").is_true()
+
+
+# The times are the knobs': each look lasts its run (or grey) plus what follows it.
+func test_a_death_looks_timing_follows_its_knobs() -> void:
+	_death_times()
+	var hold := SquadLines2D.DEATH_HOLD_SECONDS
+	var fade := SquadLines2D.DEATH_FADE_SECONDS
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.DRAIN)) \
+			.is_equal_approx(SquadLines2D.DRAIN_SECONDS + hold + fade, 0.0001)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.SLACK)) \
+			.is_equal_approx(SquadLines2D.SLACK_SECONDS + hold + fade, 0.0001)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.PULSE)) \
+			.is_equal_approx(maxf(SquadLines2D.PULSE_SECONDS, SquadLines2D.DEATH_GREY_SECONDS) + fade, 0.0001)
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.MOTES)) \
+			.is_equal_approx(SquadLines2D.DEATH_GREY_SECONDS + SquadLines2D.MOTE_SECONDS, 0.0001)
+	SquadLines2D.DRAIN_SECONDS *= 2.0
+	assert_float(SquadLines2D.moment_seconds(SquadLines2D.Moment.DRAIN)) \
+			.override_failure_message("the drain ignored its time knob") \
+			.is_equal_approx(SquadLines2D.DRAIN_SECONDS + hold + fade, 0.0001)
+
+
+# WHICH look (the dev: all four, a different one each time). Derived rather than rolled, so the same
+# death picks the same look; never the one before it; every look turns up; and the pin overrides it.
+func test_the_death_look_is_derived_never_repeats_and_can_be_pinned() -> void:
+	_death_times()
+	var seen := {}
+	for x in 6:
+		for count in 6:
+			var cell := Vector2i(x, 3 - x)
+			var pick := SquadLines2D.death_look(cell, count, -1)
+			assert_int(SquadLines2D.death_look(cell, count, -1)).override_failure_message(
+					"the same death picked a different look").is_equal(pick)
+			assert_bool(SquadLines2D.DEATH_LOOKS.has(pick)).override_failure_message(
+					"a death picked a moment that is not a death look").is_true()
+			seen[pick] = true
+			for last: int in SquadLines2D.DEATH_LOOKS:
+				assert_int(SquadLines2D.death_look(cell, count, last)).override_failure_message(
+						"a death repeated the look before it").is_not_equal(last)
+	assert_int(seen.size()).override_failure_message("some look never turned up") \
+			.is_equal(SquadLines2D.DEATH_LOOKS.size())
+	for pin in SquadLines2D.DEATH_LOOKS.size():
+		SquadLines2D.DEATH_LOOK = pin + 1
+		assert_int(SquadLines2D.death_look(Vector2i(2, 2), 5, SquadLines2D.DEATH_LOOKS[pin])) \
+				.override_failure_message("the pin did not hold its look").is_equal(SquadLines2D.DEATH_LOOKS[pin])
+
+
+# --- An enemy squad's colour (#1109) --------------------------------------------------------------
+
+# An enemy's moment wears the enemy colour: a draw-in starts in it, a break starts in it and still
+# strains toward the ONE strain red, and its sparks fly in it. Its standing tether is the same colour,
+# and the ghost and strain states do not change with the side. Compared to the statics, never values.
+func test_an_enemy_squads_lines_and_moments_wear_the_enemy_colour() -> void:
+	_break_times(0.4, 0.6, 4, 0.3)
+	var enemy := SquadLines2D.ENEMY_TETHER_COLOR
+	var red := SquadLines2D.TETHER_STRAIN_COLOR
+	assert_bool(enemy.is_equal_approx(SquadLines2D.TETHER_COLOR) or enemy.is_equal_approx(red)) \
+			.override_failure_message("fixture: the enemy colour matches a colour it is told apart from") \
+			.is_false()
+
+	var draw_in := SquadLines2D.moment_at(SquadLines2D.Moment.DRAW_IN, _chord(), 0.1, false, false, true)
+	assert_bool((draw_in["tint"] as Color).is_equal_approx(enemy)).override_failure_message(
+			"an enemy's draw-in did not wear the enemy colour").is_true()
+
+	var entry := {"chord": _chord(), "moment": SquadLines2D.Moment.BREAK, "start_msec": 0,
+			"standing": false, "hostile": true}
+	var opening: Color = SquadLines2D.moment_drawing(entry, 0, false)["tint"]
+	assert_bool(opening.is_equal_approx(enemy)).override_failure_message(
+			"an enemy's break did not start in the enemy colour -- moment_drawing lost its side").is_true()
+	var late: Color = SquadLines2D.moment_drawing(entry, 390, false)["tint"]
+	var to_red := Vector4(late.r - red.r, late.g - red.g, late.b - red.b, late.a - red.a).length()
+	var to_enemy := Vector4(late.r - enemy.r, late.g - enemy.g, late.b - enemy.b, late.a - enemy.a).length()
+	assert_bool(to_red < to_enemy).override_failure_message(
+			"an enemy's break did not strain toward the shared strain red").is_true()
+	var spark_in_enemy := false
+	for piece: Dictionary in SquadLines2D.moment_drawing(entry, 450, false)["pieces"]:
+		var tint: Color = piece["tint"]
+		spark_in_enemy = spark_in_enemy or Color(tint, 1.0).is_equal_approx(Color(enemy, 1.0))
+	assert_bool(spark_in_enemy).override_failure_message(
+			"an enemy's break threw no spark in the enemy colour").is_true()
+
+	assert_bool(SquadLines2D.color_of(SquadLines2D.Strain.SOLID, true).is_equal_approx(enemy)) \
+			.override_failure_message("an enemy's standing tether is not the enemy colour").is_true()
+	assert_bool(SquadLines2D.color_of(SquadLines2D.Strain.GHOST, true)
+			.is_equal_approx(SquadLines2D.TETHER_GHOST_COLOR)).is_true()
+	assert_bool(SquadLines2D.color_of(SquadLines2D.Strain.STRAIN, true).is_equal_approx(red)).is_true()

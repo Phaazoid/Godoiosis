@@ -124,7 +124,7 @@ func _enter_phase() -> bool:
 
 
 func _screen() -> PreMissionScreen:
-	for child: Node in game.ui_layer.get_children():
+	for child: Node in game.card_layer.get_children():
 		if child is PreMissionScreen:
 			return child as PreMissionScreen
 	return null
