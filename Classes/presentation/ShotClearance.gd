@@ -23,6 +23,8 @@ class_name ShotClearance
 #
 # A COLUMN is tested as a box from the board's underside to its drawn top, never as "anything below
 # the top": a torn-out stage floats forty cells up, and a sight line passing UNDER it blocks nothing.
+# A UNIT is its art AND its health readout (round 4): under the battle zoom every unit wears one,
+# and from the zoom's pitch the readout, not the head, is what stands in front of the next fighter.
 # The walk is BoardPicker.crossings -- the one walk the mouse pick already rides.
 
 enum Kind { COLUMN, PROP, UNIT }
@@ -64,10 +66,21 @@ class Body:
 	var height := 0.0
 	var heights: Array[float] = []
 	var cell := Vector2i.ZERO
+	# Its health readout, world-space, or empty while none is up. A box of its own rather than the
+	# art's stretched upward, so the gap between a head and its readout stays see-through.
+	var hud := AABB()
 
 	func box() -> AABB:
 		return AABB(feet - Vector3(half_width, 0.0, half_width),
 				Vector3(half_width * 2.0, height, half_width * 2.0))
+
+	# Whether this body stands in the line from `from` to `to`: its art, or the readout over it. The
+	# readout is what buries a fighter under the battle zoom -- the camera looks down past a head
+	# and straight through the bar floating over it (#1132 round 4, measured on the dev's board).
+	func blocks(from: Vector3, to: Vector3) -> bool:
+		if box().intersects_segment(from, to) != null:
+			return true
+		return hud.has_volume() and hud.intersects_segment(from, to) != null
 
 	# The points a lens must see: each sample height, at the centre and at both ink edges along the
 	# axis the billboard faces the lens with.
@@ -196,7 +209,7 @@ static func _trace_standing(world: World, cell: Vector2i, lens: Vector3, target:
 		var body := entry as Body
 		if body == null or body.unit_id == target.unit_id:
 			continue
-		if body.box().intersects_segment(lens, target.point) == null:
+		if not body.blocks(lens, target.point):
 			continue
 		if world.participants.has(body.unit_id):
 			found.fixed += 1

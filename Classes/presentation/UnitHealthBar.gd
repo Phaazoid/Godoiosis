@@ -559,6 +559,13 @@ func track_texels() -> float:
 	return stack_size_texels().x
 
 
+# Half the grid's drawn width and height, in world units, about its own anchor. The number sits ON
+# the grid, so this is the whole readout below top_extent(). The shot clearance stands a box on it
+# (#1132 round 4): from the battle zoom's pitch this readout is what hides the fighter behind.
+func half_extents() -> Vector2:
+	return stack_size_texels() * 0.5 * _texel()
+
+
 # How far above its own anchor the readout DRAWS, in world units: the grid's top half, plus the
 # state row while one is up (#1070). The crown stands on this, and it is read off what is drawn so a
 # row that wraps or a status that arrives lifts the crown in the same frame rather than through it.
