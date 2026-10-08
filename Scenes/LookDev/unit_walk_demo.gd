@@ -7,7 +7,6 @@
 # tops; other units block. Units on ramp cells stand at the slope midpoint.
 extends Node3D
 
-const SELECTED_MODULATE := Color(1.4, 1.4, 1.0)  # UnitVisuals.HIGHLIGHT_MODULATE's twin
 
 # Cast members to spawn (first found wins) and the columns they stand on.
 const SPAWN_COLUMNS: Array[Vector2i] = [
@@ -223,16 +222,16 @@ func _select(unit: UnitSprite3D) -> void:
 		_deselect()
 		return
 	if _selected != null:
-		_selected.modulate = Color.WHITE
+		_selected.set_tint(Color.WHITE)
 	_selected = unit
-	_selected.modulate = SELECTED_MODULATE
+	_selected.set_tint(UnitVisuals.HIGHLIGHT_MODULATE)
 	_refresh_selection_overlays()
 	_update_readout()
 
 
 func _deselect() -> void:
 	if _selected != null:
-		_selected.modulate = Color.WHITE
+		_selected.set_tint(Color.WHITE)
 	_selected = null
 	_overlays.clear(BoardOverlays.Layer.MOVE)
 	_overlays.clear(BoardOverlays.Layer.ATTACK)

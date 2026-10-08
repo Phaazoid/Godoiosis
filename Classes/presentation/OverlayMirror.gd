@@ -360,22 +360,27 @@ func _reach_lines(om: OverlayManager) -> void:
 
 # What a queued attack leaves (#1247), gated on one version: StrikeMarks2D's line work lifted through
 # trace_point as the reach lines are, and its badge as a standing sprite at the same point. The marks
-# the hovered unit is part of go to the FOCUS layer, and their badges over everything. Each mark's
-# colour rides its own tint, shaft and cone alike; the pointer is the cone, and when a mark has no
-# shaft (the badge covers it) its lone cone stroke is handed a zero width, so only the solid draws.
+# the hovered unit is part of lift by their focus rank, badges over everything, its own attacks over
+# the ones aimed at it (#1251). Each mark's colour rides its own tint, shaft and cone alike; the
+# pointer is the cone, and when a mark has no shaft (the badge covers it) its lone cone stroke is
+# handed a zero width, so only the solid draws.
+const STRIKE_LAYER_OF_RANK: Array[BoardOverlays.Layer] = [BoardOverlays.Layer.QUEUED_STRIKES,
+		BoardOverlays.Layer.QUEUED_STRIKES_FOCUS, BoardOverlays.Layer.QUEUED_STRIKES_OWN]
+
+
 func _queued_strikes(om: OverlayManager) -> void:
 	if om.queued_strike_version == _last_strike_version:
 		return
 	_last_strike_version = om.queued_strike_version
 	var badges: Array[Dictionary] = []
 	var pixel := StrikeMarks2D.STRIKE_BADGE_SIZE / float(StrikeMarks2D.BADGE_TEXELS)
-	for focused: bool in [false, true]:
+	for rank: int in [0, 1, 2]:
 		var marks: Array[Array] = []
 		var widths: Array[Array] = []
 		var cones: Array[Dictionary] = []
 		var tints: Array[Color] = []
 		for entry: Dictionary in om.queued_strikes:
-			if om.strike_focused(entry) != focused:
+			if om.strike_focus_rank(entry) != rank:
 				continue
 			var work := StrikeMarks2D.line_work(entry)
 			if work.is_empty():
@@ -400,10 +405,8 @@ func _queued_strikes(om: OverlayManager) -> void:
 			tints.append(colour)
 			badges.append({"pos": BoardSpace.trace_point(StrikeMarks2D.badge_point(entry)),
 					"texture": StrikeMarks2D.badge_texture(entry["icon"], entry["colour"]), "modulate": tint,
-					"exact": true, "pixel_size": pixel, "on_top": focused})
-		var layer: BoardOverlays.Layer = BoardOverlays.Layer.QUEUED_STRIKES_FOCUS if focused \
-				else BoardOverlays.Layer.QUEUED_STRIKES
-		overlays.set_marks(layer, marks, Color.WHITE, widths, cones, tints)
+					"exact": true, "pixel_size": pixel, "on_top": rank})
+		overlays.set_marks(STRIKE_LAYER_OF_RANK[rank], marks, Color.WHITE, widths, cones, tints)
 	_markers(BoardOverlays.Layer.QUEUED_BADGES, badges)
 
 

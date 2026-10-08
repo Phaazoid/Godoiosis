@@ -656,6 +656,23 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "How far the badge's pointer runs past its rim toward the target, in cells -- the part that says who is hitting whom between two units side by side. At range it ends a reach mark's inset short of the target instead."},
 	{"group": "Queued attacks", "label": "Badge ground (2D+3D)", "static": "STRIKE_BADGE_GROUND", "script": STRIKE_MARKS_SCRIPT,
 		"tip": "The disc the queue's attack icon sits on. Dark, so the icon reads on grass, stone and water alike; the ring round it carries the side's colour."},
+	# UNIT HIGHLIGHTS (#1251): the cues a unit's own sprite wears. Since #1251 a tint above 1.0 reaches
+	# the 3D view, so the aim pulse and the row highlight show there for the first time.
+	{"group": "Unit highlights", "label": "Hovered unit flash", "static": "HOVER_FLASH_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "What the unit under the pointer brightens TO, ghost or body, at full alpha. Above 1.0 on each channel washes the art toward white while its dark outline stays, the way the pin flash does."},
+	{"group": "Unit highlights", "label": "Hovered unit flash ramp", "static": "HOVER_FLASH_RAMP",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.05, "max": 2.0, "step": 0.05,
+		"tip": "Seconds from rest up to the peak, and the same back down."},
+	{"group": "Unit highlights", "label": "Hovered unit flash hold", "static": "HOVER_FLASH_HOLD",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Seconds it sits at the peak before easing back. Longer reads steadier."},
+	{"group": "Unit highlights", "label": "Aim target pulse", "static": "TARGET_PULSE_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "What a unit your aim would hit breathes TO. It restarts on the next aim, so a turned value shows on the next target."},
+	{"group": "Unit highlights", "label": "Queue row highlight", "static": "HIGHLIGHT_MODULATE",
+		"script": UNIT_VISUALS_SCRIPT,
+		"tip": "The steady tint a queue row's units take while you hover the row -- the body, or the ghost standing in for it, made opaque."},
 	{"group": "Squads & zones", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
 		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
 
@@ -1741,6 +1758,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Reach lines: the arc": "Markup",
 	"Reach lines: the cone": "Markup",
 	"Queued attacks": "Markup",
+	"Unit highlights": "Markup",
 	"Aiming": "Markup",
 	"Sight beam": "Markup",
 	"Watch": "Markup",
@@ -2018,6 +2036,11 @@ static func read_static(name: String) -> Variant:
 		"SQUAD_COUNT_GAP": return OverlayManager.SQUAD_COUNT_GAP
 		"PIN_PULSE_MODULATE": return UnitVisuals.PIN_PULSE_MODULATE
 		"PIN_PULSE_HOLD": return UnitVisuals.PIN_PULSE_HOLD
+		"HOVER_FLASH_MODULATE": return UnitVisuals.HOVER_FLASH_MODULATE
+		"HOVER_FLASH_RAMP": return UnitVisuals.HOVER_FLASH_RAMP
+		"HOVER_FLASH_HOLD": return UnitVisuals.HOVER_FLASH_HOLD
+		"TARGET_PULSE_MODULATE": return UnitVisuals.TARGET_PULSE_MODULATE
+		"HIGHLIGHT_MODULATE": return UnitVisuals.HIGHLIGHT_MODULATE
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
@@ -2308,6 +2331,25 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PIN_PULSE_HOLD":
 			UnitVisuals.PIN_PULSE_HOLD = value
 			_restyle_pin_flashes(host)
+			return
+		"HOVER_FLASH_MODULATE":
+			UnitVisuals.HOVER_FLASH_MODULATE = value
+			_restyle_hover_flash(host)
+			return
+		"HOVER_FLASH_RAMP":
+			UnitVisuals.HOVER_FLASH_RAMP = value
+			_restyle_hover_flash(host)
+			return
+		"HOVER_FLASH_HOLD":
+			UnitVisuals.HOVER_FLASH_HOLD = value
+			_restyle_hover_flash(host)
+			return
+		# Read when a pulse or a highlight STARTS, so the next aim or row hover shows a turned value.
+		"TARGET_PULSE_MODULATE":
+			UnitVisuals.TARGET_PULSE_MODULATE = value
+			return
+		"HIGHLIGHT_MODULATE":
+			UnitVisuals.HIGHLIGHT_MODULATE = value
 			return
 		# The payload inset (#1058 D2b): regenerates the one texture each view holds, like the grid below.
 		"PAYLOAD_INSET":
@@ -3228,6 +3270,14 @@ static func _restyle_pin_flashes(host: Node3D) -> void:
 	var game_2d: Node2D = host.game
 	if game_2d != null:
 		game_2d.restyle_pin_flashes()
+
+
+static func _restyle_hover_flash(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d != null:
+		game_2d.restyle_hover_flash()
 
 
 static func _restyle_action_queue(host: Node3D) -> void:

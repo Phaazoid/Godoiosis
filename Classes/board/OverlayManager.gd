@@ -66,7 +66,10 @@ const TARGET_ATLAS_COORDS = Vector2i(1, 0)  # the "pick this unit" marker (PICKI
 const BLOCKED_ATLAS_COORDS = Vector2i(2, 0)
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
-const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
+# Where a ghost's hover flash (#1251) rests between its peaks: the real sprite's own tint, opaque, so
+# the hovered unit reads as a body rather than a plan.
+const GHOST_FLASH_REST := Color(1, 1, 1, 1)
+const GHOST_HOVER_META := &"hover_flash"
 # A ghost's running refusal flash and the position it shakes about (#1150), held on the ghost itself.
 const GHOST_FLASH_META := &"invalid_flash"
 const GHOST_REST_META := &"invalid_flash_rest"
@@ -810,8 +813,8 @@ func strike_focus() -> Unit:
 	return instance_from_id(_strike_focus_id) as Unit if _strike_focus_id != 0 else null
 
 
-func strike_focused(entry: Dictionary) -> bool:
-	return StrikeMarks2D.involves(entry, strike_focus())
+func strike_focus_rank(entry: Dictionary) -> int:
+	return StrikeMarks2D.focus_rank(entry, strike_focus())
 
 
 # A turned badge or footprint knob, or a new palette: every badge is re-baked and both views redrawn.
@@ -828,11 +831,11 @@ func restyle_queued_strikes() -> void:
 
 func _redraw_queued_strikes() -> void:
 	queued_strike_version += 1
-	var focused: Array[bool] = []
+	var ranks: Array[int] = []
 	for entry in queued_strikes:
-		focused.append(strike_focused(entry))
+		ranks.append(strike_focus_rank(entry))
 	_strike_marks_2d.entries = queued_strikes
-	_strike_marks_2d.focused = focused
+	_strike_marks_2d.focus_ranks = ranks
 	_strike_marks_2d.queue_redraw()
 	if queued_footprint_overlay == null:
 		return
@@ -2314,18 +2317,66 @@ func _ghost_for(unit: Unit) -> Sprite2D:
 func has_projected_unit(unit: Unit) -> bool:
 	return _ghost_for(unit) != null
 
+# The queue-row highlight on a ghost: the real sprite's HIGHLIGHT_MODULATE, opaque, so the one knob
+# moves both. Yields to a hover flash, the ladder UnitVisuals.sync_flashes states.
+static func projected_highlight() -> Color:
+	return Color(UnitVisuals.HIGHLIGHT_MODULATE, 1.0)
+
 func set_projected_unit_highlighted(unit: Unit, value: bool) -> void:
 	var sprite := _ghost_for(unit)
-	if sprite == null:
+	if sprite == null or _ghost_hover_tween(sprite) != null:
 		return
-	sprite.modulate = PROJECTED_HIGHLIGHT if value else PROJECTED_MODULATE
+	sprite.modulate = projected_highlight() if value else PROJECTED_MODULATE
+
+# The hover flash on the ghost standing in for a unit (#1251), UnitVisuals.set_hover_flash's twin and
+# idempotent the same way: HoverPresenter asks every frame. Bound to the ghost, so a redraw that frees
+# the ghost ends it, and the next frame's ask starts it on the new one. Yields to the refusal flash.
+func set_projected_unit_flashing(unit: Unit, on: bool) -> void:
+	var ghost := _ghost_for(unit)
+	if ghost == null:
+		return
+	var running := _ghost_hover_tween(ghost)
+	var alarm: Tween = ghost.get_meta(GHOST_FLASH_META) if ghost.has_meta(GHOST_FLASH_META) else null
+	var want := on and not (alarm != null and alarm.is_running())
+	if want == (running != null):
+		return
+	if want:
+		ghost.modulate = GHOST_FLASH_REST   # opaque at once, not after the first ramp
+		ghost.set_meta(GHOST_HOVER_META, Pulse.start(ghost, ghost, &"modulate", GHOST_FLASH_REST,
+				Color(UnitVisuals.HOVER_FLASH_MODULATE, 1.0), UnitVisuals.HOVER_FLASH_RAMP,
+				UnitVisuals.HOVER_FLASH_HOLD))
+	else:
+		_drop_ghost_flash(ghost)
+
+# Every standing ghost flash dropped, so a turned knob reaches it: the next frame's ask rebuilds them.
+func restyle_ghost_flashes() -> void:
+	for unit: Variant in projected_unit_sprites.keys() + knockback_ghost_by_unit.keys():
+		if is_instance_valid(unit):
+			var ghost := _ghost_for(unit as Unit)
+			if ghost != null:
+				_drop_ghost_flash(ghost)
+
+func _ghost_hover_tween(ghost: Sprite2D) -> Tween:
+	if not ghost.has_meta(GHOST_HOVER_META):
+		return null
+	var tween: Tween = ghost.get_meta(GHOST_HOVER_META)
+	return tween if tween != null and tween.is_valid() else null
+
+func _drop_ghost_flash(ghost: Sprite2D) -> void:
+	var running := _ghost_hover_tween(ghost)
+	if ghost.has_meta(GHOST_HOVER_META):
+		ghost.remove_meta(GHOST_HOVER_META)
+	if running != null:
+		Pulse.stop(running, ghost, &"modulate", PROJECTED_MODULATE)
 
 # The refusal flash on the ghost standing in for a unit, whose real sprite is hidden (#1150). The
-# tween is bound to the ghost, so a redraw that frees the ghost ends the flash with it.
+# tween is bound to the ghost, so a redraw that frees the ghost ends the flash with it. It outranks
+# the hover flash, which the next frame's ask brings back once this has played.
 func play_projected_unit_invalid_flash(unit: Unit) -> void:
 	var ghost := _ghost_for(unit)
 	if ghost == null:
 		return
+	_drop_ghost_flash(ghost)
 	if ghost.has_meta(GHOST_FLASH_META):
 		var previous: Tween = ghost.get_meta(GHOST_FLASH_META)
 		if previous != null and previous.is_valid():

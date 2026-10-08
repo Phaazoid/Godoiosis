@@ -289,6 +289,44 @@ func test_hovering_either_end_lifts_the_mark_over_everything() -> void:
 	assert_int(sprites[0].render_priority).is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
+# Inside the lifted band, the hovered unit's OWN attack sits over the one aimed at it (#1251, the
+# dev's report: hovering the enemy left his counter behind the attack on him). Both ends, since each
+# unit is the attacker of one mark and the target of the other.
+func test_the_hovered_units_own_mark_sits_over_the_one_aimed_at_it() -> void:
+	var hero := _spawn(PLAYER, Vector2i(2, 2), true)
+	var foe := _spawn(ENEMY, Vector2i(3, 2), true)
+	_queue_attack(hero, foe.movement.cell)
+	await _settle()
+	assert_int(_badge_sprites().size()).override_failure_message("fixture: no counter was drawn").is_equal(2)
+	var flat := _om().get_node("StrikeMarks2D") as StrikeMarks2D
+
+	for hovered: Unit in [foe, hero]:
+		await _point_at(hovered.movement.cell)
+		var own: Dictionary = _entries_by(hovered)[0]
+		var aimed: Dictionary = _entries_by(foe if hovered == hero else hero)[0]
+		var own_badge := _badge_of(own)
+		var aimed_badge := _badge_of(aimed)
+		assert_object(own_badge).override_failure_message("fixture: the hovered unit's badge was not found").is_not_null()
+		assert_bool(own_badge.no_depth_test and aimed_badge.no_depth_test).override_failure_message(
+				"fixture: both marks should be lifted, the hovered unit is at both").is_true()
+		assert_int(own_badge.render_priority).override_failure_message(
+				"hovering %s left its own attack under the one aimed at it" % hovered.get_unit_name()) \
+				.is_greater(aimed_badge.render_priority)
+		# ...and the flat view draws it last.
+		var ranks: Array[int] = []
+		for entry in [own, aimed]:
+			ranks.append(flat.focus_ranks[_om().queued_strikes.find(entry)])
+		assert_array(ranks).is_equal([2, 1])
+
+
+func _badge_of(entry: Dictionary) -> Sprite3D:
+	var texture := StrikeMarks2D.badge_texture(entry["icon"], entry["colour"])
+	for sprite in _badge_sprites():
+		if sprite.texture == texture:
+			return sprite
+	return null
+
+
 # --- Lifetime ---------------------------------------------------------------------------------------
 
 # Each mark goes at its OWN blow, not when the pass starts. Headless a pass runs synchronously, so the

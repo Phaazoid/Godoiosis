@@ -101,11 +101,20 @@ var _animator := SpriteAnimator.new()
 # Where the playing set says its character stands inside a card, in card-local texels (#634).
 # Vector2(-1, -1) = the set does not say, and the still pivot is used unchanged.
 var _animation_ground := Vector2(-1, -1)
-# The element-state material (#358), built the first time this sprite wears a state and kept for
-# the next. Carried as material_override ONLY while a state shows, so every other frame is the
-# engine's own sprite material, untouched.
+# The element-state material (#358), built the first time this sprite needs it and kept for the
+# next. Carried as material_override ONLY while a state shows or the tint is brighter than the art
+# (#1251), so every other frame is the engine's own sprite material, untouched.
 var _status_material: ShaderMaterial
 var _status_bound: Texture2D   # which texture the material's two samplers were last bound to
+# What show_status was last handed, so either door can re-decide the material on its own.
+var _wet := 0.0
+var _chill := 0.0
+var _icicles := 0.0
+var _clock := 0.0
+var _seed := 0.0
+# The part of the tint ABOVE 1.0, per channel (#1251). The engine sprite carries its tint as a
+# vertex colour, which clamps at 1.0, so a white flash rendered exactly like the resting art.
+var _overbright := Vector3.ONE
 
 const STATUS_SHADER := preload("res://Classes/presentation/unit_status.gdshader")
 const STATUS_GHOST_SHADER := preload("res://Classes/presentation/unit_status_ghost.gdshader")
@@ -239,7 +248,36 @@ func set_walking_visual(walking: bool) -> void:
 # _apply_state_texture stays the one writer, and a texture swap (walk art, downed art, a frame
 # animation's borrow) is rebound on the next push with nothing to announce it.
 func show_status(wet: float, chill: float, icicles: float, clock: float, seed: float) -> void:
-	if (wet <= 0.0 and chill <= 0.0 and icicles <= 0.0) or texture == null:
+	_wet = wet
+	_chill = chill
+	_icicles = icicles
+	_clock = clock
+	_seed = seed
+	_sync_material()
+
+
+# THE one door to this sprite's tint (#1251): what 2D's modulate is, brighter-than-white included.
+# The vertex colour takes the part it can hold and the status material carries the rest, so a tint
+# of 2.4 renders the way the flat view renders it rather than as the plain art.
+func set_tint(color: Color) -> void:
+	modulate = Color(minf(color.r, 1.0), minf(color.g, 1.0), minf(color.b, 1.0), color.a)
+	var over := Vector3(maxf(color.r, 1.0), maxf(color.g, 1.0), maxf(color.b, 1.0))
+	if over != _overbright:
+		_overbright = over
+		_sync_material()
+
+
+# The whole tint this sprite wears, the inverse of set_tint.
+func tint() -> Color:
+	return Color(modulate.r * _overbright.x, modulate.g * _overbright.y, modulate.b * _overbright.z,
+			modulate.a)
+
+
+# The one writer of material_override: the status material while a state shows or the tint is
+# brighter than the art, the engine's own otherwise.
+func _sync_material() -> void:
+	var states := _wet > 0.0 or _chill > 0.0 or _icicles > 0.0
+	if (not states and _overbright == Vector3.ONE) or texture == null:
 		if material_override != null:
 			material_override = null
 		return
@@ -261,10 +299,11 @@ func show_status(wet: float, chill: float, icicles: float, clock: float, seed: f
 		_status_material.set_shader_parameter("status_map", map.texture)
 	if material_override != _status_material:
 		material_override = _status_material
-	StatusLook.push(_status_material, wet, chill, icicles, clock, seed)
+	StatusLook.push(_status_material, _wet, _chill, _icicles, _clock, _seed)
+	_status_material.set_shader_parameter("overbright", _overbright)
 
 
-# The material a state is being drawn with, or null while this sprite wears none.
+# The material a state or a bright tint is being drawn with, or null while this sprite wears neither.
 func status_material() -> ShaderMaterial:
 	return material_override as ShaderMaterial
 

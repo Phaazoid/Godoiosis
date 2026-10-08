@@ -2152,6 +2152,14 @@ func restyle_pin_flashes() -> void:
 			unit.visuals.restyle_pin_flash()
 
 
+# ...and the hover flash's (#1251), on a real sprite or the ghost standing in for one.
+func restyle_hover_flash() -> void:
+	for unit: Unit in _all_units():
+		if is_instance_valid(unit) and unit.visuals != null:
+			unit.visuals.restyle_hover_flash()
+	overlay_manager.restyle_ghost_flashes()
+
+
 func _without(cells: Array[Vector2i], taken: Array[Vector2i]) -> Array[Vector2i]:
 	var seen := {}
 	for cell: Vector2i in taken:

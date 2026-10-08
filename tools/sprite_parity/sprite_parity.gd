@@ -10,7 +10,8 @@ extends Node3D
 #     godot --path . res://tools/sprite_parity/sprite_parity.tscn
 #
 # It needs a real window (it is not a test for that reason), prints one verdict line per case, and
-# also saves what a Wet and a Chilled sprite look like to user://sprite_parity/ for an eye check.
+# also saves what a Wet, a Chilled and a bright-tinted (#1251) sprite look like to user://sprite_parity/
+# for an eye check.
 # It writes nothing under res://.
 
 const ART := preload("res://Art/Units/MapSprites/Knight Templar.png")
@@ -29,6 +30,7 @@ func _ready() -> void:
 	for clock: float in [0.3, 1.9]:
 		await _look("wet", 1.0, 0.0, 0.0, clock)
 		await _look("chilled", 0.0, 1.0, 1.0, clock)
+	await _look("bright", 0.0, 0.0, 0.0, 0.3, Color(2.4, 2.4, 2.4))
 	print("SPRITE PARITY: %s" % ("OK" if failures == 0 else "%d CASE(S) DIFFER" % failures))
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -112,12 +114,14 @@ func _parity(label: String, sprite: UnitSprite3D) -> int:
 
 # A close look at a state on the real art, through the one door the game uses. An untinted sprite,
 # unlike the parity cases: a faction tint is a parity question, and here it only muddies the look.
-func _look(name_stem: String, wet: float, chill: float, icicles: float, clock: float) -> void:
+func _look(name_stem: String, wet: float, chill: float, icicles: float, clock: float,
+		tint := Color.WHITE) -> void:
 	var sprite := UnitSprite3D.new()
 	sprite.show_still(ART)
 	add_child(sprite)
 	_frame(Vector3(0.15, 0.55, 0.75))
 	sprite.show_status(wet, chill, icicles, clock, 0.3)
+	sprite.set_tint(tint)
 	var image := await _grab()
 	var path := "%s/%s_%.1f.png" % [OUT_DIR, name_stem, clock]
 	image.save_png(path)

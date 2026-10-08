@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05.**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05; #1251 (a tint brighter than the art reaches the 3D sprite) folded in 2026-10-07.**
 
 ---
 
@@ -1011,7 +1011,8 @@ the sRGB vertex colour. **Measured pixel-identical** (0 differing pixels) for a 
 cast shadow, flip, faction tint), a ghost and an atlas frame, by `tools/sprite_parity/`, which needs
 a window and so is a TOOL rather than a test. **The engine stays authoritative: re-run that probe
 after any engine upgrade.** Two things bound the risk. The override is carried ONLY while a unit
-wears a state, so every other sprite is the engine's own. And the ghost variant sets
+wears a state or a tint brighter than its art (#1251, below), so every other sprite is the engine's
+own. And the ghost variant sets
 `render_priority` itself, because the engine applies it to its OWN material only when `alpha_cut` is
 DISABLED (#317) and never to an override.
 
@@ -1050,6 +1051,17 @@ DISABLED (#317) and never to an override.
   whether or not the shader declares it (measured), so a misspelled uniform reads back fine and draws
   nothing. `test_unit_status.gd` checks every pushed name against the shader's own uniform list in
   both directions.
+- **A tint BRIGHTER than the art rides this material too ([#1251](https://github.com/Phaazoid/Godoiosis/issues/1251), 2026-10-07).**
+  The engine sprite carries `modulate` as a vertex colour, which clamps at 1.0, so every cue that
+  brightens a unit (the pin flash, the aim pulse, the queue-row highlight, the hover flash) drew
+  nothing in 3D while the flat view showed it. Measured: a tint of 2.2 rendered pixel-identical to
+  1.0, while 0.5 darkened. `UnitSprite3D.set_tint` is the one door now (the mirror's two writers, a
+  real sprite and a ghost, go through it): the vertex colour takes what it can hold, the part above
+  1.0 rides the `overbright` uniform, and the shader applies it where the flat view does -- multiplied
+  in display space, clipped at white, before lighting. So a bright unit goes white with its outline
+  kept, like the 2D sprite. The material is worn while a state shows OR the tint is over 1.0;
+  `_sync_material` is its one writer, and at `(1, 1, 1)` the term is skipped, so parity at rest is
+  untouched (re-measured: 0 differing pixels). `UnitSprite3D.tint()` reads the whole tint back.
 
 **Slice 2 is the world half: what a worn state throws OFF the body** (BUILT 2026-09-23, in two
 PRs: the particles, then the damp blot). A Wet unit drips from its overhangs and each drip
