@@ -1219,6 +1219,26 @@ func recording() -> CameraRecording:
 	return _recording
 
 
+# The dev-tools Camera page's buttons (#705 slice 3). Jump only while paused: it cuts the camera to the
+# pose so the dev can look at it again, and anywhere else the director would take it straight back.
+func jump_to_keyframe(index: int) -> bool:
+	if not Pacing.dev_paused() or index < 1 or index > _recording.keyframes.size():
+		return false
+	_rig.return_to_snapshot(_recording.keyframes[index - 1].yours)
+	_rig.note_event("dev pause: jumped to K%d" % index)
+	return true
+
+
+func delete_keyframe(index: int) -> void:
+	if _recording.remove(index):
+		_refresh_dev_pause_label()
+
+
+# The shot table as the director last solved it, for the Camera page.
+func shots() -> ShotDirector:
+	return _shots
+
+
 # The beat's aim line by name, attacker first -- one cell at a time, so the order is the line's own.
 func _line_names(cam: CameraController) -> Array[String]:
 	var names: Array[String] = []

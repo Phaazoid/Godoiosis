@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slices 1-2 (the dev pause, key poses) folded in 2026-10-07.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08.**
 
 ## Why this page exists
 
@@ -243,6 +243,15 @@ which of two is open.**
 - **The recording in a report** — a `## Camera recording` section (a table, then the same numbers as
   JSON to replay) and `camera.png`, a contact sheet of the screenshots, K1 first, three across. Both
   come only when there are key poses.
+
+**The Camera page (#705 slice 3)** — Session → Camera in the dev window, the words above made live.
+- **The shot table** lights each row by `ShotDirector.liveness`, the per-row clauses `solve()` ranks
+  over, and marks the active shot. One set of clauses, so the page cannot disagree with the camera.
+- **The View line and the trace** are read through the sources BugReporter reads, so the page says
+  what a report filed that moment would say.
+- **The recording** lists the key poses. **Jump to** is not a sixth door: it works only while paused,
+  when the camera is already the dev's, and it cuts through the same `return_to_snapshot` resume uses.
+  **Delete** renumbers the rest, so a K number stays its slot on the contact sheet.
 
 **The recentre door has no lock of its own**, and that is why a new caller is not a new door. SPACE
 and an order's return pan cannot fire while playback owns the board, so the door never needed one.

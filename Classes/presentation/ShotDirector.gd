@@ -60,6 +60,10 @@ var _subject_id := 0
 var _cells: Array[Vector2i] = []
 var _span: Array[Vector2i] = []
 
+# Every row's liveness as of the last update(), whether or not it changed the shot -- what the
+# dev-tools Camera page draws (#705). active is always highest(live_rows).
+var live_rows: Array[bool] = liveness(false, 0, false, false, false)
+
 
 # The table: one row per shot, each stating its own liveness, and the highest-ranked live one
 # wins. Static and total -- five facts in, one shot out, no state.
@@ -82,14 +86,33 @@ var _span: Array[Vector2i] = []
 # as "the show beats the follow", which is why it took three hand-rolled fixes to say once.)
 static func solve(locked: bool, subject_id: int, staged: bool, spanned: bool,
 		death_show: bool) -> Shot:
+	return highest(liveness(locked, subject_id, staged, spanned, death_show))
+
+
+# EVERY ROW'S OWN LIVENESS, indexed by Shot -- the table as the dev-tools Camera page draws it (#705).
+# solve() ranks over exactly this, so the page and the camera are one set of clauses and cannot
+# disagree. NONE is live only while the gate is shut, and then nothing else is.
+static func liveness(locked: bool, subject_id: int, staged: bool, spanned: bool,
+		death_show: bool) -> Array[bool]:
+	var live: Array[bool] = []
+	live.resize(Shot.size())
+	live[Shot.NONE] = not locked
 	if not locked:
-		return Shot.NONE
-	var live := Shot.WIDE
-	live = _ranked(live, Shot.SPAN, spanned)
-	live = _ranked(live, Shot.STAGE, staged)
-	live = _ranked(live, Shot.TRAINED, subject_id != 0)
-	live = _ranked(live, Shot.DEATH_SHOW, death_show and subject_id == 0)
+		return live
+	live[Shot.WIDE] = true
+	live[Shot.SPAN] = spanned
+	live[Shot.STAGE] = staged
+	live[Shot.TRAINED] = subject_id != 0
+	live[Shot.DEATH_SHOW] = death_show and subject_id == 0
 	return live
+
+
+# The highest-ranked live row.
+static func highest(live: Array[bool]) -> Shot:
+	var held := Shot.NONE
+	for value: int in Shot.values():
+		held = _ranked(held, value as Shot, live[value])
+	return held
 
 
 # The rank compare, one row at a time: a live shot takes the camera only from something it
@@ -112,7 +135,8 @@ static func _ranked(held: Shot, candidate: Shot, is_live: bool) -> Shot:
 # eased and would walk the whole shot down after any body thrown mid-fight.
 func update(locked: bool, subject_id: int, cells: Array[Vector2i], span: Array[Vector2i],
 		death_show: bool) -> bool:
-	var next := solve(locked, subject_id, staged(cells), spanned(span), death_show)
+	live_rows = liveness(locked, subject_id, staged(cells), spanned(span), death_show)
+	var next := highest(live_rows)
 	var changed := next != active or subject_id != _subject_id \
 			or cells != _cells or span != _span
 	if not changed:

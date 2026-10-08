@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slices 1-2 (the dev pause, key poses) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
 
 ## Principles
 
@@ -3220,6 +3220,51 @@ Pinned in `test_bug_report_text`: the section only when there is one, below the 
 
 All three wires (the report push, the director frame, the swap clear) were falsified with a mutant. The
 screenshots are null headless, so `camera.png`'s pictures are a play-check.
+
+### Slice 3: the Camera page
+
+**Session → Camera** in the dev window (`Classes/dev/CameraTool.gd`), #705 as filed plus the
+recording. A projection with no store of its own, polled only while the window is up and the page is
+showing. It shows:
+- **the shot table**, every `ShotDirector.Shot` row lit or dark, with the active one marked;
+- **the View line**, the same one a report carries;
+- **the trace**, the same one a report carries, without its fences, rewritten four times a second (its
+  times count back from now);
+- **the recording**: K1…Kn with their pass time, shot and aim line, each with **Jump to** and
+  **Delete**, plus **Clear all**.
+
+**Why the table can't disagree with the camera.** The rows come from `ShotDirector.liveness`, one
+clause per row, and `solve()` is now `highest(liveness(...))`. Before this, the clauses lived only
+inside `solve()`, so a page drawing them would have been a second copy. `update()` keeps
+`live_rows` for the page on every call.
+
+**Where the rest comes from.**
+- View and trace: the callables battle3d pushes at BugReporter, so the page says what a report filed
+  that moment would say.
+- The recording: battle3d's own, through `recording()`, `jump_to_keyframe` and `delete_keyframe`.
+
+**Three choices worth knowing.**
+- **Jump to works only while paused.** Anywhere else the director takes the camera straight back. It
+  cuts through `return_to_snapshot`, the restore resume uses, so it is not a new door.
+- **Delete renumbers the rest.** A K number is also the key pose's slot on the contact sheet, so a gap
+  would put K3's row beside the second picture. `CameraRecording.version` moves on every add, delete
+  and clear, and the page rebuilds its rows on that rather than inside a button's own signal (#741).
+- **The trace box takes no focus.** A focused text box swallows the dev keys in this window, and P and
+  N are exactly what you want while reading the trace.
+
+**Pinned.**
+- `test_shot_director`: each row lights on its own clause, the gate darkens the rest, and the rows
+  follow every update and crown the active shot.
+- `test_camera_recording`: Delete closes the gap, and every change moves the version.
+- `test_camera_tool`, on the real Battle3D:
+  - the host reaches the page, and it crowns the shot that owns the camera;
+  - the View line is the report's, and the trace arrives without fences;
+  - Delete renumbers and redraws, the PAUSED label recounts, and Clear all empties;
+  - Jump cuts to the pose, and only while paused;
+  - with no host the page says so.
+
+The host forward in `DevOverlay.attach_3d_host` was falsified with a mutant. Whether the page is
+readable while a fight plays, and whether Jump is useful in practice, is a play-check.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 

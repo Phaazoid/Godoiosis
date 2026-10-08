@@ -170,3 +170,44 @@ func test_a_fresh_pass_inherits_nothing_from_the_last_one() -> void:
 	assert_int(shots.active).override_failure_message(
 			"the previous pass's release still governed the new pass's opening shot: %s"
 			% _name_of(shots.active)).is_equal(ShotDirector.Shot.STAGE)
+
+
+# --- The rows the Camera page draws (#705 slice 3) -------------------------------------------------
+
+func _lit(live: Array[bool]) -> Array[String]:
+	var names: Array[String] = []
+	for value: int in ShotDirector.Shot.values():
+		if live[value]:
+			names.append(ShotDirector.Shot.keys()[value])
+	return names
+
+
+func test_each_row_lights_on_its_own_clause_and_the_gate_darkens_the_rest() -> void:
+	# Every cause at once with the gate shut: NONE alone, because the lock is the gate.
+	assert_array(_lit(ShotDirector.liveness(false, SOMEBODY, true, true, true))) \
+		.override_failure_message("rows lit while playback does not own the camera") \
+		.contains_exactly(["NONE"])
+	# Gate open, nothing narrowing it: WIDE alone -- NONE goes dark.
+	assert_array(_lit(ShotDirector.liveness(true, NOBODY, false, false, false))) \
+		.contains_exactly(["WIDE"])
+	# Every row's own clause, all at once. The death show is dark: somebody is followed, and the
+	# show only stands in for the close-up once nobody is.
+	assert_array(_lit(ShotDirector.liveness(true, SOMEBODY, true, true, true))) \
+		.override_failure_message("a row lit against its own clause") \
+		.contains_exactly(["WIDE", "SPAN", "STAGE", "TRAINED"])
+	assert_array(_lit(ShotDirector.liveness(true, NOBODY, true, false, true))) \
+		.contains_exactly(["WIDE", "STAGE", "DEATH_SHOW"])
+
+
+func test_the_rows_the_page_draws_follow_every_update_and_crown_the_active_shot() -> void:
+	var shots := ShotDirector.new()
+	assert_array(_lit(shots.live_rows)).override_failure_message(
+			"an un-run director's rows do not read as the player's view").contains_exactly(["NONE"])
+	shots.update(true, NOBODY, _cells, _span, false)
+	assert_array(_lit(shots.live_rows)).override_failure_message(
+			"the rows the page draws did not follow the update").contains_exactly(["WIDE", "SPAN", "STAGE"])
+	assert_int(ShotDirector.highest(shots.live_rows)).is_equal(shots.active)
+	shots.update(true, SOMEBODY, _cells, _span, false)
+	assert_int(shots.active).is_equal(ShotDirector.Shot.TRAINED)
+	assert_int(ShotDirector.highest(shots.live_rows)).override_failure_message(
+			"the page would crown a different shot from the one that owns the camera").is_equal(shots.active)
