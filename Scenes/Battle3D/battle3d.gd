@@ -163,6 +163,12 @@ var _death_show_seen := false
 var _dev_pause_seen := false
 var _held_frame: Dictionary = {}
 var _dev_pause_label: Label
+# ...and what the dev framed while paused (#705 slice 2): key poses for the bug report, cleared by a
+# board swap. The pass clock is the "when" each one is stamped with -- scaled seconds since playback
+# claimed the camera, so it stands still across a pause the way the pass does.
+var _recording := CameraRecording.new()
+var _pass_time := 0.0
+var _pass_clock_running := false
 
 # THE SHOT CLEARANCE (#1132): which way the battle zoom turns, and what it hides, so nothing stands
 # between the lens and the action. The latch is its own; this scene builds the world it reads (the
@@ -189,6 +195,11 @@ func _ready() -> void:
 	# line answers "what is the camera doing", the trace answers "what did it just do", and the two
 	# questions have two homes for the reason the report already keeps View and Look apart.
 	game.bug_reporter.trace_source = _describe_trace
+	# ...and the dev's own key poses (#705), when there are any: the third camera question, "what
+	# should it have done", pushed the same way. The text and the contact sheet are two callables
+	# because the report writes them to two files.
+	game.bug_reporter.recording_source = _recording.render
+	game.bug_reporter.recording_sheet_source = _recording.contact_sheet
 	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address
 	# it -- and built BEFORE the dev window is handed this host, which resolves those rows as it builds.
 	_gas = GasMirror.new()
@@ -294,6 +305,8 @@ func load_mission(path: String) -> void:
 # UNCHANGED board diffed equal and never repainted (#318). Zones were the visible casualty for
 # being the only markup static across a whole board.
 func _on_board_loaded() -> void:
+	# A recording is of the board it was made on (#705): its poses and pass times mean nothing here.
+	clear_keyframes()
 	rebuild()
 	_apply_board_look()   # before fit_camera: the preset carries pitch/FOV, which framing reads
 	fit_camera()
@@ -982,6 +995,7 @@ func _process(_delta: float) -> void:
 	var live: bool = (demo_mode or game.can_process()) and view != View.FLAT_2D
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
+	_tick_pass_clock(_delta)
 	_sync_terrain_while_authoring()
 	_drive_transition(_delta)
 	_sync_staging()
@@ -1157,8 +1171,62 @@ func _sync_dev_pause(cam: CameraController) -> void:
 			_rig.return_to_snapshot(_held_frame)
 			_rig.note_event("dev pause: back to the director")
 		_held_frame = {}
-	_dev_pause_label.visible = paused
-	_fit_readout_plate()
+	_refresh_dev_pause_label()
+
+
+# Scaled seconds since playback claimed the camera, restarted on each claim. On the frame's own delta,
+# so it stands still under a dev pause exactly as the pass does -- a key pose's "when" is a moment in
+# the FIGHT, not in the dev's session.
+func _tick_pass_clock(delta: float) -> void:
+	if not game.camera_controller.playback_locked:
+		_pass_clock_running = false
+		return
+	if not _pass_clock_running:
+		_pass_clock_running = true
+		_pass_time = 0.0
+	_pass_time += delta
+
+
+# N, while paused (#705 slice 2): the camera as the dev has framed it, beside the director's frame the
+# pause is holding, stamped with the moment of the fight and what was playing. The screenshot comes a
+# frame later, with the PAUSED label out of it -- it is a picture of the framing, not of the tool.
+func add_keyframe() -> void:
+	if not Pacing.dev_paused():
+		return
+	var cam: CameraController = game.camera_controller
+	var trained := _shot_subject(cam, _unit_mirror.death_show_live())
+	var key := _recording.add(_pass_time, ShotDirector.Shot.keys()[_shots.active],
+			"" if trained == null else trained.get_unit_name(), _line_names(cam),
+			_rig.snapshot_view(), _held_frame)
+	if key == null:
+		return   # full: the label already says how many there are
+	_rig.note_event("dev pause: keyframe K%d" % key.index)
+	var readouts := _dev_badge.get_parent() as CanvasLayer
+	readouts.visible = false
+	key.image = await game.bug_reporter.capture_frame()
+	readouts.visible = true
+	_refresh_dev_pause_label()
+
+
+func clear_keyframes() -> void:
+	if _recording.is_empty():
+		return
+	_recording.clear()
+	_refresh_dev_pause_label()
+
+
+func recording() -> CameraRecording:
+	return _recording
+
+
+# The beat's aim line by name, attacker first -- one cell at a time, so the order is the line's own.
+func _line_names(cam: CameraController) -> Array[String]:
+	var names: Array[String] = []
+	for cell in cam.directed_line:
+		var cell_line: Array[Vector2i] = [cell]
+		for unit in _units_on(cell_line):
+			names.append(unit.get_unit_name())
+	return names
 
 
 # --- The shot clearance (#1132) -------------------------------------------------------------------
@@ -1652,7 +1720,7 @@ func _show_dev_badge(active: bool) -> void:
 # The dev pause's readout (#705), one row under the badge and in its style -- a duplicate of it, so
 # the two cannot drift apart. Built in code rather than authored into Battle3D.tscn beside them,
 # because its text says which keys work, and that belongs with the code that binds them.
-const DEV_PAUSE_TEXT := "⏸ PAUSED · P resume"
+const DEV_PAUSE_TEXT := "⏸ PAUSED · P resume · N key pose · Shift+N clear"
 const DEV_PAUSE_COLOR := Color(1.0, 0.8, 0.3, 1.0)
 
 func _build_dev_pause_label() -> void:
@@ -1663,6 +1731,18 @@ func _build_dev_pause_label() -> void:
 	_dev_pause_label.text = DEV_PAUSE_TEXT
 	_dev_pause_label.visible = false
 	_dev_badge.get_parent().add_child(_dev_pause_label)
+
+
+# What the label says and whether it shows: up while paused, with the key poses counted once there
+# are any. The one writer of it, so the pause's edges and N cannot disagree about it.
+func _refresh_dev_pause_label() -> void:
+	var count := _recording.keyframes.size()
+	var text := DEV_PAUSE_TEXT
+	if count > 0:
+		text += " · %d/%d recorded" % [count, CameraRecording.MAX_KEYFRAMES]
+	_dev_pause_label.text = text
+	_dev_pause_label.visible = Pacing.dev_paused()
+	_fit_readout_plate()
 
 
 func dev_pause_label() -> Label:

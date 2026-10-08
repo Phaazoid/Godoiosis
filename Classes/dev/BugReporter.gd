@@ -66,6 +66,12 @@ var view_source: Callable
 # have two homes. Unset = a flat launch, which the section says.
 var trace_source: Callable
 
+# ...and what the DEV wanted it to do (#705): key poses dropped while a pass was paused, as a section
+# (text) and a contact sheet of screenshots (Image, or null). Both "" / null when nothing is recorded,
+# and then the report says nothing about it at all.
+var recording_source: Callable
+var recording_sheet_source: Callable
+
 var _uploader: ReportUploader
 var _card: ReportPanel
 
@@ -163,8 +169,15 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	var reporter := PlayerSettings.text_of(PlayerSettings.Setting.PLAYER_NAME)
 	var install_id := TelemetryStore.install_id()
 	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
-		_view_note(), look, _devtools_note(), _trace_note(), reporter, install_id))
+		_view_note(), look, _devtools_note(), _trace_note(), reporter, install_id, _recording_note()))
 	md.close()
+
+	# The dev's key poses as pictures (#705), K1 first, three across -- the section in report.md says
+	# which numbers go with which tile.
+	if recording_sheet_source.is_valid():
+		var sheet: Image = recording_sheet_source.call()
+		if sheet != null and not sheet.is_empty():
+			sheet.save_png(dir + "camera.png")
 
 	if frame == null:
 		frame = await capture_frame()
@@ -264,6 +277,12 @@ func _trace_note() -> String:
 	var note: String = trace_source.call()
 	return note
 
+func _recording_note() -> String:
+	if not recording_source.is_valid():
+		return ""
+	var note: String = recording_source.call()
+	return note
+
 # Every machine path out of the two builders below (#1036). It lives here because those two are the
 # only text this project ships off the machine -- a telemetry run carries res:// paths, ids and enum
 # names and nothing else, so there is no second caller to mint a shared home for (Law #4).
@@ -338,7 +357,7 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
 		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String,
 		view_note := "", look_note := "", devtools_note := "", trace_note := "",
-		reporter := "", install_id := "") -> String:
+		reporter := "", install_id := "", recording_note := "") -> String:
 	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
 
 	out += "## What they wrote\n\n"
@@ -411,6 +430,10 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 	# the same kind as the log tail -- a sequence, read to find out what happened in what order --
 	# while everything above is the state the report is ABOUT.
 	out += "\n## Camera trace\n\n%s\n" % (NO_CAMERA_TRACE if trace_note == "" else trace_note)
+	# ...and what the dev wanted it to do instead (#705), only when he recorded any: a section that
+	# says "nothing recorded" in every player's report would be noise about a dev tool.
+	if recording_note != "":
+		out += "\n## Camera recording\n\n%s\n" % recording_note
 
 	out += "\n## Engine log (last %d lines)\n\n```\n%s\n```\n" % [LOG_TAIL_LINES, log_tail]
 	# The one exit (#1036). On the whole body rather than on the tail alone: the note is the

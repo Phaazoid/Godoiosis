@@ -40,6 +40,7 @@ func before_test() -> void:
 # _restore_tuning puts back -- a second copy here would be a hand-maintained duplicate of it.
 func after_test() -> void:
 	Input.action_release("fast_forward")
+	_scene.clear_keyframes()   # the board is shared across cases, and so would a recording be
 	if _fake_card != null:
 		_fake_card.free()
 		_fake_card = null
@@ -576,10 +577,85 @@ func test_a_long_dev_pause_does_not_spend_the_wait_for_the_camera_to_come_home()
 			"the camera came home and the wait never noticed").is_true()
 
 
+# --- key poses (#705 slice 2) ----------------------------------------------------------------------
+
+func test_n_records_the_framing_beside_the_directors_frame_and_the_report_carries_it() -> void:
+	_control.set_process(false)
+	_claim_like_an_ai_turn()
+	Pacing.set_dev_paused(true)
+	_scene._mirror_camera()   # the pause's edge: the director's frame is held
+	var director_yaw: float = _scene._held_frame["yaw"]
+	# The dev turns the camera somewhere the director never had it...
+	var wanted := director_yaw + 77.0
+	_rig._target_yaw_degrees = wanted
+	_rig.rotation_degrees.y = wanted
+	var dev: DevController = _game.dev_controller
+	dev.handle_dev_key(_key_press(KEY_N))
+	var recording: CameraRecording = _scene.recording()
+	assert_int(recording.keyframes.size()).override_failure_message(
+			"N while paused recorded nothing").is_equal(1)
+	var key: CameraRecording.Keyframe = recording.keyframes[0]
+	assert_float(key.yours["yaw"]).override_failure_message(
+			"the key pose is not the framing on screen").is_equal_approx(wanted, 0.01)
+	assert_float(key.director["yaw"]).override_failure_message(
+			"the key pose lost the director's frame it was taken against") \
+		.is_equal_approx(director_yaw, 0.01)
+	assert_str(key.shot).is_equal(ShotDirector.Shot.keys()[ShotDirector.Shot.WIDE])
+	var label: Label = _scene.dev_pause_label()
+	assert_str(label.text).override_failure_message("the label does not count the key poses") \
+		.contains("1/%d" % CameraRecording.MAX_KEYFRAMES)
+	assert_bool(label.visible).override_failure_message(
+			"the label never came back after the screenshot").is_true()
+	# ...and the next bug report says so, through the source battle3d pushed.
+	var reporter: BugReporter = _game.bug_reporter
+	assert_str(reporter._recording_note()).override_failure_message(
+			"the report cannot see the recording -- the pushed source is not wired").contains("| K1 |")
+
+
+func test_n_needs_a_pause_and_shift_n_clears() -> void:
+	_control.set_process(false)
+	_claim_like_an_ai_turn()
+	var dev: DevController = _game.dev_controller
+	dev.handle_dev_key(_key_press(KEY_N))
+	assert_bool(_scene.recording().is_empty()).override_failure_message(
+			"N recorded a pose with the pass still playing").is_true()
+	Pacing.set_dev_paused(true)
+	_scene._mirror_camera()
+	dev.handle_dev_key(_key_press(KEY_N))
+	dev.handle_dev_key(_key_press(KEY_N))
+	assert_int(_scene.recording().keyframes.size()).is_equal(2)
+	dev.handle_dev_key(_key_press(KEY_N, true))
+	assert_bool(_scene.recording().is_empty()).override_failure_message("Shift+N cleared nothing").is_true()
+	var reporter: BugReporter = _game.bug_reporter
+	assert_str(reporter._recording_note()).override_failure_message(
+			"a cleared recording still prints a section").is_empty()
+
+
+func test_a_board_swap_clears_the_recording() -> void:
+	_control.set_process(false)
+	_claim_like_an_ai_turn()
+	Pacing.set_dev_paused(true)
+	_scene._mirror_camera()
+	_scene.add_keyframe()
+	assert_bool(_scene.recording().is_empty()).override_failure_message(
+			"precondition: nothing was recorded").is_false()
+	Pacing.set_dev_paused(false)
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+	_scene._on_board_loaded()
+	assert_bool(_scene.recording().is_empty()).override_failure_message(
+			"a recording of one board survived into the next").is_true()
+
+
 func _p_press() -> InputEventKey:
+	return _key_press(KEY_P)
+
+
+func _key_press(code: Key, shift := false) -> InputEventKey:
 	var event := InputEventKey.new()
-	event.physical_keycode = KEY_P
+	event.physical_keycode = code
 	event.pressed = true
+	event.shift_pressed = shift
 	return event
 
 

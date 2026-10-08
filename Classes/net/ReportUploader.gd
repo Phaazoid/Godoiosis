@@ -17,6 +17,7 @@ const ATTACHMENTS := {
 	"board.tres": "text/plain",
 	"board.png": "image/png",
 	"devtools.png": "image/png",   # #328: only written while the dev-tools window is open
+	"camera.png": "image/png",     # #705: only written when the dev recorded key poses
 }
 
 

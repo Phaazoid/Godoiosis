@@ -90,6 +90,7 @@ func handle_dev_key(event: InputEvent) -> void:
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
 	_handle_pause_key(event)
+	_handle_keyframe_key(event)
 	_handle_selector_key(event)
 	_handle_zoom_animation_key(event)
 	_handle_brush_keys(event)
@@ -109,6 +110,25 @@ func _handle_pause_key(event: InputEvent) -> void:
 	if not Pacing.dev_paused() and not game.playback_owns_board():
 		return
 	Pacing.set_dev_paused(not Pacing.dev_paused())
+
+
+# N drops a key pose while paused, Shift+N clears them (#705 slice 2). The recording is the 3D host's
+# -- it owns the rig, the shot table and the pass clock -- so the key reaches it the way V reaches
+# the selector: through the host the dev window was handed, never a path up out of the game subtree.
+func _handle_keyframe_key(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.ctrl_pressed:
+		return
+	if key.physical_keycode != KEY_N:
+		return
+	var overlay: DevOverlay = game.dev_overlay
+	var host: Node3D = null if overlay == null else overlay.host_3d
+	if host == null:
+		return   # a flat Main.tscn launch has no camera to record
+	if key.shift_pressed:
+		host.call(&"clear_keyframes")
+	else:
+		host.call(&"add_keyframe")
 
 
 # V cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather
