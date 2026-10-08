@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slice 1 (the dev pause) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slice 1 (the dev pause) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
 
 ## Principles
 
@@ -4331,7 +4331,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
   - whether grey reads as "walkable, not now";
   - all of it in the flat view.
 
-## An enemy squad's LINES, on enemy hover ([#1109](https://github.com/Phaazoid/Godoiosis/issues/1109), BUILT 2026-09-27)
+## An enemy squad's LINES, on enemy hover and while aiming at it ([#1109](https://github.com/Phaazoid/Godoiosis/issues/1109), BUILT 2026-09-27; aiming and lime [#1256](https://github.com/Phaazoid/Godoiosis/issues/1256), 2026-10-07)
 
 The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH range at all."* Hovering an enemy now draws its squad's cohesion range and tethers, exactly as your own squad's are drawn, in the enemy's colour.
 
@@ -4341,7 +4341,7 @@ The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH
 
 | Fork | Ruling |
 |---|---|
-| Colour | The threat field's purple, **lightened** (`SquadLines2D.ENEMY_TETHER_COLOR`) so it reads over that field and over bare ground alike. One colour for every enemy squad. Not taken: the exact threat purple (its dashes vanished over its own field), the squad's ring hue (dealt per squad, and the enemy orange nearly matches your tethers), bone white (reads as the white focus outline). |
+| Colour | *(Superseded by Round 3: lime.)* The threat field's purple, **lightened** (`SquadLines2D.ENEMY_TETHER_COLOR`) so it reads over that field and over bare ground alike. One colour for every enemy squad. Not taken: the exact threat purple (its dashes vanished over its own field), the squad's ring hue (dealt per squad, and the enemy orange nearly matches your tethers), bone white (reads as the white focus outline). |
 | What shows | **Both** the range stroke and the tethers. |
 | An enemy's break and draw-in | **The enemy colour too**, so an enemy tether looks the same standing or breaking. A break still strains to the one strain red, which means "breaking" for either side. |
 | While your squad is mid-plan | **Shown anyway**: that is when a shove to split them gets planned. The enemy's rings keep their gate. |
@@ -4358,7 +4358,7 @@ The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH
 
 ### Declared residuals
 
-- **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it.
+- **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it (and, since Round 3, the aim).
 - **The Split chip stays tether orange**, even on a row whose blow splits an enemy squad (2A's ruling, not revisited here).
 - ~~**How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.~~ **It read badly, and Round 2 below answers it.**
 
@@ -4395,6 +4395,40 @@ The dev, after playing it: *"it is too hard to see this rose color inside the en
 - **A stroke's free start can show a sliver of casing with no ink** for a moment, as a dash marches off it. A tether's start sits under its member's sprite.
 - **The Split chip is still orange** on a row whose blow splits an enemy squad.
 - **What only the dev can judge:** the casing's width and darkness in play, the harder edge, and outlined sparks.
+
+### Round 3: lime, and the lines while aiming ([#1256](https://github.com/Phaazoid/Godoiosis/issues/1256), 2026-10-07)
+
+The dev, after more play: *"when targeting enemy units that are in a squad, you don't have an easy way to see that squad's COH range"*, and *"the enemy coh range arrows are too close to the color of the red field."*
+
+**What the renders measured.** The candidates were rendered IN-ENGINE by a windowed probe, not repainted onto a frame: the dev's own Shift+F3 board (grass and dirt, with an enemy squad formed on it) and The Causeway (pale stone). The casing did not save the rose, because it is a HUE problem:
+- the rose is hue 343°;
+- the threat field over stone is 347°;
+- the field's grout lines over dirt are 359°.
+
+The arrowheads, which are mostly cone face, suffered most.
+
+| Fork | Ruling |
+|---|---|
+| Colour | **Lime `(0.8, 1.0, 0.25)`**, picked from four in-engine candidates. Not taken: the rose (A), lavender (B), and violet (C, my recommendation, about 90–120° from every field pixel). Lime is the loudest against red. Its cost, accepted: it sits nearer the yellow cursor, crown and aim footprint, and about 57° from bare dirt. The casing and the strain red are unchanged. |
+| Your own squad's lines while aiming | **Swap**: when the aim is on an enemy squad, show that squad's lines. |
+
+**A corrected premise, on the second fork.** The question claimed your own squad's lines are usually up while you aim. They are not. A menu pick runs `clear_selection` (which takes every squad line down) and then `HoverPresenter.refresh()` while the board is still IDLE, because `cancelled` precedes `action_selected`. So the aim opened showing whatever squad sat under the menu slice, frozen for the whole aim: usually nothing, sometimes yours, sometimes an enemy's. "Yours come back" therefore had nothing to bring back. **Away from an enemy squad, the aim shows no squad lines**, which matches how aiming usually looked.
+
+**How it is built.**
+- **Which squads.** `HoverPresenter._draw_aimed_squads` collects two sets of units:
+  - the unit under the pointer, IN REACH OR NOT, since aiming is also where the next shove is planned;
+  - every victim of the aim: the sweep, its current, and its payloads.
+
+  A unit counts when it opposes the ATTACKER (`Team.is_enemy`) and has squadmates, so a hotseat aim shows the side it is aimed at. Nothing caught means `clear_squad_lines()`. The aim owns the squad lines while it is open.
+- **One draw for several squads.** `game.draw_squads_lines`: an AoE can catch two squads. It shares `_member_links` with `draw_squad_cohesion`. One side per draw still holds: `Team.is_enemy` gives any attacker opponents of one side only (PLAYER and ALLY attackers face {ENEMY}; an ENEMY attacker faces {PLAYER, ALLY}, both drawn in the player's colour).
+- **The aim repaints at once.** `MainActionMenu._pick_attack` and `_pick_watch` call `refresh()` after entering the aim. Without that, a melee aim picked with the pointer already on the adjacent enemy showed nothing until the pointer moved a cell. The visible side effect: the aim footprint, sight trace and target pulse also paint the moment the aim opens. It lives at the menu doors rather than in `enter_attack_mode`, whose many direct test callers would all change.
+
+**Test-craft.** The cases enter the aim through the real menu ordering (click, then `cancelled`, then `action_selected`), because the stale-lines fault exists only in that ordering. Five mutants, each red on its own case: the pointer clause, the victims clause, the empty-set clear, the menu repaint, and drawing only the first squad.
+
+**Declared residuals.**
+- **The pointer off the board** keeps the last lines, as idle hover does: `update_hover_visuals` returns before any arm on an off-map cell.
+- **A queued shove is not forecast on the lines.** A tether is drawn from the member's projected cell, so a shove already queued moves its end, but it stays SOLID rather than straining. The Split chip on the queue row is the forecast.
+- **What only the dev can judge:** lime in motion beside the yellow cursor, crown and aim footprint, and the aim's readout painting the moment it opens.
 
 ## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it, a death or a down plays a look of its own ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27; [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104) BUILT 2026-09-27)
 
