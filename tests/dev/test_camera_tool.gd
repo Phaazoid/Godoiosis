@@ -15,6 +15,9 @@ var _scene: Node3D
 var _game: Node2D
 var _tool: CameraTool
 var _rig: CameraRig3D
+# Only the no-host case detaches the host, and only it puts it back -- restoring after EVERY case would
+# re-wire the page by hand and hide a broken attach_3d_host forward from every case after the first.
+var _detached := false
 
 
 func before() -> void:
@@ -32,7 +35,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	_tool.attach_host(_scene)
+	if _detached:
+		_tool.attach_host(_scene)
+		_detached = false
 	_scene.clear_keyframes()
 	Pacing.reset_playback()
 	(_game.camera_controller as CameraController).set_playback_locked(false)
@@ -132,6 +137,7 @@ func test_jump_cuts_to_the_pose_and_only_while_paused() -> void:
 
 
 func test_with_no_host_the_page_says_so_and_lights_nothing() -> void:
+	_detached = true
 	_tool.attach_host(null)
 	_tool.refresh()
 	assert_str(_tool._status.text).is_equal(CameraTool.NO_HOST)
