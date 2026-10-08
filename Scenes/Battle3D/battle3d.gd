@@ -1208,13 +1208,20 @@ func _lens_yaw(line: Array[Vector2i], turn: float) -> float:
 	return _rig.target_yaw() if is_nan(yaw) else yaw
 
 
-# What the shot is OF: the trained subject, everyone on the stage, the walker.
+# What the shot is OF: the fight on a close-up, everyone on the stage, the walker.
+#
+# A close-up watches BOTH ends of its aim line, not only the one it is trained on (round 4): looking
+# at the victim alone, the search happily turned end-on and parked the victim in front of the
+# attacker, which is a fight hidden behind a unit from the other direction.
 func _clearance_subjects(cam: CameraController, trained: Unit) -> Array[ShotClearance.Body]:
 	var units: Array[Unit] = []
 	match _shots.active:
 		ShotDirector.Shot.TRAINED:
 			if trained != null:
 				units.append(trained)
+			for unit in _units_on(cam.directed_line):
+				if not units.has(unit):
+					units.append(unit)
 		ShotDirector.Shot.STAGE:
 			units = _units_on(cam.shot_cells)
 		ShotDirector.Shot.SPAN:
@@ -1258,18 +1265,35 @@ func _clearance_world(cam: CameraController, trained: Unit) -> ShotClearance.Wor
 		here.append(body)
 		world.bodies_at[body.cell] = here
 	# THE ACTION'S OWN: never hidden, and the ground under them never hidden either. The trained
-	# subject, whoever stands on the beat's aim line, everyone on stage, and the walker.
+	# subject, whoever stands on the beat's aim line, and on a walk everyone WALKING -- plus everyone
+	# on stage when the STAGE is the shot, since they are then what it is of.
+	#
+	# Every walker, not only the one the span frames (dev, 2026-10-07): once readouts counted, a
+	# squadmate walking in front of the framed walker was hidden mid-stride.
+	#
+	# Not everyone on stage on a CLOSE-UP (round 4): the tear-out keeps the stage published through
+	# every beat, so that clause made each bystander the action too, every block came out
+	# unclearable and nothing could ever be hidden -- the dev's "battles hiding behind units". A
+	# bystander may now be hidden; the ground under it stays protected, so a hidden column never
+	# leaves a unit we can still see standing on air.
 	var actors: Array[Unit] = []
 	if trained != null:
 		actors.append(trained)
 	actors.append_array(_units_on(cam.directed_line))
-	actors.append_array(_units_on(cam.shot_cells))
+	if _shots.active == ShotDirector.Shot.STAGE:
+		actors.append_array(_units_on(cam.shot_cells))
 	if _shots.active == ShotDirector.Shot.SPAN:
 		var walker := _unit_by_id(_span_walker_id)
 		if walker != null:
 			actors.append(walker)
+		for child in game.units_root.get_children():
+			var unit := child as Unit
+			if unit != null and unit.movement.moving:
+				actors.append(unit)
 	for unit in actors:
 		world.participants[unit.get_instance_id()] = true
+		world.protected[UnitMirror.cell_under(unit)] = true
+	for unit in _units_on(cam.shot_cells):
 		world.protected[UnitMirror.cell_under(unit)] = true
 	if _shots.active == ShotDirector.Shot.SPAN and cam.framed_span.size() == 2:
 		world.protected[cam.framed_span[1]] = true

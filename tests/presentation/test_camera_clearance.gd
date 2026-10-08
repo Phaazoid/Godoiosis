@@ -48,6 +48,7 @@ func before_test() -> void:
 func after_test() -> void:
 	_cam()._panning = false   # the approach cases script a pan in flight; a stuck one freezes the 2D camera
 	_units._death_show = false
+	_cam().shot_cells = []   # the staged-fight cases publish a stage; a failed assert must not leak it
 	_cam().set_playback_locked(false)
 	_scene._mirror_camera()
 	await _board.check(self)
@@ -126,11 +127,13 @@ func _ring(centre: Vector2i) -> Array[Vector2i]:
 # Playback owns the camera on a battle-zoom beat, aimed along `line`, trained on `subject` -- the
 # approach's first frame, where the angle is CHOSEN (only a travelling pan may turn the camera), and
 # then the landing. A headless pan lands before any frame runs, so the travelling frame is scripted.
+# A `stage` is published AFTER the lock, which clears the stage on the claim.
 func _frame(subject: Unit, line: Array[Vector2i], profile := Pacing.Profile.CINEMATIC,
-		cinematic := true) -> void:
+		cinematic := true, stage: Array[Vector2i] = []) -> void:
 	await _settle()   # the unit mirror draws a spawned unit on its next frame, and the clearance looks at the DRAWN body
 	var cam := _cam()
 	cam.set_playback_locked(true)
+	cam.shot_cells = stage
 	cam.playback_cinematic = cinematic
 	cam.beat_profile = profile
 	cam.directed_line = line
@@ -490,3 +493,156 @@ func test_the_zoom_pushes_its_hidden_units_at_the_mirror_and_takes_them_back() -
 	_scene._mirror_camera()
 	assert_int(_units.camera_hidden.size()).override_failure_message(
 			"the camera let go and a unit stayed hidden").is_equal(0)
+
+
+# --- the fight, its readouts and its bystanders (round 4) ---------------------------------------
+#
+# The dev's three reports (2026-10-07_18-52-16/18/22): a fighter buried behind the unit in front,
+# with the clearance reporting nothing at all. Measured on his board: from the battle zoom's pitch
+# the line to the victim passes OVER the head in front and through the health readout floating
+# above it, which the clearance never counted; and on a torn-out stage everyone on it was "the
+# action", so nothing could ever be hidden.
+
+# The battle zoom puts a readout on every unit; the next unit-mirror frame draws them.
+func _bars_up() -> void:
+	var cam := _cam()
+	cam.set_playback_locked(true)
+	cam.playback_cinematic = true
+	_scene._mirror_camera()
+	await _settle()
+
+
+# A fight: the victim at `centre`, the attacker at the far end of the line, and a bystander one cell
+# toward the lens the close-up settles at side-on, readouts up. Returns [victim, attacker, bystander].
+func _staged_fight(centre: Vector2i, line: Array[Vector2i]) -> Array[Unit]:
+	var victim := _spawn(Team.Faction.PLAYER, centre)
+	var attacker := _spawn(Team.Faction.ENEMY, line[0])
+	var feet := GridUtils.cell_world(_game.grid, centre)
+	var aim := BoardSpace.of_pixels(feet, 0.0)
+	var lens := _rig.lens_at(_rig.directed_yaw(line, 0.0), CameraRig3D.When.SETTLED, aim)
+	var toward := Vector2(lens.x - aim.x, lens.z - aim.z)
+	var step := Vector2i(signi(roundi(toward.x)), 0) if absf(toward.x) > absf(toward.y) \
+			else Vector2i(0, signi(roundi(toward.y)))
+	var bystander := _spawn(Team.Faction.PLAYER, centre + step)
+	await _bars_up()
+	var fight: Array[Unit] = [victim, attacker, bystander]
+	return fight
+
+
+# The close-up on the fight's victim, with all three of them published as the stage -- the tear-out's
+# own state, which keeps the stage up through every beat.
+func _frame_fight(fight: Array[Unit], line: Array[Vector2i]) -> void:
+	var stage: Array[Vector2i] = []
+	for unit in fight:
+		stage.append(UnitMirror.cell_under(unit))
+	await _frame(fight[0], line, Pacing.Profile.CINEMATIC, true, stage)
+	assert_int(_cam().shot_cells.size()).override_failure_message(
+			"precondition: the stage is not published, so nobody here is on it").is_equal(3)
+	assert_int(_scene._shots.active).override_failure_message(
+			"precondition: the beat is not a close-up").is_equal(ShotDirector.Shot.TRAINED)
+
+
+func test_the_clearance_body_covers_the_readout_the_mirror_draws() -> void:
+	var centre := _open_ground()
+	var unit := _spawn(Team.Faction.PLAYER, centre)
+	await _bars_up()
+	var bar := _units.bar_for(unit)
+	assert_bool(bar != null and bar.visible).override_failure_message(
+			"precondition: the battle zoom put no readout on the unit").is_true()
+	var drawn := AABB()
+	var any := false
+	for child in bar.find_children("*", "VisualInstance3D", true, false):
+		var piece := child as VisualInstance3D
+		if not piece.is_visible_in_tree():
+			continue
+		var box: AABB = piece.global_transform * piece.get_aabb()
+		if not box.has_volume():
+			continue
+		drawn = box if not any else drawn.merge(box)
+		any = true
+	assert_bool(any).override_failure_message("precondition: the readout drew nothing").is_true()
+	var hud := _units.body_of(unit).hud
+	assert_bool(hud.grow(0.001).encloses(drawn)).override_failure_message(
+			"the clearance's box for the readout %s does not cover what the bar draws %s" % [hud, drawn]) \
+		.is_true()
+
+
+func test_a_readout_in_front_of_the_victim_turns_the_camera_to_the_clear_side() -> void:
+	var centre := _open_ground()
+	var line := _east_west(centre)
+	var fight := await _staged_fight(centre, line)
+	var bystander := fight[2]
+	await _frame_fight(fight, line)
+	var cam := _cam()
+	var lens := _rig.lens_at(_rig.directed_yaw(line, 0.0), CameraRig3D.When.SETTLED)
+	var side_on := ShotClearance.survey(_scene._clearance_world(cam, fight[0]), lens,
+			_scene._clearance_subjects(cam, fight[0]), _scene._clearance_extras(cam))
+	assert_bool(side_on.units.has(bystander.get_instance_id())).override_failure_message(
+			"the bystander's readout stands in the side-on line and the clearance cannot see it") \
+		.is_true()
+	assert_float(absf(_scene._clearance.turn)).override_failure_message(
+			"a unit stood in front of the victim and the camera did not take the clear side") \
+		.is_equal(180.0)
+	assert_bool(_units.camera_hidden.has(bystander.get_instance_id())).override_failure_message(
+			"a clear side existed and the bystander was hidden anyway").is_false()
+
+
+func test_on_a_close_up_a_bystander_on_stage_may_be_hidden_but_its_ground_may_not() -> void:
+	var centre := _open_ground()
+	var line := _east_west(centre)
+	var fight := await _staged_fight(centre, line)
+	await _frame_fight(fight, line)
+	var cam := _cam()
+	var world: ShotClearance.World = _scene._clearance_world(cam, fight[0])
+	assert_bool(world.participants.has(fight[2].get_instance_id())).override_failure_message(
+			"a bystander on the stage is still the action, so a close-up can never hide it") \
+		.is_false()
+	assert_bool(world.participants.has(fight[0].get_instance_id())
+			and world.participants.has(fight[1].get_instance_id())).override_failure_message(
+			"the fighters themselves stopped being the action").is_true()
+	assert_bool(world.protected.has(UnitMirror.cell_under(fight[2]))).override_failure_message(
+			"the ground under a unit on stage may be hidden, leaving it standing on air").is_true()
+
+
+func test_on_a_close_up_the_attacker_is_watched_as_well_as_the_victim() -> void:
+	var centre := _open_ground()
+	var line := _east_west(centre)
+	var fight := await _staged_fight(centre, line)
+	await _frame_fight(fight, line)
+	var cam := _cam()
+	var watched: Dictionary[int, bool] = {}
+	for body in _scene._clearance_subjects(cam, fight[0]):
+		watched[body.unit_id] = true
+	assert_bool(watched.has(fight[1].get_instance_id())).override_failure_message(
+			"the close-up looks only at the victim, so an end-on angle may bury the attacker") \
+		.is_true()
+	assert_bool(watched.has(fight[2].get_instance_id())).override_failure_message(
+			"a bystander became something the close-up is of").is_false()
+
+
+# The walk is everyone walking, not only the one the span frames (dev, 2026-10-07): with readouts
+# counted, the replay of his board hid a squadmate mid-stride for the length of the walk.
+func test_on_a_walk_every_walker_is_the_action() -> void:
+	var centre := _open_ground()
+	var walker := _spawn(Team.Faction.PLAYER, centre)
+	var squadmate := _spawn(Team.Faction.PLAYER, centre + Vector2i(1, 0))
+	await _settle()
+	var cam := _cam()
+	cam.set_playback_locked(true)
+	cam.playback_cinematic = true
+	cam.beat_profile = Pacing.Profile.CINEMATIC
+	var span: Array[Vector2i] = [centre, centre + Vector2i(0, 3)]
+	cam.framed_span = span
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"precondition: the walk is not the shot").is_equal(ShotDirector.Shot.SPAN)
+	var world: ShotClearance.World = _scene._clearance_world(cam, null)
+	assert_bool(world.participants.has(walker.get_instance_id())).override_failure_message(
+			"the walker the span frames stopped being the action").is_true()
+	assert_bool(world.participants.has(squadmate.get_instance_id())).override_failure_message(
+			"a unit standing still became the action of somebody else's walk").is_false()
+	squadmate.movement.moving = true
+	world = _scene._clearance_world(cam, null)
+	squadmate.movement.moving = false
+	assert_bool(world.participants.has(squadmate.get_instance_id())).override_failure_message(
+			"a squadmate walking beside the framed walker may be hidden mid-stride").is_true()

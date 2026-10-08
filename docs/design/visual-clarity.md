@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -2938,7 +2938,9 @@ the one piece of state an edge needs.
 - **The action is never hidden**: the trained subject, whoever stands on the aim line, everyone on
   the stage, the walker -- and the ground under each. They still count AGAINST an angle, which is
   what keeps the old side-on reason (attacker and target across the frame, not one behind the
-  other) inside the ranking.
+  other) inside the ranking. **Round 4 below narrowed this:** "everyone on the stage" made every
+  bystander unhideable through every close-up, and a close-up only ever LOOKED at its victim, so
+  that side-on reason was never actually in the ranking.
 - **`DEATH_SHOW` holds everything**, matching its "writes nothing" rule; `WIDE` clears the hides and
   keeps the turn; the release, the gate going off and a board in flight clear both.
 
@@ -3061,6 +3063,66 @@ a new blocker is hidden and the yaw target stays put, and a shot change after la
 than turns (`test_camera_clearance`). Both cases were falsified: letting the per-frame path turn
 again, and dropping the `is_panning()` gate, each turns them red. The settle itself is
 headless-invisible, so the probe numbers above are its evidence and the feel is his play-check.
+
+### The clearance sees the units in the way, readouts included (round 4, the same day)
+
+The dev, on round 3: *"the pacing has now gone from broken, back to normal. But the actual point of
+the ticket hasn't done much yet... we had battles hiding behind units 3 times."* Three reports, each
+`clearance turn +0, hidden 0/0/0`.
+
+**What went wrong in my own verification.** Round 3's probe logged `hid 0/0/0` and turn 0 for every
+one of 1,569 frames, on a board where units visibly stand in each other's way. I reported "no turn
+anywhere" as the success it was meant to measure, when it was the symptom. A probe that measures a
+feature must also show it ACTING where it should, not only that it never misbehaves.
+
+**Measured on his board.** A print inside `_search` showed every candidate angle scoring clear
+(`f0/h0`) in every search, for three stacked reasons:
+
+- **A unit blocked only as its sprite's ink, about 0.47 units tall.** From the battle zoom's 30°
+  camera, the line to the victim passes OVER the head in front. Under the zoom every unit wears its
+  health readout (the zoom forces them on), about a cell wide and floating above the head, and that
+  readout is what buried the victim. Soldier3's readout spanned y 41.76 to 41.98, and the line to
+  Soldier2's middle crossed it at 41.89. The clearance had never counted readouts.
+- **On a torn-out stage, everyone on it was the action.** The stage stays published through every
+  close-up, so once readouts counted, every block came out unclearable and nothing could be hidden.
+- **A close-up looked only at its victim.** With the first two fixed, beat 1 turned end-on and
+  parked the victim in front of the attacker: the same complaint from the other direction.
+
+The changes:
+
+- `ShotClearance.Body` gains a `hud` box, built in `UnitMirror.body_of` from where the bar is and
+  what it says its size is (`UnitHealthBar.half_extents` beside `top_extent`). `Body.blocks()` asks
+  both boxes, so the gap between a head and its readout stays see-through.
+- On a close-up the action is the trained subject and the aim line, and the close-up looks at both
+  ends of that line. The ground under everyone on stage stays protected.
+- Every walker is the action on a walk (dev ruling mid-build). The replay of the fix had hidden
+  Soldier3 for 0.4s while Soldier3 was walking beside the framed walker.
+
+**Re-run on his board:**
+
+| Beat | Report | Before | After |
+|---|---|---|---|
+| 1, S1→S2 | 18-52-16 | nothing | side-on, hides Soldier3 |
+| 2, S3→S4 | | clear | clear |
+| 3, S6→S2 | 18-52-18 | nothing | turns +180, hides nothing |
+| 4, counter S2→S1 | 18-52-22 | nothing | side-on, hides Soldier3 |
+| 5, counter S4→S3 | | clear | clear |
+
+Nobody was hidden during the walk. Round 3's stillness held: zero frames of camera motion during any
+blow, and 0.50 to 0.52s still before each.
+
+Pinned:
+- a readout blocks a line that clears its head (`test_shot_clearance`);
+- the readout box covers what the bar draws;
+- a readout in front of the victim turns the camera;
+- a bystander on stage is not the action on a close-up, and its ground is still protected;
+- the close-up watches the attacker;
+- every walker is the action on a walk (`test_camera_clearance`).
+
+Each wire case was falsified with its own mutant. Writing the stage-publishing cases found a fixture
+trap worth knowing: `set_playback_locked(true)` clears `shot_cells` on the claim, so a stage
+published before `_frame` was silently wiped. The participants assertion passed vacuously until the
+ground assertion beside it caught that, and `_frame` now publishes the stage after its lock.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 
