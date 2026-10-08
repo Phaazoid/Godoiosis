@@ -682,7 +682,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Tether and range (2D+3D)", "static": "TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The tether from each member to its leader AND the dashed stroke round the squad's range -- one colour, because they are one system. Orange, the hue the cohesion fill always wore."},
 	{"group": "Squad lines", "label": "Enemy tether and range (2D+3D)", "static": "ENEMY_TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
-		"tip": "The same lines for an ENEMY squad, shown on enemy hover, and its breaks and draw-ins. Lightened from the enemy field's purple so it reads over that field and over bare ground alike; the strain red a break turns to is shared with yours."},
+		"tip": "The same lines for an ENEMY squad, shown on enemy hover and while aiming at one, and its breaks and draw-ins. Lime since #1256: it has to read over the enemy's own reddish field and your red aim reach, so it stays well away from red. The strain red a break turns to is shared with yours."},
 	{"group": "Squad lines", "label": "Squad line casing (2D+3D)", "static": "CASING_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The dark outline round every squad line, yours and the enemy's: what keeps a line readable on a floor near its own colour. Its alpha is multiplied by the line's, so a ghost tether's outline is as see-through as the ghost. The 3D width is Casing width; the flat view's is one pixel."},
 	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,

@@ -339,6 +339,7 @@ func _overwatch_rows(unit: Unit) -> Array:
 func _pick_watch(unit: Unit, attack: AttackData) -> void:
 	unit.active_attack = attack
 	game.enter_overwatch_mode(unit)
+	game.hover_presenter.refresh()   # see _pick_attack
 
 
 # ONE menu row, and the catalogue law in one place (#166): an option the unit OWNS is listed
@@ -638,6 +639,9 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 func _pick_attack(unit: Unit, attack: AttackData) -> void:
 	unit.active_attack = attack
 	game.enter_attack_mode(unit)
+	# _on_menu_cancelled's refresh ran before the aim existed (cancelled precedes action_selected), so
+	# the board still shows the idle hover's readout; repaint the aim's own for where the pointer is (#1256).
+	game.hover_presenter.refresh()
 
 # STEP TWO of a rescue (#116, dev 2026-08-26): *"once rescue is chosen, I would like all of the valid
 # tiles to flash, and the user to select the tile to rescue to, and only once chosen does the rescue

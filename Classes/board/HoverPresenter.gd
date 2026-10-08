@@ -364,7 +364,30 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
 	game.overlay_manager.set_aim_flash(travel, insets)
 	game.overlay_manager.set_target_pulse(victims)
+	_draw_aimed_squads(attacker, cell, victims)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
+
+
+# The squads an aim is ON (#1256, dev: "you don't have an easy way to see that squad's COH range"):
+# whoever is under the pointer, in reach or not, and whoever the aim would hit, when they oppose the
+# attacker and have squadmates. Nothing else draws -- the aim owns the squad lines while it is open, so
+# what the idle hover drew at the moment of the pick does not stand through it. Opposing is asked of
+# the ATTACKER, so a hotseat aim shows the side it is aimed at.
+func _draw_aimed_squads(attacker: Unit, cell: Vector2i, victims: Array[Unit]) -> void:
+	var squads: Array[Squad] = []
+	if attacker != null:
+		var aimed_at: Array[Unit] = victims.duplicate()
+		var pointed: Unit = game.unit_at_pointer(cell)
+		if pointed != null:
+			aimed_at.push_front(pointed)
+		for unit in aimed_at:
+			if is_instance_valid(unit) and unit.has_squad() and not squads.has(unit.squad) \
+					and Team.is_enemy(attacker.get_faction(), unit.get_faction()):
+				squads.append(unit.squad)
+	if squads.is_empty():
+		game.overlay_manager.clear_squad_lines()
+	else:
+		game.draw_squads_lines(squads)
 
 
 # The payload rows an aim would drop, folded into what its hover shows (ruling 52). Each LEVEL flashes
