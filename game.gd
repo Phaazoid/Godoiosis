@@ -1859,6 +1859,29 @@ func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 # Solo squads are the CALLERS' question: Squad Up draws round a lone unit on purpose.
 func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary = {},
 		strained: Array[Unit] = [], candidates: Array[Unit] = []) -> void:
+	var links := _member_links(squad, leader_cell, placed, strained)
+	for candidate in candidates:
+		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
+				"state": SquadLines2D.Strain.GHOST})
+	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board(),
+			SquadLines2D.is_hostile(squad.get_leader().get_faction()))
+
+# Several squads' standing lines in ONE draw (#1256): an aim can catch more than one squad. One side
+# per draw holds because the one caller passes only squads opposing a single attacker, and
+# Team.is_enemy gives any attacker opponents of one side only.
+func draw_squads_lines(squads: Array[Squad]) -> void:
+	var bubbles: Array = []
+	var links: Array[Dictionary] = []
+	for squad in squads:
+		var leader_cell := squad.get_leader().get_projected_destination()
+		bubbles.append(cohesion_bubble(squad, leader_cell))
+		links.append_array(_member_links(squad, leader_cell, {}, []))
+	overlay_manager.show_squad_lines(bubbles, links, _board(),
+			SquadLines2D.is_hostile(squads[0].get_leader().get_faction()))
+
+# One tether per member to `leader_cell`, from its stand-in in `placed` if it has one; `strained` turns red.
+func _member_links(squad: Squad, leader_cell: Vector2i, placed: Dictionary,
+		strained: Array[Unit]) -> Array[Dictionary]:
 	var links: Array[Dictionary] = []
 	for member in squad.get_members():
 		if member == squad.leader:
@@ -1866,11 +1889,7 @@ func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary
 		var state := SquadLines2D.Strain.STRAIN if strained.has(member) else SquadLines2D.Strain.SOLID
 		links.append({"from": placed.get(member, member.get_projected_destination()),
 				"to": leader_cell, "state": state})
-	for candidate in candidates:
-		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
-				"state": SquadLines2D.Strain.GHOST})
-	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board(),
-			SquadLines2D.is_hostile(squad.get_leader().get_faction()))
+	return links
 
 # The joinable squads' own rings ARE the marking (#442) -- drawn through draw_squad_unit_icons, so
 # with ALWAYS_SHOW_SQUAD_RINGS on this is idempotent over the standing set and only the PULSE

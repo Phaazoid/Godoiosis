@@ -29,6 +29,10 @@ const PERIOD := 0.5
 # principle 2's rule about not letting two motifs collide -- see UnitVisuals, where the aim pulse
 # breathes and the pin flash sits.
 #
+# `rest` is its twin at the other end (#1253): time parked at the BASE before the next ramp up. The
+# hover flash rests rather than holds (dev: "inverse the timing on how long it is glowing vs normal"),
+# so the unit reads as itself, flashing, rather than as a white shape that sometimes dims.
+#
 # `in_step_with` JOINS a pulse that is already running (#1074): the new one is stepped forward to the
 # same point in its cycle, so several cues of one kind beat together however far apart they began.
 # The dev, on the pin flash: "the flashing enemies should all flash on the same timer, rather than per
@@ -37,14 +41,16 @@ const PERIOD := 0.5
 # standing pulses the first time the pause menu opens, while two tweens that paused together are
 # still in step. The caller passes one built with the same period and hold.
 static func start(host: Node, target: Object, property: StringName, base: Variant, peak: Variant,
-		period := PERIOD, hold := 0.0, in_step_with: Tween = null) -> Tween:
+		period := PERIOD, hold := 0.0, rest := 0.0, in_step_with: Tween = null) -> Tween:
 	var tween := host.create_tween().set_loops()
 	tween.tween_property(target, NodePath(property), peak, period)
 	if hold > 0.0:
 		tween.tween_interval(hold)
 	tween.tween_property(target, NodePath(property), base, period)
+	if rest > 0.0:
+		tween.tween_interval(rest)
 	if in_step_with != null and in_step_with.is_valid():
-		tween.custom_step(fposmod(in_step_with.get_total_elapsed_time(), 2.0 * period + hold))
+		tween.custom_step(fposmod(in_step_with.get_total_elapsed_time(), 2.0 * period + hold + rest))
 	return tween
 
 static func stop(tween: Tween, target: Object, property: StringName, base: Variant) -> void:

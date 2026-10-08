@@ -666,7 +666,10 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Seconds from rest up to the peak, and the same back down."},
 	{"group": "Unit highlights", "label": "Hovered unit flash hold", "static": "HOVER_FLASH_HOLD",
 		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Seconds it sits at the peak before easing back. Longer reads steadier."},
+		"tip": "Seconds it sits at white before easing back down."},
+	{"group": "Unit highlights", "label": "Hovered unit flash rest", "static": "HOVER_FLASH_REST",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Seconds it sits at its normal colour before the next flash. Longer reads calmer."},
 	{"group": "Unit highlights", "label": "Aim target pulse", "static": "TARGET_PULSE_MODULATE",
 		"script": UNIT_VISUALS_SCRIPT,
 		"tip": "What a unit your aim would hit breathes TO. It restarts on the next aim, so a turned value shows on the next target."},
@@ -682,7 +685,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad lines", "label": "Tether and range (2D+3D)", "static": "TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The tether from each member to its leader AND the dashed stroke round the squad's range -- one colour, because they are one system. Orange, the hue the cohesion fill always wore."},
 	{"group": "Squad lines", "label": "Enemy tether and range (2D+3D)", "static": "ENEMY_TETHER_COLOR", "script": SQUAD_LINES_SCRIPT,
-		"tip": "The same lines for an ENEMY squad, shown on enemy hover, and its breaks and draw-ins. Lightened from the enemy field's purple so it reads over that field and over bare ground alike; the strain red a break turns to is shared with yours."},
+		"tip": "The same lines for an ENEMY squad, shown on enemy hover and while aiming at one, and its breaks and draw-ins. Lime since #1256: it has to read over the enemy's own reddish field and your red aim reach, so it stays well away from red. The strain red a break turns to is shared with yours."},
 	{"group": "Squad lines", "label": "Squad line casing (2D+3D)", "static": "CASING_COLOR", "script": SQUAD_LINES_SCRIPT,
 		"tip": "The dark outline round every squad line, yours and the enemy's: what keeps a line readable on a floor near its own colour. Its alpha is multiplied by the line's, so a ghost tether's outline is as see-through as the ghost. The 3D width is Casing width; the flat view's is one pixel."},
 	{"group": "Squad lines", "label": "Ghost tether (2D+3D)", "static": "TETHER_GHOST_COLOR", "script": SQUAD_LINES_SCRIPT,
@@ -2039,6 +2042,7 @@ static func read_static(name: String) -> Variant:
 		"HOVER_FLASH_MODULATE": return UnitVisuals.HOVER_FLASH_MODULATE
 		"HOVER_FLASH_RAMP": return UnitVisuals.HOVER_FLASH_RAMP
 		"HOVER_FLASH_HOLD": return UnitVisuals.HOVER_FLASH_HOLD
+		"HOVER_FLASH_REST": return UnitVisuals.HOVER_FLASH_REST
 		"TARGET_PULSE_MODULATE": return UnitVisuals.TARGET_PULSE_MODULATE
 		"HIGHLIGHT_MODULATE": return UnitVisuals.HIGHLIGHT_MODULATE
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
@@ -2342,6 +2346,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOVER_FLASH_HOLD":
 			UnitVisuals.HOVER_FLASH_HOLD = value
+			_restyle_hover_flash(host)
+			return
+		"HOVER_FLASH_REST":
+			UnitVisuals.HOVER_FLASH_REST = value
 			_restyle_hover_flash(host)
 			return
 		# Read when a pulse or a highlight STARTS, so the next aim or row hover shows a turned value.

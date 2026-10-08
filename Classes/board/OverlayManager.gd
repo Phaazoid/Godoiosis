@@ -2344,7 +2344,7 @@ func set_projected_unit_flashing(unit: Unit, on: bool) -> void:
 		ghost.modulate = GHOST_FLASH_REST   # opaque at once, not after the first ramp
 		ghost.set_meta(GHOST_HOVER_META, Pulse.start(ghost, ghost, &"modulate", GHOST_FLASH_REST,
 				Color(UnitVisuals.HOVER_FLASH_MODULATE, 1.0), UnitVisuals.HOVER_FLASH_RAMP,
-				UnitVisuals.HOVER_FLASH_HOLD))
+				UnitVisuals.HOVER_FLASH_HOLD, UnitVisuals.HOVER_FLASH_REST))
 	else:
 		_drop_ghost_flash(ghost)
 

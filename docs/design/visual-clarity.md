@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slices 1-2 (the dev pause, key poses) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slices 1-2 (the dev pause, key poses) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
 
 ## Principles
 
@@ -4375,7 +4375,7 @@ This repeals #1069's "the reach still moves onto a refused cell", above.
   - whether grey reads as "walkable, not now";
   - all of it in the flat view.
 
-## An enemy squad's LINES, on enemy hover ([#1109](https://github.com/Phaazoid/Godoiosis/issues/1109), BUILT 2026-09-27)
+## An enemy squad's LINES, on enemy hover and while aiming at it ([#1109](https://github.com/Phaazoid/Godoiosis/issues/1109), BUILT 2026-09-27; aiming and lime [#1256](https://github.com/Phaazoid/Godoiosis/issues/1256), 2026-10-07)
 
 The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH range at all."* Hovering an enemy now draws its squad's cohesion range and tethers, exactly as your own squad's are drawn, in the enemy's colour.
 
@@ -4385,7 +4385,7 @@ The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH
 
 | Fork | Ruling |
 |---|---|
-| Colour | The threat field's purple, **lightened** (`SquadLines2D.ENEMY_TETHER_COLOR`) so it reads over that field and over bare ground alike. One colour for every enemy squad. Not taken: the exact threat purple (its dashes vanished over its own field), the squad's ring hue (dealt per squad, and the enemy orange nearly matches your tethers), bone white (reads as the white focus outline). |
+| Colour | *(Superseded by Round 3: lime.)* The threat field's purple, **lightened** (`SquadLines2D.ENEMY_TETHER_COLOR`) so it reads over that field and over bare ground alike. One colour for every enemy squad. Not taken: the exact threat purple (its dashes vanished over its own field), the squad's ring hue (dealt per squad, and the enemy orange nearly matches your tethers), bone white (reads as the white focus outline). |
 | What shows | **Both** the range stroke and the tethers. |
 | An enemy's break and draw-in | **The enemy colour too**, so an enemy tether looks the same standing or breaking. A break still strains to the one strain red, which means "breaking" for either side. |
 | While your squad is mid-plan | **Shown anyway**: that is when a shove to split them gets planned. The enemy's rings keep their gate. |
@@ -4402,7 +4402,7 @@ The dev, after playing #367 part 1: *"there's no good way to see the enemy's COH
 
 ### Declared residuals
 
-- **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it.
+- **Pins draw no lines.** V and Shift+click stay field-only; this is hover alone, as the issue scoped it (and, since Round 3, the aim).
 - **The Split chip stays tether orange**, even on a row whose blow splits an enemy squad (2A's ruling, not revisited here).
 - ~~**How the rose reads in the lit diorama** over the real threat fill is the dev's to judge. The mockup's field was a flat blend with no lighting.~~ **It read badly, and Round 2 below answers it.**
 
@@ -4439,6 +4439,40 @@ The dev, after playing it: *"it is too hard to see this rose color inside the en
 - **A stroke's free start can show a sliver of casing with no ink** for a moment, as a dash marches off it. A tether's start sits under its member's sprite.
 - **The Split chip is still orange** on a row whose blow splits an enemy squad.
 - **What only the dev can judge:** the casing's width and darkness in play, the harder edge, and outlined sparks.
+
+### Round 3: lime, and the lines while aiming ([#1256](https://github.com/Phaazoid/Godoiosis/issues/1256), 2026-10-07)
+
+The dev, after more play: *"when targeting enemy units that are in a squad, you don't have an easy way to see that squad's COH range"*, and *"the enemy coh range arrows are too close to the color of the red field."*
+
+**What the renders measured.** The candidates were rendered IN-ENGINE by a windowed probe, not repainted onto a frame: the dev's own Shift+F3 board (grass and dirt, with an enemy squad formed on it) and The Causeway (pale stone). The casing did not save the rose, because it is a HUE problem:
+- the rose is hue 343°;
+- the threat field over stone is 347°;
+- the field's grout lines over dirt are 359°.
+
+The arrowheads, which are mostly cone face, suffered most.
+
+| Fork | Ruling |
+|---|---|
+| Colour | **Lime `(0.8, 1.0, 0.25)`**, picked from four in-engine candidates. Not taken: the rose (A), lavender (B), and violet (C, my recommendation, about 90–120° from every field pixel). Lime is the loudest against red. Its cost, accepted: it sits nearer the yellow cursor, crown and aim footprint, and about 57° from bare dirt. The casing and the strain red are unchanged. |
+| Your own squad's lines while aiming | **Swap**: when the aim is on an enemy squad, show that squad's lines. |
+
+**A corrected premise, on the second fork.** The question claimed your own squad's lines are usually up while you aim. They are not. A menu pick runs `clear_selection` (which takes every squad line down) and then `HoverPresenter.refresh()` while the board is still IDLE, because `cancelled` precedes `action_selected`. So the aim opened showing whatever squad sat under the menu slice, frozen for the whole aim: usually nothing, sometimes yours, sometimes an enemy's. "Yours come back" therefore had nothing to bring back. **Away from an enemy squad, the aim shows no squad lines**, which matches how aiming usually looked.
+
+**How it is built.**
+- **Which squads.** `HoverPresenter._draw_aimed_squads` collects two sets of units:
+  - the unit under the pointer, IN REACH OR NOT, since aiming is also where the next shove is planned;
+  - every victim of the aim: the sweep, its current, and its payloads.
+
+  A unit counts when it opposes the ATTACKER (`Team.is_enemy`) and has squadmates, so a hotseat aim shows the side it is aimed at. Nothing caught means `clear_squad_lines()`. The aim owns the squad lines while it is open.
+- **One draw for several squads.** `game.draw_squads_lines`: an AoE can catch two squads. It shares `_member_links` with `draw_squad_cohesion`. One side per draw still holds: `Team.is_enemy` gives any attacker opponents of one side only (PLAYER and ALLY attackers face {ENEMY}; an ENEMY attacker faces {PLAYER, ALLY}, both drawn in the player's colour).
+- **The aim repaints at once.** `MainActionMenu._pick_attack` and `_pick_watch` call `refresh()` after entering the aim. Without that, a melee aim picked with the pointer already on the adjacent enemy showed nothing until the pointer moved a cell. The visible side effect: the aim footprint, sight trace and target pulse also paint the moment the aim opens. It lives at the menu doors rather than in `enter_attack_mode`, whose many direct test callers would all change.
+
+**Test-craft.** The cases enter the aim through the real menu ordering (click, then `cancelled`, then `action_selected`), because the stale-lines fault exists only in that ordering. Five mutants, each red on its own case: the pointer clause, the victims clause, the empty-set clear, the menu repaint, and drawing only the first squad.
+
+**Declared residuals.**
+- **The pointer off the board** keeps the last lines, as idle hover does: `update_hover_visuals` returns before any arm on an off-map cell.
+- **A queued shove is not forecast on the lines.** A tether is drawn from the member's projected cell, so a shove already queued moves its end, but it stays SOLID rather than straining. The Split chip on the queue row is the forecast.
+- **What only the dev can judge:** lime in motion beside the yellow cursor, crown and aim footprint, and the aim's readout painting the moment it opens.
 
 ## Membership MOMENTS: a join draws the tether in, a leave reels it in, a forced exit breaks it, a death or a down plays a look of its own ([#367](https://github.com/Phaazoid/Godoiosis/issues/367), part 1 BUILT 2026-09-23, part 2 BUILT 2026-09-27; [#1104](https://github.com/Phaazoid/Godoiosis/issues/1104) BUILT 2026-09-27)
 
@@ -4758,8 +4792,8 @@ A queued move had its ghost and its arrow. A queued attack left nothing of its o
 
 - **`StrikeMarks2D`** (`board/`) is the derivation -- `from_plan`, one entry per queue row (`plan.attacks`, live counters, live watch shots), grouped by `AttackAction.same_volley`, a payload folding into the hit that dropped it -- the geometry (`lane_chord`, `badge_point`, `line_work`, in `ThreatLines2D`'s trace space), the badge art (baked per icon and colour, since a tint would colour the icon too) and the flat draw. `OverlayManager` holds the store, `OverlayMirror._queued_strikes` lifts it.
 - **Two rules extracted so the board and the panel cannot disagree**: `AttackAction.same_volley` (the panel's fold) and `AttackAction.group_icon` (its volley icon).
-- **Four layers**: (five since #1251, which added `QUEUED_STRIKES_OWN`) `QUEUED_FOOTPRINT` (FILL, -4), `QUEUED_STRIKES` (LINE, 11; beam set `"strike"` = the mark's width with the squad lines' dash), `QUEUED_STRIKES_FOCUS` (LINE, 14) and `QUEUED_BADGES` (BILLBOARD, 15, `"face": "camera"` -- FIXED_Y would squash the disc). Each mark's colour rides its vertex tint, which is why the cones are the see-through shader: the solid one reads only the baked shade.
-- **`BoardOverlays.FOCUS_RENDER_PRIORITY` is a band above the readout's**, used only by an `on_top` marker or cone (`no_depth_test`, and a fifth cone file, `reach_cone_on_top.gdshader`). It is not a `LAYERS` sort, so every law keeping a layer under the units still stands; its own law keeps it above the readout. The focused SHAFT stays depth-tested at 14 -- a beam drawn over the world would need a second `sight_beam` file.
+- **Four layers**: `QUEUED_FOOTPRINT` (FILL, -4), `QUEUED_STRIKES` (LINE, 11; beam set `"strike"` = the mark's width with the squad lines' dash), `QUEUED_STRIKES_FOCUS` (LINE, 14) and `QUEUED_BADGES` (BILLBOARD, 15, `"face": "camera"` -- FIXED_Y would squash the disc). The line layers carry the SHAFTS; the POINTER rides its badge since #1253 (below). Each mark's colour rides its vertex tint, which is why the pointer is the see-through cone: the solid one reads only the baked shade.
+- **`BoardOverlays.FOCUS_RENDER_PRIORITY` is a band above the readout's**, used only by an `on_top` marker -- a badge, its pointer with it (`no_depth_test`, and a fifth cone file, `reach_cone_on_top.gdshader`). It is not a `LAYERS` sort, so every law keeping a layer under the units still stands; its own law keeps it above the readout. The focused SHAFT stays depth-tested at 14 -- a beam drawn over the world would need a second `sight_beam` file.
 - **A mark retires at its own blow** (`volley_struck` -> `retire_strike`), and the pass RE-DERIVES the marks off the plan it plays: `execute_orders` resolves afresh, so the hits that strike are its objects and not the preview's. Matching the preview's by identity found nothing; a mutant pins the re-derive.
 - **The hovered unit is held by instance ID**, the squad count's precedent: the shared-board suite freed a hovered unit under a typed slot, and the next redraw died on it (#149's shape).
 - Knobs, Game tab -> Markup -> *Queued attacks*: badge size, lane, pointer length, badge ground. The line borrows the reach mark's width and the squad lines' dash.
@@ -4780,7 +4814,7 @@ Two asks from the dev's play-check of #1247, and a finding the second one turned
 ### Rulings
 
 - **Inside the lifted band, the hovered unit's OWN attacks sit over the ones aimed at it.** His report: hovering an enemy who was both attacked and countering left the counter behind the attack on him. #1247's hover lifted both ends into one band, where two badges at one priority sort by camera distance.
-- **The hovered unit FLASHES WHITE, at full alpha, on its body or on the ghost standing in for it** -- any hovered unit, marks or not. Two preview rounds: the first offered a steady highlight and warm, white and side-coloured breathes; his answer was *"None of these pop enough. I want it a white flash, but a bit steadier, and more white/bright."* He took W1: 2.4x white, 0.4 s up, held at white 0.4 s, 0.4 s down.
+- **The hovered unit FLASHES WHITE, at full alpha, on its body or on the ghost standing in for it** -- any hovered unit, marks or not. Two preview rounds: the first offered a steady highlight and warm, white and side-coloured breathes; his answer was *"None of these pop enough. I want it a white flash, but a bit steadier, and more white/bright."* He took W1: 2.4x white, 0.4 s up, held at white 0.4 s, 0.4 s down. #1253 moved the hold to the other end (below).
 - **Every bright tint reaches the 3D view**, not only the new flash (below).
 
 ### The finding: the 3D view clamped every tint at 1.0
@@ -4789,13 +4823,39 @@ The first round's flashes barely moved because they could not: the engine sprite
 
 ### How it is built
 
-- **A focus RANK, not a flag**: `StrikeMarks2D.focus_rank` answers 2 for the hovered unit's own mark, 1 for one aimed at it, 0 otherwise. `BoardOverlays`' `on_top` is a TIER drawn at `focus_priority(tier)` (64, 65), and the own tier has its own LINE layer, `QUEUED_STRIKES_OWN`, because a layer's cones are one mesh with one priority. The shafts of both tiers share sort 14 and stay depth-tested, as #1247 declared. The flat view draws by rank, 0 then 1 then 2.
+- **A focus RANK, not a flag**: `StrikeMarks2D.focus_rank` answers 2 for the hovered unit's own mark, 1 for one aimed at it, 0 otherwise. `BoardOverlays`' `on_top` is a TIER drawn at `focus_priority(tier)` (64, 65), carried by the badge and so by its pointer. #1251 gave the own tier its own LINE layer, `QUEUED_STRIKES_OWN`, because a layer's cones were one mesh with one priority; #1253 retired it once the pointers moved onto the badges. The shafts of both tiers share `QUEUED_STRIKES_FOCUS` at sort 14 and stay depth-tested, as #1247 declared. The flat view draws by rank, 0 then 1 then 2.
 - **One precedence ladder on a unit's sprite**, `UnitVisuals.sync_flashes`, strongest first: a one-shot alarm (the refusal flash), the aim pulse, the hover flash, the pin flash, the steady row highlight. A hovered pinned enemy shows the hover flash, and the pin comes back when the pointer leaves. The ghost's twin is `OverlayManager.set_projected_unit_flashing`, resting at full alpha.
 - **A RECONCILE, not an event**: `HoverPresenter._sync_hover_flash` asks every frame which unit is under the pointer and tells both doors, ghost and body. Measured while building: an ordinary hover REBUILDS the ghosts, so a flash started on hover alone died with the old node. Never while the board is not the player's (an AI turn, playback, a menu up).
 - **`OverlayManager.projected_highlight()`** derives the ghost's row highlight from `UnitVisuals.HIGHLIGHT_MODULATE`, which retired the `PROJECTED_HIGHLIGHT` const that duplicated it.
-- Knobs, Game tab -> Markup -> *Unit highlights*: the hover flash's brightness, ramp and hold; the aim target pulse; the queue row highlight. The look-dev scene's selection tint reads the row highlight too, through `set_tint`.
+- Knobs, Game tab -> Markup -> *Unit highlights*: the hover flash's brightness, ramp, hold and rest (#1253); the aim target pulse; the queue row highlight. The look-dev scene's selection tint reads the row highlight too, through `set_tint`.
 
 ### Declared limits
 
 - The hover flash runs while you aim, on every unit but the targets, whose aim pulse outranks it (the dev's "any hovered unit").
 - The aim pulse and row highlight pick up a turned knob at the next aim or row hover; the flashes rebuild at once.
+
+## A queued attack's pointer rides its badge, and the hover flash rests ([#1253](https://github.com/Phaazoid/Godoiosis/issues/1253), BUILT 2026-10-07)
+
+Two notes from the dev's play-check of #1251.
+
+### Rulings
+
+- **The arrow is one with its circle.** His report: at rest, a near attack's badge drew in front of the counter badge behind it while its arrow hid behind that same counter badge; hovering the unit brought the arrow forward. *"The arrow should always be one with the circle."*
+- **The hover flash rests at normal rather than holding at white** (*"inverse the timing on how long it is glowing vs normal"*). W1 sat at white and went straight back up, so a hovered unit read as a white shape that sometimes dimmed. It now ramps up, touches white, ramps down and rests at its own colour.
+
+### Why it split
+
+At rest every pointer drew at the strike line layer's priority (11) and every badge at 15. A see-through draw sorts by priority before depth and neither writes depth, so EVERY badge painted over EVERY arrow, a far badge over a near arrow. Hover lifted both into one band, which is why hovering hid the bug. Inside a band a layer's cones were still one mesh sorted as one object, so two marks of one tier could split too.
+
+### How it is built
+
+- **A badge carries its pointer**: a billboard marker may hold `"pointer"` and `BoardOverlays._apply_pointer` hangs the see-through cone ON the badge's sprite, at the sprite's own render priority and depth test (the on-top cone file when lifted), sorting at the sprite's own point (`sorting_use_aabb_center` off) a `POINTER_SORT_NUDGE` UNDER it. Back-to-front then keeps each pair together, nearer pair over farther, at every tier. Under rather than over because the flat view draws a pointer before its badge. `BoardOverlays.pointer_of` answers which node it is.
+- **The cone knobs reach it**: shading and facets re-hang every pointer from its marker (`_reapply_pointers`, from `_rebuild_cones`), intensity restyles its material.
+- **Retired**: `QUEUED_STRIKES_OWN` and the strike line layers' `cone_alpha` / `on_top`, so `_cone_for` lost its on-top branch. The flat view needed nothing: it already draws each entry's pointer and badge together.
+- **`Pulse.start` gained `rest`**, time held at the base, the twin of `hold` (`in_step_with` counts it in the cycle). The hover flash's hold is 0 and its rest 0.4 s; both are Game-tab rows.
+- Measured in a real window on his 22:03 board, at his camera: `main` hides the front arrow behind the counter badge, the branch draws it whole.
+
+### Declared limits
+
+- At range a mark's dashed SHAFT still draws under every badge: a long line spans many depths and cannot sort with one badge.
+- Two badges within `POINTER_SORT_NUDGE` of one camera depth could interleave their pairs; they would be side by side.
