@@ -1,6 +1,7 @@
 # The squad's lines in play (#1070): hovering and choosing a move draw the tethers and the grey
 # out-of-range tiles through the real doors, a refused click shakes instead of leaving, and Squad Up
-# works from a leader and stays open. Hovering an ENEMY draws its squad's lines too (#1109). The geometry itself is test_squad_lines; this is the wire.
+# works from a leader and stays open. Hovering an ENEMY draws its squad's lines too (#1109), and so does
+# aiming at one (#1256). The geometry itself is test_squad_lines; this is the wire.
 #
 # The real game scene, because every claim here is about what a hover or a click DOES -- which mode it
 # leaves the board in, which cache it reads -- and a case that set game_state directly would be blind to
@@ -9,6 +10,8 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
+const MD := preload("res://tests/support/menu_drive.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 # MOV is 4 + Stats.dex_mov_band -- see test_squad_cohesion, whose constants these are.
@@ -698,3 +701,118 @@ func test_a_pass_takes_the_hover_lines_down_before_its_first_blow() -> void:
 			"fixture: no blow landed, so nothing was read at one").is_false()
 	assert_int(at_the_blow[0]).override_failure_message(
 			"the hover's squad lines were still up at the blow").is_equal(0)
+
+
+# --- An enemy squad's lines while aiming (#1256) ------------------------------------------------
+
+var _pointed := Vector2i(-99, -99)
+
+
+# The 3D picker's shape: a source holding a cell, read live off the member so a case can move it.
+func _hold_pointer() -> void:
+	game.hover_presenter.pointer_source = func() -> Vector2i: return _pointed
+
+
+func _point_at(cell: Vector2i) -> void:
+	_pointed = cell
+	await await_idle_frame()   # the real poll lands the hover
+
+
+# Click the hero and pick the ring's first attack the way a player does: `cancelled` BEFORE
+# `action_selected`, which is what runs the idle repaint the aim has to take over from.
+func _open_aim(hero: Unit) -> void:
+	game._on_left_click(hero.movement.cell)
+	var controller := MD.controller_of(game)
+	assert_object(controller).override_failure_message("fixture: clicking the hero opened no ring") \
+		.is_not_null()
+	var leaf := MD.first_leaf_under(controller.level_nodes(), MD.kit_category(game, hero))
+	assert_bool(leaf.is_empty()).override_failure_message("fixture: the ring offered no attack").is_false()
+	controller.cancelled.emit(controller)
+	controller.action_selected.emit(int(leaf.get("id", 0)), hero)
+	assert_int(game.game_state).override_failure_message("fixture: the pick did not open an aim") \
+		.is_equal(game.GameState.ATTACK_TARGETING)
+
+
+func _arm_with(unit: Unit, shape: Callable) -> void:
+	var weapon := H.make_weapon()
+	shape.call(weapon.template.main_attack)
+	unit.equipped_weapon = weapon
+	game.drop_threat_field()
+
+
+# The dev: "when targeting enemy units that are in a squad, you don't have an easy way to see that
+# squad's COH range." Pointing the aim at a member shows its squad -- out of reach too, since aiming is
+# also where the next shove gets planned -- and bare ground takes it down again.
+func test_aiming_at_an_enemy_member_draws_its_squad_and_bare_ground_takes_it_down() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	var theirs: Dictionary = await _enemy_squad(Vector2i(4, 0))
+	var hero: Unit = mine.leader
+	_arm(hero)
+	_hold_pointer()
+	await _point_at(Vector2i(-5, -5))
+	_open_aim(hero)
+
+	await _point_at(theirs.members[0].movement.cell)
+	assert_bool(Reach.can_aim_at(hero, hero.movement.cell, theirs.members[0].movement.cell,
+			hero.get_fired_attack(), game._board())).override_failure_message(
+			"fixture: the member is in reach, so this case cannot tell the pointer from the hit").is_false()
+	assert_int(_om().squad_tether_chords.size()).override_failure_message(
+			"aiming at an enemy member did not draw one tether per member of its squad").is_equal(2)
+	assert_bool(_om().squad_outline.is_empty()).override_failure_message(
+			"aiming at an enemy member drew no range stroke").is_false()
+	assert_bool(_om().squad_lines_hostile).override_failure_message(
+			"an enemy squad's lines were stored as the player's").is_true()
+
+	await _point_at(Vector2i(-5, -5))
+	assert_bool(_om().squad_tether_chords.is_empty() and _om().squad_outline.is_empty()) \
+		.override_failure_message("aiming at bare ground left the enemy squad's lines up").is_true()
+
+
+# A directional aim points with an EMPTY cell and hits whoever its stamp covers: the squad it would hit
+# is the one it is on, wherever the pointer sits.
+func test_an_aim_shows_the_squad_it_would_hit_when_the_pointer_is_on_an_empty_cell() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	await _enemy_squad(Vector2i(2, 0))
+	var hero: Unit = mine.leader
+	_arm_with(hero, func(attack: AttackData) -> void: P.line(attack, 3))
+	_hold_pointer()
+	await _point_at(Vector2i(-5, -5))
+	_open_aim(hero)
+
+	await _point_at(Vector2i(1, 0))
+	assert_object(game.unit_at_pointer(Vector2i(1, 0))).override_failure_message(
+			"fixture: the pointed cell holds a unit").is_null()
+	assert_int(_om().squad_tether_chords.size()).override_failure_message(
+			"an aim whose line hits an enemy member did not draw that member's squad").is_equal(2)
+	assert_bool(_om().squad_lines_hostile).is_true()
+
+
+# The menu's own repaint runs while the board is still idle, so the squad under the slice gets its
+# lines drawn -- here, your own. The aim takes them over at once rather than on the first cell moved.
+func test_lines_the_menu_pick_drew_do_not_stand_into_the_aim() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	await _enemy_squad(Vector2i(4, 0))
+	var hero: Unit = mine.leader
+	_arm(hero)
+	_hold_pointer()
+	await _point_at(mine.members[0].movement.cell)
+	_open_aim(hero)
+
+	assert_bool(_om().squad_tether_chords.is_empty() and _om().squad_outline.is_empty()) \
+		.override_failure_message("the idle hover's squad lines stood into the aim").is_true()
+
+
+# An aim can catch more than one squad; every one it is on draws, in one draw.
+func test_an_aim_across_two_enemy_squads_draws_both() -> void:
+	var mine: Dictionary = await _squad(5, [{"dex": 5, "cell": Vector2i(-1, 0)}])
+	await _enemy_squad(Vector2i(1, -2))
+	await _enemy_squad(Vector2i(1, 2))
+	var hero: Unit = mine.leader
+	_arm_with(hero, func(attack: AttackData) -> void: P.wide(attack, 1, 5))
+	_hold_pointer()
+	await _point_at(Vector2i(-5, -5))
+	_open_aim(hero)
+
+	await _point_at(Vector2i(1, 0))
+	assert_int(_om().squad_tether_chords.size()).override_failure_message(
+			"an aim across two enemy squads did not draw both squads' tethers").is_equal(4)
