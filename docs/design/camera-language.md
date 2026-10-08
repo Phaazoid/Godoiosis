@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slice 1 (the dev pause) folded in 2026-10-07.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slices 1-2 (the dev pause, key poses) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -231,6 +231,18 @@ which of two is open.**
     director to return to.
   - Deliberately not `stash_view`: that slot is the PLAYER's view, which the pass's release flies back
     to.
+
+**Key pose words (#705 slice 2):**
+- **key pose / keyframe** — N while paused. The camera as the dev framed it ("yours"), beside the
+  director's held frame ("director"), plus:
+  - the **pass time**: scaled seconds since playback claimed the camera, so it stands still across
+    the pause;
+  - the shot, who it is trained on, and the aim line.
+
+  `CameraRecording` holds them, capped at 12. Shift+N clears, and so does a board swap.
+- **The recording in a report** — a `## Camera recording` section (a table, then the same numbers as
+  JSON to replay) and `camera.png`, a contact sheet of the screenshots, K1 first, three across. Both
+  come only when there are key poses.
 
 **The recentre door has no lock of its own**, and that is why a new caller is not a new door. SPACE
 and an order's return pan cannot fire while playback owns the board, so the door never needed one.

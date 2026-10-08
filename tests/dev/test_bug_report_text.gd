@@ -465,3 +465,18 @@ func test_a_path_straddling_the_summary_truncation_is_scrubbed_before_the_cut() 
 
 	assert_str(summary).contains("full text in report.md")   # the cut really happened
 	assert_str(summary).not_contains(fragment)
+
+# ---- the dev's key poses (#705) ----
+
+func test_a_recording_gets_its_own_section_and_no_recording_gets_none() -> void:
+	# A dev tool's section in every player's report would be noise, so it is there only when the dev
+	# recorded something -- and then below the trace, as the third camera question.
+	var no_units: Array[Unit] = []
+	var bare := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+			no_units, "log")
+	assert_str(bare).not_contains("## Camera recording")
+	var recorded := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+			no_units, "log", "", "", "", "TRACE-BODY", "", "", "RECORDING-BODY")
+	assert_str(recorded).contains("## Camera recording\n\nRECORDING-BODY")
+	assert_bool(recorded.find("## Camera recording") > recorded.find("## Camera trace")) \
+		.override_failure_message("the recording printed above the trace it answers").is_true()

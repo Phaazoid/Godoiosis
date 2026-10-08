@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slice 1 (the dev pause) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slices 1-2 (the dev pause, key poses) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
 
 ## Principles
 
@@ -3176,6 +3176,50 @@ Pinned in `test_playback_control`:
 
 The three wire cases (the stand-down, the cut back, the wait) were each falsified with a mutant. How the
 camera *feels* to drive while paused is a play-check: headless, every ease lands in one frame.
+
+### Slice 2: N records a key pose into the bug report
+
+While paused, **N** drops a key pose. Each one holds:
+- **the framing on screen:** `CameraRig3D.snapshot_view()`;
+- **the director's frame** the pause is holding;
+- **when:** the pass time, a scaled clock battle3d restarts on each playback claim, so it stands still
+  under the pause;
+- **what was playing:** the shot, who it is trained on, and the aim line;
+- **a screenshot,** taken a frame later with the dev readout layer hidden, since it is a picture of
+  the framing, not of the tool.
+
+**Shift+N** clears the recording, and so does a board swap. Filing a report does not, so the same
+recording can go out twice.
+
+**Why it isn't a saved `CameraPose`:**
+- That type has no pitch.
+- A saved type would drag in the embedded-content sweep, for a value nobody keeps beyond the report.
+
+So `CameraRecording` is plain in-memory data plus its renderers.
+
+**What reaches the report.** Both arrive through two more pushed callables beside the View line and
+the trace, and appear only when there are key poses:
+- a `## Camera recording` section: one table row per pose (yours vs the director), then the same
+  numbers as JSON to replay;
+- `camera.png`: a contact sheet of the screenshots, K1 first, three across. A keyframe with no picture
+  keeps its empty slot, so "the third tile" is always K3. It's one more `ATTACHMENTS` row.
+
+Pinned in `test_camera_recording`:
+- the copies;
+- the table and the JSON round trip;
+- the empty case;
+- the slot rule;
+- the cap.
+
+Pinned in `test_playback_control`:
+- N while paused keeps both frames, and the report sees it through the pushed source;
+- N needs the pause, and Shift+N clears;
+- a board swap clears the recording.
+
+Pinned in `test_bug_report_text`: the section only when there is one, below the trace.
+
+All three wires (the report push, the director frame, the swap clear) were falsified with a mutant. The
+screenshots are null headless, so `camera.png`'s pictures are a play-check.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 
