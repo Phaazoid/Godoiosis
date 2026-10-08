@@ -666,7 +666,10 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Seconds from rest up to the peak, and the same back down."},
 	{"group": "Unit highlights", "label": "Hovered unit flash hold", "static": "HOVER_FLASH_HOLD",
 		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Seconds it sits at the peak before easing back. Longer reads steadier."},
+		"tip": "Seconds it sits at white before easing back down."},
+	{"group": "Unit highlights", "label": "Hovered unit flash rest", "static": "HOVER_FLASH_REST",
+		"script": UNIT_VISUALS_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Seconds it sits at its normal colour before the next flash. Longer reads calmer."},
 	{"group": "Unit highlights", "label": "Aim target pulse", "static": "TARGET_PULSE_MODULATE",
 		"script": UNIT_VISUALS_SCRIPT,
 		"tip": "What a unit your aim would hit breathes TO. It restarts on the next aim, so a turned value shows on the next target."},
@@ -2039,6 +2042,7 @@ static func read_static(name: String) -> Variant:
 		"HOVER_FLASH_MODULATE": return UnitVisuals.HOVER_FLASH_MODULATE
 		"HOVER_FLASH_RAMP": return UnitVisuals.HOVER_FLASH_RAMP
 		"HOVER_FLASH_HOLD": return UnitVisuals.HOVER_FLASH_HOLD
+		"HOVER_FLASH_REST": return UnitVisuals.HOVER_FLASH_REST
 		"TARGET_PULSE_MODULATE": return UnitVisuals.TARGET_PULSE_MODULATE
 		"HIGHLIGHT_MODULATE": return UnitVisuals.HIGHLIGHT_MODULATE
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
@@ -2342,6 +2346,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOVER_FLASH_HOLD":
 			UnitVisuals.HOVER_FLASH_HOLD = value
+			_restyle_hover_flash(host)
+			return
+		"HOVER_FLASH_REST":
+			UnitVisuals.HOVER_FLASH_REST = value
 			_restyle_hover_flash(host)
 			return
 		# Read when a pulse or a highlight STARTS, so the next aim or row hover shows a turned value.
