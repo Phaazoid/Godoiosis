@@ -485,6 +485,18 @@ var _move_grid_size := 16
 var reach_line_shafts: Array[PackedVector3Array] = []
 var reach_line_marks: Array[Array] = []
 var reach_line_version := 0
+# WHAT A QUEUED ATTACK LEAVES ON THE BOARD (#1247): one entry per queue row of hits, built by
+# StrikeMarks2D.from_plan off the plan the queue panel is showing. StrikeMarks2D draws it flat,
+# OverlayMirror lifts it, and the version is the mirror's change signal. The hovered unit's marks -- at
+# either end -- draw over everything else; it is held by INSTANCE ID, the squad count's reason (#149: a
+# hovered unit can be freed under the store, and a freed Unit in a typed slot dies on the read).
+var queued_strikes: Array[Dictionary] = []
+var _strike_focus_id := 0
+var queued_strike_version := 0
+var _strike_marks_2d: StrikeMarks2D
+# ...and the tiles of every queued attack covering more than one, in the aim's footprint colour at a
+# queued mark's half strength. Built in _ready; null on a headless Play board.
+var queued_footprint_overlay: TileMapLayer = null
 
 
 
@@ -584,6 +596,20 @@ func _ready() -> void:
 	_squad_lines_2d.name = "SquadLines2D"
 	_squad_lines_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_squad_lines_2d)
+	# Queued attacks (#1247): the marks in the same band as the other board lines, and their footprints
+	# under the range fills -- a plain FILL sheet, THREAT's borrow, placed beneath it in tree order the
+	# way its 3D sort sits beneath it.
+	_strike_marks_2d = StrikeMarks2D.new()
+	_strike_marks_2d.name = "StrikeMarks2D"
+	_strike_marks_2d.z_index = TERRAIN_Z_INDEX
+	add_child(_strike_marks_2d)
+	if threat_overlay != null:
+		queued_footprint_overlay = move_overlay.duplicate() as TileMapLayer
+		queued_footprint_overlay.name = "QueuedFootprintOverlay"
+		queued_footprint_overlay.tile_set = attack_overlay.tile_set
+		queued_footprint_overlay.modulate = _ghosted(aim_fill_color())
+		add_child(queued_footprint_overlay)
+		move_child(queued_footprint_overlay, threat_overlay.get_index())
 	# The moments' clock (#367) runs only while one is in the air.
 	set_process(false)
 
@@ -740,6 +766,81 @@ func _rebuild_reach_line_marks() -> void:
 	reach_line_version += 1
 	_threat_lines_2d.marks = reach_line_marks
 	_threat_lines_2d.queue_redraw()
+
+
+# The queued plan's attacks (#1247), one entry per queue row -- StrikeMarks2D.from_plan's answer.
+# Replaced wholesale on every plan refresh; idempotent while nothing is queued.
+func show_queued_strikes(entries: Array[Dictionary]) -> void:
+	if entries.is_empty() and queued_strikes.is_empty():
+		return
+	queued_strikes = entries
+	_redraw_queued_strikes()
+
+
+func clear_queued_strikes() -> void:
+	var none: Array[Dictionary] = []
+	show_queued_strikes(none)
+
+
+# A mark goes when its own blow lands (volley_struck), not when the pass starts: the same "gone when it
+# plays" a move's arrow keeps.
+func retire_strike(attack: AttackAction) -> void:
+	var kept: Array[Dictionary] = []
+	for entry in queued_strikes:
+		if not (entry["members"] as Array).has(attack):
+			kept.append(entry)
+	if kept.size() == queued_strikes.size():
+		return
+	queued_strikes = kept
+	_redraw_queued_strikes()
+
+
+# The hovered unit, whose marks come to the top (dev, 2026-10-07: both ends).
+func set_strike_focus(unit: Unit) -> void:
+	var id := 0 if unit == null else unit.get_instance_id()
+	if id == _strike_focus_id:
+		return
+	_strike_focus_id = id
+	if not queued_strikes.is_empty():
+		_redraw_queued_strikes()
+
+
+# The hovered unit, or null once it is gone.
+func strike_focus() -> Unit:
+	return instance_from_id(_strike_focus_id) as Unit if _strike_focus_id != 0 else null
+
+
+func strike_focused(entry: Dictionary) -> bool:
+	return StrikeMarks2D.involves(entry, strike_focus())
+
+
+# A turned badge or footprint knob, or a new palette: every badge is re-baked and both views redrawn.
+func restyle_queued_strikes() -> void:
+	StrikeMarks2D.clear_badges()
+	for entry in queued_strikes:
+		var lead: AttackAction = (entry["members"] as Array)[0]
+		if lead.actor != null and is_instance_valid(lead.actor):
+			entry["colour"] = StrikeMarks2D.colour_of(lead)
+	if queued_footprint_overlay != null:
+		queued_footprint_overlay.modulate = _ghosted(aim_fill_color())
+	_redraw_queued_strikes()
+
+
+func _redraw_queued_strikes() -> void:
+	queued_strike_version += 1
+	var focused: Array[bool] = []
+	for entry in queued_strikes:
+		focused.append(strike_focused(entry))
+	_strike_marks_2d.entries = queued_strikes
+	_strike_marks_2d.focused = focused
+	_strike_marks_2d.queue_redraw()
+	if queued_footprint_overlay == null:
+		return
+	queued_footprint_overlay.clear()
+	for entry in queued_strikes:
+		var footprint: Array = entry["footprint"]
+		if footprint.size() > 1:
+			draw_cells(queued_footprint_overlay, footprint, ATLAS_COORDS)
 
 
 # YOUR unit's attack reach (#1066): every cell it could hit from anywhere in the move envelope the
@@ -1186,6 +1287,7 @@ func _apply_aim_fill() -> void:
 # this a tuned colour would not show until the player next entered targeting.
 func refresh_aim_colors() -> void:
 	set_aim_colors(_reach_attack, _aiming_watch)
+	restyle_queued_strikes()   # a queued mark wears the same palette (#1247)
 
 # The one door for the attack-reach draw (#258). Membership = the full union, drawn once on
 # entering the mode (the inviolable rule); `blocked` cells re-tile to the hatched fill in the same
@@ -2175,7 +2277,8 @@ func on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit):
 	
 	if new_unit != null and is_instance_valid(new_unit):
 		set_unit_path_hovered(new_unit, true)
-	
+	set_strike_focus(new_unit if new_unit != null and is_instance_valid(new_unit) else null)
+
 func set_unit_path_hovered(unit: Unit, hovered: bool):
 	if not planned_move_by_unit.has(unit):
 		return

@@ -487,6 +487,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
+const STRIKE_MARKS_SCRIPT := "res://Classes/board/StrikeMarks2D.gd"
 const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
 const INSET_SQUARE_SCRIPT := "res://Classes/board/InsetSquare.gd"
@@ -641,6 +642,20 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Reach lines: the cone", "label": "Reach cone width", "static": "CONE_WIDTH_SCALE", "script": THREAT_LINES_SCRIPT,
 		"min": 1.0, "max": 6.0, "step": 0.1,
 		"tip": "How wide the cone's base is as a MULTIPLE of the mark's own width, so widening the mark widens its cone with it. It wants to be subtle -- barely more than the shaft, converging to nothing at the victim."},
+	# QUEUED ATTACKS (#1247): the badge between attacker and target. Its colour is the aim's own (your
+	# side) or the reach mark's pink (theirs), and its line borrows the reach mark's width and the
+	# squad lines' dash, so only the badge's own shape is tuned here.
+	{"group": "Queued attacks", "label": "Badge size", "static": "STRIKE_BADGE_SIZE", "script": STRIKE_MARKS_SCRIPT,
+		"min": 0.1, "max": 1.5, "step": 0.01,
+		"tip": "How wide a queued attack's badge is, ring included, in world units (a tile is 1). It stands at body height between attacker and target."},
+	{"group": "Queued attacks", "label": "Badge lane", "static": "STRIKE_LANE", "script": STRIKE_MARKS_SCRIPT,
+		"min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far each mark sits to the RIGHT of its own travel, in cells, so an attack and the counter answering it sit side by side instead of on top of each other. Zero stacks them."},
+	{"group": "Queued attacks", "label": "Pointer length", "static": "STRIKE_POINTER_LENGTH", "script": STRIKE_MARKS_SCRIPT,
+		"min": 0.0, "max": 0.8, "step": 0.01,
+		"tip": "How far the badge's pointer runs past its rim toward the target, in cells -- the part that says who is hitting whom between two units side by side. At range it ends a reach mark's inset short of the target instead."},
+	{"group": "Queued attacks", "label": "Badge ground (2D+3D)", "static": "STRIKE_BADGE_GROUND", "script": STRIKE_MARKS_SCRIPT,
+		"tip": "The disc the queue's attack icon sits on. Dark, so the icon reads on grass, stone and water alike; the ring round it carries the side's colour."},
 	{"group": "Squads & zones", "label": "Leash reveal (2D+3D)", "static": "ZONE_HIGHLIGHT_MODULATE",
 		"tip": "A sentry's patrol zone while you hover it or hold the threat view -- and the Tile Brush's picked zone, which is the same layer and the same colour."},
 
@@ -1725,6 +1740,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Enemy focus": "Markup",
 	"Reach lines: the arc": "Markup",
 	"Reach lines: the cone": "Markup",
+	"Queued attacks": "Markup",
 	"Aiming": "Markup",
 	"Sight beam": "Markup",
 	"Watch": "Markup",
@@ -1935,6 +1951,10 @@ static func read_static(name: String) -> Variant:
 		"MARK_INSET": return ThreatLines2D.MARK_INSET
 		"CONE_LENGTH": return ThreatLines2D.CONE_LENGTH
 		"CONE_WIDTH_SCALE": return ThreatLines2D.CONE_WIDTH_SCALE
+		"STRIKE_BADGE_SIZE": return StrikeMarks2D.STRIKE_BADGE_SIZE
+		"STRIKE_LANE": return StrikeMarks2D.STRIKE_LANE
+		"STRIKE_POINTER_LENGTH": return StrikeMarks2D.STRIKE_POINTER_LENGTH
+		"STRIKE_BADGE_GROUND": return StrikeMarks2D.STRIKE_BADGE_GROUND
 		"PAYLOAD_INSET": return InsetSquare.PAYLOAD_INSET
 		"GRID_LINE_INSET": return MoveGrid.GRID_LINE_INSET
 		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
@@ -2273,6 +2293,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MARK_INSET": ThreatLines2D.MARK_INSET = value
 		"CONE_LENGTH": ThreatLines2D.CONE_LENGTH = value
 		"CONE_WIDTH_SCALE": ThreatLines2D.CONE_WIDTH_SCALE = value
+		"STRIKE_BADGE_SIZE": StrikeMarks2D.STRIKE_BADGE_SIZE = value
+		"STRIKE_LANE": StrikeMarks2D.STRIKE_LANE = value
+		"STRIKE_POINTER_LENGTH": StrikeMarks2D.STRIKE_POINTER_LENGTH = value
+		"STRIKE_BADGE_GROUND": StrikeMarks2D.STRIKE_BADGE_GROUND = value
 		# Both need a REBUILD rather than a re-push: a running Tween holds the endpoints it was
 		# STARTED with, so a turned value reaches a standing flash only by the flash being rebuilt.
 		# That is #591's lesson from the aim pulse, which breathed back to its old colour twice a
@@ -3069,6 +3093,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"ZONE_HIGHLIGHT_MODULATE": manager.restyle_leash()
 		"MARK_LINE_COLOR", "MARK_HEIGHT", "MARK_BOW_PER_CELL", "MARK_INSET", "CONE_LENGTH", "CONE_WIDTH_SCALE":
 			manager.restyle_reach_lines()
+			manager.restyle_queued_strikes()   # a queued mark borrows the pink, the height and the cone
+		"STRIKE_BADGE_SIZE", "STRIKE_LANE", "STRIKE_POINTER_LENGTH", "STRIKE_BADGE_GROUND":
+			manager.restyle_queued_strikes()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

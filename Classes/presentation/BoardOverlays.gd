@@ -42,6 +42,7 @@ enum Layer {
 	ZONE_MARKS, ZONE_EMBLEMS,
 	PAYLOAD,
 	TETHER_GLOW,
+	QUEUED_FOOTPRINT, QUEUED_STRIKES, QUEUED_STRIKES_FOCUS, QUEUED_BADGES,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -74,6 +75,11 @@ const EFFECT_RENDER_PRIORITY := 16
 # coplanar quads (outline, missing, fill, the predicted span, the notch) then the number's outline
 # and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
+# The band above even that (#1247): the HOVERED unit's queued-attack marks, drawn with no depth test so
+# nothing on the board -- a body, a readout -- can hide the mark the player is asking about. Not a
+# LAYERS sort, so every law that a layer stays under the units still holds: a marker or cone opts in
+# with `on_top`, and only the focus marks do.
+const FOCUS_RENDER_PRIORITY := 64
 # The gas's fog floor (#508's pixel-puff style): it lies on the ground UNDER every piece of markup,
 # so a move tile or a zone still reads on a gassed cell. One below the lowest LAYERS sort, and both
 # its draw order and its height follow from that number the way a layer's do (gas_floor_lift).
@@ -282,8 +288,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.
 	Layer.TERRAIN: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
 	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
-	# The ONE layer that hangs in the AIR rather than lying on the floor, so it sorts above
-	# every floor layer. It sat at 0 while nothing could overlap it; #325 then put a ring
+	# A layer that hangs in the AIR rather than lying on the floor (the first; #1247's badges are the
+	# second, beside it at 15), so it sorts above every floor layer. It sat at 0 while nothing could overlap it; #325 then put a ring
 	# decal (3) directly under every crown, which drew straight over it. 15 is the top of
 	# the lawful band -- a law pins every layer under EFFECT_RENDER_PRIORITY. A BILLBOARD
 	# ignores _lift_of and rides billboard_lift, so this moves PRIORITY only, not geometry.
@@ -295,6 +301,25 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.ZONE_MARKS: {"color": Color.WHITE, "sort": -5, "kind": Kind.SPRITE},
 	# ...and its EMBLEM, one per zone, a slot above the edge it can share a cell with.
 	Layer.ZONE_EMBLEMS: {"color": Color.WHITE, "sort": -3, "kind": Kind.SPRITE},
+	# WHAT A QUEUED ATTACK LEAVES (#1247) -- see StrikeMarks2D. The footprint of one covering more than a
+	# tile, in the 2D layer's tint (the aim's footprint colour at a queued mark's half strength): -4, the
+	# one vacant slot, under the range fills the way the 2D tree puts it under THREAT.
+	Layer.QUEUED_FOOTPRINT: {"color": Color(1, 1, 0, 0.5), "sort": -4, "kind": Kind.FILL},
+	# The marks' line work, hanging at body height. Every mark carries its own colour (whose side, or a
+	# heal), so the layer is WHITE and the tint rides each mark; the cone is the SEE-THROUGH one because
+	# only that shader honours a per-mark tint. Shares 11 with the reach marks: two hanging line layers
+	# depth-sort, as the tether family's five do at 14.
+	Layer.QUEUED_STRIKES: {"color": Color.WHITE, "sort": 11, "beam": "strike", "kind": Kind.LINE,
+		"cone_alpha": true},
+	# ...the HOVERED unit's marks (dev, 2026-10-07: "the hovered unit's should always come to the top"),
+	# above every other mark. Their cones and badges draw over EVERYTHING -- units and readouts included
+	# -- at FOCUS_RENDER_PRIORITY ("on_top"); the shaft stays depth-tested, since a beam that drew over
+	# the world would need a second sight_beam file.
+	Layer.QUEUED_STRIKES_FOCUS: {"color": Color.WHITE, "sort": 14, "beam": "strike", "kind": Kind.LINE,
+		"cone_alpha": true, "on_top": true},
+	# ...and the badges: the queue row's icon, STANDING (camera-facing) between the two units. With the
+	# crowns at 15, both being things hanging in the air.
+	Layer.QUEUED_BADGES: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD, "face": "camera"},
 }
 
 const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"
@@ -310,6 +335,9 @@ const REACH_CONE_ALPHA_SHADER_PATH := "res://Classes/presentation/reach_cone_alp
 # ...and the CASING round a cased layer's cone (#1109 round 2): an inverted hull, which needs its FRONT
 # faces culled -- a fourth file, for the same reason.
 const REACH_CONE_CASING_SHADER_PATH := "res://Classes/presentation/reach_cone_casing.gdshader"
+# ...and the see-through cone with NO DEPTH TEST (#1247), for an `on_top` layer: a fifth file, since
+# depth testing is render_mode too.
+const REACH_CONE_ON_TOP_SHADER_PATH := "res://Classes/presentation/reach_cone_on_top.gdshader"
 # The fixed world direction the cone's facets are shaded against. NOT the camera and NOT a knob:
 # the shade is baked into vertex colour when a mark is rebuilt (on a hover change), so a
 # camera-relative bake is stale the instant the rig orbits, and a direction is three sliders nobody
@@ -1085,7 +1113,7 @@ func set_tether_shake(amount: float) -> void:
 
 # The beam sets that march dashes (#1070): the tethers and the range's stroke, which have their own
 # widths and one pattern -- the pattern is what makes them one system.
-const DASHED_BEAMS: Array[String] = ["squad", "cohesion"]
+const DASHED_BEAMS: Array[String] = ["squad", "cohesion", "strike"]
 
 
 # A LINE layer may name its own set (slice 4). The shared trio is tuned for a LASER -- the sight
@@ -1105,7 +1133,7 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 		"outline":
 			width = outline_width
 			intensity = outline_intensity
-		"mark":
+		"mark", "strike":
 			width = mark_width
 			intensity = mark_intensity
 		"squad", "shard":
@@ -1475,7 +1503,14 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	var tint: Color = marker.get("modulate", Color.WHITE)
 	if spec["kind"] == Kind.BILLBOARD:
 		var sprite := node as Sprite3D
-		sprite.position = billboard_point(pos)
+		# Three optional keys (#1247), each written back to its default when absent because the pool
+		# is reused: `exact` hangs the sprite AT pos rather than billboard_lift over it, `pixel_size`
+		# sizes it, and `on_top` lifts it over everything into FOCUS_RENDER_PRIORITY.
+		sprite.position = pos if marker.get("exact", false) else billboard_point(pos)
+		sprite.pixel_size = float(marker.get("pixel_size", billboard_pixel_size))
+		var on_top: bool = marker.get("on_top", false)
+		sprite.no_depth_test = on_top
+		sprite.render_priority = FOCUS_RENDER_PRIORITY if on_top else int(spec["sort"])
 		sprite.texture = texture
 		sprite.modulate = tint
 		return
@@ -1615,7 +1650,10 @@ func _cone_for(layer: Layer) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = ImmediateMesh.new()
 	var material := ShaderMaterial.new()
-	if LAYERS[layer].get("cone_alpha", false):
+	if LAYERS[layer].get("on_top", false):
+		material.shader = load(REACH_CONE_ON_TOP_SHADER_PATH) as Shader
+		material.render_priority = FOCUS_RENDER_PRIORITY
+	elif LAYERS[layer].get("cone_alpha", false):
 		material.shader = load(REACH_CONE_ALPHA_SHADER_PATH) as Shader
 		material.render_priority = LAYERS[layer]["sort"]
 	else:
@@ -1652,7 +1690,10 @@ func _hull_for(layer: Layer) -> MeshInstance3D:
 
 func _make_billboard(spec: Dictionary) -> Sprite3D:
 	var sprite := Sprite3D.new()
-	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	# An ICON faces the camera outright ("face": "camera", #1247): FIXED_Y keeps a figure upright and
+	# so squashes a disc into an ellipse at the board's pitch.
+	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED if spec.get("face", "") == "camera" \
+			else BaseMaterial3D.BILLBOARD_FIXED_Y
 	sprite.pixel_size = billboard_pixel_size
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	sprite.shaded = false

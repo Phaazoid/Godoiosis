@@ -366,7 +366,7 @@ func _collect_volley_group(start: int) -> Array[BaseAction]:
 			break
 		if not _is_attack_action(e.action):
 			break
-		if e.action != first and (first.volley.is_empty() or not is_same((e.action as AttackAction).volley, first.volley)):
+		if not AttackAction.same_volley(first, e.action as AttackAction):
 			break
 		group.append(e.action)
 		j += 1

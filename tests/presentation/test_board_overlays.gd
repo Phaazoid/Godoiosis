@@ -697,6 +697,14 @@ func test_no_overlay_layer_can_sort_over_a_unit() -> void:
 				% [layer, sort]).is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
+func test_the_focus_band_sorts_over_every_unit_and_every_readout() -> void:
+	# The hovered unit's queued-attack marks draw over everything (#1247) -- a relationship to the two
+	# bands it must clear, never a number. The readout claims UNIT_HUD_RENDER_PRIORITY and the six
+	# above it, so the focus band has to start past all seven.
+	assert_int(BoardOverlays.FOCUS_RENDER_PRIORITY).is_greater(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
+	assert_int(BoardOverlays.FOCUS_RENDER_PRIORITY).is_greater(BoardOverlays.UNIT_RENDER_PRIORITY)
+
+
 func test_no_overlay_layer_can_sort_over_the_flame() -> void:
 	# Fire's 3D form is a standing effect, not markup lying on the face (#245, found in play: a
 	# frost icon at sort 2 drew over a flame sitting at the default 0, and the fire read as

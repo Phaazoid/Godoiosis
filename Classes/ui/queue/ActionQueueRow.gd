@@ -322,7 +322,7 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 	actor_texture.modulate = lead.get_actor_modulate()
 
 	# Plain attack icon (not the lead's lethality icon — the group has many outcomes).
-	action_icon.texture = AttackAction.ATTACK_ICON
+	action_icon.texture = AttackAction.group_icon(lead, count)
 	action_icon.modulate = lead.get_ui_modulate()
 	target_texture.texture = null
 	_paint_rail(null)   # the group's hits may carry different elements; the folder's rows say which
