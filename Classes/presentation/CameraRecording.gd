@@ -31,6 +31,10 @@ class Keyframe:
 
 var keyframes: Array[Keyframe] = []
 
+# Moves on every add, remove and clear, so a reader can poll for a change without comparing the list
+# (the dev-tools Camera page rebuilds its rows on it).
+var version := 0
+
 
 func is_empty() -> bool:
 	return keyframes.is_empty()
@@ -54,11 +58,24 @@ func add(pass_time: float, shot: String, trained: String, line: Array[String], y
 	key.yours = yours.duplicate()
 	key.director = director.duplicate()
 	keyframes.append(key)
+	version += 1
 	return key
+
+
+# Drops K<index> and renumbers the rest, so K numbers stay the contact sheet's slots.
+func remove(index: int) -> bool:
+	if index < 1 or index > keyframes.size():
+		return false
+	keyframes.remove_at(index - 1)
+	for i in keyframes.size():
+		keyframes[i].index = i + 1
+	version += 1
+	return true
 
 
 func clear() -> void:
 	keyframes.clear()
+	version += 1
 
 
 # --- the report -----------------------------------------------------------------------------------

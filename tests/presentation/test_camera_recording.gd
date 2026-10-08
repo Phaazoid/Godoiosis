@@ -102,3 +102,30 @@ func test_no_pictures_means_no_sheet_and_a_full_recording_refuses() -> void:
 			"a full recording took one more").is_null()
 	recording.clear()
 	assert_bool(recording.is_empty()).is_true()
+
+
+# The Camera page's Delete (#705 slice 3). The rest move up a number, because a K number is also the
+# key pose's slot on the contact sheet -- a gap would put K3's row beside the second picture.
+func test_a_deleted_key_pose_closes_the_gap_and_every_change_moves_the_version() -> void:
+	var recording := CameraRecording.new()
+	var before := recording.version
+	for yaw in [10.0, 20.0, 30.0]:
+		recording.add(1.0, "WIDE", "", _line([]), _pose(yaw, -30.0, 8.0, Vector3.ZERO), {})
+	assert_int(recording.version).override_failure_message("an add did not move the version") \
+		.is_greater(before)
+	var after_adds := recording.version
+	assert_bool(recording.remove(2)).is_true()
+	assert_int(recording.keyframes.size()).is_equal(2)
+	assert_float(recording.keyframes[1].yours["yaw"]).override_failure_message(
+			"Delete dropped the wrong key pose").is_equal(30.0)
+	assert_int(recording.keyframes[1].index).override_failure_message(
+			"the key pose after the deleted one kept its old number").is_equal(2)
+	assert_int(recording.version).override_failure_message("a delete did not move the version") \
+		.is_greater(after_adds)
+	assert_bool(recording.remove(3)).override_failure_message("a K number past the end was deleted") \
+		.is_false()
+	assert_bool(recording.remove(0)).is_false()
+	var after_remove := recording.version
+	recording.clear()
+	assert_int(recording.version).override_failure_message("a clear did not move the version") \
+		.is_greater(after_remove)

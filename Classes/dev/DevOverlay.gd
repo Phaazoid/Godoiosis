@@ -39,6 +39,7 @@ class_name DevOverlay
 @onready var replay_tool: ReplayTool = get_node("%Replay")
 @onready var roster_tool: RosterTool = get_node("%Rosters")
 @onready var weights_tool: WeightsTool = get_node("%Weights")
+@onready var camera_tool: CameraTool = get_node("%Camera")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 @onready var search_box: DevSearchBox = %DevSearch
@@ -82,6 +83,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "Dev feature flags for this machine — persisted to user://, read by nothing a player ships with."},
 	{"scope": "Session", "label": "Replay", "page": "%Replay",
 		"tip": "Put a recorded playtest run back on the board and step it -- and say whether the rules still produce what the run recorded."},
+	{"scope": "Session", "label": "Camera", "page": "%Camera",
+		"tip": "What the camera is doing, live: which shot owns it and why, its channels, its recent moves -- and the key poses you recorded with P and N, to jump back to or delete."},
 	{"scope": "Session", "label": "Info", "page": "%Info",
 		"tip": "Where this build writes and what it is — report folder, log, checkout, version — plus every dev key and what it does."},
 ]
@@ -134,6 +137,7 @@ func _ready() -> void:
 	tile_brush.init(game)
 	dev_info.init(game)
 	replay_tool.init(game)
+	camera_tool.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
 	scenario_header.file_changed.connect(_on_scenario_file_changed)
@@ -163,6 +167,7 @@ func attach_3d_host(host: Node3D) -> void:
 	moods_tool.attach_host(host)
 	object_tool.attach_host(host)
 	game_tool.attach_host(host)
+	camera_tool.attach_host(host)
 
 
 # --- The tree ---------------------------------------------------------------------------------
