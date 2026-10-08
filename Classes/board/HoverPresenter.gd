@@ -32,6 +32,8 @@ var pointer_source: Callable
 var last_hovered_cell: Vector2i = GridUtils.NO_CELL
 
 var _highlighted_queue_units: Array[Unit] = []
+# The unit whose sprite wears the hover flash (#1251), by id so a unit freed under it reads as gone.
+var _flash_unit_id := 0
 
 func _ready() -> void:
 	# Self-wiring: this node is both the detector and the first listener of its own signals.
@@ -46,14 +48,35 @@ func _process(_delta: float) -> void:
 		var mouse_world: Vector2 = game.get_global_mouse_position()
 		hovered_cell = game.grid.local_to_map(game.grid.to_local(mouse_world))
 
-	if hovered_cell == last_hovered_cell:   # everything below only runs on a CELL change
-		return
+	if hovered_cell != last_hovered_cell:   # the signals only fire on a CELL change
+		var previous: Unit = game.unit_at_pointer(last_hovered_cell)
+		var current: Unit = game.unit_at_pointer(hovered_cell)
+		hovered_unit_changed.emit(previous, current)
+		hovered_cell_changed.emit(hovered_cell)
+		last_hovered_cell = hovered_cell
+	_sync_hover_flash()
 
-	var previous: Unit = game.unit_at_pointer(last_hovered_cell)
-	var current: Unit = game.unit_at_pointer(hovered_cell)
-	hovered_unit_changed.emit(previous, current)
-	hovered_cell_changed.emit(hovered_cell)
-	last_hovered_cell = hovered_cell
+# The hover flash (#1251, dev: "a white flash... any hovered unit"), RECONCILED every frame rather than
+# fired on a change: a ghost rebuilt under a still pointer (a re-plan, an undo) is a new node, and a
+# flash that only started on hover would be gone with the old one. Both doors are told each frame,
+# so a ghost appearing or vanishing hands the flash across. Never while the board is not the
+# player's -- an AI turn, playback, a menu up.
+func _sync_hover_flash() -> void:
+	var locked: bool = game._board_locked_for_player()
+	var unit: Unit = null if locked else game.unit_at_pointer(last_hovered_cell)
+	var id := 0 if unit == null else unit.get_instance_id()
+	if id != _flash_unit_id:
+		var previous: Unit = instance_from_id(_flash_unit_id) as Unit if _flash_unit_id != 0 else null
+		if previous != null:
+			_flash_unit(previous, false)
+		_flash_unit_id = id
+	if unit != null:
+		_flash_unit(unit, true)
+
+func _flash_unit(unit: Unit, on: bool) -> void:
+	var ghosted: bool = game.overlay_manager.has_projected_unit(unit)
+	game.overlay_manager.set_projected_unit_flashing(unit, on and ghosted)
+	unit.visuals.set_hover_flash(on and not ghosted)
 
 # ==============================================================================
 #  Board hover, per mode

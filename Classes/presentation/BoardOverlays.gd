@@ -43,6 +43,7 @@ enum Layer {
 	PAYLOAD,
 	TETHER_GLOW,
 	QUEUED_FOOTPRINT, QUEUED_STRIKES, QUEUED_STRIKES_FOCUS, QUEUED_BADGES,
+	QUEUED_STRIKES_OWN,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -78,8 +79,15 @@ const UNIT_HUD_RENDER_PRIORITY := 48
 # The band above even that (#1247): the HOVERED unit's queued-attack marks, drawn with no depth test so
 # nothing on the board -- a body, a readout -- can hide the mark the player is asking about. Not a
 # LAYERS sort, so every law that a layer stays under the units still holds: a marker or cone opts in
-# with `on_top`, and only the focus marks do.
+# with `on_top`, and only the focus marks do. `on_top` is a TIER (#1251): 1 for the marks aimed at the
+# hovered unit, 2 for its own, drawn at FOCUS_RENDER_PRIORITY + tier - 1 so its own come out on top.
 const FOCUS_RENDER_PRIORITY := 64
+# The highest `on_top` tier any layer or marker uses.
+const FOCUS_TIERS := 2
+
+
+static func focus_priority(tier: int) -> int:
+	return FOCUS_RENDER_PRIORITY + tier - 1
 # The gas's fog floor (#508's pixel-puff style): it lies on the ground UNDER every piece of markup,
 # so a move tile or a zone still reads on a gassed cell. One below the lowest LAYERS sort, and both
 # its draw order and its height follow from that number the way a layer's do (gas_floor_lift).
@@ -316,7 +324,11 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# -- at FOCUS_RENDER_PRIORITY ("on_top"); the shaft stays depth-tested, since a beam that drew over
 	# the world would need a second sight_beam file.
 	Layer.QUEUED_STRIKES_FOCUS: {"color": Color.WHITE, "sort": 14, "beam": "strike", "kind": Kind.LINE,
-		"cone_alpha": true, "on_top": true},
+		"cone_alpha": true, "on_top": 1},
+	# ...and the hovered unit's OWN attacks, over the ones aimed at it (#1251). A layer of its own because
+	# a layer's cones are one mesh with one priority; the shafts share 14 and depth-sort.
+	Layer.QUEUED_STRIKES_OWN: {"color": Color.WHITE, "sort": 14, "beam": "strike", "kind": Kind.LINE,
+		"cone_alpha": true, "on_top": 2},
 	# ...and the badges: the queue row's icon, STANDING (camera-facing) between the two units. With the
 	# crowns at 15, both being things hanging in the air.
 	Layer.QUEUED_BADGES: {"color": Color.WHITE, "sort": 15, "kind": Kind.BILLBOARD, "face": "camera"},
@@ -1505,12 +1517,12 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 		var sprite := node as Sprite3D
 		# Three optional keys (#1247), each written back to its default when absent because the pool
 		# is reused: `exact` hangs the sprite AT pos rather than billboard_lift over it, `pixel_size`
-		# sizes it, and `on_top` lifts it over everything into FOCUS_RENDER_PRIORITY.
+		# sizes it, and `on_top` (a tier) lifts it over everything into the focus band.
 		sprite.position = pos if marker.get("exact", false) else billboard_point(pos)
 		sprite.pixel_size = float(marker.get("pixel_size", billboard_pixel_size))
-		var on_top: bool = marker.get("on_top", false)
-		sprite.no_depth_test = on_top
-		sprite.render_priority = FOCUS_RENDER_PRIORITY if on_top else int(spec["sort"])
+		var tier: int = marker.get("on_top", 0)
+		sprite.no_depth_test = tier > 0
+		sprite.render_priority = focus_priority(tier) if tier > 0 else int(spec["sort"])
 		sprite.texture = texture
 		sprite.modulate = tint
 		return
@@ -1650,9 +1662,9 @@ func _cone_for(layer: Layer) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = ImmediateMesh.new()
 	var material := ShaderMaterial.new()
-	if LAYERS[layer].get("on_top", false):
+	if int(LAYERS[layer].get("on_top", 0)) > 0:
 		material.shader = load(REACH_CONE_ON_TOP_SHADER_PATH) as Shader
-		material.render_priority = FOCUS_RENDER_PRIORITY
+		material.render_priority = focus_priority(LAYERS[layer]["on_top"])
 	elif LAYERS[layer].get("cone_alpha", false):
 		material.shader = load(REACH_CONE_ALPHA_SHADER_PATH) as Shader
 		material.render_priority = LAYERS[layer]["sort"]

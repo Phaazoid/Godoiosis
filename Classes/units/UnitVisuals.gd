@@ -17,8 +17,18 @@ class_name UnitVisuals
 var projected := false
 
 var visual_tween: Tween
-const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
-const TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)   # peak of the aim-target pulse
+# Statics rather than consts since #1251: until then the 3D view clamped every tint at 1.0, so these
+# brightened only the flat view, and they reach the shipped one at last -- tune them on the Game tab.
+# Warm yellow-white: a queue row's units.
+static var HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)
+# The peak of the aim-target pulse.
+static var TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)
+# The HOVER flash (#1251, dev: "a white flash, but a bit steadier, and more white/bright"): the unit
+# under the pointer, whatever it is, so the player can see whose marks just lifted. Ramp up, sit at
+# white, ramp down -- the pin flash's shape, brighter and held longer.
+static var HOVER_FLASH_MODULATE := Color(2.4, 2.4, 2.4)
+static var HOVER_FLASH_RAMP := 0.4
+static var HOVER_FLASH_HOLD := 0.4
 # ...and the peak of the PIN flash (#1066, dev: "units that are toggled need to be indicated in some
 # way. I think they should flash, too.").
 #
@@ -49,6 +59,10 @@ var pulse_tween: Tween
 # flash has to come back when the aim moves on.
 var pinned := false
 var pin_tween: Tween
+# TRUE while this unit is the one under the pointer, held as a flag for the pin's reason: the flash
+# yields to stronger cues and has to come back after them.
+var hover_flashing := false
+var hover_tween: Tween
 
 
 var base_position: Vector2
@@ -75,41 +89,72 @@ func start_pulse() -> void:
 	if sprite == null or pulse_tween != null:
 		return
 	pulse_tween = Pulse.start(self, sprite, &"modulate", base_modulate, TARGET_PULSE_MODULATE)
-	sync_pin_flash()   # a pin flash underneath yields -- see there
+	sync_flashes()   # a flash underneath yields -- see there
 
 func stop_pulse() -> void:
 	if pulse_tween == null:
 		return
 	Pulse.stop(pulse_tween, sprite, &"modulate", base_modulate)
 	pulse_tween = null
-	sync_pin_flash()   # ...and comes back
+	sync_flashes()   # ...and comes back
 
 # The pin flash (#1066): this unit's ranges are held up by a shift+click rather than by the pointer,
 # and nothing on the board said so. Idempotent and called on every redraw rather than only on the
 # change, so a flash killed by reset_visuals is rebuilt on the next pass instead of staying dark.
 func set_pinned(value: bool) -> void:
 	pinned = value
-	sync_pin_flash()
+	sync_flashes()
 
-# THE PRECEDENCE, stated once and in one place: an aim pulse OUTRANKS a pin flash. Both write
-# sprite.modulate and a live pulse owns that channel (#442), so exactly one may run -- and "this
-# unit is about to be hit" is news, where "you pinned it" is a bookmark you set yourself.
+# The hover flash (#1251), idempotent: HoverPresenter asks every frame, which is what brings it back
+# after anything that outranked it lets go.
+func set_hover_flash(value: bool) -> void:
+	hover_flashing = value
+	sync_flashes()
+
+# THE PRECEDENCE, stated once and in one place, strongest first: a one-shot alarm (the refusal flash,
+# which owns the sprite outright), the aim pulse, the hover flash, the pin flash, and last the steady
+# queue-row highlight (set_highlighted). Each writes sprite.modulate and a live pulse owns that
+# channel (#442), so exactly one runs. "This unit is about to be hit" is news; "the pointer is on this
+# unit" is the thing the player is doing right now; "you pinned it" is a bookmark they set earlier.
 #
-# A flash that starts JOINS any already running (#1074) -- a fresh pin, and equally one coming back
-# when an aim pulse lets go of it, which would otherwise restart on its own beat every time.
-func sync_pin_flash() -> void:
-	var want: bool = pinned and sprite != null and pulse_tween == null
-	if want == (pin_tween != null):
-		return
-	if want:
+# A pin flash that starts JOINS any already running (#1074) -- a fresh pin, and equally one coming
+# back when something above lets go of it, which would otherwise restart on its own beat every time.
+func sync_flashes() -> void:
+	var free: bool = sprite != null and pulse_tween == null and not _alarm_running()
+	var want_hover := hover_flashing and free
+	var want_pin := pinned and free and not want_hover
+	if not want_hover:
+		drop_hover_flash()
+	if not want_pin:
+		drop_pin_flash()
+	if want_hover and hover_tween == null:
+		hover_tween = Pulse.start(self, sprite, &"modulate", base_modulate, HOVER_FLASH_MODULATE,
+				HOVER_FLASH_RAMP, HOVER_FLASH_HOLD)
+	if want_pin and pin_tween == null:
 		pin_tween = Pulse.start(self, sprite, &"modulate", base_modulate, PIN_PULSE_MODULATE,
 				Pulse.PERIOD, PIN_PULSE_HOLD, _running_pin_flash())
 		add_to_group(PIN_FLASH_GROUP)
-	else:
-		drop_pin_flash()
+
+func _alarm_running() -> bool:
+	return visual_tween != null and visual_tween.is_running()
+
+# Stop the hover flash without forgetting it is wanted, the pin's shape.
+func drop_hover_flash() -> void:
+	if hover_tween == null:
+		return
+	Pulse.stop(hover_tween, sprite, &"modulate", base_modulate)
+	hover_tween = null
+
+# Rebuild a running hover flash so a turned knob reaches it, restyle_pin_flash's reason.
+func restyle_hover_flash() -> void:
+	if hover_tween == null:
+		return
+	drop_hover_flash()
+	sync_flashes()
 
 # Stop a standing pin flash WITHOUT forgetting the pin -- `pinned` survives, so the next sync brings
 # it back. The one door a pin tween closes through, which is what keeps the group honest.
+# (sync_flashes is the one that OPENS it.)
 func drop_pin_flash() -> void:
 	if pin_tween == null:
 		return
@@ -119,13 +164,13 @@ func drop_pin_flash() -> void:
 		remove_from_group(PIN_FLASH_GROUP)
 
 # Rebuild a STANDING pin flash so a turned knob reaches it (#1069) -- a running Tween holds the
-# endpoints it was started with. sync_pin_flash alone would do nothing here: it is idempotent, and
+# endpoints it was started with. sync_flashes alone would do nothing here: it is idempotent, and
 # "should there be one" and "is there one" already agree.
 func restyle_pin_flash() -> void:
 	if pin_tween == null:
 		return
 	drop_pin_flash()
-	sync_pin_flash()
+	sync_flashes()
 
 # Another unit's running pin flash to beat in step with, or null when this is the first.
 func _running_pin_flash() -> Tween:
@@ -145,8 +190,9 @@ func reset_visuals():
 	stop_pulse()
 	# The pin flash goes too, and `pinned` deliberately does NOT: this is a reset of the CHANNEL,
 	# and the one-shot alarm that follows it must own modulate outright. The next redraw's
-	# set_pinned rebuilds the flash.
+	# set_pinned rebuilds the flash. The hover flash likewise, rebuilt by the next frame's ask.
 	drop_pin_flash()
+	drop_hover_flash()
 	if visual_tween:
 		visual_tween.kill()
 
@@ -155,13 +201,13 @@ func reset_visuals():
 	sprite.scale = base_scale
 	
 # A one-shot flash for the one a death's PULSE ran to (#1104). It YIELDS where play_invalid_flash
-# seizes: to an aim pulse (news about this unit), to a pin flash (already white), and to any one-shot
+# seizes: to an aim pulse (news about this unit), to a pin or hover flash (already white), to any one-shot
 # already running -- that tween also drives the lunge and the shake, and killing it mid-lunge would
 # leave the sprite where the lunge had it. The lowest tier on sprite.modulate.
 func play_loss_flash() -> void:
-	if sprite == null or pulse_tween != null or pin_tween != null:
+	if sprite == null or pulse_tween != null or pin_tween != null or hover_tween != null:
 		return
-	if visual_tween != null and visual_tween.is_running():
+	if _alarm_running():
 		return
 	visual_tween = create_tween()
 	visual_tween.tween_property(sprite, "modulate", LOSS_FLASH_MODULATE, LOSS_FLASH_SECONDS * 0.3)
@@ -205,8 +251,9 @@ func set_highlighted(value: bool) -> void:
 	if sprite == null:
 		return
 	# A live pulse owns modulate; hovering a pulsing unit must not stomp it. The pin flash counts,
-	# for the same reason and by the same rule -- and a pinned enemy is hovered constantly.
-	if pulse_tween == null and pin_tween == null:
+	# for the same reason and by the same rule -- and a pinned enemy is hovered constantly. So does the
+	# hover flash (#1251).
+	if pulse_tween == null and pin_tween == null and hover_tween == null:
 		sprite.modulate = HIGHLIGHT_MODULATE if value else base_modulate
 	set_hovered(value)
 
