@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slice 1 (the dev pause) folded in 2026-10-07.**
 
 ## Why this page exists
 
@@ -217,6 +217,20 @@ playback it is still easing onto the shot, so every playback pan's settle waits 
 widened to every pan in round 3).
 
 Adding a sixth door is a decision worth stating out loud.
+
+**The dev pause ([#705](https://github.com/Phaazoid/Godoiosis/issues/705)) adds no door. It swaps
+which of two is open.**
+- **P freezes a pass.** `Pacing.set_dev_paused` is one more reason in the one time-scale writer.
+- **While paused, the player's-hand door opens under playback.** `battle3d._process` enables manual and
+  zoom input, and the rig eases on a capped wall clock, since game time is at zero.
+- **The director's per-frame writes stand down.** `_mirror_camera` returns before them.
+- **Resume is the director's own door handing back its own frame.**
+  - `battle3d._sync_dev_pause` snapshots the rig at the pause (`CameraRig3D.snapshot_view`) and CUTS
+    back to it at resume (`return_to_snapshot`). A cut, because nothing may move while anything plays.
+  - It does this only while playback still owns the camera. A pause ended by a board swap has no
+    director to return to.
+  - Deliberately not `stash_view`: that slot is the PLAYER's view, which the pass's release flies back
+    to.
 
 **The recentre door has no lock of its own**, and that is why a new caller is not a new door. SPACE
 and an order's return pan cannot fire while playback owns the board, so the door never needed one.

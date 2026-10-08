@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 slice 1 (the dev pause) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -3123,6 +3123,59 @@ Each wire case was falsified with its own mutant. Writing the stage-publishing c
 trap worth knowing: `set_playback_locked(true)` clears `shot_cells` on the claim, so a stage
 published before `_frame` was silently wiped. The participants assertion passed vacuously until the
 ground assertion beside it caught that, and `_frame` now publishes the stage after its lock.
+
+## Camera dev tools: show a shot rather than describe it ([#705](https://github.com/Phaazoid/Godoiosis/issues/705))
+
+The dev, after #1132's four rounds: *"Giving me camera dev tools, along with letting me pause, and
+record camera movements during battle, will let me give you more clear instructions on the kinds of
+things I want implemented going forward."* His rulings (2026-10-07):
+- a recording is **his camera as a spec**;
+- it is built from **key poses**;
+- it is **delivered inside a bug report**;
+- on resume **the director takes back over**.
+
+Three slices, in this order:
+1. the pause;
+2. the key poses;
+3. the Camera leaf (#705 as filed).
+
+### Slice 1: P freezes the pass and hands over the camera
+
+- **The freeze is one more reason in `Pacing._apply_time_scale`, the single writer of
+  `Engine.time_scale`.**
+  - It can't be a direct write: `PlaybackControl.tick` rewrites the speed every frame, and a hitstop's
+    release (its timer ignores time scale) reapplies it.
+  - At zero, everything a pass plays freezes: beat timers, every tween, sprite animation, particles,
+    mirrors and board flight. The pass's awaits stall and resume cleanly.
+  - Tether moments run on wall-clock milliseconds by design, so they keep marching. Declared.
+- **The camera would freeze with it.** Its eases run on scaled delta, so under the pause
+  `CameraRig3D._camera_delta` hands them a capped wall clock. The shake and sway clocks stay on game
+  time, so nothing breathes while the dev frames.
+- **Who holds the camera:** see `camera-language.md` → the doors.
+  - Manual and zoom input open, and the director's per-frame writes stand down.
+  - Resume CUTS back to the director's frame as it was at the pause, so the pass continues untouched.
+- **Nothing can strand the game at time scale 0.**
+  - `PlaybackControl` releases the pause on any frame playback stops owning the board: the pass
+    ending, F2, a board swap.
+  - `reset_playback` clears it.
+  - P only pauses while a pass is playing.
+- **Two waits made safe.**
+  - Space (skip) refuses under the pause, since its tweens would sit frozen under the fade.
+  - `OrderExecutor._wait_for_the_camera_to_come_home` stops counting frames while paused. It is a
+    600-frame budget, and a long pause would otherwise send the tiles home under a camera still in a
+    pit.
+
+Pinned in `test_playback_control`:
+- time holds at zero through a speed change and a hitstop;
+- P works only during a pass, and from the dev-tools window too;
+- the camera is handed over, the director stands down, and resume returns every channel;
+- Space and the hint are off while paused;
+- playback letting go releases the pause;
+- the wall clock only applies while paused;
+- the home-coming wait isn't spent by a pause.
+
+The three wire cases (the stand-down, the cut back, the wait) were each falsified with a mutant. How the
+camera *feels* to drive while paused is a play-check: headless, every ease lands in one frame.
 
 ## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
 
