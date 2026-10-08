@@ -750,13 +750,17 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 #
 # BOUNDED rather than open. Nothing publishes headlessly, so this returns on its first check there
 # and costs the suite nothing; and a rig that somehow never settles costs ten seconds rather than
-# hanging the pass.
+# hanging the pass. A frame spent under a dev pause (#705) is not a frame of waiting: the climb is
+# frozen with everything else, so counting it would let a long pause send the tiles home early.
 func _wait_for_the_camera_to_come_home() -> void:
 	var cam: CameraController = game.camera_controller
-	for _frame in range(600):
+	var frames := 0
+	while frames < 600:
 		if cam.fall_depth <= 0.01:
 			return
 		await game.get_tree().process_frame
+		if not Pacing.dev_paused():
+			frames += 1
 	push_warning("the camera never climbed back out of its fall -- the tiles are going home anyway")
 
 

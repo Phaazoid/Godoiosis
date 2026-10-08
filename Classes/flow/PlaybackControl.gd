@@ -73,6 +73,8 @@ func _process(_delta: float) -> void:
 func request_skip() -> bool:
 	if phase != Phase.IDLE or not game.playback_owns_board() or game.menu_is_up():
 		return false
+	if Pacing.dev_paused():   # #705: a skip's tweens would sit frozen under the fade
+		return false
 	if ModalLock.any_open(get_tree()) or _talked or game.scenario_director.is_talking():
 		return false
 	phase = Phase.FADING_OUT
@@ -83,6 +85,11 @@ func request_skip() -> bool:
 func tick(real_dt: float, holding: bool) -> void:
 	_talked = game.scenario_director.is_talking()
 	var owned: bool = game.playback_owns_board()
+	# A dev pause (#705) only means something while a pass is playing. Released here, on the frame
+	# playback lets go for ANY reason -- the pass ending, F2, a board swap -- so no door can leave the
+	# game frozen at time scale 0.
+	if not owned:
+		Pacing.set_dev_paused(false)
 	match phase:
 		Phase.FADING_OUT:
 			if not owned:
@@ -109,6 +116,8 @@ func tick(real_dt: float, holding: bool) -> void:
 # slot, one occupant -- End Turn stays up through your own end-of-turn burn, so the hint yields.
 func hint_shown(owned: bool) -> bool:
 	if not owned or game.menu_is_up() or ModalLock.any_open(get_tree()) or phase != Phase.IDLE:
+		return false
+	if Pacing.dev_paused():   # both keys are inert under a dev pause (#705)
 		return false
 	var end_turn: EndTurnButton = game.end_turn_button
 	return not end_turn.visible

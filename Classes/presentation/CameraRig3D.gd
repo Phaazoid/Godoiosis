@@ -1162,7 +1162,61 @@ func drop_stashed_view() -> void:
 	_target_drop = 0.0
 
 
-func _process(delta: float):
+# --- the dev pause's hold on the director's frame (#705) ---------------------------------------
+#
+# Every channel exactly as it stands, live values AND targets, so handing the camera back to the
+# director is a CUT to the frame he had rather than an ease toward it -- nothing may move while
+# anything plays (#1132 round 3), and the pass resumes the instant the pause lifts. Deliberately not
+# stash_view: that slot holds the PLAYER's view, which playback flies back to when the pass ends.
+func snapshot_view() -> Dictionary:
+	return {
+		"aim": _aim, "target_aim": _target_aim,
+		"lift": _lift, "target_lift": _target_lift,
+		"drop": _drop, "target_drop": _target_drop,
+		"yaw": rotation_degrees.y, "target_yaw": _target_yaw_degrees,
+		"pitch": _pitch_degrees, "target_pitch": _target_pitch_degrees,
+		"distance": _camera.position.z, "target_distance": _target_distance,
+		"dolly": _dolly,
+	}
+
+
+func return_to_snapshot(view: Dictionary) -> void:
+	if view.is_empty():
+		return
+	_aim = view["aim"]
+	_target_aim = view["target_aim"]
+	_lift = view["lift"]
+	_target_lift = view["target_lift"]
+	_drop = view["drop"]
+	_target_drop = view["target_drop"]
+	rotation_degrees.y = view["yaw"]
+	_target_yaw_degrees = view["target_yaw"]
+	_pitch_degrees = view["pitch"]
+	_target_pitch_degrees = view["target_pitch"]
+	_pitch.rotation_degrees.x = _pitch_degrees
+	_camera.position.z = view["distance"]
+	_target_distance = view["target_distance"]
+	_dolly = view["dolly"]
+	_apply_position()
+
+
+# The camera's own clock: the frame's scaled delta, or under a dev pause the wall clock -- capped,
+# so a rig that sat disabled behind a card does not take one enormous step when it wakes. Read
+# every frame, paused or not, so the first paused frame steps by one frame (PlaybackControl's idiom).
+var _last_usec := -1
+
+func _camera_delta(scaled_delta: float) -> float:
+	var now := Time.get_ticks_usec()
+	var real := 0.0 if _last_usec < 0 else minf((now - _last_usec) / 1_000_000.0, 0.1)
+	_last_usec = now
+	return real if Pacing.dev_paused() else scaled_delta
+
+
+func _process(scaled_delta: float):
+	# The camera's own clock (#705): game time, except under a dev pause, where the pass is frozen at
+	# time scale 0 and the camera the dev is framing with must still move. The flourish clocks below
+	# keep `scaled_delta` on purpose, so nothing sways or shakes while he frames.
+	var delta := _camera_delta(scaled_delta)
 	var blend := 1.0 - exp(-effective_smoothing() * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
 	# ...toward the DOLLIED distance (#520 diff 2c), which is _target_distance untouched unless the
@@ -1232,8 +1286,8 @@ func _process(delta: float):
 	# SPEND time, exactly as Pacing.beat does; a case that wants to watch a curve supplies the
 	# elapsed time itself and reads flourish().
 	if not Pacing.unwatched():
-		_shake_elapsed += delta
-		_sway_elapsed += delta
+		_shake_elapsed += scaled_delta
+		_sway_elapsed += scaled_delta
 
 	# Clamped unconditionally, not inside the pan branch: a host driving the aim (the Battle3D camera
 	# mirror) writes it earlier in the same frame and must be bounded too. On the AIM rather than on
