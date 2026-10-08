@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle) folded in 2026-10-07; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07.**
 
 ## Principles
 
@@ -4578,3 +4578,38 @@ Headless is already unwatched, so no case can watch a skip collapse a pause or a
 - Typing Shift or Space into a dev-tools text field during playback fast-forwards or skips (dev-only).
 - The hint does not show during your own end-of-turn burn, because End Turn holds the slot there.
 - The tear-out's white flash lives in `battle3d`'s own layer, so a flash already running as a skip begins draws over the fade until the skip collapses it.
+
+## Queued attacks wear the queue's icon ([#1247](https://github.com/Phaazoid/Godoiosis/issues/1247), BUILT 2026-10-07)
+
+A queued move had its ghost and its arrow. A queued attack left nothing of its own: everything the aim draws is torn down the moment the click commits, and only the consequences stayed (the shove ghost, deposit icons, the health cubes). Each queue ROW of hits now leaves a mark.
+
+### Rulings (grill, 2026-10-07, two rounds of mockups painted onto the dev's own report frame)
+
+- **The queue's own icon, not a line.** Round 1 offered a dashed line, a footprint, or both. The dev: the line *"looks decent from a range, but is too squished when next to targets"* -- use the queue's attack icon, *"with some way to indicate which unit is attacking which"*.
+- **On a badge, standing.** The bare swords did not read on grass, so the icon sits on a dark disc ringed in the mark's colour, camera-facing at body height between the two units -- the reach marks' height (#1059). A pointer, the reach mark's cone made short, runs from the rim at the target. At range a dashed line runs attacker to target under the badge.
+- **The row's OWN icon**: the swords, or the lethality rung that row shows. A folded volley shows the plain swords, as its folded row does.
+- **Colour is whose side**: yours the aim's reach colour (so a player palette reaches it), theirs the reach marks' pink, a heal the heal green, a watch shot the watch tint.
+- **Counters draw too**, in the same style.
+- **Lanes**: every mark keeps to its right-hand side, so a blow and the counter answering it -- the same two cells, opposite ways -- sit side by side instead of stacked.
+- **Always on while queued; gone when it plays or is cancelled.**
+- **Hover, both ends**: the hovered unit's marks, its own and those aimed at it, draw over everything, units and readouts included. In a tight north-south melee the health bars cover the gap between the units whatever is drawn there, and this is the answer to it.
+- **The footprint only past one tile**, in the aim footprint's colour at a queued mark's half strength.
+
+### How it is built
+
+- **`StrikeMarks2D`** (`board/`) is the derivation -- `from_plan`, one entry per queue row (`plan.attacks`, live counters, live watch shots), grouped by `AttackAction.same_volley`, a payload folding into the hit that dropped it -- the geometry (`lane_chord`, `badge_point`, `line_work`, in `ThreatLines2D`'s trace space), the badge art (baked per icon and colour, since a tint would colour the icon too) and the flat draw. `OverlayManager` holds the store, `OverlayMirror._queued_strikes` lifts it.
+- **Two rules extracted so the board and the panel cannot disagree**: `AttackAction.same_volley` (the panel's fold) and `AttackAction.group_icon` (its volley icon).
+- **Four layers**: `QUEUED_FOOTPRINT` (FILL, -4), `QUEUED_STRIKES` (LINE, 11; beam set `"strike"` = the mark's width with the squad lines' dash), `QUEUED_STRIKES_FOCUS` (LINE, 14) and `QUEUED_BADGES` (BILLBOARD, 15, `"face": "camera"` -- FIXED_Y would squash the disc). Each mark's colour rides its vertex tint, which is why the cones are the see-through shader: the solid one reads only the baked shade.
+- **`BoardOverlays.FOCUS_RENDER_PRIORITY` is a band above the readout's**, used only by an `on_top` marker or cone (`no_depth_test`, and a fifth cone file, `reach_cone_on_top.gdshader`). It is not a `LAYERS` sort, so every law keeping a layer under the units still stands; its own law keeps it above the readout. The focused SHAFT stays depth-tested at 14 -- a beam drawn over the world would need a second `sight_beam` file.
+- **A mark retires at its own blow** (`volley_struck` -> `retire_strike`), and the pass RE-DERIVES the marks off the plan it plays: `execute_orders` resolves afresh, so the hits that strike are its objects and not the preview's. Matching the preview's by identity found nothing; a mutant pins the re-derive.
+- **The hovered unit is held by instance ID**, the squad count's precedent: the shared-board suite freed a hovered unit under a typed slot, and the next redraw died on it (#149's shape).
+- Knobs, Game tab -> Markup -> *Queued attacks*: badge size, lane, pointer length, badge ground. The line borrows the reach mark's width and the squad lines' dash.
+
+### Declared limits
+
+- At rest a tight north-south melee still hides most of a badge behind the bodies and their bars; hover is the answer, by ruling.
+- The focused shaft is depth-tested (above).
+- A mark's height is read off the board when the plan is drawn, so turning `MARK_HEIGHT` moves standing marks at the next plan change.
+- During a battle zoom the marks of fights not yet played stay on the board beneath the stage.
+- The flat view draws the same marks, under the units and without the over-everything lift (#292, declared).
+- An area COUNTER's line points at its first victim.

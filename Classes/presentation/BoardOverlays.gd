@@ -288,8 +288,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.
 	Layer.TERRAIN: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
 	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
-	# The ONE layer that hangs in the AIR rather than lying on the floor, so it sorts above
-	# every floor layer. It sat at 0 while nothing could overlap it; #325 then put a ring
+	# A layer that hangs in the AIR rather than lying on the floor (the first; #1247's badges are the
+	# second, beside it at 15), so it sorts above every floor layer. It sat at 0 while nothing could overlap it; #325 then put a ring
 	# decal (3) directly under every crown, which drew straight over it. 15 is the top of
 	# the lawful band -- a law pins every layer under EFFECT_RENDER_PRIORITY. A BILLBOARD
 	# ignores _lift_of and rides billboard_lift, so this moves PRIORITY only, not geometry.
