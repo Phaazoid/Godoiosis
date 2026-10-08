@@ -687,7 +687,7 @@ func set_ghosts(ghosts: Array[Dictionary]) -> void:
 			# Through the state door, never past it: a ghost has no unit, so a texture written
 			# around `_apply_state_texture` is one that door will answer null for (#747).
 			ghost.show_still(ghosts[i]["texture"])
-			ghost.modulate = ghosts[i]["modulate"]
+			ghost.set_tint(ghosts[i]["modulate"])
 		else:
 			ghost.visible = false
 
@@ -810,7 +810,7 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# The PRODUCT, because 2D modulate multiplies down the tree and the faction tint lives
 	# on the Unit node while the effects (pulse, highlight, flash) live on its sprite. The
 	# child alone is what left enemies un-reddened in 3D.
-	sprite.modulate = unit.modulate * unit.visuals.sprite.modulate
+	sprite.set_tint(unit.modulate * unit.visuals.sprite.modulate)
 
 	var step := stand - previous
 	# A SHOVED unit keeps the facing it had when it was hit (dev, #259 rework) -- being moved is

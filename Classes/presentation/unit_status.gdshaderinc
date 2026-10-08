@@ -5,7 +5,8 @@
 // shaded, double-sided, FIXED_Y-billboarded sprite whose albedo comes from the vertex colour. Measured
 // pixel-identical to the engine sprite on 4.7.1 (tools/sprite_parity/), shadows and flip included. The
 // engine stays authoritative; after an engine upgrade, re-run that probe before trusting this half.
-// A sprite only carries this material while it wears a state, so everything else keeps the engine's.
+// A sprite only carries this material while it wears a state or a tint brighter than its art (#1251),
+// so everything else keeps the engine's.
 //
 // The second half draws the state from StatusArt's effect map. Tint goes to ALBEDO, so it is lit
 // with the sprite; the bright marks go to EMISSION, so they still read on a dark board. Every mark
@@ -38,6 +39,8 @@ uniform float chill_glint_rate = 0.1;
 uniform float chill_glint_glow = 1.0;
 uniform float icicle_min_texels = 2.0;
 uniform float icicle_max_texels = 4.0;
+// The tint's part above 1.0 (#1251), which the vertex colour cannot carry. (1, 1, 1) = none.
+uniform vec3 overbright = vec3(1.0);
 
 // StatusArt stores icicle depth as k / ICICLE_SCALE.
 const float ICICLE_SCALE = 8.0;
@@ -75,6 +78,11 @@ void fragment() {
 	vec4 art = texture(texture_albedo, UV);
 	vec4 albedo_tex = art * tint;
 	vec3 rgb = albedo.rgb * albedo_tex.rgb;
+	// A tint brighter than the art, applied where the flat view applies it: multiplied in display
+	// space and clipped at white. Skipped at (1, 1, 1), so the replica half above is untouched.
+	if (any(greaterThan(overbright, vec3(1.0)))) {
+		rgb = status_to_linear(min(status_to_display(rgb) * overbright, vec3(1.0)));
+	}
 	float alpha = albedo.a * albedo_tex.a;
 	vec3 glow = vec3(0.0);
 

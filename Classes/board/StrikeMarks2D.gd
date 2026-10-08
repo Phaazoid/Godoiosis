@@ -34,9 +34,9 @@ static var STRIKE_POINTER_LENGTH := 0.16
 # The disc the icon sits on.
 static var STRIKE_BADGE_GROUND := Color(0.094, 0.094, 0.118, 1.0)
 
-# The store this node draws, handed in by OverlayManager, and which of it the hovered unit is part of.
+# The store this node draws, handed in by OverlayManager, and each entry's focus_rank.
 var entries: Array[Dictionary] = []
-var focused: Array[bool] = []
+var focus_ranks: Array[int] = []
 
 static var _badges: Dictionary = {}
 
@@ -125,13 +125,14 @@ static func colour_of(hit: AttackAction) -> Color:
 	return Color(colour.r, colour.g, colour.b, 1.0)
 
 
-# Does a mark involve this unit, at either end?
-static func involves(entry: Dictionary, unit: Unit) -> bool:
+# How far a mark lifts for this hovered unit: 2 = it is the unit's own attack, 1 = it is aimed at
+# the unit, 0 = neither. The unit's own marks come out on top of the ones aimed at it (#1251).
+static func focus_rank(entry: Dictionary, unit: Unit) -> int:
 	if unit == null or not is_instance_valid(unit):
-		return false
+		return 0
 	if entry["attacker"] == unit:
-		return true
-	return (entry["targets"] as Array).has(unit)
+		return 2
+	return 1 if (entry["targets"] as Array).has(unit) else 0
 
 
 # --- Geometry, in trace space ---------------------------------------------------------------------
@@ -227,10 +228,10 @@ static func clear_badges() -> void:
 # --- The flat view -----------------------------------------------------------------------------------
 
 func _draw() -> void:
-	# The marks the hovered unit is part of draw last, over the rest.
-	for pass_focused: bool in [false, true]:
+	# By focus rank, so the hovered unit's marks draw over the rest and its own over those aimed at it.
+	for rank: int in [0, 1, 2]:
 		for i in entries.size():
-			if (i < focused.size() and focused[i]) == pass_focused:
+			if (focus_ranks[i] if i < focus_ranks.size() else 0) == rank:
 				_draw_entry(entries[i])
 
 

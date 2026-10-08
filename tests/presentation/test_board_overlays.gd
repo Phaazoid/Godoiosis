@@ -705,6 +705,17 @@ func test_the_focus_band_sorts_over_every_unit_and_every_readout() -> void:
 	assert_int(BoardOverlays.FOCUS_RENDER_PRIORITY).is_greater(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
+func test_every_focus_tier_is_a_render_priority_godot_accepts() -> void:
+	# The tiers stack upward from the band (#1251); the engine refuses anything past its maximum.
+	assert_int(BoardOverlays.focus_priority(BoardOverlays.FOCUS_TIERS)).is_less_equal(
+			RenderingServer.MATERIAL_RENDER_PRIORITY_MAX)
+	for layer: int in BoardOverlays.LAYERS:
+		var tier: int = BoardOverlays.LAYERS[layer].get("on_top", 0)
+		assert_int(tier).override_failure_message(
+				"layer %d asks for focus tier %d, past FOCUS_TIERS" % [layer, tier]).is_less_equal(
+				BoardOverlays.FOCUS_TIERS)
+
+
 func test_no_overlay_layer_can_sort_over_the_flame() -> void:
 	# Fire's 3D form is a standing effect, not markup lying on the face (#245, found in play: a
 	# frost icon at sort 2 drew over a flame sitting at the default 0, and the fire read as

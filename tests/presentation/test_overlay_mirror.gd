@@ -487,9 +487,10 @@ func test_unit_pulse_reaches_the_mirrored_sprite() -> void:
 	var live: Color = foe.modulate * foe.visuals.sprite.modulate
 	_unit_mirror.reconcile()
 	var sprite: UnitSprite3D = _unit_mirror.sprite_for(foe)
-	assert_that(sprite.modulate).is_equal(live)
+	# tint(), not modulate: since #1251 the part above 1.0 rides the material, not the vertex colour.
+	assert_that(sprite.tint()).is_equal(live)
 	# And the two COMPOSE rather than one replacing the other: a pulsing enemy still reads red.
-	assert_bool(sprite.modulate.r > sprite.modulate.g).override_failure_message(
+	assert_bool(sprite.tint().r > sprite.tint().g).override_failure_message(
 			"the pulse overwrote the faction tint instead of multiplying with it").is_true()
 
 
@@ -1992,7 +1993,7 @@ func test_a_shoved_units_ghost_can_be_highlighted() -> void:
 	var ghost: Sprite2D = _om().knockback_ghost_by_unit[foe]
 	assert_that(ghost.modulate).override_failure_message(
 			"highlighting a shoved unit moved nothing the player can see"
-			).is_equal(OverlayManager.PROJECTED_HIGHLIGHT)
+			).is_equal(OverlayManager.projected_highlight())
 
 	_om().set_projected_unit_highlighted(foe, false)
 	assert_that(ghost.modulate).is_equal(OverlayManager.PROJECTED_MODULATE)
