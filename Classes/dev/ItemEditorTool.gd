@@ -9,12 +9,13 @@ class_name ItemEditorTool
 @onready var delete_button: Button = %DeleteItemButton
 @onready var status_label: Label = %ItemStatusLabel
 
-# Authors a WeaponInstance, a RuneData, a WeaponModData, or a prototype WeaponData. The first two
-# fill the equip slot; the third is a COMPONENT fitted into one of a weapon's spaces, and it lives
-# here (#74) because this is already where a mod gets fitted -- authoring one anywhere else would
-# mean two tabs to make one weapon. The type dropdown lists weapon bases + prototypes + rune sizes
-# + the blank mod + the blank prototype; the field area renders a bespoke editor per kind.
-# Carvings are authored in the Attack Editor tab.
+# Authors a WeaponInstance, a RuneData, a WeaponModData, a prototype WeaponData, or a VialData. The
+# first two fill the equip slot; the third is a COMPONENT fitted into one of a weapon's spaces, and it
+# lives here (#74) because this is already where a mod gets fitted -- authoring one anywhere else would
+# mean two tabs to make one weapon. A vial (#791) is CARRIED, never slotted, and is here because this
+# is the tab that authors carried things. The type dropdown lists weapon bases + prototypes + rune
+# sizes + the blank mod + the blank prototype + the blank vial; the field area renders a bespoke
+# editor per kind. Carvings are authored in the Attack Editor tab.
 #
 # The PROTOTYPE mode (#486) is the one that edits a TEMPLATE rather than a carried item, which is
 # why the read-only rule below does not cover it: that rule forbids editing a shared family
@@ -24,10 +25,8 @@ class_name ItemEditorTool
 # that mode owns what it SWINGS (tuning the main, and extra_attacks). Both edit the catalog object
 # LIVE, so the two panels cannot hold divergent copies of one file.
 #
-# current_item is a Resource rather than an EquippableData because a mod is deliberately NOT one --
-# WeaponModData is its own content root off Resource, beside Item/AttackData/JobData (CLAUDE.md),
-# and making it an Item to satisfy this field would be the model bending to fit its editor. The
-# cost is that display_name is reached through _edited_name/_set_edited_name instead of directly.
+# current_item is a Resource rather than an EquippableData because a mod, a prototype template and a
+# vial are none of them equippable. display_name is reached through _edited_name/_set_edited_name.
 var current_item: Resource = null
 var _variants := {}
 # Which catalog entry current_item was loaded from ("" = a New item). Load hands out a COPY with
@@ -47,6 +46,7 @@ func _ready():
 # open). A prototype picks its family in the form the same way.
 const NEW_MOD_KEY := "Weapon Mod (blank)"
 const NEW_PROTOTYPE_KEY := "Weapon Prototype (new)"
+const NEW_VIAL_KEY := "Vial (blank)"
 
 func _base_catalog() -> Dictionary:
 	var bases := {}
@@ -58,6 +58,7 @@ func _base_catalog() -> Dictionary:
 		bases[k] = runes[k]
 	bases[NEW_MOD_KEY] = WeaponModData.new()
 	bases[NEW_PROTOTYPE_KEY] = _blank_prototype()
+	bases[NEW_VIAL_KEY] = VialData.new()
 	return bases
 
 func _blank_prototype() -> WeaponData:
@@ -83,6 +84,9 @@ func _refresh_variant_list(select_name := ""):
 	var mods := WeaponModCatalog.get_mods()
 	for v in mods:
 		_variants[v] = mods[v]
+	var vials := VialCatalog.get_variants()
+	for v in vials:
+		_variants[v] = vials[v]
 	for v in _variants:
 		load_dropdown.add_item(v)
 
@@ -253,6 +257,8 @@ func populate():
 		_populate_mod_editor(current_item)
 	elif current_item is WeaponData:
 		_populate_prototype_editor(current_item)
+	elif current_item is VialData:
+		_populate_vial_editor(current_item)
 	else:
 		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "display_name"])
 
@@ -620,6 +626,8 @@ func _save_dir_for(item: Resource) -> String:
 		return WeaponModCatalog.MOD_DIR
 	if item is WeaponData:
 		return WeaponCatalog.PROTOTYPE_DIR
+	if item is VialData:
+		return VialCatalog.VARIANT_DIR
 	return WeaponCatalog.SAVED_DIR
 
 # --- Prototype mode (#486) ---
@@ -793,3 +801,36 @@ func _populate_mod_spaces(template: WeaponData) -> void:
 	)
 	editor_container.add_child(add)
 	_tip_from(first, DevWidgets.property_tip(template, "mod_spaces"))
+
+
+# --- Vial mode (#791) ---
+
+# Everything but the substance draws reflectively (element, alkahest, weight, flavour), tips from
+# VialData.property_tips. The substance is a PICKER over the library, as a direct reference: the
+# reflective swapper would hand the field a fresh, blank Substance, which saves INLINE into the vial
+# instead of naming the library file every other reader shares.
+const NO_SUBSTANCE_KEY := "(none)"
+
+func _populate_vial_editor(vial: VialData) -> void:
+	DevWidgets.build_resource_editor(editor_container, vial, populate, ["display_name", "substance"])
+	_populate_vial_substance(vial)
+
+func _substance_choices() -> Dictionary:
+	var choices := {NO_SUBSTANCE_KEY: null}
+	var all := SubstanceCatalog.get_all()
+	for id: String in all:
+		var substance: Substance = all[id]
+		var label := "%s (%s)" % [substance.display_name, id] if substance.display_name != "" else id
+		choices[label] = substance
+	return choices
+
+func _populate_vial_substance(vial: VialData) -> void:
+	var first := editor_container.get_child_count()
+	var choices := _substance_choices()
+	DevWidgets.add_option(editor_container, "Substance", choices.keys(),
+		_key_for(choices, vial.substance, NO_SUBSTANCE_KEY),
+		func(s: String):
+			vial.substance = choices[s]
+			populate()
+	)
+	_tip_from(first, DevWidgets.property_tip(vial, "substance"))
