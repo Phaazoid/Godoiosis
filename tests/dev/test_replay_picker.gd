@@ -51,7 +51,6 @@ func _boot() -> void:
 
 
 func after_test() -> void:
-	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
 	_wipe(SCRATCH_ROOT)

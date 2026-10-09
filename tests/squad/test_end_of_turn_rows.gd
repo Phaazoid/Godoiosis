@@ -25,10 +25,6 @@ func before_test() -> void:
 	_gas = GasField.new()   # no ground_source: a fixture grid judges nothing
 
 
-func after_test() -> void:
-	await await_idle_frame()   # #473: settle before gdUnit4 counts orphans
-
-
 func _ignite(cell: Vector2i, state := Terrain.TileState.BURNING) -> void:
 	_states.apply(_deposit(cell, state))
 

@@ -33,7 +33,6 @@ func before_test() -> void:
 	await await_idle_frame()
 
 func after_test() -> void:
-	await await_idle_frame()
 	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
 	get_tree().root.remove_child(_main)
 	_main.free()

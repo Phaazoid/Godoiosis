@@ -51,7 +51,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	await await_idle_frame()
 	if is_instance_valid(driver):
 		remove_child(driver)
 		driver.free()

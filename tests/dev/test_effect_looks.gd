@@ -37,9 +37,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	# FALSE orphans, not a leak (tests/README.md #162): populate() tears its rows down with
-	# remove_child + queue_free, and a parentless-pending node is what the monitor counts.
-	await await_idle_frame()
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 	if FileAccess.file_exists(PROBE_PATH):
