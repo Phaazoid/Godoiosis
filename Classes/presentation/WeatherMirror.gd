@@ -15,8 +15,10 @@ class_name WeatherMirror
 #     white-out composes it with the others), a light from the strike's side, and the sky's glow.
 #   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box, wandering as they fall and lying a
 #     moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
-#     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Which of the
-#     two a look draws is its FALL; every rain path is gated on it.
+#     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Snow that
+#     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
+#     prop_caps tells BoardMirror to lay its overlays on the billboards. Which of the two a look draws
+#     is its FALL; every rain path is gated on it.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -50,6 +52,7 @@ var camera: Camera3D
 var aim_source: Callable              # () -> Vector3, where the camera is looking
 var sky: ProceduralSkyMaterial
 var stands_down: Callable             # () -> bool: the flat view is up, draw nothing
+var prop_caps: Callable               # (shown: bool, color: Color) -> void: BoardMirror.set_prop_caps
 
 var _kind := Weather.Kind.CLEAR
 var _look: WeatherLook = null
@@ -68,6 +71,7 @@ var _drift_draw: ShaderMaterial
 var _wet: Decal
 var _puddles: Decal
 var _snow_cover: Decal
+var _caps: Decal
 var _bolts: StormBolts
 var _side: DirectionalLight3D
 
@@ -114,6 +118,12 @@ func _ready() -> void:
 	_wet = _decal()
 	_puddles = _decal()
 	_snow_cover = _decal()
+	_caps = _decal()
+	_caps.cull_mask = BoardOverlays.PROP_RENDER_LAYER   # the block props' own bit, and nothing else
+	var white := Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)
+	white.set_pixel(0, 0, Color.WHITE)
+	_caps.texture_albedo = ImageTexture.create_from_image(white)
+	_caps.albedo_mix = 1.0
 	_bolts = StormBolts.new()
 	add_child(_bolts)
 	_side = DirectionalLight3D.new()
@@ -192,6 +202,9 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_snow.emitting = snow
 	_snow.visible = snow
 	_snow_cover.visible = snow
+	_caps.visible = snow and look.caps_props
+	if prop_caps.is_valid():
+		prop_caps.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE)
 	_drift.emitting = snow and look.drift_rate > 0.0
 	_drift.visible = _drift.emitting
 	_drift_texels = -1
@@ -272,6 +285,7 @@ func _sync_snow_ground() -> void:
 			return
 	_snow_key = key
 	_fit(_snow_cover)
+	_fit(_caps)
 	_snow_cover.texture_albedo = ImageTexture.create_from_image(SnowGround.paint_cover(grid, _rect,
 			_look.snow_cover, _look.snow_frost, _look.snow_flecks, _look.snow_color))
 
@@ -465,6 +479,11 @@ func _style_snow() -> void:
 	if not is_equal_approx(_look.snow_roughness, _snow_roughness):
 		_snow_roughness = _look.snow_roughness
 		_snow_cover.texture_orm = _orm(_snow_roughness)
+		_caps.texture_orm = _snow_cover.texture_orm
+	_caps.visible = _look.caps_props
+	_caps.modulate = _look.snow_color
+	if prop_caps.is_valid():
+		prop_caps.call(_look.caps_props, _look.snow_color)   # the door returns at once when nothing moved
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one

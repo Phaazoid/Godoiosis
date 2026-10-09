@@ -12,6 +12,7 @@ const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 const GROUND := BoardOverlays.GROUND_RENDER_LAYER
 const UNIT := BoardOverlays.UNIT_RENDER_LAYER
+const PROP := BoardOverlays.PROP_RENDER_LAYER
 
 var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
@@ -85,12 +86,19 @@ func test_nothing_but_the_ground_is_on_the_ground_layer() -> void:
 
 	var lips := 0
 	var particles := 0
+	var capped := 0
 	for node in _descendants(_scene):
 		var drawn := node as GeometryInstance3D
 		if drawn == null:
 			continue
 		if drawn is StatusParticles:
 			particles += 1
+		# The snow's cap decal (#1269) paints whatever carries PROP, so only a block prop's body may.
+		if (drawn.layers & PROP) != 0:
+			capped += 1
+			assert_bool(drawn is MeshInstance3D and _is_prop_root(mirror, drawn.get_parent())) \
+					.override_failure_message("%s is on the prop layer, so the snow's cap decal would paint it"
+					% _scene.get_path_to(drawn)).is_true()
 		var on_ground := (drawn.layers & GROUND) != 0
 		if on_ground:
 			lips += 1
@@ -103,7 +111,16 @@ func test_nothing_but_the_ground_is_on_the_ground_layer() -> void:
 			"the dug hole grew no lip, so the ground's own non-GridMap pieces were never asked").is_greater(0)
 	assert_int(particles).override_failure_message(
 			"no status emitter was found, so the particles' layer was never asked").is_greater(0)
+	assert_int(capped).override_failure_message(
+			"no block prop carries the prop layer, so the snow's caps have nothing to settle on").is_greater(0)
 	bracket.free()
+
+
+func _is_prop_root(mirror: BoardMirror, node: Node) -> bool:
+	for root: Node3D in mirror._props.values():
+		if root == node:
+			return true
+	return false
 
 
 func _descendants(root: Node) -> Array[Node]:

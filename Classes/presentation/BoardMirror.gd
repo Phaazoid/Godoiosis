@@ -2493,8 +2493,12 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 	root.set_meta(OVERRIDE_META,
 		GridUtils.prop_override_of(grid.get_cell_tile_data(cell), "prop_height_scale"))
 	body.layers = BoardOverlays.WORLD_RENDER_LAYER
+	if body is MeshInstance3D:
+		body.layers |= BoardOverlays.PROP_RENDER_LAYER   # the snow's cap decal settles on its top (#1269)
 	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	root.add_child(body)
+	if _prop_caps:
+		_show_cap(root)
 
 	var data := grid.get_cell_tile_data(cell)
 	if GridUtils.prop_lit_of(data):
@@ -2507,6 +2511,68 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 		_add_light(root, light_color_for(data), light_energy_for(data),
 			light_range_for(data), light_height_for(data))
 	return root
+
+
+# --- Snow caps on billboard props (#1269) -------------------------------------------------------
+#
+# A block prop takes its cap from the weather's decal (its body carries PROP_RENDER_LAYER); a BILLBOARD
+# prop stands upright, where a decal cannot settle, so it wears an overlay sprite of SnowCapArt over its
+# own art. set_prop_caps is the one door that shows them, and a prop built while they show gets one at
+# build. Built lazily: a board that never snows builds none. A tuft takes none -- tall grass pokes up
+# through the snow (declared, #1269).
+
+const SNOW_CAP_NAME := "SnowCap"
+var _prop_caps := false
+var _prop_cap_color := Color.WHITE
+
+
+func set_prop_caps(shown: bool, color: Color) -> void:
+	if shown == _prop_caps and color == _prop_cap_color:
+		return
+	_prop_caps = shown
+	_prop_cap_color = color
+	for root: Node3D in _props.values():
+		_show_cap(root)
+
+
+func prop_caps_shown() -> bool:
+	return _prop_caps
+
+
+func _show_cap(root: Node3D) -> void:
+	for child in root.get_children():
+		var sprite := child as Sprite3D
+		if sprite == null or sprite.has_meta(TUFT_META):
+			continue
+		var cap := sprite.get_node_or_null(SNOW_CAP_NAME) as Sprite3D
+		if cap == null and _prop_caps:
+			cap = _make_cap(sprite)
+		if cap != null:
+			cap.visible = _prop_caps
+			cap.modulate = _prop_cap_color
+
+
+# The overlay: the prop sprite's own placement, drawn after it (render_priority) without a depth cut,
+# so it lies on the art rather than fighting it -- measured stable on the real renderer.
+func _make_cap(sprite: Sprite3D) -> Sprite3D:
+	var art := SnowCapArt.cap_for(sprite.texture)
+	if art == null:
+		return null
+	var cap := Sprite3D.new()
+	cap.name = SNOW_CAP_NAME
+	cap.texture = art
+	cap.billboard = sprite.billboard
+	cap.texture_filter = sprite.texture_filter
+	cap.pixel_size = sprite.pixel_size
+	cap.offset = sprite.offset
+	cap.flip_h = sprite.flip_h
+	cap.shaded = sprite.shaded
+	cap.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	cap.render_priority = 1
+	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cap.layers = sprite.layers
+	sprite.add_child(cap)
+	return cap
 
 
 # --- Global default, per-object override (#272 slice 2) -----------------------------------------

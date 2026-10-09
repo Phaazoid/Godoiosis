@@ -49,6 +49,9 @@ enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 const GROUND_RENDER_LAYER := 1  # bit for layer index 0 — the GridMaps (fixed there) and the hole lips
 const UNIT_RENDER_LAYER := 2    # bit for layer index 1 — UnitSprite3D sets this
 const WORLD_RENDER_LAYER := 4   # bit for layer index 2 — everything else the board draws
+# Bit for layer index 3 — the BLOCK props alone (rocks, crates, walls), beside WORLD: the snow's cap
+# decal (#1269) paints what this bit meets, so nothing else may carry it.
+const PROP_RENDER_LAYER := 8
 # Every unit sprite (real or planning ghost) sorts ABOVE every overlay layer, structurally
 # rather than by numeric luck — the 3D twin of the 2D's "tile overlays sit below
 # Unit.BASE_SPRITE_INDEX". Must stay greater than any LAYERS "sort"; pinned by a test.

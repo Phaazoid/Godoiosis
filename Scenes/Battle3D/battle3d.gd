@@ -228,6 +228,7 @@ func _ready() -> void:
 	var environment: Environment = ($WorldEnvironment as WorldEnvironment).environment
 	_weather.sky = environment.sky.sky_material as ProceduralSkyMaterial if environment.sky != null else null
 	_weather.stands_down = func() -> bool: return view == View.FLAT_2D
+	_weather.prop_caps = _board_mirror.set_prop_caps
 	add_child(_weather)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:

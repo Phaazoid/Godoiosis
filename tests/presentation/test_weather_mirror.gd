@@ -122,6 +122,32 @@ func test_a_look_draws_only_what_it_drops() -> void:
 	assert_bool(snow_on_rain).override_failure_message("a rain board draws snow").is_false()
 
 
+# The wire to the board (#1269): a look that caps props turns the board's billboard caps and the cap
+# decal on, one that does not leaves them off, and leaving the snow takes them down. Read off the
+# BOARD's own state, so a forgotten injection in battle3d reds here.
+func test_a_capping_snow_reaches_the_board_and_leaving_it_clears() -> void:
+	var mirror := _mirror()
+	var board := _scene.get_node("BoardMirror") as BoardMirror
+	var capping := WeatherLook.for_kind(Weather.Kind.SNOW)
+	var bare := WeatherLook.for_kind(Weather.Kind.LIGHT_SNOW)
+	assert_bool(capping != null and capping.caps_props and bare != null and not bare.caps_props) \
+			.override_failure_message("fixture: snow should cap props and light snow should not").is_true()
+	_scene.game.scenario_manager.current_weather = Weather.Kind.SNOW
+	mirror._process(0.016)
+	var on := board.prop_caps_shown() and mirror._caps.visible
+	_scene.game.scenario_manager.current_weather = Weather.Kind.LIGHT_SNOW
+	mirror._process(0.016)
+	var off_light := not board.prop_caps_shown() and not mirror._caps.visible
+	_scene.game.scenario_manager.current_weather = Weather.Kind.SNOW
+	mirror._process(0.016)
+	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	mirror._process(0.016)
+	var off_clear := not board.prop_caps_shown() and not mirror._caps.visible
+	assert_bool(on).override_failure_message("a capping snow reached no cap").is_true()
+	assert_bool(off_light).override_failure_message("a snow that caps nothing still caps").is_true()
+	assert_bool(off_clear).override_failure_message("the caps outlived the snow").is_true()
+
+
 # The ground drift runs while its rate is above zero, and only then -- the dev's blizzard has it, the
 # gentler snows author none. Driven off the look's own knob, so no authored rate is pinned.
 func test_the_ground_drift_runs_only_at_a_rate() -> void:
