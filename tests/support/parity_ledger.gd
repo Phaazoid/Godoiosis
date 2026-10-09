@@ -257,6 +257,9 @@ static func board_keys() -> Dictionary:
 			"Right-click": {"play": gap("#46", "undoes the last gesture; headless `cancel` drops a unit's whole plan")},
 			"Escape": {"play": never("opens the pause menu; its choices are their own rows")},
 			"V": {"play": cmd("ranges")},
+			# #1038: which unit's ring is up; headless names the unit in every verb and has no selection.
+			"F": {"play": never("selects the next squadmate; headless names units directly")},
+			"Shift+F": {"play": never("selects the previous squadmate; headless names units directly")},
 			"Alt (hold)": {"play": cmd("terrain")},
 			"F3": {"play": never("a report is the player's channel to the dev")},
 			"Shift+click | On an enemy": {"play": cmd("ranges")},

@@ -147,6 +147,13 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "V", "context": Context.BOARD, "when": "",
 		"does": "Enemy ranges",
 		"action": "toggle_enemy_ranges"},
+	# #1038: the squad cycle, through the same door a queue-row click selects a unit by.
+	{"key": "F", "context": Context.BOARD, "when": "",
+		"does": "Next squadmate",
+		"action": "select_next_squadmate"},
+	{"key": "Shift+F", "context": Context.BOARD, "when": "",
+		"does": "Previous squadmate",
+		"action": "select_previous_squadmate"},
 	{"key": "Alt (hold)", "context": Context.BOARD, "when": "",
 		"does": "Gas tiles",
 		"action": "show_gas_floor"},
