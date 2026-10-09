@@ -89,8 +89,9 @@ func _ready() -> void:
 	# callers (spawn, deploy, leave, disband-per-member, the squad-up verb, the headless builder),
 	# so it means "a solo squad now exists" and would log a leave as a squad-up.
 	game.squad_manager.squad_member_joined.connect(_on_squad_joined)
-	# The gear ACT, forwarded up from inventory_panel's one funnel.
-	game.unit_info_panel.loadout_acted.connect(_on_loadout_acted)
+	# The gear ACT, from the game's one channel: the dock's funnel forwards into it, and so does an aim
+	# that commits to another carried weapon (#929).
+	game.loadout_acted.connect(_on_loadout_acted)
 
 
 # ALT-F4, AND THE ONLY HOOK THAT SEES IT (#53 slice 4b). The project's first _notification handler.

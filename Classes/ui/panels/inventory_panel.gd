@@ -32,7 +32,7 @@ func _ready() -> void:
 # The player's palette (#1105): the slots are the action queue's rows on paper, re-inked on every
 # refresh, so a palette switch needs only a refresh.
 func restyle() -> void:
-	_refresh()
+	refresh()
 
 # A slot NAME is text on paper, so it takes a font colour; `modulate` multiplies the theme's white
 # and cannot darken it for parchment.
@@ -83,7 +83,7 @@ func set_unit(new_unit: Unit, p_can_act := false):
 	can_act = p_can_act
 	selected_index = -1
 	_close_action_popup()
-	_refresh()
+	refresh()
 
 func _on_slot_gui_input(event: InputEvent, index: int):
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -93,15 +93,15 @@ func _select_slot(index: int):
 	if unit == null or index >= unit.inventory.size() or unit.inventory[index] == null:
 		selected_index = -1
 		_close_action_popup()
-		_refresh()
+		refresh()
 		return
 	if selected_index == index and action_popup != null:
 		selected_index = -1        # clicking the open slot again = "never mind"
 		_close_action_popup()
-		_refresh()
+		refresh()
 		return
 	selected_index = index
-	_refresh()
+	refresh()
 	if _offers_anything(unit.inventory[index]):
 		_show_action_popup(index)
 	else:
@@ -223,7 +223,7 @@ func _close_action_popup():
 # the stats section listens; this one deliberately doesn't know how to reach it.
 func _apply_change(verb := "", index := -1):
 	_close_action_popup()
-	_refresh()
+	refresh()
 	loadout_changed.emit()
 	if verb != "":
 		loadout_acted.emit(unit, verb, index)
@@ -269,14 +269,14 @@ func _do_inspect(index: int):
 func _do_cancel():
 	selected_index = -1
 	_close_action_popup()
-	_refresh()
+	refresh()
 
 # Hover readout for one slot. ItemText owns the composition -- since #137 the pre-mission surfaces
 # say the same words, and a panel wording an item its own way is what that door exists to stop.
 func _tooltip_for(item: Item) -> String:
 	return ItemText.hover(item, unit)
 
-func _refresh():
+func refresh():
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		var slot = slots_container.get_child(i)
 		var icon = slot.get_node("SlotHBox/Icon")

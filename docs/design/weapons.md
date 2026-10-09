@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05.**
+**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09.**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -102,12 +102,54 @@
 **The ally line ([#1083](https://github.com/Phaazoid/Godoiosis/issues/1083), dev rulings 2026-09-27 and 2026-09-28).** `AttackChannelText.ally_line` is the one wording, read by `lines()` for both cards and by `MainActionMenu` for the battle ring's fire and watch rows. It is the one channel line that speaks BOTH ways: an attack whose footprint can hold an ally says **Splashes allies** or **Spares allies**, because on an area attack silence was exactly what a player could not read. It says NOTHING on a one-cell attack (`AttackData.covers_one_cell`: no shape, or a one-tile stamp), where `hits_allies` means *may be aimed at an ally* rather than splash, which is why Heal authors it. A single-target SWING is not one cell: an ally on its path is struck or passed through as `hits_allies` says (#1054 ruling 8), so it speaks. A map-only attack hits nobody (#1135) and says nothing. The value is always the COMPOSED one (`Unit.attack_hits_allies` in battle, `effective_hits_allies` on the weapon card), so a fitted OFF mod reads Spares. **The ring stays succinct by ruling** (dev: *"only show immediately relevant information that isn't shown in other ways"*), and the aim needs no line: the aim preview already pulses every victim, allies included. Two declared gaps: a SHOCK current arcs into allies whatever `hits_allies` says (Conduction is tag-blind), so a shock area marked Spares can still hurt a wet ally, though no authored attack or mod produces that combination; and a carrier's line speaks for the carrier only, never for its payload.
 
 **The aim preview (ruling 52, D2b, replacing the timing half of 37/41).** Hovering an attack that carries a payload shows every tile its payloads will reach, as INSET squares: the aim's own yellow, a size smaller (`InsetSquare`, one generated texture both views draw, sized by the Game-tab knob *Payload inset*). A tile the aim strikes itself stays its full tile. Each LEVEL flashes together, level k at the aim's last step + k (`HoverPresenter._add_payloads`), so an aim tile a payload also covers flashes twice. Whoever a payload hits pulses with the aim's own victims.
-- **The tiles come from a resolve, because nothing else knows them.** A sticky bomb goes off where the shove LEAVES its victim (ruling 43), and that landing exists only inside the pass. `SquadManager.preview_payloads` runs `resolve_hypothetical` with the candidate and keeps the rows whose `source_aim` is the candidate and whose `dropped_by` is set, SpringspearWeaponRoutine's back-link.
-- **It restores the board itself.** The hypothetical publishes the candidate's shoves, so `preview_payloads` ends with the real `resolve_plan` — `resolve_hypothetical`'s documented contract, kept beside it rather than left to the hover. That is two resolves per hovered cell, and only for an attack that carries a payload: measured at ~28 ms with 9 payload volleys and 42–100 ms with 81, over one frame each (docs/performance.md).
+- **The tiles come from a resolve, because nothing else knows them.** A sticky bomb goes off where the shove LEAVES its victim (ruling 43), and that landing exists only inside the pass. `SquadManager.preview_aim` runs `resolve_hypothetical` with the candidate, and `SquadManager.payloads_in` keeps the rows whose `source_aim` is the candidate and whose `dropped_by` is set, SpringspearWeaponRoutine's back-link. Since [#929](https://github.com/Phaazoid/Godoiosis/issues/929) that one resolve is also every fire aim's forecast (below), so a payload aim asks once.
+- **It restores the board itself.** The hypothetical publishes the candidate's shoves, so `preview_aim` ends with the real `resolve_plan` — `resolve_hypothetical`'s documented contract, kept beside it rather than left to the hover. That is two resolves per hovered cell, for every fire aim since #929: about 4 ms for a plain aim, and for a payload chain ~28 ms with 9 payload volleys and 42–100 ms with 81, over one frame each (docs/performance.md).
 - **A watch shows none.** Its shot fires later, from wherever the crosser is, so there is no landing yet to show.
 - **Both views, one clock.** The flat layer (`OverlayManager.payload_overlay`) is a child of the footprint layer, so it wears the footprint's colour and z, and a watch aim or a player's palette reaches it with no second write; it is painted and cleared with the aim flash (`set_aim_flash(steps, insets)`), so every exit that stops the flash takes the squares too. `AimFlash2D` whitens the inset square rather than the whole tile. In 3D, `BoardOverlays.Layer.PAYLOAD` is a FILL on AIM's sort — legal, because its cells are the payloads' minus the aim's and never meet AIM's — and `OverlayMirror` lights it from the same `levels()` as AIM.
 
 **An attack may also leave GAS ([#508](https://github.com/Phaazoid/Godoiosis/issues/508), 2026-10-03).** `AttackData.gas` + `gas_level` (none, thin, medium, thick), drawn in the editor's Payload section under the pick: every tile the attack struck gains that many levels of that gas, **whatever Targets says**, and the cards say *Leaves Steam where it hits* after the payload chain. It is NOT a payload (nothing goes off), but a payload that authors gas leaves its own where it lands, since it resolves as a whole attack. The rule, the ground it needs and the reactions that release gas are terrain.md's #508 banner.
+
+## Comparing attacks while aiming — BUILT 2026-10-09 ([#929](https://github.com/Phaazoid/Godoiosis/issues/929))
+
+The dev's scratchpad ask (2026-09-12): *"cycle through your available weapons and compare what each of them will do in the situation before comitting... not just for different weapons in inventory, but for all attacks available from all weapons."*
+
+**Scope (ruled at the sweep):** every carried weapon counts, and the swap is free. The inspect dock already equipped mid-battle for free.
+
+**His rulings at the build (2026-10-09):**
+- The forecast is the **health bars plus a name strip**.
+- Another weapon's attack is previewed by **holding it while aiming**.
+- The key is **F / Shift+F**, the squadmate cycle's keys, because that cycle refuses mid-aim.
+
+- **The aim forecasts before the click.**
+  - `SquadManager.preview_aim` resolves the squad's plan with the hovered aim added.
+  - The hover publishes it as `game.aim_forecast`, and `battle3d._previewed_plan` hands that plan to the health bars while the aim is open.
+  - So a target shows the damage, the HP after and the down/kill alarm the click would queue, plus any counter coming back.
+  - A watch forecasts nothing: its shot fires later, the payload preview's own rule.
+- **The cycle is one list: `Unit.aim_options(watch)`.**
+  - **Order:** the source in hand first, in the ring's own order (`selectable_attacks`), then every other carried equippable in inventory order.
+  - **Which sources count:** each is asked with it in hand, so the equip door decides (armour, or a rune nobody can channel, contributes nothing).
+  - **Which attacks count:** the queue's own gate decides (`AttackAction.fire_block_reason`). An attack its weapon cannot fire right now is skipped; the ring stays the place a greyed row explains itself.
+  - A watch aim walks the watch view (#590).
+  - `game.cycle_aimed_attack` re-enters the aim on the next option. `enter_attack_mode`'s `source` is the one writer of `game.aim_source`.
+- **A preview writes nothing.**
+  - The resolver reads the weapon in hand in about eight places: damage, armour-piercing, kind, elements, a tank charge, shove, ally splash, and mod stat bonuses. So another weapon's attack is previewed with that weapon in hand.
+  - `Unit.with_weapon_in_hand(source, work)` swaps it in through `set_equipped_weapon` for one synchronous computation, then puts the held one back.
+  - The hover's sweep and the forecast's hypothetical run inside it. `preview_aim`'s restoring `resolve_plan` deliberately runs outside, or the cache would keep a plan resolved with a weapon nobody holds.
+  - Between frames the unit always holds what was equipped, so a save, a bug report or an Update taken mid-aim records no swap the player never made.
+  - The visible cost, declared: the dock shows the held weapon until the click.
+- **The click equips it for real.**
+  - `game._commit_aim` equips through `GearVerbs.perform(EQUIP)`, then queues.
+  - **Refused:** the order takes its swap with it, unrecorded.
+  - **Accepted:** it is recorded as a gear act on `game.loadout_acted`. That is the one channel now: the dock forwards into it too, and `MissionLog` and the dev header's "(modified)" listen there. So a replay equips before the pass that names the attack; a replay re-picks attacks by name off the weapon in hand.
+  - A committed swap is a real free equip. It stays if the order is later undone, and it becomes the unit's counter weapon, Fire Emblem's rule.
+- **The name strip (`AimStrip`).**
+  - Bottom centre: the attack's name and its weapon's, plus "swaps on click" on a carried weapon.
+  - `n / N` and the key hints show only when there is more than one option.
+  - It parks at the top while a dialogue is up (#1033's rule).
+- **Declared gaps:**
+  - The forecast is 3D only, because the flat view has no predicted bars (#292).
+  - The AI's version of the question (#117, the issue's fork 5) is not wired. `aim_options` and `preview_aim(source)` are that query.
+- **Found and filed, not fixed:** equipping another weapon in the dock with an attack already queued fires the old attack through the new weapon ([#1283](https://github.com/Phaazoid/Godoiosis/issues/1283)).
 
 ## Cross-cutting principles ([WORKSHOP])
 

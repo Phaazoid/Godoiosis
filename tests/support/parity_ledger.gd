@@ -264,6 +264,9 @@ static func board_keys() -> Dictionary:
 			"F3": {"play": never("a report is the player's channel to the dev")},
 			"Shift+click | On an enemy": {"play": cmd("ranges")},
 			"Right-click | After a move order": {"play": never("re-plans the move: cancel, then move again")},
+			# #929: which attack the aim shows; headless names the attack, and equips through its gear verb.
+			"F | Aiming": {"play": never("cycles the attack being aimed; headless names the attack directly")},
+			"Shift+F | Aiming": {"play": never("cycles the attack being aimed; headless names the attack directly")},
 			"Tab | Deploying": {"play": never("swaps the loadout screen and the board; headless reads both")},
 			"Enter | Deploying": {"play": cmd("begin")},
 			"Left-click | Deploying": {"play": cmd("deploy")},

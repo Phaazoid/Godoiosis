@@ -2136,6 +2136,11 @@ func _previewed_plan() -> ResolvedPlan:
 	var executing: ResolvedPlan = game.order_executor.executing_plan
 	if executing != null:
 		return executing
+	# An aim shows what it WOULD do before the click (#929), read only while the aim is open so a
+	# forecast nothing has cleared yet can never outlive it.
+	var forecast: ResolvedPlan = game.aim_forecast
+	if forecast != null and game.game_state == game.GameState.ATTACK_TARGETING:
+		return forecast
 	var squads: SquadManager = game.squad_manager
 	return squads.resolved_plan_for(squads.active_squad)
 

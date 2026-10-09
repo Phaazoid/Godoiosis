@@ -86,6 +86,14 @@ func _refresh_derived_rows():
 		return
 	stats_section.set_unit(current_unit, current_board)
 
+# Re-read the loadout after an act made somewhere other than this panel (#929: an aim that commits to
+# another carried weapon). set_unit early-returns on the same unit, so nothing else would.
+func refresh_loadout() -> void:
+	if current_unit == null:
+		return
+	inventory_panel.refresh()
+	_refresh_derived_rows()
+
 # The panel outlives the units it shows. Guarded the way info_panel.set_unit guards its own
 # teardown: a freed ref compares == null as TRUE (#149), so this skips instead of faulting.
 func _release_current_unit() -> void:

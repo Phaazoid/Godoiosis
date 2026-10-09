@@ -101,7 +101,9 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 	_clear_threat_markup()   # cleared on every cell change; the branch that wants it draws it back
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
 		# Off the map -- every mode draws nothing out there. A card is left alone: it describes the
-		# cell that was clicked, not the one under the pointer (#1105).
+		# cell that was clicked, not the one under the pointer (#1105). An aim's forecast is about the
+		# cell under the pointer, so it does go (#929).
+		game.aim_forecast = null
 		return
 
 	# Only IDLE produces squad icons. They're collected rather than drawn inline because that
@@ -317,12 +319,16 @@ func _draw_move_lines(unit: Unit, cell: Vector2i, moverange: Dictionary) -> void
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
 	var attacker: Unit = game.selected_unit
+	# The carried weapon the aim fires from when it is not the one in hand (#929, the F cycle): every
+	# question below that reads the firing weapon is asked with it held.
+	var source: EquippableData = game.aim_source
 
 	var preview_cells: Array[Vector2i] = []
 	var travel: Dictionary[Vector2i, Array] = {}
 	var insets: Array[Vector2i] = []
 	var victims: Array[Unit] = []
 	var trace_shown := false
+	var forecast: ResolvedPlan = null
 	if attacker != null:
 		var board: BoardContext = game._board()
 		var origin := attacker.get_projected_destination()
@@ -342,7 +348,9 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# say so before the click). Read against LIVE wetness, since that is what is true at the
 			# moment the player is aiming; a queued-but-unexecuted WATER order is threaded into the
 			# pass instead, and the queue row it produces is where that reading is honest.
-			var reach := Conduction.sweep(attacker, origin, cell, aiming, board)
+			# Held, because who it catches asks attack_hits_allies -- a fact about the firing weapon's mods.
+			var reach: Conduction.Sweep = attacker.with_weapon_in_hand(source,
+				func() -> Conduction.Sweep: return Conduction.sweep(attacker, origin, cell, aiming, board))
 			preview_cells = reach.cells
 			# Every footprint flashes in the order the attack travels (#1057 part 2), whatever it
 			# targets -- the tiles say HOW it lands, the victims' own pulse says WHO.
@@ -351,14 +359,18 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# victims are already none (RulesService.is_attack_victim, #1135), and the ones its current
 			# catches are hit for real, so hiding them here would be a second answer to "who is hit".
 			victims = reach.victims
-			# ...and what it DROPS (#1058 D2b). A watch declares nothing here: its shot fires later, from
-			# wherever the crosser is, so there is no landing to show yet.
-			if aiming != null and aiming.payload != null and game.aim_intent != game.AimIntent.WATCH:
+			# What it would DO (#929): the plan with this aim added, which the health bars read until the
+			# aim moves on -- and what it DROPS (#1058 D2b), off the same resolve. A watch declares nothing
+			# here: its shot fires later, from wherever the crosser is, so there is no outcome to show yet.
+			if game.aim_intent != game.AimIntent.WATCH:
 				var candidate := AttackAction.declare(attacker, origin, cell)
-				var rows: Array[AttackAction] = game.squad_manager.preview_payloads(attacker.squad, candidate, board)
-				travel = travel.duplicate(true)
-				_add_payloads(rows, preview_cells, travel, insets, victims)
+				forecast = game.squad_manager.preview_aim(attacker.squad, candidate, board, source)
+				if aiming != null and aiming.payload != null:
+					var rows := SquadManager.payloads_in(forecast, candidate)
+					travel = travel.duplicate(true)
+					_add_payloads(rows, preview_cells, travel, insets, victims)
 
+	game.aim_forecast = forecast
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)

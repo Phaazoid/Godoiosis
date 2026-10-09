@@ -1294,6 +1294,53 @@ func get_selectable_attacks() -> Array[AttackData]:
 		return []
 	return equipped_weapon.selectable_attacks(self)
 
+# One attack this unit could aim right now, and the carried equippable it fires from (#929).
+class AimOption:
+	var source: EquippableData
+	var attack: AttackData
+
+	func _init(p_source: EquippableData, p_attack: AttackData) -> void:
+		source = p_source
+		attack = p_attack
+
+# Every attack this unit could aim right now, across everything it carries (#929, the F cycle): the
+# source in hand first, in the ring's own order, then each other carried equippable in inventory order.
+# Each is asked WITH IT IN HAND, so the equip door decides which sources count (armour and a rune nobody
+# can channel contribute nothing) and the queue's own gate decides which attacks do -- one an empty
+# magazine or a sprung spear cannot fire right now is left out. `watch` walks the watch view (#590).
+func aim_options(watch: bool) -> Array[AimOption]:
+	var sources: Array[EquippableData] = []
+	if equipped_weapon != null:
+		sources.append(equipped_weapon)
+	for item: Item in inventory:
+		var carried := item as EquippableData
+		if carried != null and carried != equipped_weapon:
+			sources.append(carried)
+	var options: Array[AimOption] = []
+	for source: EquippableData in sources:
+		with_weapon_in_hand(source, func() -> void:
+			var attacks: Array[AttackData] = overwatch_attacks() if watch else get_selectable_attacks()
+			for attack: AttackData in attacks:
+				if AttackAction.fire_block_reason(self, attack) == "":
+					options.append(AimOption.new(source, attack)))
+	return options
+
+# Runs `work` with `source` in the weapon slot and puts the held one back after (#929): how a preview
+# asks what another carried weapon would do without the unit ever being seen holding it -- a save or a
+# report taken mid-aim records what was equipped, not what was being looked at. The swap goes through
+# set_equipped_weapon (#157); putting the held one back is a RESTORE of the exact prior state rather
+# than an equip, so it is a plain write. SYNCHRONOUS only: an await inside `work` would leave the swap
+# standing for every frame it spans. A null source, or the one already in hand, just runs `work`.
+func with_weapon_in_hand(source: EquippableData, work: Callable) -> Variant:
+	var held := equipped_weapon
+	if source == null or source == held:
+		return work.call()
+	if not set_equipped_weapon(source):
+		return null
+	var result: Variant = work.call()
+	equipped_weapon = held
+	return result
+
 # The equipped WEAPON's non-main attacks — surfaced under the Weapon Action menu (2026-07-24).
 # Empty for a rune or an empty slot. A rune's carvings are the OTHER side of this fork
 # (choice_attacks -> the Transmutation category, #88), never Weapon Action and no longer

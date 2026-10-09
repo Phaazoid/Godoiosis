@@ -96,6 +96,10 @@ signal unit_selected(unit: Unit)   # fired at the one select write point (select
 # screen. A SIGNAL because the game subtree keeps no path to the 3D host that renders it -- the
 # same PUSH #212 made for the dev window, for the same reason.
 signal view_focus_requested(cell: Vector2i)
+# A gear ACT the player made (#53 slice 2), from either door that makes one: the inspect dock, and an
+# aim that commits to another carried weapon's attack (#929). The recorder and the dev header listen
+# HERE rather than to the dock, so the second door is not a second wire to remember.
+signal loadout_acted(unit: Unit, verb: String, index: int)
 # Dev INTENT (the toggle), written only by set_dev_mode. game_state == DEV_MODE is where the board
 # RESTS right now; the two split (declared, Law #4) because transient flows -- loads, turn handoffs,
 # mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
@@ -301,6 +305,9 @@ func _build_collaborators() -> void:
 	playback_control.game = self
 	add_child(playback_control)   # AFTER scenario_director: a skip asks whether a dialog is up
 
+	aim_strip = AimStrip.open(self)   # the aim names itself (#929); hidden until an aim opens
+	aim_strip.talking_source = scenario_director.is_talking
+
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)
 	turn_manager.round_completed.connect(_on_round_completed)
@@ -334,8 +341,10 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
+	# The dock's gear acts join the game's one channel (#929 gave it a second door).
+	unit_info_panel.loadout_acted.connect(loadout_acted.emit)
 	# A gear act is play: the dev header's "(modified)" counts it (#1182).
-	unit_info_panel.loadout_acted.connect(func(_u: Unit, _verb: String, _i: int) -> void:
+	loadout_acted.connect(func(_u: Unit, _verb: String, _i: int) -> void:
 		scenario_manager.note_play())
 	# The dock's Inspect (#1152): the item's own card, READ-ONLY -- fitting a mod is a pre-mission act,
 	# and a battle has no mod pool to offer, hence the empty one.
@@ -415,13 +424,20 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_enemy_ranges()
-	# F / Shift+F cycle the selected squad member (#1038), here for the same both-views reason. EXACT
-	# match for F3's reason: without it the Shift+F press also matches plain F and cycles both ways.
+	# F / Shift+F cycle the selected squad member (#1038), here for the same both-views reason -- and,
+	# while aiming, the attack being aimed (#929): the squadmate cycle refuses mid-aim, so the one key
+	# never means both. EXACT match for F3's reason: without it the Shift+F press also matches plain F
+	# and cycles both ways.
 	if not ModalLock.any_open(get_tree()):
+		var step := 0
 		if event.is_action_pressed("select_next_squadmate", false, true):
-			cycle_squad_member(1)
+			step = 1
 		elif event.is_action_pressed("select_previous_squadmate", false, true):
-			cycle_squad_member(-1)
+			step = -1
+		if step != 0 and game_state == GameState.ATTACK_TARGETING:
+			cycle_aimed_attack(step)
+		elif step != 0:
+			cycle_squad_member(step)
 
 	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
 	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it
@@ -818,6 +834,45 @@ func next_squad_member(anchor: Unit, step: int) -> Unit:
 	var at := maxi(members.find(anchor), 0)
 	return members[posmod(at + step, members.size())]
 
+
+# F / Shift+F WHILE AIMING (#929): the next or previous attack this unit could aim, across every
+# weapon it carries (Unit.aim_options), wrapping. The aim is re-entered on it so its reach repaints,
+# and the hover re-asks what it would do. Nothing is equipped until the click.
+func cycle_aimed_attack(step: int) -> void:
+	if game_state != GameState.ATTACK_TARGETING or not is_instance_valid(selected_unit):
+		return
+	var unit: Unit = selected_unit
+	var options := unit.aim_options(aim_intent == AimIntent.WATCH)
+	if options.is_empty():
+		return
+	var at := _aim_index(unit, options)
+	var to := posmod(at + step, options.size()) if at >= 0 else (0 if step > 0 else options.size() - 1)
+	var next: Unit.AimOption = options[to]
+	unit.active_attack = next.attack
+	var source: EquippableData = null if next.source == unit.get_equipped_weapon() else next.source
+	enter_attack_mode(unit, aim_intent, source)
+	hover_presenter.refresh()
+
+
+# Where the open aim sits in `options`, or -1 when it is not one of them. The FIRED attack rather than
+# the pick, because an aim opened on the default has no pick to compare.
+func _aim_index(unit: Unit, options: Array[Unit.AimOption]) -> int:
+	var source: EquippableData = aim_source if aim_source != null else unit.get_equipped_weapon()
+	var attack := unit.get_fired_attack()
+	for i in options.size():
+		if options[i].source == source and options[i].attack == attack:
+			return i
+	return -1
+
+
+func _show_aim_strip(unit: Unit) -> void:
+	var options := unit.aim_options(aim_intent == AimIntent.WATCH)
+	var attack := unit.get_fired_attack()
+	var source: EquippableData = aim_source if aim_source != null else unit.get_equipped_weapon()
+	aim_strip.show_aim(attack.display_name if attack != null else "",
+			source.shown_name() if source != null else "", aim_source != null,
+			_aim_index(unit, options), options.size())
+
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
 	var moverange := compute_move_range(unit)
@@ -879,17 +934,37 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 		# since #756, because a directional aim is no longer unconditional: a facing whose spread
 		# the terrain truncates to nothing is a dud order, and the hover draws the same answer.
 		if Reach.can_aim_at(attacker, origin, cell, aiming, _board()):
-			# #47: cells are the target. A legal aim is queueable whether or not a unit is
-			# there — victims (and terrain effects, #50) are derived at resolve time (#15).
-			# Store the AIM only (actor + aimed cell); null target = derived later.
-			# The one place the two aim verbs part company (#413): same legality, same stamp,
-			# different order. A watch aims and holds fire.
-			if aim_intent == AimIntent.WATCH:
-				queue_overwatch(attacker, cell)
-			else:
-				var attack := AttackAction.declare(attacker, origin, cell)
-				squad_manager.queue_action(attacker.squad, attack)
+			_commit_aim(attacker, origin, cell)
 	exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
+
+# The click on a legal aim. #47: cells are the target. A legal aim is queueable whether or not a unit
+# is there — victims (and terrain effects, #50) are derived at resolve time (#15). Store the AIM only
+# (actor + aimed cell); null target = derived later. The one place the two aim verbs part company
+# (#413): same legality, same stamp, different order. A watch aims and holds fire.
+#
+# An aim cycled onto another carried weapon (#929) EQUIPS it first, through the dock's own door: the
+# queue gate, the resolver, execution and a replay all read the weapon in hand. The swap is then the
+# player's act like a dock equip and recorded as one -- AFTER the queue accepts, so a refused order
+# takes its swap with it, unrecorded. A committed swap stays if the order is later undone.
+func _commit_aim(attacker: Unit, origin: Vector2i, cell: Vector2i) -> void:
+	var source := aim_source
+	var held := attacker.get_equipped_weapon()
+	var source_index := attacker.inventory.find(source) if source != null else -1
+	if source != null and GearVerbs.perform(attacker, GearVerbs.Verb.EQUIP, source_index) != "":
+		return
+	var queued: bool
+	if aim_intent == AimIntent.WATCH:
+		queued = queue_overwatch(attacker, cell)
+	else:
+		queued = squad_manager.queue_action(attacker.squad, AttackAction.declare(attacker, origin, cell))
+	if source == null:
+		return
+	if not queued:
+		attacker.equipped_weapon = held   # a restore of what was in hand, not an equip: nothing to record
+		return
+	loadout_acted.emit(attacker, GearVerbs.name_of(GearVerbs.Verb.EQUIP), source_index)
+	if unit_info_panel.is_showing_unit(attacker):
+		unit_info_panel.refresh_loadout()
 
 func _click_picking_target(cell: Vector2i) -> void:
 	if not target_pick_cells.has(cell):
@@ -1173,16 +1248,26 @@ func enter_group_move_mode(unit: Unit):
 # aiming handler for one branch, so the mode carries the verb instead.
 enum AimIntent { FIRE, WATCH }
 var aim_intent: AimIntent = AimIntent.FIRE
+# The carried weapon the aim fires from when it is NOT the one in hand (#929, the F cycle); null for
+# the held one, which is every aim the ring opens. enter_attack_mode is its one writer. Every read that
+# asks the firing weapon asks with it held (Unit.with_weapon_in_hand), and the click equips it for real.
+var aim_source: EquippableData = null
+# What the hovered aim would DO, as a whole plan (#929): the health bars read it in place of the queued
+# plan while an aim stands. The hover writes it; the aim's exit drops it.
+var aim_forecast: ResolvedPlan = null
+var aim_strip: AimStrip
 
 # Aiming a WATCH rather than a shot (#413). A named door so no caller has to reach through the
 # untyped `game` ref for the enum -- and so "declare an overwatch" reads as one act at the menu.
 func enter_overwatch_mode(unit: Unit):
 	enter_attack_mode(unit, AimIntent.WATCH)
 
-func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE):
+func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE, source: EquippableData = null):
 	game_state = GameState.ATTACK_TARGETING
 	aim_intent = intent
+	aim_source = source
 	var aiming := unit.get_fired_attack()
+	_show_aim_strip(unit)
 	# The reach layer is the whole range and NEVER changes. What an aim will actually affect is
 	# pulsed by HoverPresenter instead -- one tile per cell means any marker drawn here erases the
 	# range underneath it, which is exactly what wiped whole ForwardWide lanes. Its COLOR does
@@ -1242,6 +1327,9 @@ func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
 		aim_intent = AimIntent.FIRE   # the verb dies with the aim, same as the pick
+		aim_source = null   # ...and so do the weapon it was looked at with and what it would do (#929)
+		aim_forecast = null
+		aim_strip.hide_aim()
 		# ...and so does its paint (#591). The HOVER layer is shared with PICKING_TARGET, so a watch
 		# aim left standing here would tint the next rescue's tile pick in the watch's colours.
 		overlay_manager.set_aim_colors(null, false)
@@ -1351,10 +1439,10 @@ func queue_guard(guarding_unit: Unit, ward: Unit) -> void:
 
 # The watch's declaration (#413). Stamps the aim and the chosen attack exactly as AttackAction.declare
 # does — a watch that re-picked its attack later would be a Law #2 break, not a convenience.
-func queue_overwatch(watching_unit: Unit, cell: Vector2i) -> void:
+func queue_overwatch(watching_unit: Unit, cell: Vector2i) -> bool:
 	var watch := OverwatchAction.new()
 	watch.init(watching_unit, cell, watching_unit.get_fired_attack())
-	squad_manager.queue_action(watching_unit.squad, watch)
+	return squad_manager.queue_action(watching_unit.squad, watch)
 
 # ==============================================================================
 #  The action-queue panel

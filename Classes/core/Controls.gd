@@ -169,6 +169,14 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Right-click", "context": Context.BOARD, "when": "After a move order",
 		"does": "Re-plan that move",
 		"action": HARDCODED},
+	# #929: the same two actions as the squad cycle above, which refuses mid-aim, so the key means one
+	# thing at a time. Rebinding one rebinds both, deliberately.
+	{"key": "F", "context": Context.BOARD, "when": "Aiming",
+		"does": "Next attack",
+		"action": "select_next_squadmate"},
+	{"key": "Shift+F", "context": Context.BOARD, "when": "Aiming",
+		"does": "Previous attack",
+		"action": "select_previous_squadmate"},
 	{"key": "Tab", "context": Context.BOARD, "when": "Deploying",
 		"does": "Menu swap",
 		"action": "toggle_deployment_view"},

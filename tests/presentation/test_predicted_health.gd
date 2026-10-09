@@ -24,6 +24,7 @@ var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var game: Node2D
 var _unit_mirror: UnitMirror
+var _saved_pointer: Callable
 
 
 func before() -> void:
@@ -49,9 +50,11 @@ func before_test() -> void:
 	# is what the file already says it wants ("the pointer is nowhere"); leaving it live made these
 	# cases pass or fail on whatever the PREVIOUS suite left the mouse doing.
 	_unit_mirror.hovered_unit_source = Callable()
+	_saved_pointer = game.hover_presenter.pointer_source
 
 
 func after_test() -> void:
+	game.hover_presenter.pointer_source = _saved_pointer   # the aim cases pin it (#929)
 	await _board.check(self)
 
 
@@ -437,3 +440,127 @@ func test_the_effect_pass_raises_a_readout_over_the_units_it_is_about_to_hit() -
 #
 # `AIController.preview_turn` and `ThreatIntent` are still live and still have their own cases in
 # tests/ui/test_threat_preview.gd. What went is the DRAWING.
+
+
+# --- AN AIM SHOWS WHAT IT WOULD DO BEFORE THE CLICK (#929) --------------------------------------
+#
+# The same wire one step earlier: while an aim is open the bars read the AIM's own plan -- the queued
+# plan with this aim added -- so comparing two attacks is a key press rather than click, read, undo.
+# Every expected number is the forecast's own, through the one display clamp. The pointer is PINNED
+# to the aimed cell (the #222 seam test_dev_tree uses), because the hover's own _process re-reads it
+# every frame and an unpinned headless mouse would aim somewhere else between the awaits.
+
+func _hover_aim(attacker: Unit, cell: Vector2i) -> void:
+	game.hover_presenter.pointer_source = func() -> Vector2i: return cell
+	game.selected_unit = attacker
+	game.enter_attack_mode(attacker)
+	game.hover_presenter.update_hover_visuals(cell)
+
+
+func _forecast_hp(unit: Unit) -> int:
+	var plan: ResolvedPlan = game.aim_forecast
+	assert_object(plan).override_failure_message("the aim forecast nothing").is_not_null()
+	return LethalityRules.displayed_hp(PlanResolver.projected_hp(unit, plan.hypo),
+			PlanResolver.projected_lifecycle(unit, plan.hypo))
+
+
+func _queued_attacks(unit: Unit) -> int:
+	var count := 0
+	for action in unit.squad.get_actions():
+		if action is AttackAction:
+			count += 1
+	return count
+
+
+func test_hovering_an_aim_puts_its_outcome_on_the_target_before_the_click() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	var bystander := _spawn(ENEMY, Vector2i(6, 2))
+	_hover_aim(attacker, victim.movement.cell)
+	await _settle()
+
+	assert_int(_queued_attacks(attacker)).override_failure_message(
+			"something was queued, so a readout here would be the old wire's").is_equal(0)
+	var bar := _unit_mirror.bar_for(victim)
+	assert_bool(bar.visible).override_failure_message(
+			"an aim held over a unit put no readout on it before the click").is_true()
+	var predicted := _forecast_hp(victim)
+	assert_bool(predicted < victim.get_current_hp()).override_failure_message(
+			"the fixture aim does no damage, so the readout proves nothing").is_true()
+	assert_int(_grid_predicts(bar, false)).is_equal(predicted)
+	assert_bool(_unit_mirror.bar_for(bystander).visible).override_failure_message(
+			"a unit the aim never touches is wearing its forecast").is_false()
+
+
+# The carried weapon's ATTACK is as strong as the held one's; what differs is a mod fitted to the
+# carried WEAPON. An attack carries its own power, so a stronger attack would read stronger whichever
+# weapon were in hand -- only what the weapon itself adds can show that the forecast was asked with
+# the cycled weapon held (a mutant handing preview_aim no source passed the power-only version).
+func test_cycling_to_a_carried_weapon_forecasts_it_with_its_own_mods_and_equips_nothing() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	var held: EquippableData = attacker.get_equipped_weapon()
+	var strong := H.make_weapon()
+	var edge := WeaponModData.new()
+	edge.power_delta = 8
+	assert_bool(strong.fit(0, edge)).override_failure_message("fixture: the mod did not fit").is_true()
+	assert_bool(attacker.add_item(strong)).override_failure_message("fixture: nothing to carry it in").is_true()
+	_hover_aim(attacker, victim.movement.cell)
+	await _settle()
+	var with_held := _forecast_hp(victim)
+
+	game.cycle_aimed_attack(1)
+	await _settle()
+
+	assert_object(game.aim_source).override_failure_message("the cycle never reached the carried weapon") \
+		.is_same(strong)
+	var with_strong := _forecast_hp(victim)
+	assert_bool(with_strong < with_held).override_failure_message(
+			"the modded weapon's forecast is no worse for the victim -- it was not asked with it in hand"
+			).is_true()
+	assert_int(_grid_predicts(_unit_mirror.bar_for(victim), false)).is_equal(with_strong)
+	assert_object(attacker.get_equipped_weapon()).override_failure_message(
+			"looking at another weapon's attack equipped it").is_same(held)
+
+
+func test_a_cell_the_aim_cannot_take_forecasts_nothing() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	var far := _spawn(ENEMY, Vector2i(6, 2))   # out of the fixture weapon's adjacency reach
+	_hover_aim(attacker, far.movement.cell)
+	await _settle()
+
+	assert_object(game.aim_forecast).is_null()
+	assert_array(_shown_bars()).override_failure_message(
+			"an aim that cannot be taken still put a forecast up").is_empty()
+	assert_bool(_unit_mirror.bar_for(victim).visible).is_false()
+
+
+func test_leaving_the_aim_puts_its_forecast_away() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	_hover_aim(attacker, victim.movement.cell)
+	await _settle()
+	assert_bool(_unit_mirror.bar_for(victim).visible).override_failure_message(
+			"no forecast appeared, so its going proves nothing").is_true()
+
+	game.exit_current_mode()
+	await _settle()
+
+	assert_array(_shown_bars()).override_failure_message(
+			"the aim's forecast outlived the aim").is_empty()
+
+
+func test_the_forecast_is_what_the_click_queues() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	_hover_aim(attacker, victim.movement.cell)
+	await _settle()
+	var forecast := _forecast_hp(victim)
+
+	game._on_left_click(victim.movement.cell)
+	await _settle()
+
+	# Law #2 at the one place this ticket can break it: the preview is the plan the click makes.
+	assert_int(_predicted(victim)).is_equal(forecast)
+	assert_int(_grid_predicts(_unit_mirror.bar_for(victim), false)).is_equal(forecast)
