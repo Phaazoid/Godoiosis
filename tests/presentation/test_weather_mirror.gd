@@ -108,12 +108,13 @@ func test_a_look_draws_only_what_it_drops() -> void:
 			"fixture: snow has no look file").is_not_null()
 	_scene.game.scenario_manager.current_weather = Weather.Kind.SNOW
 	mirror._process(0.016)
-	var snow_drawn := mirror._snow.emitting and mirror._snow.visible
+	var snow_drawn := mirror._snow.emitting and mirror._snow.visible and mirror._snow_cover.visible \
+			and mirror._snow_cover.texture_albedo != null
 	var rain_on_snow := mirror._rain.emitting or mirror._rain.visible or mirror._splash.visible \
 			or mirror._wet.visible or mirror._puddles.visible
 	_scene.game.scenario_manager.current_weather = Weather.Kind.RAIN
 	mirror._process(0.016)
-	var snow_on_rain := mirror._snow.emitting or mirror._snow.visible
+	var snow_on_rain := mirror._snow.emitting or mirror._snow.visible or mirror._snow_cover.visible
 	assert_bool(snow_drawn).override_failure_message("the board is snowing and the mirror drew no snow").is_true()
 	assert_bool(rain_on_snow).override_failure_message("a snow board draws rain").is_false()
 	assert_bool(snow_on_rain).override_failure_message("a rain board draws snow").is_false()

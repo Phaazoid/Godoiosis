@@ -14,7 +14,8 @@ class_name WeatherMirror
 #   - THE STORM: bolts beyond the board (StormBolts), a screen flash this node only REPORTS (battle3d's
 #     white-out composes it with the others), a light from the strike's side, and the sky's glow.
 #   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box, wandering as they fall and lying a
-#     moment where they land. Which of the two a look draws is its FALL; every rain path is gated on it.
+#     moment where they land, and a third ground decal painted by SnowGround. Which of the two a look
+#     draws is its FALL; every rain path is gated on it.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -36,6 +37,9 @@ const DECAL_BELOW := 40.0
 const DECAL_ABOVE := 40.0
 # How far below where the camera looks a sky bolt reaches: past the bottom of any frame.
 const BOLT_BELOW := 80.0
+# The snow cover is painted per art pixel, a fraction of a second on a big board, so once it is up a
+# change waits until it has held this long: a slider drag repaints once, when it stops.
+const COVER_SETTLE := 0.15
 
 var weather_source: Callable          # () -> Weather.Kind
 var grid: BoardGrid
@@ -58,6 +62,7 @@ var _snow_process: ShaderMaterial
 var _snow_draw: ShaderMaterial
 var _wet: Decal
 var _puddles: Decal
+var _snow_cover: Decal
 var _bolts: StormBolts
 var _side: DirectionalLight3D
 
@@ -69,6 +74,10 @@ var _strip_built := false
 var _flakes_built := false
 var _wet_roughness := -1.0
 var _puddle_roughness := -1.0
+var _snow_key := 0
+var _snow_wanted := 0
+var _snow_wanted_at := 0.0
+var _snow_roughness := -1.0
 var _volume := AABB()
 var _aim_y := 0.0
 
@@ -94,6 +103,7 @@ func _ready() -> void:
 	_snow = _particles(_snow_process, _snow_draw, PlaneMesh.FACE_Z)
 	_wet = _decal()
 	_puddles = _decal()
+	_snow_cover = _decal()
 	_bolts = StormBolts.new()
 	add_child(_bolts)
 	_side = DirectionalLight3D.new()
@@ -144,6 +154,7 @@ func _process(delta: float) -> void:
 		_place_rain()
 		_style()
 	elif _snowing():
+		_sync_snow_ground()
 		_place_snow()
 		_style_snow()
 	_storm()
@@ -170,6 +181,9 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	var snow := _snowing()
 	_snow.emitting = snow
 	_snow.visible = snow
+	_snow_cover.visible = snow
+	_snow_key = 0
+	_snow_roughness = -1.0
 	_mask_versions = []
 	_ground_key = 0
 	_streak_texels = -1
@@ -220,18 +234,42 @@ func _sync_ground() -> void:
 	if key == _ground_key:
 		return
 	_ground_key = key
-	var size := Vector3(_rect.size.x * BoardSpace.CELL_SIZE, DECAL_BELOW + DECAL_ABOVE + BoardSpace.lift_offset().y,
-			_rect.size.y * BoardSpace.CELL_SIZE)
-	var centre := Vector3(_rect.position.x * BoardSpace.CELL_SIZE + size.x * 0.5,
-			-DECAL_BELOW + size.y * 0.5, _rect.position.y * BoardSpace.CELL_SIZE + size.z * 0.5)
-	for decal: Decal in [_wet, _puddles]:
-		decal.size = size
-		decal.position = centre
+	_fit(_wet)
+	_fit(_puddles)
 	_wet.texture_albedo = ImageTexture.create_from_image(WetGround.paint_wet(grid, _rect, _look.wet_tint))
 	_puddles.visible = _look.puddles
 	if _look.puddles:
 		_puddles.texture_albedo = ImageTexture.create_from_image(
 				WetGround.paint_puddles(grid, heights, _rect, _look.puddle_coverage, _look.puddle_color))
+
+
+# The snow's own ground decal, on the same rule: rebuilt when the board or the cover it paints changes.
+func _sync_snow_ground() -> void:
+	if grid == null:
+		return
+	var key := hash([_mask_versions.slice(0, 3), _look.snow_cover, _look.snow_frost, _look.snow_flecks,
+			_look.snow_color])
+	if key == _snow_key:
+		return
+	if _snow_key != 0:
+		if key != _snow_wanted:
+			_snow_wanted = key
+			_snow_wanted_at = _clock
+		if _clock - _snow_wanted_at < COVER_SETTLE:
+			return
+	_snow_key = key
+	_fit(_snow_cover)
+	_snow_cover.texture_albedo = ImageTexture.create_from_image(SnowGround.paint_cover(grid, _rect,
+			_look.snow_cover, _look.snow_frost, _look.snow_flecks, _look.snow_color))
+
+
+# A ground decal spans the board's rect, from well under the board to well over the tear-out's stage.
+func _fit(decal: Decal) -> void:
+	var size := Vector3(_rect.size.x * BoardSpace.CELL_SIZE, DECAL_BELOW + DECAL_ABOVE + BoardSpace.lift_offset().y,
+			_rect.size.y * BoardSpace.CELL_SIZE)
+	decal.size = size
+	decal.position = Vector3(_rect.position.x * BoardSpace.CELL_SIZE + size.x * 0.5,
+			-DECAL_BELOW + size.y * 0.5, _rect.position.y * BoardSpace.CELL_SIZE + size.z * 0.5)
 
 
 # ---- The birth box -----------------------------------------------------------------------------
@@ -385,6 +423,10 @@ func _style_snow() -> void:
 		_snow_draw.set_shader_parameter("flakes", ImageTexture.create_from_image(WeatherArt.flakes(Color.WHITE)))
 	_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
 	_snow_draw.set_shader_parameter("tint", _look.flake_color)
+	_snow_cover.albedo_mix = 1.0
+	if not is_equal_approx(_look.snow_roughness, _snow_roughness):
+		_snow_roughness = _look.snow_roughness
+		_snow_cover.texture_orm = _orm(_snow_roughness)
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one

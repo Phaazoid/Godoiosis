@@ -16,6 +16,8 @@ extends Node
 # user://weather_probe/ for an eye check. It writes nothing under res://.
 
 const MISSION := "res://Scenarios/missions/TheFord.tres"
+# Snow is measured on grass: the Ford's pale stone hides a snow cover.
+const SNOW_MISSION := "res://Scenarios/missions/Level_1.tres"
 const OUT_DIR := "user://weather_probe"
 
 var _scene: Node3D
@@ -35,14 +37,7 @@ func _ready() -> void:
 	add_child(_scene)
 	await _wait(0.5)
 	_game = _scene.game
-	_scene.load_mission(MISSION)
-	await _wait(0.5)
-	# The board, unobstructed: no lesson dialog over it, no title or pre-mission screen in front of it.
-	Dialogic.end_timeline()
-	_game.mission_controller.call("_close_mission_select")
-	if _game.mission_controller.has_method("commit_deployment") and _game.mission_controller.get("_deploying"):
-		_game.mission_controller.commit_deployment()
-	await _wait(1.5)
+	await _open(MISSION)
 	var failures := 0
 	var clear := await _grab("clear")
 	# The board moves on its own (water, flames, idle units), so the rain is measured against how much
@@ -112,8 +107,12 @@ func _storm() -> int:
 	return 0 if flash > 0.0 and lit and bolts > 0 else 1
 
 
-# Flakes are near-white pixels the clear frame did not have; a blizzard must draw more than light snow.
-func _snow(clear: Image) -> int:
+# Flakes are near-white pixels the clear frame did not have; a blizzard must draw more than light snow,
+# and every strength must whiten more than its flakes alone do (the cover).
+func _snow(_ford_clear: Image) -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	await _open(SNOW_MISSION)
+	var clear := await _grab("snow_clear")
 	var counts := {}
 	var mirror: WeatherMirror = _scene._weather
 	for kind: Weather.Kind in [Weather.Kind.LIGHT_SNOW, Weather.Kind.SNOW, Weather.Kind.BLIZZARD]:
@@ -146,6 +145,17 @@ func _save_zoom(frame: Image, label: String) -> void:
 	var crop := frame.get_region(Rect2i((frame.get_width() - w) / 2, (frame.get_height() - h) / 2, w, h))
 	crop.resize(w * 4, h * 4, Image.INTERPOLATE_NEAREST)
 	crop.save_png("%s/%s.png" % [OUT_DIR, label])
+
+
+# The board, unobstructed: no lesson dialog over it, no title or pre-mission screen in front of it.
+func _open(mission: String) -> void:
+	_scene.load_mission(mission)
+	await _wait(0.5)
+	Dialogic.end_timeline()
+	_game.mission_controller.call("_close_mission_select")
+	if _game.mission_controller.has_method("commit_deployment") and _game.mission_controller.get("_deploying"):
+		_game.mission_controller.commit_deployment()
+	await _wait(1.5)
 
 
 func _grab(label: String) -> Image:
