@@ -492,11 +492,18 @@ func test_hovering_an_aim_puts_its_outcome_on_the_target_before_the_click() -> v
 			"a unit the aim never touches is wearing its forecast").is_false()
 
 
-func test_cycling_to_a_stronger_carried_weapon_moves_the_forecast_and_equips_nothing() -> void:
+# The carried weapon's ATTACK is as strong as the held one's; what differs is a mod fitted to the
+# carried WEAPON. An attack carries its own power, so a stronger attack would read stronger whichever
+# weapon were in hand -- only what the weapon itself adds can show that the forecast was asked with
+# the cycled weapon held (a mutant handing preview_aim no source passed the power-only version).
+func test_cycling_to_a_carried_weapon_forecasts_it_with_its_own_mods_and_equips_nothing() -> void:
 	var attacker := _spawn(PLAYER, Vector2i(2, 2))
 	var victim := _spawn(ENEMY, Vector2i(3, 2))
 	var held: EquippableData = attacker.get_equipped_weapon()
-	var strong := H.make_weapon(12)
+	var strong := H.make_weapon()
+	var edge := WeaponModData.new()
+	edge.power_delta = 8
+	assert_bool(strong.fit(0, edge)).override_failure_message("fixture: the mod did not fit").is_true()
 	assert_bool(attacker.add_item(strong)).override_failure_message("fixture: nothing to carry it in").is_true()
 	_hover_aim(attacker, victim.movement.cell)
 	await _settle()
@@ -509,7 +516,7 @@ func test_cycling_to_a_stronger_carried_weapon_moves_the_forecast_and_equips_not
 		.is_same(strong)
 	var with_strong := _forecast_hp(victim)
 	assert_bool(with_strong < with_held).override_failure_message(
-			"the stronger weapon's forecast is no worse for the victim -- it was not asked with it in hand"
+			"the modded weapon's forecast is no worse for the victim -- it was not asked with it in hand"
 			).is_true()
 	assert_int(_grid_predicts(_unit_mirror.bar_for(victim), false)).is_equal(with_strong)
 	assert_object(attacker.get_equipped_weapon()).override_failure_message(
