@@ -469,7 +469,10 @@ The rulings, all dev calls, all made before building:
 - **Persisted, not session-scoped.** `user://settings.cfg` via `ConfigFile`, keyed by the enum
   member's NAME — `Experiments`'s shape, minus its cull-the-flags doctrine, because a setting is a
   promise to the player rather than an experiment. A static class, not an autoload; this project
-  has none, and `Stats` / `Elemental` / `Experiments` are all class-level statics.
+  has none, and `Stats` / `Elemental` / `Experiments` are all class-level statics. **Only a value
+  that differs from the default is written** ([#648](https://github.com/Phaazoid/Godoiosis/issues/648),
+  2026-10-09): putting a row back to its default erases the key, so a player who wandered across a
+  choice strip and back still follows the next default the dev ships.
 - **The preference governs the HOVER reason only.** A bar that is up because a queued
   plan is about to change that unit stays up either way. Law #2 says the queue never lies, and #354
   had just finished ruling that a prediction survives to the end of its pass; a preference that can

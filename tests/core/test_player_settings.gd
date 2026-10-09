@@ -397,6 +397,78 @@ func test_a_hand_edited_name_is_cleaned_on_load() -> void:
 			PlayerSettings.max_length_of(TEXT_SETTING))
 	_close_disk()
 
+# --- #648: a default is never stored -----------------------------------------------------------
+#
+# The claim is about the FILE: a key in the cfg is a pin, and a pinned player never sees the next
+# default. So every case reads the cfg back rather than value_of, which answers the same for "stored
+# the default" and "stored nothing" -- the very difference #648 is about. A fix that wrote the
+# default value in would pass any value_of check and fail all of these.
+
+func _cfg_has(key: String) -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(PlayerSettings.config_path) != OK:
+		return false
+	return cfg.has_section_key(PlayerSettings.CONFIG_SECTION, key)
+
+# Any option of a choice row that is not its default -- derived, never pinned.
+func _other_choice(setting: PlayerSettings.Setting) -> int:
+	var authored: int = PlayerSettings.default_value(setting)
+	return (authored + 1) % PlayerSettings.options_of(setting).size()
+
+func test_a_setting_put_back_to_its_default_leaves_no_key_in_the_cfg() -> void:
+	_open_disk("user://settings_unpin_test.cfg")
+	PlayerSettings.set_choice(CHOICE_SETTING, _other_choice(CHOICE_SETTING))
+	assert_bool(_cfg_has("HEALTH_BARS")).override_failure_message(
+			"fixture: a non-default choice was not written at all").is_true()
+	PlayerSettings.set_choice(CHOICE_SETTING, PlayerSettings.default_value(CHOICE_SETTING))
+	assert_bool(_cfg_has("HEALTH_BARS")).override_failure_message(
+			"putting the setting back wrote today's default into the cfg -- the player is pinned to it"
+			).is_false()
+	_close_disk()
+
+# Every row, every kind: the default is never what gets written.
+func test_no_row_stores_its_own_default() -> void:
+	_open_disk("user://settings_unpin_all_test.cfg")
+	for setting: PlayerSettings.Setting in PlayerSettings.DEFS:
+		PlayerSettings.set_value(setting, PlayerSettings.default_value(setting))
+	for setting: PlayerSettings.Setting in PlayerSettings.DEFS:
+		var key: String = PlayerSettings.Setting.keys()[setting]
+		assert_bool(_cfg_has(key)).override_failure_message(
+				"%s stored its own default" % key).is_false()
+	_close_disk()
+
+# A slider hands back k * step, and 12 * 0.05 is 0.6000000000000001 rather than 0.6, so a level
+# is equal to its default when it is equal to float precision, not bit for bit.
+func test_a_level_a_rounding_error_from_its_default_is_the_default() -> void:
+	_open_disk("user://settings_unpin_level_test.cfg")
+	var authored: float = PlayerSettings.default_value(LEVEL_SETTING)
+	var nudge := 1e-9 if authored < PlayerSettings.max_of(LEVEL_SETTING) else -1e-9
+	var nudged := authored + nudge
+	assert_bool(nudged != authored).override_failure_message(
+			"fixture: the nudge did not move the float").is_true()
+	PlayerSettings.set_level(LEVEL_SETTING, nudged)
+	assert_bool(_cfg_has("SFX_VOLUME")).override_failure_message(
+			"a level a rounding error off its default was stored as a choice").is_false()
+	_close_disk()
+
+# A cfg written before #648 can already hold a default. It lets go of it on the next launch, and a
+# real choice beside it survives.
+func test_a_cfg_that_already_pins_a_default_lets_go_of_it() -> void:
+	var path := "user://settings_unpin_old_cfg_test.cfg"
+	var cfg := ConfigFile.new()
+	cfg.set_value(PlayerSettings.CONFIG_SECTION, "HEALTH_BARS", PlayerSettings.default_value(CHOICE_SETTING))
+	cfg.set_value(PlayerSettings.CONFIG_SECTION, "BATTLE_ZOOM_MODE", _other_choice(ZOOM_SETTING))
+	assert_int(cfg.save(path)).is_equal(OK)   # fixture setup, not the claim
+	_open_disk(path)
+	_relaunch()
+	PlayerSettings.set_on(BOOL_SETTING, not bool(PlayerSettings.default_value(BOOL_SETTING)))   # any save
+	assert_bool(_cfg_has("HEALTH_BARS")).override_failure_message(
+			"a default the old cfg pinned survived the next save").is_false()
+	assert_bool(_cfg_has("BATTLE_ZOOM_MODE")).override_failure_message(
+			"a real choice beside it was lost").is_true()
+	assert_int(PlayerSettings.choice_of(ZOOM_SETTING)).is_equal(_other_choice(ZOOM_SETTING))
+	_close_disk()
+
 # --- helpers -----------------------------------------------------------------------------------
 
 # Opt back into the real disk path, against a temp cfg nobody else owns.
