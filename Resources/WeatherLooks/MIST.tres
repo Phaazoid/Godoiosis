@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://cxtjmuluycwpr"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_k7nl8"]
+
+[resource]
+script = ExtResource("1_k7nl8")
+fall = 2
+fog_strength = 0.8
+layer_amount = 0.0
+card_amount = 1.2
+card_opacity = 0.55
+card_lift = 0.45
+grade_saturation = 0.95

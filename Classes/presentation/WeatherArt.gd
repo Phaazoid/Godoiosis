@@ -2,8 +2,9 @@ extends Object
 class_name WeatherArt
 
 # The pixel art the weather draws (#1260), generated rather than drawn: a rain streak, a splash ring's
-# frames, a snowflake's two frames (#1269) and the queue row's icon. GasPuffArt's shape -- a tune shows the moment the art is rebuilt,
-# and a sheet replaces any of it once someone draws one. The icon especially is a PLACEHOLDER.
+# frames, a snowflake's two frames (#1269), the fog's wisps and its drifting noise (#1285), and the queue
+# row's icon. GasPuffArt's shape -- a tune shows the moment the art is rebuilt, and a sheet replaces any
+# of it once someone draws one. The icon and the wisps especially are PLACEHOLDERS.
 #
 # Pure and static: every function returns a fresh Image or a cached texture, and nothing reads a node.
 
@@ -13,8 +14,14 @@ const SPLASH_FRAMES := 4
 const SPLASH_SIDE := 9
 # The square a snowflake's frame is drawn in, in art pixels: room for the big flake's plus.
 const FLAKE_SIDE := 3
+# A fog wisp's frame, in GROUND art pixels (BoardOverlays.ART_PIXELS_PER_CELL a cell), and how many.
+const WISP_SIZE := Vector2i(44, 14)
+const WISP_FRAMES := 3
+# The fog's breakup and bank noise: one seamless tile, this many pixels a side.
+const FOG_NOISE_SIDE := 256
 
 static var _icon: Texture2D = null
+static var _fog_noise: Texture2D = null
 
 
 # A rain streak `texels` art pixels long and one wide, brightest at its leading (bottom) end. The
@@ -57,6 +64,41 @@ static func flakes(color: Color) -> Image:
 	for step: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 		image.set_pixel(FLAKE_SIDE + mid + step.x, mid + step.y, arm)
 	return image
+
+
+# The fog's wisps (#1285): WISP_FRAMES frames side by side, each WISP_SIZE, white with its opacity in
+# three steps -- a soft oval broken by noise, so each frame reads as a different scrap of fog. The draw
+# shader tints it and fades it.
+static func fog_wisps() -> Image:
+	var w := WISP_SIZE.x
+	var h := WISP_SIZE.y
+	var image := Image.create_empty(w * WISP_FRAMES, h, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.frequency = 0.11
+	var seeds: Array[int] = [11, 23, 37]   # the three the dev picked from, on 2026-10-09's renders
+	for frame in WISP_FRAMES:
+		noise.seed = seeds[frame % seeds.size()]
+		for y in h:
+			for x in w:
+				var nx := (x + 0.5 - w * 0.5) / (w * 0.5)
+				var ny := (y + 0.5 - h * 0.6) / (h * 0.5)
+				var a := clampf((1.0 - (nx * nx + ny * ny)) * 1.2 + noise.get_noise_2d(x, y) * 0.7, 0.0, 1.0)
+				a = floorf(a * 3.0 + 0.5) / 3.0
+				image.set_pixel(frame * w + x, y, Color(1.0, 1.0, 1.0, a))
+	return image
+
+
+# The fog's noise (#1285), one seamless tile, cached for the process: the breakup and the banks both
+# read it, at their own scales.
+static func fog_noise() -> Texture2D:
+	if _fog_noise == null:
+		var noise := FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		noise.frequency = 0.015
+		noise.fractal_octaves = 3
+		noise.seed = 1285
+		_fog_noise = ImageTexture.create_from_image(noise.get_seamless_image(FOG_NOISE_SIDE, FOG_NOISE_SIDE))
+	return _fog_noise
 
 
 # The END OF TURN row's icon: three slanted streaks and a drop on a board-icon canvas. A placeholder.

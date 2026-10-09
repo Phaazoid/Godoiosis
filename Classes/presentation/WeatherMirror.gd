@@ -19,8 +19,12 @@ class_name WeatherMirror
 #     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
 #     snow_on_props tells BoardMirror to cap the billboards and bury the tufts. Which of the two a look draws
 #     is its FALL; every rain path is gated on it.
+#   - FOG (#1285): drifting pixel CARDS (fog_card.gdshader) over a thin fog PASS (fog_pass.gdshader), a
+#     full-screen quad marching each view ray through the fog. Both read fog_field.gdshaderinc, the one
+#     answer to how thick the fog is at a point, over the rain's mask and FogGround's field (where fog
+#     thins at an edge, and how deep it pools over its own ground). Both sort under every piece of markup.
 #   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
-#     easing between weathers. Either fall may author one; every shipped rain leaves it at identity.
+#     easing between weathers. Any fall may author one; every shipped rain leaves it at identity.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -35,6 +39,7 @@ const MAX_DROPS := 60000
 const MAX_SPLASHES := 12000
 const MAX_FLAKES := 200000
 const MAX_DRIFT := 20000
+const MAX_FOG_CARDS := 20000
 # How far above the camera drops are born, so none ever appears inside the frame.
 const SPAWN_ABOVE := 2.0
 # The decals' height: from well under the board to well over the tear-out's stage, which shares the
@@ -74,6 +79,11 @@ var _snow_draw: ShaderMaterial
 var _drift: GPUParticles3D
 var _drift_process: ShaderMaterial
 var _drift_draw: ShaderMaterial
+var _fog_pass: MeshInstance3D
+var _fog_pass_material: ShaderMaterial
+var _fog_cards: GPUParticles3D
+var _fog_process: ShaderMaterial
+var _fog_draw: ShaderMaterial
 var _wet: Decal
 var _puddles: Decal
 var _snow_cover: Decal
@@ -95,6 +105,10 @@ var _snow_key := 0
 var _snow_wanted := 0
 var _snow_wanted_at := 0.0
 var _snow_roughness := -1.0
+var _fog_key := 0
+var _fog_drift := Vector2.ZERO
+var _span := Vector2.ZERO
+var _wisps_built := false
 var _volume := AABB()
 var _aim_y := 0.0
 
@@ -122,6 +136,22 @@ func _ready() -> void:
 	_drift_draw = _draw_material("res://Classes/presentation/rain_drop.gdshader")
 	_drift_draw.set_shader_parameter("age_fade", 1.0)
 	_drift = _particles(_drift_process, _drift_draw, PlaneMesh.FACE_Z)
+	_fog_process = _process_material("res://Classes/presentation/fog_card.gdshader")
+	_fog_draw = _draw_material("res://Classes/presentation/fog_card_draw.gdshader")
+	_fog_draw.render_priority = BoardOverlays.FOG_CARD_RENDER_PRIORITY
+	_fog_cards = _particles(_fog_process, _fog_draw, PlaneMesh.FACE_Z)
+	_fog_pass_material = _draw_material("res://Classes/presentation/fog_pass.gdshader")
+	_fog_pass_material.render_priority = BoardOverlays.FOG_RENDER_PRIORITY
+	_fog_pass = MeshInstance3D.new()
+	var screen := QuadMesh.new()
+	screen.size = Vector2(2.0, 2.0)   # the vertex stage pins it to the whole screen
+	_fog_pass.mesh = screen
+	_fog_pass.material_override = _fog_pass_material
+	_fog_pass.extra_cull_margin = 16384.0
+	_fog_pass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_fog_pass.layers = BoardOverlays.WORLD_RENDER_LAYER
+	_fog_pass.visible = false
+	add_child(_fog_pass)
 	_wet = _decal()
 	_puddles = _decal()
 	_snow_cover = _decal()
@@ -160,7 +190,7 @@ func cover_volume(volume: AABB) -> void:
 # Every particle system this node draws: the one list the cull sweep walks, so a new one cannot be
 # left out of it.
 func emitters() -> Array[GPUParticles3D]:
-	return [_rain, _splash, _snow, _drift]
+	return [_rain, _splash, _snow, _drift, _fog_cards]
 
 
 # The colour of the units' caps (#1269; their own since #1278, not the ground's), its alpha 1 while
@@ -207,6 +237,10 @@ func _process(delta: float) -> void:
 		_sync_snow_ground()
 		_place_snow()
 		_style_snow()
+	elif _fogging():
+		_sync_fog()
+		_place_fog(delta)
+		_style_fog()
 	_storm()
 
 
@@ -216,6 +250,10 @@ func _raining() -> bool:
 
 func _snowing() -> bool:
 	return _look != null and _look.fall == WeatherLook.Fall.SNOW
+
+
+func _fogging() -> bool:
+	return _look != null and _look.fall == WeatherLook.Fall.FOG
 
 
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
@@ -237,6 +275,11 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 		snow_on_props.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE, snow)
 	_drift.emitting = snow and look.drift_rate > 0.0
 	_drift.visible = _drift.emitting
+	var fog := _fogging()
+	_fog_pass.visible = fog
+	_fog_cards.emitting = fog
+	_fog_cards.visible = fog
+	_fog_key = 0
 	_drift_texels = -1
 	_snow_key = 0
 	_snow_roughness = -1.0
@@ -268,8 +311,10 @@ func _sync_mask() -> void:
 	_mask_versions = versions
 	_rect = rect
 	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
+	_span = WeatherMask.span(image)
 	var texture := ImageTexture.create_from_image(image)
-	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process, _drift_process]:
+	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process, _drift_process,
+			_fog_process, _fog_pass_material]:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
@@ -326,6 +371,21 @@ func _sync_snow_ground() -> void:
 		_snow_cover.texture_normal = ImageTexture.create_from_image(SnowGround.relief(cover,
 				_rect.position * SnowGround.PX, _look.snow_relief, _look.relief_softness, _look.snow_bumps,
 				_look.bump_size))
+
+
+# Where fog may stand (#1285): FogGround's field, repainted when the board or the three values it
+# paints change. One texel a cell, so it is cheap enough to follow a slider live.
+func _sync_fog() -> void:
+	if grid == null:
+		return
+	var key := hash([_mask_versions.slice(0, 3), _look.pool_share, _look.pool_depth, _look.edge_fade])
+	if key == _fog_key:
+		return
+	_fog_key = key
+	var texture := ImageTexture.create_from_image(FogGround.field(grid, heights, _rect, _look.pool_share,
+			_look.pool_depth, _look.edge_fade))
+	for material: ShaderMaterial in [_fog_process, _fog_pass_material]:
+		material.set_shader_parameter("fog_field", texture)
 
 
 # A ground decal spans the board's rect, from well under the board to well over the tear-out's stage.
@@ -442,6 +502,37 @@ func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> vo
 			MAX_DRIFT)
 
 
+# The fog's cards are born on the ground over the view and drift with the wind; the fog's noise drifts
+# with them, on this node's scaled clock, so a hitstop holds the fog with the world.
+func _place_fog(delta: float) -> void:
+	var wind := Vector2(_look.wind_x, _look.wind_z) * _look.fog_speed
+	_fog_drift += wind * delta
+	var card := _card_size()
+	var box := _view_box(1.0, Vector2.ZERO, maxf(card.x, card.y))
+	if box.is_empty():
+		return
+	var lo: Vector2 = box["lo"]
+	var hi: Vector2 = box["hi"]
+	var life := maxf(_look.card_life, 0.5)
+	_fog_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
+	_fog_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
+	_fog_process.set_shader_parameter("velocity", Vector3(wind.x, 0.0, wind.y))
+	_fog_process.set_shader_parameter("lift", _look.card_lift)
+	_size(_fog_cards, _fog_process, _look.card_amount * float(box["area"]) / life, life, MAX_FOG_CARDS)
+
+
+# A card's world size: a wisp at the ground art's pixel size, times the look's card size.
+func _card_size() -> Vector2:
+	return Vector2(WeatherArt.WISP_SIZE) / BoardOverlays.ART_PIXELS_PER_CELL * maxf(_look.card_size, 0.01)
+
+
+# The fog's colour: its own, taken toward the sky's horizon by the look's sky tint. The sky is read and
+# never written, so a night or dusk look darkens or warms the fog without the two fighting.
+static func fog_tint(look: WeatherLook, horizon: Color) -> Color:
+	var color := look.fog_color.lerp(horizon, clampf(look.sky_tint, 0.0, 1.0))
+	return Color(color.r, color.g, color.b, 1.0)
+
+
 # Births per second -> an amount and a lifetime, with slack: either property restarts the system, so
 # they move only when the wanted value strays far, and `keep` trims the births in between so the
 # density on screen is the authored one whatever the box is doing. PURE in its arithmetic -- see
@@ -522,6 +613,34 @@ func _style_snow() -> void:
 	_caps.modulate = _look.snow_color
 	if snow_on_props.is_valid():
 		snow_on_props.call(_look.caps_props, _look.snow_color, true)   # returns at once when nothing moved
+
+
+func _style_fog() -> void:
+	if not _wisps_built:
+		_wisps_built = true
+		_fog_draw.set_shader_parameter("wisps", ImageTexture.create_from_image(WeatherArt.fog_wisps()))
+		_fog_draw.set_shader_parameter("frames", float(WeatherArt.WISP_FRAMES))
+		_fog_process.set_shader_parameter("frames", float(WeatherArt.WISP_FRAMES))
+	var color := fog_tint(_look, sky.sky_horizon_color if sky != null else _look.fog_color)
+	_fog_draw.set_shader_parameter("tint", Color(color.r, color.g, color.b, _look.card_opacity))
+	_fog_draw.set_shader_parameter("size", _card_size())
+	_fog_pass_material.set_shader_parameter("tint", color)
+	_fog_pass_material.set_shader_parameter("strength", _look.fog_strength)
+	_fog_pass_material.set_shader_parameter("pixel_steps", 1.0 if _look.pixel_steps else 0.0)
+	_fog_pass_material.set_shader_parameter("art_pixels", BoardOverlays.ART_PIXELS_PER_CELL)
+	var reach := maxf(maxf(_look.layer_depth, _look.pool_depth + 0.2), _look.bank_height)
+	_fog_pass_material.set_shader_parameter("slab_low", _span.x - 0.2)
+	_fog_pass_material.set_shader_parameter("slab_high", _span.y + reach + 0.3)
+	for material: ShaderMaterial in [_fog_pass_material, _fog_process]:
+		material.set_shader_parameter("fog_noise", WeatherArt.fog_noise())
+		material.set_shader_parameter("layer_amount", _look.layer_amount)
+		material.set_shader_parameter("layer_depth", maxf(_look.layer_depth, 0.01))
+		material.set_shader_parameter("pool_amount", _look.pool_amount)
+		material.set_shader_parameter("bank_amount", _look.bank_amount)
+		material.set_shader_parameter("bank_height", maxf(_look.bank_height, 0.01))
+		material.set_shader_parameter("bank_size", maxf(_look.bank_size, 0.5))
+		material.set_shader_parameter("breakup", _look.fog_breakup)
+		material.set_shader_parameter("fog_drift", _fog_drift)
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one

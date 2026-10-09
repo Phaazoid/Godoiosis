@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
-**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #1260's weather folded in 2026-10-08; #1269's snows folded in 2026-10-09.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #1260's weather folded in 2026-10-08; #1269's snows folded in 2026-10-09; #1285's fogs the same day.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -297,6 +297,8 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 | Tempest / High Winds | constant AIR | shoves units, disperses all atmospheres | anti-gas; positioning chaos |
 
 > **BUILT, in part ([#1260](https://github.com/Phaazoid/Godoiosis/issues/1260), 2026-10-08):** Light Rain, Rain, Heavy Rain and Thunderstorm exist as a board's weather, authored per board and never rolled. Their one RULE is the soak -- WET at the end of a unit's own turn ([elemental-system.md](elemental-system.md)) -- so the *shock meta* is real; the rest of the Rain and Thunderstorm rows (fire suppressed, burning extinguished, the telegraphed strike on the most-exposed unit) is not built, and the storm's lightning is a LOOK that never lands on a cell. The table stays the menu; [#277](https://github.com/Phaazoid/Godoiosis/issues/277) owns the rest.
+>
+> **[#1285](https://github.com/Phaazoid/Godoiosis/issues/1285) (2026-10-09):** Mist, Fog and Thick Fog exist as LOOKS with no rule at all -- the Fog / Mist row above (less vision and LDR) is unbuilt, and thick fog may swallow a unit visually before any sight rule backs it (dev: *"Full look, rules later"*).
 >
 > **[#1269](https://github.com/Phaazoid/Godoiosis/issues/1269) (2026-10-09):** Light Snow, Snow and Blizzard exist as LOOKS with no rule at all -- the Blizzard row above (Chill accrual, freezing, ice bridges, weak fire) is unbuilt. Snow settling on units and their frost breath are drawn before any Chilled rule backs them (dev: *"Full look, rules later"*).
 

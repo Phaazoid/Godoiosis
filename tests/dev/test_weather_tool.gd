@@ -59,18 +59,24 @@ func _slider_after(root: Node, label: String) -> Range:
 
 
 # A look draws only the rows of what it drops (#1269): a snow page lists no splashes, a rain page no
-# swirl, and both list the shared ones. Asked of the built page, not of the table.
+# swirl, a fog page (#1285) neither and no fall speed, and all list the shared ones. Asked of the built
+# page, not of the table.
 func test_a_page_lists_only_its_falls_rows() -> void:
-	var snow := _label_texts(Weather.Kind.SNOW)
-	var rain := _label_texts(Weather.Kind.RAIN)
-	assert_object(WeatherLook.for_kind(Weather.Kind.SNOW)).override_failure_message(
-			"fixture: snow has no look file").is_not_null()
+	var pages := {
+		WeatherLook.Fall.SNOW: _label_texts(Weather.Kind.SNOW),
+		WeatherLook.Fall.RAIN: _label_texts(Weather.Kind.RAIN),
+		WeatherLook.Fall.FOG: _label_texts(Weather.Kind.FOG),
+	}
+	for kind: Weather.Kind in [Weather.Kind.SNOW, Weather.Kind.FOG]:
+		assert_object(WeatherLook.for_kind(kind)).override_failure_message(
+				"fixture: %s has no look file" % Weather.name_of(kind)).is_not_null()
 	for row: Dictionary in WeatherLook.ROWS:
 		var label: String = row["label"]
-		var on_snow: bool = not row.has("fall") or row["fall"] == WeatherLook.Fall.SNOW
-		var on_rain: bool = not row.has("fall") or row["fall"] == WeatherLook.Fall.RAIN
-		assert_bool(snow.has(label)).override_failure_message("snow page, row '%s'" % label).is_equal(on_snow)
-		assert_bool(rain.has(label)).override_failure_message("rain page, row '%s'" % label).is_equal(on_rain)
+		for fall: WeatherLook.Fall in pages:
+			var shown: bool = not row.has("fall") or (row["fall"] is Array and (row["fall"] as Array).has(fall)) \
+					or (row["fall"] is int and row["fall"] == fall)
+			assert_bool((pages[fall] as Array[String]).has(label)).override_failure_message(
+					"%s page, row '%s'" % [WeatherLook.Fall.keys()[fall], label]).is_equal(shown)
 
 
 func _label_texts(kind: Weather.Kind) -> Array[String]:

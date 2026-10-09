@@ -43,6 +43,21 @@ static func build(grid: TileMapLayer, heights: BoardHeights, rect: Rect2i,
 	return image
 
 
+# The lowest and highest ground a mask holds, world units, as (low, high): the slab the fog pass
+# marches (#1285). (0, 0) when the mask holds no ground.
+static func span(image: Image) -> Vector2:
+	var low := INF
+	var high := -INF
+	for y in image.get_height():
+		for x in image.get_width():
+			var c := image.get_pixel(x, y)
+			if c.r < VOID_BELOW:
+				continue
+			low = minf(low, minf(minf(c.r, c.g), minf(c.b, c.a)))
+			high = maxf(high, maxf(maxf(c.r, c.g), maxf(c.b, c.a)))
+	return Vector2.ZERO if low == INF else Vector2(low, high)
+
+
 # The surface a drop at world (x, z) falls onto, or VOID. Terrain.height_at_uv on the texel's corners,
 # exactly as rain.gdshader and splash.gdshader evaluate it.
 static func surface_at(image: Image, rect: Rect2i, x: float, z: float) -> float:

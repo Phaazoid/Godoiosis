@@ -2,7 +2,8 @@
 # the dev's eye and tools/weather_probe's pixels; what is pinned here is that each channel is WIRED:
 #
 #   - the cull box reaches every emitter (#656 shipped a particle invisible for want of exactly this);
-#   - a look draws only what it drops: snow turns rain off, and rain snow (#1269);
+#   - a look draws only what it drops: snow turns rain off, and rain snow (#1269); fog draws its pass
+#     and cards and neither (#1285), and sorts under every piece of markup;
 #   - a storm's flash reaches the screen through battle3d's white-out on an ordinary frame;
 #   - a clear board draws nothing, and the board's weather is what the mirror draws;
 #   - the box arithmetic carries the authored births whatever the amount;
@@ -70,7 +71,8 @@ func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -
 	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	mirror._process(0.016)
 	assert_bool(mirror._rain.emitting or mirror._rain.visible or mirror._wet.visible \
-			or mirror._puddles.visible or mirror._splash.visible or mirror._snow.visible).override_failure_message(
+			or mirror._puddles.visible or mirror._splash.visible or mirror._snow.visible \
+			or mirror._fog_pass.visible or mirror._fog_cards.visible).override_failure_message(
 			"a clear board still draws weather").is_false()
 
 
@@ -80,6 +82,8 @@ func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -
 func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> void:
 	var mirror := _mirror()
 	var mask := ["mask", "mask_origin", "cell_size", "box_min", "box_max", "floor_y", "keep"]
+	var fog := ["mask", "mask_origin", "cell_size", "fog_field", "fog_noise", "layer_amount", "layer_depth",
+			"pool_amount", "bank_amount", "bank_height", "bank_size", "breakup", "fog_drift"]
 	var wanted := {
 		mirror._rain_process: mask + ["velocity"],
 		mirror._rain_draw: ["streak", "size", "tint"],
@@ -90,6 +94,9 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror._drift_process: mask + ["velocity", "hover"],
 		mirror._drift_draw: ["streak", "size", "tint", "age_fade"],
 		mirror.grade()._material: ["saturation", "brightness", "tint", "veil", "veil_color", "veil_offset"],
+		mirror._fog_process: fog + ["box_min", "box_max", "keep", "velocity", "lift", "frames"],
+		mirror._fog_draw: ["wisps", "tint", "size", "frames"],
+		mirror._fog_pass_material: fog + ["tint", "strength", "pixel_steps", "art_pixels", "slab_low", "slab_high"],
 	}
 	for material: ShaderMaterial in wanted:
 		var names: Array[String] = []
@@ -321,3 +328,53 @@ func test_the_snow_relief_reaches_the_cover_and_zero_takes_it_off() -> void:
 	look.snow_relief = was
 	assert_bool(raised).override_failure_message("a snow with relief drew a flat cover").is_true()
 	assert_bool(flat).override_failure_message("a relief of 0 left the cover raised").is_true()
+
+
+# A fog board (#1285) draws the fog's pass and cards, with where fog may stand handed to both, and no
+# rain or snow; a rain board after it draws no fog.
+func test_a_fog_board_draws_its_pass_and_cards_and_nothing_else() -> void:
+	var mirror := _mirror()
+	assert_object(WeatherLook.for_kind(Weather.Kind.FOG)).override_failure_message(
+			"fixture: fog has no look file").is_not_null()
+	_scene.game.scenario_manager.current_weather = Weather.Kind.FOG
+	mirror._process(0.016)
+	var drawn := mirror._fog_pass.visible and mirror._fog_cards.emitting and mirror._fog_cards.visible
+	var field_in := mirror._fog_pass_material.get_shader_parameter("fog_field") != null \
+			and mirror._fog_process.get_shader_parameter("fog_field") != null
+	var other := mirror._rain.visible or mirror._snow.visible or mirror._wet.visible or mirror._snow_cover.visible
+	_scene.game.scenario_manager.current_weather = Weather.Kind.RAIN
+	mirror._process(0.016)
+	var fog_on_rain := mirror._fog_pass.visible or mirror._fog_cards.emitting or mirror._fog_cards.visible
+	assert_bool(drawn).override_failure_message("the board is foggy and the mirror drew no fog").is_true()
+	assert_bool(field_in).override_failure_message("the fog drew with nowhere to stand").is_true()
+	assert_bool(other).override_failure_message("a fog board draws rain or snow").is_false()
+	assert_bool(fog_on_rain).override_failure_message("a rain board draws fog").is_false()
+
+
+# The ruling that markup and rings draw over fog (#1285): both of the fog's draws sort under every
+# BoardOverlays layer, the outline a layer draws one under its own sort included, and under the gas
+# floor -- and the mirror's materials carry those priorities, so the table is not a comment.
+func test_the_fog_sorts_under_every_piece_of_markup() -> void:
+	var mirror := _mirror()
+	var lowest := BoardOverlays.GAS_FLOOR_SORT
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		lowest = mini(lowest, int(BoardOverlays.LAYERS[layer]["sort"]) - 1)
+	for priority: int in [mirror._fog_pass_material.render_priority, mirror._fog_draw.render_priority]:
+		assert_int(priority).override_failure_message(
+				"a fog draw sorts at %d, not under the lowest markup at %d" % [priority, lowest]).is_less(lowest)
+	assert_int(mirror._fog_pass_material.render_priority).is_equal(BoardOverlays.FOG_RENDER_PRIORITY)
+	assert_int(mirror._fog_draw.render_priority).is_equal(BoardOverlays.FOG_CARD_RENDER_PRIORITY)
+
+
+# The fog takes the sky's horizon colour by the look's share of it, and none at 0 -- read, so a night
+# look darkens the fog without either writing the other.
+func test_the_fog_takes_the_sky_by_its_share() -> void:
+	var look := WeatherLook.new()
+	look.fog_color = Color(1.0, 1.0, 1.0)
+	var night := Color(0.1, 0.12, 0.2)
+	look.sky_tint = 0.0
+	assert_bool(WeatherMirror.fog_tint(look, night).is_equal_approx(Color(1.0, 1.0, 1.0))).override_failure_message(
+			"a fog that takes none of the sky still changed colour").is_true()
+	look.sky_tint = 1.0
+	assert_bool(WeatherMirror.fog_tint(look, night).is_equal_approx(night)).override_failure_message(
+			"a fog that takes all of the sky is not the sky's colour").is_true()

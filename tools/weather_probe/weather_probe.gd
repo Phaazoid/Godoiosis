@@ -10,7 +10,9 @@ extends Node
 #   - that a STORM strike reaches the screen (the white-out) and draws its bolt;
 #   - that each SNOW strength draws flakes, more of them the harder it snows (#1269), and that its cold
 #     grade greys the board while the HUD's pixels stay exactly as they were;
-#   - that the blizzard's whiteout has no seams (#1278): drawn alone, no step between neighbours.
+#   - that the blizzard's whiteout has no seams (#1278): drawn alone, no step between neighbours;
+#   - that each FOG strength changes the board, leaves the HUD alone and puts nothing in the void well
+#     past the board's edge (#1285: fog never hangs over nothing), and what it costs the GPU.
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -20,6 +22,12 @@ extends Node
 const MISSION := "res://Scenarios/missions/TheFord.tres"
 # Snow is measured on grass: the Ford's pale stone hides a snow cover.
 const SNOW_MISSION := "res://Scenarios/missions/Level_1.tres"
+# Fog is measured on Terraces: it pools in the low field and the high terraces stand clear.
+const FOG_MISSION := "res://Scenarios/missions/Terraces.tres"
+# How far past the board's edge the void must be untouched, cells: a card is a little under three wide.
+const FOG_CLEAR_MARGIN := 3.0
+# A void pixel counts as touched past this much luminance: a card or the pass moves it far more.
+const FOG_VOID_TOLERANCE := 0.02
 const OUT_DIR := "user://weather_probe"
 
 var _scene: Node3D
@@ -52,6 +60,7 @@ func _ready() -> void:
 	failures += await _storm()
 	failures += await _snow(clear)
 	failures += await _veil()
+	failures += await _fog()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
 	get_tree().quit(1 if failures > 0 else 0)
@@ -150,6 +159,110 @@ func _snow(_ford_clear: Image) -> int:
 	var light: int = counts[Weather.Kind.LIGHT_SNOW]
 	var blizzard: int = counts[Weather.Kind.BLIZZARD]
 	return 0 if light > 20 and blizzard > light and greyed == 3 and hud_moved == 0 else 1
+
+
+# Each fog strength (#1285) changes the board against a clear frame and leaves the End Turn button's
+# pixels as they were. Then, zoomed out with the grade held at identity, the void left of the board --
+# past FOG_CLEAR_MARGIN cells -- must not change: fog never hangs over nothing. "Change" is past
+# FOG_VOID_TOLERANCE in luminance, because the look's own volumetric fog dithers the background by a
+# level from frame to frame (measured: one level, scattered, with no weather at all). A frame with no
+# such void to look at fails rather than passing on nothing. GPU time is printed.
+func _fog() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	await _open(FOG_MISSION)
+	var rid := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	await _wait(1.0)
+	var clear := await _grab("fog_clear")
+	var clear_gpu := await _gpu_ms(60)
+	print("  fog: clear GPU %.2f ms" % clear_gpu)
+	var failures := 0
+	for kind: Weather.Kind in [Weather.Kind.MIST, Weather.Kind.FOG, Weather.Kind.THICK_FOG]:
+		_game.scenario_manager.current_weather = kind
+		await _wait(4.0)
+		var name := Weather.name_of(kind).to_lower()
+		var frame := await _grab(name)
+		_save_zoom(frame, name + "_zoom")
+		var gpu := await _gpu_ms(60)
+		var changed := 0
+		for y in range(0, clear.get_height(), 2):
+			for x in range(0, clear.get_width(), 2):
+				if absf(frame.get_pixel(x, y).get_luminance() - clear.get_pixel(x, y).get_luminance()) > 0.04:
+					changed += 1
+		var hud := _hud_moved(clear, frame)
+		print("  %s: %d sampled px changed, %d HUD px moved; GPU %.2f ms (+%.2f)"
+				% [Weather.name_of(kind), changed, hud, gpu, gpu - clear_gpu])
+		if changed < 500 or hud > 0:
+			failures += 1
+	failures += await _fog_void()
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	return 0 if failures == 0 else 1
+
+
+# Zoomed out to twice the opening distance so there is void beside the board to look at.
+func _fog_void() -> int:
+	var rig: CameraRig3D = _scene._rig
+	var opening := rig._target_distance
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	rig.set_zoom(opening * 2.0)
+	await _wait(2.0)
+	var clear := await _grab("fog_clear_wide")
+	var void_rect := _void_left_of_board(FOG_CLEAR_MARGIN)
+	var failures := 0
+	if not void_rect.has_area():
+		print("  fog void: FAILED -- no void left of the board in the wide frame to check")
+		failures += 1
+	for kind: Weather.Kind in ([] if failures > 0 else [Weather.Kind.MIST, Weather.Kind.FOG, Weather.Kind.THICK_FOG]):
+		var look := WeatherLook.for_kind(kind)
+		var grade := [look.grade_saturation, look.grade_brightness, look.grade_tint, look.grade_fade]
+		look.grade_saturation = 1.0
+		look.grade_brightness = 1.0
+		look.grade_tint = Color(1.0, 1.0, 1.0, 0.0)
+		look.grade_fade = 0.0
+		_game.scenario_manager.current_weather = kind
+		await _wait(4.0)
+		var frame := await _grab(Weather.name_of(kind).to_lower() + "_wide")
+		look.grade_saturation = grade[0]
+		look.grade_brightness = grade[1]
+		look.grade_tint = grade[2]
+		look.grade_fade = grade[3]
+		var in_void := 0
+		var checked := 0
+		for y in range(int(void_rect.position.y), int(void_rect.end.y), 2):
+			for x in range(int(void_rect.position.x), int(void_rect.end.x), 2):
+				checked += 1
+				if absf(frame.get_pixel(x, y).get_luminance() - clear.get_pixel(x, y).get_luminance()) > FOG_VOID_TOLERANCE:
+					in_void += 1
+		print("  %s void: %d of %d sampled px past the board's edge touched" % [Weather.name_of(kind), in_void, checked])
+		if in_void > 0:
+			failures += 1
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	rig.set_zoom(opening)
+	return failures
+
+
+# The screen columns left of the board grown by `margin` cells, under the checkout label and above the
+# HUD corner: void a fog must never reach. Empty when the board fills the frame's left side.
+func _void_left_of_board(margin: float) -> Rect2:
+	var camera := get_viewport().get_camera_3d()
+	var board: AABB = _scene._board_volume().grow(margin)
+	var left := INF
+	for i in 8:
+		var corner := board.get_endpoint(i)
+		if not camera.is_position_behind(corner):
+			left = minf(left, camera.unproject_position(corner).x)
+	var width := clampf(left, 0.0, float(get_viewport().get_visible_rect().size.x))
+	return Rect2(0.0, 40.0, width, get_viewport().get_visible_rect().size.y - 140.0) if width > 8.0 else Rect2()
+
+
+# The mean GPU time of the next `frames` frames, ms.
+func _gpu_ms(frames: int) -> float:
+	var total := 0.0
+	var rid := get_viewport().get_viewport_rid()
+	for i in frames:
+		await RenderingServer.frame_post_draw
+		total += RenderingServer.viewport_get_measured_render_time_gpu(rid)
+	return total / frames
 
 
 # Mean HSV saturation over the frame, the End Turn corner left out.

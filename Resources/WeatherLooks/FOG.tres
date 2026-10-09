@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://dxgyp7xf8je1c"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_3f772"]
+
+[resource]
+script = ExtResource("1_3f772")
+fall = 2
+grade_saturation = 0.9
+grade_brightness = 1.02
