@@ -33,6 +33,10 @@ var fuel_source: Callable
 var _states: Dictionary = {}        # Vector2i -> Array[Terrain.TileState]
 var _state_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns_left }
 
+# Every write to either dictionary above marks here, the grid's and gas's shape (#1182). Only
+# `version` is read today -- the dev header's "(modified)" -- so the cell list goes unconsumed.
+var dirty := DirtyCells.new()
+
 func states_at(cell: Vector2i) -> Array[Terrain.TileState]:
 	var result: Array[Terrain.TileState] = []
 	if _states.has(cell):
@@ -48,6 +52,7 @@ func apply(effect: ResolvedCellEffect) -> void:
 	# Deposits onto a groundless cell are DROPPED; removals always run. The asymmetry is the point:
 	# a cell whose tile was just erased still has to be cleanable, and routing that through here
 	# keeps the timer bookkeeping below correct instead of needing a second back door.
+	dirty.mark(effect.cell)
 	var grounded := _has_ground(effect.cell)
 	var current := fold(states_at(effect.cell), effect, grounded)
 	if current.is_empty():
@@ -112,6 +117,7 @@ func prune_groundless() -> bool:
 func clear() -> void:
 	_states.clear()
 	_state_turns.clear()
+	dirty.mark_all()
 
 func to_state_dict() -> Dictionary:
 	return _states.duplicate(true)
@@ -130,6 +136,7 @@ func to_turns_dict() -> Dictionary:
 func load_state_dict(data: Dictionary, turns: Dictionary = {}) -> void:
 	_states.clear()
 	_state_turns.clear()
+	dirty.mark_all()
 	for cell in data:
 		var states: Array[Terrain.TileState] = []
 		states.assign(data[cell])
@@ -185,6 +192,7 @@ func turns_remaining(cell: Vector2i, state: Terrain.TileState) -> int:
 func tick_states() -> void:
 	var taken := _cells_fire_takes()
 	for cell in _state_turns.keys():
+		dirty.mark(cell)
 		for state in _state_turns[cell].keys():
 			_state_turns[cell][state] -= 1
 			if _state_turns[cell][state] <= 0:
@@ -297,6 +305,7 @@ func _clear_timer(cell: Vector2i, state: Terrain.TileState) -> void:
 			_state_turns.erase(cell)
 
 func _remove_state(cell: Vector2i, state: Terrain.TileState) -> void:
+	dirty.mark(cell)
 	_clear_timer(cell, state)
 	if _states.has(cell):
 		_states[cell].erase(state)

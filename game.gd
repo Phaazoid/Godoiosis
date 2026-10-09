@@ -334,6 +334,9 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
+	# A gear act is play: the dev header's "(modified)" counts it (#1182).
+	unit_info_panel.loadout_acted.connect(func(_u: Unit, _verb: String, _i: int) -> void:
+		scenario_manager.note_play())
 	# The dock's Inspect (#1152): the item's own card, READ-ONLY -- fitting a mod is a pre-mission act,
 	# and a battle has no mod pool to offer, hence the empty one.
 	unit_info_panel.detail_requested.connect(func(item: Item, owner: Unit) -> void:
@@ -905,6 +908,7 @@ func start_faction_turn(faction: Team.Faction):
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
 
 func end_turn():
+	scenario_manager.note_play()   # the burn, the round and the hand-off all change the board (#1182)
 	var board: int = scenario_manager.board_generation
 	await order_executor.apply_end_of_turn_tiles(turn_manager.active_faction())
 	if board != scenario_manager.board_generation:
@@ -1588,6 +1592,7 @@ func create_squad(unit: Unit):
 	overlay_manager.show_squad_count(unit)
 	enter_target_pick_mode(candidates, func(picked: Unit):
 		squad_manager.join_squad(picked, unit.squad)
+		scenario_manager.note_play()   # squads are saved (#1182)
 		if not squad_up_candidates(unit).is_empty():
 			create_squad(unit)
 		else:
@@ -1610,7 +1615,10 @@ func join_squad_mode(unit: Unit):
 	# The rings ARE the candidate marking now (#442), so the generic ground marker would be a second
 	# spelling of the same fact -- #346's own complaint about the TARGET icon Squad Up already lost.
 	# The cells still go in: what is suppressed is the DRAW, never the clickability.
-	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(unit, picked.squad), false)
+	var join := func(picked: Unit) -> void:
+		squad_manager.join_squad(unit, picked.squad)
+		scenario_manager.note_play()   # squads are saved (#1182)
+	enter_target_pick_mode(candidates, join, false)
 	overlay_manager.set_ring_pulse(candidates)
 
 # WHICH squads this unit could join -- THE one answer, read by the marking and by the candidate list
@@ -1805,6 +1813,7 @@ func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
 	unit.movement.set_cell(cell)   # after set_grid: set_cell push_errors without one
 	unit.movement.set_heights(board_heights)
 	squad_manager.create_squad(unit)
+	_note_deployment_edit()
 	return true
 
 
@@ -1823,6 +1832,15 @@ func undeploy_unit(unit: Unit) -> void:
 	units_root.remove_child(unit)
 	reserve_root.add_child(unit)
 	unit.movement.set_grid(null)
+	_note_deployment_edit()
+
+
+# The player's own placing counts as play for the dev header's "(modified)" (#1182). The roster's
+# automatic draw goes through these same two doors BEFORE the phase opens, and that draw is what the
+# file produces on every load, so it must not count.
+func _note_deployment_edit() -> void:
+	if mission_controller.is_deploying():
+		scenario_manager.note_play()
 
 func _on_unit_died(unit: Unit):
 	# FIRST, while the unit is still readable: die() has already queue_freed it, and the mission may

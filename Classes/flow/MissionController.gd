@@ -460,6 +460,7 @@ func reposition(unit: Unit, cell: Vector2i) -> bool:
 	if not _phase.reposition(unit, cell):
 		return false
 	game.overlay_manager.redraw_projected_units()
+	game.scenario_manager.note_play()   # a placing edit, which the dev header counts (#1182)
 	return true
 
 # Never null: an empty Loadout is what a board with no roster has.
