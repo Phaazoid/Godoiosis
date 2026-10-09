@@ -591,8 +591,86 @@ static func lift_offset() -> Vector3:
 	return Vector3(0.0, STAGE_LIFT * CELL_SIZE, 0.0)
 
 
+# --- the water BASIN (#654): water drawn below the ground around it, behind an Experiment ----------
+#
+# A PRESENTATION drop, never a rules height. The surface functions above stay rules-pure and every
+# reader that lies something ON a water cell subtracts basin_drop() at its own placement site, the
+# way it adds staged_offset() -- which keeps the knockback edge-drop pair, its flight levels and the
+# camera on the rules height by construction (dev ruling, 2026-10-08: a recess is not a drop).
+#
+# The dip is drawn by the water shader lowering the TOP block of a column (BoardMirror's basin twin),
+# never by moving every block: a column is a stack of one-row blocks, and lowering all of their tops
+# would open a gap in the column's wall wherever that wall is exposed.
+#
+# The three depths are GameKnobs rows, and a knob writes a static (STAGE_LIFT's shape).
+static var WATER_BASIN_DEPTH := 0.25
+# How much further a unit standing IN the water sinks, so the surface hides its legs.
+static var WATER_WADE_DEPTH := 0.14
+# Seconds a unit takes to step down into the water or back up out of it.
+static var WATER_STEP_TIME := 0.15
+# The deepest a basin may go, in world units. The dropped block is one ROW tall, so dropping its top
+# a whole row would turn its walls inside out.
+const BASIN_DEPTH_MAX := 0.45
+# Whether the experiment is on. battle3d re-publishes it the frame it changes.
+static var _basin_on := false
+# The cells drawn with a basin twin. BoardMirror._write_column writes this as it draws them, so the
+# set and the drawn columns are one answer rather than two that can disagree.
+static var _basin_cells: Dictionary[Vector2i, bool] = {}
+# Monotonic, so a per-frame poll can tell "the basin moved" from "it did not" (staging_version's shape).
+static var basin_version := 0
+
+
+static func basin_on() -> bool:
+	return _basin_on
+
+
+static func basin_depth() -> float:
+	return clampf(WATER_BASIN_DEPTH, 0.0, BASIN_DEPTH_MAX)
+
+
+# How far this cell's DRAWN surface sits below its rules height. Zero unless the cell was drawn with
+# a basin twin, which only happens while the experiment is on.
+static func basin_drop(cell: Vector2i) -> float:
+	if not _basin_cells.has(cell):
+		return 0.0
+	return basin_depth()
+
+
+static func set_basin_on(on: bool) -> void:
+	if on == _basin_on:
+		return
+	_basin_on = on
+	basin_version += 1
+
+
+static func mark_basin(cell: Vector2i, on: bool) -> void:
+	if on == _basin_cells.has(cell):
+		return
+	if on:
+		_basin_cells[cell] = true
+	else:
+		_basin_cells.erase(cell)
+	basin_version += 1
+
+
+# The depth knob moved: nothing in the set changed, but everything placed off it has to re-place.
+static func touch_basin() -> void:
+	basin_version += 1
+
+
+# The board went away. clear_board() calls this; the next board's columns re-mark as they are drawn.
+static func clear_basin() -> void:
+	if _basin_cells.is_empty():
+		return
+	_basin_cells.clear()
+	basin_version += 1
+
+
 static func reset_for_test() -> void:
 	_staged.clear()
 	_stage_offset = Vector3.ZERO
 	staging_version = 0
 	_end_flight()
+	_basin_on = false
+	_basin_cells.clear()
+	basin_version = 0

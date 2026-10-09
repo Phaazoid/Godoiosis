@@ -393,7 +393,7 @@ func _gen_meshlib() -> int:
 		Terrain.Kind.DIRT: dirt_top,
 	}
 	if _add_tileset_items(ml, _mat(dirt_side), _mat(stone_side), water_side, bases,
-			dirt_top) < 0:
+			dirt_top, fallback_water) < 0:
 		return 1
 
 	var err := ResourceSaver.save(ml, MESHLIB_PATH)
@@ -423,7 +423,7 @@ func _gen_meshlib() -> int:
 # which has no 1x1 constraint. This loop only decides what the GROUND under them looks like.
 func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Material,
 		water_side_tex: Texture2D, bases: Dictionary[Terrain.Kind, Texture2D],
-		default_base: Texture2D) -> int:
+		default_base: Texture2D, fallback_water: ShaderMaterial) -> int:
 	var ts := load(TILESET_PATH) as TileSet
 	if ts == null:
 		push_error("Tileset missing or unreadable at %s" % TILESET_PATH)
@@ -434,6 +434,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 	var rims := 0
 	var translucent: PackedStringArray = []
 	var rim_report: PackedStringArray = []
+	# Basin twins (#654), emitted after every other item so that no existing id moves.
+	var basin_twins: Array[Dictionary] = []
 	# Seeded, like every other generated texture here, so an unchanged tileset regenerates an
 	# identical meshlib and a re-run produces no diff.
 	var rng := RandomNumberGenerator.new()
@@ -491,6 +493,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# still the only thing one water tile may differ from another about -- but that difference
 		# now lives in the board mask BoardMirror rebuilds, per cell, where it can be interpolated.
 		var water_mat := _water_mat(water_side_tex)
+		var basin_mat := _basin_twin_mat(water_mat)
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
@@ -550,6 +553,9 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
 					_block_mesh(top, side, top_uv))
 			next_id += 1
+			if kind == Terrain.Kind.WATER:
+				basin_twins.append({"name": BoardMirror.basin_twin_name(
+						BoardMirror.tile_item_name(source_id, coords)), "mat": basin_mat, "uv": top_uv})
 
 			# The same surface on a SLOPE (#340). EVERY 1x1 tile gets one, wearing exactly what the
 			# block above wears on its top face -- same top_uv, same side, same materials.
@@ -673,10 +679,22 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		atlas_mat.albedo_texture = composited
 		prop_mat.albedo_texture = composited
 
+	# THE BASIN TWINS (#654), LAST, so no existing id moves -- LookDev.tscn references the fallbacks BY
+	# ID. One per flat water block, plus the declared water fallback's, which a cell with no per-tile
+	# item wears and so must dip like the rest. Sloped water gets none: its cap, not a block, is the top
+	# of its column, so there is no block top to drop.
+	basin_twins.append({"name": BoardMirror.basin_twin_name(
+			ml.get_item_name(BoardMirror.KIND_TO_ITEM[Terrain.Kind.WATER])),
+			"mat": _basin_twin_mat(fallback_water), "uv": Rect2(0, 0, 1, 1)})
+	for twin: Dictionary in basin_twins:
+		_add_item(ml, next_id, twin["name"], _block_mesh(twin["mat"], twin["mat"], twin["uv"]))
+		next_id += 1
+
 	var added := next_id - FIRST_TILE_ITEM
-	print("Tileset items %d..%d (%d ground + %d prop + %d rim) from %s" \
-			% [FIRST_TILE_ITEM, next_id - 1, added - props - rims * RIM_PARTS.size(), props,
-					rims * RIM_PARTS.size(), TILESET_PATH])
+	print("Tileset items %d..%d (%d ground + %d prop + %d rim + %d basin twin) from %s" \
+			% [FIRST_TILE_ITEM, next_id - 1,
+					added - props - rims * RIM_PARTS.size() - basin_twins.size(), props,
+					rims * RIM_PARTS.size(), basin_twins.size(), TILESET_PATH])
 	if not rim_report.is_empty():
 		# The bands are MEASURED off each tile's own cut, and how deep they came out decides how
 		# much of a rim survives the merge toggle -- worth printing rather than reading back off
@@ -813,6 +831,18 @@ func _water_mat(body: Texture2D) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(WATER_SHADER_PATH)
 	mat.set_shader_parameter("body_tex", body)
+	# Said out loud rather than left unset: an unset uniform the shader declares saves as `null`, and
+	# only a basin twin (#654) is allowed to drop its top.
+	mat.set_shader_parameter("basin_surface", false)
+	return mat
+
+
+# A basin twin's material (#654): the water material it twins, plus the one flag that lets the shader
+# drop its top half. A COPY rather than a parameter on the shared one, because a GridMap item cannot
+# carry a per-cell instance value -- the twin item is how one cell's block differs from the next.
+func _basin_twin_mat(water: ShaderMaterial) -> ShaderMaterial:
+	var mat := water.duplicate() as ShaderMaterial
+	mat.set_shader_parameter("basin_surface", true)
 	return mat
 
 

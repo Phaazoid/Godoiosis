@@ -344,7 +344,9 @@ static func travel(from: Vector3, to: Vector3, life: float) -> Vector3:
 # The surface under a world point, on the board and wherever a tear-out has carried that cell.
 static func ground_under(cell: Vector2i, at: Vector3, heights: BoardHeights) -> float:
 	var lifted := BoardSpace.staged_offset(cell)
-	return BoardSpace.surface_height_at(cell, at.x - lifted.x, at.z - lifted.z, heights) + lifted.y
+	# Less the water basin's drop (#654): a drip off a wading unit lands on the water, not in mid-air.
+	return BoardSpace.surface_height_at(cell, at.x - lifted.x, at.z - lifted.z, heights) + lifted.y \
+			- BoardSpace.basin_drop(cell)
 
 
 # The mouth: the one constant anchor every sprite shares for now (dev, #358 grill), in the UNFLIPPED

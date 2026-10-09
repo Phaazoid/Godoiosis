@@ -121,6 +121,10 @@ func test_only_water_wears_the_water_shader() -> void:
 	# The declared Kind FALLBACK is water too, and wears it for the same reason: a cell with no
 	# per-tile item would otherwise sit still in the middle of a moving lake.
 	water_items[_library.get_item_name(BoardMirror.KIND_TO_ITEM[Terrain.Kind.WATER])] = true
+	# ...and so is every flat water block's BASIN TWIN (#654): the same block, wearing the shader with
+	# the one flag that lets it drop its top. Named off its base, so it is water exactly when that is.
+	for base: String in water_items.keys():
+		water_items[BoardMirror.basin_twin_name(base)] = true
 
 	var shaded_surfaces: Dictionary[String, int] = {}
 	var shader := load(SHADER_PATH) as Shader
@@ -277,6 +281,12 @@ const SHARED_GLOBALS := ["water_depth_range", "water_shore_fade_range"]
 const SHOCK_GLOBALS := ["water_shock_mask", "water_shock_age", "water_shock_life",
 		"water_shock_step", "water_shock_color"]
 
+# EXPERIMENT data: the FOURTH declared exemption (#654), and a kind of its own again. The basin drop
+# is DERIVED -- the depth knob while Experiments.WATER_BASIN is on, zero while it is off -- so it has
+# no Water knob row (the knob is a BoardSpace static on the CLASS_KNOBS table) and names neither water,
+# because every water cell dips by the one amount (dev ruling, 2026-10-08). Closed, both directions.
+const BASIN_GLOBALS := ["water_basin_drop"]
+
 # PHASE globals: the ones that set WHERE a wave is rather than how strong it is. Interpolating one
 # across the depth seam is #646, and the closed list is the BOARD_GLOBALS shape for the same reason
 # -- the suffix check below catches a renamed or duplicated wave knob, but a NEW kind of phase knob
@@ -315,7 +325,8 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 	for name in declared:
 		# Board data and event data are both spelled in TWO of the three places -- no knob row,
 		# because nobody tunes the shape of the board and the shock's own values live on the effect.
-		if not BOARD_GLOBALS.has(name) and not SHOCK_GLOBALS.has(name):
+		# ...and so is the basin drop, which is derived from a static knob and an Experiment flag.
+		if not BOARD_GLOBALS.has(name) and not SHOCK_GLOBALS.has(name) and not BASIN_GLOBALS.has(name):
 			tunable.append(name)
 
 	var rows: Dictionary[String, bool] = {}
@@ -352,6 +363,7 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 	var board_side: Array[String] = []
 	var shared_side: Array[String] = []
 	var shock_side: Array[String] = []
+	var basin_side: Array[String] = []
 	for name in _declared_globals():
 		if BOARD_GLOBALS.has(name):
 			board_side.append(name)
@@ -361,6 +373,9 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 			continue
 		if SHOCK_GLOBALS.has(name):
 			shock_side.append(name)
+			continue
+		if BASIN_GLOBALS.has(name):
+			basin_side.append(name)
 			continue
 		var deep := name.begins_with("water_deep_")
 		var shallow := name.begins_with("water_shallow_")
@@ -393,6 +408,10 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 			"the event-data exemption is declared as %s and the shader's is %s -- a value that " \
 			% [SHOCK_GLOBALS, shock_side] + "describes the WATER rather than something happening " \
 			+ "to it belongs in a deep/shallow pair").contains_exactly_in_any_order(SHOCK_GLOBALS)
+	assert_array(basin_side).override_failure_message(
+			"the experiment exemption is declared as %s and the shader's is %s -- a value a dev tunes " \
+			% [BASIN_GLOBALS, basin_side] + "belongs on a knob row, not in here") \
+			.contains_exactly_in_any_order(BASIN_GLOBALS)
 
 
 # A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider
@@ -500,3 +519,54 @@ func test_no_phase_knob_is_interpolated_across_a_seam() -> void:
 			% ", ".join(offenders) + "sinusoid's frequency and phase rate per fragment, which " \
 			+ "chirps the surface into rings along the boundary and tightens them as TIME runs. " \
 			+ "Evaluate both wave fields and mix the RESULT instead").is_empty()
+
+
+# THE BASIN TWINS (#654). The water basin experiment draws a flat column's TOP block as its twin, whose
+# material lets the shader drop that block's top half; everything else in the column keeps the base
+# item, so the column's walls stay whole. Four promises, each a way the experiment fails in silence:
+# a water block with no twin never dips; a twin that is not the SAME mesh dips a different block; a
+# base that carries the flag drops every buried block's top and opens the column; and shallow and deep
+# twins on different materials bake depth per material again, the thing the board mask replaced.
+func test_every_flat_water_block_has_one_basin_twin() -> void:
+	var bases: Array[String] = []
+	for tile: Dictionary in _water_tiles():
+		bases.append(BoardMirror.tile_item_name(tile["source"], tile["coords"]))
+	var fallback := _library.get_item_name(BoardMirror.KIND_TO_ITEM[Terrain.Kind.WATER])
+	bases.append(fallback)
+	assert_int(bases.size()).override_failure_message("no water blocks; the case is vacuous").is_greater(1)
+	var tile_twin_mats: Array[ShaderMaterial] = []
+	for base: String in bases:
+		var twin := BoardMirror.basin_twin_name(base)
+		assert_bool(_by_name.has(twin)).override_failure_message(
+			"water block '%s' has no basin twin '%s' -- it would never dip" % [base, twin]).is_true()
+		if not _by_name.has(twin) or not _by_name.has(base):
+			continue
+		var base_mesh := _library.get_item_mesh(_by_name[base])
+		var twin_mesh := _library.get_item_mesh(_by_name[twin])
+		assert_int(twin_mesh.get_surface_count()).is_equal(base_mesh.get_surface_count())
+		for surface in base_mesh.get_surface_count():
+			var base_verts: PackedVector3Array = base_mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+			var twin_verts: PackedVector3Array = twin_mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
+			assert_bool(base_verts == twin_verts).override_failure_message(
+				"'%s' surface %d is not its base's geometry -- the dip happens in the shader, so the " \
+				% [twin, surface] + "mesh must be the same block").is_true()
+			var twin_mat := twin_mesh.surface_get_material(surface) as ShaderMaterial
+			var base_mat := base_mesh.surface_get_material(surface) as ShaderMaterial
+			assert_bool(twin_mat != null and twin_mat.get_shader_parameter("basin_surface") == true) \
+				.override_failure_message("'%s' surface %d does not carry basin_surface" % [twin, surface]) \
+				.is_true()
+			assert_bool(base_mat != null and base_mat.get_shader_parameter("basin_surface") != true) \
+				.override_failure_message("base '%s' carries basin_surface -- every buried block in a " \
+				% base + "water column would drop its top and open the column's walls").is_true()
+			if base != fallback and twin_mat != null:
+				tile_twin_mats.append(twin_mat)
+	for mat: ShaderMaterial in tile_twin_mats:
+		assert_bool(mat == tile_twin_mats[0]).override_failure_message(
+			"basin twins wear more than one material -- depth is baked per material again").is_true()
+	# And nothing but a water block has a twin: the suffix is how the mirror finds one.
+	var twins := 0
+	for id: int in _library.get_item_list():
+		if _library.get_item_name(id).ends_with(BoardMirror.BASIN_TWIN_SUFFIX):
+			twins += 1
+	assert_int(twins).override_failure_message("the meshlib holds %d basin twins for %d water blocks" \
+			% [twins, bases.size()]).is_equal(bases.size())

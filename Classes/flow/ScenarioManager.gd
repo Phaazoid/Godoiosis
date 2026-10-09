@@ -455,6 +455,9 @@ func clear_board():
 	# cells nothing will ever put down -- and since the rig now RIDES that lift, the camera goes with
 	# it. `BoardSpace` is a static, so it outlives the board exactly the way that flag does.
 	BoardSpace.clear_staging()
+	# ...and which cells the water basin experiment dipped (#654): the next board re-marks its own as
+	# BoardMirror draws them.
+	BoardSpace.clear_basin()
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
 	overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
 	game.terrain_states.clear()   # tile states are board content too -- a sandbox spawn inherits no fire (#174)
