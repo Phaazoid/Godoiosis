@@ -76,3 +76,15 @@ func test_a_staged_cell_is_rained_on_where_it_stands() -> void:
 	var beside := BoardSpace.surface_height_at(Vector2i(0, 0), 0.5, 0.5, board.board_heights)
 	assert_float(WeatherMask.surface_at(image, rect, 0.5, 0.5)).override_failure_message(
 			"the lift leaked onto a cell that is not staged").is_equal_approx(beside, 0.0001)
+
+
+# The water basin (#654) draws a water cell below its rules surface, and every reader that lays
+# something on water subtracts the drop: a drop over a basin lands on the water you see.
+func test_a_basin_cell_is_rained_on_at_its_drawn_surface() -> void:
+	var cell := Vector2i(0, 2)
+	BoardSpace.mark_basin(cell, true)
+	var drop := BoardSpace.basin_drop(cell)
+	var offset := WeatherMirror.drawn_offset(cell)
+	BoardSpace.mark_basin(cell, false)
+	assert_float(drop).override_failure_message("fixture: the basin drops nothing").is_greater(0.0)
+	assert_float(offset.y).is_equal_approx(-drop, 0.0001)
