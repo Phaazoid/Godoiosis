@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_ndo4q")
 fall = 1
-density = 1.2
+density = 1.0
 fall_speed = 1.6
 wind_x = 0.3
 wind_z = 0.1

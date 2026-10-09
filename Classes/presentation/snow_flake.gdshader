@@ -9,7 +9,7 @@ uniform vec4 tint : source_color = vec4(1.0);
 uniform float size = 0.1;   // world width of one frame
 // A flake passing right by the lens would be a blot across the frame, so it fades out between these
 // distances from the camera (world units) instead -- rain_drop's rule.
-uniform vec2 near_fade = vec2(1.5, 5.0);
+uniform vec2 near_fade = vec2(3.0, 9.0);
 
 varying float seen_from;
 varying float frame;

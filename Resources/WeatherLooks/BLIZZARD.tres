@@ -5,7 +5,6 @@
 [resource]
 script = ExtResource("1_0ocp6")
 fall = 1
-density = 7.0
 fall_speed = 3.0
 wind_x = 4.0
 wind_z = 1.0

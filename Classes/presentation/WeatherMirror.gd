@@ -27,7 +27,7 @@ const COVER_MARGIN := 120.0
 const AMOUNT_SLACK := 0.35
 const MAX_DROPS := 60000
 const MAX_SPLASHES := 12000
-const MAX_FLAKES := 60000
+const MAX_FLAKES := 200000
 # How far above the camera drops are born, so none ever appears inside the frame.
 const SPAWN_ABOVE := 2.0
 # The decals' height: from well under the board to well over the tear-out's stage, which shares the
@@ -317,7 +317,7 @@ func _place_snow() -> void:
 	_snow_process.set_shader_parameter("settle", _look.flake_settle)
 	_snow_process.set_shader_parameter("big", _look.big_flakes)
 	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
-	var life := float(box["fall"]) * 1.5 + maxf(_look.flake_settle, 0.0) + 0.25
+	var life := float(box["fall"]) * 1.3 + maxf(_look.flake_settle, 0.0) + 0.25
 	_size(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
 
 

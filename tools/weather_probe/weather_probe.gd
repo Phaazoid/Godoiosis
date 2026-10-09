@@ -7,7 +7,8 @@ extends Node
 #
 #   - that the RAIN draws at all (pixels that move against a clear control frame);
 #   - that the GROUND changes under it with the drops switched off (the decals alone);
-#   - that a STORM strike reaches the screen (the white-out) and draws its bolt.
+#   - that a STORM strike reaches the screen (the white-out) and draws its bolt;
+#   - that each SNOW strength draws flakes, more of them the harder it snows (#1269).
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -52,6 +53,7 @@ func _ready() -> void:
 	failures += await _rain(clear, baseline)
 	failures += await _ground(clear)
 	failures += await _storm()
+	failures += await _snow(clear)
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
 	get_tree().quit(1 if failures > 0 else 0)
@@ -108,6 +110,42 @@ func _storm() -> int:
 	print("  storm: flash %.2f, white-out showing %s, %d bolt surface(s) drawn, side light %s"
 			% [flash, lit, bolts, mirror._side.visible])
 	return 0 if flash > 0.0 and lit and bolts > 0 else 1
+
+
+# Flakes are near-white pixels the clear frame did not have; a blizzard must draw more than light snow.
+func _snow(clear: Image) -> int:
+	var counts := {}
+	var mirror: WeatherMirror = _scene._weather
+	for kind: Weather.Kind in [Weather.Kind.LIGHT_SNOW, Weather.Kind.SNOW, Weather.Kind.BLIZZARD]:
+		_game.scenario_manager.current_weather = kind
+		await _wait(3.0)
+		var frame := await _grab(Weather.name_of(kind).to_lower())
+		_save_zoom(frame, Weather.name_of(kind).to_lower() + "_zoom")
+		var flakes := 0
+		for y in range(0, clear.get_height(), 2):
+			for x in range(0, clear.get_width(), 2):
+				var now := frame.get_pixel(x, y)
+				if now.get_luminance() > clear.get_pixel(x, y).get_luminance() + 0.15 and now.s < 0.25:
+					flakes += 1
+		counts[kind] = flakes
+		var look := WeatherLook.for_kind(kind)
+		var box: Dictionary = mirror._view_box(maxf(look.fall_speed, 0.5), Vector2(look.wind_x, look.wind_z),
+				look.swirl_scale + look.flake_sway)
+		var wanted := look.density * float(box["area"]) * mirror._snow.lifetime
+		print("  %s: %d sampled px whitened; a system of %d flakes for %d wanted (box %.0f m2, fall %.1fs)"
+				% [Weather.name_of(kind), flakes, mirror._snow.amount, int(wanted), box["area"], box["fall"]])
+	var light: int = counts[Weather.Kind.LIGHT_SNOW]
+	var blizzard: int = counts[Weather.Kind.BLIZZARD]
+	return 0 if light > 20 and blizzard > light else 1
+
+
+# The middle of the frame at 4x, for an eye check of pixel-sized things.
+func _save_zoom(frame: Image, label: String) -> void:
+	var w := frame.get_width() / 4
+	var h := frame.get_height() / 4
+	var crop := frame.get_region(Rect2i((frame.get_width() - w) / 2, (frame.get_height() - h) / 2, w, h))
+	crop.resize(w * 4, h * 4, Image.INTERPOLATE_NEAREST)
+	crop.save_png("%s/%s.png" % [OUT_DIR, label])
 
 
 func _grab(label: String) -> Image:
