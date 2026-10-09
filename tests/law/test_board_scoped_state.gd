@@ -65,8 +65,9 @@ const PROCESS_SCOPED := [
 	"_warned_sets",                               # UnitSprite3D: which sets have already warned, keyed by path
 	"_maps_by_texture",                           # StatusArt: per-texture effect map, keyed by the sampled texture's path
 	"_art_cache", "art_version",                 # ZoneMarks (#955): generated cell art keyed by (look, mask), and the count restyle() moves
-	"_looks_by_kind",                             # GasLook (#508): each kind's loaded look, keyed by Gas.Kind
+	"_looks_by_kind",                             # GasLook (#508) and WeatherLook (#1260): each kind's loaded look, keyed by kind
 	"_icons_by_kind",                             # GasPuffArt (#508): each kind's preview ghost, keyed by Gas.Kind
+	"_icon",                                      # WeatherArt (#1260): the placeholder soak icon, built once
 	"_badges",                                    # StrikeMarks2D (#1247): baked badge art, keyed by (icon, colour)
 	"GUARD_RING_SCALE",                           # tuning, no knob
 	"_basin_on",                                  # BoardSpace (#654): the Water basin flag, re-published by battle3d every frame

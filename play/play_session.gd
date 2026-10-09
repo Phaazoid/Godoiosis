@@ -163,11 +163,11 @@ func reserve_units() -> Array[Unit]:
 func _board() -> BoardContext:
 	var board := BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission)
-	board.weather = weather()
+	board.weather = _weather()
 	return board
 
 # The weather over this board (#1260): the scenario's, as the game's ScenarioManager.current_weather is.
-func weather() -> Weather.Kind:
+func _weather() -> Weather.Kind:
 	return scenario_data.weather if scenario_data != null else Weather.Kind.CLEAR
 
 func active_faction() -> Team.Faction:
@@ -1660,7 +1660,7 @@ func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 	var events: Array[String] = []
 	if terrain_states == null:
 		return events
-	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, weather(), faction):
+	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, _weather(), faction):
 		hit.execute()
 		var soaked_by := hit.soak_source_name()
 		if soaked_by != "":
