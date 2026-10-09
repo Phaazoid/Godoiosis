@@ -111,7 +111,7 @@ enum Fall { RAIN, SNOW, FOG }
 @export var card_size := 1.0                # times a wisp's own size, 44x14 ground art pixels
 @export var card_life := 8.0                # seconds a card takes to fade in and out
 @export var card_lift := 0.55               # world units above the ground a card floats, at most
-@export var card_speed := 0.3               # the share of the wind a card drifts with
+@export var fog_speed := 0.3                # the share of the wind the fog drifts with, its cards and banks alike
 
 @export_group("Grade")
 @export var grade_saturation := 1.0         # 1 leaves the board's colours; lower greys them
@@ -267,8 +267,8 @@ const ROWS: Array[Dictionary] = [
 		"tip": "Seconds a card takes to fade in, drift and fade out."},
 	{"prop": "card_lift", "label": "Card height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
 		"tip": "How high over the ground a card floats, in cells, at most. Higher cards cross more of a unit."},
-	{"prop": "card_speed", "label": "Card drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": Fall.FOG,
-		"tip": "The share of the wind a card drifts with. 0 hangs still."},
+	{"prop": "fog_speed", "label": "Fog drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "The share of the wind the fog drifts with, its cards and its banks alike. 0 hangs still."},
 	{"prop": "grade_saturation", "label": "Grade saturation", "min": 0.0, "max": 1.5, "step": 0.01,
 		"tip": "The weather's own grade over the board's look: 1 leaves the colours, lower greys them. The HUD is never graded."},
 	{"prop": "grade_brightness", "label": "Grade brightness", "min": 0.5, "max": 1.5, "step": 0.01,

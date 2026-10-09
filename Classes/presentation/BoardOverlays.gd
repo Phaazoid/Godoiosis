@@ -95,6 +95,11 @@ static func focus_priority(tier: int) -> int:
 # so a move tile or a zone still reads on a gassed cell. One below the lowest LAYERS sort, and both
 # its draw order and its height follow from that number the way a layer's do (gas_floor_lift).
 const GAS_FLOOR_SORT := -8
+# The weather's fog (#1285) sorts UNDER every piece of markup, the gas floor included (dev ruling: markup
+# and rings draw over fog). The pass first, its cards one above it. A unit is held above the pass by
+# drawing after it, and is crossed by a card only where the card is nearer the camera.
+const FOG_RENDER_PRIORITY := GAS_FLOOR_SORT - 4
+const FOG_CARD_RENDER_PRIORITY := FOG_RENDER_PRIORITY + 1
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it

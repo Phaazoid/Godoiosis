@@ -88,3 +88,26 @@ func test_a_basin_cell_is_rained_on_at_its_drawn_surface() -> void:
 	BoardSpace.mark_basin(cell, false)
 	assert_float(drop).override_failure_message("fixture: the basin drops nothing").is_greater(0.0)
 	assert_float(offset.y).is_equal_approx(-drop, 0.0001)
+
+
+# The span the fog pass marches (#1285): the lowest and highest ground the mask holds, and a hole --
+# VOID, far below everything -- never drags the low end down.
+func test_the_span_is_the_lowest_and_highest_ground() -> void:
+	var heights: BoardHeights = board.board_heights
+	var rect := _rect()
+	var image := WeatherMask.build(board.grid, heights, rect, Callable())
+	var low := INF
+	var high := -INF
+	for y in rect.size.y:
+		for x in rect.size.x:
+			var cell := rect.position + Vector2i(x, y)
+			if cell == HOLE:
+				continue
+			for corner: Vector2 in [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]:
+				var at := BoardSpace.surface_height_at(cell, cell.x + corner.x, cell.y + corner.y, heights)
+				low = minf(low, at)
+				high = maxf(high, at)
+	var span := WeatherMask.span(image)
+	assert_float(span.x).override_failure_message("the span's low end is not the lowest ground").is_equal_approx(low, 0.0001)
+	assert_float(span.y).override_failure_message("the span's high end is not the highest ground").is_equal_approx(high, 0.0001)
+	assert_float(high).override_failure_message("fixture: the board is flat").is_greater(low)
