@@ -502,23 +502,24 @@ func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> vo
 			MAX_DRIFT)
 
 
-# The fog's cards are born on the ground over the view and drift with the wind; the fog's noise drifts
-# with them, on this node's scaled clock, so a hitstop holds the fog with the world.
+# The fog's cards are born over the whole BOARD and drift with the wind; the fog's noise drifts with
+# them, on this node's scaled clock, so a hitstop holds the fog with the world. Never over the view, as
+# rain is: setting a system's amount restarts it, and an amount sized off the camera re-dealt every card
+# on every zoom -- big slow wisps jumping to new shapes (dev report). Fog only stands on the board, so
+# the board is its box, and the count moves only when the board or a card dial does.
 func _place_fog(delta: float) -> void:
 	var wind := Vector2(_look.wind_x, _look.wind_z) * _look.fog_speed
 	_fog_drift += wind * delta
-	var card := _card_size()
-	var box := _view_box(1.0, Vector2.ZERO, maxf(card.x, card.y))
-	if box.is_empty():
+	if not _rect.has_area():
 		return
-	var lo: Vector2 = box["lo"]
-	var hi: Vector2 = box["hi"]
+	var lo := Vector2(_rect.position) * BoardSpace.CELL_SIZE
+	var hi := Vector2(_rect.end) * BoardSpace.CELL_SIZE
 	var life := maxf(_look.card_life, 0.5)
 	_fog_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
 	_fog_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
 	_fog_process.set_shader_parameter("velocity", Vector3(wind.x, 0.0, wind.y))
 	_fog_process.set_shader_parameter("lift", _look.card_lift)
-	_size(_fog_cards, _fog_process, _look.card_amount * float(box["area"]) / life, life, MAX_FOG_CARDS)
+	_size(_fog_cards, _fog_process, _look.card_amount * (hi.x - lo.x) * (hi.y - lo.y) / life, life, MAX_FOG_CARDS)
 
 
 # A card's world size: a wisp at the ground art's pixel size, times the look's card size.
