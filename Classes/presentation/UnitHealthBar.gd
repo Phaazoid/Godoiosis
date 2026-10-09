@@ -389,12 +389,13 @@ func _stop_alarm() -> void:
 #
 # FACING THE CAMERA IS NOW OPTIONAL (dev, 2026-08-22: "The health bars are 3D, they should not
 # billboard towards the camera. Let's add an option to keep them in place."). Held in place, the grid
-# sits on the board's own axes like the voxel props do, and orbiting past it edge-on turns it into a
-# thin line -- that is what keeping it in place MEANS, not a bug. Everything above still applies to
+# squares to the LEVEL's own viewing angle (the rig's home yaw, #562 -- world yaw 0 until then, which
+# put every readout askew at a board's own opening shot), and orbiting past it edge-on turns it into
+# a thin line -- that is what keeping it in place MEANS, not a bug. Everything above still applies to
 # the facing mode; nothing here billboards per element either way.
-func face(camera_basis: Basis, faces_camera: bool) -> void:
+func face(camera_basis: Basis, faces_camera: bool, held_yaw_degrees := 0.0) -> void:
 	if not faces_camera:
-		global_rotation = Vector3.ZERO
+		global_rotation = Vector3(0.0, deg_to_rad(held_yaw_degrees), 0.0)
 		return
 	var facing := camera_basis.z
 	if absf(facing.x) < 0.0001 and absf(facing.z) < 0.0001:

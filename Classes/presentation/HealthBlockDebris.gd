@@ -67,7 +67,7 @@ func burst(positions: Array[Vector3], colors: PackedColorArray, facing: Basis,
 		cube.mesh = mesh
 		cube.visible = true
 		cube.global_position = positions[i]
-		cube.global_rotation = Vector3.ZERO
+		cube.global_rotation = facing.orthonormalized().get_euler()   # on the grid's own axes (#562)
 		var material: StandardMaterial3D = _materials[slot]
 		material.albedo_texture = UnitHealthBar.cage_texture()
 		# A colour PER CUBE, because a killing hit throws the whole grid at once and the red sockets

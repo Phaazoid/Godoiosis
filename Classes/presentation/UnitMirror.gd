@@ -217,6 +217,10 @@ var plan_source: Callable
 # one. Unset reads as "no pass running", the same graceful absence plan_source has.
 var effect_subjects_source: Callable
 
+# The level's own viewing angle (CameraRig3D.home_yaw_degrees), injected beside them (#562): a readout
+# held in place squares to it rather than to world yaw 0. Unset reads as 0, the world axes.
+var home_yaw_source: Callable
+
 # Whether a board cell's ground is WATER, injected by battle3d beside the sources above (#358's damp
 # blot: a Wet unit standing in water leaves no patch on it). Unset reads as dry ground everywhere.
 var water_at: Callable
@@ -937,7 +941,8 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	if is_inside_tree():
 		var camera := get_viewport().get_camera_3d()
 		if camera != null:
-			bar.face(camera.global_transform.basis, hp_grid_faces_camera)
+			bar.face(camera.global_transform.basis, hp_grid_faces_camera,
+					float(home_yaw_source.call()) if home_yaw_source.is_valid() else 0.0)
 
 
 # The readout rides whatever is ON SCREEN. That is the same fork _sync makes when it hides a
