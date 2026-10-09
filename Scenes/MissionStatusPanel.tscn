@@ -38,7 +38,6 @@ offset_right = -8.0
 offset_bottom = -8.0
 grow_horizontal = 0
 grow_vertical = 0
-mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_msp01")
 
 [node name="Rows" type="VBoxContainer" parent="ObjectivePanel"]
@@ -55,6 +54,7 @@ offset_left = -60.0
 offset_right = -6.0
 offset_bottom = 20.0
 grow_horizontal = 0
+mouse_filter = 0
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 theme_override_font_sizes/font_size = 11
 text = "v0.0.0"
@@ -68,7 +68,7 @@ offset_left = -160.0
 offset_right = -6.0
 offset_bottom = 20.0
 grow_horizontal = 0
-mouse_filter = 2
+mouse_filter = 0
 theme_override_colors/font_color = Color(1, 1, 1, 0.75)
 theme_override_font_sizes/font_size = 11
 horizontal_alignment = 2

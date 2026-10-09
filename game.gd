@@ -307,6 +307,7 @@ func _build_collaborators() -> void:
 
 	aim_strip = AimStrip.open(self)   # the aim names itself (#929); hidden until an aim opens
 	aim_strip.talking_source = scenario_director.is_talking
+	aim_strip.cycle_requested.connect(cycle_aimed_attack)   # its arrows are the F keys' door
 
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)
@@ -1100,12 +1101,12 @@ func playback_owns_board() -> bool:
 
 # A full-screen surface is up, so the board behind it is not the player's to click.
 #
-# THE PRE-MISSION SCREEN JOINS THIS RATHER THAN EATING CLICKS ITSELF (#740), and the reason is
-# measured: battle3d picks board cells with its own raycast and calls _on_left_click DIRECTLY
-# (battle3d.gd, "the game refuses clicks while the board is locked"), so a full-rect Control that
-# swallows input is entirely transparent to the 3D view -- which is the SHIPPED one. This predicate
-# is the only thing both doors ask, plus the camera rig's manual-input gate, so joining it locks
-# all three at once and unlocks all three the moment the player toggles to the board preview.
+# THE PRE-MISSION SCREEN JOINS THIS RATHER THAN EATING CLICKS ITSELF (#740): this predicate is what
+# both click doors ask, plus the camera rig's manual-input gate (a WASD poll no Control can catch),
+# so joining it locks all three at once and unlocks all three the moment the player toggles to the
+# board preview. #740 also said a click a Control catches still reaches the 3D view; a real click on
+# the 3D scene says it does not (test_hud_clicks_stay_off_the_board), and every HUD surface relies on
+# that (test_hud_catches_its_clicks).
 #
 # It reads VISIBILITY, not existence: hiding the screen IS the board preview.
 func menu_is_up() -> bool:

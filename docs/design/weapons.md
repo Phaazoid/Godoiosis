@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09.**
+**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09; its follow-up (the strip catches its clicks, its arrows cycle) folded in 2026-10-09.**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -145,6 +145,8 @@ The dev's scratchpad ask (2026-09-12): *"cycle through your available weapons an
 - **The name strip (`AimStrip`).**
   - Bottom centre: the attack's name and its weapon's, plus "swaps on click" on a carried weapon.
   - `n / N` and the key hints show only when there is more than one option.
+  - The key hints are also buttons: `◀ Shift+F` and `F ▶` cycle back and forward through `cycle_requested`, which game wires to `cycle_aimed_attack`, the keys' own door.
+  - Its box catches the mouse. It shipped see-through, and a click on its arrow aimed the attack at the cell underneath (visual-clarity.md principle 7).
   - It parks at the top while a dialogue is up (#1033's rule).
 - **Declared gaps:**
   - The forecast is 3D only, because the flat view has no predicted bars (#292).

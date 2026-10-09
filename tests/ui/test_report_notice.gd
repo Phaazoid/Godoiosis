@@ -5,7 +5,7 @@
 # "Not a door" is the rule this file exists to hold. The ticket shipped once as a clickable mark
 # and the dev's correction was that a fourth way into the same card, sitting beside three nobody
 # could find, taught a player nothing: the sign's whole job is to NAME the cheapest way in. A case
-# asserting it eats no input is the only thing standing between that ruling and the obvious
+# asserting it is no button is the only thing standing between that ruling and the obvious
 # "while we are here, may as well make it clickable".
 #
 # TWO THINGS GIVE THESE CASES TEETH, and both are arrangements rather than assertions:
@@ -83,22 +83,21 @@ func test_the_sign_is_not_a_door() -> void:
 	# report button on the screen. I wanted a notice... Now there are 3 paths to the report, and
 	# the player has no way of knowing the easiest one."
 	#
-	# So: not a button, and no mouse_filter that would swallow a board click passing under it.
-	# The node is read UNTYPED here on purpose, and the reason is worth keeping: typed as a Label,
-	# GDScript refuses to COMPILE the check -- "Expression is of type Label so it can't be of type
-	# BaseButton". The check has to be made where the type is still open, which is also the only
-	# place the mistake could be made.
+	# So: not a button. The node is read UNTYPED here on purpose, and the reason is worth keeping:
+	# typed as a Label, GDScript refuses to COMPILE the check -- "Expression is of type Label so it
+	# can't be of type BaseButton". The check has to be made where the type is still open, which is
+	# also the only place the mistake could be made.
 	#
-	# MEASURED 2026-09-21: dropping `mouse_filter = 2` from the .tscn leaves all seven cases green,
-	# because Godot 4.7 already defaults a Label to IGNORE. So the second assertion bites on the
-	# node CHANGING TYPE -- a Button or a RichTextLabel stops at STOP -- and not on that line, which
-	# is an explicit restatement of a default kept where someone would make the swap.
+	# And a click on it does NOTHING, which since the #929 follow-up includes not reaching the board
+	# under it: this case used to require IGNORE, so a click on the sign mid-aim aimed at the cell
+	# beneath. Catching the mouse is not being a door -- nothing here answers the click -- and
+	# tests/law/test_hud_catches_its_clicks.gd holds the board half for every HUD surface.
 	var node: Node = game.mission_status_panel.get_node("ReportHint")
 	assert_bool(node is BaseButton).override_failure_message(
 		"the report sign became a button again -- it is a SIGN, and the card already has three doors"
 		).is_false()
 	assert_int((node as Control).mouse_filter).override_failure_message(
-		"the report sign eats mouse input it has no use for").is_equal(Control.MOUSE_FILTER_IGNORE)
+		"a click on the report sign falls through to the board").is_equal(Control.MOUSE_FILTER_STOP)
 
 
 func test_the_sign_sits_clear_of_the_version_stamp() -> void:
