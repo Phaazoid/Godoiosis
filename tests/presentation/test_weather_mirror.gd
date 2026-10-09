@@ -287,3 +287,15 @@ func test_no_look_knob_names_the_weathers_grade() -> void:
 	for knob: Dictionary in LookKnobs.KNOBS:
 		assert_bool(String(knob.get("node", "")).contains("Weather")).override_failure_message(
 				"Look knob %s names a node the weather draws on" % knob.get("label")).is_false()
+
+
+# No weather decal reaches a wall (#1278). Godot remaps the surface-to-decal angle to 0..1 before
+# its normal fade, so a vertical face sits at 0.5: a fade below that paints every cliff (0.35 left
+# 13% of the snow on them, measured on the dev's board). A threshold of the engine's, not a feel value.
+func test_no_weather_decal_reaches_a_wall() -> void:
+	var mirror := _mirror()
+	var decals := mirror.find_children("*", "Decal", true, false)
+	assert_int(decals.size()).override_failure_message("fixture: the mirror built no decals").is_greater(3)
+	for node in decals:
+		assert_float((node as Decal).normal_fade).override_failure_message(
+				"%s fades at %.2f, so it paints walls" % [node.name, (node as Decal).normal_fade]).is_greater(0.5)

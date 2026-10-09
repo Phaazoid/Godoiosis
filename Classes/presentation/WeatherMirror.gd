@@ -46,6 +46,10 @@ const BOLT_BELOW := 80.0
 # The snow cover is painted per art pixel, a fraction of a second on a big board, so once it is up a
 # change waits until it has held this long: a slider drag repaints once, when it stops.
 const COVER_SETTLE := 0.15
+# How far a decal fades off a tilted surface. Godot remaps the surface-to-decal angle to 0..1 before
+# fading, so a WALL sits at 0.5 and anything below it paints walls -- 0.35 put 13% of the snow on
+# every cliff (measured, #1278). Above 0.5 a wall takes none and a 45-degree ramp keeps about 79%.
+const WALL_FADE := 0.55
 
 var weather_source: Callable          # () -> Weather.Kind
 var grid: BoardGrid
@@ -633,7 +637,7 @@ func _decal() -> Decal:
 	decal.cull_mask = BoardOverlays.GROUND_RENDER_LAYER
 	decal.upper_fade = 0.0
 	decal.lower_fade = 0.0
-	decal.normal_fade = 0.35   # a cliff's side stays dry rather than wearing a smear of the top
+	decal.normal_fade = WALL_FADE   # a cliff's side stays dry rather than wearing a smear of the top
 	decal.visible = false
 	add_child(decal)
 	return decal
