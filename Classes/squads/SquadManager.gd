@@ -772,22 +772,34 @@ func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: Bo
 	return plan
 
 
-# What an aim not yet queued would DROP (#1058 D2b): every payload row the resolve derives from
-# `candidate`, in the order it plays. Only a resolve can answer, because a sticky bomb goes off where
-# the hit LEAVES its victim (ruling 43) and that landing exists nowhere else. `source_aim` is the
-# back-link SpringspearWeaponRoutine reads for the candidate's own rows.
+# What an aim not yet queued would DO (#929): the squad's whole plan with `candidate` added, which is
+# what the board would show the instant the click queued it -- the forecast the health bars read while
+# aiming, and the payload tiles' only source (#1058 D2b: a sticky bomb goes off where the hit LEAVES its
+# victim, and that landing exists nowhere but a resolve). `source` is the carried weapon the aim fires
+# from when it is not the one in hand: the hypothetical runs with it held (Unit.with_weapon_in_hand).
 #
 # It keeps resolve_hypothetical's contract HERE rather than leaving it to the caller: the pass
-# publishes the candidate's shoves onto the board, so a real resolve_plan follows before anyone reads
-# a projected position again -- and a hover asks this on every cell it crosses.
-func preview_payloads(squad: Squad, candidate: AttackAction, board: BoardContext) -> Array[AttackAction]:
-	var rows: Array[AttackAction] = []
+# publishes the candidate's shoves onto the board, so a real resolve_plan follows -- OUTSIDE the hold,
+# or the cache would keep a plan resolved with a weapon nobody is holding -- before anyone reads a
+# projected position again. A hover asks this on every cell it crosses.
+func preview_aim(squad: Squad, candidate: AttackAction, board: BoardContext,
+		source: EquippableData = null) -> ResolvedPlan:
 	var candidates: Array[BaseAction] = [candidate]
-	var plan := resolve_hypothetical(squad, candidates, board)
+	var plan: ResolvedPlan = candidate.actor.with_weapon_in_hand(source,
+		func() -> ResolvedPlan: return resolve_hypothetical(squad, candidates, board))
+	resolve_plan(squad, board)
+	return plan
+
+
+# Every payload row `plan` derives from `candidate`, in the order it plays. `source_aim` is the
+# back-link SpringspearWeaponRoutine reads for the candidate's own rows.
+static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[AttackAction]:
+	var rows: Array[AttackAction] = []
+	if plan == null:
+		return rows
 	for row in plan.attacks:
 		if row.source_aim == candidate and row.dropped_by != null:
 			rows.append(row)
-	resolve_plan(squad, board)
 	return rows
 
 
