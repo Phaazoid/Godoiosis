@@ -243,6 +243,7 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	_unit_mirror.home_yaw_source = _rig.home_yaw_degrees
 	# Whether a cell's ground is water, for the damp blot (#358): the AUTHORED kind, frozen or not.
 	_unit_mirror.water_at = func(cell: Vector2i) -> bool:
 		return GridUtils.get_terrain_kind_at_cell(game.grid, cell) == Terrain.Kind.WATER
