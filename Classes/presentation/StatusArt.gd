@@ -104,7 +104,7 @@ static func build(image: Image) -> Map:
 			span = Vector2i(mini(span.x, x), maxi(span.y, x))
 			var down := float(y - top) / tall
 			var rime := 0.0
-			if not _opaque(image, x, y - 1):
+			if is_top_edge(image, x, y):
 				rime = 1.0
 			elif down < RIME_SIDE_REACH and (not _opaque(image, x - 1, y) or not _opaque(image, x + 1, y)):
 				rime = RIME_SIDE
@@ -162,6 +162,13 @@ static func _icicle_overhangs(image: Image, top: int, bottom: int, left: int, ri
 # A texel an icicle may occupy: transparent, and strictly above the feet row.
 static func _hangs_free(image: Image, x: int, y: int, bottom: int) -> bool:
 	return y < bottom and not _opaque(image, x, y)
+
+
+# An opaque texel with open air above it: where rime forms on a unit, and where snow settles on a
+# prop's art (SnowCapArt, #1269) -- one answer, so the two can never disagree about what a top is.
+# The image's own edge counts as open air, so a caller crops to the frame it means.
+static func is_top_edge(image: Image, x: int, y: int) -> bool:
+	return _opaque(image, x, y) and not _opaque(image, x, y - 1)
 
 
 static func _opaque(image: Image, x: int, y: int) -> bool:

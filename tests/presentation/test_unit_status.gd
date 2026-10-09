@@ -404,3 +404,94 @@ func test_the_move_hover_stand_in_stays_plain() -> void:
 	assert_object(_unit_mirror.sprite_for(unit).status_material()).override_failure_message(
 			"the real sprite, still on screen beside the stand-in, lost its state").is_not_null()
 	game.exit_current_mode()
+
+
+# --- The weather's snow on the units (#1269) -----------------------------------------------
+#
+# A look, not a state: the board's weather caps every unit and fogs every standing unit's breath.
+# Driven from the board's weather store through the real WeatherMirror and battle3d's injection, so
+# a forgotten wire reds here. Which weathers cap is authored, so the capping one is found, not named.
+
+func _weather() -> WeatherMirror:
+	return _board.scene.get_node("WeatherMirror") as WeatherMirror
+
+
+func _set_weather(kind: Weather.Kind) -> void:
+	game.scenario_manager.current_weather = kind
+	_weather()._process(0.016)
+
+
+func _capping_weather() -> Weather.Kind:
+	for kind: Weather.Kind in Weather.Kind.values():
+		var look := WeatherLook.for_kind(kind)
+		if look != null and look.fall == WeatherLook.Fall.SNOW and look.caps_units and look.breath:
+			return kind
+	return Weather.Kind.CLEAR
+
+
+func test_a_capping_snow_caps_a_dry_unit_fading_in_its_colour() -> void:
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	await _settle()
+	var kind := _capping_weather()
+	assert_int(kind).override_failure_message("fixture: no weather caps units").is_not_equal(Weather.Kind.CLEAR)
+	StatusLook.status_fade_time = 1.0
+	_set_weather(kind)
+	_unit_mirror.reconcile(0.5)
+	var sprite := _unit_mirror.sprite_for(unit)
+	var half := sprite.cap_level()
+	var material := sprite.status_material()
+	assert_bool(half > 0.0 and half < 1.0).override_failure_message(
+			"half a fade in, the cap reads %s -- it jumped rather than faded" % [half]).is_true()
+	assert_object(material).override_failure_message("a capped unit wears no status material").is_not_null()
+	assert_float(_param(material, "snow_cap")).is_equal_approx(half, 0.0001)
+	var hue: Color = material.get_shader_parameter("snow_cap_hue")
+	assert_bool(hue.is_equal_approx(Color(WeatherLook.for_kind(kind).snow_color, 1.0))).override_failure_message(
+			"the cap is drawn in %s, not the snow's colour" % [hue]).is_true()
+	_set_weather(Weather.Kind.CLEAR)
+	_unit_mirror.reconcile(2.0)
+	assert_object(sprite.material_override).override_failure_message(
+			"the snow left and the unit still wears the status material").is_null()
+
+
+func test_a_ghost_wears_the_cap_and_the_hover_stand_in_does_not() -> void:
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	await _settle()
+	StatusLook.status_fade_time = 0.0
+	_set_weather(_capping_weather())
+	_unit_mirror.reconcile()
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game.hover_presenter.update_hover_visuals(Vector2i(4, 2))
+	await _settle()
+	var stand_ins := 0
+	for ghost in _unit_mirror.ghosts():
+		if ghost.visible and _unit_mirror.ghost_unit_id(ghost) == 0:
+			stand_ins += 1
+			assert_float(ghost.cap_level()).override_failure_message("the hover stand-in wears snow").is_equal(0.0)
+	assert_int(stand_ins).override_failure_message("no hover stand-in reached the diorama").is_greater(0)
+	game._on_left_click(Vector2i(3, 2))
+	await _settle()
+	var ghost := _ghost_for(unit)
+	assert_object(ghost).override_failure_message("no ghost stands for the moving unit").is_not_null()
+	assert_float(ghost.cap_level()).override_failure_message("the ghost standing in for a capped unit is bare") \
+			.is_equal(1.0)
+
+
+func test_a_blizzard_fogs_a_standing_units_breath_and_not_a_downed_ones() -> void:
+	var standing := _spawn(PLAYER, Vector2i(2, 2))
+	var down := _spawn(PLAYER, Vector2i(5, 2))
+	await _settle()
+	down.restore_lifecycle(Unit.LifecycleState.DOWNED, 3)
+	assert_bool(standing.element_states.is_empty() and down.element_states.is_empty()).override_failure_message(
+			"fixture: a unit arrived wearing a state, so its breath would be the state's").is_true()
+	_set_weather(_capping_weather())
+	_unit_mirror.reconcile()
+	var world := _unit_mirror.status_world()
+	assert_bool(world._wearers.has(standing.get_instance_id())).override_failure_message(
+			"a standing unit in the blizzard breathes nothing").is_true()
+	assert_bool(world._wearers.has(down.get_instance_id())).override_failure_message(
+			"a downed body breathes the blizzard").is_false()
+	_set_weather(Weather.Kind.CLEAR)
+	_unit_mirror.reconcile()
+	assert_bool(world._wearers.has(standing.get_instance_id())).override_failure_message(
+			"the breath outlived the blizzard").is_false()

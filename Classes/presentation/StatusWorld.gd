@@ -67,6 +67,7 @@ class Wearer extends RefCounted:
 	var mists := 0
 	var next_breath := -1.0   # the status clock's time of the next puff; -1 until one is scheduled
 	var breaths := 0
+	var breath := 0.0   # breath fog with no state behind it: the weather's cold (#1269)
 	var ripples: Array[Vector3] = []   # a ring's centre in the patch's texels (x, y), and when it began (z)
 	var painted := ""                  # what the patch's texture last showed; a re-paint only on change
 
@@ -103,7 +104,8 @@ func emitter(of: StatusParticles.Kind) -> StatusParticles:
 # One unit wearing a state this frame. `sprite` is whichever sprite STANDS for it -- the real one,
 # or the planning ghost that replaced it -- and `cell` the board cell under that sprite, whose
 # surface its drips land on.
-func wear(id: int, sprite: UnitSprite3D, cell: Vector2i, level: Vector4, seed: float) -> void:
+# `breath` fogs the unit's breath with no state behind it -- a blizzard's cold (#1269) -- and only that.
+func wear(id: int, sprite: UnitSprite3D, cell: Vector2i, level: Vector4, seed: float, breath := 0.0) -> void:
 	var wearer: Wearer = _wearers.get(id)
 	if wearer == null:
 		wearer = Wearer.new()
@@ -112,6 +114,7 @@ func wear(id: int, sprite: UnitSprite3D, cell: Vector2i, level: Vector4, seed: f
 	wearer.cell = cell
 	wearer.level = level
 	wearer.seed = seed
+	wearer.breath = breath
 	wearer.reported = true
 
 
@@ -303,7 +306,8 @@ func _mist_from(id: int, wearer: Wearer, map: StatusArt.Map, frame: Rect2, delta
 
 func _breathe(id: int, wearer: Wearer, map: StatusArt.Map, frame: Rect2, clock: float,
 		right: Vector3, toward: Vector3) -> void:
-	if wearer.level.y <= 0.0:
+	var cold := maxf(wearer.level.y, wearer.breath)
+	if cold <= 0.0:
 		wearer.next_breath = -1.0
 		return
 	var period := maxf(StatusLook.chill_breath_period, 0.05)
@@ -319,7 +323,7 @@ func _breathe(id: int, wearer: Wearer, map: StatusArt.Map, frame: Rect2, clock: 
 			+ toward * wearer.sprite.pixel_size
 	var ahead := right * (1.0 if faces_right(wearer.sprite.flip_h) else -1.0)
 	var speed := StatusLook.chill_breath_speed
-	var puffs := ceili(float(StatusLook.chill_breath_count) * wearer.level.y)
+	var puffs := ceili(float(StatusLook.chill_breath_count) * cold)
 	for i in puffs:
 		var n := wearer.breaths * 16 + i
 		var velocity := ahead * speed * (0.8 + 0.4 * unit_hash(id, n, 4)) \

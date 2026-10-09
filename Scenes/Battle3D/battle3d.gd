@@ -228,6 +228,7 @@ func _ready() -> void:
 	var environment: Environment = ($WorldEnvironment as WorldEnvironment).environment
 	_weather.sky = environment.sky.sky_material as ProceduralSkyMaterial if environment.sky != null else null
 	_weather.stands_down = func() -> bool: return view == View.FLAT_2D
+	_weather.prop_caps = _board_mirror.set_prop_caps
 	add_child(_weather)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
@@ -264,6 +265,8 @@ func _ready() -> void:
 	# Who is standing IN the water rather than on it, for the basin's wading (#654). One board per frame,
 	# and only while the experiment is on.
 	_unit_mirror.board_source = func() -> BoardContext: return game._board()
+	_unit_mirror.snow_source = _weather.unit_snow
+	_unit_mirror.breath_source = _weather.breathes
 	# The impact wire (#520 diff 2b): the mirror sees the blow land, and this decides what it is
 	# worth. It bound straight to _rig.shake until 2c gave a killing blow a second consequence --
 	# the freeze -- which is not the rig's to do, so the decision moved here where both are reachable.

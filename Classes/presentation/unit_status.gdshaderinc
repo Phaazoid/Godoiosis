@@ -5,8 +5,8 @@
 // shaded, double-sided, FIXED_Y-billboarded sprite whose albedo comes from the vertex colour. Measured
 // pixel-identical to the engine sprite on 4.7.1 (tools/sprite_parity/), shadows and flip included. The
 // engine stays authoritative; after an engine upgrade, re-run that probe before trusting this half.
-// A sprite only carries this material while it wears a state or a tint brighter than its art (#1251),
-// so everything else keeps the engine's.
+// A sprite only carries this material while it wears a state, a tint brighter than its art (#1251)
+// or the weather's snow cap (#1269), so everything else keeps the engine's.
 //
 // The second half draws the state from StatusArt's effect map. Tint goes to ALBEDO, so it is lit
 // with the sprite; the bright marks go to EMISSION, so they still read on a dark board. Every mark
@@ -41,6 +41,15 @@ uniform float icicle_min_texels = 2.0;
 uniform float icicle_max_texels = 4.0;
 // The tint's part above 1.0 (#1251), which the vertex colour cannot carry. (1, 1, 1) = none.
 uniform vec3 overbright = vec3(1.0);
+// Snow settled on the head and shoulders (#1269): a WEATHER look, not a state, so it has no glow and
+// no clock. It piles one texel high on the open air above the silhouette's TOPMOST texel in each
+// column (the approved mockup's rule -- every top edge read as noise), so the outline under it stays.
+// frame_origin is the shown frame's top-left in the sampled sheet, so the scan up stops at its own
+// frame rather than reading the next one.
+uniform float snow_cap = 0.0;
+uniform vec4 snow_cap_hue : source_color = vec4(1.0);
+uniform vec2 frame_origin = vec2(0.0);
+const int SNOW_CAP_SCAN = 96;
 
 // StatusArt stores icicle depth as k / ICICLE_SCALE.
 const float ICICLE_SCALE = 8.0;
@@ -120,6 +129,24 @@ void fragment() {
 			if (phase < 0.08) {
 				glow += vec3(1.0) * (1.0 - phase / 0.08) * chill_glint_glow * chill;
 			}
+		}
+	}
+
+	if (!body && snow_cap > 0.0 && texture(status_map, (texel + vec2(0.0, 1.0) + 0.5) / size).r > 0.9) {
+		bool open = true;
+		for (int k = 1; k <= SNOW_CAP_SCAN; k++) {
+			float y = texel.y - float(k);
+			if (y < frame_origin.y) {
+				break;
+			}
+			if (texture(texture_albedo, (vec2(texel.x, y) + 0.5) / size).a >= 0.5) {
+				open = false;
+				break;
+			}
+		}
+		if (open) {
+			rgb = snow_cap_hue.rgb;
+			alpha = albedo.a * tint.a * snow_cap;
 		}
 	}
 

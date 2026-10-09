@@ -7,7 +7,8 @@ class_name WeatherTool
 # through DevWidgets.save_over, asking first, since a save overwrites.
 #
 # Which weather a BOARD wears is the Scenario page's (its Weather picker beside Look). This page opens
-# on that one, so tuning the rain you are looking at is one click.
+# on that one, so tuning the rain you are looking at is one click. A look draws only the rows of what
+# it drops (WeatherLook.row_shows), so a snow page lists no splashes.
 
 const NO_LOOK := "No look file for this weather -- add one under Resources/WeatherLooks/."
 
@@ -56,10 +57,16 @@ func refresh_on_show() -> void:
 func _show(kind: Weather.Kind) -> void:
 	_kind = kind
 	_picker.select(_picker.get_item_index(kind))
+	_status.text = ""
+	_fill()
+	_set_dirty(false)
+
+
+func _fill() -> void:
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.queue_free()
-	_status.text = ""
+	var kind := _kind
 	var rules := WeatherRules.for_kind(kind)
 	if rules != null:
 		var states: Array = []
@@ -74,11 +81,12 @@ func _show(kind: Weather.Kind) -> void:
 		DevWidgets.add_label(_rows, NO_LOOK)
 	else:
 		for row: Dictionary in WeatherLook.ROWS:
+			if not WeatherLook.row_shows(row, look.fall):
+				continue
 			var prop: String = row["prop"]
 			DevWidgets.add_knob_row(_rows, row, look.get(prop),
 				func(value: Variant) -> void: _write(look, prop, value),
 				DevWidgets.wrap_tooltip(row["tip"]))
-	_set_dirty(false)
 
 
 # Into the live resource: the mirror and the soak read the cached object, so this IS the preview.
@@ -88,6 +96,8 @@ func _write(resource: Resource, prop: String, value: Variant) -> void:
 	resource.set(prop, value)
 	resource.emit_changed()
 	_set_dirty(true)
+	if prop == "fall":
+		_fill.call_deferred()   # deferred: the picker that fired this is one of the rows freed
 
 
 func _set_dirty(dirty: bool) -> void:

@@ -13,6 +13,14 @@ class_name WeatherMirror
 #   - THE GROUND: two board-sized decals painted by WetGround -- darkened and glossy, and puddles.
 #   - THE STORM: bolts beyond the board (StormBolts), a screen flash this node only REPORTS (battle3d's
 #     white-out composes it with the others), a light from the strike's side, and the sky's glow.
+#   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box, wandering as they fall and lying a
+#     moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
+#     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Snow that
+#     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
+#     prop_caps tells BoardMirror to lay its overlays on the billboards. Which of the two a look draws
+#     is its FALL; every rain path is gated on it.
+#   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
+#     easing between weathers. Either fall may author one; every shipped rain leaves it at identity.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -25,6 +33,8 @@ const COVER_MARGIN := 120.0
 const AMOUNT_SLACK := 0.35
 const MAX_DROPS := 60000
 const MAX_SPLASHES := 12000
+const MAX_FLAKES := 200000
+const MAX_DRIFT := 20000
 # How far above the camera drops are born, so none ever appears inside the frame.
 const SPAWN_ABOVE := 2.0
 # The decals' height: from well under the board to well over the tear-out's stage, which shares the
@@ -33,6 +43,9 @@ const DECAL_BELOW := 40.0
 const DECAL_ABOVE := 40.0
 # How far below where the camera looks a sky bolt reaches: past the bottom of any frame.
 const BOLT_BELOW := 80.0
+# The snow cover is painted per art pixel, a fraction of a second on a big board, so once it is up a
+# change waits until it has held this long: a slider drag repaints once, when it stops.
+const COVER_SETTLE := 0.15
 
 var weather_source: Callable          # () -> Weather.Kind
 var grid: BoardGrid
@@ -41,6 +54,7 @@ var camera: Camera3D
 var aim_source: Callable              # () -> Vector3, where the camera is looking
 var sky: ProceduralSkyMaterial
 var stands_down: Callable             # () -> bool: the flat view is up, draw nothing
+var prop_caps: Callable               # (shown: bool, color: Color) -> void: BoardMirror.set_prop_caps
 
 var _kind := Weather.Kind.CLEAR
 var _look: WeatherLook = null
@@ -50,9 +64,18 @@ var _rain_draw: ShaderMaterial
 var _splash: GPUParticles3D
 var _splash_process: ShaderMaterial
 var _splash_draw: ShaderMaterial
+var _snow: GPUParticles3D
+var _snow_process: ShaderMaterial
+var _snow_draw: ShaderMaterial
+var _drift: GPUParticles3D
+var _drift_process: ShaderMaterial
+var _drift_draw: ShaderMaterial
 var _wet: Decal
 var _puddles: Decal
+var _snow_cover: Decal
+var _caps: Decal
 var _bolts: StormBolts
+var _grade: WeatherGrade
 var _side: DirectionalLight3D
 
 var _rect := Rect2i()
@@ -60,8 +83,14 @@ var _mask_versions := []
 var _ground_key := 0
 var _streak_texels := -1
 var _strip_built := false
+var _flakes_built := false
+var _drift_texels := -1
 var _wet_roughness := -1.0
 var _puddle_roughness := -1.0
+var _snow_key := 0
+var _snow_wanted := 0
+var _snow_wanted_at := 0.0
+var _snow_roughness := -1.0
 var _volume := AABB()
 var _aim_y := 0.0
 
@@ -82,10 +111,26 @@ func _ready() -> void:
 	_splash_draw = _draw_material("res://Classes/presentation/splash_draw.gdshader")
 	_splash_draw.set_shader_parameter("frames", float(WeatherArt.SPLASH_FRAMES))
 	_splash = _particles(_splash_process, _splash_draw, PlaneMesh.FACE_Y)
+	_snow_process = _process_material("res://Classes/presentation/snow.gdshader")
+	_snow_draw = _draw_material("res://Classes/presentation/snow_flake.gdshader")
+	_snow = _particles(_snow_process, _snow_draw, PlaneMesh.FACE_Z)
+	_drift_process = _process_material("res://Classes/presentation/snow_drift.gdshader")
+	_drift_draw = _draw_material("res://Classes/presentation/rain_drop.gdshader")
+	_drift_draw.set_shader_parameter("age_fade", 1.0)
+	_drift = _particles(_drift_process, _drift_draw, PlaneMesh.FACE_Z)
 	_wet = _decal()
 	_puddles = _decal()
+	_snow_cover = _decal()
+	_caps = _decal()
+	_caps.cull_mask = BoardOverlays.PROP_RENDER_LAYER   # the block props' own bit, and nothing else
+	var white := Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)
+	white.set_pixel(0, 0, Color.WHITE)
+	_caps.texture_albedo = ImageTexture.create_from_image(white)
+	_caps.albedo_mix = 1.0
 	_bolts = StormBolts.new()
 	add_child(_bolts)
+	_grade = WeatherGrade.new()
+	add_child(_grade)
 	_side = DirectionalLight3D.new()
 	_side.shadow_enabled = true
 	_side.visible = false
@@ -104,8 +149,32 @@ func cover(board: AABB) -> void:
 func cover_volume(volume: AABB) -> void:
 	_volume = volume
 	if _rain != null:
-		_rain.visibility_aabb = volume
-		_splash.visibility_aabb = volume
+		for system: GPUParticles3D in emitters():
+			system.visibility_aabb = volume
+
+
+# Every particle system this node draws: the one list the cull sweep walks, so a new one cannot be
+# left out of it.
+func emitters() -> Array[GPUParticles3D]:
+	return [_rain, _splash, _snow, _drift]
+
+
+# The snow's colour on the units (#1269), its alpha 1 while this weather caps them and 0 otherwise --
+# UnitMirror.snow_source. Read off the look the mirror is drawing, so a flat view caps nobody.
+func unit_snow() -> Color:
+	if not _snowing() or not _look.caps_units:
+		return Color(1.0, 1.0, 1.0, 0.0)
+	return Color(_look.snow_color.r, _look.snow_color.g, _look.snow_color.b, 1.0)
+
+
+# The grade drawn over the board right now (#1269).
+func grade() -> WeatherGrade:
+	return _grade
+
+
+# Whether every standing unit's breath fogs (#1269) -- UnitMirror.breath_source.
+func breathes() -> bool:
+	return _snowing() and _look.breath
 
 
 # The storm's screen flash, 0..1, for battle3d's white-out -- a DRIVER, never a writer (#887's rule).
@@ -120,25 +189,52 @@ func _process(delta: float) -> void:
 	var look := WeatherLook.for_kind(kind) if kind != Weather.Kind.CLEAR and not down else null
 	if look != _look or kind != _kind:
 		_switch(kind, look)
+	# Every frame, the clear ones too: a grade eases OUT as well as in.
+	_grade.drive(_look, Vector2(_look.wind_x, _look.wind_z) if _look != null else Vector2.ZERO, delta)
 	if _look == null:
 		return
 	_sync_mask()
-	_sync_ground()
-	_place()
-	_style()
+	if _raining():
+		_sync_ground()
+		_place_rain()
+		_style()
+	elif _snowing():
+		_sync_snow_ground()
+		_place_snow()
+		_style_snow()
 	_storm()
+
+
+func _raining() -> bool:
+	return _look != null and _look.fall == WeatherLook.Fall.RAIN
+
+
+func _snowing() -> bool:
+	return _look != null and _look.fall == WeatherLook.Fall.SNOW
 
 
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_kind = kind
 	_look = look
-	var on := look != null
-	_rain.emitting = on
-	_rain.visible = on
-	_splash.emitting = on and look.splashes
-	_splash.visible = on and look.splashes
-	_wet.visible = on
-	_puddles.visible = on and look.puddles
+	var rain := _raining()
+	_rain.emitting = rain
+	_rain.visible = rain
+	_splash.emitting = rain and look.splashes
+	_splash.visible = rain and look.splashes
+	_wet.visible = rain
+	_puddles.visible = rain and look.puddles
+	var snow := _snowing()
+	_snow.emitting = snow
+	_snow.visible = snow
+	_snow_cover.visible = snow
+	_caps.visible = snow and look.caps_props
+	if prop_caps.is_valid():
+		prop_caps.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE)
+	_drift.emitting = snow and look.drift_rate > 0.0
+	_drift.visible = _drift.emitting
+	_drift_texels = -1
+	_snow_key = 0
+	_snow_roughness = -1.0
 	_mask_versions = []
 	_ground_key = 0
 	_streak_texels = -1
@@ -168,7 +264,7 @@ func _sync_mask() -> void:
 	_rect = rect
 	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
 	var texture := ImageTexture.create_from_image(image)
-	for material: ShaderMaterial in [_rain_process, _splash_process]:
+	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process, _drift_process]:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
@@ -189,13 +285,8 @@ func _sync_ground() -> void:
 	if key == _ground_key:
 		return
 	_ground_key = key
-	var size := Vector3(_rect.size.x * BoardSpace.CELL_SIZE, DECAL_BELOW + DECAL_ABOVE + BoardSpace.lift_offset().y,
-			_rect.size.y * BoardSpace.CELL_SIZE)
-	var centre := Vector3(_rect.position.x * BoardSpace.CELL_SIZE + size.x * 0.5,
-			-DECAL_BELOW + size.y * 0.5, _rect.position.y * BoardSpace.CELL_SIZE + size.z * 0.5)
-	for decal: Decal in [_wet, _puddles]:
-		decal.size = size
-		decal.position = centre
+	_fit(_wet)
+	_fit(_puddles)
 	_wet.texture_albedo = ImageTexture.create_from_image(WetGround.paint_wet(grid, _rect, _look.wet_tint))
 	_puddles.visible = _look.puddles
 	if _look.puddles:
@@ -203,15 +294,46 @@ func _sync_ground() -> void:
 				WetGround.paint_puddles(grid, heights, _rect, _look.puddle_coverage, _look.puddle_color))
 
 
-# ---- The rain box ------------------------------------------------------------------------------
+# The snow's own ground decal, on the same rule: rebuilt when the board or the cover it paints changes.
+func _sync_snow_ground() -> void:
+	if grid == null:
+		return
+	var key := hash([_mask_versions.slice(0, 3), _look.snow_cover, _look.snow_frost, _look.snow_flecks,
+			_look.snow_color])
+	if key == _snow_key:
+		return
+	if _snow_key != 0:
+		if key != _snow_wanted:
+			_snow_wanted = key
+			_snow_wanted_at = _clock
+		if _clock - _snow_wanted_at < COVER_SETTLE:
+			return
+	_snow_key = key
+	_fit(_snow_cover)
+	_fit(_caps)
+	_snow_cover.texture_albedo = ImageTexture.create_from_image(SnowGround.paint_cover(grid, _rect,
+			_look.snow_cover, _look.snow_frost, _look.snow_flecks, _look.snow_color))
+
+
+# A ground decal spans the board's rect, from well under the board to well over the tear-out's stage.
+func _fit(decal: Decal) -> void:
+	var size := Vector3(_rect.size.x * BoardSpace.CELL_SIZE, DECAL_BELOW + DECAL_ABOVE + BoardSpace.lift_offset().y,
+			_rect.size.y * BoardSpace.CELL_SIZE)
+	decal.size = size
+	decal.position = Vector3(_rect.position.x * BoardSpace.CELL_SIZE + size.x * 0.5,
+			-DECAL_BELOW + size.y * 0.5, _rect.position.y * BoardSpace.CELL_SIZE + size.z * 0.5)
+
+
+# ---- The birth box -----------------------------------------------------------------------------
 
 # Fit the birth box to what the camera can see, every frame: the four frustum corners on the plane
-# the camera looks at, plus the camera's own column, grown by how far the wind carries a drop on its
-# way down. The floor is below where the LOWEST frame edge leaves the farthest drop's fall, so a drop
-# over the void leaves the screen before it dies.
-func _place() -> void:
+# the camera looks at, plus the camera's own column, grown by how far the wind carries a particle on
+# its way down and by `wander` either way. The floor is below where the LOWEST frame edge leaves the
+# farthest particle's fall, so one over the void leaves the screen before it dies. Empty with no camera.
+# Keys: lo, hi (Vector2, x/z), top, floor_y, fall (seconds from top to floor), area.
+func _view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
 	if camera == null or not camera.is_inside_tree():
-		return
+		return {}
 	var eye := camera.global_position
 	var aim: Vector3 = aim_source.call() if aim_source.is_valid() else Vector3.ZERO
 	var rise := maxf(eye.y - aim.y, 2.0)
@@ -234,24 +356,77 @@ func _place() -> void:
 				slope = minf(slope, -ray.y / flat)
 	var top := eye.y + SPAWN_ABOVE
 	var floor_y := aim.y - rise * 4.0 if slope == INF else eye.y - far * slope - 1.0
+	var fall := (top - floor_y) / maxf(speed, 0.5)
+	var drift := wind * fall
+	var pad := Vector2.ONE * (1.0 + maxf(wander, 0.0))
+	lo = lo.min(lo - drift) - pad
+	hi = hi.max(hi - drift) + pad
+	return {"lo": lo, "hi": hi, "top": top, "floor_y": floor_y, "fall": fall,
+			"area": (hi.x - lo.x) * (hi.y - lo.y)}
+
+
+func _place_rain() -> void:
 	var speed := maxf(_look.fall_speed, 0.5)
-	var fall := (top - floor_y) / speed
-	var drift := Vector2(_look.wind_x, _look.wind_z) * fall
-	lo = lo.min(lo - drift) - Vector2.ONE
-	hi = hi.max(hi - drift) + Vector2.ONE
-	var area := (hi.x - lo.x) * (hi.y - lo.y)
+	var box := _view_box(speed, Vector2(_look.wind_x, _look.wind_z), 0.0)
+	if box.is_empty():
+		return
+	var lo: Vector2 = box["lo"]
+	var hi: Vector2 = box["hi"]
+	var top: float = box["top"]
+	var area: float = box["area"]
 	_rain_process.set_shader_parameter("box_min", Vector3(lo.x, top - 0.5, lo.y))
 	_rain_process.set_shader_parameter("box_max", Vector3(hi.x, top, hi.y))
-	_rain_process.set_shader_parameter("floor_y", floor_y)
+	_rain_process.set_shader_parameter("floor_y", box["floor_y"])
 	_rain_process.set_shader_parameter("velocity", Vector3(_look.wind_x, -speed, _look.wind_z))
-	_size(_rain, _rain_process, _look.density * area, fall + 0.25, MAX_DROPS)
-	var ground_lo := Vector3(lo.x, 0.0, lo.y)
-	var ground_hi := Vector3(hi.x, 0.0, hi.y)
-	_splash_process.set_shader_parameter("box_min", ground_lo)
-	_splash_process.set_shader_parameter("box_max", ground_hi)
-	_splash_process.set_shader_parameter("floor_y", floor_y)
+	_size(_rain, _rain_process, _look.density * area, float(box["fall"]) + 0.25, MAX_DROPS)
+	_splash_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
+	_splash_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
+	_splash_process.set_shader_parameter("floor_y", box["floor_y"])
 	if _look.splashes:
 		_size(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
+
+
+# Flakes fall slowly and wander, so they get a longer life than their fall -- an eddy can hold one up --
+# and the settle on top. The box is padded by an eddy's width either way.
+func _place_snow() -> void:
+	var speed := maxf(_look.fall_speed, 0.5)
+	var wind := Vector2(_look.wind_x, _look.wind_z)
+	var box := _view_box(speed, wind, _look.swirl_scale + _look.flake_sway)
+	if box.is_empty():
+		return
+	var lo: Vector2 = box["lo"]
+	var hi: Vector2 = box["hi"]
+	var top: float = box["top"]
+	_snow_process.set_shader_parameter("box_min", Vector3(lo.x, top - 0.5, lo.y))
+	_snow_process.set_shader_parameter("box_max", Vector3(hi.x, top, hi.y))
+	_snow_process.set_shader_parameter("floor_y", box["floor_y"])
+	_snow_process.set_shader_parameter("velocity", Vector3(wind.x, -speed, wind.y))
+	_snow_process.set_shader_parameter("sway", _look.flake_sway)
+	_snow_process.set_shader_parameter("swirl", _look.flake_swirl)
+	_snow_process.set_shader_parameter("swirl_scale", _look.swirl_scale)
+	_snow_process.set_shader_parameter("settle", _look.flake_settle)
+	_snow_process.set_shader_parameter("big", _look.big_flakes)
+	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
+	var life := float(box["fall"]) * 1.3 + maxf(_look.flake_settle, 0.0) + 0.25
+	_size(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
+	_place_drift(lo, hi, box["floor_y"], wind)
+
+
+# The ground drift streams along the wind, born on the ground over the same box at its own rate.
+func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> void:
+	var on := _look.drift_rate > 0.0
+	_drift.emitting = on
+	_drift.visible = on
+	if not on:
+		return
+	var along := wind.normalized() if wind.length() > 0.001 else Vector2.RIGHT
+	_drift_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
+	_drift_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
+	_drift_process.set_shader_parameter("floor_y", floor_y)
+	_drift_process.set_shader_parameter("velocity", Vector3(along.x, 0.0, along.y) * _look.drift_speed)
+	_drift_process.set_shader_parameter("hover", 1.0 / UnitSprite3D.texels_per_unit)
+	_size(_drift, _drift_process, _look.drift_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.drift_life, 0.05),
+			MAX_DRIFT)
 
 
 # Births per second -> an amount and a lifetime, with slack: either property restarts the system, so
@@ -310,6 +485,30 @@ func _style() -> void:
 	if not is_equal_approx(_look.puddle_roughness, _puddle_roughness):
 		_puddle_roughness = _look.puddle_roughness
 		_puddles.texture_orm = _orm(_puddle_roughness)
+
+
+func _style_snow() -> void:
+	if not _flakes_built:
+		_flakes_built = true
+		_snow_draw.set_shader_parameter("flakes", ImageTexture.create_from_image(WeatherArt.flakes(Color.WHITE)))
+	_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
+	_snow_draw.set_shader_parameter("tint", _look.flake_color)
+	_snow_cover.albedo_mix = 1.0
+	if _look.drift_texels != _drift_texels:
+		_drift_texels = _look.drift_texels
+		_drift_draw.set_shader_parameter("streak", ImageTexture.create_from_image(
+				WeatherArt.streak(_drift_texels, Color.WHITE)))
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	_drift_draw.set_shader_parameter("size", Vector2(texel, texel * float(maxi(_drift_texels, 1))))
+	_drift_draw.set_shader_parameter("tint", _look.drift_color)
+	if not is_equal_approx(_look.snow_roughness, _snow_roughness):
+		_snow_roughness = _look.snow_roughness
+		_snow_cover.texture_orm = _orm(_snow_roughness)
+		_caps.texture_orm = _snow_cover.texture_orm
+	_caps.visible = _look.caps_props
+	_caps.modulate = _look.snow_color
+	if prop_caps.is_valid():
+		prop_caps.call(_look.caps_props, _look.snow_color)   # the door returns at once when nothing moved
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one

@@ -3,12 +3,13 @@ class_name Weather
 
 # The weather's vocabulary (#1260): which weathers exist. A board names one (ScenarioData.weather),
 # what it DOES is its WeatherRules file and how it LOOKS is its WeatherLook file, one of each per
-# kind and named for it -- Gas's split, for Gas's reason.
+# kind and named for it -- Gas's split, for Gas's reason. A kind with no rules file does nothing to a
+# unit: the snows (#1269) are looks only for now.
 #
 # A kind's int is what a save holds, so Kind is APPEND-ONLY: rename a member freely, never reorder
 # or delete one. CLEAR is the default and does nothing.
 
-enum Kind { CLEAR, LIGHT_RAIN, RAIN, HEAVY_RAIN, THUNDERSTORM }
+enum Kind { CLEAR, LIGHT_RAIN, RAIN, HEAVY_RAIN, THUNDERSTORM, LIGHT_SNOW, SNOW, BLIZZARD }
 
 
 static func name_of(kind: Kind) -> String:

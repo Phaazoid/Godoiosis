@@ -68,6 +68,7 @@ const PROCESS_SCOPED := [
 	"_looks_by_kind",                             # GasLook (#508) and WeatherLook (#1260): each kind's loaded look, keyed by kind
 	"_icons_by_kind",                             # GasPuffArt (#508): each kind's preview ghost, keyed by Gas.Kind
 	"_icon",                                      # WeatherArt (#1260): the placeholder soak icon, built once
+	"_caps_by_frame",                             # SnowCapArt (#1269): each prop art's snow cap, keyed by sheet and frame
 	"_badges",                                    # StrikeMarks2D (#1247): baked badge art, keyed by (icon, colour)
 	"GUARD_RING_SCALE",                           # tuning, no knob
 	"_basin_on",                                  # BoardSpace (#654): the Water basin flag, re-published by battle3d every frame

@@ -2,7 +2,7 @@ extends Object
 class_name WeatherArt
 
 # The pixel art the weather draws (#1260), generated rather than drawn: a rain streak, a splash ring's
-# frames and the queue row's icon. GasPuffArt's shape -- a tune shows the moment the art is rebuilt,
+# frames, a snowflake's two frames (#1269) and the queue row's icon. GasPuffArt's shape -- a tune shows the moment the art is rebuilt,
 # and a sheet replaces any of it once someone draws one. The icon especially is a PLACEHOLDER.
 #
 # Pure and static: every function returns a fresh Image or a cached texture, and nothing reads a node.
@@ -11,6 +11,8 @@ const ICON_SIZE := GridUtils.TILE_SIZE
 # How many frames a splash ring plays, and the square each is drawn in, in art pixels.
 const SPLASH_FRAMES := 4
 const SPLASH_SIDE := 9
+# The square a snowflake's frame is drawn in, in art pixels: room for the big flake's plus.
+const FLAKE_SIDE := 3
 
 static var _icon: Texture2D = null
 
@@ -40,6 +42,20 @@ static func splash_strip(color: Color) -> Image:
 			for x in SPLASH_SIDE:
 				if absf(Vector2(x, y).distance_to(centre) - radius) < 0.5:
 					image.set_pixel(frame * SPLASH_SIDE + x, y, Color(color.r, color.g, color.b, alpha))
+	return image
+
+
+# A snowflake's two frames side by side, each FLAKE_SIDE square: one art pixel, and a plus whose
+# arms are a shade fainter than its heart. The quad is one frame wide, so a flake keeps the sprites'
+# density whatever that is tuned to.
+static func flakes(color: Color) -> Image:
+	var image := Image.create_empty(FLAKE_SIDE * 2, FLAKE_SIDE, false, Image.FORMAT_RGBA8)
+	var mid := FLAKE_SIDE >> 1
+	image.set_pixel(mid, mid, color)
+	image.set_pixel(FLAKE_SIDE + mid, mid, color)
+	var arm := Color(color.r, color.g, color.b, color.a * 0.75)
+	for step: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		image.set_pixel(FLAKE_SIDE + mid + step.x, mid + step.y, arm)
 	return image
 
 
