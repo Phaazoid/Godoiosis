@@ -134,9 +134,9 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 		if situation.lifecycle == Unit.LifecycleState.DEAD:
 			continue
 		var destination := unit.get_projected_destination()
-		if board.gas != null:
-			plan.tile_hits.append_array(TileHitAction.gas_hits(unit, projected_states(unit, hypo),
-					board.gas.projected_packed_at(destination, plan.cell_effects)))
+		var packed := board.gas.projected_packed_at(destination, plan.cell_effects) if board.gas != null else 0
+		plan.tile_hits.append_array(TileHitAction.soaks(unit, projected_states(unit, hypo), packed,
+				board.weather))
 		if board.terrain_states == null:
 			continue
 		var states := board.terrain_states.projected_states_at(destination, plan.cell_effects)

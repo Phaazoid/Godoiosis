@@ -2,10 +2,10 @@ extends VBoxContainer
 class_name ScenarioTool
 
 # The Properties page (#382): what this mission DECLARES -- objectives (#96), what loses it (#101),
-# the look preset it wears (#253), and where its camera opens (#234). The file ops that headed this tab
-# live on ScenarioHeader now (the persistent header over the whole window), and the board's
-# occupants (AI toggles, squad rows) live on SquadsAiTool -- what a mission requires versus who is
-# standing on it, split at the seam.
+# the look preset it wears (#253), the weather over it (#1260), and where its camera opens (#234). The
+# file ops that headed this tab live on ScenarioHeader now (the persistent header over the whole
+# window), and the board's occupants (AI toggles, squad rows) live on SquadsAiTool -- what a mission
+# requires versus who is standing on it, split at the seam.
 #
 # Every edit here is scenario content, so each one marks the header modified. The one exception is
 # Check board (#390), which is a READ: it asks BoardLint whether what this page and its neighbours
@@ -79,7 +79,39 @@ func refresh_look_row() -> void:
 		options.append(current)
 	_look_row = DevWidgets.add_option(self, "Look preset", options,
 		current if current != "" else NO_LOOK_LABEL, _on_look_picked)
+	_add_weather_picker(_look_row)
 	move_child(_look_row, 0)
+
+
+# The weather over this board (#1260), riding the look row for the roster cap's reason: the two are
+# one thought (what the board looks like and what is falling on it), and a second pinned row would
+# drift on the next rebuild. Built by hand rather than through add_option, which wraps its own HBox.
+# After the look's own tooltip has been set, never before, so this one does not wear it.
+func _add_weather_picker(row: HBoxContainer) -> void:
+	var label := Label.new()
+	label.text = "Weather"
+	row.add_child(label)
+	var picker := OptionButton.new()
+	for kind: Weather.Kind in Weather.Kind.values():
+		picker.add_item(Weather.display_name(kind), kind)
+	picker.select(picker.get_item_index(scenario_manager.current_weather))
+	picker.item_selected.connect(func(index: int) -> void:
+		_on_weather_picked(picker.get_item_id(index) as Weather.Kind))
+	row.add_child(picker)
+	var tip := DevWidgets.wrap_tooltip(
+		"What falls on this board, for the whole battle. Rain wets every unit at the end of its own "
+		+ "turn, so it shows in the queue's END OF TURN section. Saved with the board. How each "
+		+ "weather looks is tuned on Project > Weather.")
+	DevWidgets.apply_tooltip(label, tip)
+	DevWidgets.apply_tooltip(picker, tip)
+
+
+func _on_weather_picked(kind: Weather.Kind) -> void:
+	scenario_manager.current_weather = kind
+	_mark()
+	# The open plan's END OF TURN rows read the weather, so re-resolve it now rather than leave the
+	# forecast saying what the last weather would have done.
+	game.refresh_action_queue(game.squad_manager.active_squad)
 
 
 # Which roster this board offers (#735). The look row's shape exactly, and for the same reason:

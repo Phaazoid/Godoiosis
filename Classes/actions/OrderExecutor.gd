@@ -969,8 +969,8 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # ==============================================================================
 
 # End-of-turn tiles: a unit standing in fire when ITS faction's turn ends takes damage, and since
-# #508 one standing in steam is soaked first (TileHitAction.gas_hits). The burn is routed through
-# take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses. No
+# #508 one standing in steam, and since #1260 one out in the rain, is soaked first
+# (TileHitAction.soaks). The burn is routed through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses. No
 # is_active() filter (#191): burn is a damage source like any other, so the ladder names
 # its rung exactly as it names a blow's, and take_damage no-ops safely on an already-DEAD unit --
 # nothing upstream needs to ask the question again. #191's own wording said the ladder rules
@@ -990,7 +990,8 @@ func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
 	var units: Array[Unit] = game._all_units()
 	var states_store: TerrainStateManager = game.terrain_states
 	var gas: GasField = game.gas_field
-	var hits := TurnBoundary.tile_hits(units, states_store, gas, faction)
+	var weather: Weather.Kind = game.scenario_manager.current_weather
+	var hits := TurnBoundary.tile_hits(units, states_store, gas, weather, faction)
 	# Claim NOTHING for a phase with nothing to show: the release is what hands the player their
 	# view back (#520 follow-up), so claiming here would fire a camera return at the end of every
 	# turn, burning or not.

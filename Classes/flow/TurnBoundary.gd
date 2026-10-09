@@ -11,7 +11,7 @@ class_name TurnBoundary
 # the queue forecasts (#419), derived here from LIVE positions, tile state and gas instead of the
 # plan's projected ones. Two derivations of one rule: a plan is per-SQUAD and this phase is
 # per-FACTION, so neither can consume the other's list -- what they share is
-# RulesService.occupant_damage_for, TileHitAction.make and TileHitAction.gas_hits. The burn is TWO
+# RulesService.occupant_damage_for, TileHitAction.make and TileHitAction.soaks. The burn is TWO
 # layers since #892: what the ground charges (Terrain.occupant_damage) and whether this unit pays it
 # (fire insulation), and BOTH callers must ask the outer one or an immune unit gets a forecast that
 # lies about it.
@@ -21,14 +21,13 @@ class_name TurnBoundary
 # A unit's soak comes BEFORE its burn (#508), here and in the forecast, so the pass plays them in
 # the order the queue lists them.
 static func tile_hits(units: Array[Unit], states: TerrainStateManager, gas: GasField,
-		faction: Team.Faction) -> Array[TileHitAction]:
+		weather: Weather.Kind, faction: Team.Faction) -> Array[TileHitAction]:
 	var hits: Array[TileHitAction] = []
 	for unit in units:
 		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
 			continue
-		if gas != null:
-			hits.append_array(TileHitAction.gas_hits(unit, unit.element_states,
-					gas.packed_at(unit.movement.cell)))
+		var packed := gas.packed_at(unit.movement.cell) if gas != null else 0
+		hits.append_array(TileHitAction.soaks(unit, unit.element_states, packed, weather))
 		var cell_states := states.states_at(unit.movement.cell)
 		var damage := RulesService.occupant_damage_for(unit, cell_states)
 		if damage > 0:

@@ -88,7 +88,7 @@ static func axes() -> Array[Dictionary]:
 	return [
 		ring_verbs(), action_types(), gear_verbs(), hud_doors(), board_keys(),
 		outcome_fields(), plan_lists(),
-		tile_states(), gases(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
+		tile_states(), gases(), weathers(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
 		ground_kinds(), element_states(),
 	]
 
@@ -390,6 +390,28 @@ static func gases() -> Dictionary:
 			K.FROST: {"ai": inert()},
 			K.THUNDER: {"ai": inert()},
 			K.SULFUR: {"ai": inert()},
+		},
+	}
+
+
+# The weathers a board may name (#1260). CLEAR is left out the way a NONE is: it does nothing.
+static func weathers() -> Dictionary:
+	var members: Array = []
+	for kind: int in Weather.Kind.values():
+		if kind != Weather.Kind.CLEAR:
+			members.append(kind)
+	var K := Weather.Kind
+	var blind := gap("#117", "the AI is blind to rain's soak, as it is to steam's (terrain.md)")
+	return {
+		"name": "weathers (Weather.Kind)",
+		"members": members,
+		"label": _enum_label(K.keys()),
+		"play_all": covered(SESSION, "scenario_data.weather"),
+		"rows": {
+			K.LIGHT_RAIN: {"ai": blind},
+			K.RAIN: {"ai": blind},
+			K.HEAVY_RAIN: {"ai": blind},
+			K.THUNDERSTORM: {"ai": blind},
 		},
 	}
 

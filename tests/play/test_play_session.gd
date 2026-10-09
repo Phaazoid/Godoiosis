@@ -230,6 +230,64 @@ func test_the_headless_preview_forecasts_the_soak_at_the_walks_end() -> void:
 		return
 	assert_str(str((rows[0] as Dictionary).get("actor"))).is_equal("A")
 
+# The weather's soak, headless (#1260). The weather is the loaded scenario's, so these load one rather
+# than set a store: the third load path is where #103 says a store goes missing. Which weather soaks,
+# and with what, is authored, so both are read off the rules files.
+func _rain_session() -> Array:
+	var sky := Weather.Kind.CLEAR
+	var rules: WeatherRules = null
+	for kind: Weather.Kind in Weather.Kind.values():
+		var authored := WeatherRules.for_kind(kind)
+		if authored != null and authored.state != Elemental.State.NONE:
+			sky = kind
+			rules = authored
+			break
+	assert_int(sky).override_failure_message(
+			"fixture: no weather's rules name a state").is_not_equal(Weather.Kind.CLEAR)
+	var src: Dictionary = BoardBuilder.build(self, "RainSrc")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 6, 6))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	scenario.weather = sky
+	for spec: Array in [["Out", PLAYER, Vector2i(1, 1)], ["Foe", ENEMY, Vector2i(4, 4)]]:
+		var entry := ScenarioUnitEntry.new()
+		entry.unit_data = _data(spec[0], spec[1])
+		entry.cell = spec[2]
+		scenario.unit_entries.append(entry)
+	var dst: Dictionary = BoardBuilder.build(self, "RainDst")
+	auto_free(dst.root)
+	await BoardBuilder.apply_scenario(dst, scenario)
+	return [PlaySession.new(dst), sky, rules]
+
+func test_the_headless_turn_end_soaks_under_the_loaded_weather() -> void:
+	var made: Array = await _rain_session()
+	var sess = made[0]
+	var sky: Weather.Kind = made[1]
+	var rules: WeatherRules = made[2]
+	var unit: Unit = sess.unit_by_handle("A")
+	var res: Dictionary = sess.end_turn()
+	assert_bool(unit.element_states.has(rules.state)).override_failure_message(
+			"the headless turn end never soaked a unit out in the weather").is_true()
+	var events: Array = res.get("ai_events", [])
+	assert_bool(events.any(func(line: Variant) -> bool:
+			return str(line).contains(Weather.display_name(sky)))) \
+		.override_failure_message("the headless turn end soaked without naming the weather").is_true()
+
+func test_the_headless_preview_forecasts_the_weathers_soak() -> void:
+	var made: Array = await _rain_session()
+	var sess = made[0]
+	var sky: Weather.Kind = made[1]
+	sess.queue_move("A", Vector2i(1, 2))
+	var prev: Dictionary = sess.preview()
+	assert_bool(prev.ok).is_true()
+	var rows: Array = prev.plan.tile_hits
+	assert_int(rows.size()).override_failure_message(
+			"the headless preview forecast no soak under the weather").is_equal(1)
+	if rows.size() != 1:
+		return
+	assert_str(str((rows[0] as Dictionary).get("description"))).contains(Weather.display_name(sky))
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:

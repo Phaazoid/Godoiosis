@@ -118,7 +118,7 @@ func test_a_state_that_keeps_the_soak_off_wins_and_stays() -> void:
 
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
 	var live := TurnBoundary.tile_hits(game._all_units(), game.terrain_states, game.gas_field,
-			Team.Faction.PLAYER)
+			game.scenario_manager.current_weather, Team.Faction.PLAYER)
 	assert_int(_soaks_of(plan).size()).override_failure_message(
 			"the queue forecast a soak a held state keeps off").is_equal(0)
 	assert_int(live.size()).override_failure_message(
@@ -164,7 +164,7 @@ func test_a_unit_already_holding_the_state_grows_no_row() -> void:
 
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
 	var live := TurnBoundary.tile_hits(game._all_units(), game.terrain_states, game.gas_field,
-			Team.Faction.PLAYER)
+			game.scenario_manager.current_weather, Team.Faction.PLAYER)
 
 	assert_int(_soaks_of(plan).size()).override_failure_message(
 			"the queue forecast a soak for a unit already soaked").is_equal(0)

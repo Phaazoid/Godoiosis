@@ -169,7 +169,8 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	var reporter := PlayerSettings.text_of(PlayerSettings.Setting.PLAYER_NAME)
 	var install_id := TelemetryStore.install_id()
 	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
-		_view_note(), look, _devtools_note(), _trace_note(), reporter, install_id, _recording_note()))
+		_view_note(), look, _devtools_note(), _trace_note(), reporter, install_id, _recording_note(),
+		Weather.display_name(game.scenario_manager.current_weather)))
 	md.close()
 
 	# The dev's key poses as pictures (#705), K1 first, three across -- the section in report.md says
@@ -357,7 +358,7 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
 		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String,
 		view_note := "", look_note := "", devtools_note := "", trace_note := "",
-		reporter := "", install_id := "", recording_note := "") -> String:
+		reporter := "", install_id := "", recording_note := "", weather_note := "") -> String:
 	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
 
 	out += "## What they wrote\n\n"
@@ -380,6 +381,10 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 	# in, while the look is the BOARD's own (ScenarioData.look_preset, #253 part 2).
 	out += "View: **%s**\n\n" % (NO_3D_VIEW if view_note == "" else view_note)
 	out += "Look: **%s**\n\n" % (DEFAULT_LOOK if look_note == "" else look_note)
+	# And the weather over it (#1260), the board's too -- a rule input, so a report of a unit that came
+	# up wet with no water near it is answered by this line.
+	if weather_note != "":
+		out += "Weather: **%s**\n\n" % weather_note
 	# WHICH DEV TAB was up (#328). Names the tab only, never devtools.png: a picture of a second OS
 	# window can fail where this line cannot, and a report naming a file it does not carry is the
 	# small lie that wastes a triage session.
