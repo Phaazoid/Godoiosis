@@ -291,3 +291,30 @@ func test_hovering_an_aim_forecasts_it_and_leaves_no_shove_behind() -> void:
 	assert_that(enemy.get_projected_destination()).override_failure_message(
 			"the hover left the forecast's shove published on the board") \
 		.is_equal(enemy.movement.cell)
+
+
+# WHO the aim catches is asked with the cycled weapon held too: an ally under the aim is caught only
+# while the firing weapon's mod turns ally splash on (attack_hits_allies reads the weapon), so the
+# pulse and the forecast have to agree about whose weapon it is.
+func test_a_carried_weapons_ally_splash_is_what_the_hover_pulses() -> void:
+	var unit := _spawn(Vector2i(1, 1))
+	var ally := _spawn(Vector2i(2, 1))
+	var slash := _attack("Slash")
+	var mace := _weapon("Mace", [_attack("Smash")])
+	var splash := WeaponModData.new()
+	splash.hits_allies_override = WeaponModData.Override.ON
+	assert_bool(mace.fit(0, splash)).override_failure_message("fixture: the mod did not fit").is_true()
+	var weapons: Array[EquippableData] = [_weapon("Sword", [slash]), mace]
+	_arm(unit, weapons)
+	_aim(unit, slash)
+	game.hover_presenter.update_hover_visuals(ally.movement.cell)
+	var pulsing: Array = game.overlay_manager._pulsing_units
+	assert_array(pulsing).override_failure_message("fixture: the held sword already catches the ally") \
+		.not_contains([ally])
+
+	_press_f()
+	game.hover_presenter.update_hover_visuals(ally.movement.cell)
+
+	pulsing = game.overlay_manager._pulsing_units
+	assert_array(pulsing).override_failure_message(
+			"the hover asked who the aim catches with the wrong weapon in hand").contains([ally])
