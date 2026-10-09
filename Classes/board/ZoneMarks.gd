@@ -189,12 +189,13 @@ static func _texel(d: float, outline: float, size: float, fill_alpha: float) -> 
 
 # The perimeter the wall stands on: OverlayManager's outline, in its trace space, each strip moved
 # WALL_INSET into the zone. Its ends are trimmed at an outer corner and run on at an inner one, judged
-# from the zone's own cells, so the ring stays closed.
-static func wall_outline(cells: Array[Vector2i], board: BoardContext) -> Array[PackedVector3Array]:
+# from the zone's own cells, so the ring stays closed. Each strip comes with the zone CELL it stands
+# inside, which is whose ground it rides during a tear-out (#1118): {"cell", "points": [from, to]}.
+static func wall_outline(cells: Array[Vector2i], board: BoardContext) -> Array[Dictionary]:
 	var inside := {}
 	for cell in cells:
 		inside[cell] = true
-	var strips: Array[PackedVector3Array] = []
+	var strips: Array[Dictionary] = []
 	for segment in OverlayManager.outline_segments(cells, board):
 		var from := segment[0]
 		var to := segment[1]
@@ -203,9 +204,9 @@ static func wall_outline(cells: Array[Vector2i], board: BoardContext) -> Array[P
 		var step := Vector2i(roundi(along.x), roundi(along.z))
 		var out := Vector2i(-roundi(inward.x), -roundi(inward.z))
 		var cell := Vector2i(floori((from.x + to.x + inward.x) * 0.5), floori((from.z + to.z + inward.z) * 0.5))
-		strips.append(PackedVector3Array([
+		strips.append({"cell": cell, "points": PackedVector3Array([
 			from + (inward - along * _corner_turn(inside, cell - step, out)) * WALL_INSET,
-			to + (inward + along * _corner_turn(inside, cell + step, out)) * WALL_INSET]))
+			to + (inward + along * _corner_turn(inside, cell + step, out)) * WALL_INSET])})
 	return strips
 
 
