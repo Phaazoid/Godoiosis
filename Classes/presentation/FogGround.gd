@@ -4,8 +4,9 @@ class_name FogGround
 # Where fog may stand on the board (#1285), for WeatherMirror's fog pass and cards: one texel per cell
 # over WeatherMask's rect, read LINEAR so it eases from cell to cell.
 #
-#   R -- the edge fade: 0 on a cell beside a hole or off the board, rising to 1 `edge_fade` cells in,
-#        so fog thins out before it would hang over nothing.
+#   R -- the edge fade: a third on a cell beside a hole or off the board, rising to full `edge_fade`
+#        cells further in, so fog thins out before it would hang over nothing (the share the dev picked
+#        it at on 2026-10-09, which kept the fog up to the board edge without a wall there).
 #   G -- the pooled depth, world units: `pool_depth` on the low ground, easing to 0 just above the pool
 #        level. It is a depth over the cell's OWN ground, never a level the fog fills up to, so pooled
 #        fog cannot stand as a box over a drop (dev, 2026-10-09: the rectangle over the ramp off the
@@ -33,7 +34,7 @@ static func field(grid: TileMapLayer, heights: BoardHeights, rect: Rect2i, pool_
 			var cell := rect.position + Vector2i(x, y)
 			if not GridUtils.has_surface(grid, cell):
 				continue
-			var fade := 1.0 if edge_fade <= 0.0 else clampf(float(steps[y * w + x] - 1) / edge_fade, 0.0, 1.0)
+			var fade := clampf((float(steps[y * w + x]) - 0.5) / (maxf(edge_fade, 0.0) + 0.5), 0.0, 1.0)
 			var pooled := maxf(pool_depth, 0.0) * (1.0 - smoothstep(level, level + POOL_EASE, ground_of(cell, heights)))
 			image.set_pixel(x, y, Color(fade, pooled, 0.0))
 	return image

@@ -102,7 +102,7 @@ enum Fall { RAIN, SNOW, FOG }
 @export var bank_height := 1.5              # world units a bank stands
 @export var bank_size := 7.0                # cells across one bank
 @export var fog_breakup := 0.6              # 0..1: how much drifting noise breaks the fog up
-@export var edge_fade := 1.5                # cells over which fog thins before the board's edge or a hole
+@export var edge_fade := 1.0                # cells over which fog thins before the board's edge or a hole
 @export var pixel_steps := false            # the pass snapped to the ground's art grid, its opacity in steps
 @export var fog_color := Color(0.86, 0.89, 0.93)
 @export var sky_tint := 0.3                 # 0..1: how far the fog takes the sky's horizon colour

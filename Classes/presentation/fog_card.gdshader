@@ -1,9 +1,9 @@
 // The fog's cards (#1285): pixel wisps that carry the fog's look (the dev's pick, "cards lead"). Born on
 // the ground anywhere in the view (splash.gdshader's way, through WeatherMask) at up to `lift` above it,
-// but only where fog_field says there is fog at that height. They drift with the wind, ride the surface
-// as they go, die over the void, and re-read the fog every frame: CUSTOM.x is how present the fog is
-// where the card now floats, so one drifting out of it fades. CUSTOM.y is its age (0..1), CUSTOM.z its
-// frame, CUSTOM.w its own height over the ground.
+// but only where fog_field says there is fog on the ground below. They drift with the wind, ride the
+// surface as they go, die over the void, and re-read the fog every frame: CUSTOM.x is how present the
+// fog is on the ground under the card, so one drifting out of it fades. CUSTOM.y is its age (0..1),
+// CUSTOM.z its frame, CUSTOM.w its own height over the ground.
 shader_type particles;
 
 #include "res://Classes/presentation/fog_field.gdshaderinc"
@@ -15,9 +15,11 @@ uniform vec3 velocity = vec3(0.3, 0.0, 0.1);
 uniform float lift = 0.55;
 uniform float frames = 3.0;
 
-// How much fog a card needs under it to be born, and how much reads as fully present.
+// How much fog a card needs on the ground under it to be born, and how much reads as fully present.
+// Asked at the ground, not the card's own height: a card says WHERE there is fog, not how thick.
 const float BORN_ABOVE = 0.05;
-const float FULL = 0.35;
+const float FULL = 0.2;
+const float AT_GROUND = 0.05;
 
 void start() {
 	uint seed = weather_hash(NUMBER + uint(41) + RANDOM_SEED);
@@ -32,7 +34,7 @@ void start() {
 		CUSTOM.w = h;
 		TRANSFORM = mat4(1.0);
 		TRANSFORM[3].xyz = vec3(p.x, s + h, p.y);
-		if (s < WEATHER_VOID * 0.5 || weather_rand(seed) > keep || fog_amount(TRANSFORM[3].xyz) < BORN_ABOVE) {
+		if (s < WEATHER_VOID * 0.5 || weather_rand(seed) > keep || fog_amount(vec3(p.x, s + AT_GROUND, p.y)) < BORN_ABOVE) {
 			ACTIVE = false;
 		}
 	}
@@ -50,6 +52,6 @@ void process() {
 	} else {
 		// Eased onto the surface, so a card drifting up a terrace climbs rather than jumps.
 		TRANSFORM[3].y = mix(at.y, s + CUSTOM.w, 1.0 - exp(-4.0 * DELTA));
-		CUSTOM.x = smoothstep(0.0, FULL, fog_amount(TRANSFORM[3].xyz));
+		CUSTOM.x = smoothstep(0.0, FULL, fog_amount(vec3(at.x, s + AT_GROUND, at.z)));
 	}
 }
