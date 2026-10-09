@@ -13,6 +13,7 @@ flake_sway = 0.4
 flake_swirl = 0.3
 big_flakes = 0.18
 flake_settle = 1.2
+slope_cover = 0.3
 snow_frost = 0.3
 snow_flecks = 0.06
 caps_props = true

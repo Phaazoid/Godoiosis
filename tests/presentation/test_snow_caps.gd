@@ -1,8 +1,9 @@
-# Snow settling on props (#1269). A block prop takes the weather's cap decal (its layer is pinned by
-# test_only_the_ground_takes_a_decal); a BILLBOARD prop wears an overlay of SnowCapArt, shown through
-# BoardMirror.set_prop_caps. Pinned here: the art is cut from its own FRAME (a packed tileset's
-# neighbour is not air), the one door shows and hides every overlay, a prop built while caps show
-# wears one, and tall grass never does. Whether a cap LOOKS right is the probe's and the dev's eye.
+# What the snow does to props (#1269, #1278). A block prop takes the weather's cap decal (its layer is
+# pinned by test_only_the_ground_takes_a_decal); a BILLBOARD prop wears an overlay of SnowCapArt; tall
+# grass and flowers are BURIED. All through BoardMirror.set_snow. Pinned here: the art is cut from its
+# own FRAME (a packed tileset's neighbour is not air), the one door shows and hides every overlay and
+# every blade, a prop built in snow is dressed at once, and the tufts' density rule still thins the
+# field when it is not snowing. Whether any of it LOOKS right is the probe's and the dev's eye.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -26,7 +27,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	(_scene.get_node("BoardMirror") as BoardMirror).set_prop_caps(false, Color.WHITE)
+	(_scene.get_node("BoardMirror") as BoardMirror).set_snow(false, Color.WHITE, false)
 	await _board.check(self)
 
 
@@ -61,7 +62,7 @@ func test_a_frame_with_no_ink_has_no_cap() -> void:
 
 func test_the_one_door_shows_and_hides_every_billboard_cap_and_no_tuft_wears_one() -> void:
 	var mirror := await _open()
-	mirror.set_prop_caps(true, SNOW)
+	mirror.set_snow(true, SNOW, false)
 	var shown := _caps(mirror)
 	assert_int(shown["boards"]).override_failure_message("fixture: the board stands no billboard prop") \
 			.is_greater(0)
@@ -70,13 +71,13 @@ func test_the_one_door_shows_and_hides_every_billboard_cap_and_no_tuft_wears_one
 	assert_int(shown["wrong_colour"]).override_failure_message("a cap is not the snow's colour").is_equal(0)
 	assert_int(shown["tufts"]).override_failure_message("fixture: the board stands no tuft").is_greater(0)
 	assert_int(shown["tuft_caps"]).override_failure_message("tall grass wears a snow cap").is_equal(0)
-	mirror.set_prop_caps(false, SNOW)
+	mirror.set_snow(false, SNOW, false)
 	assert_int(_caps(mirror)["capped"]).override_failure_message("a cap still shows with caps off").is_equal(0)
 
 
-func test_a_prop_built_while_caps_show_wears_one() -> void:
+func test_a_prop_built_in_snow_is_dressed_at_once() -> void:
 	var mirror := await _open()
-	mirror.set_prop_caps(true, SNOW)
+	mirror.set_snow(true, SNOW, true)
 	mirror.drop_props()
 	mirror.sync(_game.grid, _game.board_heights)
 	var shown := _caps(mirror)
@@ -84,6 +85,27 @@ func test_a_prop_built_while_caps_show_wears_one() -> void:
 			.is_greater(0)
 	assert_int(shown["capped"]).override_failure_message("a prop rebuilt under snow came back bare") \
 			.is_equal(shown["boards"])
+	assert_int(shown["tufts"]).override_failure_message("fixture: the rebuild stood no tuft").is_greater(0)
+	assert_int(shown["tufts_up"]).override_failure_message("a tuft rebuilt under snow came back standing") \
+			.is_equal(0)
+
+
+# Tall grass and flowers hide while it snows and come back after (#1278), and the density rule (#904)
+# still thins the field when it is not snowing -- one rule answers whether a blade shows.
+func test_snow_buries_every_tuft_and_clear_weather_brings_them_back() -> void:
+	var mirror := await _open()
+	var standing: int = _caps(mirror)["tufts_up"]
+	assert_int(standing).override_failure_message("fixture: no blade stands before the snow").is_greater(0)
+	mirror.set_snow(false, SNOW, true)
+	assert_int(_caps(mirror)["tufts_up"]).override_failure_message("a blade stands in the snow").is_equal(0)
+	mirror.set_snow(false, SNOW, false)
+	assert_int(_caps(mirror)["tufts_up"]).override_failure_message("the snow left and the field stayed bare") \
+			.is_equal(standing)
+	var density := mirror.tuft_density
+	mirror.tuft_density = 0.0
+	var thinned: int = _caps(mirror)["tufts_up"]
+	mirror.tuft_density = density
+	assert_int(thinned).override_failure_message("the density rule no longer thins the field").is_equal(0)
 
 
 func _open() -> BoardMirror:
@@ -96,7 +118,7 @@ func _open() -> BoardMirror:
 # Every billboard body standing, how many wear a showing cap, and the tufts' plants likewise. A body
 # whose art holds no ink at the top would wear none, and none of the shipped props is such art.
 func _caps(mirror: BoardMirror) -> Dictionary:
-	var out := {"boards": 0, "capped": 0, "wrong_colour": 0, "tufts": 0, "tuft_caps": 0}
+	var out := {"boards": 0, "capped": 0, "wrong_colour": 0, "tufts": 0, "tuft_caps": 0, "tufts_up": 0}
 	for root: Node3D in mirror._props.values():
 		for child in root.get_children():
 			var sprite := child as Sprite3D
@@ -107,6 +129,7 @@ func _caps(mirror: BoardMirror) -> Dictionary:
 			if sprite.has_meta(BoardMirror.TUFT_META):
 				out["tufts"] += 1
 				out["tuft_caps"] += 1 if showing else 0
+				out["tufts_up"] += 1 if sprite.visible else 0
 				continue
 			out["boards"] += 1
 			if showing:

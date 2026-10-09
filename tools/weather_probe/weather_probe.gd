@@ -9,7 +9,8 @@ extends Node
 #   - that the GROUND changes under it with the drops switched off (the decals alone);
 #   - that a STORM strike reaches the screen (the white-out) and draws its bolt;
 #   - that each SNOW strength draws flakes, more of them the harder it snows (#1269), and that its cold
-#     grade greys the board while the HUD's pixels stay exactly as they were.
+#     grade greys the board while the HUD's pixels stay exactly as they were;
+#   - that the blizzard's whiteout has no seams (#1278): drawn alone, no step between neighbours.
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -50,6 +51,7 @@ func _ready() -> void:
 	failures += await _ground(clear)
 	failures += await _storm()
 	failures += await _snow(clear)
+	failures += await _veil()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
 	get_tree().quit(1 if failures > 0 else 0)
@@ -222,6 +224,46 @@ func _save_unit(frame: Image, label: String) -> void:
 		crop.resize(box.size.x * 6, box.size.y * 6, Image.INTERPOLATE_NEAREST)
 		crop.save_png("%s/%s.png" % [OUT_DIR, label])
 		return
+
+
+# The whiteout alone (#1278): drawn full strength over flat grey in a viewport of its own, its
+# smooth noise moves a channel only a few levels from one pixel to the next. A seam -- two cells
+# disagreeing about a shared corner -- is a jump far past that.
+const VEIL_SEAM := 24.0
+
+func _veil() -> int:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(viewport)
+	var back := CanvasLayer.new()
+	back.layer = -2
+	var grey := ColorRect.new()
+	grey.color = Color(0.4, 0.4, 0.4)
+	grey.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	back.add_child(grey)
+	viewport.add_child(back)
+	var grade := WeatherGrade.new()
+	viewport.add_child(grade)
+	var look := WeatherLook.new()
+	look.veil = 1.0
+	look.veil_color = Color(1.0, 1.0, 1.0)
+	look.grade_fade = 0.0
+	grade.drive(look, Vector2(1.0, 0.0), 1.0)
+	for i in 3:
+		await RenderingServer.frame_post_draw
+	var image := viewport.get_texture().get_image()
+	image.save_png("%s/veil_alone.png" % OUT_DIR)
+	var worst := 0.0
+	for y in range(0, image.get_height() - 1):
+		for x in range(0, image.get_width() - 1):
+			var here := image.get_pixel(x, y).r * 255.0
+			worst = maxf(worst, absf(image.get_pixel(x + 1, y).r * 255.0 - here))
+			worst = maxf(worst, absf(image.get_pixel(x, y + 1).r * 255.0 - here))
+	viewport.queue_free()
+	print("  veil: the largest step between neighbouring pixels is %.0f levels (a seam is past %.0f)"
+			% [worst, VEIL_SEAM])
+	return 0 if worst <= VEIL_SEAM else 1
 
 
 func _grab(label: String) -> Image:

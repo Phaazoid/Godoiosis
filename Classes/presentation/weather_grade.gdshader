@@ -14,16 +14,22 @@ uniform vec2 veil_offset = vec2(0.0);
 uniform vec4 veil_color : source_color = vec4(0.92, 0.94, 0.97, 1.0);
 uniform vec2 veil_scale = vec2(2.5, 5.0);   // bands across and down the screen
 
-float grade_hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+// A lattice corner's value, from its INTEGER coordinates (#1278). A fract(sin()) hash made a last-bit
+// rounding difference a different value, so neighbouring cells disagreed about a shared corner and
+// the veil drew a checkerboard of hard edges.
+float grade_hash(ivec2 p) {
+	uint h = uint(p.x) * 1597334677u ^ uint(p.y) * 3812015801u;
+	h = (h ^ (h >> 16u)) * 2246822519u;
+	h ^= h >> 13u;
+	return float(h & 65535u) / 65535.0;
 }
 
 float grade_noise(vec2 p) {
-	vec2 i = floor(p);
+	ivec2 i = ivec2(floor(p));
 	vec2 f = fract(p);
 	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(grade_hash(i), grade_hash(i + vec2(1.0, 0.0)), u.x),
-			mix(grade_hash(i + vec2(0.0, 1.0)), grade_hash(i + vec2(1.0, 1.0)), u.x), u.y);
+	return mix(mix(grade_hash(i), grade_hash(i + ivec2(1, 0)), u.x),
+			mix(grade_hash(i + ivec2(0, 1)), grade_hash(i + ivec2(1, 1)), u.x), u.y);
 }
 
 void fragment() {
