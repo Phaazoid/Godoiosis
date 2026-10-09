@@ -1,7 +1,8 @@
 # The weather's drawing (#1260), at the seams a headless run CAN see. Whether the rain looks right is
 # the dev's eye and tools/weather_probe's pixels; what is pinned here is that each channel is WIRED:
 #
-#   - the cull box reaches the rain (#656 shipped a particle invisible for want of exactly this);
+#   - the cull box reaches every emitter (#656 shipped a particle invisible for want of exactly this);
+#   - a look draws only what it drops: snow turns rain off, and rain snow (#1269);
 #   - a storm's flash reaches the screen through battle3d's white-out on an ordinary frame;
 #   - a clear board draws nothing, and the board's weather is what the mirror draws;
 #   - the box arithmetic carries the authored births whatever the amount;
@@ -43,17 +44,20 @@ func _mirror() -> WeatherMirror:
 	return mirror
 
 
-# The sweep battle3d runs whenever the board's extent moves must reach the rain, and the box it sets
-# must hold the board AND its lifted stage copy -- a stale box draws nothing and no other case sees it.
-func test_the_cull_box_reaches_the_rain() -> void:
+# The sweep battle3d runs whenever the board's extent moves must reach every emitter, and the box it
+# sets must hold the board AND its lifted stage copy -- a stale box draws nothing and no other case sees
+# it. Walked off the node's CHILDREN, not its own list, so an emitter left out of that list reds here.
+func test_the_cull_box_reaches_every_emitter() -> void:
 	var mirror := _mirror()
 	var board: AABB = _scene._board_volume()
 	assert_bool(board.has_volume()).override_failure_message("fixture: the mission built no board").is_true()
 	_scene._cover_effects(board)
-	var box := mirror._rain.visibility_aabb
-	assert_bool(box.encloses(BoardSpace.effect_volume(board, 0.0))).override_failure_message(
-			"the rain's cull box does not hold the board and its stage: %s" % box).is_true()
-	assert_bool(mirror._splash.visibility_aabb.encloses(BoardSpace.effect_volume(board, 0.0))).is_true()
+	var systems := mirror.find_children("*", "GPUParticles3D", true, false)
+	assert_int(systems.size()).override_failure_message("fixture: the mirror built no emitters").is_greater(2)
+	for node in systems:
+		var box := (node as GPUParticles3D).visibility_aabb
+		assert_bool(box.encloses(BoardSpace.effect_volume(board, 0.0))).override_failure_message(
+				"%s's cull box does not hold the board and its stage: %s" % [node.name, box]).is_true()
 
 
 func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -> void:
@@ -66,8 +70,53 @@ func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -
 	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	mirror._process(0.016)
 	assert_bool(mirror._rain.emitting or mirror._rain.visible or mirror._wet.visible \
-			or mirror._puddles.visible or mirror._splash.visible).override_failure_message(
+			or mirror._puddles.visible or mirror._splash.visible or mirror._snow.visible).override_failure_message(
 			"a clear board still draws weather").is_false()
+
+
+# Every weather shader PARSES, and declares each parameter the mirror sets on it. A headless run draws
+# nothing, so a shader that fails to compile is otherwise only a line in the log (#1269 shipped one
+# to its first run), and a parameter set on a uniform that does not exist is dropped in silence.
+func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> void:
+	var mirror := _mirror()
+	var mask := ["mask", "mask_origin", "cell_size", "box_min", "box_max", "floor_y", "keep"]
+	var wanted := {
+		mirror._rain_process: mask + ["velocity"],
+		mirror._rain_draw: ["streak", "size", "tint"],
+		mirror._splash_process: mask,
+		mirror._splash_draw: ["strip", "tint", "frames"],
+		mirror._snow_process: mask + ["velocity", "sway", "swirl", "swirl_scale", "settle", "big", "lift"],
+		mirror._snow_draw: ["flakes", "size", "tint"],
+	}
+	for material: ShaderMaterial in wanted:
+		var names: Array[String] = []
+		for entry: Dictionary in material.shader.get_shader_uniform_list():
+			names.append(String(entry["name"]))
+		var path := material.shader.resource_path
+		assert_int(names.size()).override_failure_message(
+				"%s exposes no uniforms -- it failed to parse" % path).is_greater(0)
+		for name: String in wanted[material]:
+			assert_bool(names.has(name)).override_failure_message(
+					"the mirror sets '%s' on %s, which declares no such uniform" % [name, path]).is_true()
+
+
+# What a look drops decides what is drawn, both ways: a snow board draws flakes and no rain, splash,
+# sheen or puddle, and a rain board no flakes.
+func test_a_look_draws_only_what_it_drops() -> void:
+	var mirror := _mirror()
+	assert_object(WeatherLook.for_kind(Weather.Kind.SNOW)).override_failure_message(
+			"fixture: snow has no look file").is_not_null()
+	_scene.game.scenario_manager.current_weather = Weather.Kind.SNOW
+	mirror._process(0.016)
+	var snow_drawn := mirror._snow.emitting and mirror._snow.visible
+	var rain_on_snow := mirror._rain.emitting or mirror._rain.visible or mirror._splash.visible \
+			or mirror._wet.visible or mirror._puddles.visible
+	_scene.game.scenario_manager.current_weather = Weather.Kind.RAIN
+	mirror._process(0.016)
+	var snow_on_rain := mirror._snow.emitting or mirror._snow.visible
+	assert_bool(snow_drawn).override_failure_message("the board is snowing and the mirror drew no snow").is_true()
+	assert_bool(rain_on_snow).override_failure_message("a snow board draws rain").is_false()
+	assert_bool(snow_on_rain).override_failure_message("a rain board draws snow").is_false()
 
 
 # A look's puddles switch is honoured by the decal (light rain authors none, the dev's ruling).

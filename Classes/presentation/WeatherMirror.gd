@@ -13,6 +13,8 @@ class_name WeatherMirror
 #   - THE GROUND: two board-sized decals painted by WetGround -- darkened and glossy, and puddles.
 #   - THE STORM: bolts beyond the board (StormBolts), a screen flash this node only REPORTS (battle3d's
 #     white-out composes it with the others), a light from the strike's side, and the sky's glow.
+#   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box, wandering as they fall and lying a
+#     moment where they land. Which of the two a look draws is its FALL; every rain path is gated on it.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -25,6 +27,7 @@ const COVER_MARGIN := 120.0
 const AMOUNT_SLACK := 0.35
 const MAX_DROPS := 60000
 const MAX_SPLASHES := 12000
+const MAX_FLAKES := 60000
 # How far above the camera drops are born, so none ever appears inside the frame.
 const SPAWN_ABOVE := 2.0
 # The decals' height: from well under the board to well over the tear-out's stage, which shares the
@@ -50,6 +53,9 @@ var _rain_draw: ShaderMaterial
 var _splash: GPUParticles3D
 var _splash_process: ShaderMaterial
 var _splash_draw: ShaderMaterial
+var _snow: GPUParticles3D
+var _snow_process: ShaderMaterial
+var _snow_draw: ShaderMaterial
 var _wet: Decal
 var _puddles: Decal
 var _bolts: StormBolts
@@ -60,6 +66,7 @@ var _mask_versions := []
 var _ground_key := 0
 var _streak_texels := -1
 var _strip_built := false
+var _flakes_built := false
 var _wet_roughness := -1.0
 var _puddle_roughness := -1.0
 var _volume := AABB()
@@ -82,6 +89,9 @@ func _ready() -> void:
 	_splash_draw = _draw_material("res://Classes/presentation/splash_draw.gdshader")
 	_splash_draw.set_shader_parameter("frames", float(WeatherArt.SPLASH_FRAMES))
 	_splash = _particles(_splash_process, _splash_draw, PlaneMesh.FACE_Y)
+	_snow_process = _process_material("res://Classes/presentation/snow.gdshader")
+	_snow_draw = _draw_material("res://Classes/presentation/snow_flake.gdshader")
+	_snow = _particles(_snow_process, _snow_draw, PlaneMesh.FACE_Z)
 	_wet = _decal()
 	_puddles = _decal()
 	_bolts = StormBolts.new()
@@ -104,8 +114,14 @@ func cover(board: AABB) -> void:
 func cover_volume(volume: AABB) -> void:
 	_volume = volume
 	if _rain != null:
-		_rain.visibility_aabb = volume
-		_splash.visibility_aabb = volume
+		for system: GPUParticles3D in emitters():
+			system.visibility_aabb = volume
+
+
+# Every particle system this node draws: the one list the cull sweep walks, so a new one cannot be
+# left out of it.
+func emitters() -> Array[GPUParticles3D]:
+	return [_rain, _splash, _snow]
 
 
 # The storm's screen flash, 0..1, for battle3d's white-out -- a DRIVER, never a writer (#887's rule).
@@ -127,11 +143,18 @@ func _process(delta: float) -> void:
 		_sync_ground()
 		_place_rain()
 		_style()
+	elif _snowing():
+		_place_snow()
+		_style_snow()
 	_storm()
 
 
 func _raining() -> bool:
 	return _look != null and _look.fall == WeatherLook.Fall.RAIN
+
+
+func _snowing() -> bool:
+	return _look != null and _look.fall == WeatherLook.Fall.SNOW
 
 
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
@@ -144,6 +167,9 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_splash.visible = rain and look.splashes
 	_wet.visible = rain
 	_puddles.visible = rain and look.puddles
+	var snow := _snowing()
+	_snow.emitting = snow
+	_snow.visible = snow
 	_mask_versions = []
 	_ground_key = 0
 	_streak_texels = -1
@@ -173,7 +199,7 @@ func _sync_mask() -> void:
 	_rect = rect
 	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
 	var texture := ImageTexture.create_from_image(image)
-	for material: ShaderMaterial in [_rain_process, _splash_process]:
+	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process]:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
@@ -270,6 +296,31 @@ func _place_rain() -> void:
 		_size(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
 
 
+# Flakes fall slowly and wander, so they get a longer life than their fall -- an eddy can hold one up --
+# and the settle on top. The box is padded by an eddy's width either way.
+func _place_snow() -> void:
+	var speed := maxf(_look.fall_speed, 0.5)
+	var wind := Vector2(_look.wind_x, _look.wind_z)
+	var box := _view_box(speed, wind, _look.swirl_scale + _look.flake_sway)
+	if box.is_empty():
+		return
+	var lo: Vector2 = box["lo"]
+	var hi: Vector2 = box["hi"]
+	var top: float = box["top"]
+	_snow_process.set_shader_parameter("box_min", Vector3(lo.x, top - 0.5, lo.y))
+	_snow_process.set_shader_parameter("box_max", Vector3(hi.x, top, hi.y))
+	_snow_process.set_shader_parameter("floor_y", box["floor_y"])
+	_snow_process.set_shader_parameter("velocity", Vector3(wind.x, -speed, wind.y))
+	_snow_process.set_shader_parameter("sway", _look.flake_sway)
+	_snow_process.set_shader_parameter("swirl", _look.flake_swirl)
+	_snow_process.set_shader_parameter("swirl_scale", _look.swirl_scale)
+	_snow_process.set_shader_parameter("settle", _look.flake_settle)
+	_snow_process.set_shader_parameter("big", _look.big_flakes)
+	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
+	var life := float(box["fall"]) * 1.5 + maxf(_look.flake_settle, 0.0) + 0.25
+	_size(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
+
+
 # Births per second -> an amount and a lifetime, with slack: either property restarts the system, so
 # they move only when the wanted value strays far, and `keep` trims the births in between so the
 # density on screen is the authored one whatever the box is doing. PURE in its arithmetic -- see
@@ -326,6 +377,14 @@ func _style() -> void:
 	if not is_equal_approx(_look.puddle_roughness, _puddle_roughness):
 		_puddle_roughness = _look.puddle_roughness
 		_puddles.texture_orm = _orm(_puddle_roughness)
+
+
+func _style_snow() -> void:
+	if not _flakes_built:
+		_flakes_built = true
+		_snow_draw.set_shader_parameter("flakes", ImageTexture.create_from_image(WeatherArt.flakes(Color.WHITE)))
+	_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
+	_snow_draw.set_shader_parameter("tint", _look.flake_color)
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one
