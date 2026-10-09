@@ -15,6 +15,7 @@ flake_settle = 1.0
 snow_cover = 0.1
 snow_frost = 0.25
 snow_flecks = 0.05
+snow_relief = 5.0
 grade_saturation = 0.9
 grade_brightness = 1.02
 grade_tint = Color(0.75, 0.85, 1, 0.08)

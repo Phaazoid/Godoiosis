@@ -646,6 +646,8 @@ func _on_detail_requested(item: Item, owner_unit: Unit) -> void:
 # Through the Loadout, the one door a pick takes on this screen and in the headless Play API (#46).
 func _on_job_picked(target: Unit, job_id: String) -> void:
 	_last_refusal = _controller.loadout().set_job(target, job_id)
+	if _last_refusal == "":
+		_controller.game.scenario_manager.note_play()   # the dev header counts a loadout edit (#1182)
 	_hover_note = ""
 	_redraw()
 
@@ -675,6 +677,7 @@ func _perform_move(item: Item, from: Object, to: Object) -> String:
 	if refusal == "":
 		_selected_item = null
 		_selected_owner = null
+		_controller.game.scenario_manager.note_play()
 	_redraw()
 	return refusal
 

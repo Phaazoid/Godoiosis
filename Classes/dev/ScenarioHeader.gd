@@ -9,11 +9,12 @@ class_name ScenarioHeader
 #
 # The file ops are ScenarioTool's old ones, verbatim in behaviour: Update is load-gated AND
 # confirmed, Delete confirms, Save As refuses a taken name. What is new is the DIRTY MARKER --
-# "(modified)" means AUTHORING edits since load/save, declared narrowly: terrain (the grid's own
-# DirtyCells.version, the #308 any-number-of-readers counter), zones (zones_changed), and
-# scenario-field edits (the Properties and Squads & AI panels call mark_modified()). Unit movement
-# and combat deliberately do NOT mark -- a mid-battle board is always "changed" in the snapshot
-# sense, and a marker that is always on says nothing.
+# "(modified)" means ANY change since load/save, authored or played (dev, 2026-10-09, #1182): Update
+# would then write something the file does not hold. Five sources, each "touched since the stamp":
+# the board stores' own DirtyCells.version counters (terrain, corner heights, tile states, gas --
+# the #308 any-number-of-readers counter), ScenarioManager.play_version for what play changes
+# (units, turns, the mission's latches), zones (zones_changed), and mark_modified() from the
+# panels that edit scenario fields. This reverses the earlier rule that play never marks.
 #
 # A file op that changes the board emits file_changed; DevOverlay routes it to the panels that
 # draw board state. The header never reaches into a panel itself.
@@ -38,11 +39,14 @@ var game
 # Ad-hoc units snapshot fully either way.
 var authored_save := true
 
-# The dirty marker's memory: what the terrain counter read at the last load/save, and whether
-# anything else (zones, scenario fields) has marked since. _process polls the terrain counter
-# because DirtyCells is deliberately signal-free; gated on the window being visible.
+# The dirty marker's memory: what each counter read at the last load/save, and whether anything
+# else (zones, scenario fields) has marked since. _process polls the counters because DirtyCells is
+# deliberately signal-free; gated on the window being visible.
 var _seen_terrain_version := -1
 var _seen_gas_version := -1   # the gas store's counter, the same poll (#508)
+var _seen_heights_version := -1   # corner heights (#1182)
+var _seen_states_version := -1    # tile states (#1182)
+var _seen_play_version := -1      # what play changed (#1182)
 var _marked := false
 var _shown_dirty := false   # what the label currently says, so the poll only redraws on a flip
 
@@ -65,8 +69,8 @@ func init(p_scenario_manager: ScenarioManager, p_game) -> void:
 		+ "Bug reports (F3) ignore this and always snapshot.")
 	game.zone_manager.zones_changed.connect(mark_modified)
 	# A board can arrive from OUTSIDE the header's own Load -- Mission Select, F2, the boot screen.
-	# clear_board's grid.reset() bumps the terrain counter, so without re-stamping here every
-	# external load would read (modified) on arrival.
+	# A load's restore_board bumps every store's counter, so without re-stamping here every external
+	# load would read (modified) on arrival.
 	scenario_manager.board_loaded.connect(_on_board_loaded)
 	_stamp_clean()
 	refresh_loaded_label()
@@ -94,7 +98,10 @@ func is_modified() -> bool:
 	if game == null or scenario_manager == null or scenario_manager.last_loaded_path == "":
 		return false
 	return _marked or game.grid.dirty.version != _seen_terrain_version \
-		or game.gas_field.dirty.version != _seen_gas_version
+		or game.gas_field.dirty.version != _seen_gas_version \
+		or game.board_heights.dirty.version != _seen_heights_version \
+		or game.terrain_states.dirty.version != _seen_states_version \
+		or scenario_manager.play_version != _seen_play_version
 
 
 # A load or a save is the board and the file agreeing again, by definition.
@@ -103,6 +110,10 @@ func _stamp_clean() -> void:
 	if game != null:
 		_seen_terrain_version = game.grid.dirty.version
 		_seen_gas_version = game.gas_field.dirty.version
+		_seen_heights_version = game.board_heights.dirty.version
+		_seen_states_version = game.terrain_states.dirty.version
+	if scenario_manager != null:
+		_seen_play_version = scenario_manager.play_version
 
 
 # The terrain counter has no signal, so the label follows it by poll -- window-local, an int
@@ -202,8 +213,8 @@ func _on_update_pressed() -> void:
 func _update_confirmed(target: String) -> void:
 	capturing.emit()   # flush staged unit edits first -- the save must match what panels show
 	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
-	scenario_manager.save_scenario(target, status_label, authored_save)
-	_stamp_clean()
+	if scenario_manager.save_scenario(target, status_label, authored_save):
+		_stamp_clean()   # only a written file agrees with the board (#1182)
 	refresh_dropdown(target)
 	refresh_loaded_label()
 	file_changed.emit()
@@ -235,8 +246,8 @@ func _on_save_as_pressed() -> void:
 	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario", status_label):
 		return
 	capturing.emit()   # same flush as Update: a Save As mid-edit keeps what the panel shows
-	scenario_manager.save_scenario(entered, status_label, authored_save)
-	_stamp_clean()
+	if scenario_manager.save_scenario(entered, status_label, authored_save):
+		_stamp_clean()
 	scenario_name_input.text = ""
 	refresh_dropdown(entered)
 	refresh_loaded_label()

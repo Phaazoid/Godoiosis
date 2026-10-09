@@ -1,8 +1,9 @@
 extends Object
 class_name SnowGround
 
-# What the snow does to the ground's LOOK (#1269): one texture for a board-sized decal, painted at the
-# ground art's own density like WetGround's, so its edges step with the tiles.
+# What the snow does to the ground's LOOK (#1269, #1278): one texture for a board-sized decal, painted at
+# the ground art's own density like WetGround's, so its edges step with the tiles, and a normal map for
+# the same decal so the patches stand up off the ground.
 #
 # Snow lies where rain wets (WetGround.is_wettable: ground, and not water) and each cell paints only
 # inside its own block, so nothing lies past its tile or over a hole (dev, 2026-10-09: "no patch past
@@ -13,6 +14,10 @@ class_name SnowGround
 #     leaves clumps, mid lies in patches, high covers nearly all.
 #   - FROST: a faint whitening over every cell the snow could lie on.
 #   - FLECKS: a sparse sprinkle of single white pixels between the patches.
+#
+# A slope (any cell whose corners differ) keeps only slope_cover of the cover: snow slides off a ramp or
+# a hill's flank, so the hills read by their thin sides (#1278). relief() then raises what lies under
+# snow, roughens its top with bumps, and turns that height into the decal's normal map.
 #
 # Fixed per art pixel (fire's seed policy): a board snows in the same places at every rebuild, and a
 # higher cover is a SUPERSET of a lower one, so a slider grows the patches rather than reshuffling
@@ -34,17 +39,20 @@ const FROST_ALPHA := 0.45
 const RIM_SHADE := 0.1
 
 const BAYER := [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+const BUMP_SEED := 1278
 
 
-static func paint_cover(grid: TileMapLayer, rect: Rect2i, cover: float, frost: float, flecks: float,
-		color: Color) -> Image:
+# heights may be null: a board with no heights has no slopes.
+static func paint_cover(grid: TileMapLayer, heights: BoardHeights, rect: Rect2i, cover: float,
+		slope_cover: float, frost: float, flecks: float, color: Color) -> Image:
 	var size := WetGround.image_size(rect)
 	var w := size.x
 	var origin := rect.position * PX
 	var field := _noise(origin, size, 1.0 / PATCH, 2).get_data()
 	var specks := _noise(origin, size, 1.0, 1).get_data()
 	# Thresholds in the 0..255 the noise images hold.
-	var threshold := ((1.0 - clampf(cover, 0.0, 1.0)) * (1.0 + 2.0 * EDGE) - 2.0 * EDGE) * 255.0
+	var flat_threshold := _threshold(cover)
+	var slope_threshold := _threshold(cover * clampf(slope_cover, 0.0, 1.0))
 	var band := 2.0 * EDGE * 255.0
 	var fleck_below := clampf(flecks, 0.0, 1.0) * 255.0
 	var dither: Array[float] = []
@@ -57,9 +65,11 @@ static func paint_cover(grid: TileMapLayer, rect: Rect2i, cover: float, frost: f
 	ground.resize(rect.size.x * rect.size.y)
 	for cy in rect.size.y:
 		for cx in rect.size.x:
-			if not WetGround.is_wettable(grid, rect.position + Vector2i(cx, cy)):
+			var cell := rect.position + Vector2i(cx, cy)
+			if not WetGround.is_wettable(grid, cell):
 				continue
 			ground[cy * rect.size.x + cx] = 1
+			var threshold := slope_threshold if heights != null and heights.is_ramp(cell) else flat_threshold
 			for py in PX:
 				var y := cy * PX + py
 				var by := origin.y + y
@@ -102,6 +112,53 @@ static func paint_cover(grid: TileMapLayer, rect: Rect2i, cover: float, frost: f
 			bytes[at + 2] = snow[2]
 			bytes[at + 3] = 255 if s == 2 else frost_a
 	return Image.create_from_data(w, height, false, Image.FORMAT_RGBA8, bytes)
+
+
+# The cover's normal map: every pixel under snow (full alpha) stands up, its top roughened by bumps
+# (0..1, lumps bump_size art pixels across, keyed to the board like the patches), its edge sloped over
+# softness art pixels, and strength how hard the slopes tilt. origin is the cover's top-left board pixel.
+static func relief(cover_image: Image, origin: Vector2i, strength: float, softness: float, bumps: float,
+		bump_size: float) -> Image:
+	var size := cover_image.get_size()
+	var cover := cover_image.duplicate() as Image
+	if cover.get_format() != Image.FORMAT_RGBA8:
+		cover.convert(Image.FORMAT_RGBA8)
+	var data := cover.get_data()
+	var lumps := _bumps(origin, size, bump_size).get_data()
+	var depth := clampf(bumps, 0.0, 1.0)
+	var height := PackedByteArray()
+	height.resize(size.x * size.y)
+	for i in height.size():
+		if data[i * 4 + 3] == 255:
+			height[i] = int(255.0 - depth * float(lumps[i]))
+	var image := Image.create_from_data(size.x, size.y, false, Image.FORMAT_L8, height)
+	if softness > 0.0:
+		var scale := 1.0 + softness
+		image.resize(maxi(1, roundi(size.x / scale)), maxi(1, roundi(size.y / scale)), Image.INTERPOLATE_BILINEAR)
+		image.resize(size.x, size.y, Image.INTERPOLATE_BILINEAR)
+	# The engine's bump pass wraps its last row and column onto the first; a bare margin stops that.
+	image.crop(size.x + 1, size.y + 1)
+	image.bump_map_to_normal_map(strength)
+	image.crop(size.x, size.y)
+	return image
+
+
+static func _threshold(cover: float) -> float:
+	return ((1.0 - clampf(cover, 0.0, 1.0)) * (1.0 + 2.0 * EDGE) - 2.0 * EDGE) * 255.0
+
+
+# Smooth lumps for relief(), at board position like _noise, 0..255 in an L8 image.
+static func _bumps(origin: Vector2i, size: Vector2i, bump_size: float) -> Image:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	noise.seed = BUMP_SEED
+	noise.frequency = 1.0 / maxf(bump_size, 1.0)
+	noise.fractal_type = FastNoiseLite.FRACTAL_NONE
+	noise.offset = Vector3(origin.x, origin.y, 0.0)
+	var image := noise.get_image(size.x, size.y, false, false, false)
+	if image.get_format() != Image.FORMAT_L8:
+		image.convert(Image.FORMAT_L8)
+	return image
 
 
 # The engine's value noise over this image, one sample per art pixel at its BOARD position, 0..255 in

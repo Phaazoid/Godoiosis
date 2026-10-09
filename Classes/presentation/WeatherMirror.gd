@@ -17,7 +17,7 @@ class_name WeatherMirror
 #     moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
 #     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Snow that
 #     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
-#     prop_caps tells BoardMirror to lay its overlays on the billboards. Which of the two a look draws
+#     snow_on_props tells BoardMirror to cap the billboards and bury the tufts. Which of the two a look draws
 #     is its FALL; every rain path is gated on it.
 #   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
 #     easing between weathers. Either fall may author one; every shipped rain leaves it at identity.
@@ -46,6 +46,10 @@ const BOLT_BELOW := 80.0
 # The snow cover is painted per art pixel, a fraction of a second on a big board, so once it is up a
 # change waits until it has held this long: a slider drag repaints once, when it stops.
 const COVER_SETTLE := 0.15
+# How far a decal fades off a tilted surface. Godot remaps the surface-to-decal angle to 0..1 before
+# fading, so a WALL sits at 0.5 and anything below it paints walls -- 0.35 put 13% of the snow on
+# every cliff (measured, #1278). Above 0.5 a wall takes none and a 45-degree ramp keeps about 79%.
+const WALL_FADE := 0.55
 
 var weather_source: Callable          # () -> Weather.Kind
 var grid: BoardGrid
@@ -54,7 +58,7 @@ var camera: Camera3D
 var aim_source: Callable              # () -> Vector3, where the camera is looking
 var sky: ProceduralSkyMaterial
 var stands_down: Callable             # () -> bool: the flat view is up, draw nothing
-var prop_caps: Callable               # (shown: bool, color: Color) -> void: BoardMirror.set_prop_caps
+var snow_on_props: Callable           # (caps: bool, cap_color: Color, buries_tufts: bool) -> void: BoardMirror.set_snow
 
 var _kind := Weather.Kind.CLEAR
 var _look: WeatherLook = null
@@ -228,8 +232,8 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_snow.visible = snow
 	_snow_cover.visible = snow
 	_caps.visible = snow and look.caps_props
-	if prop_caps.is_valid():
-		prop_caps.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE)
+	if snow_on_props.is_valid():
+		snow_on_props.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE, snow)
 	_drift.emitting = snow and look.drift_rate > 0.0
 	_drift.visible = _drift.emitting
 	_drift_texels = -1
@@ -295,11 +299,13 @@ func _sync_ground() -> void:
 
 
 # The snow's own ground decal, on the same rule: rebuilt when the board or the cover it paints changes.
+# Its relief rides the same decal as a normal map, and none at all at relief 0.
 func _sync_snow_ground() -> void:
 	if grid == null:
 		return
-	var key := hash([_mask_versions.slice(0, 3), _look.snow_cover, _look.snow_frost, _look.snow_flecks,
-			_look.snow_color])
+	var key := hash([_mask_versions.slice(0, 3), _look.snow_cover, _look.slope_cover, _look.snow_frost,
+			_look.snow_flecks, _look.snow_color, _look.snow_relief, _look.relief_softness, _look.snow_bumps,
+			_look.bump_size])
 	if key == _snow_key:
 		return
 	if _snow_key != 0:
@@ -311,8 +317,14 @@ func _sync_snow_ground() -> void:
 	_snow_key = key
 	_fit(_snow_cover)
 	_fit(_caps)
-	_snow_cover.texture_albedo = ImageTexture.create_from_image(SnowGround.paint_cover(grid, _rect,
-			_look.snow_cover, _look.snow_frost, _look.snow_flecks, _look.snow_color))
+	var cover := SnowGround.paint_cover(grid, heights, _rect, _look.snow_cover, _look.slope_cover,
+			_look.snow_frost, _look.snow_flecks, _look.snow_color)
+	_snow_cover.texture_albedo = ImageTexture.create_from_image(cover)
+	_snow_cover.texture_normal = null
+	if _look.snow_relief > 0.0:
+		_snow_cover.texture_normal = ImageTexture.create_from_image(SnowGround.relief(cover,
+				_rect.position * SnowGround.PX, _look.snow_relief, _look.relief_softness, _look.snow_bumps,
+				_look.bump_size))
 
 
 # A ground decal spans the board's rect, from well under the board to well over the tear-out's stage.
@@ -507,8 +519,8 @@ func _style_snow() -> void:
 		_caps.texture_orm = _snow_cover.texture_orm
 	_caps.visible = _look.caps_props
 	_caps.modulate = _look.snow_color
-	if prop_caps.is_valid():
-		prop_caps.call(_look.caps_props, _look.snow_color)   # the door returns at once when nothing moved
+	if snow_on_props.is_valid():
+		snow_on_props.call(_look.caps_props, _look.snow_color, true)   # returns at once when nothing moved
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one
@@ -633,7 +645,7 @@ func _decal() -> Decal:
 	decal.cull_mask = BoardOverlays.GROUND_RENDER_LAYER
 	decal.upper_fade = 0.0
 	decal.lower_fade = 0.0
-	decal.normal_fade = 0.35   # a cliff's side stays dry rather than wearing a smear of the top
+	decal.normal_fade = WALL_FADE   # a cliff's side stays dry rather than wearing a smear of the top
 	decal.visible = false
 	add_child(decal)
 	return decal

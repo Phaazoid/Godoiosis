@@ -61,6 +61,13 @@ static func display_name(path: String) -> String:
 # the board that replaced it (#661).
 var board_generation := 0
 
+# How many times PLAY has changed the standing board: a pass, a turn ending, a free gear act, a
+# deployment edit. Each of those doors calls note_play(). The dev header's "(modified)" reads it
+# beside the stores' own DirtyCells counters, because unit and mission state have no counter of
+# their own and some of their writers are transient (the AI preview stands units on cells and puts
+# them back), so a per-field count would tick on a hover (#1182).
+var play_version := 0
+
 var last_loaded_path := ""
 
 # The look the CURRENT board wears (#253 part 2), by preset name; "" = the default. One store,
@@ -133,17 +140,24 @@ static func relink_guards(scenario: ScenarioData, unit_of_entry: Dictionary) -> 
 		var guarding_unit: Unit = unit_of_entry[entry]
 		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
 
+func note_play() -> void:
+	play_version += 1
+
+
 # The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and
-# the error path (mirrored into status_label when given, #168) all live there, not here.
-func save_scenario(scenario_name: String, status_label: Label = null, authored := false):
+# the error path (mirrored into status_label when given, #168) all live there, not here. Answers
+# whether the file was written, so the header only calls the board clean when it is (#1182).
+func save_scenario(scenario_name: String, status_label: Label = null, authored := false) -> bool:
 	if scenario_name.strip_edges() == "":
 		push_warning("Scenario needs a name")
-		return
+		return false
 
 	var scenario := capture_scenario(scenario_name, authored)
 	var path := scenario_path(scenario_name)
-	if DevWidgets.save_over(scenario, path, status_label):
-		last_loaded_path = path
+	if not DevWidgets.save_over(scenario, path, status_label):
+		return false
+	last_loaded_path = path
+	return true
 
 # A player save (#144): a FULL snapshot -- authored stays false, the #177 reference mode captures
 # no state -- wrapped with its origin mission so Restart-after-resume returns to the mission start.

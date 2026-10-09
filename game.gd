@@ -334,6 +334,9 @@ func _wire_signals() -> void:
 	# every edge the panel can be open on.
 	unit_info_panel.loadout_changed.connect(func() -> void:
 		refresh_action_queue(squad_manager.active_squad))
+	# A gear act is play: the dev header's "(modified)" counts it (#1182).
+	unit_info_panel.loadout_acted.connect(func(_u: Unit, _verb: String, _i: int) -> void:
+		scenario_manager.note_play())
 	# The dock's Inspect (#1152): the item's own card, READ-ONLY -- fitting a mod is a pre-mission act,
 	# and a battle has no mod pool to offer, hence the empty one.
 	unit_info_panel.detail_requested.connect(func(item: Item, owner: Unit) -> void:
@@ -412,6 +415,13 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_enemy_ranges") and not ModalLock.any_open(get_tree()) \
 			and not _board_locked_for_player():
 		toggle_enemy_ranges()
+	# F / Shift+F cycle the selected squad member (#1038), here for the same both-views reason. EXACT
+	# match for F3's reason: without it the Shift+F press also matches plain F and cycles both ways.
+	if not ModalLock.any_open(get_tree()):
+		if event.is_action_pressed("select_next_squadmate", false, true):
+			cycle_squad_member(1)
+		elif event.is_action_pressed("select_previous_squadmate", false, true):
+			cycle_squad_member(-1)
 
 	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
 	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it
@@ -754,12 +764,59 @@ func show_selected_reach(unit: Unit) -> void:
 	show_player_reach(unit, unit.get_projected_destination())
 
 
-# THE select write point (#107) -- the selection is stored, never re-derived from a cell. Two doors
-# reach it: a click on the board, and right-click re-opening a queued move's planning.
+# THE select write point (#107) -- the selection is stored, never re-derived from a cell. Its doors:
+# a click on the board, right-click re-opening a queued move's planning, a queue-row click, and the
+# F / Shift+F squad cycle (#1038).
 func select_unit(unit: Unit, cell: Vector2i) -> void:
 	last_clicked_cell = cell
 	selected_unit = unit
 	unit_selected.emit(unit)   # ScenarioDirector's lesson listens (#182)
+
+
+# F / Shift+F (#1038): the next or previous member of the selected unit's squad, selected the way a
+# queue-row click selects one -- the camera goes to them and their ring opens. With nobody selected
+# it starts on the first squad that can still act this turn. Only at rest: under a half-made gesture
+# (a move being planned, an aim, a pick) the gesture belongs to the unit that started it.
+func cycle_squad_member(step: int) -> void:
+	if _board_locked_for_player():
+		return
+	if game_state != GameState.IDLE and game_state != GameState.TILE_SELECTED:
+		return
+	var next := next_squad_member(_cycle_anchor(), step)
+	if next == null:
+		return
+	main_action_menu.close_ring()
+	_leave_mode()
+	focus_view_on(next)
+	open_unit_ring(next, next.get_projected_destination(), Vector2i(get_viewport().get_visible_rect().size / 2.0))
+
+
+# Who the cycle starts from: the selected unit, while it is still one the player could command.
+# selected_unit outlives a closed ring (clear_selection leaves it), which is what lets F carry on
+# from the last unit you had up.
+func _cycle_anchor() -> Unit:
+	if not is_instance_valid(selected_unit):
+		return null
+	var unit: Unit = selected_unit
+	if unit.squad == null or not unit.is_active() or not can_control(unit):
+		return null
+	return unit
+
+
+# The squad's standing members in its own order, `step` along from `anchor`, wrapping. No anchor
+# starts on the leader of the first squad still able to act -- the order the AI walks them in.
+func next_squad_member(anchor: Unit, step: int) -> Unit:
+	if anchor == null:
+		var squads := AIController.actable_squads(turn_manager.active_faction(), squad_manager)
+		return squads[0].leader if not squads.is_empty() else null
+	var members: Array[Unit] = []
+	for member in anchor.squad.get_members():
+		if is_instance_valid(member) and member.is_active():
+			members.append(member)
+	if members.is_empty():
+		return null
+	var at := maxi(members.find(anchor), 0)
+	return members[posmod(at + step, members.size())]
 
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
@@ -905,6 +962,7 @@ func start_faction_turn(faction: Team.Faction):
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
 
 func end_turn():
+	scenario_manager.note_play()   # the burn, the round and the hand-off all change the board (#1182)
 	var board: int = scenario_manager.board_generation
 	await order_executor.apply_end_of_turn_tiles(turn_manager.active_faction())
 	if board != scenario_manager.board_generation:
@@ -1588,6 +1646,7 @@ func create_squad(unit: Unit):
 	overlay_manager.show_squad_count(unit)
 	enter_target_pick_mode(candidates, func(picked: Unit):
 		squad_manager.join_squad(picked, unit.squad)
+		scenario_manager.note_play()   # squads are saved (#1182)
 		if not squad_up_candidates(unit).is_empty():
 			create_squad(unit)
 		else:
@@ -1610,7 +1669,10 @@ func join_squad_mode(unit: Unit):
 	# The rings ARE the candidate marking now (#442), so the generic ground marker would be a second
 	# spelling of the same fact -- #346's own complaint about the TARGET icon Squad Up already lost.
 	# The cells still go in: what is suppressed is the DRAW, never the clickability.
-	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(unit, picked.squad), false)
+	var join := func(picked: Unit) -> void:
+		squad_manager.join_squad(unit, picked.squad)
+		scenario_manager.note_play()   # squads are saved (#1182)
+	enter_target_pick_mode(candidates, join, false)
 	overlay_manager.set_ring_pulse(candidates)
 
 # WHICH squads this unit could join -- THE one answer, read by the marking and by the candidate list
@@ -1805,6 +1867,7 @@ func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
 	unit.movement.set_cell(cell)   # after set_grid: set_cell push_errors without one
 	unit.movement.set_heights(board_heights)
 	squad_manager.create_squad(unit)
+	_note_deployment_edit()
 	return true
 
 
@@ -1823,6 +1886,15 @@ func undeploy_unit(unit: Unit) -> void:
 	units_root.remove_child(unit)
 	reserve_root.add_child(unit)
 	unit.movement.set_grid(null)
+	_note_deployment_edit()
+
+
+# The player's own placing counts as play for the dev header's "(modified)" (#1182). The roster's
+# automatic draw goes through these same two doors BEFORE the phase opens, and that draw is what the
+# file produces on every load, so it must not count.
+func _note_deployment_edit() -> void:
+	if mission_controller.is_deploying():
+		scenario_manager.note_play()
 
 func _on_unit_died(unit: Unit):
 	# FIRST, while the unit is still readable: die() has already queue_freed it, and the mission may

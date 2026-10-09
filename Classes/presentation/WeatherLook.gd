@@ -67,10 +67,15 @@ enum Fall { RAIN, SNOW }
 
 @export_group("Snow ground")
 @export var snow_cover := 0.5               # 0..1: how much of the ground lies under snow
+@export var slope_cover := 1.0              # 0..1: the share of that cover a ramp or hillside keeps
 @export var snow_frost := 0.2               # 0..1: the faint whitening over all of it
 @export var snow_flecks := 0.04             # share of the ground's art pixels flecked white
 @export var snow_color := Color(0.93, 0.95, 0.99)
 @export var snow_roughness := 0.85
+@export var snow_relief := 6.0              # how hard the patches' edges and lumps catch the light; 0 is flat
+@export var relief_softness := 1.0          # art pixels a patch's edge slopes over
+@export var snow_bumps := 0.3               # 0..1: how lumpy the snow's top is
+@export var bump_size := 5.0                # art pixels across one lump
 
 @export_group("Settles")
 @export var caps_props := false             # snow on the tops of rocks, walls, crates and trees
@@ -166,6 +171,8 @@ const ROWS: Array[Dictionary] = [
 		"tip": "Seconds a landed flake lies on the ground before it melts away. 0 is gone on landing."},
 	{"prop": "snow_cover", "label": "Snow cover", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
 		"tip": "How much of the ground lies under snow: low leaves clumps, mid lies in patches, high covers nearly all. Never on water or a hole, and never past a tile."},
+	{"prop": "slope_cover", "label": "Slopes keep", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
+		"tip": "The share of the cover a ramp or a hillside keeps: snow slides off, so a low value shows the hills by their thin sides. 1 treats a slope like flat ground."},
 	{"prop": "snow_frost", "label": "Frost", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
 		"tip": "A faint whitening over all the ground the snow could lie on."},
 	{"prop": "snow_flecks", "label": "Flecks", "min": 0.0, "max": 0.3, "step": 0.005, "fall": Fall.SNOW,
@@ -174,8 +181,16 @@ const ROWS: Array[Dictionary] = [
 		"tip": "The settled snow's colour: on the ground, on the caps and on the units."},
 	{"prop": "snow_roughness", "label": "Snow gloss", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
 		"tip": "The snow's roughness: 1 is matte powder, lower catches the light like a crust."},
+	{"prop": "snow_relief", "label": "Relief", "min": 0.0, "max": 20.0, "step": 0.1, "fall": Fall.SNOW,
+		"tip": "How much the snow stands up off the ground: patch edges and lumps catch the light and cast a little shade. 0 is flat."},
+	{"prop": "relief_softness", "label": "Edge softness", "min": 0.0, "max": 3.0, "step": 0.1, "fall": Fall.SNOW,
+		"tip": "How many art pixels a patch's edge slopes over. 0 is a sharp step."},
+	{"prop": "snow_bumps", "label": "Lumps", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
+		"tip": "How lumpy the top of the snow is. 0 is smooth."},
+	{"prop": "bump_size", "label": "Lump size", "min": 2.0, "max": 16.0, "step": 0.5, "fall": Fall.SNOW,
+		"tip": "How wide one lump is, in art pixels."},
 	{"prop": "caps_props", "label": "Caps on props", "fall": Fall.SNOW,
-		"tip": "Snow on the tops of rocks, walls, crates, barrels, trees and lanterns. Tall grass pokes through bare."},
+		"tip": "Snow on the tops of rocks, walls, crates, barrels, trees and lanterns. Tall grass and flowers hide in any snow."},
 	{"prop": "caps_units", "label": "Caps on units", "fall": Fall.SNOW,
 		"tip": "Snow on every unit's head and shoulders. A look only: no rule is behind it yet."},
 	{"prop": "breath", "label": "Breath", "fall": Fall.SNOW,

@@ -10,9 +10,9 @@
 # the zone overlay shows only on the Tile Brush leaf, the brush disarms on leaving, and the
 # click-a-unit jump moves the tree too.
 #
-# The HEADER cases pin the (modified) marker's narrow meaning: terrain and zone AUTHORING marks,
-# save/load clears, and unit movement deliberately does not mark — a mid-battle board is always
-# "changed" in the snapshot sense, and a marker that is always on says nothing.
+# The HEADER cases pin the (modified) marker: ANY change marks, authored or played (dev ruling
+# 2026-10-09, #1182 -- reversing the old "play never marks"), save/load clears, and a mission start
+# arrives clean, because the roster's own draw is what the file produces on every load.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -36,6 +36,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	await DialogFixtures.end_all_dialog(self)   # the mission-start case can open a briefing
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -319,18 +320,163 @@ func test_a_zone_paint_marks_the_scenario_modified() -> void:
 	assert_bool(overlay.scenario_header.is_modified()).is_true()
 
 
-func test_unit_movement_does_not_mark_the_scenario_modified() -> void:
-	await _load_prolog()
-	var unit: Unit = null
+# The first step any Prolog player unit can legally queue, through the real queue.
+func _queue_a_step() -> MoveAction:
+	var board: BoardContext = game._board()
 	for child in game.units_root.get_children():
-		if child is Unit:
-			unit = child
+		var unit := child as Unit
+		if unit == null or unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		var reach := RulesService.compute_move_range(unit, board)
+		for cell: Vector2i in game.get_move_range(reach, unit):
+			var move := MoveAction.new()
+			move.init(unit, RulesService.route_to(unit, reach, cell, board), null)
+			if game.squad_manager.queue_action(unit.squad, move):
+				return move
+	return null
+
+
+func _a_player_unit() -> Unit:
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and unit.get_faction() == Team.Faction.PLAYER:
+			return unit
+	return null
+
+
+func _is_modified() -> bool:
+	return overlay.scenario_header.is_modified()
+
+
+func test_a_played_pass_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var move := _queue_a_step()
+	assert_object(move).override_failure_message(
+		"no Prolog player unit could queue a step; the case is vacuous").is_not_null()
+	await game.order_executor.execute_orders(move.actor)
+	assert_bool(_is_modified()).override_failure_message(
+		"a played pass did not mark the scenario -- Update would save the moved unit (#1182)").is_true()
+
+
+# end_turn on its own: with no AI on the board nothing plays after it, so only the turn's own door
+# can light the marker. The hand-off changes active_faction, which a save holds.
+func test_ending_a_turn_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var nobody: Array[Team.Faction] = []
+	game.ai_controller.set_ai_factions(nobody)
+	await game.end_turn()
+	assert_bool(_is_modified()).override_failure_message(
+		"ending a turn did not mark the scenario -- the faction to act is saved (#1182)").is_true()
+
+
+func test_waiting_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var unit := _a_player_unit()
+	assert_object(unit).override_failure_message("Prolog has no player unit; the case is vacuous").is_not_null()
+	game.main_action_menu._dispatch(MainActionMenu.WAIT, unit)
+	assert_bool(_is_modified()).override_failure_message(
+		"Wait did not mark the scenario -- the squad's has_acted is saved (#1182)").is_true()
+
+
+# The dock's own announcement, so the wire from the panel to the counter is what is tested.
+func test_a_gear_act_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var unit := _a_player_unit()
+	assert_object(unit).override_failure_message("Prolog has no player unit; the case is vacuous").is_not_null()
+	game.unit_info_panel.inventory_panel.loadout_acted.emit(unit, "Equip", 0)
+	assert_bool(_is_modified()).override_failure_message(
+		"a gear act in the dock did not mark the scenario (#1182)").is_true()
+
+
+# Corners write BoardHeights alone -- never the grid -- which is the gap #1182 was filed for.
+func test_a_corner_edit_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var brush: TileBrushTool = overlay.tile_brush
+	var grid_before: int = game.grid.dirty.version
+	var heights_before: int = game.board_heights.dirty.version
+	for cell: Vector2i in game.grid.get_used_cells():
+		brush.set_elevation(game.board_heights.elevation_at(cell) + 1)
+		game.dev_controller._paint_corner(cell)
+		if game.board_heights.dirty.version != heights_before:
 			break
-	assert_object(unit).override_failure_message("Prolog spawned no units; the case is vacuous").is_not_null()
-	unit.movement.set_cell(unit.movement.cell + Vector2i(1, 0))
-	assert_bool(overlay.scenario_header.is_modified()).override_failure_message(
-		"unit movement marked the scenario modified -- a mid-battle board would always read modified"
-	).is_false()
+	assert_int(game.board_heights.dirty.version).override_failure_message(
+		"no corner on Prolog took the raise; the case is vacuous").is_not_equal(heights_before)
+	assert_int(game.grid.dirty.version).override_failure_message(
+		"the corner brush touched the grid too, so this case no longer isolates the heights").is_equal(grid_before)
+	assert_bool(_is_modified()).override_failure_message(
+		"a corner edit did not mark the scenario (#1182)").is_true()
+
+
+func test_a_tile_state_paint_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var brush: TileBrushTool = overlay.tile_brush
+	brush._tile_state = Terrain.TileState.COVER
+	var target := Vector2i(-9999, -9999)
+	for cell: Vector2i in game.grid.get_used_cells():
+		if not game.terrain_states.has_state(cell, Terrain.TileState.COVER):
+			target = cell
+			break
+	game.dev_controller._paint_state(target)
+	assert_bool(game.terrain_states.has_state(target, Terrain.TileState.COVER)).override_failure_message(
+		"the paint did not land; the case is vacuous").is_true()
+	assert_bool(_is_modified()).override_failure_message(
+		"painting a tile state did not mark the scenario (#1182)").is_true()
+
+
+# The ruling's own example: fire spreading in PLAY lights the marker, not just the brush.
+func test_fire_burning_down_in_play_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var lit := Vector2i(-9999, -9999)
+	for cell: Vector2i in game.grid.get_used_cells():
+		var effect := ResolvedCellEffect.new()
+		effect.cell = cell
+		effect.states_added.assign([Terrain.TileState.BURNING])
+		game.terrain_states.apply(effect)
+		if game.terrain_states.turns_remaining(cell, Terrain.TileState.BURNING) > 0:
+			lit = cell
+			break
+	assert_bool(lit != Vector2i(-9999, -9999)).override_failure_message(
+		"no Prolog ground gives fire a clock; the case is vacuous").is_true()
+	overlay.scenario_header._stamp_clean()   # the fire stands as authored; only the round is play
+	game.terrain_states.tick_states()
+	assert_bool(_is_modified()).override_failure_message(
+		"a round of fire did not mark the scenario (#1182)").is_true()
+
+
+func _a_rostered_mission() -> String:
+	for path in game.scenario_manager.get_missions():
+		var data := load(path) as ScenarioData
+		if data != null and data.roster != "" and data.offers_pre_mission:
+			return path
+	return ""
+
+
+func _a_drawn_unit() -> Unit:
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and unit.drawn_from_roster:
+			return unit
+	return null
+
+
+# The roster's draw goes through game.deploy_unit, the same door the player's placing does. The draw
+# is what the file produces on every load, so a mission start must arrive clean; the player's own
+# edit, once the phase is open, must not.
+func test_a_mission_start_arrives_clean_and_a_placing_edit_marks_it() -> void:
+	var path := _a_rostered_mission()
+	assert_str(path).override_failure_message(
+		"no shipped mission opens a pre-mission phase; the case is vacuous").is_not_empty()
+	game.mission_controller.begin_mission(path)
+	await await_idle_frame()
+	var drawn := _a_drawn_unit()
+	assert_object(drawn).override_failure_message("the roster drew nobody; the case is vacuous").is_not_null()
+	assert_bool(game.mission_controller.is_deploying()).override_failure_message(
+		"the pre-mission phase did not open; the case is vacuous").is_true()
+	assert_bool(_is_modified()).override_failure_message(
+		"a mission start reads modified -- the roster's own draw counted as an edit").is_false()
+	game.main_action_menu._dispatch(MainActionMenu.UNDEPLOY, drawn)
+	assert_bool(_is_modified()).override_failure_message(
+		"undeploying a unit in the pre-mission phase did not mark the scenario (#1182)").is_true()
 
 
 # The marker gap the verticality fixture surfaced (#259 rework): the Unit Editor's own Save wrote

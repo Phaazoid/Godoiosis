@@ -30,7 +30,9 @@ class_name PlayerSettings
 ##
 ## Unlike Experiments.Flag, these are NOT meant to be culled — a setting is a promise to the player.
 ## Persistence is keyed by the enum member's NAME, so reordering is safe and a deleted member just
-## leaves a dead cfg key behind.
+## leaves a dead cfg key behind. A row at its DEFAULT is never stored (#648): absence is what follows
+## the default, so only a value that differs from it is kept, and a changed default reaches everyone
+## who has not chosen otherwise.
 
 enum Setting {
 	HEALTH_BARS,
@@ -266,7 +268,8 @@ static var config_path := "user://settings.cfg"
 # Tests flip this false to stay fully in-memory (no disk I/O); _static_init clears it headlessly.
 static var persistence_enabled := true
 
-# Variant-valued because a row is a bool or an int depending on its kind (#418).
+# Variant-valued because a row is a bool, an int, a float or a String depending on its kind.
+# A row the player has left at its default holds NO entry (#648) -- see set_value.
 static var _state: Dictionary[Setting, Variant] = {}
 static var _loaded := false
 
@@ -287,12 +290,32 @@ static func value_of(setting: Setting) -> Variant:
 		return _state[setting]
 	return default_value(setting)
 
+# A value equal to the row's default is NOT STORED: the key is erased (#648, dev ruling 2026-10-09).
+# Absence is what follows the default, so storing today's default pins the player to it, and a
+# later change to that default never reaches them. Putting a setting back where you found it is
+# ordinary (wander across a choice strip and return), so it must un-pin rather than pin.
+#
+# The read before the write is so a write that happens first does not save a cfg holding this one
+# key and drop every other one the player had.
 static func set_value(setting: Setting, value: Variant) -> void:
-	_state[setting] = value
+	if not _loaded:
+		load_state()
+	if _is_default(setting, value):
+		_state.erase(setting)
+	else:
+		_state[setting] = value
 	save_state()
 
 static func default_value(setting: Setting) -> Variant:
 	return DEFS[setting]["default"]
+
+# A level compares APPROXIMATELY: the slider hands back k * step, and 12 * 0.05 is
+# 0.6000000000000001, not the 0.6 a default is written as.
+static func _is_default(setting: Setting, value: Variant) -> bool:
+	var authored: Variant = default_value(setting)
+	if is_level(setting):
+		return is_equal_approx(float(value), float(authored))
+	return value == authored
 
 # --- typed façades, for callers that know their row's kind ---
 #
@@ -357,14 +380,11 @@ static func set_level(setting: Setting, value: float) -> void:
 		return
 	set_value(setting, clampf(value, min_of(setting), max_of(setting)))
 
-# TRIMMED AT READ, never at write (#1049). The settings page reconciles its controls against this
-# store every frame, so trimming on the way IN would rewrite the box under the caret: typing "John "
-# would save "John", the next frame would put "John" back, and a two-word name could never be typed
-# at all. Trimming here instead means the box keeps whatever is being typed and every CONSUMER still
-# gets a clean value -- the guarantee sits on the read, which is the side that has callers.
-#
-# The cap is applied here too, for the same reason set_text applies it: a cfg is a text file the
-# player can open, so a 900-character name is reachable input rather than a bug.
+# CLEANED ON BOTH SIDES (#1049): set_text stores _clean_text's answer, which trims, and this read
+# cleans again because a cfg is a text file the player can open, so a 900-character name is reachable
+# input rather than a bug. The settings page copes with the trim on write by leaving its text box out
+# of the per-frame reconcile while it has focus (SettingsScreen); otherwise typing "John " would put
+# "John" back under the caret and a two-word name could never be typed.
 static func text_of(setting: Setting) -> String:
 	if not is_text(setting):
 		push_error("PlayerSettings: %s is not a text row -- read it with is_on, choice_of or level_of" % _name_of(setting))
@@ -450,31 +470,36 @@ static func load_state() -> void:
 		var key: String = Setting.keys()[setting]
 		if not cfg.has_section_key(CONFIG_SECTION, key):
 			continue
-		var raw: Variant = cfg.get_value(CONFIG_SECTION, key)
-		# A LEVEL is answered FIRST, because the toggle branch below coerces with bool() -- which
-		# would read any saved volume back as `true` and lose it silently, consistently, across
-		# every relaunch (#647's shape, from the persistence side). CLAMPED rather than defaulted,
-		# unlike the choice branch: an index outside the options list means nothing, where a volume
-		# outside the range means the nearest end of it.
-		if is_level(setting):
-			_state[setting] = clampf(float(raw), min_of(setting), max_of(setting))
-			continue
-		# TEXT is answered before the toggle fallback below, for the reason the LEVEL branch states
-		# one comment up and more bluntly: `bool("Dave")` is true, so a saved name would come back
-		# from disk as `true` and be lost on the first relaunch -- silently, and consistently
-		# (#1049). CLEANED rather than trusted, the level branch's clamp in its other form: the cfg
-		# is a text file the player can open.
-		if is_text(setting):
-			_state[setting] = _clean_text(str(raw), max_length_of(setting))
-			continue
-		if not is_choice(setting):
-			_state[setting] = bool(raw)
-			continue
-		# The cfg is a text file the player can open, so an index out of the options list is
-		# reachable input rather than a bug. Fall back to the default instead of trusting it.
-		var picked := int(raw)
-		if picked >= 0 and picked < options_of(setting).size():
-			_state[setting] = picked
+		var value: Variant = _read(setting, cfg.get_value(CONFIG_SECTION, key))
+		# A stored DEFAULT is dropped, set_value's rule applied to a cfg written before it (#648):
+		# the next save writes the file without the key, and the player follows the next default.
+		if value != null and not _is_default(setting, value):
+			_state[setting] = value
+
+# One saved value, read back as its row's kind, or null where it means nothing.
+static func _read(setting: Setting, raw: Variant) -> Variant:
+	# A LEVEL is answered FIRST, because the toggle branch below coerces with bool() -- which would
+	# read any saved volume back as `true` and lose it silently, consistently, across every relaunch
+	# (#647's shape, from the persistence side). CLAMPED rather than defaulted, unlike the choice
+	# branch: an index outside the options list means nothing, where a volume outside the range means
+	# the nearest end of it.
+	if is_level(setting):
+		return clampf(float(raw), min_of(setting), max_of(setting))
+	# TEXT is answered before the toggle fallback below, for the reason the LEVEL branch states one
+	# comment up and more bluntly: `bool("Dave")` is true, so a saved name would come back from disk
+	# as `true` and be lost on the first relaunch -- silently, and consistently (#1049). CLEANED
+	# rather than trusted, the level branch's clamp in its other form: the cfg is a text file the
+	# player can open.
+	if is_text(setting):
+		return _clean_text(str(raw), max_length_of(setting))
+	if not is_choice(setting):
+		return bool(raw)
+	# The cfg is a text file the player can open, so an index out of the options list is reachable
+	# input rather than a bug. Null, so the default shows instead of trusting it.
+	var picked := int(raw)
+	if picked >= 0 and picked < options_of(setting).size():
+		return picked
+	return null
 
 static func save_state() -> void:
 	if not persistence_enabled:

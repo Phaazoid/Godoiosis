@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09.**
 
 ## Principles
 
@@ -469,7 +469,10 @@ The rulings, all dev calls, all made before building:
 - **Persisted, not session-scoped.** `user://settings.cfg` via `ConfigFile`, keyed by the enum
   member's NAME — `Experiments`'s shape, minus its cull-the-flags doctrine, because a setting is a
   promise to the player rather than an experiment. A static class, not an autoload; this project
-  has none, and `Stats` / `Elemental` / `Experiments` are all class-level statics.
+  has none, and `Stats` / `Elemental` / `Experiments` are all class-level statics. **Only a value
+  that differs from the default is written** ([#648](https://github.com/Phaazoid/Godoiosis/issues/648),
+  2026-10-09): putting a row back to its default erases the key, so a player who wandered across a
+  choice strip and back still follows the next default the dev ships.
 - **The preference governs the HOVER reason only.** A bar that is up because a queued
   plan is about to change that unit stays up either way. Law #2 says the queue never lies, and #354
   had just finished ruling that a prediction survives to the end of its pass; a preference that can
@@ -4142,6 +4145,7 @@ He played it and reported three things: *"They should be shallow arcs rather tha
 ### Declared limits
 
 - **Kills are not applied to the BOARD, but a felled attacker's intent is dropped ([#1001](https://github.com/Phaazoid/Godoiosis/issues/1001)'s cheap half, built with #1042).** `AIController._felled_by_viewer` resolves each viewer squad's real queue on the live board and drops any intent whose ATTACKER the plan leaves non-live. It filters the HARVEST rather than the snapshot, so what the AI decided is untouched -- a doomed enemy still influenced its squadmates' plan. The question is `PlanResolver.actor_is_live`, the same predicate execution uses (#1005), and deliberately **not** `plan_fells`, which answers true for a unit entering CRISIS -- a unit in Crisis is emphatically still attacking, and dropping its mark would UNDER-warn.
+  > **#1001 CLOSED not-planned (dev ruling, 2026-10-09): threat lines are DUMB REACH LINES.** His words: *"I want those threat lines to show. They should be dumb lines that only indicate what is in reach of what."* An enemy your plan will kill still draws its line. The lines on the board already obey: since #1069 they are reach lines off `ThreatField`, which reads each enemy as it stands and removes nobody for your pending plan's kills (it reads that plan for wetness alone). The filter above lives only on this DORMANT plan preview, so the ruling changes no code today; **if the preview is ever revived to draw lines, the filter goes with it.**
 - **A void-removed enemy** publishes no landing and previews from where it stands. Same direction.
 - **Only factions the AI drives are previewed** -- an unmanaged faction is nobody's to predict.
 
