@@ -123,22 +123,27 @@ func _process(delta: float) -> void:
 	if _look == null:
 		return
 	_sync_mask()
-	_sync_ground()
-	_place()
-	_style()
+	if _raining():
+		_sync_ground()
+		_place_rain()
+		_style()
 	_storm()
+
+
+func _raining() -> bool:
+	return _look != null and _look.fall == WeatherLook.Fall.RAIN
 
 
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_kind = kind
 	_look = look
-	var on := look != null
-	_rain.emitting = on
-	_rain.visible = on
-	_splash.emitting = on and look.splashes
-	_splash.visible = on and look.splashes
-	_wet.visible = on
-	_puddles.visible = on and look.puddles
+	var rain := _raining()
+	_rain.emitting = rain
+	_rain.visible = rain
+	_splash.emitting = rain and look.splashes
+	_splash.visible = rain and look.splashes
+	_wet.visible = rain
+	_puddles.visible = rain and look.puddles
 	_mask_versions = []
 	_ground_key = 0
 	_streak_texels = -1
@@ -203,15 +208,16 @@ func _sync_ground() -> void:
 				WetGround.paint_puddles(grid, heights, _rect, _look.puddle_coverage, _look.puddle_color))
 
 
-# ---- The rain box ------------------------------------------------------------------------------
+# ---- The birth box -----------------------------------------------------------------------------
 
 # Fit the birth box to what the camera can see, every frame: the four frustum corners on the plane
-# the camera looks at, plus the camera's own column, grown by how far the wind carries a drop on its
-# way down. The floor is below where the LOWEST frame edge leaves the farthest drop's fall, so a drop
-# over the void leaves the screen before it dies.
-func _place() -> void:
+# the camera looks at, plus the camera's own column, grown by how far the wind carries a particle on
+# its way down and by `wander` either way. The floor is below where the LOWEST frame edge leaves the
+# farthest particle's fall, so one over the void leaves the screen before it dies. Empty with no camera.
+# Keys: lo, hi (Vector2, x/z), top, floor_y, fall (seconds from top to floor), area.
+func _view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
 	if camera == null or not camera.is_inside_tree():
-		return
+		return {}
 	var eye := camera.global_position
 	var aim: Vector3 = aim_source.call() if aim_source.is_valid() else Vector3.ZERO
 	var rise := maxf(eye.y - aim.y, 2.0)
@@ -234,22 +240,32 @@ func _place() -> void:
 				slope = minf(slope, -ray.y / flat)
 	var top := eye.y + SPAWN_ABOVE
 	var floor_y := aim.y - rise * 4.0 if slope == INF else eye.y - far * slope - 1.0
+	var fall := (top - floor_y) / maxf(speed, 0.5)
+	var drift := wind * fall
+	var pad := Vector2.ONE * (1.0 + maxf(wander, 0.0))
+	lo = lo.min(lo - drift) - pad
+	hi = hi.max(hi - drift) + pad
+	return {"lo": lo, "hi": hi, "top": top, "floor_y": floor_y, "fall": fall,
+			"area": (hi.x - lo.x) * (hi.y - lo.y)}
+
+
+func _place_rain() -> void:
 	var speed := maxf(_look.fall_speed, 0.5)
-	var fall := (top - floor_y) / speed
-	var drift := Vector2(_look.wind_x, _look.wind_z) * fall
-	lo = lo.min(lo - drift) - Vector2.ONE
-	hi = hi.max(hi - drift) + Vector2.ONE
-	var area := (hi.x - lo.x) * (hi.y - lo.y)
+	var box := _view_box(speed, Vector2(_look.wind_x, _look.wind_z), 0.0)
+	if box.is_empty():
+		return
+	var lo: Vector2 = box["lo"]
+	var hi: Vector2 = box["hi"]
+	var top: float = box["top"]
+	var area: float = box["area"]
 	_rain_process.set_shader_parameter("box_min", Vector3(lo.x, top - 0.5, lo.y))
 	_rain_process.set_shader_parameter("box_max", Vector3(hi.x, top, hi.y))
-	_rain_process.set_shader_parameter("floor_y", floor_y)
+	_rain_process.set_shader_parameter("floor_y", box["floor_y"])
 	_rain_process.set_shader_parameter("velocity", Vector3(_look.wind_x, -speed, _look.wind_z))
-	_size(_rain, _rain_process, _look.density * area, fall + 0.25, MAX_DROPS)
-	var ground_lo := Vector3(lo.x, 0.0, lo.y)
-	var ground_hi := Vector3(hi.x, 0.0, hi.y)
-	_splash_process.set_shader_parameter("box_min", ground_lo)
-	_splash_process.set_shader_parameter("box_max", ground_hi)
-	_splash_process.set_shader_parameter("floor_y", floor_y)
+	_size(_rain, _rain_process, _look.density * area, float(box["fall"]) + 0.25, MAX_DROPS)
+	_splash_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
+	_splash_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
+	_splash_process.set_shader_parameter("floor_y", box["floor_y"])
 	if _look.splashes:
 		_size(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
 

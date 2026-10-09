@@ -56,3 +56,33 @@ func _slider_after(root: Node, label: String) -> Range:
 			if sibling is HSlider:
 				return sibling
 	return null
+
+
+# A look draws only the rows of what it drops (#1269): a snow page lists no splashes, a rain page no
+# swirl, and both list the shared ones. Asked of the built page, not of the table.
+func test_a_page_lists_only_its_falls_rows() -> void:
+	var snow := _label_texts(Weather.Kind.SNOW)
+	var rain := _label_texts(Weather.Kind.RAIN)
+	assert_object(WeatherLook.for_kind(Weather.Kind.SNOW)).override_failure_message(
+			"fixture: snow has no look file").is_not_null()
+	for row: Dictionary in WeatherLook.ROWS:
+		var label: String = row["label"]
+		var on_snow: bool = not row.has("fall") or row["fall"] == WeatherLook.Fall.SNOW
+		var on_rain: bool = not row.has("fall") or row["fall"] == WeatherLook.Fall.RAIN
+		assert_bool(snow.has(label)).override_failure_message("snow page, row '%s'" % label).is_equal(on_snow)
+		assert_bool(rain.has(label)).override_failure_message("rain page, row '%s'" % label).is_equal(on_rain)
+
+
+func _label_texts(kind: Weather.Kind) -> Array[String]:
+	var page := WeatherTool.new()
+	add_child(page)
+	page.init(null)
+	page._show(kind)
+	var texts: Array[String] = []
+	for node in page.find_children("*", "Control", true, false):
+		if node is Label:
+			texts.append((node as Label).text)
+		elif node is Button:   # a checkbox row carries its label as its own text
+			texts.append((node as Button).text)
+	page.free()
+	return texts

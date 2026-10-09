@@ -101,15 +101,23 @@ func test_a_tile_states_hazard_row_agrees_with_the_rule() -> void:
 	assert_array(wrong).override_failure_message("\n".join(wrong)).is_empty()
 
 
-# A gas declared inert has no rules at all. The day one gains some, this reds, because the AI's row
-# was written about a look.
+# A gas or a weather declared inert has no rules at all. The day one gains some, this reds, because
+# the AI's row was written about a look.
 func test_a_gas_declared_inert_has_no_rules() -> void:
-	var axis: Dictionary = Ledger.gases()
+	_assert_inert_has_no_rules(Ledger.gases(), func(kind: Variant) -> bool: return GasRules.for_kind(kind) != null)
+
+
+func test_a_weather_declared_inert_has_no_rules() -> void:
+	_assert_inert_has_no_rules(Ledger.weathers(),
+		func(kind: Variant) -> bool: return WeatherRules.for_kind(kind) != null)
+
+
+func _assert_inert_has_no_rules(axis: Dictionary, has_rules: Callable) -> void:
 	var label: Callable = axis["label"]
 	var wrong: Array[String] = []
 	for kind: Variant in axis["rows"]:
 		var stance: Dictionary = axis["rows"][kind].get("ai", {})
-		if stance.get("inert", false) and GasRules.for_kind(kind) != null:
+		if stance.get("inert", false) and has_rules.call(kind):
 			wrong.append("%s is declared inert, and it has rules now -- say what the AI does about them" % label.call(kind))
 	assert_array(wrong).override_failure_message("\n".join(wrong)).is_empty()
 
