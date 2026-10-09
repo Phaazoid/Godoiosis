@@ -225,6 +225,12 @@ var home_yaw_source: Callable
 # blot: a Wet unit standing in water leaves no patch on it). Unset reads as dry ground everywhere.
 var water_at: Callable
 
+# The weather's snow on the units (#1269), injected by battle3d off WeatherMirror like water_at: the
+# colour a cap is drawn in, its alpha 1 while the weather caps units and 0 otherwise; and whether
+# every standing unit's breath fogs. Unset is no snow. A look, not a state: nothing here reads a rule.
+var snow_source: Callable     # () -> Color
+var breath_source: Callable   # () -> bool
+
 # The game's board, for the WATER BASIN's wading (#654): who is standing IN the water rather than on
 # it is RulesService.wets_in's question, and that reads a BoardContext. Asked once per frame, and only
 # while the experiment is on, so the ordinary board pays nothing for it. Unset means nobody wades.
@@ -314,6 +320,11 @@ var _status: Dictionary[int, Vector4] = {}
 var _status_clock := 0.0
 # Which unit each pooled ghost stands in for, by slot; 0 = none (a move-hover stand-in, or a spare).
 var _ghost_units: Array[int] = []
+# The snow cap every unit wears (#1269): ONE board-wide level, faded on the scaled clock like a
+# state, and the colour it fades in (kept while it fades out, so it does not flash white).
+var _cap_level := 0.0
+var _cap_color := Color.WHITE
+var _breathing := false
 # What a worn state throws into the world around the unit (#358 slice 2). A child for the debris'
 # reason: it is board-wide, and it is fed from this node's own per-frame pass.
 var _status_world: StatusWorld
@@ -394,6 +405,7 @@ func reconcile(delta := 0.0) -> void:
 	# same way -- a static read per unit would be N reads answering one question.
 	var unhovered_numbers := PlayerSettings.is_on(PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS)
 	_push_debris_knobs()
+	_settle_snow(delta)
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
 		var unit := child as Unit
@@ -468,10 +480,29 @@ func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> vo
 		_status.erase(id)
 	else:
 		_status[id] = level
+	# A blizzard fogs every standing unit's breath (#1269); a body on the ground does not breathe it.
+	var breath := 1.0 if _breathing and not unit.is_downed() else 0.0
+	if level != Vector4.ZERO or breath > 0.0:
 		var standing := _standing_sprite(unit, id, sprite)
 		if standing != null:
-			_status_world.wear(id, standing, cell, level, status_seed(id))
+			_status_world.wear(id, standing, cell, level, status_seed(id), breath)
 	sprite.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
+	sprite.show_cap(_cap_level, _cap_color)
+
+
+# The board's snow, once per frame: the cap fades toward whether the weather caps units, and breath
+# follows the weather at once (a puff is already its own fade).
+func _settle_snow(delta: float) -> void:
+	var snow: Color = snow_source.call() if snow_source.is_valid() else Color(1.0, 1.0, 1.0, 0.0)
+	if snow.a > 0.0:
+		_cap_color = Color(snow.r, snow.g, snow.b, 1.0)
+	_cap_level = move_toward(_cap_level, 1.0 if snow.a > 0.0 else 0.0, _fade_step(StatusLook.status_fade_time, delta))
+	_breathing = breath_source.is_valid() and bool(breath_source.call())
+
+
+# How much snow every unit wears right now (#1269), 0..1.
+func cap_level() -> float:
+	return _cap_level
 
 
 func _is_water(cell: Vector2i) -> bool:
@@ -501,6 +532,8 @@ func _sync_ghost_status() -> void:
 		var id: int = _ghost_units[i] if i < _ghost_units.size() else 0
 		var level: Vector4 = _status.get(id, Vector4.ZERO) if ghost.visible else Vector4.ZERO
 		ghost.show_status(level.x, level.y, level.z, _status_clock, status_seed(id))
+		# A ghost stands in for its unit, so it wears the snow; a move-hover stand-in (id 0) stays plain.
+		ghost.show_cap(_cap_level if ghost.visible and id != 0 else 0.0, _cap_color)
 
 
 # Zero means INSTANT, never a division.

@@ -17,8 +17,9 @@ extends GPUParticles3D
 enum Kind { DRIP, SPLASH, MIST, BREATH }
 
 # How many units may wear a state at once, for sizing the emission buffer. Generous on purpose: a
-# particle slot is a few bytes, and a buffer that fills drops the next drip without a word.
-const WEARERS := 24
+# particle slot is a few bytes, and a buffer that fills drops the next drip without a word. A
+# blizzard's breath (#1269) makes every standing unit a wearer, so this is a board's whole roster.
+const WEARERS := 48
 const CULL_MARGIN := 8.0
 
 var kind := Kind.DRIP

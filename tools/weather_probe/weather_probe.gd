@@ -120,6 +120,7 @@ func _snow(_ford_clear: Image) -> int:
 		await _wait(3.0)
 		var frame := await _grab(Weather.name_of(kind).to_lower())
 		_save_zoom(frame, Weather.name_of(kind).to_lower() + "_zoom")
+		_save_unit(frame, Weather.name_of(kind).to_lower() + "_unit")
 		var flakes := 0
 		for y in range(0, clear.get_height(), 2):
 			for x in range(0, clear.get_width(), 2):
@@ -156,6 +157,26 @@ func _open(mission: String) -> void:
 	if _game.mission_controller.has_method("commit_deployment") and _game.mission_controller.get("_deploying"):
 		_game.mission_controller.commit_deployment()
 	await _wait(1.5)
+
+
+# The first unit's sprite at 6x, for an eye check of its cap and breath.
+func _save_unit(frame: Image, label: String) -> void:
+	var units: UnitMirror = _scene.get_node("UnitMirror")
+	var camera := get_viewport().get_camera_3d()
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		var sprite := units.sprite_for(unit) if unit != null else null
+		if sprite == null or not sprite.visible:
+			continue
+		var at := camera.unproject_position(sprite.global_position + Vector3.UP * 0.5)
+		var box := Rect2i(Vector2i(at) - Vector2i(40, 40), Vector2i(80, 80)).intersection(
+				Rect2i(Vector2i.ZERO, frame.get_size()))
+		if box.size.x < 8 or box.size.y < 8:
+			continue
+		var crop := frame.get_region(box)
+		crop.resize(box.size.x * 6, box.size.y * 6, Image.INTERPOLATE_NEAREST)
+		crop.save_png("%s/%s.png" % [OUT_DIR, label])
+		return
 
 
 func _grab(label: String) -> Image:

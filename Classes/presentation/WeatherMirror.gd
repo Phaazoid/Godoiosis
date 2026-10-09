@@ -154,6 +154,19 @@ func emitters() -> Array[GPUParticles3D]:
 	return [_rain, _splash, _snow, _drift]
 
 
+# The snow's colour on the units (#1269), its alpha 1 while this weather caps them and 0 otherwise --
+# UnitMirror.snow_source. Read off the look the mirror is drawing, so a flat view caps nobody.
+func unit_snow() -> Color:
+	if not _snowing() or not _look.caps_units:
+		return Color(1.0, 1.0, 1.0, 0.0)
+	return Color(_look.snow_color.r, _look.snow_color.g, _look.snow_color.b, 1.0)
+
+
+# Whether every standing unit's breath fogs (#1269) -- UnitMirror.breath_source.
+func breathes() -> bool:
+	return _snowing() and _look.breath
+
+
 # The storm's screen flash, 0..1, for battle3d's white-out -- a DRIVER, never a writer (#887's rule).
 func flash_level() -> float:
 	return _level * _look.flash_peak if _look != null and _look.lightning else 0.0

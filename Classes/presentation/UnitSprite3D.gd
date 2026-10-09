@@ -115,6 +115,9 @@ var _seed := 0.0
 # The part of the tint ABOVE 1.0, per channel (#1251). The engine sprite carries its tint as a
 # vertex colour, which clamps at 1.0, so a white flash rendered exactly like the resting art.
 var _overbright := Vector3.ONE
+# The weather's snow on this unit's head and shoulders (#1269), 0..1, and its colour.
+var _cap := 0.0
+var _cap_color := Color.WHITE
 
 const STATUS_SHADER := preload("res://Classes/presentation/unit_status.gdshader")
 const STATUS_GHOST_SHADER := preload("res://Classes/presentation/unit_status_ghost.gdshader")
@@ -256,6 +259,20 @@ func show_status(wet: float, chill: float, icicles: float, clock: float, seed: f
 	_sync_material()
 
 
+# THE one door to the snow settled on this sprite (#1269): a weather look rather than a state, pushed
+# by UnitMirror off the board's snow. It shares the status material, so a capped unit wears it.
+func show_cap(level: float, color: Color) -> void:
+	if is_equal_approx(level, _cap) and color == _cap_color:
+		return
+	_cap = level
+	_cap_color = color
+	_sync_material()
+
+
+func cap_level() -> float:
+	return _cap
+
+
 # THE one door to this sprite's tint (#1251): what 2D's modulate is, brighter-than-white included.
 # The vertex colour takes the part it can hold and the status material carries the rest, so a tint
 # of 2.4 renders the way the flat view renders it rather than as the plain art.
@@ -273,10 +290,10 @@ func tint() -> Color:
 			modulate.a)
 
 
-# The one writer of material_override: the status material while a state shows or the tint is
-# brighter than the art, the engine's own otherwise.
+# The one writer of material_override: the status material while a state shows, the tint is brighter
+# than the art or snow has settled, the engine's own otherwise.
 func _sync_material() -> void:
-	var states := _wet > 0.0 or _chill > 0.0 or _icicles > 0.0
+	var states := _wet > 0.0 or _chill > 0.0 or _icicles > 0.0 or _cap > 0.0
 	if (not states and _overbright == Vector3.ONE) or texture == null:
 		if material_override != null:
 			material_override = null
@@ -297,10 +314,13 @@ func _sync_material() -> void:
 		_status_bound = texture
 		_status_material.set_shader_parameter("texture_albedo", texture)
 		_status_material.set_shader_parameter("status_map", map.texture)
+		_status_material.set_shader_parameter("frame_origin", StatusArt.frame_of(texture).position)
 	if material_override != _status_material:
 		material_override = _status_material
 	StatusLook.push(_status_material, _wet, _chill, _icicles, _clock, _seed)
 	_status_material.set_shader_parameter("overbright", _overbright)
+	_status_material.set_shader_parameter("snow_cap", _cap)
+	_status_material.set_shader_parameter("snow_cap_hue", _cap_color)
 
 
 # The material a state or a bright tint is being drawn with, or null while this sprite wears neither.
