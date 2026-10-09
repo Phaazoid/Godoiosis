@@ -67,6 +67,7 @@ const GLOW_TAPER: Array[float] = [0.0, 0.383, 0.707, 0.924, 1.0, 0.924, 0.707, 0
 # knobs and the colours -- so a still board rebuilds nothing.
 var _zone_walls: ZoneWalls
 var _last_wall_key: Array = []
+var _walls_staged := false   # a staging was up last frame, so the wall owes one placement home (#1118)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -694,8 +695,9 @@ func _zones(om: OverlayManager) -> void:
 	_zone_wall_sync(om)
 
 
-# The zones' wall, standing just inside each zone (ZoneMarks.wall_outline). Hidden while a tear-out
-# is up, since its strips stand where the ground rests.
+# The zones' wall, standing just inside each zone (ZoneMarks.wall_outline). It rides a tear-out
+# (#1118): every frame a staging is up, and once more as it ends, each cell's strips are PLACED at
+# that cell's staged offset -- a position write, never the rebuild below (#893's place-don't-rebuild).
 func _zone_wall_sync(om: OverlayManager) -> void:
 	var wanted := not om.drawn_zones.is_empty()
 
@@ -704,9 +706,13 @@ func _zone_wall_sync(om: OverlayManager) -> void:
 			return
 		_zone_walls = ZoneWalls.new()
 		add_child(_zone_walls)
-	_zone_walls.visible = wanted and not BoardSpace.staging_active()
+	_zone_walls.visible = wanted
 	if not wanted:
 		return
+	var staged := BoardSpace.staging_active()
+	if staged or _walls_staged:
+		_zone_walls.place()
+	_walls_staged = staged
 	var key: Array = [om.drawn_zones_version, ZoneMarks.art_version]
 	for layer: BoardOverlays.Layer in ZoneMarks.LAYER_OF_KIND.values():
 		key.append(overlays.layer_modulate(layer))   # a zone colour dragged on the Game tab
@@ -727,9 +733,10 @@ func _zone_wall_sync(om: OverlayManager) -> void:
 		var lit := om.is_lit(zone)
 		colour.a = ZoneMarks.ZONE_LIT_WALL_ALPHA if lit else ZoneMarks.ZONE_WALL_ALPHA
 		var height := (ZoneMarks.ZONE_LIT_WALL_HEIGHT if lit else ZoneMarks.ZONE_WALL_HEIGHT) * BoardSpace.CELL_SIZE
-		for segment in ZoneMarks.wall_outline(cells, board):
-			strips.append({"from": BoardSpace.trace_point(segment[0]) + lift,
-					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour, "height": height})
+		for strip in ZoneMarks.wall_outline(cells, board):
+			var points: PackedVector3Array = strip["points"]
+			strips.append({"cell": strip["cell"], "from": BoardSpace.trace_point(points[0]) + lift,
+					"to": BoardSpace.trace_point(points[1]) + lift, "colour": colour, "height": height})
 	_zone_walls.build(strips, ZoneMarks.ZONE_SHIMMER_SPEED)
 
 
