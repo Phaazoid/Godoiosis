@@ -299,11 +299,13 @@ func _sync_ground() -> void:
 
 
 # The snow's own ground decal, on the same rule: rebuilt when the board or the cover it paints changes.
+# Its relief rides the same decal as a normal map, and none at all at relief 0.
 func _sync_snow_ground() -> void:
 	if grid == null:
 		return
-	var key := hash([_mask_versions.slice(0, 3), _look.snow_cover, _look.snow_frost, _look.snow_flecks,
-			_look.snow_color])
+	var key := hash([_mask_versions.slice(0, 3), _look.snow_cover, _look.slope_cover, _look.snow_frost,
+			_look.snow_flecks, _look.snow_color, _look.snow_relief, _look.relief_softness, _look.snow_bumps,
+			_look.bump_size])
 	if key == _snow_key:
 		return
 	if _snow_key != 0:
@@ -315,8 +317,14 @@ func _sync_snow_ground() -> void:
 	_snow_key = key
 	_fit(_snow_cover)
 	_fit(_caps)
-	_snow_cover.texture_albedo = ImageTexture.create_from_image(SnowGround.paint_cover(grid, _rect,
-			_look.snow_cover, _look.snow_frost, _look.snow_flecks, _look.snow_color))
+	var cover := SnowGround.paint_cover(grid, heights, _rect, _look.snow_cover, _look.slope_cover,
+			_look.snow_frost, _look.snow_flecks, _look.snow_color)
+	_snow_cover.texture_albedo = ImageTexture.create_from_image(cover)
+	_snow_cover.texture_normal = null
+	if _look.snow_relief > 0.0:
+		_snow_cover.texture_normal = ImageTexture.create_from_image(SnowGround.relief(cover,
+				_rect.position * SnowGround.PX, _look.snow_relief, _look.relief_softness, _look.snow_bumps,
+				_look.bump_size))
 
 
 # A ground decal spans the board's rect, from well under the board to well over the tear-out's stage.

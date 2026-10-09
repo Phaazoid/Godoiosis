@@ -301,3 +301,23 @@ func test_no_weather_decal_reaches_a_wall() -> void:
 	for node in decals:
 		assert_float((node as Decal).normal_fade).override_failure_message(
 				"%s fades at %.2f, so it paints walls" % [node.name, (node as Decal).normal_fade]).is_greater(0.5)
+
+
+# The snow's relief (#1278) rides the cover decal as its normal map at any strength above 0, and is
+# taken off at 0. A slider repaint waits for the drag to settle, so each change is given two frames,
+# the second past the settle.
+func test_the_snow_relief_reaches_the_cover_and_zero_takes_it_off() -> void:
+	var mirror := _mirror()
+	var look := WeatherLook.for_kind(Weather.Kind.SNOW)
+	var was := look.snow_relief
+	_scene.game.scenario_manager.current_weather = Weather.Kind.SNOW
+	look.snow_relief = 4.0
+	mirror._process(0.016)
+	var raised := mirror._snow_cover.texture_normal != null
+	look.snow_relief = 0.0
+	mirror._process(0.016)
+	mirror._process(WeatherMirror.COVER_SETTLE + 0.05)
+	var flat := mirror._snow_cover.texture_normal == null
+	look.snow_relief = was
+	assert_bool(raised).override_failure_message("a snow with relief drew a flat cover").is_true()
+	assert_bool(flat).override_failure_message("a relief of 0 left the cover raised").is_true()
