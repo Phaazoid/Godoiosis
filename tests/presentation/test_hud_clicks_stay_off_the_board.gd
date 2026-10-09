@@ -168,13 +168,16 @@ func test_a_click_on_the_corner_text_stays_on_the_hud() -> void:
 	game.refresh_mission_status()
 	var unit := await _aim(["Swing"])
 	var panel: MissionStatusPanel = game.mission_status_panel
-	var header := panel._rows.get_child(0) as Control
-	var lines: Array[Control] = [header, panel._report_hint, panel._version_label]
-	for line in lines:
+	var lines := {
+		"the objectives header": panel._rows.get_child(0) as Control,
+		"the F3 sign": panel._report_hint,
+		"the version stamp": panel._version_label,
+	}
+	for what: String in lines:
+		var line: Control = lines[what]
 		assert_bool(line.is_visible_in_tree()).override_failure_message(
-				"%s is not on screen to click" % line.name).is_true()
+				"%s is not on screen to click" % what).is_true()
 		await _click(line)
-		_assert_board_untouched(String(line.name))
-		assert_bool(_aiming()).override_failure_message(
-				"a click on %s closed the aim" % line.name).is_true()
+		_assert_board_untouched(what)
+		assert_bool(_aiming()).override_failure_message("a click on %s closed the aim" % what).is_true()
 	assert_int(_queued(unit)).is_equal(0)
