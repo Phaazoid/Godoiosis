@@ -682,15 +682,14 @@ func _sync_staging() -> void:
 # nothing (Experiments has no signal, and a knob writes a static), so this polls both and publishes the
 # EFFECTIVE state: BoardSpace for everything placed on a water cell, the shader global for the drop
 # itself. Flipping the flag rewrites every column, because the top block of each flat water column
-# changes item; moving the knob only re-pushes.
+# changes item; moving the knob only re-pushes. One push site serves both, since a flipped flag also
+# moves the effective drop.
 func _poll_basin() -> void:
 	var on := Experiments.is_on(Experiments.Flag.WATER_BASIN)
 	var drop := BoardSpace.basin_depth() if on else 0.0
 	if on != BoardSpace.basin_on():
 		BoardSpace.set_basin_on(on)
-		_board_mirror.push_basin_drop(drop)
 		_board_mirror.sync(game.grid, game.board_heights)
-		return
 	if not is_equal_approx(drop, _board_mirror.basin_drop_pushed):
 		_board_mirror.push_basin_drop(drop)
 		BoardSpace.touch_basin()
