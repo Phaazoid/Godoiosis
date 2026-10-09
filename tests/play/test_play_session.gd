@@ -258,7 +258,7 @@ func _rain_session() -> Array:
 	var dst: Dictionary = BoardBuilder.build(self, "RainDst")
 	auto_free(dst.root)
 	await BoardBuilder.apply_scenario(dst, scenario)
-	return [PlaySession.new(dst), sky, rules]
+	return [PlaySession.new(dst), sky, rules, dst]
 
 func test_the_headless_turn_end_soaks_under_the_loaded_weather() -> void:
 	var made: Array = await _rain_session()
@@ -287,6 +287,14 @@ func test_the_headless_preview_forecasts_the_weathers_soak() -> void:
 	if rows.size() != 1:
 		return
 	assert_str(str((rows[0] as Dictionary).get("description"))).contains(Weather.display_name(sky))
+
+# The OTHER headless board: the builder's board_source, which the AI and cohesion read. The preview
+# above resolves through the session's own, so it cannot see this one drop the weather.
+func test_the_headless_board_source_sees_the_loaded_weather() -> void:
+	var made: Array = await _rain_session()
+	var dst: Dictionary = made[3]
+	var board: BoardContext = dst.squad_manager.board_source.call()
+	assert_int(board.weather).is_equal(made[1])
 
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
