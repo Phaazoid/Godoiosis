@@ -2092,7 +2092,7 @@ nothing unwound — the same shape `aim_along` has, one axis across.
 **THE FLOOR IS ON THE DOLLY'S OWN CONTRIBUTION, NEVER ON THE TOTAL, and that distinction is the
 whole care in this slice.** This rig has **no zoom-in floor on the wheel** by dev ruling (asked
 twice, *"please remove it entirely"*) — scrolling in past the aim point takes the camera through
-its target to look back, which is his call for *his hand*, and that ruling keeps its scope now that
+its target to look back, which is his call for *his hand* (since #1280 a notch SCALES the distance, so the wheel approaches without crossing; `set_zoom` is still floorless, so this arm's reason stands), and that ruling keeps its scope now that
 the wheel's scope shrank: outside playback. Under playback the floor guards the DIRECTED base the
 same way it guarded the player's: a base already closer than `DOLLY_FLOOR` — a trained distance
 tuned tight — gets **no push-in** rather than being shoved back OUT to the floor, which would be

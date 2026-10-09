@@ -232,8 +232,8 @@ both views, and the dev took the one-channel version.
 
 **A third shape, and it is the one #394 was filed without.** That ticket asked whether a value can live
 in both places — dev default and player setting — and the [#422](https://github.com/Phaazoid/Godoiosis/issues/422)
-ruling answered *no, it moves*. The camera-handling knobs are neither: the dev authors `pan_speed`,
-`orbit_sensitivity`, `zoom_step` and `smoothing`, and the player picks a **step that multiplies them**.
+ruling answered *no, it moves*. The camera-handling knobs are neither: the dev authors `pan_speed_screens`,
+`orbit_sensitivity`, `zoom_step_share` and `smoothing` (renamed from `pan_speed`/`zoom_step` by #1280, when both became per-screen shares), and the player picks a **step that multiplies them**.
 So nothing leaves `GameKnobs`, Save-to-source is untouched, and the ticket's own framing — *five rows
 move to `PlayerSettings`* — is wrong about what shipped.
 
