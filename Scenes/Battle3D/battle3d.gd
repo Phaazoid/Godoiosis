@@ -257,9 +257,13 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	_unit_mirror.home_yaw_source = _rig.home_yaw_degrees
 	# Whether a cell's ground is water, for the damp blot (#358): the AUTHORED kind, frozen or not.
 	_unit_mirror.water_at = func(cell: Vector2i) -> bool:
 		return GridUtils.get_terrain_kind_at_cell(game.grid, cell) == Terrain.Kind.WATER
+	# Who is standing IN the water rather than on it, for the basin's wading (#654). One board per frame,
+	# and only while the experiment is on.
+	_unit_mirror.board_source = func() -> BoardContext: return game._board()
 	# The impact wire (#520 diff 2b): the mirror sees the blow land, and this decides what it is
 	# worth. It bound straight to _rig.shake until 2c gave a killing blow a second consequence --
 	# the freeze -- which is not the rig's to do, so the decision moved here where both are reachable.
@@ -691,6 +695,23 @@ func _sync_staging() -> void:
 			_board_mirror.floor_row_of(game.board_heights))
 
 
+# THE WATER BASIN (#654), an Experiment. Its flag and its depth knob live in two stores that announce
+# nothing (Experiments has no signal, and a knob writes a static), so this polls both and publishes the
+# EFFECTIVE state: BoardSpace for everything placed on a water cell, the shader global for the drop
+# itself. Flipping the flag rewrites every column, because the top block of each flat water column
+# changes item; moving the knob only re-pushes. One push site serves both, since a flipped flag also
+# moves the effective drop.
+func _poll_basin() -> void:
+	var on := Experiments.is_on(Experiments.Flag.WATER_BASIN)
+	var drop := BoardSpace.basin_depth() if on else 0.0
+	if on != BoardSpace.basin_on():
+		BoardSpace.set_basin_on(on)
+		_board_mirror.sync(game.grid, game.board_heights)
+	if not is_equal_approx(drop, _board_mirror.basin_drop_pushed):
+		_board_mirror.push_basin_drop(drop)
+		BoardSpace.touch_basin()
+
+
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
@@ -1015,6 +1036,7 @@ func _process(_delta: float) -> void:
 	_rig.set_process_unhandled_input(live)
 	_tick_pass_clock(_delta)
 	_sync_terrain_while_authoring()
+	_poll_basin()
 	_drive_transition(_delta)
 	_sync_staging()
 	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the

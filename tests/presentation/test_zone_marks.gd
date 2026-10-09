@@ -105,12 +105,18 @@ func test_the_wall_outline_stands_inside_its_zone_and_closes_round_the_notch() -
 		assert_int(strips.size()).is_equal(OverlayManager.outline_segments(shape, null).size())
 		var starts: Array[Vector3] = []
 		for strip in strips:
-			starts.append(strip[0])
+			starts.append((strip["points"] as PackedVector3Array)[0])
 		for strip in strips:
-			for point in strip:
+			var points: PackedVector3Array = strip["points"]
+			for point in points:
 				assert_bool(_strictly_inside(point, shape)).override_failure_message(
 						"a wall end at %s stands on or outside the zone %s" % [point, shape]).is_true()
-			var end := strip[1]
+			# The cell a strip names is the zone cell it stands in -- whose ground it rides (#1118).
+			var mid := (points[0] + points[1]) * 0.5
+			assert_that(strip["cell"]).is_equal(Vector2i(floori(mid.x), floori(mid.z)))
+			assert_bool(shape.has(strip["cell"])).override_failure_message(
+					"a strip names %s, which is not in the zone" % [strip["cell"]]).is_true()
+			var end := points[1]
 			assert_bool(starts.any(func(start: Vector3) -> bool: return start.is_equal_approx(end))) \
 					.override_failure_message("a strip ends at %s and none starts there: the ring is open" % end) \
 					.is_true()

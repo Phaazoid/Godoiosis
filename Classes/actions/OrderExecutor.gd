@@ -53,11 +53,34 @@ var executing_plan: ResolvedPlan = null
 var effect_pass_subjects: Dictionary[int, bool] = {}
 
 # ==============================================================================
+#  A board swapped out from under a pass (#661)
+# ==============================================================================
+
+# What a pass's own end releases, released for a pass that will never reach it. ScenarioManager's
+# clear_board calls it: a pass suspended on a unit the teardown frees never resumes, so without this
+# executing_plan stays set and refresh_action_queue refuses every board after it.
+func abandon_pass() -> void:
+	executing_plan = null
+	effect_pass_subjects.clear()
+	_downed_pending.clear()
+
+
+# Every coroutine here takes the board's generation on entry and asks this after each await: a pass
+# that DOES resume after a swap (a beat's timer, a pan) must stop rather than play on the new board.
+func _board_now() -> int:
+	return game.scenario_manager.board_generation
+
+
+func _board_gone(board: int) -> bool:
+	return board != game.scenario_manager.board_generation
+
+# ==============================================================================
 #  Resolving a plan
 # ==============================================================================
 
 func execute_orders(unit):
 	var squad = unit.squad
+	var board := _board_now()
 
 	game.squad_manager.validate_squad_plan(squad)
 	game.overlay_manager.redraw_planned_paths()
@@ -180,6 +203,8 @@ func execute_orders(unit):
 	# Variant; an Object cast degrades to null rather than throwing, and the phase treats null the
 	# way it treats a player pass.
 	await _execute_move_phase(move_actions, plan, sheet, is_ai, beat, squad as Squad)
+	if _board_gone(board):
+		return
 
 	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
 	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
@@ -193,6 +218,8 @@ func execute_orders(unit):
 	# Gated on the PROFILE too, which is what makes "displacement is provably zero with the cinematic
 	# off" a property rather than a promise.
 	await _stage_the_fight(sheet)
+	if _board_gone(board):
+		return
 
 	# attack_playback(), not plan.attacks: a shot a SHOVE set off plays right after the volley that
 	# threw somebody into it (#567), where the whole batch of them used to play ahead of the attacks
@@ -200,18 +227,26 @@ func execute_orders(unit):
 	# playback and never written back: a triggered shot inside plan.attacks would be counter-bait.
 	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases,
 			profiles)
+	if _board_gone(board):
+		return
 	_apply_cell_effects(plan.cell_effects)
 	await _play_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND))   # the ice just went (#922)
+	if _board_gone(board):
+		return
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of. It is a COMBAT beat under
 	# COMBAT_ONLY (dev, 2026-08-28), so it keeps the cinematic's hold there.
 	var turnover := sheet.turnover()
 	await Pacing.beat(self, Pacing.duration_for(turnover, Pacing.profile_for(turnover), is_ai) \
 			if turnover != null else 0.0)
+	if _board_gone(board):
+		return
 	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), is_ai),
 			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)),
 			_beat_lingers(sheet.volleys(true)), _beat_emphases(sheet.volleys(true)),
 			_beat_profiles(sheet.volleys(true)))
+	if _board_gone(board):
+		return
 	# The tail gets the same treatment the volleys do (dev 2026-08-26): a CODA beat per ORDER, so
 	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
 	# flat beat and one camera position.
@@ -232,6 +267,8 @@ func execute_orders(unit):
 		# question asked above is whether we get as far as asking.
 		if not Pacing.coda_earns_a_beat(type, is_ai):
 			await _execute_action_sequence(batch)
+			if _board_gone(board):
+				return
 			continue
 		var codas := sheet.codas(type)
 		# MERGED with the volley schedules hoisted above, because an arm-fired shot's beat is an
@@ -242,9 +279,15 @@ func execute_orders(unit):
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai).merged(holds),
 				_beat_subjects(codas).merged(subjects), lines, _beat_lingers(codas).merged(lingers),
 				_beat_emphases(codas).merged(emphases), _beat_profiles(codas).merged(profiles))
+		if _board_gone(board):
+			return
 	# The melts only a counter or a tail shot made (#922) -- the pass has settled, and the stage is still up.
 	await _play_sinks(plan.sinks_at(SinkAction.Moment.PASS_END))
+	if _board_gone(board):
+		return
 	await _bring_the_board_home()   # the tiles travel back into their sockets (#521 slice B)
+	if _board_gone(board):
+		return
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
 	# _end_squad_turn because everything below is synchronous (no frame renders between them) and
@@ -329,6 +372,7 @@ func _invalid_plan_summary(squad: Squad) -> String:
 # so its ghost and arrow correctly stay up through the interrupt.
 func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 		is_ai: bool, beat: float, squad: Squad):
+	var board := _board_now()
 	# Framed across BOTH ENDS of the walk rather than centred on the walker (dev, scratchpad
 	# 2026-08-26: "instead of just centering on the unit, it should try to show both their start and
 	# end position in the initial shot"). Computed ONCE and returned to after every interrupt (#567,
@@ -364,6 +408,8 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 	# Pacing states -- one crosses the board, one comes back to a walk already on screen.
 	await _frame_the_walk(span, walk_profile,
 			Pacing.AI_SQUAD_PAN if is_ai else Pacing.PLAYBACK_PAN)
+	if _board_gone(board):
+		return
 	# ...and the plan is READ inside the shot that frames it (#118, re-homed by #987). It was a beat
 	# in AIController taken before the camera had arrived; here the squad's whole move is already in
 	# frame when the hold starts. Zero for a player pass -- they authored the plan and pressed
@@ -373,7 +419,7 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 	if is_ai and squad != null and not game.squad_manager.only_hold_actions(squad):
 		plan_read = Pacing.AI_PLAN_READ
 	await Pacing.beat(self, plan_read)
-	if actions.is_empty():
+	if actions.is_empty() or _board_gone(board):
 		return
 
 	var pending := _walk_interrupts(plan, actions)
@@ -421,6 +467,8 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 				var shots: Array = next["shots"]
 				await _execute_action_sequence(shots, beat, holds, subjects, lines,
 						lingers, emphases, profiles)
+				if _board_gone(board):
+					return
 				mover.release()
 				pending.pop_front()
 				# The walk is still running, so the camera goes back to it (dev 2026-08-28). Skipped
@@ -429,6 +477,8 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 				# A soaking alone played nothing, so nothing left the walk to come back from.
 				if not all_complete and not shots.is_empty():
 					await _frame_the_walk(span, walk_profile, Pacing.PLAYBACK_PAN)
+					if _board_gone(board):
+						return
 				continue
 
 		if all_complete and pending.is_empty():
@@ -458,6 +508,8 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			return
 
 		await get_tree().process_frame
+		if _board_gone(board):
+			return
 
 
 # Where the camera sits for the walk (#520): the MIDPOINT of the walk's span in 2D, with the span
@@ -541,6 +593,7 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		profiles: Dictionary = {}):
 	if actions.is_empty():
 		return
+	var board := _board_now()
 
 	for action in actions:
 		# With a hold schedule, only the action that OPENS a beat pauses -- one blast is one moment
@@ -576,12 +629,16 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			await _settle_then(hold)
 		else:
 			await Pacing.beat(self, hold)
+		if _board_gone(board):
+			return
 		_listen_for_the_blow(action)
 		action.begin_execution()
 		action.execute()
 
 		while not action.execution_complete:
 			await get_tree().process_frame
+			if _board_gone(board):
+				return
 		# ...and the LINGER, the one pause in this file that lands AFTER (#520, dev 2026-08-27).
 		# execution_complete means the lunge, the shove and the fall are done -- it does NOT mean the
 		# health cubes have finished bursting, because those are thrown by UnitMirror's own HP poll
@@ -593,6 +650,8 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
 		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
 		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
+		if _board_gone(board):
+			return
 
 
 # Wait until the 3D camera has finished easing onto the beat's shot (#1132 follow-up). The rig says so
@@ -731,11 +790,14 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 	# scaling the cliff face on the way in. It is also what the mirror reads as "frame the WIDE
 	# shot", so the tear-out is watched from a distance that holds all of it.
 	game.camera_controller.shot_cells = cells.duplicate()
+	var board := _board_now()
 	await game.camera_controller.pan_to_position(_stage_centre(cells), Pacing.PLAYBACK_PAN)
 	# The board holds still, intact, before it comes apart. BEFORE stage(), not after: staging is
 	# what puts the cells in the diorama, and a beat between that and begin_flight would hold them
 	# in the sky rather than on the board. Counted from the camera's ARRIVAL, and at least the settle.
 	await _settle_then(Pacing.TEAR_OUT_BRACE)
+	if _board_gone(board):
+		return
 	BoardSpace.stage(cells, BoardSpace.lift_offset())
 	await _play_transition(cells, true)
 	# ...and the assembled diorama holds before the first blow (dev, 2026-08-28: the action used to
@@ -803,8 +865,11 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 	# last tile lands -- it covers the camera's drop home -- so awaiting bare total would tear the
 	# driver down with the screen still white and the camera still up. The entry already contains
 	# its flash unless the knobs are tuned shorter than one; entry_total is that insurance.
+	var board := _board_now()
 	await Pacing.beat(self,
 			StagingFlight.entry_total(plan) if entering else StagingFlight.exit_total(plan))
+	if _board_gone(board):
+		return
 	# Ended HERE rather than left to the driver, and that is what makes the property hold in every
 	# run: headless the await returns without a single frame, so nothing ever advanced the flight
 	# and the tiles would still be sitting at their opening offsets. Every existing staging
@@ -816,6 +881,7 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 # teleport the board home and leave a transition animating cells nothing was displacing any more.
 func _bring_the_board_home() -> void:
 	var staged := BoardSpace.staged_cells()
+	var board := _board_now()
 	if not staged.is_empty():
 		# THE DEATH SHOW FINISHES BEFORE ANYTHING MOVES (#602 round 8, dev: "the camera should
 		# never look at where it forms"): release the follow so the depth channel answers the show
@@ -830,12 +896,18 @@ func _bring_the_board_home() -> void:
 		# start dropping while the camera was still on its way up.
 		game.camera_controller.follow(null)
 		await _wait_for_the_camera_to_come_home()
+		if _board_gone(board):
+			return
 		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
 		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
 		# last blow is not immediately swept away by the tiles going home. AFTER the climb, so it is
 		# a beat on the diorama rather than a beat spent travelling -- and after the camera arrives.
 		await _settle_then(Pacing.TEAR_OUT_AFTERMATH)
+		if _board_gone(board):
+			return
 		await _play_transition(staged, false)
+		if _board_gone(board):
+			return
 	BoardSpace.clear_staging()
 	# The stage leaves the air the moment the ground does. The release edge clears it too, but the
 	# tail of execute_orders still runs under the lock -- a stage surviving to there would hold the
@@ -951,9 +1023,12 @@ func _beat_lines(beats: Array[BeatSheet.Beat]) -> Dictionary:
 # goes under, then the same look the end-of-turn burn gives a unit the ground hurt. The stage the
 # deposits' beat staged is still up, so the camera stays where it is.
 func _play_sinks(sinks: Array[SinkAction]) -> void:
+	var board := _board_now()
 	for sink in sinks:
 		sink.execute()
 		await Pacing.beat(self, after_the_blow(sink, Pacing.ENVIRONMENT_HOLD))
+		if _board_gone(board):
+			return
 
 
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
@@ -1007,16 +1082,21 @@ func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
 	# will touch -- so the units still to come are already readable when the camera reaches them.
 	for hit in hits:
 		effect_pass_subjects[hit.actor.get_instance_id()] = true
+	var board := _board_now()
 	for hit in hits:
 		await game.camera_controller.pan_to(hit.actor, Pacing.ENVIRONMENT_PAN)
 		# ...and nothing burns until the camera has stopped (#1132, dev 2026-10-07: "always").
 		await _settle_then(0.0)
+		if _board_gone(board):
+			return
 		# The hit lands BEFORE the hold (dev, 2026-08-26: "the point of the linger is to show that
 		# something happened"). The other way round, the pause watched a unit at full health and the
 		# camera left as the cubes burst. It is also what keeps the mission banner off a kill that is
 		# not on screen yet -- game.end_turn calls mission_controller.check the moment this returns.
 		hit.execute()
 		await Pacing.beat(self, Pacing.ENVIRONMENT_HOLD)
+		if _board_gone(board):
+			return
 	effect_pass_subjects.clear()
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	_process_downed_pending()

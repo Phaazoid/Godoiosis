@@ -6,8 +6,11 @@
 // per-cell node (#324's fire). Waves are driven off WORLD position, which is what makes a lake
 // read as one body of water rather than as N tiles each rippling privately.
 //
-// Two rules it must not break. It never DISPLACES a vertex -- BoardSpace.lie_on, the hover bracket
-// and every markup quad assume a flat top face at a known Y. And it stays OPAQUE, so it owes none
+// Two rules it must not break. It never DISPLACES a vertex per frame or per fragment --
+// BoardSpace.lie_on, the hover bracket and every markup quad assume a flat top face at a known Y. The
+// one displacement is the basin experiment's (#654): a basin twin drops its top half by a single
+// uniform, flat, and BoardSpace.basin_drop() reports that drop to every reader that places something
+// on the cell, so the top is still flat at a Y everyone knows. And it stays OPAQUE, so it owes none
 // of the depth-sorting checks presentation-effects.md catalogues for a new transparent surface.
 //
 // SHALLOW vs DEEP arrives per CELL, in the board mask's green channel, derived by BoardMirror from
@@ -147,6 +150,15 @@ global uniform float water_board_shore_range;
 // water_depth_range, applied after this decodes.
 global uniform float water_board_mask_range;
 
+// THE BASIN (#654, an Experiment): how far a column's TOP block drops its top half, so the water sits
+// below the ground around it and the ground's own side faces show as a bank. Pushed by BoardMirror as
+// the EFFECTIVE value -- the depth knob while Experiments.WATER_BASIN is on, zero otherwise -- so it
+// is derived rather than tuned here. Only a basin twin reads it: the blocks under the top one must
+// keep their walls whole.
+global uniform float water_basin_drop;
+// Set on the basin twins alone (gen_lookdev_assets); every other water item leaves it false.
+uniform bool basin_surface = false;
+
 // THE SHOCK CRAWL (#887): what a shock's current looks like IN the water, under the bolts drawn
 // above it. Not board data and not water tuning -- it is an EVENT, pushed by the effect while one
 // is playing and dormant otherwise, which is why it names neither water type and has no per-type
@@ -203,6 +215,11 @@ varying vec2 cell_xz;
 
 
 void vertex() {
+	// Everything above the block's middle -- its top, the rim and the top edge of its walls -- drops
+	// together, so a twin's walls stay whole; their bottom edge still meets the block below.
+	if (basin_surface && VERTEX.y > 0.0) {
+		VERTEX.y -= water_basin_drop;
+	}
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// NORMAL is VIEW space by the time fragment() sees it, and "is this face up" is a world
 	// question, so the world normal travels as its own varying.

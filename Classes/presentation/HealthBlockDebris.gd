@@ -67,7 +67,7 @@ func burst(positions: Array[Vector3], colors: PackedColorArray, facing: Basis,
 		cube.mesh = mesh
 		cube.visible = true
 		cube.global_position = positions[i]
-		cube.global_rotation = Vector3.ZERO
+		cube.global_rotation = facing.orthonormalized().get_euler()   # on the grid's own axes (#562)
 		var material: StandardMaterial3D = _materials[slot]
 		material.albedo_texture = UnitHealthBar.cage_texture()
 		# A colour PER CUBE, because a killing hit throws the whole grid at once and the red sockets
@@ -195,7 +195,8 @@ func _surface_under(position: Vector3) -> float:
 	if heights == null:
 		return 0.0
 	var cell := BoardSpace.flat(BoardSpace.cell_of(position))
-	return BoardSpace.surface_height_at(cell, position.x, position.z, heights)
+	# Less the water basin's drop (#654), so a cube bounces on the water rather than above it.
+	return BoardSpace.surface_height_at(cell, position.x, position.z, heights) - BoardSpace.basin_drop(cell)
 
 
 func _half_cube() -> float:

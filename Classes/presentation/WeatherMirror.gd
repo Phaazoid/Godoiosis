@@ -159,19 +159,26 @@ func _sync_mask() -> void:
 		return
 	var rect := grid.get_used_rect()
 	var versions := [rect, grid.dirty.version, heights.dirty.version if heights != null else 0,
-			BoardSpace.staging_version]
+			BoardSpace.staging_version, BoardSpace.basin_version]
 	# A tear-out moves cells between announcements (#521 slice B), and only placing it is cheap -- the
 	# mask is one texel per cell, so it is re-read every frame the flight is in the air.
 	if versions == _mask_versions and not BoardSpace.flight_active():
 		return
 	_mask_versions = versions
 	_rect = rect
-	var image := WeatherMask.build(grid, heights, rect, BoardSpace.staged_offset)
+	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
 	var texture := ImageTexture.create_from_image(image)
 	for material: ShaderMaterial in [_rain_process, _splash_process]:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
+
+
+# Where a cell is DRAWN relative to its rules surface: lifted onto the stage by a tear-out (#521), and
+# lowered into its basin when the water experiment is on (#654) -- that experiment's rule is that every
+# reader which lays something on a water cell subtracts the drop, and a raindrop lands on one.
+static func drawn_offset(cell: Vector2i) -> Vector3:
+	return BoardSpace.staged_offset(cell) - Vector3(0.0, BoardSpace.basin_drop(cell), 0.0)
 
 
 # The two ground decals, rebuilt when the board or the look they paint changes. A decal's texture is

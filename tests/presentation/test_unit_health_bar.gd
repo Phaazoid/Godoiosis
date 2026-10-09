@@ -231,9 +231,39 @@ func test_held_in_place_the_grid_sits_on_the_boards_own_axes() -> void:
 	await _settle()
 	var bar := _unit_mirror.bar_for(unit)
 	assert_bool(bar.visible).is_true()
-	assert_float(bar.global_rotation.y).override_failure_message(
-			"the readout turned even though it is meant to be held in place").is_equal_approx(
-			0.0, 0.001)
+	# The board's own axes are the LEVEL's (#562): the rig's home yaw, read rather than assumed 0.
+	var rig: CameraRig3D = _scene.get_node("CameraRig")
+	assert_float(absf(angle_difference(bar.global_rotation.y, deg_to_rad(rig.home_yaw_degrees())))) 			.override_failure_message("the readout turned even though it is meant to be held in place") 			.is_less(0.001)
+
+
+# #562: a board that AUTHORS its opening angle holds its readouts square to THAT angle, not to world
+# yaw 0 and not to wherever the player has since orbited. The yaw is this case's own, authored through
+# the real round trip (capture -> apply -> fit_camera -> pose), so no shipped board is pinned.
+func test_held_in_place_the_grid_squares_to_the_levels_authored_angle() -> void:
+	_unit_mirror.hp_grid_faces_camera = false
+	var start := CameraPose.new()
+	start.aim = Vector3(4.0, 1.0, 4.0)
+	start.yaw_degrees = 40.0
+	start.distance = 14.0
+	var manager: ScenarioManager = game.scenario_manager
+	manager.current_camera_start = start
+	manager.apply_scenario(manager.capture_scenario("held_yaw"))
+	await _settle()
+	var rig: CameraRig3D = _scene.get_node("CameraRig")
+	assert_float(rig.home_yaw_degrees()).override_failure_message(
+			"fixture: the authored start never became the rig's home").is_equal_approx(40.0, 0.001)
+	# ...then orbit AWAY, so a readout that followed the live camera would fail as well. The bar is
+	# up by PREFERENCE (EVERY, this case's declared branch) rather than by hover: the camera just moved,
+	# and a hover would race the pointer poll that re-derives on camera movement.
+	rig.rotation_degrees.y = 100.0
+	rig._target_yaw_degrees = 100.0
+	_set_bars(PlayerSettings.HealthBars.EVERY)
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).is_true()
+	assert_float(rad_to_deg(bar.global_rotation.y)).override_failure_message(
+			"a held readout is not square to the level's authored angle").is_equal_approx(40.0, 0.01)
 
 
 func test_the_knob_puts_the_grid_back_on_the_camera_view_plane() -> void:

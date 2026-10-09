@@ -400,10 +400,15 @@ func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
 	planned_squad_count = 0
 	handoff_squad = null
 	regroup(faction, game.squad_manager, game._board())
+	# The board this turn is for (#661). A swap mid-turn frees every squad below, and the turn must
+	# end there rather than plan on, or end_turn, the board that replaced it.
+	var generation: int = game.scenario_manager.board_generation
 	var planned: Squad = null
 	if handoff > 0.0:
 		planned = await _plan_during_handoff(faction, handoff)
 		handoff_squad = planned
+		if generation != game.scenario_manager.board_generation:
+			return
 	for squad in actable_squads(faction, game.squad_manager):
 		# The mission can end mid-turn -- this squad's pass may have wiped the player. Stop
 		# issuing orders behind the end-of-mission card (#96).
@@ -434,6 +439,8 @@ func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
 			plan_squad(squad, board, game.squad_manager)
 			planned_squad_count += 1
 		await game.order_executor.execute_orders(squad.get_leader())
+		if generation != game.scenario_manager.board_generation:
+			return
 
 	if game.mission_controller.is_over():
 		return
@@ -444,8 +451,11 @@ func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
 # The frame wait is what lets the banner draw before the planning stalls the frame.
 func _plan_during_handoff(faction: Team.Faction, handoff: float) -> Squad:
 	var started := Time.get_ticks_msec()
+	var generation: int = game.scenario_manager.board_generation
 	if DisplayServer.get_name() != "headless":
 		await get_tree().process_frame
+		if generation != game.scenario_manager.board_generation:
+			return null
 	var first: Squad = null
 	for squad in actable_squads(faction, game.squad_manager):
 		if is_squad_actable(squad, faction):

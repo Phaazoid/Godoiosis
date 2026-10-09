@@ -887,6 +887,12 @@ func pose(aim: Vector3, yaw_degrees: float, distance: float, bounds: AABB) -> vo
 	drop_stashed_view()
 
 
+# Which way this LEVEL is meant to be looked at: the opening shot's yaw, authored (pose) or the
+# scene's own (_ready). What R returns to, and what a held-in-place readout faces (#562).
+func home_yaw_degrees() -> float:
+	return _home_yaw_degrees
+
+
 # The half of frame() that is about the BOARD rather than the shot: how far out you may
 # zoom and how far you may pan. Split out for #231, where painting a tile grows the board
 # and the limits must follow WITHOUT the camera moving — the 2D twin

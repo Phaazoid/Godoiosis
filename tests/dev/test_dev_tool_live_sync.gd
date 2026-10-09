@@ -25,7 +25,6 @@ const EDITED_POWER := 42
 
 
 func after_test() -> void:
-	await await_idle_frame()   # #93/#101 orphan workaround
 	for path in [TEMP_PATH, OTHER_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)

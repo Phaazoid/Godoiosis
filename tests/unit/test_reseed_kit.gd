@@ -21,7 +21,6 @@ const VARIANT_PATH := "user://__test_reseed_variant.tres"
 
 
 func after_test() -> void:
-	await await_idle_frame()   # #93/#101 orphan workaround
 	for path in [CHARACTER_PATH, VARIANT_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)

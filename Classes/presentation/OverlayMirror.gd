@@ -52,6 +52,8 @@ var _heights_moved := false
 # copy of what it holds.
 var _last_staging_version := -1
 var _staging_moved := false
+var _last_basin_version := -1
+var _basin_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by way of #1069
@@ -67,6 +69,7 @@ const GLOW_TAPER: Array[float] = [0.0, 0.383, 0.707, 0.924, 1.0, 0.924, 0.707, 0
 # knobs and the colours -- so a still board rebuilds nothing.
 var _zone_walls: ZoneWalls
 var _last_wall_key: Array = []
+var _walls_staged := false   # a staging was up last frame, so the wall owes one placement home (#1118)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
 # epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
@@ -89,6 +92,7 @@ func _process(_delta: float) -> void:
 	var om: OverlayManager = game.overlay_manager
 	_heights_moved = _poll_heights()   # once per frame, ahead of every diff that reads it
 	_staging_moved = _poll_staging()
+	_basin_moved = _poll_basin()
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
@@ -172,6 +176,17 @@ func _poll_staging() -> bool:
 	return true
 
 
+# Has the water basin moved since the last frame (#654) -- the experiment flipped, its depth knob was
+# dragged, or a cell started or stopped dipping? A fill diffs on its CELLS, which a dip leaves alone, so
+# its gate reads this (#308's law: gate on the store the render reads). Markers need nothing: they diff
+# on the positions _anchor computes, and _anchor subtracts the drop.
+func _poll_basin() -> bool:
+	if BoardSpace.basin_version == _last_basin_version:
+		return false
+	_last_basin_version = BoardSpace.basin_version
+	return true
+
+
 # Which cells are alight and which are dug in, each straight off its ONE enumeration form. Polled
 # rather than wired because a states_changed signal would fire inside the resolver's per-effect
 # loop and churn markers many times within a single pass; the poll coalesces a frame into one
@@ -238,7 +253,7 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	for cell in used:
 		cells.append(BoardSpace.of_cell(cell, _row_of(cell)))
 	cells.sort()
-	if not _heights_moved and _last_cells.get(layer, Array()) == cells:
+	if not _heights_moved and not _basin_moved and _last_cells.get(layer, Array()) == cells:
 		return
 	_last_cells[layer] = cells
 	overlays.set_cells(layer, cells, _heights())
@@ -471,7 +486,7 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 		if sprite.get_parent() == om.arrow_icon_overlay:
 			trails.append(entry)
 		elif sprite.get_parent() == om.projected_unit_overlay:
-			ghosts.append(_stands_for(entry, owner_of.get(sprite)))
+			ghosts.append(_stands_for(entry, owner_of.get(sprite), sprite.global_position))
 
 
 # The drop pointer (#431, replacing the #259 rework's stamped landing). THE RULE: a trail cell
@@ -694,8 +709,9 @@ func _zones(om: OverlayManager) -> void:
 	_zone_wall_sync(om)
 
 
-# The zones' wall, standing just inside each zone (ZoneMarks.wall_outline). Hidden while a tear-out
-# is up, since its strips stand where the ground rests.
+# The zones' wall, standing just inside each zone (ZoneMarks.wall_outline). It rides a tear-out
+# (#1118): every frame a staging is up, and once more as it ends, each cell's strips are PLACED at
+# that cell's staged offset -- a position write, never the rebuild below (#893's place-don't-rebuild).
 func _zone_wall_sync(om: OverlayManager) -> void:
 	var wanted := not om.drawn_zones.is_empty()
 
@@ -704,9 +720,13 @@ func _zone_wall_sync(om: OverlayManager) -> void:
 			return
 		_zone_walls = ZoneWalls.new()
 		add_child(_zone_walls)
-	_zone_walls.visible = wanted and not BoardSpace.staging_active()
+	_zone_walls.visible = wanted
 	if not wanted:
 		return
+	var staged := BoardSpace.staging_active()
+	if staged or _walls_staged:
+		_zone_walls.place()
+	_walls_staged = staged
 	var key: Array = [om.drawn_zones_version, ZoneMarks.art_version]
 	for layer: BoardOverlays.Layer in ZoneMarks.LAYER_OF_KIND.values():
 		key.append(overlays.layer_modulate(layer))   # a zone colour dragged on the Game tab
@@ -727,9 +747,10 @@ func _zone_wall_sync(om: OverlayManager) -> void:
 		var lit := om.is_lit(zone)
 		colour.a = ZoneMarks.ZONE_LIT_WALL_ALPHA if lit else ZoneMarks.ZONE_WALL_ALPHA
 		var height := (ZoneMarks.ZONE_LIT_WALL_HEIGHT if lit else ZoneMarks.ZONE_WALL_HEIGHT) * BoardSpace.CELL_SIZE
-		for segment in ZoneMarks.wall_outline(cells, board):
-			strips.append({"from": BoardSpace.trace_point(segment[0]) + lift,
-					"to": BoardSpace.trace_point(segment[1]) + lift, "colour": colour, "height": height})
+		for strip in ZoneMarks.wall_outline(cells, board):
+			var points: PackedVector3Array = strip["points"]
+			strips.append({"cell": strip["cell"], "from": BoardSpace.trace_point(points[0]) + lift,
+					"to": BoardSpace.trace_point(points[1]) + lift, "colour": colour, "height": height})
 	_zone_walls.build(strips, ZoneMarks.ZONE_SHIMMER_SPEED)
 
 
@@ -815,7 +836,8 @@ func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 		if ghost == null or ghost.texture == null:
 			continue
 		entries.append(_stands_for(
-				_marker(_anchor_px(ghost.global_position), ghost.texture, ghost.modulate), subject))
+				_marker(_anchor_px(ghost.global_position), ghost.texture, ghost.modulate), subject,
+				ghost.global_position))
 	# ...and the MOVE-HOVER stand-ins (#1069), which are their own store because they mean a move
 	# nobody has made. They have to be walked HERE or they are 2D-only -- this loop is the whole of
 	# how a ghost reaches the diorama, and the flat view is the dev-only one.
@@ -832,10 +854,14 @@ func _ghost_sync(om: OverlayManager, kb_ghosts: Array[Dictionary]) -> void:
 # A ghost entry that STANDS FOR a unit carries its id (#358), so the pool can dress it in that unit's
 # element states. Inside the entry, so `_last_ghosts` sees a change of who a ghost is (#308). The
 # move-hover stand-ins never get one: they mean a move nobody has made.
-func _stands_for(entry: Dictionary, subject: Variant) -> Dictionary:
+func _stands_for(entry: Dictionary, subject: Variant, px: Vector2) -> Dictionary:
 	var unit: Unit = (subject as Unit) if is_instance_valid(subject) else null
 	if unit != null:
 		entry["unit_id"] = unit.get_instance_id()
+		# A ghost of a unit that would stand IN the water wades the way the unit will (#654). Inside the
+		# entry, so `_last_ghosts` sees it change.
+		if unit_mirror != null:
+			entry["pos"] = (entry["pos"] as Vector3) - Vector3(0.0, unit_mirror.wade_at(unit, _cell_of_px(px)), 0.0)
 	return entry
 
 
@@ -872,6 +898,9 @@ func _anchor(cell: Vector2i) -> Dictionary:
 	# that cell went. One line, because this is the one answer for every marker in the file.
 	var surface := BoardSpace.surface_transform(cell, heights)
 	surface.origin += BoardSpace.staged_offset(cell)
+	# ...and down to the water, where the basin experiment has dropped it (#654). Markup lies ON the
+	# drawn surface; the knockback drop pointer reads the rules height itself and never comes here.
+	surface.origin.y -= BoardSpace.basin_drop(cell)
 	return {"surface": surface,
 			"corners": Vector4i.ZERO if heights == null else heights.corners_at(cell)}
 

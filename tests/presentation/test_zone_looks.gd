@@ -67,6 +67,18 @@ func _full(layer: BoardOverlays.Layer) -> Color:
 	return colour
 
 
+# Every strip of the wall, across its per-cell meshes (#1118), as one vertex list and one colour list.
+# Each piece holds whole strips, six vertices apiece, so the six-at-a-time walks below still line up.
+func _wall_arrays(walls: ZoneWalls) -> Array:
+	var vertices := PackedVector3Array()
+	var colours := PackedColorArray()
+	for piece in walls.pieces():
+		var arrays := piece.mesh.surface_get_arrays(0)
+		vertices.append_array(arrays[Mesh.ARRAY_VERTEX])
+		colours.append_array(arrays[Mesh.ARRAY_COLOR])
+	return [vertices, colours]
+
+
 # The flat view's rim sprites, leaving out its emblems.
 func _flat_rims() -> Array[Sprite2D]:
 	var rims: Array[Sprite2D] = []
@@ -131,8 +143,10 @@ func test_the_wall_stands_one_strip_per_outward_edge_and_goes_with_the_last_zone
 	assert_bool(walls.visible).is_true()
 	# The decal law walks what EXISTS, and the wall exists only once a zone is drawn -- so it is asked
 	# here: off the ground layer, or the damp blot darkens it.
-	assert_int(walls.layers & BoardOverlays.GROUND_RENDER_LAYER).override_failure_message(
-			"the wall is on the ground layer").is_equal(0)
+	assert_int(walls.pieces().size()).override_failure_message("the wall built no pieces").is_greater(0)
+	for piece in walls.pieces():
+		assert_int(piece.layers & BoardOverlays.GROUND_RENDER_LAYER).override_failure_message(
+				"the wall is on the ground layer").is_equal(0)
 	assert_int(walls.strip_count).override_failure_message(
 			"two cells side by side have six outward edges and a lone cell four").is_equal(10)
 	var none_left: Array[String] = ["cap", "ext"]
@@ -148,7 +162,7 @@ func test_the_wall_stands_inside_its_zone_never_on_its_border() -> void:
 	await _settle()
 	var walls := _mirror.get_node_or_null("ZoneWalls") as ZoneWalls
 	assert_object(walls).is_not_null()
-	var vertices: PackedVector3Array = walls.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var vertices: PackedVector3Array = _wall_arrays(walls)[0]
 	assert_int(vertices.size()).is_greater(0)
 	for vertex in vertices:
 		var at := vertex / BoardSpace.CELL_SIZE
@@ -207,6 +221,32 @@ func test_the_flat_view_wears_the_same_rim_on_every_zone_cell() -> void:
 			"the flat view and the diorama draw different rim art").is_true()
 
 
+# #1118: the wall RIDES a tear-out, cell by cell, instead of hiding for the whole staged fight. A staged
+# cell's strips sit at that cell's staged offset (where its ground is), a cell left on the board keeps
+# its strips where they were built, and both go home when the staging clears.
+func test_the_wall_rides_a_tear_out_cell_by_cell() -> void:
+	await _settle()
+	var walls := _mirror.get_node_or_null("ZoneWalls") as ZoneWalls
+	assert_object(walls).is_not_null()
+	var staged_cell := Vector2i(1, 1)
+	var left_cell := Vector2i(2, 1)
+	assert_object(walls.piece_at(staged_cell)).override_failure_message(
+			"fixture: no wall stands in the staged cell").is_not_null()
+	BoardSpace.stage([staged_cell] as Array[Vector2i], BoardSpace.lift_offset())
+	await _settle()
+	assert_bool(walls.visible).override_failure_message("the wall hid for the tear-out").is_true()
+	var lifted := BoardSpace.staged_offset(staged_cell)
+	assert_bool(lifted.is_zero_approx()).override_failure_message("fixture: the stage put nothing in the air").is_false()
+	assert_vector(walls.piece_at(staged_cell).position).override_failure_message(
+			"a staged cell's wall did not follow its ground").is_equal_approx(lifted, Vector3.ONE * 0.001)
+	assert_vector(walls.piece_at(left_cell).position).override_failure_message(
+			"a cell left on the board had its wall moved").is_equal_approx(Vector3.ZERO, Vector3.ONE * 0.001)
+	BoardSpace.clear_staging()
+	await _settle()
+	assert_vector(walls.piece_at(staged_cell).position).override_failure_message(
+			"the wall stayed in the air after the staging cleared").is_equal_approx(Vector3.ZERO, Vector3.ONE * 0.001)
+
+
 # A zone knob moves BOTH views: the diorama re-reads ZoneMarks every frame, and the flat sprites have to
 # be rebuilt with the new art -- the half a knob written for one view forgets.
 # A LIT zone (#955 part 3) stands its wall at the lit knobs and every other zone at the plain ones, in
@@ -216,9 +256,9 @@ func test_a_lit_zones_wall_stands_at_the_lit_knobs_and_the_rest_do_not() -> void
 	_om().set_lit_zone_kind(ZoneManager.Kind.CAPTURE)
 	await _settle()
 	var walls := _mirror.get_node_or_null("ZoneWalls") as ZoneWalls
-	var arrays := walls.mesh.surface_get_arrays(0)
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var arrays := _wall_arrays(walls)
+	var vertices: PackedVector3Array = arrays[0]
+	var colours: PackedColorArray = arrays[1]
 	var capture := _full(BoardOverlays.Layer.ZONE_CAPTURE)
 	var seen := {true: 0, false: 0}
 	for strip in vertices.size() / 6:
