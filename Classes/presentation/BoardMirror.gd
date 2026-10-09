@@ -1997,6 +1997,7 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 		return
 	built.set_meta(PROP_TILE_META, tile)
 	built.set_meta(PROP_CORNERS_META, corners)
+	_dress_for_snow(built)   # a prop built while it snows wears the snow at once
 	# Every tear-out bump drops and rebuilds a staged cell's prop, so a hide written only when the
 	# set changed would come back on the next landing (#1132) -- the builder asks too.
 	built.visible = _prop_shown(cell)
@@ -2497,8 +2498,6 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 		body.layers |= BoardOverlays.PROP_RENDER_LAYER   # the snow's cap decal settles on its top (#1269)
 	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	root.add_child(body)
-	if _prop_caps:
-		_show_cap(root)
 
 	var data := grid.get_cell_tile_data(cell)
 	if GridUtils.prop_lit_of(data):
@@ -2513,36 +2512,50 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 	return root
 
 
-# --- Snow caps on billboard props (#1269) -------------------------------------------------------
+# --- What the snow does to props (#1269, #1278) -------------------------------------------------
 #
 # A block prop takes its cap from the weather's decal (its body carries PROP_RENDER_LAYER); a BILLBOARD
 # prop stands upright, where a decal cannot settle, so it wears an overlay sprite of SnowCapArt over its
-# own art. set_prop_caps is the one door that shows them, and a prop built while they show gets one at
-# build. Built lazily: a board that never snows builds none. A tuft takes none -- tall grass pokes up
-# through the snow (declared, #1269).
+# own art, built lazily so a board that never snows builds none. Tall grass and flowers (tufts) are
+# BURIED: hidden while it snows (dev, #1278; #1274 is what pops up instead). set_snow is the one door,
+# and a prop built while it snows is dressed at build.
 
 const SNOW_CAP_NAME := "SnowCap"
 var _prop_caps := false
 var _prop_cap_color := Color.WHITE
+var _tufts_buried := false
 
 
-func set_prop_caps(shown: bool, color: Color) -> void:
-	if shown == _prop_caps and color == _prop_cap_color:
+func set_snow(caps: bool, cap_color: Color, buries_tufts: bool) -> void:
+	if caps == _prop_caps and cap_color == _prop_cap_color and buries_tufts == _tufts_buried:
 		return
-	_prop_caps = shown
-	_prop_cap_color = color
+	_prop_caps = caps
+	_prop_cap_color = cap_color
+	_tufts_buried = buries_tufts
 	for root: Node3D in _props.values():
-		_show_cap(root)
+		_dress_for_snow(root)
 
 
 func prop_caps_shown() -> bool:
 	return _prop_caps
 
 
-func _show_cap(root: Node3D) -> void:
+func tufts_buried() -> bool:
+	return _tufts_buried
+
+
+# Whether a tuft's blade shows: its density rank (#904), and not under snow.
+func _tuft_shown(sprite: Sprite3D) -> bool:
+	return float(sprite.get_meta(TUFT_KEEP_META)) < tuft_density and not _tufts_buried
+
+
+func _dress_for_snow(root: Node3D) -> void:
 	for child in root.get_children():
 		var sprite := child as Sprite3D
-		if sprite == null or sprite.has_meta(TUFT_META):
+		if sprite == null:
+			continue
+		if sprite.has_meta(TUFT_META):
+			sprite.visible = _tuft_shown(sprite)
 			continue
 		var cap := sprite.get_node_or_null(SNOW_CAP_NAME) as Sprite3D
 		if cap == null and _prop_caps:
@@ -2727,7 +2740,7 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 				float(GridUtils.TILE_SIZE))
 		sprite.set_meta(TUFT_META, true)
 		sprite.set_meta(TUFT_KEEP_META, keep[i])
-		sprite.visible = keep[i] < tuft_density
+		sprite.visible = _tuft_shown(sprite)
 		# Its own foot, not the root's: the sprite is already placed across the cell, so the lift is
 		# the surface under THAT point minus the surface under the centre — both off `ground`, never
 		# off `at`, or a staged plant cancels out its own root's lift (#992). Exactly zero on a LEVEL
@@ -2814,7 +2827,7 @@ func _set_tuft_density(value: float) -> void:
 		for child in root.get_children():
 			var sprite := child as Sprite3D
 			if sprite != null and sprite.has_meta(TUFT_META):
-				sprite.visible = float(sprite.get_meta(TUFT_KEEP_META)) < tuft_density
+				sprite.visible = _tuft_shown(sprite)
 
 
 # The density each cluster needs to be planted: rank them by a stable hash of their own rect, then

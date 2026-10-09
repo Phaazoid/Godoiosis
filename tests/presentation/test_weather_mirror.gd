@@ -139,11 +139,13 @@ func test_a_capping_snow_reaches_the_board_and_leaving_it_clears() -> void:
 	_scene.game.scenario_manager.current_weather = Weather.Kind.LIGHT_SNOW
 	mirror._process(0.016)
 	var off_light := not board.prop_caps_shown() and not mirror._caps.visible
+	var buried_light := board.tufts_buried()   # any snow buries the grass (#1278)
 	_scene.game.scenario_manager.current_weather = Weather.Kind.SNOW
 	mirror._process(0.016)
 	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	mirror._process(0.016)
-	var off_clear := not board.prop_caps_shown() and not mirror._caps.visible
+	var off_clear := not board.prop_caps_shown() and not mirror._caps.visible and not board.tufts_buried()
+	assert_bool(buried_light).override_failure_message("a light snow left the grass standing").is_true()
 	assert_bool(on).override_failure_message("a capping snow reached no cap").is_true()
 	assert_bool(off_light).override_failure_message("a snow that caps nothing still caps").is_true()
 	assert_bool(off_clear).override_failure_message("the caps outlived the snow").is_true()

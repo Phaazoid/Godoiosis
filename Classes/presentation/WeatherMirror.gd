@@ -17,7 +17,7 @@ class_name WeatherMirror
 #     moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
 #     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Snow that
 #     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
-#     prop_caps tells BoardMirror to lay its overlays on the billboards. Which of the two a look draws
+#     snow_on_props tells BoardMirror to cap the billboards and bury the tufts. Which of the two a look draws
 #     is its FALL; every rain path is gated on it.
 #   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
 #     easing between weathers. Either fall may author one; every shipped rain leaves it at identity.
@@ -58,7 +58,7 @@ var camera: Camera3D
 var aim_source: Callable              # () -> Vector3, where the camera is looking
 var sky: ProceduralSkyMaterial
 var stands_down: Callable             # () -> bool: the flat view is up, draw nothing
-var prop_caps: Callable               # (shown: bool, color: Color) -> void: BoardMirror.set_prop_caps
+var snow_on_props: Callable           # (caps: bool, cap_color: Color, buries_tufts: bool) -> void: BoardMirror.set_snow
 
 var _kind := Weather.Kind.CLEAR
 var _look: WeatherLook = null
@@ -232,8 +232,8 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_snow.visible = snow
 	_snow_cover.visible = snow
 	_caps.visible = snow and look.caps_props
-	if prop_caps.is_valid():
-		prop_caps.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE)
+	if snow_on_props.is_valid():
+		snow_on_props.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE, snow)
 	_drift.emitting = snow and look.drift_rate > 0.0
 	_drift.visible = _drift.emitting
 	_drift_texels = -1
@@ -511,8 +511,8 @@ func _style_snow() -> void:
 		_caps.texture_orm = _snow_cover.texture_orm
 	_caps.visible = _look.caps_props
 	_caps.modulate = _look.snow_color
-	if prop_caps.is_valid():
-		prop_caps.call(_look.caps_props, _look.snow_color)   # the door returns at once when nothing moved
+	if snow_on_props.is_valid():
+		snow_on_props.call(_look.caps_props, _look.snow_color, true)   # returns at once when nothing moved
 
 
 # A one-texel ORM: occlusion 1, the roughness, no metal. It is masked in by the albedo's alpha, so one
