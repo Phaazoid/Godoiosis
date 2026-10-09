@@ -120,6 +120,14 @@ func test_every_field_the_prototype_editor_draws_carries_text() -> void:
 	assert_array(missing).is_empty()
 
 
+# The Item Editor's vial mode (#791). display_name has its own LineEdit; the substance is a bespoke
+# picker handed property_tip explicitly, so it owes text like everything else.
+func test_every_field_the_vial_editor_draws_carries_text() -> void:
+	var missing: Array[String] = []
+	_untipped(VialData.new(), ["display_name"], missing)
+	assert_array(missing).is_empty()
+
+
 # WeaponData reaches Item's table through its own merge -- the same hand-written step below, one
 # content root over, and the one this mode's inherited fields (weight, icon, description) ride.
 func test_a_template_reaches_the_base_item_tips() -> void:
