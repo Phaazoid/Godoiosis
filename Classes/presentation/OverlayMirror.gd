@@ -176,8 +176,9 @@ func _poll_staging() -> bool:
 
 
 # Has the water basin moved since the last frame (#654) -- the experiment flipped, its depth knob was
-# dragged, or a cell started or stopped dipping? Every marker _anchor places reads basin_drop, so a
-# gated producer has to re-place when this does (#308's law: gate on the store the render reads).
+# dragged, or a cell started or stopped dipping? A fill diffs on its CELLS, which a dip leaves alone, so
+# its gate reads this (#308's law: gate on the store the render reads). Markers need nothing: they diff
+# on the positions _anchor computes, and _anchor subtracts the drop.
 func _poll_basin() -> bool:
 	if BoardSpace.basin_version == _last_basin_version:
 		return false
@@ -198,7 +199,7 @@ func _standing_states() -> void:
 	covered.sort()
 	# A marker STANDS on its cell's surface, so raising that cell moves it while the burning set
 	# stays byte-identical (#308).
-	if not _heights_moved and not _staging_moved and not _basin_moved and _last_fire == burning and _last_cover == covered:
+	if not _heights_moved and not _staging_moved and _last_fire == burning and _last_cover == covered:
 		return
 	_last_fire = burning
 	_last_cover = covered
