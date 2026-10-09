@@ -881,15 +881,20 @@ func _on_turn_started(faction: Team.Faction):
 # (#1220 ruling 7): the costliest decision of the turn hides behind the banner, and orders queued on
 # an unlocked board would be the player's to click. The lock is not negotiable.
 func start_faction_turn(faction: Team.Faction):
+	# A board swapped in during either await below (#661) owns its own lock and state now.
+	var board: int = scenario_manager.board_generation
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
 		camera_controller.set_playback_locked(true)
 		await ai_controller.take_faction_turn(faction, Pacing.TURN_HANDOFF)
-		camera_controller.set_playback_locked(false)
+		if board == scenario_manager.board_generation:
+			camera_controller.set_playback_locked(false)
 		return
 
 	game_state = GameState.BETWEEN_TURNS
 	await Pacing.beat(self, Pacing.TURN_HANDOFF)
+	if board != scenario_manager.board_generation:
+		return
 	game_state = _base_state()
 
 	#TODO This should probably be it's own game state - IN_MENU or something.
@@ -897,7 +902,10 @@ func start_faction_turn(faction: Team.Faction):
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
 
 func end_turn():
+	var board: int = scenario_manager.board_generation
 	await order_executor.apply_end_of_turn_tiles(turn_manager.active_faction())
+	if board != scenario_manager.board_generation:
+		return   # the board this turn ended on is gone (#661)
 	mission_controller.check()   # a burning tile can take the last unit (#96)
 	if mission_controller.is_over():
 		return

@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08.**
 
 ## Principles
 
@@ -404,6 +404,30 @@ the resolve* — paint suppressed, re-derivation still running — leaves the ro
 only by the stored-plan assertion. The second mutant is the one worth copying: **a gate that
 suppresses an EFFECT is not a gate that suppresses the CAUSE, and only a mutant that moves the gate
 can tell the two apart.**
+
+## A board swap ends the pass in flight ([#661](https://github.com/Phaazoid/Godoiosis/issues/661), FIXED 2026-10-08)
+
+#361's gate made `executing_plan` load-bearing, and #661 is what that costs when a pass never ends. F2 (or
+any load) during a walk frees the walker, so the pass suspended on its walk never resumes, never reaches
+`executing_plan = null`, and every reader of it treats the NEXT board as mid-pass for good: the queue
+panel refuses to re-derive, the danger field never resolves your plan, the 3D readouts are fed a dead plan.
+
+Two halves, because a suspended pass ends one of two ways:
+
+1. **It never resumes** (it waits on a freed unit's tween). `ScenarioManager.clear_board` calls
+   `OrderExecutor.abandon_pass()`, which releases what the pass's own end releases: `executing_plan`,
+   `effect_pass_subjects`, `_downed_pending`. The rule is #602's: enumerate the paths that END a pass.
+2. **It resumes on the new board** (a beat's timer, a pan). `ScenarioManager.board_generation` is the one
+   answer to *is the board I started on still standing*, bumped first in `clear_board`; every coroutine
+   that awaits across a pass or a turn (`OrderExecutor`'s phases, `apply_end_of_turn_tiles`,
+   `AIController.take_faction_turn`, `game.end_turn`, `game.start_faction_turn`) takes it on entry and
+   stops after an await that moved it. Without this an interrupted AI turn would go on to `end_turn` the
+   board that replaced it.
+
+#723 already greys Restart, Save and Load in the pause menu while a pass runs, so the doors left were F2
+and Mission Select after Return to Title. `tests/flow/test_board_swap_mid_pass.gd` pins both halves on a
+real walk, the one suspension a headless run keeps; its resume cases move the generation by hand, because
+a real swap frees the walker and a pass waiting on a freed unit never resumes.
 
 ## Every bar, if the player says so ([#350](https://github.com/Phaazoid/Godoiosis/issues/350), BUILT 2026-08-19)
 
