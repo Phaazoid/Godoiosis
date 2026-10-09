@@ -1050,6 +1050,28 @@ static func add_beam_strip(mesh: ImmediateMesh, points: PackedVector3Array,
 	return true
 
 
+# A bolt's ribbon instance under `parent`: an ImmediateMesh add_beam_strip fills, worn with the sight
+# beam's shader in the effect band, on the WORLD layer (so no decal paints it), casting nothing.
+# Hoisted from ArcLightning when the weather's sky bolts became the second drawer of a bolt (#1260).
+# `cull_margin` is slack for the width the shader adds in the vertex stage, which the mesh's own
+# bounds know nothing about.
+static func make_ribbon(parent: Node, cull_margin: float) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	instance.mesh = ImmediateMesh.new()
+	var material := ShaderMaterial.new()
+	material.shader = load(SIGHT_BEAM_SHADER_PATH) as Shader
+	# Fire's band (#245), whose name says "effect" rather than "flame": a bolt is a standing effect
+	# in the world, over every markup layer and under the bodies.
+	material.render_priority = EFFECT_RENDER_PRIORITY
+	instance.material_override = material
+	instance.extra_cull_margin = cull_margin
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
+	instance.visible = false
+	parent.add_child(instance)
+	return instance
+
+
 # The direction the ribbon is "along" at each point. Interior points AVERAGE their two segments
 # rather than taking one: a lob's arc bends at every sample, and a tangent that jumps between
 # segments splits the strip open at each joint. Endpoints have one segment and use it. A

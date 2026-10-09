@@ -40,6 +40,7 @@ class_name DevOverlay
 @onready var roster_tool: RosterTool = get_node("%Rosters")
 @onready var weights_tool: WeightsTool = get_node("%Weights")
 @onready var camera_tool: CameraTool = get_node("%Camera")
+@onready var weather_tool: WeatherTool = get_node("%Weather")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 @onready var search_box: DevSearchBox = %DevSearch
@@ -79,6 +80,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "Scene mood, tuned live — lighting, post, fog, camera framing. Saves as a named mood a mission wears, or rewrites the default every other board gets."},
 	{"scope": "Project", "label": "Game", "page": "%Game",
 		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, elemental effects. Save to source writes each value into the declaration that authors it."},
+	{"scope": "Project", "label": "Weather", "page": "%Weather",
+		"tip": "How each weather looks and what it does, tuned live on the board: the rain, its splashes and puddles, and the storm. Which weather a board wears is picked on Scenario > Properties."},
 	{"scope": "Session", "label": "Experiments", "page": "%Experiments",
 		"tip": "Dev feature flags for this machine — persisted to user://, read by nothing a player ships with."},
 	{"scope": "Session", "label": "Replay", "page": "%Replay",
@@ -138,6 +141,7 @@ func _ready() -> void:
 	dev_info.init(game)
 	replay_tool.init(game)
 	camera_tool.init(game)
+	weather_tool.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
 	scenario_header.file_changed.connect(_on_scenario_file_changed)
@@ -370,6 +374,8 @@ func _on_tab_changed(_tab: int):
 		replay_tool.refresh_on_show()
 	if showing(weights_tool):
 		weights_tool.refresh_on_show()
+	if showing(weather_tool):
+		weather_tool.refresh_on_show()
 	if not showing(tile_brush):
 		tile_brush.deactivate()
 	_update_zone_visibility()

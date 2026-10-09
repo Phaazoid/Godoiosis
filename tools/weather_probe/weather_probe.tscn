@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tools/weather_probe/weather_probe.gd" id="1_wprb"]
+
+[node name="WeatherProbe" type="Node"]
+script = ExtResource("1_wprb")

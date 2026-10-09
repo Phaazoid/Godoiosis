@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://ktkm2s6x6oqe"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_tk3ag"]
+
+[resource]
+script = ExtResource("1_tk3ag")
+density = 1.2
+fall_speed = 11.0
+wind_x = 0.4
+wind_z = 0.1
+streak_texels = 4
+drop_color = Color(0.8, 0.87, 1, 0.45)
+splash_rate = 0.5
+wet_darkness = 0.15
+wet_roughness = 0.45
+puddles = false
