@@ -1304,18 +1304,17 @@ class AimOption:
 		attack = p_attack
 
 # Every attack this unit could aim right now, across everything it carries (#929, the F cycle): the
-# source in hand first, in the ring's own order, then each other weapon or rune the dock could equip,
-# in inventory order. Each source is asked WITH IT IN HAND, so the gate is the queue's own and an
-# attack its weapon cannot fire right now is left out. `watch` walks the watch view instead (#590).
+# source in hand first, in the ring's own order, then each other carried equippable in inventory order.
+# Each is asked WITH IT IN HAND, so the equip door decides which sources count (armour and a rune nobody
+# can channel contribute nothing) and the queue's own gate decides which attacks do -- one an empty
+# magazine or a sprung spear cannot fire right now is left out. `watch` walks the watch view (#590).
 func aim_options(watch: bool) -> Array[AimOption]:
 	var sources: Array[EquippableData] = []
 	if equipped_weapon != null:
 		sources.append(equipped_weapon)
-	for i in inventory.size():
-		var carried := inventory[i] as EquippableData
-		if carried == null or carried == equipped_weapon:
-			continue
-		if GearVerbs.block_reason(self, GearVerbs.Verb.EQUIP, i) == "":
+	for item: Item in inventory:
+		var carried := item as EquippableData
+		if carried != null and carried != equipped_weapon:
 			sources.append(carried)
 	var options: Array[AimOption] = []
 	for source: EquippableData in sources:
