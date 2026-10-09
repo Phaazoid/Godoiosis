@@ -603,6 +603,7 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			game.begin_move_planning(unit)
 		WAIT:
 			game.squad_manager.set_has_acted(unit.squad, true)
+			game.scenario_manager.note_play()   # has_acted is saved (#1182)
 			game.refresh_end_turn_button()
 			game.clear_selection()
 		SQUADUP:
@@ -614,9 +615,11 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			# there, and an ejection is a consequence a replay re-derives, not a decision.
 			game.mission_log.record_squad_verb("disband", unit)
 			game.squad_manager.disband_squad(unit.squad)
+			game.scenario_manager.note_play()   # squads are saved (#1182)
 		LEAVESQUAD:
 			game.mission_log.record_squad_verb("leave", unit)
 			game.squad_manager.leave_squad(unit)
+			game.scenario_manager.note_play()
 		INSPECT:
 			game.inspect_unit(unit)
 		RESCUE:

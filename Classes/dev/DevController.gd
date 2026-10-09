@@ -313,9 +313,9 @@ func resolve_pending(cell: Vector2i) -> void:
 			unit.movement.set_cell(cell)             # set_cell snaps world position too
 		PendingAction.DUPLICATE:
 			duplicate_unit(unit, cell)
-	# A dev-armed placement is AUTHORING, unlike gameplay movement, which deliberately never marks
-	# (#259 rework round 2 -- the edit sweep). Reached through the overlay ref the F1 toggle
-	# already holds; null in a demo build, where there is no scenario header to tell.
+	# A dev-armed placement marks the header directly (#259 rework round 2 -- the edit sweep); play
+	# marks it through ScenarioManager.play_version since #1182. Reached through the overlay ref the
+	# F1 toggle already holds; null in a demo build, where there is no scenario header to tell.
 	if game.dev_overlay != null:
 		game.dev_overlay.scenario_header.mark_modified()
 	game.mission_log.note_dev_intervention()   # #53: a spawn is a board move a replay cannot know about

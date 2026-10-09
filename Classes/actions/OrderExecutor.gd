@@ -110,6 +110,7 @@ func execute_orders(unit):
 		game.squad_action_queue_control.play_refusal()
 		return
 
+	game.scenario_manager.note_play()   # a pass changes the board the dev header compares (#1182)
 	game.clear_selection_icons()
 	# ...and the squad lines a hover left up (#1109). The pointer stops polling while the pass plays, so
 	# they would otherwise stand at cells the pass is about to empty -- an intact tether beside its own
@@ -330,6 +331,7 @@ func execute_orders(unit):
 # idempotent. (It read "the TARGET markers a queued attack drew" until #346 -- TARGET was never
 # drawn by an attack, only by Squad Up, and it is retired now.)
 func _end_squad_turn(squad: Squad) -> void:
+	game.scenario_manager.note_play()   # has_acted is saved, so a conceded turn changes the board too
 	game.clear_selection_icons()
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
