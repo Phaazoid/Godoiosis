@@ -14,8 +14,9 @@ class_name WeatherMirror
 #   - THE STORM: bolts beyond the board (StormBolts), a screen flash this node only REPORTS (battle3d's
 #     white-out composes it with the others), a light from the strike's side, and the sky's glow.
 #   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box, wandering as they fall and lying a
-#     moment where they land, and a third ground decal painted by SnowGround. Which of the two a look
-#     draws is its FALL; every rain path is gated on it.
+#     moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
+#     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Which of the
+#     two a look draws is its FALL; every rain path is gated on it.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -29,6 +30,7 @@ const AMOUNT_SLACK := 0.35
 const MAX_DROPS := 60000
 const MAX_SPLASHES := 12000
 const MAX_FLAKES := 200000
+const MAX_DRIFT := 20000
 # How far above the camera drops are born, so none ever appears inside the frame.
 const SPAWN_ABOVE := 2.0
 # The decals' height: from well under the board to well over the tear-out's stage, which shares the
@@ -60,6 +62,9 @@ var _splash_draw: ShaderMaterial
 var _snow: GPUParticles3D
 var _snow_process: ShaderMaterial
 var _snow_draw: ShaderMaterial
+var _drift: GPUParticles3D
+var _drift_process: ShaderMaterial
+var _drift_draw: ShaderMaterial
 var _wet: Decal
 var _puddles: Decal
 var _snow_cover: Decal
@@ -72,6 +77,7 @@ var _ground_key := 0
 var _streak_texels := -1
 var _strip_built := false
 var _flakes_built := false
+var _drift_texels := -1
 var _wet_roughness := -1.0
 var _puddle_roughness := -1.0
 var _snow_key := 0
@@ -101,6 +107,10 @@ func _ready() -> void:
 	_snow_process = _process_material("res://Classes/presentation/snow.gdshader")
 	_snow_draw = _draw_material("res://Classes/presentation/snow_flake.gdshader")
 	_snow = _particles(_snow_process, _snow_draw, PlaneMesh.FACE_Z)
+	_drift_process = _process_material("res://Classes/presentation/snow_drift.gdshader")
+	_drift_draw = _draw_material("res://Classes/presentation/rain_drop.gdshader")
+	_drift_draw.set_shader_parameter("age_fade", 1.0)
+	_drift = _particles(_drift_process, _drift_draw, PlaneMesh.FACE_Z)
 	_wet = _decal()
 	_puddles = _decal()
 	_snow_cover = _decal()
@@ -131,7 +141,7 @@ func cover_volume(volume: AABB) -> void:
 # Every particle system this node draws: the one list the cull sweep walks, so a new one cannot be
 # left out of it.
 func emitters() -> Array[GPUParticles3D]:
-	return [_rain, _splash, _snow]
+	return [_rain, _splash, _snow, _drift]
 
 
 # The storm's screen flash, 0..1, for battle3d's white-out -- a DRIVER, never a writer (#887's rule).
@@ -182,6 +192,9 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_snow.emitting = snow
 	_snow.visible = snow
 	_snow_cover.visible = snow
+	_drift.emitting = snow and look.drift_rate > 0.0
+	_drift.visible = _drift.emitting
+	_drift_texels = -1
 	_snow_key = 0
 	_snow_roughness = -1.0
 	_mask_versions = []
@@ -213,7 +226,7 @@ func _sync_mask() -> void:
 	_rect = rect
 	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
 	var texture := ImageTexture.create_from_image(image)
-	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process]:
+	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process, _drift_process]:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
@@ -357,6 +370,24 @@ func _place_snow() -> void:
 	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
 	var life := float(box["fall"]) * 1.3 + maxf(_look.flake_settle, 0.0) + 0.25
 	_size(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
+	_place_drift(lo, hi, box["floor_y"], wind)
+
+
+# The ground drift streams along the wind, born on the ground over the same box at its own rate.
+func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> void:
+	var on := _look.drift_rate > 0.0
+	_drift.emitting = on
+	_drift.visible = on
+	if not on:
+		return
+	var along := wind.normalized() if wind.length() > 0.001 else Vector2.RIGHT
+	_drift_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
+	_drift_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
+	_drift_process.set_shader_parameter("floor_y", floor_y)
+	_drift_process.set_shader_parameter("velocity", Vector3(along.x, 0.0, along.y) * _look.drift_speed)
+	_drift_process.set_shader_parameter("hover", 1.0 / UnitSprite3D.texels_per_unit)
+	_size(_drift, _drift_process, _look.drift_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.drift_life, 0.05),
+			MAX_DRIFT)
 
 
 # Births per second -> an amount and a lifetime, with slack: either property restarts the system, so
@@ -424,6 +455,13 @@ func _style_snow() -> void:
 	_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
 	_snow_draw.set_shader_parameter("tint", _look.flake_color)
 	_snow_cover.albedo_mix = 1.0
+	if _look.drift_texels != _drift_texels:
+		_drift_texels = _look.drift_texels
+		_drift_draw.set_shader_parameter("streak", ImageTexture.create_from_image(
+				WeatherArt.streak(_drift_texels, Color.WHITE)))
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	_drift_draw.set_shader_parameter("size", Vector2(texel, texel * float(maxi(_drift_texels, 1))))
+	_drift_draw.set_shader_parameter("tint", _look.drift_color)
 	if not is_equal_approx(_look.snow_roughness, _snow_roughness):
 		_snow_roughness = _look.snow_roughness
 		_snow_cover.texture_orm = _orm(_snow_roughness)

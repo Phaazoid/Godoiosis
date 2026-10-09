@@ -87,6 +87,8 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror._splash_draw: ["strip", "tint", "frames"],
 		mirror._snow_process: mask + ["velocity", "sway", "swirl", "swirl_scale", "settle", "big", "lift"],
 		mirror._snow_draw: ["flakes", "size", "tint"],
+		mirror._drift_process: mask + ["velocity", "hover"],
+		mirror._drift_draw: ["streak", "size", "tint", "age_fade"],
 	}
 	for material: ShaderMaterial in wanted:
 		var names: Array[String] = []
@@ -118,6 +120,25 @@ func test_a_look_draws_only_what_it_drops() -> void:
 	assert_bool(snow_drawn).override_failure_message("the board is snowing and the mirror drew no snow").is_true()
 	assert_bool(rain_on_snow).override_failure_message("a snow board draws rain").is_false()
 	assert_bool(snow_on_rain).override_failure_message("a rain board draws snow").is_false()
+
+
+# The ground drift runs while its rate is above zero, and only then -- the dev's blizzard has it, the
+# gentler snows author none. Driven off the look's own knob, so no authored rate is pinned.
+func test_the_ground_drift_runs_only_at_a_rate() -> void:
+	var mirror := _mirror()
+	var look := WeatherLook.for_kind(Weather.Kind.BLIZZARD)
+	assert_object(look).override_failure_message("fixture: the blizzard has no look file").is_not_null()
+	var was := look.drift_rate
+	_scene.game.scenario_manager.current_weather = Weather.Kind.BLIZZARD
+	look.drift_rate = 1.5
+	mirror._process(0.016)
+	var running := mirror._drift.emitting and mirror._drift.visible
+	look.drift_rate = 0.0
+	mirror._process(0.016)
+	var stopped := not mirror._drift.emitting and not mirror._drift.visible
+	look.drift_rate = was
+	assert_bool(running).override_failure_message("a drift rate drew no drift").is_true()
+	assert_bool(stopped).override_failure_message("a zero drift rate still drew drift").is_true()
 
 
 # A look's puddles switch is honoured by the decal (light rain authors none, the dev's ruling).
