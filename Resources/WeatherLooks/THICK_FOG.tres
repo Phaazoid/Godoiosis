@@ -5,11 +5,9 @@
 [resource]
 script = ExtResource("1_5lrd3")
 fall = 2
-fog_strength = 1.4
-layer_depth = 1.0
-bank_amount = 1.0
-card_amount = 2.2
-card_opacity = 0.7
-card_lift = 0.8
-grade_saturation = 0.85
-grade_brightness = 1.03
+fog_strength = 0.8
+pool_depth = 0.4
+card_amount = 1.2
+card_opacity = 0.55
+card_lift = 0.45
+grade_saturation = 0.95

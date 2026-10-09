@@ -92,12 +92,12 @@ enum Fall { RAIN, SNOW, FOG }
 @export var drift_color := Color(0.95, 0.97, 1.0, 0.5)
 
 @export_group("Fog")
-@export var fog_strength := 1.2             # the thin fog pass's density
-@export var layer_amount := 1.0             # 0..1: the sheet over every surface
+@export var fog_strength := 0.55            # the thin fog pass's density
+@export var layer_amount := 0.0             # 0..1: the sheet over every surface
 @export var layer_depth := 0.8              # world units the sheet stands over its own ground
 @export var pool_amount := 1.0              # 0..1: the fog lying in the low ground
 @export var pool_share := 0.45              # 0..1: the share of the board's ground that counts as low
-@export var pool_depth := 0.4               # world units it stands over its own ground, at most
+@export var pool_depth := 0.3               # world units it stands over its own ground, at most
 @export var bank_amount := 0.0              # 0..1: drifting banks that swallow units
 @export var bank_height := 1.5              # world units a bank stands
 @export var bank_size := 7.0                # cells across one bank
@@ -106,11 +106,11 @@ enum Fall { RAIN, SNOW, FOG }
 @export var pixel_steps := false            # the pass snapped to the ground's art grid, its opacity in steps
 @export var fog_color := Color(0.86, 0.89, 0.93)
 @export var sky_tint := 0.3                 # 0..1: how far the fog takes the sky's horizon colour
-@export var card_amount := 1.3              # pixel cards per cell of view
-@export var card_opacity := 0.65
+@export var card_amount := 0.8              # pixel cards per cell of the board
+@export var card_opacity := 0.45
 @export var card_size := 1.0                # times a wisp's own size, 44x14 ground art pixels
 @export var card_life := 8.0                # seconds a card takes to fade in and out
-@export var card_lift := 0.55               # world units above the ground a card floats, at most
+@export var card_lift := 0.4                # world units above the ground a card floats, at most
 @export var fog_speed := 0.3                # the share of the wind the fog drifts with, its cards and banks alike
 
 @export_group("Grade")
@@ -258,7 +258,7 @@ const ROWS: Array[Dictionary] = [
 	{"prop": "sky_tint", "label": "Takes the sky", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
 		"tip": "How far the fog takes the colour of the board's sky at the horizon, so a night fog darkens and a dusk one warms. The sky is read, never changed."},
 	{"prop": "card_amount", "label": "Cards", "min": 0.0, "max": 6.0, "step": 0.05, "fall": Fall.FOG,
-		"tip": "How many pixel fog cards drift over each cell of the view. They only show where there is fog."},
+		"tip": "How many pixel fog cards drift over each cell of the board. They only show where there is fog."},
 	{"prop": "card_opacity", "label": "Card opacity", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
 		"tip": "How solid a card is at its thickest."},
 	{"prop": "card_size", "label": "Card size", "min": 0.25, "max": 4.0, "step": 0.05, "fall": Fall.FOG,

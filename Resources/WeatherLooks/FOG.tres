@@ -5,5 +5,4 @@
 [resource]
 script = ExtResource("1_3f772")
 fall = 2
-grade_saturation = 0.9
-grade_brightness = 1.02
+grade_saturation = 0.97
