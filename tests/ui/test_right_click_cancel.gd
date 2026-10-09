@@ -36,9 +36,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	# clear_board()/spawn_unit() leave nodes parentless for one frame BY DESIGN; without this
-	# gdUnit4 samples them as orphans. A real leak survives the frame and still reports.
-	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
 

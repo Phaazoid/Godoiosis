@@ -30,7 +30,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	await await_idle_frame()   # #93/#101 false orphans, see test_attack_editor_extras.gd
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 	if FileAccess.file_exists(SHAPE_PATH):

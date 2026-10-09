@@ -28,12 +28,6 @@ func before_test() -> void:
 	_sm = H.make_manager(self)
 
 
-func after_test() -> void:
-	# #473's orphan workaround: a frame for queue_free to land, or the runner reports a non-zero
-	# verdict with zero failures.
-	await await_idle_frame()
-
-
 # Affinity ORDER is the argument, not a set: rank is what the readout carries now that the ring draws
 # no primary marker (dev, #930).
 func _alchemist(order: Array[Elemental.Element], aura: Dictionary[Elemental.Element, int],
