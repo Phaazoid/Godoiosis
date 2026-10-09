@@ -510,7 +510,8 @@ credited with fixing does not exist. If that rebuild count ever matters, the fix
 
 Hovering an attack that carries a payload runs `SquadManager.preview_payloads` on every cell the
 pointer crosses: a hypothetical resolve with the candidate, then the restoring `resolve_plan`. Only a
-payload attack pays it; every other aim is untouched. Measured with a throwaway gdUnit probe (never
+payload attack paid it until #929 (2026-10-09, below), which made every fire aim run the pair as its
+forecast; the call is `preview_aim` now. Measured with a throwaway gdUnit probe (never
 committed): a placed 3×3 tile blast whose payload is the same blast, on a 33×33 board, the thrower's
 queue empty, five reps each, the median shown.
 
@@ -636,3 +637,32 @@ branch, three runs each, alternating. The machine was noisy that evening: `main`
 - **The decision record is byte-identical** to `main` with every unit unassigned (Hard): no
   Crisis-armed unit, no hit reaching the limb threshold and no stray on turn 1 (the profiler now runs
   the regroup pass first and prints `regroup = 0 join(s)` per faction).
+
+## 2026-10-09 — every fire aim forecasts before the click (#929)
+
+The health bars read an open aim's own plan now, so every FIRE aim runs `SquadManager.preview_aim`
+on each cell the pointer crosses: a hypothetical resolve with the candidate, then the restoring
+`resolve_plan`. Before this only a payload attack paid that pair (the D2b section above). A watch
+forecasts nothing, so it is unchanged.
+
+Measured with a throwaway gdUnit probe, never committed: `HoverPresenter.update_hover_visuals`
+timed 30 times over three cells, two of them legal aims. The board is `Main.tscn`'s cleared one. The
+squad is three members, two of whom already have an attack queued, so the restore re-resolves a real
+plan with counters in it. The aim is plain (no payload).
+
+| What | Median | Max |
+|---|---|---|
+| One hovered-cell change, the weapon in hand | 4.2 ms | 5.8 ms |
+| One hovered-cell change, a carried weapon cycled to (the hold) | 4.1 ms | 7.2 ms |
+| The sweep alone (what a plain aim cost before) | 0.08 ms | |
+| One `resolve_plan` of that squad | 1.6 ms | |
+
+What this means:
+- **Under a frame per cell change.** The plan's stop was 16 ms, and this is well clear of it. The
+  hover only repaints when the hovered cell moves, not every frame.
+- **The hold costs nothing measurable.** It is two field writes around the computation.
+- **The cost is the two resolves.** It grows with the squad's queued plan and the counters it draws,
+  exactly as the payload table above grows with the foes a chain reaches.
+- **If an aim hover ever feels sticky,** measure the restore first. It re-resolves the whole real
+  queue only to put published shoves back, and a resolve that published nothing would make it
+  unnecessary.
