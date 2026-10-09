@@ -40,4 +40,5 @@ script = ExtResource("1_5ipho")
 [node name="TurnLabel" type="Label" parent="." unique_id=1575186755]
 offset_right = 40.0
 offset_bottom = 23.0
+mouse_filter = 0
 label_settings = SubResource("LabelSettings_l5qph")

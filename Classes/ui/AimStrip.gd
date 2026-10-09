@@ -9,12 +9,18 @@ class_name AimStrip
 # A DUMB VIEW: game.gd tells it what to say at the aim's two doors (enter_attack_mode, which the cycle
 # re-enters, and exit_current_mode) and it asks nothing of the board. The cycle keys come through
 # Controls.key_for_action, never spelled, so it cannot advertise a binding the Input Map has not got
-# (#1051's rule) -- and they show only when there is something to cycle to.
+# (#1051's rule) -- and they show only when there is something to cycle to. They are BUTTONS as well,
+# onto the keys' own door: cycle_requested, which game wires to cycle_aimed_attack.
 #
-# Root is full-rect with mouse_filter IGNORE (PreMissionBar's shape), so it eats no click. The box
-# sits on the panel FRAME, which is dark in both palettes, so every ink here is a frame role. It parks
-# at the TOP while a dialogue is up (#1033's rule): the dialogue owns the bottom strip and draws over
-# the HUD.
+# Root is full-rect with mouse_filter IGNORE (PreMissionBar's shape), so the board stays clickable
+# around it; the BOX catches the mouse, because a click through it lands on the board and aims at the
+# cell underneath (it queued an attack at nothing). tests/law/test_hud_catches_its_clicks.gd walks
+# every HUD surface for that. The box sits on the panel FRAME, which is dark in both palettes, so
+# every ink here is a frame role. It parks at the TOP while a dialogue is up (#1033's rule): the
+# dialogue owns the bottom strip and draws over the HUD.
+
+# step +1 for the next attack, -1 for the previous, as F / Shift+F.
+signal cycle_requested(step: int)
 
 const EDGE_MARGIN := 14
 const PAD_H := 12
@@ -30,12 +36,12 @@ const SWAP_TEXT := "swaps on click"
 var talking_source: Callable
 
 var _box: PanelContainer
-var _back: Label
+var _back: Button
 var _attack: Label
 var _source: Label
 var _swap: Label
 var _count: Label
-var _next: Label
+var _next: Button
 
 
 static func open(game_node: Node) -> AimStrip:
@@ -51,7 +57,7 @@ func _build() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_box = PanelContainer.new()
-	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_box)
 	var margin := MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -64,13 +70,13 @@ func _build() -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", SEPARATION)
 	margin.add_child(row)
-	_back = _label(row, HINT_FONT_SIZE)
+	_back = _arrow(row, -1)
 	_attack = _label(row, NAME_FONT_SIZE)
 	_source = _label(row, SOURCE_FONT_SIZE)
 	_swap = _label(row, HINT_FONT_SIZE)
 	_swap.text = SWAP_TEXT
 	_count = _label(row, HINT_FONT_SIZE)
-	_next = _label(row, HINT_FONT_SIZE)
+	_next = _arrow(row, 1)
 	visible = false
 
 
@@ -80,6 +86,31 @@ func _label(row: HBoxContainer, font_size: int) -> Label:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(label)
 	return label
+
+
+# A key hint that is also the click. No box in any state, so it reads as the hint it was; the ink
+# lifts on hover instead. FOCUS_NONE, or Space and Enter would press it (PreMissionBar's reason).
+func _arrow(row: HBoxContainer, step: int) -> Button:
+	var button := Button.new()
+	button.flat = true
+	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_size_override("font_size", HINT_FONT_SIZE)
+	for state: String in ["normal", "hover", "pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	button.pressed.connect(cycle_requested.emit.bind(step))
+	row.add_child(button)
+	return button
+
+
+# All four states: a Button falls back to the theme's ink for any state left unset.
+func _ink_arrow(button: Button) -> void:
+	var rest := QueueStyle.ink(QueueStyle.Role.FRAME_TEXT)
+	var lit := QueueStyle.ink(QueueStyle.Role.TITLE_TEXT)
+	button.add_theme_color_override("font_color", rest)
+	button.add_theme_color_override("font_focus_color", rest)
+	button.add_theme_color_override("font_hover_color", lit)
+	button.add_theme_color_override("font_pressed_color", lit)
 
 
 # Say what is being aimed. `at` is the aim's place in the cycle, 0-based, or -1 when it is not
@@ -104,8 +135,9 @@ func show_aim(attack_name: String, source_name: String, swaps: bool, at: int, co
 	_back.text = "◀ %s" % Controls.key_for_action("select_previous_squadmate")
 	_next.text = "%s ▶" % Controls.key_for_action("select_next_squadmate")
 	_count.text = "%d / %d" % [at + 1, count]
-	for hint: Label in [_back, _next, _count]:
-		hint.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+	_count.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+	_ink_arrow(_back)
+	_ink_arrow(_next)
 	visible = true
 	_park()
 
@@ -117,10 +149,19 @@ func hide_aim() -> void:
 # What the strip says, joined -- for a test to read without walking the row.
 func shown_text() -> String:
 	var parts: Array[String] = []
-	for label: Label in [_back, _attack, _source, _swap, _count, _next]:
+	if _back.visible:
+		parts.append(_back.text)
+	for label: Label in [_attack, _source, _swap, _count]:
 		if label.visible and label.text != "":
 			parts.append(label.text)
+	if _next.visible:
+		parts.append(_next.text)
 	return " ".join(parts)
+
+
+# The two arrows, for a test to click: back first.
+func arrows() -> Array[Button]:
+	return [_back, _next]
 
 
 func _process(_delta: float) -> void:

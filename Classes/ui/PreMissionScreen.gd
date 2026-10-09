@@ -9,10 +9,9 @@ class_name PreMissionScreen
 # A ModalCard that is NOT a card, the way MissionSelectScreen is not: unframed, opaque, and it does
 # NOT claim ModalLock -- the board underneath has to keep running, because Tab swaps to it.
 #
-# IT LOCKS THE BOARD BY JOINING game.menu_is_up(), NOT BY EATING CLICKS. A full-rect Control that
-# swallows input is transparent to the 3D view, which picks cells with its own raycast and calls
-# game._on_left_click directly; that door and _unhandled_input both gate on _board_locked_for_player,
-# so one predicate covers them plus the camera rig. See game.menu_is_up.
+# IT LOCKS THE BOARD BY JOINING game.menu_is_up(), NOT BY EATING CLICKS. battle3d's click door and
+# game's _unhandled_input both gate on _board_locked_for_player, and so does the camera rig, whose
+# WASD poll no Control can catch -- so one predicate covers them all. See game.menu_is_up.
 #
 # THE BACKDROP IS OPAQUE AND THAT IS LOAD-BEARING: nothing is frozen behind it, so CameraController's
 # WASD poll and HoverPresenter._process are still running. Translucent, the player would watch the

@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09.**
+**Canon checked through #1171 (2026-09-29); #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09; the #929 follow-up (a HUD surface catches its own clicks) folded in 2026-10-09.**
 
 ## Principles
 
@@ -80,6 +80,30 @@ plus the running order of the queue-UX checklist. Update it as items land.
    signature, is what showed a rock the grass tile's fire (dev report, 2026-09-26). The hover setting
    slice 2 was to add (Verbose / Minimal / Off) was dropped when #1105 closed (dev, 2026-09-27): with
    no hover card left, there is nothing for it to set.
+
+7. **A HUD surface catches its own clicks** ([#929](https://github.com/Phaazoid/Godoiosis/issues/929)
+   follow-up, 2026-10-09). A click no Control catches falls through to the board, where
+   `battle3d._unhandled_input` picks the cell under it, so a click on a see-through box aims, moves or
+   selects whatever lies beneath. Found in play: the aim strip shipped `IGNORE` throughout and a click
+   on its arrow queued an attack at empty ground (a self-anchored carving takes any cell as a facing,
+   and a carving that deposits may aim at nothing). The objectives box, the F3 sign, the version stamp
+   and the turn banner had the same hole. The rule is Godot's own picking: a box (or an ancestor up
+   to its full-screen host) is `MOUSE_FILTER_STOP`, while the full-screen host stays `IGNORE` so the
+   board is clickable around its boxes. `PASS` does not count, because nobody handles it and it falls
+   through like `IGNORE`. A scroll still reaches the camera through `STOP`, which passes the wheel up
+   by default (`mouse_force_pass_scroll_events`).
+   - **The law:** `tests/law/test_hud_catches_its_clicks.gd` walks every CanvasLayer in the game's
+     viewport, visible or not, and names each control a click would fall through. A surface that is
+     see-through on purpose goes in its `SEE_THROUGH` table with the reason; today that is only the
+     playback hint, which shows only while playback has locked the board.
+   - **What it cannot see:** a surface its fixture never builds — a card (safe anyway: a card freezes
+     the game or locks the board), the update banner, the dialogue box.
+   - **What a real click does:** `tests/presentation/test_hud_clicks_stay_off_the_board.gd` clicks
+     the strip, its arrows and the corner text on the 3D scene and asks the board door whether
+     anything arrived. That measurement also retired a claim #740 had recorded, that a click a
+     Control catches still reaches the 3D view: it does not. The pre-mission screen still joins
+     `game.menu_is_up()`, for the reasons that survive (it must stop picks anywhere on the board,
+     and the camera's WASD poll is something no Control can catch).
 
 
 ## #49 Action Queue UX — CLOSED, all items shipped
