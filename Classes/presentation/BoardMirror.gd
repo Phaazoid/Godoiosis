@@ -103,6 +103,12 @@ const RAMP_ITEM_NAMES: Dictionary[int, String] = {
 # slope would have hidden. Draws nothing; it exists to make occupancy match geometry.
 const RAMP_FILL_ITEM_NAME := "ramp_fill"
 
+# THE BASIN TWIN (#654): the same water block, wearing a material that lets the water shader drop its
+# top half while Experiments.WATER_BASIN is on. One per FLAT water item, named off it, so the mirror
+# finds a twin by asking the meshlib rather than by knowing which items are water. It ends in
+# "_block" on purpose: the meshlib laws sort items by NAME, and a twin is a ground block, never a cap.
+const BASIN_TWIN_SUFFIX := "_basin_block"
+
 # Which way the authored wedge already climbs, in board space: its high edge is at -Z, and -Z is
 # north. Every other rise is this rotated.
 const RAMP_MESH_HIGH_SIDE := Vector3(0.0, 0.0, -1.0)
@@ -357,6 +363,13 @@ var _lip_mat: StandardMaterial3D = null
 @export var cover_scale := 0.97: set = _set_cover_scale
 
 var board: GridMap
+# The basin twin of each water item (#654), read off the library by name. A CACHE: rebuilt whenever
+# the library it was read from is not the one in hand.
+var _basin_twins: Dictionary[int, int] = {}
+var _basin_twin_library: MeshLibrary
+# The basin drop last pushed to the shader (#654). battle3d reads it to re-push only when the knob
+# moved, and it is recorded IN the push so it cannot claim a value the shader was never sent.
+var basin_drop_pushed := 0.0
 # The tear-out's second lattice (#521): same mesh library, same cell_size, same cell coordinates,
 # and a NODE transform carrying the staged offset. A staged cell's column is written here and
 # cleared from `board`, leaving the socket the exit will thud back into. Null outside Battle3D --
@@ -828,6 +841,7 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 # BOTH maps, because a cell that loses its ground may have been torn out at the time (#521) -- and
 # because "clear this column" must mean the same thing wherever the column happens to live.
 func _clear_column(cell: Vector2i, floor_row: int) -> void:
+	BoardSpace.mark_basin(cell, false)
 	for map: GridMap in _lattices(cell):
 		_clear_column_on(map, cell, floor_row)
 
@@ -925,6 +939,25 @@ func floor_row_of(heights: BoardHeights) -> int:
 # The grid is taken so the cap can wear the cell's own art (#340). Asked INSIDE the sloped branch
 # rather than resolved beside `item` at the caller: it costs a name format per lookup, and a flat
 # cell -- almost every cell -- has no cap to pick art for.
+# An item's basin twin (#654), or the item itself when it has none -- asked of the LIBRARY by name,
+# so the mirror never has to know which items are water. Rebuilt if the library is swapped.
+func basin_twin_of(item: int) -> int:
+	var library: MeshLibrary = board.mesh_library if board != null else null
+	if library == null:
+		return item
+	if library != _basin_twin_library:
+		_basin_twin_library = library
+		_basin_twins.clear()
+		for id: int in library.get_item_list():
+			var twin_name := library.get_item_name(id)
+			if not twin_name.ends_with(BASIN_TWIN_SUFFIX):
+				continue
+			var base := library.find_item_by_name(twin_name.trim_suffix(BASIN_TWIN_SUFFIX))
+			if base != -1:
+				_basin_twins[base] = id
+	return _basin_twins.get(item, item)
+
+
 func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: BoardHeights,
 		floor_row: int) -> void:
 	# Routed, and the OTHER map's column cleared first (#521): a cell that just staged (or just came
@@ -939,12 +972,19 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 	# its flat side (always) nor, since the corner-cap fix, a ground triangle lying on its own floor.
 	# That is what stopped an outer corner's flat half being drawn twice into one plane. Stop writing
 	# this block and that half becomes a hole; draw it AND the cap's floor triangle and they fight.
+	var climb := Terrain.climb_of_corners(corners)
+	# THE BASIN (#654): while the experiment is on, a FLAT column's top block is its basin twin, which
+	# the water shader lets drop its top half. The blocks under it keep the item they always had, so the
+	# column's walls stay whole. A sloped column's top is its cap, so it has no block top to drop.
+	# Published as it is drawn, so BoardSpace.basin_drop() and the drawn columns are one answer.
+	var top_item := basin_twin_of(item) if climb == 0 and BoardSpace.basin_on() else item
+	BoardSpace.mark_basin(cell, top_item != item)
 	for y in range(floor_row, top_row + 1):
 		var at := Vector3i(cell.x, y, cell.y)
-		if map.get_cell_item(at) != item:
-			map.set_cell_item(at, item)
+		var want := top_item if y == top_row else item
+		if map.get_cell_item(at) != want:
+			map.set_cell_item(at, want)
 	var top := top_row
-	var climb := Terrain.climb_of_corners(corners)
 	if climb > 0:
 		var cap := Vector3i(cell.x, top_row + 1, cell.y)
 		var mask := Terrain.corner_mask(corners)
@@ -1099,6 +1139,12 @@ func item_for_tile(source_id: int, coords: Vector2i, alternative: int) -> int:
 # there is no second table to keep in sync.
 static func tile_item_name(source_id: int, coords: Vector2i) -> String:
 	return "tile_%d_%d_%d" % [source_id, coords.x, coords.y]
+
+
+# The ONE spelling of a basin twin's name, read by the generator that writes it and by the mirror
+# that looks it up -- the tile_item_name contract, one family along.
+static func basin_twin_name(item_name: String) -> String:
+	return item_name + BASIN_TWIN_SUFFIX
 
 
 # The same contract for a solid prop's geometry item (#264). A separate namespace rather than a
@@ -1406,10 +1452,18 @@ func _push_water(uniform: StringName, value: Variant) -> void:
 	RenderingServer.global_shader_parameter_set(uniform, value)
 
 
+# The basin's drop (#654), pushed as the EFFECTIVE value: battle3d hands over the depth knob while the
+# experiment is on and zero while it is off, so the shader never needs to know the flag exists.
+func push_basin_drop(drop: float) -> void:
+	basin_drop_pushed = drop
+	_push_water(&"water_basin_drop", drop)
+
+
 # Everything at once, on entering the tree. Without it the board wears project.godot's saved
 # defaults until someone happens to move a slider, which is the same born-dead-knob failure #264
 # shipped and #380 named.
 func _push_all_water() -> void:
+	push_basin_drop(BoardSpace.basin_depth() if BoardSpace.basin_on() else 0.0)
 	_push_water(&"water_deep_wave_speed", water_deep_wave_speed)
 	_push_water(&"water_shallow_wave_speed", water_shallow_wave_speed)
 	_push_water(&"water_deep_wave_scale", water_deep_wave_scale)

@@ -225,6 +225,15 @@ var home_yaw_source: Callable
 # blot: a Wet unit standing in water leaves no patch on it). Unset reads as dry ground everywhere.
 var water_at: Callable
 
+# The game's board, for the WATER BASIN's wading (#654): who is standing IN the water rather than on
+# it is RulesService.wets_in's question, and that reads a BoardContext. Asked once per frame, and only
+# while the experiment is on, so the ordinary board pays nothing for it. Unset means nobody wades.
+var board_source: Callable
+var _frame_board: BoardContext
+# How far below its stand height each unit is drawn right now, eased toward basin_drop + wade so a
+# unit STEPS into the water rather than popping down. Keyed by instance id, dropped with the sprite.
+var _basin_sink: Dictionary[int, float] = {}
+
 # THE ENEMY-INTENT SPAN THAT LIVED HERE IS GONE (#1069). #710 slice 3 drew a second predicted span
 # on a victim's bar for what the enemy was about to do, composed with the player's own plan; the
 # readout it belonged to retired when the lines stopped answering about intent, so the channel went
@@ -359,6 +368,7 @@ func _refresh_facing_on_camera_turn() -> void:
 
 # `delta` is the status fade step (#358); a bare call advances no fade and only re-pushes what is held.
 func reconcile(delta := 0.0) -> void:
+	_frame_board = board_source.call() if BoardSpace.basin_on() and board_source.is_valid() else null
 	# Asked ONCE per frame, not once per unit: it is a board-wide question, and calling it per unit
 	# would re-derive every other unit's projected cell for each unit on the board.
 	var hovered := _hovered_unit()
@@ -411,7 +421,7 @@ func reconcile(delta := 0.0) -> void:
 			# handed in by the host -- see hold_falls).
 			if not unit.unit_died.is_connected(_on_unit_died.bind(id)):
 				unit.unit_died.connect(_on_unit_died.bind(id))
-		_sync(unit, _mirrored[id])
+		_sync(unit, _mirrored[id], delta)
 		# Before the bar, so the readout draws the hold on the very frame it starts and ends.
 		var held_before := _settle_fall_hold(unit, id)
 		var held: int = _fall_held.get(id, 0)
@@ -426,6 +436,7 @@ func reconcile(delta := 0.0) -> void:
 			_last_hp.erase(id)
 			_fall_armed.erase(id)
 			_fall_held.erase(id)
+			_basin_sink.erase(id)
 			_was_falling.erase(id)
 			_status.erase(id)
 			if _bars.has(id):
@@ -586,7 +597,11 @@ func head_height(unit: Unit) -> float:
 	var bar := bar_for(unit)
 	if bar != null and bar.visible:
 		top += hud_lift + bar.top_extent()
-	return top
+	# A wading unit's head is lower than its cell's drawn surface plus its art (#654); the surface half
+	# of the sink is already in the crown's anchor, so only the wade comes off here.
+	var wading := maxf(0.0, float(_basin_sink.get(unit.get_instance_id(), 0.0))
+			- BoardSpace.basin_drop(cell_under(unit)))
+	return top - wading
 
 
 # --- The Squad Up count (#1070) -------------------------------------------------------------------
@@ -770,7 +785,33 @@ static func fall_depth(unit: Unit, heights: BoardHeights) -> float:
 	return BoardSpace.surface_point(cell_under(unit), heights).y - stand_height(unit, heights)
 
 
-func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
+# How much further a unit standing IN water sinks (#654), so the opaque surface hides its legs.
+# RulesService.wets_in is the one answer to "in the water, not on it": shallow and deep alike, a
+# body in deep water too, and never a Waterwalker or anyone standing on FROZEN water. Zero while the
+# basin experiment is off, because no board is built then.
+func wade_at(unit: Unit, cell: Vector2i) -> float:
+	if _frame_board == null or unit == null:
+		return 0.0
+	return BoardSpace.WATER_WADE_DEPTH if RulesService.wets_in(cell, unit, _frame_board) else 0.0
+
+
+# The sink a unit is drawn with, eased over WATER_STEP_TIME on the SCALED delta so a hitstop freezes
+# it with everything else. A unit seen for the first time takes its target outright: it was placed,
+# it did not step.
+func _eased_sink(unit: Unit, cell: Vector2i, delta: float) -> float:
+	var id := unit.get_instance_id()
+	var target := BoardSpace.basin_drop(cell) + wade_at(unit, cell)
+	if not _basin_sink.has(id) or BoardSpace.WATER_STEP_TIME <= 0.0:
+		_basin_sink[id] = target
+		return target
+	var now: float = _basin_sink[id]
+	var span := maxf(BoardSpace.basin_depth() + BoardSpace.WATER_WADE_DEPTH, absf(now - target))
+	now = move_toward(now, target, delta * span / BoardSpace.WATER_STEP_TIME)
+	_basin_sink[id] = now
+	return now
+
+
+func _sync(unit: Unit, sprite: UnitSprite3D, delta := 0.0) -> void:
 	# The BOARD point, which is what every derivation below reads — never the written position,
 	# which since #321 also carries the effect offset.
 	var previous := sprite.position - sprite.art_offset
@@ -789,6 +830,9 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# from PIXELS above rather than from BoardSpace, which is why the offset is added to the whole
 	# placement here instead of hiding inside surface_point.
 	stand += BoardSpace.staged_offset(over)
+	# ...and down into the water, while the basin experiment is on (#654). Here and never inside
+	# stand_height, which also feeds fall_depth and the camera: a recess is not a fall (dev ruling).
+	stand.y -= _eased_sink(unit, over, delta)
 	# The attack lunge and the invalid-order shake (#321) tween $MapSprite's LOCAL position, which
 	# unit.position never sees — the one fact UnitVisuals expresses that the reads above cannot
 	# reach. Mapped through the same metric and the same axes as the stand point: a 2D y is board
@@ -963,7 +1007,8 @@ func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
 	# The ghost's cell, so the readout rides the diorama with the ground it is over (#521). The
 	# branch above needs no offset: sprite.position already carries it.
 	var ghost_cell := unit.get_projected_destination()
-	return BoardSpace.surface_point(ghost_cell, heights) + BoardSpace.staged_offset(ghost_cell) + lift
+	var sink := Vector3(0.0, BoardSpace.basin_drop(ghost_cell) + wade_at(unit, ghost_cell), 0.0)
+	return BoardSpace.surface_point(ghost_cell, heights) + BoardSpace.staged_offset(ghost_cell) + lift - sink
 
 
 # HP moving, and what the readout does about it (#314). The BASELINE is written before anything

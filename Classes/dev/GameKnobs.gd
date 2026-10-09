@@ -1543,6 +1543,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"profile": "cinematic", "script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
 		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from. Nothing stages at all with the battle zoom off."},
 
+	# THE WATER BASIN (#654), an Experiment: all three are BoardSpace statics, read by everything that
+	# places something on a water cell, and inert until Session > Experiments > Water basin is on.
+	{"group": "Water basin (experiment)", "label": "Basin depth", "static": "WATER_BASIN_DEPTH",
+		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 0.45, "step": 0.01,
+		"tip": "How far water sits below the ground around it, in cells, so its banks show. Every water cell dips by this one amount, shallow and deep alike. Only while the Water basin experiment is on."},
+	{"group": "Water basin (experiment)", "label": "Wade depth", "static": "WATER_WADE_DEPTH",
+		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 0.4, "step": 0.01,
+		"tip": "How much further a unit standing in the water sinks, so the surface hides its legs. Waterwalkers and anyone on frozen water stand on top. Only while the Water basin experiment is on."},
+	{"group": "Water basin (experiment)", "label": "Step time", "static": "WATER_STEP_TIME",
+		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Seconds a unit takes to step down into the water or back up out of it. 0 snaps. Only while the Water basin experiment is on."},
+
 	# The cliff follow (#602). NO profile tag on any of these, and that is the section's own rule: a
 	# fall is an animation running in real time in both profiles, so it is flat like the linger and
 	# the impact jolt rather than forked like the sway. Since round 4 the trained shot rides every
@@ -1806,6 +1818,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Water (deep)": "Water",
 	"Water (shallow)": "Water",
 	"Water (shared)": "Water",
+	"Water basin (experiment)": "Water",
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
 	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
@@ -2192,6 +2205,9 @@ static func read_static(name: String) -> Variant:
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
 		"STAGE_LIFT": return BoardSpace.STAGE_LIFT
+		"WATER_BASIN_DEPTH": return BoardSpace.WATER_BASIN_DEPTH
+		"WATER_WADE_DEPTH": return BoardSpace.WATER_WADE_DEPTH
+		"WATER_STEP_TIME": return BoardSpace.WATER_STEP_TIME
 		"BOARD_DRAMA": return Pacing.BOARD_DRAMA
 		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
 		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
@@ -2813,6 +2829,15 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"STAGE_LIFT":
 			BoardSpace.STAGE_LIFT = value
+			return
+		"WATER_BASIN_DEPTH":
+			BoardSpace.WATER_BASIN_DEPTH = value
+			return
+		"WATER_WADE_DEPTH":
+			BoardSpace.WATER_WADE_DEPTH = value
+			return
+		"WATER_STEP_TIME":
+			BoardSpace.WATER_STEP_TIME = value
 			return
 		"BOARD_DRAMA":
 			Pacing.BOARD_DRAMA = value

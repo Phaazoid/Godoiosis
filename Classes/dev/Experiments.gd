@@ -23,6 +23,7 @@ enum Flag {
 	DIORAMA_CAMERA_CUTS_AHEAD,
 	GAS_STYLE,
 	GAS_OVER_UNITS,
+	WATER_BASIN,
 }
 
 # Per-flag metadata. Literal-only, so it can be a compile-time const (like STAT_DEFAULTS).
@@ -56,6 +57,11 @@ const DEFS := {
 		"title": "Gas draws over units",
 		"desc": "On: a gas volume veils whatever is behind it -- units, move tiles, flames and health bars too. Off: all of those draw crisp on top of the gas. #508's layering test.",
 		"default": true,
+	},
+	Flag.WATER_BASIN: {
+		"title": "Water basin",
+		"desc": "On: water sits below the ground around it, so its banks show in dirt, and units standing in it wade with their legs under the surface. Off: today's flush water. #654 -- tune the depth on Game > Water > Water basin. If the look stays this becomes the default; if not, it is deleted with everything it gates.",
+		"default": false,
 	},
 }
 

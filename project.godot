@@ -311,3 +311,7 @@ water_shock_color={
 "type": "color",
 "value": Color(0.706, 0.541, 0.91, 0.55)
 }
+water_basin_drop={
+"type": "float",
+"value": 0.0
+}
