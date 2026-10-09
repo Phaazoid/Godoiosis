@@ -346,6 +346,9 @@ func _wire_signals() -> void:
 		return TileReadout.read(self, cell)
 	hover_info_panel.tile_sections_source = func(cell: Vector2i) -> Array[TileReadout.Section]:
 		return TileReadout.compose(self, cell)
+	# ...and whether a dialogue holds the bottom strip, which the card leaves to it (#1033). The
+	# director's own answer, the one the playback skip already asks.
+	hover_info_panel.dialogue_source = scenario_director.is_talking
 	unit_info_panel.closed.connect(hover_info_panel.clear)
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)

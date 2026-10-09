@@ -9,7 +9,8 @@ class_name HoverInfoPanelControl
 #     an inspected unit stands on, parked beside the Inspect dock and FOLLOWING that unit, since the
 #     dock stays open through Execute and a card fixed on the old cell would describe where it was.
 # It parks on the screen half opposite what it describes; the caller pushes its left edge right of
-# the docked inspect column (#68). Y comes from the live viewport and the card's own size, never a
+# the docked inspect column (#68). While a dialogue is up the BOTTOM strip is the dialogue's (#1033),
+# so a card that would park there parks at the top instead, and goes back down when it ends. Y comes from the live viewport and the card's own size, never a
 # hardcoded pixel constant (the old BOTTOM_LEFT_POS=410 broke on a viewport-height change once).
 
 const MARGIN := 8
@@ -21,6 +22,7 @@ const TILE_ICON_SIZE := Vector2i(32, 32)
 # the tile's picture is built fresh on each read.
 var tile_source: Callable            # (cell) -> TileReadout.Readout
 var tile_sections_source: Callable   # (cell) -> Array[TileReadout.Section]
+var dialogue_source: Callable        # () -> bool: a dialogue holds the bottom strip (#1033)
 
 @onready var hover_panel: Panel = $HoverPanel
 @onready var hover_gridcontainer = $HoverPanel/HoverInfoGridContainer
@@ -37,6 +39,7 @@ var _follow: Unit = null              # the unit whose cell the tile card follow
 # The last park's inputs, kept so a late layout pass can re-run it (see _on_tile_panel_resized).
 var _park_bottom: bool = false
 var _park_left_x: int = MARGIN
+var _parked_for_dialogue := false   # what the last park read, so _process re-parks when it flips
 
 # Hidden while a cinematic pass owns the frame (#722), and what the CONTENT rule last decided.
 # The flag lives in this gate rather than being written from outside, so a show mid-pass cannot
@@ -148,6 +151,10 @@ func tile_texts() -> Array[String]:
 # A tile card stays live: a watch firing, a claim landing or its unit walking changes it without a
 # second click.
 func _process(_delta: float) -> void:
+	# A dialogue can start or end under a card that is already up -- the Prolog's UNIT_SELECTED line
+	# begins as the ring opens -- so the park is re-asked when the answer flips (#1033).
+	if visible and _dialogue_up() != _parked_for_dialogue:
+		_apply_park()
 	if not (visible and is_showing_tile()):
 		return
 	if _follow != null:
@@ -200,10 +207,14 @@ func _park(world_pos: Vector2, left_x: int) -> void:
 	_apply_park()
 
 func _apply_park() -> void:
+	_parked_for_dialogue = _dialogue_up()
 	var y: int = MARGIN
-	if _park_bottom:
+	if _park_bottom and not _parked_for_dialogue:
 		y = int(get_viewport_rect().size.y - _card_height() - MARGIN)
 	position = Vector2(_park_left_x, y)
+
+func _dialogue_up() -> bool:
+	return dialogue_source.is_valid() and bool(dialogue_source.call())
 
 # The tile card is exactly as tall as what it says. Growing needs nothing -- a control is never
 # smaller than its minimum -- but shrinking does, because a free-floating container never shrinks by
