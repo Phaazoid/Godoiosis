@@ -367,6 +367,9 @@ var board: GridMap
 # the library it was read from is not the one in hand.
 var _basin_twins: Dictionary[int, int] = {}
 var _basin_twin_library: MeshLibrary
+# The basin drop last pushed to the shader (#654). battle3d reads it to re-push only when the knob
+# moved, and it is recorded IN the push so it cannot claim a value the shader was never sent.
+var basin_drop_pushed := 0.0
 # The tear-out's second lattice (#521): same mesh library, same cell_size, same cell coordinates,
 # and a NODE transform carrying the staged offset. A staged cell's column is written here and
 # cleared from `board`, leaving the socket the exit will thud back into. Null outside Battle3D --
@@ -1452,6 +1455,7 @@ func _push_water(uniform: StringName, value: Variant) -> void:
 # The basin's drop (#654), pushed as the EFFECTIVE value: battle3d hands over the depth knob while the
 # experiment is on and zero while it is off, so the shader never needs to know the flag exists.
 func push_basin_drop(drop: float) -> void:
+	basin_drop_pushed = drop
 	_push_water(&"water_basin_drop", drop)
 
 

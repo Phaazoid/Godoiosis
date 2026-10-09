@@ -99,8 +99,6 @@ var _tops: Dictionary[Vector2i, int] = {}
 # mirror because the question is "has it MOVED since the last pass", which only a caller that runs
 # every frame can answer.
 var _floor_row := 0
-# The basin drop last pushed to the shader (#654), so a knob drag re-pushes only when it moved.
-var _basin_pushed := 0.0
 # The painted footprint, cached beside _tops and written wherever it is (#231): the
 # picker needs it grown by the apron on every motion event, and deriving it per pick
 # would walk every column of the board each time the mouse moves.
@@ -690,12 +688,10 @@ func _poll_basin() -> void:
 	var drop := BoardSpace.basin_depth() if on else 0.0
 	if on != BoardSpace.basin_on():
 		BoardSpace.set_basin_on(on)
-		_basin_pushed = drop
 		_board_mirror.push_basin_drop(drop)
 		_board_mirror.sync(game.grid, game.board_heights)
 		return
-	if not is_equal_approx(drop, _basin_pushed):
-		_basin_pushed = drop
+	if not is_equal_approx(drop, _board_mirror.basin_drop_pushed):
 		_board_mirror.push_basin_drop(drop)
 		BoardSpace.touch_basin()
 

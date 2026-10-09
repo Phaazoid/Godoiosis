@@ -124,6 +124,10 @@ func _lake() -> Dictionary:
 	return lake
 
 
+func _mirror() -> BoardMirror:
+	return _scene.get_node("BoardMirror") as BoardMirror
+
+
 func _top_item_name(cell: Vector2i, below := 0) -> String:
 	var heights: BoardHeights = _game.board_heights
 	var board := _scene.get_node("Board") as GridMap
@@ -156,7 +160,7 @@ func test_off_draws_todays_columns_and_nothing_dips() -> void:
 				"with the basin OFF the %s column's top is %s, not its own block" % [key, _top_item_name(cell)]) \
 				.is_equal(_base_name(lake, key))
 		assert_float(BoardSpace.basin_drop(cell)).is_equal(0.0)
-	assert_float(float(_scene.get("_basin_pushed"))).is_equal(0.0)
+	assert_float(_mirror().basin_drop_pushed).is_equal(0.0)
 
 
 func test_on_dips_every_flat_water_column_and_off_puts_it_back() -> void:
@@ -175,7 +179,7 @@ func test_on_dips_every_flat_water_column_and_off_puts_it_back() -> void:
 	assert_bool(_top_item_name(lake["dry"]).ends_with(BoardMirror.BASIN_TWIN_SUFFIX)).is_false()
 	assert_float(BoardSpace.basin_drop(lake["dry"])).is_equal(0.0)
 	# The poll is what turns the flag into the shader's drop -- the wire.
-	assert_float(float(_scene.get("_basin_pushed"))).is_equal_approx(DEPTH, 0.0001)
+	assert_float(_mirror().basin_drop_pushed).is_equal_approx(DEPTH, 0.0001)
 
 	await _basin(false)
 	for key: String in ["shallow", "deep"]:
@@ -184,7 +188,7 @@ func test_on_dips_every_flat_water_column_and_off_puts_it_back() -> void:
 				"turning the basin OFF left the %s column on its twin" % key) \
 				.is_equal(_base_name(lake, key))
 		assert_float(BoardSpace.basin_drop(cell)).is_equal(0.0)
-	assert_float(float(_scene.get("_basin_pushed"))).is_equal(0.0)
+	assert_float(_mirror().basin_drop_pushed).is_equal(0.0)
 
 
 func test_moving_the_depth_knob_reaches_the_shader_and_the_drop() -> void:
@@ -192,7 +196,7 @@ func test_moving_the_depth_knob_reaches_the_shader_and_the_drop() -> void:
 	await _basin(true)
 	BoardSpace.WATER_BASIN_DEPTH = DEPTH * 0.5
 	await _settle()
-	assert_float(float(_scene.get("_basin_pushed"))).is_equal_approx(DEPTH * 0.5, 0.0001)
+	assert_float(_mirror().basin_drop_pushed).is_equal_approx(DEPTH * 0.5, 0.0001)
 	assert_float(BoardSpace.basin_drop(lake["shallow"])).is_equal_approx(DEPTH * 0.5, 0.0001)
 
 
