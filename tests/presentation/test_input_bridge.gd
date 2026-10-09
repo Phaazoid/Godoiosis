@@ -1000,19 +1000,28 @@ func test_an_elevation_notch_moves_the_level_and_leaves_the_zoom_alone() -> void
 			).is_equal_approx(zoom_before, 0.001)
 
 
+# How far along its own view line the camera is HEADED (#1280). A notch re-seats the pivot onto the
+# ground before it scales, which relabels _target_distance without moving the lens -- so a zoom is
+# read off where the lens will settle, never off the distance number.
+func _settled_depth() -> float:
+	var rig := _rig() as CameraRig3D
+	var lens: Vector3 = rig.lens_at(rig.target_yaw(), CameraRig3D.When.SETTLED)
+	return lens.dot(-_camera3d.global_transform.basis.z)
+
+
 func test_ctrl_hands_the_notch_back_to_the_camera() -> void:
 	# Zoom needs somewhere to live while the wheel is the level.
 	var brush := _elevation_brush()
 	await _pump()
-	var zoom_before: float = _rig()._target_distance
+	var depth_before := _settled_depth()
 
 	_parse_wheel(MOUSE_BUTTON_WHEEL_UP, true)
 	await _pump()
 
 	assert_int(brush.selected_elevation()).override_failure_message(
 			"Ctrl+wheel moved the brush level as well as the camera").is_equal(0)
-	assert_float(_rig()._target_distance).override_failure_message(
-			"Ctrl+wheel did not zoom").is_less(zoom_before)
+	assert_float(_settled_depth()).override_failure_message(
+			"Ctrl+wheel did not zoom").is_greater(depth_before)
 
 
 func test_the_other_paint_modes_leave_the_wheel_to_the_camera() -> void:
@@ -1024,13 +1033,13 @@ func test_the_other_paint_modes_leave_the_wheel_to_the_camera() -> void:
 		var brush: TileBrushTool = _game.dev_overlay.tile_brush
 		brush._set_paint_mode(mode)
 		await _pump()
-		var zoom_before: float = _rig()._target_distance
+		var depth_before := _settled_depth()
 
 		_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
 		await _pump()
 
-		assert_float(_rig()._target_distance).override_failure_message(
-				"an armed brush in mode %d swallowed the camera's zoom" % mode).is_less(zoom_before)
+		assert_float(_settled_depth()).override_failure_message(
+				"an armed brush in mode %d swallowed the camera's zoom" % mode).is_greater(depth_before)
 
 
 # ---- a dip stays on the board (#294) ----

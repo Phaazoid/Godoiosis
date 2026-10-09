@@ -1114,3 +1114,159 @@ func test_the_camera_is_arriving_until_its_eased_channels_land() -> void:
 			"a camera still zooming said it had arrived").is_true()
 	_land(rig)
 	assert_bool(rig.is_arriving()).is_false()
+
+
+# --- the pivot on the ground, and every hand rate per screen (#1280) ----------------------------
+#
+# Dev, 2026-10-09: "the camera control speeds should be uniform at all zoom levels." Each case asks
+# the property in a unit no knob can move -- a share of the screen, a share of the distance, a point
+# held at the centre -- so retuning a speed never reddens one.
+
+# A flat ground plane at height `y`, as the rig's probe. The board answers this in Battle3D; the rig
+# only ever sees the probe's ANSWER, which is what these cases are about.
+func _ground_at(y: float) -> Callable:
+	return func(origin: Vector3, direction: Vector3) -> float:
+		if direction.y >= 0.0:
+			return INF
+		return (y - origin.y) / direction.y
+
+
+# Where the centre of the screen meets that plane, from the camera as it stands.
+func _centre_on_ground(y: float) -> Vector3:
+	var lens := _camera().global_transform
+	var forward := -lens.basis.z.normalized()
+	return lens.origin + forward * ((y - lens.origin.y) / forward.y)
+
+
+func _screen_centre() -> Vector2:
+	return _camera().get_viewport().get_visible_rect().size * 0.5
+
+
+# Zoomed in PAST the pivot over ground well below it -- the state both of today's reports were in.
+func _past_the_pivot(rig: CameraRig3D) -> float:
+	rig.max_distance = 100.0
+	rig.set_zoom(-3.0)
+	_land(rig)
+	var ground := rig.position.y - 6.0
+	rig.ground_probe = _ground_at(ground)
+	return ground
+
+
+func test_reseating_the_pivot_leaves_the_camera_where_it_was() -> void:
+	var rig := _rig()
+	var camera := _camera()
+	rig.max_distance = 100.0
+	var ground := rig.position.y - 4.0
+	rig.ground_probe = _ground_at(ground)
+	var before := camera.global_transform
+	var on_ground := _centre_on_ground(ground)
+
+	rig._reseat_pivot()
+
+	assert_vector(camera.global_transform.origin).override_failure_message(
+			"re-seating the pivot moved the camera itself").is_equal_approx(before.origin,
+			Vector3(0.0001, 0.0001, 0.0001))
+	assert_vector(rig.position).override_failure_message(
+			"the pivot did not land on the ground at the centre of the screen").is_equal_approx(
+			on_ground, Vector3(0.001, 0.001, 0.001))
+	assert_float(rig._target_distance).is_equal_approx(before.origin.distance_to(on_ground), 0.001)
+
+
+func test_an_orbit_past_the_old_pivot_turns_around_the_centre_of_the_screen() -> void:
+	var rig := _rig()
+	var camera := _camera()
+	var ground := _past_the_pivot(rig)
+	var held := _centre_on_ground(ground)
+
+	_drag(rig.orbit_button, Vector2(80.0, 0.0))
+	_land(rig)
+
+	assert_float(rig._target_yaw_degrees).override_failure_message(
+			"precondition: the drag never turned the camera").is_not_equal(0.0)
+	var drift: float = camera.unproject_position(held).distance_to(_screen_centre())
+	assert_float(drift).override_failure_message(
+			"the ground at the centre of the screen swung %.1f px off it -- the orbit turned around a pivot behind the camera"
+			% drift).is_less(1.0)
+
+
+func test_wasd_crosses_the_same_share_of_the_screen_at_every_zoom() -> void:
+	var rig := _rig()
+	rig.max_distance = 100.0
+	var shares: Array[float] = []
+	for distance: float in [3.0, 30.0]:
+		rig.set_zoom(distance)
+		_land(rig)
+		shares.append(rig._key_pan(Vector2(0.0, -1.0), 0.5).length() / rig.screen_span(distance))
+	assert_float(shares[0]).override_failure_message(
+			"a held key crossed %.3f of a screen close up and %.3f zoomed out" % [shares[0], shares[1]]) \
+		.is_equal_approx(shares[1], 0.0001)
+
+
+func test_a_wheel_notch_closes_the_same_share_at_every_zoom_and_never_passes_through() -> void:
+	var rig := _rig()
+	rig.max_distance = 100.0
+	var ratios: Array[float] = []
+	for distance: float in [4.0, 40.0]:
+		rig.set_zoom(distance)
+		rig.zoom_by(-1)
+		ratios.append(rig._target_distance / distance)
+	assert_float(ratios[0]).override_failure_message(
+			"precondition: a notch in did not zoom in").is_less(1.0)
+	assert_float(ratios[0]).override_failure_message(
+			"a notch closed %.3f of the distance close up and %.3f zoomed out" % [1.0 - ratios[0], 1.0 - ratios[1]]) \
+		.is_equal_approx(ratios[1], 0.0001)
+
+	rig.set_zoom(4.0)
+	for i in 200:
+		rig.zoom_by(-1)
+	assert_float(rig._target_distance).override_failure_message(
+			"two hundred notches in carried the camera through what it looks at").is_greater(0.0)
+
+
+func test_a_grab_past_the_old_pivot_still_follows_the_hand() -> void:
+	var rig := _rig()
+	var camera := _camera()
+	_assert_pan_is_its_own_button(rig)
+	var ground := _past_the_pivot(rig)
+	var drags: Array[Vector2] = [Vector2(12.0, 0.0), Vector2(0.0, 12.0)]
+	for drag: Vector2 in drags:
+		var grabbed := _centre_on_ground(ground)
+		var before: Vector2 = camera.unproject_position(grabbed)
+		_drag(rig.pan_button, drag)
+		var moved: Vector2 = camera.unproject_position(grabbed) - before
+		assert_float(moved.distance_to(drag)).override_failure_message(
+				"past the old pivot a %s drag carried the ground under the centre by %s on screen"
+				% [drag, moved]).is_less_equal(drag.length() * 0.1)
+
+
+func test_a_reseat_that_would_pass_the_zoom_ceiling_is_skipped() -> void:
+	var rig := _rig()
+	rig.max_distance = 20.0
+	rig.set_zoom(20.0)
+	_land(rig)
+	rig.ground_probe = _ground_at(rig.position.y - 4.0)
+	var pivot := rig.position
+
+	rig._reseat_pivot()
+	assert_vector(rig.position).override_failure_message(
+			"a re-seat took the distance past the ceiling, so the next notch out would lurch IN") \
+		.is_equal_approx(pivot, Vector3(0.0001, 0.0001, 0.0001))
+
+	rig.set_zoom(10.0)
+	_land(rig)
+	rig.zoom_by(20)
+	assert_float(rig._target_distance).override_failure_message(
+			"zooming out no longer reaches the ceiling").is_equal_approx(rig.max_distance, 0.0001)
+
+
+func test_a_reseat_that_would_leave_the_pan_limit_is_skipped() -> void:
+	var rig := _rig()
+	rig.max_distance = 100.0
+	var pivot := rig.position
+	rig.pan_limit = Rect2(pivot.x - 0.5, pivot.z - 0.5, 1.0, 1.0)
+	rig.ground_probe = _ground_at(pivot.y - 4.0)   # six units further down the line: off the limit
+
+	rig._reseat_pivot()
+	assert_vector(rig.position).override_failure_message(
+			"a re-seat put the aim off the pan limit, where the clamp would yank the camera") \
+		.is_equal_approx(pivot, Vector3(0.0001, 0.0001, 0.0001))

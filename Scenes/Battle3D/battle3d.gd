@@ -201,6 +201,9 @@ func _ready() -> void:
 	# because the report writes them to two files.
 	game.bug_reporter.recording_source = _recording.render
 	game.bug_reporter.recording_sheet_source = _recording.contact_sheet
+	# Where the ground is along a ray (#1280). The rig re-seats its pivot onto it whenever the player's
+	# hand takes the camera, so every hand rate is measured against what is on screen.
+	_rig.ground_probe = _ground_depth
 	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address
 	# it -- and built BEFORE the dev window is handed this host, which resolves those rows as it builds.
 	_gas = GasMirror.new()
@@ -2191,6 +2194,21 @@ func _vertex_under(screen_pos: Vector2, cell: Vector3i) -> Vector2i:
 # board outward the way the 2D view allows.
 func _paint_plane() -> Rect2i:
 	return _board_rect.grow(paint_apron_cells)
+
+
+# How far along a ray the ground is, INF where it meets none: the rig's ground probe (#1280). The
+# board's own pick, with the pan limit as its floor plane, so the probe answers anywhere the aim may
+# legally be -- past the stage edge it lands on the ground level a missing column already stands for.
+func _ground_depth(origin: Vector3, direction: Vector3) -> float:
+	if direction.y >= 0.0:
+		return INF
+	var bound := _rig.pan_limit
+	var plane := Rect2i(Vector2i(bound.position.floor()), Vector2i(bound.size.ceil())) \
+			if bound.has_area() else _paint_plane()
+	var cell := BoardPicker.pick_cell(origin, direction, _tops, plane)
+	if cell == BoardSpace.NO_CELL:
+		return INF
+	return (BoardSpace.surface_y(cell.y) - origin.y) / direction.y
 
 
 # What a landed blow is worth (#520 diff 2b jolt, 2c freeze). The mirror observes the instant and

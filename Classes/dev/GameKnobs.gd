@@ -223,14 +223,14 @@ const KNOBS: Array[Dictionary] = [
 	# the half Battle3D.tscn authors -- it overrides fov -- which is why these six are the ones
 	# with an @export default to write and those four are not. (Seven until the zoom-in floor was
 	# removed outright, 2026-08-23 -- a knob cannot name a property that no longer exists.)
-	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
-		"tip": "How far one notch of the mouse wheel moves the camera."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_step_share", "label": "Zoom step (share)", "min": 0.02, "max": 0.5, "step": 0.001,
+		"tip": "How much of the distance to the ground one notch of the mouse wheel closes. 0.1 is a tenth: out multiplies the distance by 1.1, in divides by it. A share rather than a distance, so a notch feels the same at every zoom and zooming in never carries you through the ground."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,
 		"tip": "How fast the camera catches up to where it has been told to go. Higher is snappier and more responsive; lower glides, which reads as cinematic until you are trying to play."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "glide_smoothing", "label": "Pan glide speed", "min": 1.0, "max": 24.0, "step": 0.1,
 		"tip": "How fast the camera TRAVELS when something other than your hand moves it -- the flight back to your own view after a pass, the return to a unit you just gave an order to, R, and the rise into the torn-out diorama. Higher lands sooner, lower drifts. This is where to look if the end of every Execute reads as slow: the return is the most visible of them by far. Separate from Camera smoothing above, which is how the yaw and the zoom catch up under your own input."},
-	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_speed", "label": "Pan speed", "min": 1.0, "max": 30.0, "step": 0.5,
-		"tip": "How fast WASD slides the camera across the board, in world units per second."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_speed_screens", "label": "Pan speed (screens/s)", "min": 0.05, "max": 3.0, "step": 0.01,
+		"tip": "How fast WASD slides the camera, in screen widths per second. In screens rather than world units, so it feels the same zoomed in close as zoomed out wide."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "orbit_sensitivity", "label": "Orbit sensitivity", "min": 0.02, "max": 1.0, "step": 0.01,
 		"tip": "Degrees the view swings per pixel of mouse travel while dragging to orbit. ONE rate for both axes -- turning and tilting are two halves of the same drag, and separate rates make a diagonal drag curve."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "max_pitch_degrees", "label": "Tilt limit: shallow", "min": -60.0, "max": -5.0, "step": 1.0,
