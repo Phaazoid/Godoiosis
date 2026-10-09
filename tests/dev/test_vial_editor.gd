@@ -26,7 +26,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	await await_idle_frame()   # gdUnit4 6.2.1's false orphans; retired with the rest by #482
 	get_tree().root.remove_child(_main)
 	_main.free()
 
