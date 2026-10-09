@@ -200,7 +200,9 @@ func test_moving_the_depth_knob_reaches_the_shader_and_the_drop() -> void:
 	assert_float(BoardSpace.basin_drop(lake["shallow"])).is_equal_approx(DEPTH * 0.5, 0.0001)
 
 
-func test_repainting_dipped_water_to_ground_stops_it_dipping() -> void:
+# Two doors take a column off the water: a repaint goes through the column WRITER, an erase through the
+# column CLEARER. Each has to unpublish the drop, so the case walks both.
+func test_repainting_or_erasing_dipped_water_stops_it_dipping() -> void:
 	var lake := await _lake()
 	await _basin(true)
 	var cell: Vector2i = lake["shallow"]
@@ -210,6 +212,13 @@ func test_repainting_dipped_water_to_ground_stops_it_dipping() -> void:
 	assert_float(BoardSpace.basin_drop(cell)).override_failure_message(
 			"a cell painted back to ground still reports a basin drop").is_equal(0.0)
 	assert_str(_top_item_name(cell)).is_equal(_base_name(lake, "dry"))
+
+	var deep: Vector2i = lake["deep"]
+	assert_float(BoardSpace.basin_drop(deep)).is_greater(0.0)
+	_game.grid.erase(deep)
+	await _settle()
+	assert_float(BoardSpace.basin_drop(deep)).override_failure_message(
+			"an erased cell still reports a basin drop").is_equal(0.0)
 
 
 func test_a_unit_wades_in_water_and_stands_on_frozen_water() -> void:
