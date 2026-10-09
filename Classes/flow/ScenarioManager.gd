@@ -56,6 +56,11 @@ static func display_name(path: String) -> String:
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var turn_manager: TurnManager = $"../TurnManager"
 
+# Which board is standing: bumped by every clear_board. A coroutine that awaits across a pass or a
+# turn captures it on entry and stops if it moved, so a pass interrupted by a board swap never acts on
+# the board that replaced it (#661).
+var board_generation := 0
+
 var last_loaded_path := ""
 
 # The look the CURRENT board wears (#253 part 2), by preset name; "" = the default. One store,
@@ -408,6 +413,7 @@ func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 		paths.append(dir.path_join(file))
 
 func clear_board():
+	board_generation += 1   # first, so anything this teardown wakes already sees the board as gone (#661)
 	# Director BEFORE controller: mc.reset() is a refresh_mission_status write point, and that
 	# refresh reads active_instruction() -- reset the director first or the instruction row
 	# re-renders stale on the dying board (#182).
@@ -449,6 +455,10 @@ func clear_board():
 	# reload mid-enemy-phase rests game_state on _base_state() through exit_current_mode below, so an
 	# playback_locked left standing by an interrupted turn would lock the fresh board for good.
 	game.camera_controller.set_playback_locked(false)
+	# ...and the PASS itself (#661). A pass suspended on a unit this teardown frees never reaches its
+	# own end, so what that end releases is released here, or executing_plan stays set and every
+	# reader of it (the queue panel's re-derive above all) refuses the next board for good.
+	game.order_executor.abandon_pass()
 	# ...and the TEAR-OUT the same pass may have left in the sky (#521, wired to the camera in #520
 	# diff 2b). Same shape as the line above and the same trigger: only execute_orders clears the
 	# staging, so a board swapped mid-pass (F2, Mission Select) hands the fresh board a lifted set of
