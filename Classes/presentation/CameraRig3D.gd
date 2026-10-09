@@ -75,12 +75,18 @@ class_name CameraRig3D
 # Ctrl+wheel had always handed notches back (battle3d's _handle_brush_zoom), they just hit this the
 # instant they arrived. Lowering it to 1.0 first was not what he asked for and did not satisfy him.
 #
-# Consequence, stated rather than guarded: scrolling in past the aim point takes the distance through
-# zero and negative, and the camera passes through its target and looks back. His call; a floor at 0
-# is the one line that would stop it. Pinned by test_zooming_in_has_no_floor_while_the_ceiling_still_holds.
+# set_zoom still bounds from above only. What changed (#1280, dev 2026-10-09: "the camera control
+# speeds should be uniform at all zoom levels") is the WHEEL: a notch closes a SHARE of the distance,
+# so it gets as close as you like and never carries you through the ground. A caller handing set_zoom
+# a distance directly still can. Pinned by test_zooming_in_has_no_floor_while_the_ceiling_still_holds.
 @export var max_distance := 24.0   # frame() overwrites this from the board it fits
-@export var zoom_step := 1.5
-@export var pan_speed := 8.0
+# What one wheel notch moves, as a SHARE of the distance (#1280): out multiplies by 1 + share, in
+# divides by it. 0.107 is the old 1.5-unit step at the default zoom of 14.
+@export var zoom_step_share := 0.107
+# How fast WASD slides the view, in SCREENS per second -- never world units, which raced across the
+# board up close and crawled zoomed out (#1280; #879's screens-not-cells law). 0.6 is the old 8 units
+# a second at the default zoom of 14 on a 16:9 screen.
+@export var pan_speed_screens := 0.6
 @export var smoothing := 8.0
 # How fast a GLIDE closes, in the same units as `smoothing` above -- which stays the YAW and ZOOM
 # rate. Its own number because the two answer different questions: that one is how snappy the camera
@@ -136,7 +142,7 @@ const SCALE_FACTORS := {
 # at each read: a read site that forgot to scale is invisible, and a missing accessor is a parse
 # error. MOUSE SENSITIVITY drives TWO of them -- the drag and the wheel are one hand.
 func effective_pan_speed() -> float:
-	return pan_speed * scale_of(PlayerSettings.Setting.CAMERA_PAN_SPEED)
+	return pan_speed_screens * scale_of(PlayerSettings.Setting.CAMERA_PAN_SPEED)
 
 
 func effective_orbit_sensitivity() -> float:
@@ -144,7 +150,7 @@ func effective_orbit_sensitivity() -> float:
 
 
 func effective_zoom_step() -> float:
-	return zoom_step * scale_of(PlayerSettings.Setting.MOUSE_SENSITIVITY)
+	return zoom_step_share * scale_of(PlayerSettings.Setting.MOUSE_SENSITIVITY)
 
 
 func effective_smoothing() -> float:
@@ -305,6 +311,11 @@ var beat_profile: Pacing.Profile = Pacing.Profile.BOARD
 # Empty = unbounded (the look-dev scene never frames, so it keeps free roam).
 var pan_limit := Rect2()
 
+# How far along a ray the GROUND is: (origin: Vector3, direction: Vector3) -> float, INF on a miss.
+# The host's to supply (#1280), because only the host can see the board; empty means the pivot is
+# never re-seated, which is the look-dev scene and every case that does not set one.
+var ground_probe := Callable()
+
 var _orbiting := false
 var _orbit_travel_px := 0.0
 # This gesture's press reached the rig and its release has not. Separate from _orbiting, which
@@ -312,6 +323,9 @@ var _orbit_travel_px := 0.0
 var _press_held := false
 # A pan_button press reached the rig and its release has not.
 var _drag_panning := false
+# A WASD key was held last frame -- so the pivot re-seats once when a hold STARTS, not every frame of
+# it, or the speed would jump each time the centre of the screen crossed a tower (#1280).
+var _key_panning := false
 
 # The camera's black box (#669), dumped into report.md beside the View line. It lives HERE rather
 # than on the host because the rig is the one place every channel is readable at once -- so a trace
@@ -359,6 +373,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_orbiting = button.pressed
 		if button.pressed:
 			_orbit_travel_px = 0.0
+			# So the drag turns and tilts around what is at the centre of the screen (#1280).
+			_reseat_pivot()
 		elif not _press_held:
 			# A release whose press never reached us (#1081): a UI surface ate the press and freed
 			# itself on it -- the action ring backing out of its last level -- so nothing was left
@@ -391,6 +407,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Below the orbit branch on purpose: when both knobs name one button, that button orbits.
 	if button != null and button.button_index == pan_button:
 		_drag_panning = button.pressed
+		if button.pressed:
+			_reseat_pivot()   # the grab is sized off the distance, so it must be the ground's
 		return
 
 	if _drag_panning:
@@ -404,8 +422,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key != null and key.pressed and not key.echo:
 		match key.physical_keycode:
 			KEY_Q:
+				_reseat_pivot()
 				_target_yaw_degrees = _next_detent(1)
 			KEY_E:
+				_reseat_pivot()
 				_target_yaw_degrees = _next_detent(-1)
 			KEY_R:
 				# A PAN since #520, like the other three that used to cut. Yaw and distance were
@@ -424,8 +444,68 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # One notch of zoom. Public so a host that has taken the wheel away can still hand a MODIFIED
 # notch back (#285's Ctrl+wheel) without reaching into _target_distance or re-spelling the step.
+#
+# A notch scales the distance to the ground at the centre of the screen (#1280), so it is the same
+# share of the view at every zoom and never carries the camera through what it is looking at. A
+# distance already at or past the pivot (one that could not be re-seated) steps instead, scaled by
+# the rate distance, so it still moves the way the wheel turned.
 func zoom_by(notches: int) -> void:
-	set_zoom(_target_distance + effective_zoom_step() * notches)
+	_reseat_pivot()
+	var factor := pow(1.0 + effective_zoom_step(), notches)
+	if _target_distance > 0.0:
+		set_zoom(_target_distance * factor)
+	else:
+		set_zoom(_target_distance + _rate_distance(_target_distance) * (factor - 1.0))
+
+
+# The distance every hand rate scales by (#1280): how far the camera sits from its pivot, which a
+# re-seat has made the distance to the ground. The floor is NOT a zoom floor -- it only stops a rate
+# collapsing to nothing at a distance of zero, which only a pivot that could not be re-seated meets.
+const MIN_RATE_DISTANCE := 0.1
+
+static func _rate_distance(distance: float) -> float:
+	return maxf(absf(distance), MIN_RATE_DISTANCE)
+
+
+# Slide the pivot along the view line onto the ground at the centre of the screen, leaving the camera
+# exactly where it is (#1280). The camera turns around and zooms toward its pivot, and the opening
+# shot seats that at the top of the board's tallest column -- so on a tall board, zoomed in, the pivot
+# sat behind the camera and an orbit swung it sideways on a boom. Only the player's hand calls this.
+#
+# Skipped, leaving the pivot where it was, wherever the move would show: no ground on the line, ground
+# behind the lens, a distance past the zoom ceiling (the next notch out would clamp and lurch in), or
+# an aim off the pan limit (the clamp would yank it).
+const RESEAT_EPSILON := 0.01
+
+func _reseat_pivot() -> void:
+	if not ground_probe.is_valid():
+		return
+	var lens := _camera.global_transform
+	var forward := -lens.basis.z.normalized()
+	var depth: float = ground_probe.call(lens.origin, forward)
+	if not is_finite(depth) or depth <= 0.0:
+		return
+	var shift := depth - _camera.position.z
+	if absf(shift) < RESEAT_EPSILON or _target_distance + shift > max_distance:
+		return
+	var aim := _aim + forward * shift
+	var target := _target_aim + forward * shift
+	if pan_limit.has_area() and not (pan_limit.has_point(Vector2(aim.x, aim.z))
+			and pan_limit.has_point(Vector2(target.x, target.z))):
+		return
+	_aim = aim
+	_target_aim = target
+	_camera.position.z += shift
+	_target_distance += shift
+	_apply_position()
+	note_event("pivot -> ground %+.1f" % shift)
+
+
+# The aim's move for one frame of a WASD hold, `direction` in screen axes (x = right, y = toward the
+# camera): pan_speed_screens screenfuls a second of whatever the camera is looking at (#1280).
+func _key_pan(direction: Vector2, delta: float) -> Vector3:
+	var step := effective_pan_speed() * screen_span(_rate_distance(_camera.position.z)) * delta
+	return _on_ground(direction.normalized() * step)
 
 
 # The next detent in `direction`. From an exact detent this is the old `+= yaw_step`
@@ -444,7 +524,9 @@ func _grab_offset(relative: Vector2) -> Vector3:
 	var proj := _camera.get_camera_projection()
 	if height <= 0.0 or proj.y.y <= 0.0:
 		return Vector3.ZERO
-	var per_pixel := 2.0 * _camera.position.z / (proj.y.y * height)
+	# The rate distance, not the raw one: past the pivot the raw distance is negative and ran the drag
+	# backwards (#1280). The press re-seated the pivot, so this is the distance to the ground.
+	var per_pixel := 2.0 * _rate_distance(_camera.position.z) / (proj.y.y * height)
 	# A pitched camera sees ground recede as well as rise, so a forward drag spans 1/sin(pitch) more.
 	var along := per_pixel / maxf(absf(sin(deg_to_rad(_pitch_degrees))), 0.05)
 	return _on_ground(Vector2(-relative.x * per_pixel, -relative.y * along))
@@ -1256,8 +1338,8 @@ func _process(scaled_delta: float):
 	_attributes.dof_blur_near_distance = maxf(0.5, _camera.position.z - focus_band_near)
 	_attributes.dof_blur_far_distance = _camera.position.z + focus_band_far
 
+	var pan := Vector2.ZERO
 	if manual_input_enabled:
-		var pan := Vector2.ZERO
 		if Input.is_physical_key_pressed(KEY_W):
 			pan.y -= 1.0
 		if Input.is_physical_key_pressed(KEY_S):
@@ -1266,9 +1348,11 @@ func _process(scaled_delta: float):
 			pan.x -= 1.0
 		if Input.is_physical_key_pressed(KEY_D):
 			pan.x += 1.0
-		if pan != Vector2.ZERO:
-			pan = pan.normalized() * effective_pan_speed() * delta
-			hold_at(_target_aim + _on_ground(pan))
+	if pan != Vector2.ZERO:
+		if not _key_panning:
+			_reseat_pivot()
+		hold_at(_target_aim + _key_pan(pan, delta))
+	_key_panning = pan != Vector2.ZERO
 
 	# The two eased channels (#520). Headless, land now: nobody is watching, the asymptotic lerp
 	# never settles, and a suite sampling the rig must read the DECISION rather than frame timing.

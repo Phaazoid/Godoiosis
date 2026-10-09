@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1280 (the pivot on the ground, the hand rates per screen) folded in 2026-10-09.**
 
 ## Why this page exists
 
@@ -38,10 +38,10 @@ position = _aim + _lift + Vector3(0.0, -_drop, 0.0) + flourish()
 
 | Channel | What it means | Owned by | Written through |
 |---|---|---|---|
-| **aim** | the point on the board the rig sits over | `CameraRig3D._aim` / `_target_aim` | `hold_at` (snap) · `glide_to` (pan) |
+| **aim** | the point on the board the rig sits over: the PIVOT the camera turns around and zooms toward | `CameraRig3D._aim` / `_target_aim` | `hold_at` (snap) · `glide_to` (pan) · `_reseat_pivot` (the hand's; camera unmoved) |
 | **lift** | how far the torn-out diorama has risen under it | `_lift` / `_target_lift` | `lift_to` (eased) · `cut_lift` (lands now) |
 | **drop** | how far below the board the shot has ridden a falling body | `_drop` / `_target_drop` | `drop_to` |
-| **distance** | how far the camera sits back from the aim | `_camera.position.z` / `_target_distance` | `set_zoom` — the ONE distance door |
+| **distance** | how far the camera sits back from the aim; after any hand gesture, the distance to the ground at the centre of the screen | `_camera.position.z` / `_target_distance` | `set_zoom` — the ONE distance door (`_reseat_pivot` relabels it, moving nothing) |
 | **dolly** | the director's push-in for the beat now playing, an ADDEND on distance | `_dolly` | `dolly_to` |
 | **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` (carrying the clearance **turn**) · `align_to_detent` · orbit |
 | **pitch** | the tilt | `_pitch_degrees` / `_target_pitch_degrees` | drag · `board_pitch_degrees` |
@@ -188,7 +188,16 @@ zoom sees past what stands in the way*.
 
 - **zoom** is the PLAYER'S WHEEL, never the director's push-in. The push-in is the **dolly**. The
   ruling *"this rig has no zoom-in floor"* is about the wheel and keeps that scope; the dolly has a
-  floor on its own contribution.
+  floor on its own contribution. Since [#1280](https://github.com/Phaazoid/Godoiosis/issues/1280) a notch
+  SCALES the distance (`zoom_step_share`), so the wheel gets as close as you like and never passes
+  through the ground; `set_zoom` itself is still floorless.
+- **re-seat** — the player's hand moving the aim along the view line onto the ground at the centre
+  of the screen ([#1280](https://github.com/Phaazoid/Godoiosis/issues/1280)), so orbit, tilt, Q/E
+  and the wheel act around what is on screen and every hand rate scales by a distance that means
+  something. It fires on a gesture's START (orbit or pan press, a notch, Q/E, a WASD hold), never
+  per frame, needs a host `ground_probe` (battle3d's, off `BoardPicker`), and never moves the camera:
+  it is skipped past the zoom ceiling or off the pan limit. Every hand rate is per SCREEN —
+  `pan_speed_screens` — #879's screens-not-cells law.
 - **"looks at"** — when the dev says the camera must never look at where the death bar forms, that is
   about the frame's bottom EDGE descending onto it, not about the aim travelling toward it. The aim
   can be nowhere near a thing that is nonetheless in shot.

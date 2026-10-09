@@ -38,9 +38,9 @@ func test_normal_is_the_authored_value_untouched() -> void:
 		assert_float(CameraRig3D.scale_of(setting)).override_failure_message(
 				"%s does not fall through to 1.0 at NORMAL" % PlayerSettings.Setting.keys()[setting]
 				).is_equal_approx(1.0, 0.0001)
-	assert_float(_rig.effective_pan_speed()).is_equal_approx(_rig.pan_speed, 0.0001)
+	assert_float(_rig.effective_pan_speed()).is_equal_approx(_rig.pan_speed_screens, 0.0001)
 	assert_float(_rig.effective_orbit_sensitivity()).is_equal_approx(_rig.orbit_sensitivity, 0.0001)
-	assert_float(_rig.effective_zoom_step()).is_equal_approx(_rig.zoom_step, 0.0001)
+	assert_float(_rig.effective_zoom_step()).is_equal_approx(_rig.zoom_step_share, 0.0001)
 	assert_float(_rig.effective_smoothing()).is_equal_approx(_rig.smoothing, 0.0001)
 
 func test_normal_is_not_a_row_in_the_factor_table() -> void:
@@ -73,7 +73,7 @@ func test_a_step_scales_the_value_it_names() -> void:
 	PlayerSettings.set_choice(PAN, PlayerSettings.Scale.FASTER)
 	assert_float(_rig.effective_pan_speed()).override_failure_message(
 			"the pan-speed step did not reach the value it names").is_equal_approx(
-			_rig.pan_speed * CameraRig3D.scale_of(PAN), 0.0001)
+			_rig.pan_speed_screens * CameraRig3D.scale_of(PAN), 0.0001)
 	assert_float(CameraRig3D.scale_of(PAN)).override_failure_message(
 			"FASTER left the pan speed unscaled").is_not_equal(1.0)
 
@@ -86,14 +86,14 @@ func test_the_mouse_row_drives_the_drag_and_the_wheel_together() -> void:
 			_rig.orbit_sensitivity * factor, 0.0001)
 	assert_float(_rig.effective_zoom_step()).override_failure_message(
 			"the wheel was left behind by the mouse-sensitivity step").is_equal_approx(
-			_rig.zoom_step * factor, 0.0001)
+			_rig.zoom_step_share * factor, 0.0001)
 
 func test_each_row_moves_only_its_own_values() -> void:
 	# Three preferences sharing one enum must not share an EFFECT. Asserted per row so a factor table
 	# keyed wrongly names which row leaked.
 	PlayerSettings.set_choice(MOUSE, PlayerSettings.Scale.FASTER)
 	assert_float(_rig.effective_pan_speed()).override_failure_message(
-			"the mouse row moved the pan speed").is_equal_approx(_rig.pan_speed, 0.0001)
+			"the mouse row moved the pan speed").is_equal_approx(_rig.pan_speed_screens, 0.0001)
 	assert_float(_rig.effective_smoothing()).override_failure_message(
 			"the mouse row moved the smoothing").is_equal_approx(_rig.smoothing, 0.0001)
 
