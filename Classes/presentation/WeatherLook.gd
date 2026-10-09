@@ -80,6 +80,7 @@ enum Fall { RAIN, SNOW }
 @export_group("Settles")
 @export var caps_props := false             # snow on the tops of rocks, walls, crates and trees
 @export var caps_units := false             # ...and on the units' heads and shoulders
+@export var unit_cap_color := Color(0.32, 0.58, 0.98)   # the units' caps: ice blue, to read against white ground
 @export var breath := false                 # every standing unit's breath fogs
 
 @export_group("Drift")
@@ -178,7 +179,7 @@ const ROWS: Array[Dictionary] = [
 	{"prop": "snow_flecks", "label": "Flecks", "min": 0.0, "max": 0.3, "step": 0.005, "fall": Fall.SNOW,
 		"tip": "The share of the ground's art pixels flecked white between the patches."},
 	{"prop": "snow_color", "label": "Snow colour", "fall": Fall.SNOW,
-		"tip": "The settled snow's colour: on the ground, on the caps and on the units."},
+		"tip": "The settled snow's colour: on the ground and on the props' caps. The units' caps have their own colour."},
 	{"prop": "snow_roughness", "label": "Snow gloss", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
 		"tip": "The snow's roughness: 1 is matte powder, lower catches the light like a crust."},
 	{"prop": "snow_relief", "label": "Relief", "min": 0.0, "max": 20.0, "step": 0.1, "fall": Fall.SNOW,
@@ -193,6 +194,8 @@ const ROWS: Array[Dictionary] = [
 		"tip": "Snow on the tops of rocks, walls, crates, barrels, trees and lanterns. Tall grass and flowers hide in any snow."},
 	{"prop": "caps_units", "label": "Caps on units", "fall": Fall.SNOW,
 		"tip": "Snow on every unit's head and shoulders. A look only: no rule is behind it yet."},
+	{"prop": "unit_cap_color", "label": "Unit cap colour", "fall": Fall.SNOW,
+		"tip": "The colour of the snow on the units' heads. Blue reads as ice and stands out against a white ground."},
 	{"prop": "breath", "label": "Breath", "fall": Fall.SNOW,
 		"tip": "Every standing unit's breath fogs, the puff a Chilled unit breathes. A look only."},
 	{"prop": "drift_rate", "label": "Ground drift", "min": 0.0, "max": 8.0, "step": 0.05, "fall": Fall.SNOW,

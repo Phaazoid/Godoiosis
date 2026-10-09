@@ -445,8 +445,8 @@ func test_a_capping_snow_caps_a_dry_unit_fading_in_its_colour() -> void:
 	assert_object(material).override_failure_message("a capped unit wears no status material").is_not_null()
 	assert_float(_param(material, "snow_cap")).is_equal_approx(half, 0.0001)
 	var hue: Color = material.get_shader_parameter("snow_cap_hue")
-	assert_bool(hue.is_equal_approx(Color(WeatherLook.for_kind(kind).snow_color, 1.0))).override_failure_message(
-			"the cap is drawn in %s, not the snow's colour" % [hue]).is_true()
+	assert_bool(hue.is_equal_approx(Color(WeatherLook.for_kind(kind).unit_cap_color, 1.0))).override_failure_message(
+			"the cap is drawn in %s, not the look's unit cap colour" % [hue]).is_true()
 	_set_weather(Weather.Kind.CLEAR)
 	_unit_mirror.reconcile(2.0)
 	assert_object(sprite.material_override).override_failure_message(
