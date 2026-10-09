@@ -19,6 +19,8 @@ class_name WeatherMirror
 #     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
 #     prop_caps tells BoardMirror to lay its overlays on the billboards. Which of the two a look draws
 #     is its FALL; every rain path is gated on it.
+#   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
+#     easing between weathers. Either fall may author one; every shipped rain leaves it at identity.
 #
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
@@ -73,6 +75,7 @@ var _puddles: Decal
 var _snow_cover: Decal
 var _caps: Decal
 var _bolts: StormBolts
+var _grade: WeatherGrade
 var _side: DirectionalLight3D
 
 var _rect := Rect2i()
@@ -126,6 +129,8 @@ func _ready() -> void:
 	_caps.albedo_mix = 1.0
 	_bolts = StormBolts.new()
 	add_child(_bolts)
+	_grade = WeatherGrade.new()
+	add_child(_grade)
 	_side = DirectionalLight3D.new()
 	_side.shadow_enabled = true
 	_side.visible = false
@@ -162,6 +167,11 @@ func unit_snow() -> Color:
 	return Color(_look.snow_color.r, _look.snow_color.g, _look.snow_color.b, 1.0)
 
 
+# The grade drawn over the board right now (#1269).
+func grade() -> WeatherGrade:
+	return _grade
+
+
 # Whether every standing unit's breath fogs (#1269) -- UnitMirror.breath_source.
 func breathes() -> bool:
 	return _snowing() and _look.breath
@@ -179,6 +189,8 @@ func _process(delta: float) -> void:
 	var look := WeatherLook.for_kind(kind) if kind != Weather.Kind.CLEAR and not down else null
 	if look != _look or kind != _kind:
 		_switch(kind, look)
+	# Every frame, the clear ones too: a grade eases OUT as well as in.
+	_grade.drive(_look, Vector2(_look.wind_x, _look.wind_z) if _look != null else Vector2.ZERO, delta)
 	if _look == null:
 		return
 	_sync_mask()

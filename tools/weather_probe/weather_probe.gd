@@ -8,7 +8,8 @@ extends Node
 #   - that the RAIN draws at all (pixels that move against a clear control frame);
 #   - that the GROUND changes under it with the drops switched off (the decals alone);
 #   - that a STORM strike reaches the screen (the white-out) and draws its bolt;
-#   - that each SNOW strength draws flakes, more of them the harder it snows (#1269).
+#   - that each SNOW strength draws flakes, more of them the harder it snows (#1269), and that its cold
+#     grade greys the board while the HUD's pixels stay exactly as they were.
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -114,6 +115,9 @@ func _snow(_ford_clear: Image) -> int:
 	await _open(SNOW_MISSION)
 	var clear := await _grab("snow_clear")
 	var counts := {}
+	var greyed := 0
+	var hud_moved := 0
+	var clear_sat := _saturation(clear)
 	var mirror: WeatherMirror = _scene._weather
 	for kind: Weather.Kind in [Weather.Kind.LIGHT_SNOW, Weather.Kind.SNOW, Weather.Kind.BLIZZARD]:
 		_game.scenario_manager.current_weather = kind
@@ -128,6 +132,13 @@ func _snow(_ford_clear: Image) -> int:
 				if now.get_luminance() > clear.get_pixel(x, y).get_luminance() + 0.15 and now.s < 0.25:
 					flakes += 1
 		counts[kind] = flakes
+		var sat := _saturation(frame)
+		var moved := _hud_moved(clear, frame)
+		hud_moved += moved
+		if sat < clear_sat - 0.01:
+			greyed += 1
+		print("  %s: board saturation %.3f (clear %.3f), grade %s, veil %.2f, %d HUD px moved" % [
+				Weather.name_of(kind), sat, clear_sat, mirror.grade().rect().visible, mirror.grade().veil, moved])
 		var look := WeatherLook.for_kind(kind)
 		var box: Dictionary = mirror._view_box(maxf(look.fall_speed, 0.5), Vector2(look.wind_x, look.wind_z),
 				look.swirl_scale + look.flake_sway)
@@ -136,7 +147,41 @@ func _snow(_ford_clear: Image) -> int:
 				% [Weather.name_of(kind), flakes, mirror._snow.amount, int(wanted), box["area"], box["fall"]])
 	var light: int = counts[Weather.Kind.LIGHT_SNOW]
 	var blizzard: int = counts[Weather.Kind.BLIZZARD]
-	return 0 if light > 20 and blizzard > light else 1
+	return 0 if light > 20 and blizzard > light and greyed == 3 and hud_moved == 0 else 1
+
+
+# Mean HSV saturation over the frame, the End Turn corner left out.
+func _saturation(frame: Image) -> float:
+	var hud := _hud_rect()
+	var total := 0.0
+	var count := 0
+	for y in range(0, frame.get_height(), 4):
+		for x in range(0, frame.get_width(), 4):
+			if hud.has_point(Vector2(x, y)):
+				continue
+			total += frame.get_pixel(x, y).s
+			count += 1
+	return total / maxf(count, 1)
+
+
+# How many of the End Turn button's pixels differ from the clear frame: the grade must leave the HUD.
+func _hud_moved(clear: Image, frame: Image) -> int:
+	var hud := _hud_rect().grow(-2)
+	var moved := 0
+	for y in range(int(hud.position.y), int(hud.end.y)):
+		for x in range(int(hud.position.x), int(hud.end.x)):
+			if not clear.get_pixel(x, y).is_equal_approx(frame.get_pixel(x, y)):
+				moved += 1
+	return moved
+
+
+# The End Turn button itself -- its holder is a full-rect Control, so the rect is its Button child's.
+func _hud_rect() -> Rect2:
+	var holder: Control = _game.end_turn_button
+	var button := holder.get_node_or_null("Button") as Control if holder != null else null
+	if button == null or not button.is_visible_in_tree():
+		return Rect2()
+	return button.get_global_rect()
 
 
 # The middle of the frame at 4x, for an eye check of pixel-sized things.

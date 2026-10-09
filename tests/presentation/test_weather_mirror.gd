@@ -89,6 +89,7 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror._snow_draw: ["flakes", "size", "tint"],
 		mirror._drift_process: mask + ["velocity", "hover"],
 		mirror._drift_draw: ["streak", "size", "tint", "age_fade"],
+		mirror.grade()._material: ["saturation", "brightness", "tint", "veil", "veil_color", "veil_offset"],
 	}
 	for material: ShaderMaterial in wanted:
 		var names: Array[String] = []
@@ -244,3 +245,45 @@ func test_no_look_knob_names_what_the_storm_writes() -> void:
 	for knob: Dictionary in LookKnobs.KNOBS:
 		assert_bool(String(knob.get("prop", "")).contains("energy_multiplier")).override_failure_message(
 				"Look knob %s names the sky energy the storm's glow writes" % knob.get("label")).is_false()
+
+
+# The cold grade (#1269): a grading weather shows it, easing in rather than snapping, and a clear or
+# ungraded one hides it -- no full-screen pass while nothing is graded. It sits BELOW the 2D game's
+# canvas layer, which is what keeps the HUD ungraded (measured on the real renderer by the probe).
+func test_the_grade_eases_in_under_a_grading_weather_and_hides_at_identity() -> void:
+	var mirror := _mirror()
+	var grade := mirror.grade()
+	assert_int(grade.layer).override_failure_message("the grade is not under the game's canvas layer") \
+			.is_less(0)
+	var kind := Weather.Kind.CLEAR
+	for candidate: Weather.Kind in Weather.Kind.values():
+		var look := WeatherLook.for_kind(candidate)
+		if look != null and look.grades() and look.grade_fade > 0.0:
+			kind = candidate
+			break
+	assert_int(kind).override_failure_message("fixture: no weather grades the board").is_not_equal(Weather.Kind.CLEAR)
+	var look := WeatherLook.for_kind(kind)
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(look.grade_fade * 0.1)
+	var partway := grade.saturation
+	mirror._process(look.grade_fade * 10.0)
+	assert_bool(grade.rect().visible).override_failure_message("a grading weather drew no grade").is_true()
+	assert_float(grade.saturation).is_equal_approx(look.grade_saturation, 0.01)
+	if not is_equal_approx(look.grade_saturation, 1.0):
+		assert_bool(absf(partway - look.grade_saturation) > 0.01).override_failure_message(
+				"the grade snapped to the weather rather than easing in").is_true()
+	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	mirror._process(look.grade_fade * 10.0)
+	assert_bool(grade.rect().visible).override_failure_message("a clear board still draws a grade").is_false()
+	_scene.game.scenario_manager.current_weather = Weather.Kind.RAIN
+	mirror._process(10.0)
+	assert_bool(WeatherLook.for_kind(Weather.Kind.RAIN).grades()).override_failure_message(
+			"fixture: rain grades the board, so it cannot show the identity case").is_false()
+	assert_bool(grade.rect().visible).override_failure_message("an ungraded rain drew a grade").is_false()
+
+
+# The grade writes only its own material, and no Look knob may reach the node it is drawn on.
+func test_no_look_knob_names_the_weathers_grade() -> void:
+	for knob: Dictionary in LookKnobs.KNOBS:
+		assert_bool(String(knob.get("node", "")).contains("Weather")).override_failure_message(
+				"Look knob %s names a node the weather draws on" % knob.get("label")).is_false()
