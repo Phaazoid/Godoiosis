@@ -418,6 +418,9 @@ static func weathers() -> Dictionary:
 			K.LIGHT_SNOW: {"ai": inert()},
 			K.SNOW: {"ai": inert()},
 			K.BLIZZARD: {"ai": inert()},
+			K.MIST: {"ai": inert()},
+			K.FOG: {"ai": inert()},
+			K.THICK_FOG: {"ai": inert()},
 		},
 	}
 

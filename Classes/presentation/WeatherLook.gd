@@ -6,15 +6,16 @@ class_name WeatherLook
 # owners. Dumb data: WeatherMirror draws it, and the dev tools' Weather page tunes it live and saves it.
 #
 # What falls is the FALL field (#1269): rain draws drops, splashes, a wet sheen and puddles; snow draws
-# flakes, a snow cover, caps, drift and breath. The fields of the other fall are ignored, and the page
-# hides their rows. The grade is either fall's.
+# flakes, a snow cover, caps, drift and breath; fog (#1285) draws a thin fog pass and drifting pixel
+# cards. The fields of the other falls are ignored, and the page hides their rows. The grade is any
+# fall's.
 #
 # Every number is a feel value, so every one is a row (ROWS) on that page. A kind with no file draws
 # nothing; CLEAR has none.
 
 const FOLDER := "res://Resources/WeatherLooks/"
 
-enum Fall { RAIN, SNOW }
+enum Fall { RAIN, SNOW, FOG }
 
 @export var fall := Fall.RAIN
 
@@ -90,6 +91,28 @@ enum Fall { RAIN, SNOW }
 @export var drift_life := 0.6               # seconds a streak lives
 @export var drift_color := Color(0.95, 0.97, 1.0, 0.5)
 
+@export_group("Fog")
+@export var fog_strength := 1.2             # the thin fog pass's density
+@export var layer_amount := 1.0             # 0..1: the sheet over every surface
+@export var layer_depth := 0.8              # world units the sheet stands over its own ground
+@export var pool_amount := 1.0              # 0..1: the fog lying in the low ground
+@export var pool_share := 0.45              # 0..1: the share of the board's ground that counts as low
+@export var pool_depth := 0.4               # world units it stands over its own ground, at most
+@export var bank_amount := 0.0              # 0..1: drifting banks that swallow units
+@export var bank_height := 1.5              # world units a bank stands
+@export var bank_size := 7.0                # cells across one bank
+@export var fog_breakup := 0.6              # 0..1: how much drifting noise breaks the fog up
+@export var edge_fade := 1.5                # cells over which fog thins before the board's edge or a hole
+@export var pixel_steps := false            # the pass snapped to the ground's art grid, its opacity in steps
+@export var fog_color := Color(0.86, 0.89, 0.93)
+@export var sky_tint := 0.3                 # 0..1: how far the fog takes the sky's horizon colour
+@export var card_amount := 1.3              # pixel cards per cell of view
+@export var card_opacity := 0.65
+@export var card_size := 1.0                # times a wisp's own size, 44x14 ground art pixels
+@export var card_life := 8.0                # seconds a card takes to fade in and out
+@export var card_lift := 0.55               # world units above the ground a card floats, at most
+@export var card_speed := 0.3               # the share of the wind a card drifts with
+
 @export_group("Grade")
 @export var grade_saturation := 1.0         # 1 leaves the board's colours; lower greys them
 @export var grade_brightness := 1.0
@@ -104,14 +127,14 @@ enum Fall { RAIN, SNOW }
 # added later is one line away from its row; `test_weather_tool` refuses a field with none. A row
 # with a "fall" key shows only on a look of that fall.
 const ROWS: Array[Dictionary] = [
-	{"prop": "fall", "label": "Falls as", "options": ["Rain", "Snow"],
-		"tip": "What this weather draws: drops, splashes and a wet sheen, or flakes, snow cover and caps."},
-	{"prop": "density", "label": "Density", "min": 0.0, "max": 12.0, "step": 0.1,
+	{"prop": "fall", "label": "Falls as", "options": ["Rain", "Snow", "Fog"],
+		"tip": "What this weather draws: drops, splashes and a wet sheen; flakes, snow cover and caps; or fog and drifting fog cards."},
+	{"prop": "density", "label": "Density", "min": 0.0, "max": 12.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
 		"tip": "How many drops or flakes are born over each cell of the view every second."},
-	{"prop": "fall_speed", "label": "Fall speed", "min": 0.5, "max": 40.0, "step": 0.1,
+	{"prop": "fall_speed", "label": "Fall speed", "min": 0.5, "max": 40.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
 		"tip": "How fast it falls, in cells a second. Rain reads heavier faster; snow drifts slow."},
 	{"prop": "wind_x", "label": "Wind east", "min": -8.0, "max": 8.0, "step": 0.1,
-		"tip": "Sideways drift, cells a second. Slants the rain, carries the snow, and drives the ground drift."},
+		"tip": "Sideways drift, cells a second. Slants the rain, carries the snow, drives the ground drift and drifts the fog."},
 	{"prop": "wind_z", "label": "Wind south", "min": -8.0, "max": 8.0, "step": 0.1,
 		"tip": "Sideways drift toward the bottom of the map, cells a second."},
 	{"prop": "streak_texels", "label": "Streak length", "min": 1.0, "max": 16.0, "step": 1.0, "fall": Fall.RAIN,
@@ -207,6 +230,45 @@ const ROWS: Array[Dictionary] = [
 	{"prop": "drift_life", "label": "Drift time", "min": 0.1, "max": 3.0, "step": 0.05, "fall": Fall.SNOW,
 		"tip": "Seconds a streak lives; it fades in and out."},
 	{"prop": "drift_color", "label": "Drift colour", "fall": Fall.SNOW, "tip": "Colour and opacity of the loose snow."},
+	{"prop": "fog_strength", "label": "Fog strength", "min": 0.0, "max": 6.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "How thick the fog pass under the cards is. The cards carry the look; this is the soft body between them."},
+	{"prop": "layer_amount", "label": "Ground layer", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "A low sheet of fog over every surface, high ground and low alike. 0 is none."},
+	{"prop": "layer_depth", "label": "Layer depth", "min": 0.05, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "How high the sheet stands over its own ground, in cells. A unit is about one tall."},
+	{"prop": "pool_amount", "label": "Pooling", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "Fog lying in the low ground, with the high ground standing clear. 0 is none."},
+	{"prop": "pool_share", "label": "Low ground share", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "How much of the board counts as low ground, lowest first: the fog pools on that share of its surfaces."},
+	{"prop": "pool_depth", "label": "Pool depth", "min": 0.05, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "How deep the pooled fog stands over its own ground, in cells -- at most, so it never stands as a box over a drop."},
+	{"prop": "bank_amount", "label": "Banks", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "Big drifting patches of fog, tall enough to swallow units, with clearer ground between. 0 is none."},
+	{"prop": "bank_height", "label": "Bank height", "min": 0.2, "max": 4.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "How tall a bank stands over its ground, in cells."},
+	{"prop": "bank_size", "label": "Bank size", "min": 2.0, "max": 24.0, "step": 0.5, "fall": Fall.FOG,
+		"tip": "Roughly how many cells across one bank is."},
+	{"prop": "fog_breakup", "label": "Breakup", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "How much drifting noise thins the fog in places. 0 is an even sheet."},
+	{"prop": "edge_fade", "label": "Edge fade", "min": 0.0, "max": 6.0, "step": 0.1, "fall": Fall.FOG,
+		"tip": "Over how many cells the fog thins out before the board's edge or a hole, so it never hangs over nothing."},
+	{"prop": "pixel_steps", "label": "Pixel steps", "fall": Fall.FOG,
+		"tip": "Snaps the fog pass to the ground's art pixels and steps its opacity, so its edges read as pixel art."},
+	{"prop": "fog_color", "label": "Fog colour", "fall": Fall.FOG, "tip": "The colour of the fog, the cards and the pass alike."},
+	{"prop": "sky_tint", "label": "Takes the sky", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "How far the fog takes the colour of the board's sky at the horizon, so a night fog darkens and a dusk one warms. The sky is read, never changed."},
+	{"prop": "card_amount", "label": "Cards", "min": 0.0, "max": 6.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "How many pixel fog cards drift over each cell of the view. They only show where there is fog."},
+	{"prop": "card_opacity", "label": "Card opacity", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "How solid a card is at its thickest."},
+	{"prop": "card_size", "label": "Card size", "min": 0.25, "max": 4.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "Times a wisp's own size. 1 draws it at the ground tiles' pixel size."},
+	{"prop": "card_life", "label": "Card life", "min": 1.0, "max": 30.0, "step": 0.5, "fall": Fall.FOG,
+		"tip": "Seconds a card takes to fade in, drift and fade out."},
+	{"prop": "card_lift", "label": "Card height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "How high over the ground a card floats, in cells, at most. Higher cards cross more of a unit."},
+	{"prop": "card_speed", "label": "Card drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "The share of the wind a card drifts with. 0 hangs still."},
 	{"prop": "grade_saturation", "label": "Grade saturation", "min": 0.0, "max": 1.5, "step": 0.01,
 		"tip": "The weather's own grade over the board's look: 1 leaves the colours, lower greys them. The HUD is never graded."},
 	{"prop": "grade_brightness", "label": "Grade brightness", "min": 0.5, "max": 1.5, "step": 0.01,
@@ -238,9 +300,13 @@ static func path_of(kind: Weather.Kind) -> String:
 	return FOLDER + Weather.name_of(kind) + ".tres"
 
 
-# Whether a ROWS entry belongs on a look of this fall.
+# Whether a ROWS entry belongs on a look of this fall: a row names one fall, or a list of them.
 static func row_shows(row: Dictionary, fall: Fall) -> bool:
-	return not row.has("fall") or int(row["fall"]) == fall
+	if not row.has("fall"):
+		return true
+	if row["fall"] is Array:
+		return (row["fall"] as Array).has(fall)
+	return int(row["fall"]) == fall
 
 
 # Whether this look grades the picture at all: identity draws nothing.
