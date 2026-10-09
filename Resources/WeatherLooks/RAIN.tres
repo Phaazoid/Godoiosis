@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://ceek8k2e6fd0r"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_0rjo6"]
+
+[resource]
+script = ExtResource("1_0rjo6")
+puddle_coverage = 0.2

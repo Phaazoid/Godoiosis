@@ -90,6 +90,10 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	var gas_field := GasField.new()
 	gas_field.ground_source = terrain_states.ground_source
 
+	# The Dictionary this returns, made BEFORE the lambda below so the lambda can read the scenario
+	# apply_scenario files into it later -- the weather (#1260) is that scenario's, not a store of its own.
+	var board := {}
+
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
 	# units scanned off units_root so mid-test spawns are seen. Sits below terrain_states because a
 	# lambda captures what exists at creation.
@@ -98,9 +102,11 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		for child in units_root.get_children():
 			if child is Unit:
 				units.append(child)
-		return BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+		var context := BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+		context.weather = weather_of(board)
+		return context
 
-	return {
+	board.merge({
 		"root": root,
 		"grid": grid,
 		"units_root": units_root,
@@ -112,7 +118,13 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"terrain_states": terrain_states,
 		"board_heights": board_heights,
 		"gas_field": gas_field,
-	}
+	})
+	return board
+
+# The weather over a built board (#1260): its loaded scenario's, CLEAR before one is loaded.
+static func weather_of(board: Dictionary) -> Weather.Kind:
+	var scenario: ScenarioData = board.get("scenario")
+	return scenario.weather if scenario != null else Weather.Kind.CLEAR
 
 static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 	for x in range(rect.position.x, rect.end.x):

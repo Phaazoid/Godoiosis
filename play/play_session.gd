@@ -161,8 +161,14 @@ func reserve_units() -> Array[Unit]:
 	return result
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+	var board := BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission)
+	board.weather = _weather()
+	return board
+
+# The weather over this board (#1260): the scenario's, as the game's ScenarioManager.current_weather is.
+func _weather() -> Weather.Kind:
+	return scenario_data.weather if scenario_data != null else Weather.Kind.CLEAR
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -1259,8 +1265,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 			row["guarding"] = handle_for(attack.blocked_for)
 	elif action is TileHitAction:
 		var hit := action as TileHitAction
-		row["source"] = Gas.display_name(hit.gas as Gas.Kind) if hit.gas >= 0 \
-				else Terrain.tile_state_display_name(hit.state)
+		var soaked_by := hit.soak_source_name()
+		row["source"] = soaked_by if soaked_by != "" else Terrain.tile_state_display_name(hit.state)
 	elif action is SinkAction:
 		row["cell"] = (action as SinkAction).cell
 	var r := action.resolved_outcome()
@@ -1654,12 +1660,13 @@ func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 	var events: Array[String] = []
 	if terrain_states == null:
 		return events
-	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, faction):
+	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, _weather(), faction):
 		hit.execute()
-		if hit.gas >= 0:
+		var soaked_by := hit.soak_source_name()
+		if soaked_by != "":
 			for gained in hit.resolved.states_added:
 				events.append("%s gains %s from %s" % [handle_for(hit.actor),
-						Elemental.state_display_name(gained), Gas.display_name(hit.gas as Gas.Kind)])
+						Elemental.state_display_name(gained), soaked_by])
 			continue
 		events.append("%s takes %d from %s%s" % [handle_for(hit.actor), hit.resolved.damage,
 				Terrain.tile_state_display_name(hit.state), _lethality_tag(hit.resolved.lethality)])

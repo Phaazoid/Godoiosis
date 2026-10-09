@@ -2240,8 +2240,10 @@ func _leash_cells_of(subjects: Array[Unit]) -> Array[Vector2i]:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+	var board := BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission_controller.mission if mission_controller != null else null)
+	board.weather = scenario_manager.current_weather   # #1260
+	return board
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

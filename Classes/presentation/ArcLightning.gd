@@ -466,20 +466,7 @@ func _shade(node: MeshInstance3D, color: Color, width: float, intensity: float) 
 
 
 func _make_ribbon() -> MeshInstance3D:
-	var instance := MeshInstance3D.new()
-	instance.mesh = ImmediateMesh.new()
-	var material := ShaderMaterial.new()
-	material.shader = load(BoardOverlays.SIGHT_BEAM_SHADER_PATH) as Shader
-	# Fire's band (#245), whose name says "effect" rather than "flame" since this arrived: a bolt is
-	# a standing effect in the world, over every markup layer and under the bodies.
-	material.render_priority = BoardOverlays.EFFECT_RENDER_PRIORITY
-	instance.material_override = material
-	instance.extra_cull_margin = CULL_MARGIN
-	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	instance.layers = BoardOverlays.WORLD_RENDER_LAYER
-	instance.visible = false
-	add_child(instance)
-	return instance
+	return BoardOverlays.make_ribbon(self, CULL_MARGIN)
 
 
 # --- The shapes, all pure ------------------------------------------------------------

@@ -55,6 +55,11 @@ class_name ScenarioData
 # unit_data. Empty = the default look. Resolved by LookKnobs.resolve, applied by battle3d.
 @export var look_preset := ""
 
+# The weather over this board (#1260), fixed for the battle. An enum rather than look_preset's name,
+# because a weather is a rule input (rain soaks at the end of a turn), so it has to travel with every
+# save, report, replay and Play API board exactly as authored. CLEAR is the default and does nothing.
+@export var weather: Weather.Kind = Weather.Kind.CLEAR
+
 # Which Roster this mission offers (#735) -- who the player may bring into it, and the loose gear
 # they may bring. A NAME resolved against RosterCatalog.ROSTER_DIR, never a Roster reference, for
 # the two reasons stated for look_preset directly above; the filename IS a roster's identity, so

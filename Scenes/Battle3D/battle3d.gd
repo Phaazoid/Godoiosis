@@ -124,6 +124,7 @@ var _crawl_pushed := -2.0
 var _staging_dust: StagingDust = null
 var _arc: ArcLightning = null
 var _gas: GasMirror = null
+var _weather: WeatherMirror = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -215,6 +216,19 @@ func _ready() -> void:
 	_gas.overlays = _overlays
 	_gas.board_source = func() -> BoardContext: return game._board()   # next round's forecast rules on it
 	add_child(_gas)
+	# The board's weather (#1260), drawn off the RULE store so it cannot look like one weather and
+	# soak like another. Resident like the gas; the cull sweep and the white-out reach it below.
+	_weather = WeatherMirror.new()
+	_weather.name = "WeatherMirror"
+	_weather.weather_source = func() -> Weather.Kind: return game.scenario_manager.current_weather
+	_weather.grid = game.grid
+	_weather.heights = game.board_heights
+	_weather.camera = _camera
+	_weather.aim_source = func() -> Vector3: return _rig.global_position
+	var environment: Environment = ($WorldEnvironment as WorldEnvironment).environment
+	_weather.sky = environment.sky.sky_material as ProceduralSkyMaterial if environment.sky != null else null
+	_weather.stands_down = func() -> bool: return view == View.FLAT_2D
+	add_child(_weather)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
@@ -576,7 +590,8 @@ func _drive_whiteout() -> void:
 	_push_whiteout()
 
 
-# THE WHITE-OUT HAS TWO DRIVERS SINCE #887, and this is the only place either reaches it.
+# THE WHITE-OUT HAS THREE DRIVERS -- #887 made it two and #1260's storm three -- and this is the only
+# place any of them reaches it.
 #
 # It was built for the tear-out and had exactly one writer, so `_drive_transition`'s idle branch
 # could simply push a 0 — which with a second driver is a channel one caller silently clears out
@@ -589,7 +604,8 @@ func _drive_whiteout() -> void:
 # past the cap #217's safe mode is enforcing.
 func _push_whiteout() -> void:
 	var shock := 0.0 if _arc == null else _arc.flash_level()
-	_apply_whiteout(maxf(_transition_flash, shock))
+	var storm := 0.0 if _weather == null else _weather.flash_level()   # the third driver (#1260)
+	_apply_whiteout(maxf(maxf(_transition_flash, shock), storm))
 
 
 # The crawl's clock, into the water shader (#887 slice 2). CHANGE-GATED rather than pushed every
@@ -828,6 +844,8 @@ func _cover_effects(board: AABB) -> void:
 		_staging_dust.cover(board)
 	if _arc != null:
 		_arc.cover(board)
+	if _weather != null:
+		_weather.cover(board)
 	_unit_mirror.cover_status(board)
 
 
