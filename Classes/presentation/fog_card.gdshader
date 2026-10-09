@@ -1,5 +1,5 @@
 // The fog's cards (#1285): pixel wisps that carry the fog's look (the dev's pick, "cards lead"). Born on
-// the ground anywhere in the view (splash.gdshader's way, through WeatherMask) at up to `lift` above it,
+// the ground anywhere on the board (the box WeatherMirror hands it) at up to `lift` above it,
 // but only where fog_field says there is fog on the ground below. They drift with the wind, ride the
 // surface as they go, die over the void, and re-read the fog every frame: CUSTOM.x is how present the
 // fog is on the ground under the card, so one drifting out of it fades. CUSTOM.y is its age (0..1),

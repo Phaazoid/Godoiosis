@@ -378,3 +378,27 @@ func test_the_fog_takes_the_sky_by_its_share() -> void:
 	look.sky_tint = 1.0
 	assert_bool(WeatherMirror.fog_tint(look, night).is_equal_approx(night)).override_failure_message(
 			"a fog that takes all of the sky is not the sky's colour").is_true()
+
+
+# The fog's cards are born over the BOARD, never the view (#1285): setting a particle system's amount
+# restarts it, and an amount sized off the camera re-dealt every card on every zoom -- the clouds jumping
+# to new shapes. The camera is moved far out and back under a fog, the mirror re-run each time, and the
+# card system must keep its amount and lifetime throughout.
+func test_zooming_never_re_deals_the_fog_cards() -> void:
+	var mirror := _mirror()
+	_scene.game.scenario_manager.current_weather = Weather.Kind.FOG
+	mirror._process(0.016)
+	var amount := mirror._fog_cards.amount
+	var lifetime := mirror._fog_cards.lifetime
+	assert_int(amount).override_failure_message("fixture: the fog sized no cards").is_greater(1)
+	var camera: Camera3D = mirror.camera
+	assert_object(camera).override_failure_message("fixture: the mirror has no camera").is_not_null()
+	var was := camera.global_position
+	for rise: float in [30.0, 60.0, 0.0]:
+		camera.global_position = was + Vector3(0.0, rise, 0.0)
+		mirror._process(0.016)
+		assert_int(mirror._fog_cards.amount).override_failure_message(
+				"the cards were re-dealt by a camera %.0f higher: amount %d -> %d" % [
+				rise, amount, mirror._fog_cards.amount]).is_equal(amount)
+		assert_float(mirror._fog_cards.lifetime).is_equal(lifetime)
+	camera.global_position = was
