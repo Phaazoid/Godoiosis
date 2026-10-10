@@ -504,6 +504,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_sway(delta)
 	if _fire_markers.is_empty():
 		return
 	if _flame_animating():
@@ -1998,6 +1999,7 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 	built.set_meta(PROP_TILE_META, tile)
 	built.set_meta(PROP_CORNERS_META, corners)
 	_dress_for_snow(built)   # a prop built while it snows wears the snow at once
+	_dress_for_wind(built)   # ...and one built while the wind blows leans in it (#1286)
 	# Every tear-out bump drops and rebuilds a staged cell's prop, so a hide written only when the
 	# set changed would come back on the next landing (#1132) -- the builder asks too.
 	built.visible = _prop_shown(cell)
@@ -2485,6 +2487,8 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 	# still draw SOMETHING rather than nothing.
 	if body == null:
 		body = _make_prop_billboard(grid, cell)
+		if body != null and GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.TREE:
+			body.set_meta(SWAY_META, true)   # a tree leans in the wind; a lantern does not (#1286)
 	if body == null:
 		return null
 
@@ -2534,6 +2538,7 @@ func set_snow(caps: bool, cap_color: Color, buries_tufts: bool) -> void:
 	_tufts_buried = buries_tufts
 	for root: Node3D in _props.values():
 		_dress_for_snow(root)
+		_dress_for_wind(root)   # a cap made just now sways with its plant (#1286)
 
 
 func prop_caps_shown() -> bool:
@@ -2586,6 +2591,84 @@ func _make_cap(sprite: Sprite3D) -> Sprite3D:
 	cap.layers = sprite.layers
 	sprite.add_child(cap)
 	return cap
+
+
+# --- What the wind does to plants (#1286) ---------------------------------------------------------
+#
+# Tufts (grass, flowers, tall grass) and trees lean along the board's wind and rock on a slow gust,
+# through prop_sway.gdshader -- the engine's own sprite (the ONE hand copy, sprite_material) with its
+# quad sheared above the base. A plant carries that material ONLY while the wind blows, and the
+# engine's own otherwise, so a calm board draws exactly what it always did. Which plants sway is marked
+# at build (SWAY_META), and one material per art sheet is shared and fed the wind every frame.
+
+const SWAY_META := "sways"
+const SWAY_SHADER := preload("res://Classes/presentation/prop_sway.gdshader")
+const SWAY_CAP_SHADER := preload("res://Classes/presentation/prop_sway_cap.gdshader")
+
+var wind_kind_source := Callable()   # -> Wind.Kind, the board's wind strength
+var wind_source := Callable()        # -> Vector2, the board's wind, world units a second on x / z
+var _swaying := false
+var _sway_clock := 0.0
+var _sway_materials: Dictionary = {}   # [art RID, is a cap] -> ShaderMaterial
+
+
+func swaying() -> bool:
+	return _swaying
+
+
+# A plant's sway material for its art, or its snow cap's. Static and pure, so tools/sprite_parity
+# checks the very material this file hands a plant against the engine's own.
+static func sway_material(texture: Texture2D, cap: bool, priority := 0) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = SWAY_CAP_SHADER if cap else SWAY_SHADER
+	if cap:
+		material.render_priority = priority   # the engine applies it to its own material only (#317)
+	material.set_shader_parameter("texture_albedo", texture)
+	return material
+
+
+func _sway(delta: float) -> void:
+	_sway_clock += delta
+	var kind: Wind.Kind = wind_kind_source.call() if wind_kind_source.is_valid() else Wind.Kind.CALM
+	var look := WindLook.for_kind(kind)
+	var wind: Vector2 = wind_source.call() if wind_source.is_valid() else Vector2.ZERO
+	var on := look != null and wind.length() > 0.001 and (look.sway_lean > 0.0 or look.sway_flutter > 0.0)
+	if on != _swaying:
+		_swaying = on
+		for root: Node3D in _props.values():
+			_dress_for_wind(root)
+	if not on:
+		return
+	var heading := wind.normalized()
+	var lean := look.sway_lean * WindMirror.gust_at(look, _sway_clock)
+	for material: ShaderMaterial in _sway_materials.values():
+		material.set_shader_parameter("wind_heading", heading)
+		material.set_shader_parameter("lean", lean)
+		material.set_shader_parameter("flutter", look.sway_flutter)
+		material.set_shader_parameter("sway_speed", look.sway_speed)
+		material.set_shader_parameter("sway_time", _sway_clock)
+
+
+# Every swaying plant under a prop root wears the sway material while the wind blows, its cap too, and
+# the engine's own again when it drops.
+func _dress_for_wind(root: Node3D) -> void:
+	for child in root.get_children():
+		var sprite := child as Sprite3D
+		if sprite == null or not sprite.has_meta(SWAY_META):
+			continue
+		sprite.material_override = _sway_material_for(sprite.texture, false, 0) if _swaying else null
+		var cap := sprite.get_node_or_null(SNOW_CAP_NAME) as Sprite3D
+		if cap != null:
+			cap.material_override = _sway_material_for(cap.texture, true, cap.render_priority) if _swaying else null
+
+
+func _sway_material_for(texture: Texture2D, cap: bool, priority: int) -> ShaderMaterial:
+	if texture == null:
+		return null
+	var key := [texture.get_rid(), cap]
+	if not _sway_materials.has(key):
+		_sway_materials[key] = sway_material(texture, cap, priority)
+	return _sway_materials[key]
 
 
 # --- Global default, per-object override (#272 slice 2) -----------------------------------------
@@ -2739,6 +2822,7 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardH
 		var sprite := _make_cluster_sprite(sheet, rect, _tuft_pixel_size(authored),
 				float(GridUtils.TILE_SIZE))
 		sprite.set_meta(TUFT_META, true)
+		sprite.set_meta(SWAY_META, true)
 		sprite.set_meta(TUFT_KEEP_META, keep[i])
 		sprite.visible = _tuft_shown(sprite)
 		# Its own foot, not the root's: the sprite is already placed across the cell, so the lift is

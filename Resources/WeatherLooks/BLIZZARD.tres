@@ -6,8 +6,6 @@
 script = ExtResource("1_0ocp6")
 fall = 1
 fall_speed = 3.0
-wind_x = 4.0
-wind_z = 1.0
 flake_sway = 0.6
 flake_swirl = 2.5
 big_flakes = 0.25

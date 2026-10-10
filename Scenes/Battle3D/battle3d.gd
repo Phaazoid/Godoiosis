@@ -125,6 +125,7 @@ var _staging_dust: StagingDust = null
 var _arc: ArcLightning = null
 var _gas: GasMirror = null
 var _weather: WeatherMirror = null
+var _wind: WindMirror = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -204,6 +205,11 @@ func _ready() -> void:
 	# Where the ground is along a ray (#1280). The rig re-seats its pivot onto it whenever the player's
 	# hand takes the camera, so every hand rate is measured against what is on screen.
 	_rig.ground_probe = _ground_depth
+	# The board's wind (#1286), composed ONCE and handed to everything that drifts with it.
+	var wind_source := func() -> Vector2:
+		return WindLook.vector(game.scenario_manager.current_wind, game.scenario_manager.current_wind_direction)
+	_board_mirror.wind_kind_source = func() -> Wind.Kind: return game.scenario_manager.current_wind
+	_board_mirror.wind_source = wind_source   # the plants lean in it
 	# The gas store's drawing (#508), resident like the arc. Named, because GameKnobs rows address
 	# it -- and built BEFORE the dev window is handed this host, which resolves those rows as it builds.
 	_gas = GasMirror.new()
@@ -218,12 +224,14 @@ func _ready() -> void:
 	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
 	_gas.overlays = _overlays
 	_gas.board_source = func() -> BoardContext: return game._board()   # next round's forecast rules on it
+	_gas.wind_source = wind_source
 	add_child(_gas)
 	# The board's weather (#1260), drawn off the RULE store so it cannot look like one weather and
 	# soak like another. Resident like the gas; the cull sweep and the white-out reach it below.
 	_weather = WeatherMirror.new()
 	_weather.name = "WeatherMirror"
 	_weather.weather_source = func() -> Weather.Kind: return game.scenario_manager.current_weather
+	_weather.wind_source = wind_source
 	_weather.grid = game.grid
 	_weather.heights = game.board_heights
 	_weather.camera = _camera
@@ -233,6 +241,15 @@ func _ready() -> void:
 	_weather.stands_down = func() -> bool: return view == View.FLAT_2D
 	_weather.snow_on_props = _board_mirror.set_snow
 	add_child(_weather)
+	# The board's wind on its own (#1286): blown specks and cloud shadows, under any weather. After the
+	# weather, whose view box and ground mask it reads.
+	_wind = WindMirror.new()
+	_wind.name = "WindMirror"
+	_wind.wind_kind_source = func() -> Wind.Kind: return game.scenario_manager.current_wind
+	_wind.wind_source = wind_source
+	_wind.weather = _weather
+	_wind.stands_down = func() -> bool: return view == View.FLAT_2D
+	add_child(_wind)
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
@@ -852,6 +869,8 @@ func _cover_effects(board: AABB) -> void:
 		_arc.cover(board)
 	if _weather != null:
 		_weather.cover(board)
+	if _wind != null:
+		_wind.cover(board)
 	_unit_mirror.cover_status(board)
 
 

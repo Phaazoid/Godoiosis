@@ -7,11 +7,14 @@
 #   - a storm's flash reaches the screen through battle3d's white-out on an ordinary frame;
 #   - a clear board draws nothing, and the board's weather is what the mirror draws;
 #   - the box arithmetic carries the authored births whatever the amount;
-#   - the sky glow can never fight a Look preset, because no Look knob names what it writes.
+#   - the sky glow can never fight a Look preset, because no Look knob names what it writes;
+#   - the board's wind (#1286) reaches every fall, the specks, the clouds and the plants, and saves.
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const MISSION := "res://Scenarios/missions/TheFord.tres"
+# A board with plants on it, for the wind's sway (#1286).
+const PLANTED := "res://Scenarios/missions/Level_1.tres"
 
 var _scene: Node3D
 
@@ -28,12 +31,15 @@ func before() -> void:
 func after() -> void:
 	if _scene != null:
 		_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+		_scene.game.scenario_manager.current_wind = Wind.Kind.CALM
 		get_tree().root.remove_child(_scene)
 		_scene.free()
 
 
 func after_test() -> void:
 	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_scene.game.scenario_manager.current_wind = Wind.Kind.CALM
+	_scene.game.scenario_manager.current_wind_direction = Wind.Direction.EAST
 	var mirror: WeatherMirror = _scene._weather
 	mirror._process(0.0)
 	await await_idle_frame()
@@ -54,6 +60,7 @@ func test_the_cull_box_reaches_every_emitter() -> void:
 	assert_bool(board.has_volume()).override_failure_message("fixture: the mission built no board").is_true()
 	_scene._cover_effects(board)
 	var systems := mirror.find_children("*", "GPUParticles3D", true, false)
+	systems.append_array((_scene._wind as WindMirror).find_children("*", "GPUParticles3D", true, false))
 	assert_int(systems.size()).override_failure_message("fixture: the mirror built no emitters").is_greater(2)
 	for node in systems:
 		var box := (node as GPUParticles3D).visibility_aabb
@@ -82,6 +89,9 @@ func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -
 func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> void:
 	var mirror := _mirror()
 	var mask := ["mask", "mask_origin", "cell_size", "box_min", "box_max", "floor_y", "keep"]
+	var wind: WindMirror = _scene._wind
+	var art := WeatherArt.fog_noise()
+	var sway := ["texture_albedo", "wind_heading", "lean", "flutter", "sway_speed", "sway_time"]
 	var fog := ["mask", "mask_origin", "cell_size", "fog_field", "fog_noise", "layer_amount", "layer_depth",
 			"pool_amount", "bank_amount", "bank_height", "bank_size", "breakup", "fog_drift"]
 	var wanted := {
@@ -97,6 +107,13 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror._fog_process: fog + ["box_min", "box_max", "keep", "velocity", "lift", "sink", "dissolve", "frames"],
 		mirror._fog_draw: ["wisps", "tint", "size", "frames"],
 		mirror._fog_pass_material: fog + ["tint", "strength", "pixel_steps", "art_pixels", "slab_low", "slab_high"],
+		wind._speck_process: ["mask", "mask_origin", "cell_size", "box_min", "box_max", "keep", "wind", "flutter",
+				"height", "leaves", "leaf_frames", "dust_frames"],
+		wind._speck_draw: ["specks", "leaf_tint", "dust_tint", "size", "leaf_frames", "dust_frames", "tumbles"],
+		wind._cloud_material: ["cloud_noise", "drift", "cover", "darkness", "cloud_size", "softness", "pixel_steps",
+				"art_pixels", "cell_size"],
+		BoardMirror.sway_material(art, false): sway,
+		BoardMirror.sway_material(art, true): sway,
 	}
 	for material: ShaderMaterial in wanted:
 		var names: Array[String] = []
@@ -166,15 +183,22 @@ func test_the_ground_drift_runs_only_at_a_rate() -> void:
 	assert_object(look).override_failure_message("fixture: the blizzard has no look file").is_not_null()
 	var was := look.drift_rate
 	_scene.game.scenario_manager.current_weather = Weather.Kind.BLIZZARD
+	_scene.game.scenario_manager.current_wind = Wind.Kind.STRONG_WIND
 	look.drift_rate = 1.5
 	mirror._process(0.016)
 	var running := mirror._drift.emitting and mirror._drift.visible
 	look.drift_rate = 0.0
 	mirror._process(0.016)
 	var stopped := not mirror._drift.emitting and not mirror._drift.visible
+	# A calm board has nothing for the drift to stream along (#1286), whatever the rate.
+	look.drift_rate = 1.5
+	_scene.game.scenario_manager.current_wind = Wind.Kind.CALM
+	mirror._process(0.016)
+	var calm := mirror._drift.emitting or mirror._drift.visible
 	look.drift_rate = was
 	assert_bool(running).override_failure_message("a drift rate drew no drift").is_true()
 	assert_bool(stopped).override_failure_message("a zero drift rate still drew drift").is_true()
+	assert_bool(calm).override_failure_message("a calm board still drew ground drift").is_false()
 
 
 # A look's puddles switch is honoured by the decal (light rain authors none, the dev's ruling).
@@ -422,3 +446,139 @@ func test_the_card_sink_and_dissolve_dials_reach_the_cards() -> void:
 	look.card_dissolve = was_dissolve
 	assert_float(sink).override_failure_message("the Card sink dial never reached the cards").is_equal_approx(0.77, 0.0001)
 	assert_float(dissolve).override_failure_message("the Card dissolve dial never reached the cards").is_equal_approx(2.5, 0.0001)
+
+
+# ---- The wind (#1286) --------------------------------------------------------------------------
+
+func _manager():
+	return _scene.game.scenario_manager
+
+
+# The board's wind is what every fall drifts with, and a calm board's rain falls straight: a weather has
+# no wind of its own. Read off the material the mirror hands the GPU, so a wind_source battle3d forgot to
+# hand on reds here.
+func test_the_board_wind_reaches_the_falls_and_calm_falls_straight() -> void:
+	var mirror := _mirror()
+	var sm = _manager()
+	sm.current_weather = Weather.Kind.RAIN
+	sm.current_wind = Wind.Kind.GALE
+	sm.current_wind_direction = Wind.Direction.SOUTH
+	mirror._process(0.016)
+	var blown: Variant = mirror._rain_process.get_shader_parameter("velocity")
+	sm.current_wind = Wind.Kind.CALM
+	mirror._process(0.016)
+	var still: Variant = mirror._rain_process.get_shader_parameter("velocity")
+	var want := WindLook.vector(Wind.Kind.GALE, Wind.Direction.SOUTH)
+	assert_float(want.length()).override_failure_message("fixture: the gale blows nothing").is_greater(0.1)
+	assert_bool(blown is Vector3 and still is Vector3).override_failure_message(
+			"the mirror placed no rain (no view box?)").is_true()
+	assert_vector(Vector2((blown as Vector3).x, (blown as Vector3).z)).override_failure_message(
+			"the rain drifts %s under a gale blowing %s" % [blown, want]).is_equal_approx(want, Vector2.ONE * 0.001)
+	assert_vector(Vector2((still as Vector3).x, (still as Vector3).z)).override_failure_message(
+			"a calm board's rain still slants: %s" % still).is_equal_approx(Vector2.ZERO, Vector2.ONE * 0.001)
+
+
+# A calm board draws no wind; a blowing one draws its specks, on the weather's own ground mask, and its
+# cloud shadows -- under a clear sky, since a wind is not a weather.
+func test_a_calm_board_draws_no_wind_and_a_blowing_one_draws_specks_and_clouds() -> void:
+	var weather := _mirror()
+	var wind: WindMirror = _scene._wind
+	var sm = _manager()
+	assert_object(WindLook.for_kind(Wind.Kind.STRONG_WIND)).override_failure_message(
+			"fixture: the strong wind has no look file").is_not_null()
+	sm.current_wind = Wind.Kind.CALM
+	weather._process(0.016)
+	wind._process(0.016)
+	var calm := wind._specks.emitting or wind._specks.visible or wind._clouds.visible
+	sm.current_wind = Wind.Kind.STRONG_WIND
+	weather._process(0.016)
+	wind._process(0.016)
+	var specks := wind._specks.emitting and wind._specks.visible
+	var clouds := wind._clouds.visible
+	var mask: Variant = wind._speck_process.get_shader_parameter("mask")
+	assert_bool(calm).override_failure_message("a calm board still draws wind").is_false()
+	assert_bool(specks).override_failure_message("a strong wind blew no specks").is_true()
+	assert_bool(clouds).override_failure_message("a strong wind drew no cloud shadows").is_true()
+	assert_object(mask).override_failure_message("the specks were handed no ground mask").is_not_null()
+	assert_object(mask).override_failure_message("the specks read a second mask, not the weather's").is_same(weather.mask())
+
+
+# Under another weather the wind keeps its cloud shadows and drops its specks: rain, snow and fog already
+# fill the air (dev, 2026-10-10). Asked of the weather the board names, through both mirrors.
+func test_specks_blow_only_under_a_clear_sky() -> void:
+	var weather := _mirror()
+	var wind: WindMirror = _scene._wind
+	var sm = _manager()
+	sm.current_wind = Wind.Kind.STRONG_WIND
+	sm.current_weather = Weather.Kind.RAIN
+	weather._process(0.016)
+	wind._process(0.016)
+	var rain_specks := wind._specks.emitting or wind._specks.visible
+	var rain_clouds := wind._clouds.visible
+	sm.current_weather = Weather.Kind.CLEAR
+	weather._process(0.016)
+	wind._process(0.016)
+	var clear_specks := wind._specks.emitting and wind._specks.visible
+	assert_bool(rain_specks).override_failure_message("the wind blew specks through the rain").is_false()
+	assert_bool(rain_clouds).override_failure_message("the rain took the wind's cloud shadows too").is_true()
+	assert_bool(clear_specks).override_failure_message("a clear sky blew no specks").is_true()
+
+
+# The wind's drawing sorts under every piece of markup, the shadows under the fog too, so a move tile is
+# never shaded or crossed.
+func test_the_wind_sorts_under_every_piece_of_markup() -> void:
+	var wind: WindMirror = _scene._wind
+	var lowest := BoardOverlays.GAS_FLOOR_SORT
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		lowest = mini(lowest, int(BoardOverlays.LAYERS[layer]["sort"]) - 1)
+	for priority: int in [wind._cloud_material.render_priority, wind._speck_draw.render_priority]:
+		assert_int(priority).override_failure_message(
+				"a wind draw sorts at %d, not under the lowest markup at %d" % [priority, lowest]).is_less(lowest)
+	assert_int(wind._cloud_material.render_priority).is_less(BoardOverlays.FOG_RENDER_PRIORITY)
+
+
+# A plant leans while the wind blows and stands on the engine's own material when it drops. Asked of a
+# real plant on a real board, through battle3d's own wire. The Ford stands none, so this loads a board
+# with grass and trees on it.
+func test_a_plant_leans_while_the_wind_blows_and_stands_when_calm() -> void:
+	_scene.game.scenario_manager.load_scenario(PLANTED)
+	await await_idle_frame()
+	await await_idle_frame()
+	var board: BoardMirror = _scene._board_mirror
+	var plant: Sprite3D = null
+	for root: Node3D in board._props.values():
+		for child in root.get_children():
+			if child is Sprite3D and child.has_meta(BoardMirror.SWAY_META):
+				plant = child
+				break
+		if plant != null:
+			break
+	assert_object(plant).override_failure_message("fixture: the board stands no plant").is_not_null()
+	var sm = _manager()
+	sm.current_wind = Wind.Kind.GALE
+	board._process(0.016)
+	var leaning := plant.material_override as ShaderMaterial
+	var lean: float = leaning.get_shader_parameter("lean") if leaning != null else 0.0
+	sm.current_wind = Wind.Kind.CALM
+	board._process(0.016)
+	var calm := plant.material_override
+	assert_object(leaning).override_failure_message("a gale left the plant on its own material").is_not_null()
+	assert_object(leaning.shader).is_same(BoardMirror.SWAY_SHADER)
+	assert_float(lean).override_failure_message("the gale handed the plant no lean").is_greater(0.0)
+	assert_object(calm).override_failure_message("a calm board left the plant on the sway material").is_null()
+
+
+# The board's wind saves with it and comes back on load, the weather's way.
+func test_the_board_wind_saves_with_the_board() -> void:
+	var sm = _manager()
+	sm.current_wind = Wind.Kind.GALE
+	sm.current_wind_direction = Wind.Direction.NORTH_WEST
+	var data: ScenarioData = sm.capture_scenario("wind round trip")
+	sm.current_wind = Wind.Kind.CALM
+	sm.current_wind_direction = Wind.Direction.EAST
+	sm.apply_scenario(data)
+	await await_idle_frame()
+	assert_int(data.wind).is_equal(Wind.Kind.GALE)
+	assert_int(data.wind_direction).is_equal(Wind.Direction.NORTH_WEST)
+	assert_int(sm.current_wind).override_failure_message("the wind did not come back on load").is_equal(Wind.Kind.GALE)
+	assert_int(sm.current_wind_direction).is_equal(Wind.Direction.NORTH_WEST)

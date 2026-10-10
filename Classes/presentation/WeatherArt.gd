@@ -2,9 +2,10 @@ extends Object
 class_name WeatherArt
 
 # The pixel art the weather draws (#1260), generated rather than drawn: a rain streak, a splash ring's
-# frames, a snowflake's two frames (#1269), the fog's wisps and its drifting noise (#1285), and the queue
-# row's icon. GasPuffArt's shape -- a tune shows the moment the art is rebuilt, and a sheet replaces any
-# of it once someone draws one. The icon and the wisps especially are PLACEHOLDERS.
+# frames, a snowflake's two frames (#1269), the fog's wisps and its drifting noise (#1285), the wind's
+# blown specks (#1286), and the queue row's icon. GasPuffArt's shape -- a tune shows the moment the art
+# is rebuilt, and a sheet replaces any of it once someone draws one. The icon, the wisps and the specks
+# especially are PLACEHOLDERS.
 #
 # Pure and static: every function returns a fresh Image or a cached texture, and nothing reads a node.
 
@@ -19,6 +20,10 @@ const WISP_SIZE := Vector2i(44, 14)
 const WISP_FRAMES := 3
 # The fog's breakup and bank noise: one seamless tile, this many pixels a side.
 const FOG_NOISE_SIDE := 256
+# A blown speck's frame (#1286), in art pixels: the leaves' tumble, then the dust motes.
+const SPECK_SIDE := 5
+const LEAF_FRAMES := 4
+const DUST_FRAMES := 2
 
 static var _icon: Texture2D = null
 static var _fog_noise: Texture2D = null
@@ -88,8 +93,39 @@ static func fog_wisps() -> Image:
 	return image
 
 
+# The wind's blown specks (#1286): LEAF_FRAMES frames of a leaf tumbling end over end, then DUST_FRAMES
+# motes, side by side, each SPECK_SIDE square. White with the leaf's turned-away side shaded; the draw
+# shader tints a leaf and a mote each their own colour. PLACEHOLDERS.
+static func specks() -> Image:
+	var image := Image.create_empty(SPECK_SIDE * (LEAF_FRAMES + DUST_FRAMES), SPECK_SIDE, false,
+			Image.FORMAT_RGBA8)
+	var lit := Color.WHITE
+	var shade := Color(0.72, 0.72, 0.72)
+	# Each frame: [the leaf's lit pixels, its shaded pixels].
+	var frames: Array = [
+		[[Vector2i(2, 1), Vector2i(3, 1), Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2), Vector2i(1, 3), Vector2i(2, 3)],
+			[Vector2i(0, 4)]],
+		[[Vector2i(3, 1), Vector2i(2, 2), Vector2i(3, 2), Vector2i(1, 3), Vector2i(2, 3)], [Vector2i(1, 4)]],
+		[[], [Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2)]],
+		[[], [Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2), Vector2i(2, 2), Vector2i(3, 2), Vector2i(2, 3),
+			Vector2i(3, 3), Vector2i(4, 4)]],
+	]
+	for i in frames.size():
+		var origin := Vector2i(SPECK_SIDE * i, 0)
+		for p: Vector2i in frames[i][0]:
+			image.set_pixelv(origin + p, lit)
+		for p: Vector2i in frames[i][1]:
+			image.set_pixelv(origin + p, shade)
+	var mid := SPECK_SIDE >> 1
+	var dust := Vector2i(SPECK_SIDE * LEAF_FRAMES, 0)
+	image.set_pixelv(dust + Vector2i(mid, mid), lit)
+	image.set_pixelv(dust + Vector2i(SPECK_SIDE + mid, mid), lit)
+	image.set_pixelv(dust + Vector2i(SPECK_SIDE + mid + 1, mid + 1), shade)
+	return image
+
+
 # The fog's noise (#1285), one seamless tile, cached for the process: the breakup and the banks both
-# read it, at their own scales.
+# read it, at their own scales. The wind's cloud shadows (#1286) read it too, at a larger one.
 static func fog_noise() -> Texture2D:
 	if _fog_noise == null:
 		var noise := FastNoiseLite.new()

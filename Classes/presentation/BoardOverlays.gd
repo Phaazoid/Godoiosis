@@ -100,6 +100,10 @@ const GAS_FLOOR_SORT := -8
 # drawing after it, and is crossed by a card only where the card is nearer the camera.
 const FOG_RENDER_PRIORITY := GAS_FLOOR_SORT - 4
 const FOG_CARD_RENDER_PRIORITY := FOG_RENDER_PRIORITY + 1
+# The wind (#1286): its cloud shadows lie on the ground under the fog, and its blown specks fly over
+# the fog cards -- both still under every piece of markup, so a move tile is never shaded or crossed.
+const CLOUD_RENDER_PRIORITY := FOG_RENDER_PRIORITY - 1
+const SPECK_RENDER_PRIORITY := FOG_CARD_RENDER_PRIORITY + 1
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it

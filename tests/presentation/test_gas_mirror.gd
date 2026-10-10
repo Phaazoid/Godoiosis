@@ -10,6 +10,8 @@ extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
+# Where a gas's drift sits among the floats GasMirror._pack_looks writes per look (gas_volume.glsl's `wind`).
+const GAS_WIND_SLOT := 20
 
 var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
@@ -344,3 +346,29 @@ func test_holding_the_key_outlines_next_round_as_the_round_will_play_it() -> voi
 
 	await _hold_floor(false)
 	assert_bool(_gas.forecast_node().visible).is_false()
+
+
+# The billows drift with the board's wind (#1286), each gas its own share of it: what the mirror packs for
+# the volume is the wind times the look's share, and a calm board packs none. Read off the packed looks,
+# so a wind_source battle3d forgot to hand on reds here.
+func test_the_billows_drift_with_the_board_wind() -> void:
+	var sm = _game.scenario_manager
+	sm.current_wind = Wind.Kind.GALE
+	sm.current_wind_direction = Wind.Direction.SOUTH
+	await _settle()
+	var blown: PackedFloat32Array = _gas._looks
+	sm.current_wind = Wind.Kind.CALM
+	sm.current_wind_direction = Wind.Direction.EAST
+	await _settle()
+	var calm: PackedFloat32Array = _gas._looks
+	var wind := WindLook.vector(Wind.Kind.GALE, Wind.Direction.SOUTH)
+	var stride: int = blown.size() / Gas.Kind.size()
+	assert_float(wind.length()).override_failure_message("fixture: the gale blows nothing").is_greater(0.1)
+	for kind: Gas.Kind in Gas.Kind.values():
+		var share := GasLook.for_kind(kind).wind_share
+		var at := int(kind) * stride + GAS_WIND_SLOT
+		assert_vector(Vector2(blown[at], blown[at + 1])).override_failure_message(
+				"%s drifts %s, not the gale times its share" % [Gas.name_of(kind), Vector2(blown[at], blown[at + 1])]) \
+				.is_equal_approx(wind * share, Vector2.ONE * 0.0001)
+		assert_vector(Vector2(calm[at], calm[at + 1])).override_failure_message(
+				"%s still drifts on a calm board" % Gas.name_of(kind)).is_equal_approx(Vector2.ZERO, Vector2.ONE * 0.0001)

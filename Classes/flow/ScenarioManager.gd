@@ -79,6 +79,10 @@ var current_look_preset := ""
 # game's BoardContext reads it, so the end-of-turn soak and its forecast see what the board says.
 var current_weather: Weather.Kind = Weather.Kind.CLEAR
 
+# The wind over the CURRENT board (#1286): the weather's store/writer shape, a look only.
+var current_wind: Wind.Kind = Wind.Kind.CALM
+var current_wind_direction: Wind.Direction = Wind.Direction.EAST
+
 # Where the CURRENT board opens the camera (#234); null = derive from the player's units. Same
 # store/writer shape as the look right above -- apply_scenario sets it, clear_board zeroes it, the
 # dev Scenario tab captures into it, capture_scenario reads it back out.
@@ -241,6 +245,8 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.weather = current_weather                       # #1260: and the weather over it
+	scenario.wind = current_wind                             # #1286: and the wind, a look only
+	scenario.wind_direction = current_wind_direction
 	scenario.roster = current_roster                         # #735: who it offers, if anyone
 	scenario.deployment_cap = current_deployment_cap         # #736: and how many of them
 	scenario.offers_pre_mission = current_offers_pre_mission   # #46: and whether they get a screen
@@ -335,6 +341,8 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	# correctly applies nothing.
 	current_look_preset = scenario.look_preset
 	current_weather = scenario.weather            # #1260: a rule input, read through game._board()
+	current_wind = scenario.wind                  # #1286: a look only
+	current_wind_direction = scenario.wind_direction
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded
 	current_roster = scenario.roster              # #735; the mission-start doors draw from it (#737)
 	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
@@ -450,6 +458,9 @@ func clear_board():
 	# And the weather (#1260), with a sharper consequence than the look: rain is a rule, so a sandbox
 	# board inheriting the last mission's would soak units nobody told it to.
 	current_weather = Weather.Kind.CLEAR
+	# And the wind (#1286), for the look's reason: a sandbox must not blow the last mission's gale.
+	current_wind = Wind.Kind.CALM
+	current_wind_direction = Wind.Direction.EAST
 	# And the camera start (#234): a sandbox spawn must not open on the last mission's authored shot.
 	current_camera_start = null
 	# And the roster (#735), for exactly the look preset's reason and with a sharper consequence:

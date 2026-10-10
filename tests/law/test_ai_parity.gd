@@ -112,6 +112,18 @@ func test_a_weather_declared_inert_has_no_rules() -> void:
 		func(kind: Variant) -> bool: return WeatherRules.for_kind(kind) != null)
 
 
+# The wind is a look only (#1286): the ledger declares it so for both columns, and the rules read a board
+# through BoardContext. The day that grows a wind, this reds, because those rows were written about a look.
+func test_the_wind_reaches_no_rule() -> void:
+	var names: Array[String] = []
+	var script := load("res://Classes/board/BoardContext.gd") as Script
+	for prop: Dictionary in script.get_script_property_list():
+		names.append(String(prop.name).to_lower())
+	for name: String in names:
+		assert_bool(name.contains("wind")).override_failure_message(
+				"BoardContext carries '%s': the wind reaches a rule now -- restate its rows in parity_ledger.winds()" % name).is_false()
+
+
 func _assert_inert_has_no_rules(axis: Dictionary, has_rules: Callable) -> void:
 	var label: Callable = axis["label"]
 	var wrong: Array[String] = []

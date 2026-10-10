@@ -80,6 +80,7 @@ func refresh_look_row() -> void:
 	_look_row = DevWidgets.add_option(self, "Look preset", options,
 		current if current != "" else NO_LOOK_LABEL, _on_look_picked)
 	_add_weather_picker(_look_row)
+	_add_wind_pickers(_look_row)
 	move_child(_look_row, 0)
 
 
@@ -104,6 +105,37 @@ func _add_weather_picker(row: HBoxContainer) -> void:
 		+ "weather looks is tuned on Project > Weather.")
 	DevWidgets.apply_tooltip(label, tip)
 	DevWidgets.apply_tooltip(picker, tip)
+
+
+# The wind over this board (#1286), beside the weather on the same row and for the same reason: how
+# hard it blows and which way, independent of what falls. A look only, so no plan re-resolves.
+func _add_wind_pickers(row: HBoxContainer) -> void:
+	var tip := DevWidgets.wrap_tooltip(
+		"How hard the wind blows over this board, and which way. It slants the rain, carries the snow, "
+		+ "fog and gas, sways the plants, blows leaves across the board and drifts cloud shadows over "
+		+ "it, under any weather. A look only. Saved with the board; each strength is tuned on "
+		+ "Project > Weather.")
+	var label := Label.new()
+	label.text = "Wind"
+	row.add_child(label)
+	var strength := OptionButton.new()
+	for kind: Wind.Kind in Wind.Kind.values():
+		strength.add_item(Wind.display_name(kind), kind)
+	strength.select(strength.get_item_index(scenario_manager.current_wind))
+	strength.item_selected.connect(func(index: int) -> void:
+		scenario_manager.current_wind = strength.get_item_id(index) as Wind.Kind
+		_mark())
+	row.add_child(strength)
+	var toward := OptionButton.new()
+	for direction: Wind.Direction in Wind.Direction.values():
+		toward.add_item("toward " + Wind.direction_name(direction), direction)
+	toward.select(toward.get_item_index(scenario_manager.current_wind_direction))
+	toward.item_selected.connect(func(index: int) -> void:
+		scenario_manager.current_wind_direction = toward.get_item_id(index) as Wind.Direction
+		_mark())
+	row.add_child(toward)
+	for control: Control in [label, strength, toward]:
+		DevWidgets.apply_tooltip(control, tip)
 
 
 func _on_weather_picked(kind: Weather.Kind) -> void:

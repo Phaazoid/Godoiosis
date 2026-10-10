@@ -60,6 +60,11 @@ class_name ScenarioData
 # save, report, replay and Play API board exactly as authored. CLEAR is the default and does nothing.
 @export var weather: Weather.Kind = Weather.Kind.CLEAR
 
+# The wind over this board (#1286): how hard and which way, beside the weather and independent of it.
+# A look only, so nothing reads it but the drawing. CALM blowing EAST is the default and blows nothing.
+@export var wind: Wind.Kind = Wind.Kind.CALM
+@export var wind_direction: Wind.Direction = Wind.Direction.EAST
+
 # Which Roster this mission offers (#735) -- who the player may bring into it, and the loose gear
 # they may bring. A NAME resolved against RosterCatalog.ROSTER_DIR, never a Roster reference, for
 # the two reasons stated for look_preset directly above; the filename IS a roster's identity, so
