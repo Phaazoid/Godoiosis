@@ -46,6 +46,7 @@ func after_test() -> void:
 	# The experiment is undone IN the case: the reset's board reload draws columns before the frame
 	# whose poll would flip them back.
 	Experiments.set_on(Experiments.Flag.WATER_BASIN, false)
+	Experiments.set_on(Experiments.Flag.WATER_BANK, false)
 	BoardSpace.WATER_BASIN_DEPTH = _saved["depth"]
 	BoardSpace.WATER_WADE_DEPTH = _saved["wade"]
 	BoardSpace.WATER_STEP_TIME = _saved["step"]
@@ -321,3 +322,34 @@ func test_a_fill_already_drawn_re_places_when_the_basin_turns_on() -> void:
 	assert_float(after - before).override_failure_message(
 			"the reach fill over water stayed put when the basin turned on").is_equal_approx(-DEPTH, 0.0001)
 	om.show_attack_reach([] as Array[Vector2i], [] as Array[Vector2i])
+
+
+# The submerged bank's bits (#654) for one board cell, off the mask the mirror last pushed. Read off
+# the recorded image, since a headless ImageTexture reads back only the first picture it was given.
+func _mask_bits(cell: Vector2i) -> int:
+	var image := _mirror().water_mask_built
+	var origin: Vector2i = _game.grid.get_used_rect().position
+	return int(round(image.get_pixel(cell.x - origin.x, cell.y - origin.y).a * 255.0))
+
+
+# The WIRE for the submerged bank: the flag reaches the mask through battle3d's poll, and turning it
+# off takes every bit back out. The lake runs dry, shallow, deep from west to east, so the shallow
+# cell has ground behind its west edge and water behind its east one.
+func test_the_bank_flag_reaches_the_mask() -> void:
+	var lake := await _lake()
+	var shallow: Vector2i = lake["shallow"]
+	assert_int(_mask_bits(shallow)).override_failure_message(
+			"the mask carries bank bits with the experiment off").is_equal(0)
+
+	Experiments.set_on(Experiments.Flag.WATER_BANK, true)
+	await _settle()
+	var bits := _mask_bits(shallow)
+	assert_int(bits & BoardMirror.BANK_ON).override_failure_message(
+			"turning the experiment on never reached the mask").is_equal(BoardMirror.BANK_ON)
+	assert_int(bits & 8).override_failure_message("the dry cell to the west is not a bank").is_equal(8)
+	assert_int(bits & 2).override_failure_message("the deep water to the east is a bank").is_equal(0)
+
+	Experiments.set_on(Experiments.Flag.WATER_BANK, false)
+	await _settle()
+	assert_int(_mask_bits(shallow)).override_failure_message(
+			"turning the experiment off left bank bits in the mask").is_equal(0)

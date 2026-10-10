@@ -248,7 +248,7 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 	assert_bool(names.is_empty()).override_failure_message(
 			"the water shader exposes no uniforms at all -- it failed to parse, and every water " \
 			+ "surface will render as an error").is_false()
-	for wanted in ["body_tex"]:
+	for wanted in ["body_tex", "bank_tex"]:
 		assert_bool(names.has(wanted)).override_failure_message(
 				"gen_lookdev_assets sets shader parameter '%s' and the shader declares no such " \
 				% wanted + "uniform -- the value is dropped in silence").is_true()
@@ -570,3 +570,17 @@ func test_every_flat_water_block_has_one_basin_twin() -> void:
 			twins += 1
 	assert_int(twins).override_failure_message("the meshlib holds %d basin twins for %d water blocks" \
 			% [twins, bases.size()]).is_equal(bases.size())
+
+
+# The submerged bank (#654) maps the dirt on its wall one repeat per ROW, and a shader cannot read
+# BoardSpace, so the row height is spelled twice. They must agree, or the wall under the water shears
+# off the real face above it at the waterline -- which no headless run could ever see drawn.
+func test_the_submerged_bank_counts_rows_the_way_the_board_does() -> void:
+	var found := RegEx.create_from_string("const float ROW_HEIGHT = ([0-9.]+);").search(
+			(load(SHADER_PATH) as Shader).code)
+	assert_object(found).override_failure_message(
+			"water.gdshader declares no ROW_HEIGHT, so the bank cannot map its dirt").is_not_null()
+	if found == null:
+		return
+	assert_float(float(found.get_string(1))).override_failure_message(
+			"the shader's ROW_HEIGHT is not BoardSpace.ROW_HEIGHT").is_equal_approx(BoardSpace.ROW_HEIGHT, 0.0001)

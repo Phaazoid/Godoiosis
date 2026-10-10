@@ -831,6 +831,8 @@ func _water_mat(body: Texture2D) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(WATER_SHADER_PATH)
 	mat.set_shader_parameter("body_tex", body)
+	# The submerged bank (#654) draws the dirt every ground side wears, so it reads the same file.
+	mat.set_shader_parameter("bank_tex", _load_tex("dirt_side.png"))
 	# Said out loud rather than left unset: an unset uniform the shader declares saves as `null`, and
 	# only a basin twin (#654) is allowed to drop its top.
 	mat.set_shader_parameter("basin_surface", false)

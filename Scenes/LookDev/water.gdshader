@@ -37,6 +37,10 @@ render_mode cull_back;
 // atlas rect -- so one sampler would smear the whole tilesheet down every wall. That is the trap
 // gen_lookdev_assets._block_mesh records, and it was a WATER bug when it last fired.
 uniform sampler2D body_tex : source_color, filter_nearest;
+// THE SUBMERGED BANK's art (#654): the dirt a ground block's side face wears, so the wall seen through
+// the water is the same wall standing above it. Read with texelFetch, so its filter and repeat never
+// apply.
+uniform sampler2D bank_tex : source_color, filter_nearest;
 // HOW DEEP a cell is comes from the board mask's GREEN channel, not from a per-material uniform.
 // It used to be baked 0 or 1 into two materials, which is why the shallow/deep boundary was a hard
 // step: every mix() below snapped at the cell edge and the bed popped from present to absent in one
@@ -133,6 +137,9 @@ global uniform float water_shore_fade_range;
 //   BLUE  how far out from land, over that same range. It is what lets deep water lose light as it
 //         leaves the shore, and it cannot reuse RED: RED is encoded over two cells so the foam band
 //         keeps sub-art-pixel precision, and widening it that far would step the surf visibly.
+//   ALPHA the submerged bank's bits (#654, an Experiment): which of a water cell's edges has a ground
+//         wall behind it, plus BANK_ON. BITS, so they are read with texelFetch and never through the
+//         linear filter. Zero everywhere while the experiment is off.
 //
 // Clamped rather than repeated, so water running off the edge of the board meets its own value
 // there and does not foam against the void.
@@ -158,6 +165,32 @@ global uniform float water_board_mask_range;
 global uniform float water_basin_drop;
 // Set on the basin twins alone (gen_lookdev_assets); every other water item leaves it false.
 uniform bool basin_surface = false;
+
+// THE SUBMERGED BANK (#654, an Experiment): how far down through the water a bank wall stays in view,
+// in world units, and how hard the waves bend the view of it. Per type, like every dial here; a depth
+// of 0 turns it off for that water. Nothing draws unless the mask's alpha carries the walls, which
+// BoardMirror bakes only while Experiments.WATER_BANK is on.
+global uniform float water_deep_bank_depth;
+global uniform float water_shallow_bank_depth;
+global uniform float water_deep_bank_wobble;
+global uniform float water_shallow_bank_wobble;
+
+// The mask's alpha bits (BoardMirror._bank_bits_at): one per edge of a water cell with a wall behind
+// it, north being -z, plus one saying the experiment is on at all.
+const int BANK_N = 1;
+const int BANK_E = 2;
+const int BANK_S = 4;
+const int BANK_W = 8;
+const int BANK_ON = 16;
+// How much a ray bends going into water, and how a wall seen through it is coloured: the water's hue
+// at BANK_TINT strength, darkening by BANK_DIM by the time it fades out. The numbers in the mockup the
+// dev approved (2026-10-10).
+const float WATER_IOR = 1.33;
+const float BANK_TINT = 0.75;
+const float BANK_DIM = 0.25;
+// One ROW of a ground block, which is one repeat of the dirt on its side faces: BoardSpace.ROW_HEIGHT,
+// spelled again because a shader cannot read it. The water law pins the two together.
+const float ROW_HEIGHT = 0.5;
 
 // THE SHOCK CRAWL (#887): what a shock's current looks like IN the water, under the bolts drawn
 // above it. Not board data and not water tuning -- it is an EVENT, pushed by the effect while one
@@ -274,6 +307,68 @@ float speckle(vec2 cell_px) {
 }
 
 
+// The bank bits of one board cell, or 0 off the mask.
+int bank_bits(vec2 cell) {
+	ivec2 t = ivec2(cell - water_board_mask_rect.xy);
+	ivec2 size = textureSize(water_board_mask, 0);
+	if (t.x < 0 || t.y < 0 || t.x >= size.x || t.y >= size.y) {
+		return 0;
+	}
+	return int(round(texelFetch(water_board_mask, t, 0).a * 255.0));
+}
+
+
+// THE SUBMERGED BANK (#654). Follows a refracted view ray down from `start`, cell to cell, and answers
+// how deep it meets a bank wall, or -1.0 if the water swallows it first. Walls exist only where
+// BoardMirror baked one, so a pond's far bank shows and its near bank, which faces away, never does.
+// `at_wall` is where it met the wall and `into` the step it took into the bank's cell.
+float bank_wall(vec2 start, vec3 ray, float vis, out vec2 at_wall, out vec2 into) {
+	at_wall = start;
+	into = vec2(0.0);
+	if (ray.y > -0.0001) {
+		return -1.0;
+	}
+	vec2 run = ray.xz / -ray.y;
+	vec2 cell = floor(start);
+	vec2 pos = start;
+	float dep = 0.0;
+	for (int i = 0; i < 4; i++) {
+		float tx = run.x > 0.0 ? (cell.x + 1.0 - pos.x) / run.x
+				: (run.x < 0.0 ? (pos.x - cell.x) / -run.x : 1000000.0);
+		float tz = run.y > 0.0 ? (cell.y + 1.0 - pos.y) / run.y
+				: (run.y < 0.0 ? (pos.y - cell.y) / -run.y : 1000000.0);
+		float t = min(tx, tz);
+		if (dep + t > vis) {
+			return -1.0;
+		}
+		pos += run * t;
+		dep += t;
+		vec2 dir = tx < tz ? vec2(sign(run.x), 0.0) : vec2(0.0, sign(run.y));
+		int side = dir.x > 0.0 ? BANK_E : (dir.x < 0.0 ? BANK_W : (dir.y > 0.0 ? BANK_S : BANK_N));
+		if ((bank_bits(cell) & side) != 0) {
+			at_wall = pos;
+			into = dir;
+			return dep;
+		}
+		cell += dir;
+	}
+	return -1.0;
+}
+
+
+// The dirt where the ray met the wall, mapped the way that block's side face maps it
+// (gen_lookdev_assets._block_mesh), so the wall carries on below the waterline without a jump.
+vec3 bank_dirt(vec2 at_wall, vec2 into, float y) {
+	float along = into.x > 0.0 ? fract(at_wall.y)
+			: (into.x < 0.0 ? 1.0 - fract(at_wall.y)
+			: (into.y > 0.0 ? 1.0 - fract(at_wall.x) : fract(at_wall.x)));
+	float down = 1.0 - fract(y / ROW_HEIGHT);
+	ivec2 size = textureSize(bank_tex, 0);
+	ivec2 texel = clamp(ivec2(vec2(along, down) * vec2(size)), ivec2(0), size - ivec2(1));
+	return texelFetch(bank_tex, texel, 0).rgb;
+}
+
+
 void fragment() {
 	// Where this fragment sits in the board mask. Read BEFORE the surface/body fork, because how
 	// deep the cell is comes out of it and the body wears a depth-dependent shade too.
@@ -321,6 +416,12 @@ void fragment() {
 		float ts = TIME * water_shallow_wave_speed;
 		float td = TIME * water_deep_wave_speed;
 
+		// The surface's wave field, read once here and reused by the bands and the highlight below,
+		// because the submerged bank bends its view through the same field before those go on.
+		float w = wave_at(p, ts, td, d);
+		float wx = wave_at(p + vec2(px, 0.0), ts, td, d);
+		float wz = wave_at(p + vec2(0.0, px), ts, td, d);
+
 		// --- What is UNDER the water -------------------------------------------------------
 		// The bed is hashed off the STATIC art-pixel index, so it stays nailed to the board while
 		// the caustics travel over it. That contrast is the depth cue, and it is the one thing an
@@ -339,11 +440,34 @@ void fragment() {
 		// Deep water is opaque and unchanged; shallow lets its bottom show.
 		vec3 col = mix(base, through, clamp(water_shallow_bed * (1.0 - d), 0.0, 1.0));
 
+		// --- The SUBMERGED BANK (#654, an Experiment) -------------------------------------------
+		// In front of the bed, since a wall the ray meets first hides what lies beyond it, and under
+		// every surface layer below. The fragment's own cell says whether the experiment is on.
+		bool bank_on = (bank_bits(floor(world_pos.xz)) & BANK_ON) != 0;
+		float bank_vis = mix(water_shallow_bank_depth, water_deep_bank_depth, d);
+		if (bank_on && bank_vis > 0.0) {
+			float wobble = mix(water_shallow_bank_wobble, water_deep_bank_wobble, d);
+			vec3 through_n = normalize(vec3(-(wx - w) * ripple * wobble, 1.0,
+					-(wz - w) * ripple * wobble));
+			vec3 eye = vec3(p.x + px * 0.5, world_pos.y, p.y + px * 0.5);
+			vec3 ray = refract(normalize(eye - CAMERA_POSITION_WORLD), through_n, 1.0 / WATER_IOR);
+			vec2 at_wall;
+			vec2 into;
+			float met = bank_wall(eye.xz, ray, bank_vis, at_wall, into);
+			if (met >= 0.0) {
+				float faded = met / bank_vis;
+				float facing = max(0.0, dot(vec3(-into.x, 0.0, -into.y), INV_VIEW_MATRIX[2].xyz));
+				vec3 wall = bank_dirt(at_wall, into, world_pos.y - met) * (0.82 + 0.18 * facing);
+				vec3 hue = base / max(max(base.r, base.g), max(base.b, 0.001));
+				wall *= mix(vec3(1.0), hue, BANK_TINT) * (1.0 - BANK_DIM * faded);
+				col = mix(wall, col, smoothstep(0.0, 1.0, faded));
+			}
+		}
+
 		// --- What happens ON the water ------------------------------------------------------
 		// Bands are a SURFACE phenomenon and go on top, additively -- they must ride over the bed,
 		// never modulate it, or the bed reads as noise painted across the highlights. Two hard
 		// thresholds rather than a gradient, which is how pixel water reads.
-		float w = wave_at(p, ts, td, d);
 		float tone = step(0.20, w) * 0.45 + step(0.72, w) * 0.55;
 		col += base * tone * band_contrast;
 
@@ -378,7 +502,9 @@ void fragment() {
 				* 2.0 * water_board_shore_range + w * FOAM_WOBBLE * foam_width;
 		// Width 0 means OFF, not a hairline: a zero-wide smoothstep still fires on whichever pixel
 		// lands exactly on the boundary.
-		float foam = foam_width <= 0.0
+		// The submerged bank turns the foam off (dev, off the approved mockup): it sits right on the
+		// bank's upper edge.
+		float foam = (foam_width <= 0.0 || bank_on)
 				? 0.0
 				: 1.0 - smoothstep(0.0, 0.5 * foam_width, shore);
 		col = mix(col, foam_color.rgb, foam * foam_color.a);
@@ -414,10 +540,7 @@ void fragment() {
 		// The highlight has to TRAVEL, so the wave bends the normal. A finite difference over the
 		// same quantised field, carried into view space by hand: a NORMAL_MAP would want tangents
 		// the block mesh does not generate.
-		vec3 bent = normalize(vec3(
-				-(wave_at(p + vec2(px, 0.0), ts, td, d) - w) * ripple,
-				1.0,
-				-(wave_at(p + vec2(0.0, px), ts, td, d) - w) * ripple));
+		vec3 bent = normalize(vec3(-(wx - w) * ripple, 1.0, -(wz - w) * ripple));
 		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);
 	}
 }

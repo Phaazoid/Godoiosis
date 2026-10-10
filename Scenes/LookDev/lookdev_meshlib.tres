@@ -140,6 +140,7 @@ _surfaces = [{
 render_priority = 0
 shader = ExtResource("6_2bctr")
 shader_parameter/body_tex = ExtResource("7_tv3nm")
+shader_parameter/bank_tex = ExtResource("2_ih7ba")
 shader_parameter/basin_surface = false
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_ycmo8"]
@@ -28064,6 +28065,7 @@ _surfaces = [{
 render_priority = 0
 shader = ExtResource("6_2bctr")
 shader_parameter/body_tex = ExtResource("7_tv3nm")
+shader_parameter/bank_tex = ExtResource("2_ih7ba")
 shader_parameter/basin_surface = true
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_n8upd"]
@@ -28154,6 +28156,7 @@ _surfaces = [{
 render_priority = 0
 shader = ExtResource("6_2bctr")
 shader_parameter/body_tex = ExtResource("7_tv3nm")
+shader_parameter/bank_tex = ExtResource("2_ih7ba")
 shader_parameter/basin_surface = true
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_324tm"]
@@ -34597,6 +34600,7 @@ _surfaces = [{
 render_priority = 0
 shader = ExtResource("6_2bctr")
 shader_parameter/body_tex = ExtResource("7_tv3nm")
+shader_parameter/bank_tex = ExtResource("2_ih7ba")
 shader_parameter/basin_surface = false
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_o057y"]
