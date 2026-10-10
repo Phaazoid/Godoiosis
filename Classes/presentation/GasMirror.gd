@@ -86,6 +86,7 @@ var lights_source := Callable()     # -> Array[OmniLight3D], the board's own lam
 var stands_down := Callable()       # -> bool, true in the flat 2D view
 var overlays: BoardOverlays          # the markup stack the fog floor lies in
 var board_source := Callable()      # -> BoardContext, the board next round's forecast is ruled on
+var wind_source := Callable()       # -> Vector2, the board's wind (#1286), world units a second on x / z
 
 var _effect: GasVolumeEffect
 var _shape_noise: NoiseTexture3D
@@ -97,6 +98,7 @@ var _textures: Array[Texture] = []
 var _looks := PackedFloat32Array()
 var _looks_version := 0
 var _packed_mix := -1
+var _packed_wind := Vector2.INF
 var _regions: Array[AABB] = []
 var _region_floats := PackedFloat32Array()
 var _regions_version := 0
@@ -174,6 +176,8 @@ func _process(delta: float) -> void:
 	if key != _seen:
 		_seen = key
 		_rebuild()
+	if _wind() != _packed_wind:
+		_pack_looks()   # the billows drift with the board's wind, a share each (#1286)
 	_update_forecast()
 	_submit()
 	_animate_pixels()
@@ -332,6 +336,7 @@ func _column_at(kind: Gas.Kind, level: int) -> float:
 # rise with the column all read one scaled look.
 func _pack_looks() -> void:
 	_packed_mix = mix()
+	_packed_wind = _wind()
 	var height := float(_mix().height)
 	var density := float(_mix().density)
 	var f := PackedFloat32Array()
@@ -342,11 +347,16 @@ func _pack_looks() -> void:
 			look.base_height * height, look.column_height * height, look.top_softness, look.shape_scale,
 			look.stretch, look.erosion, look.rise_speed, look.coverage_boost,
 			look.pool_height, look.pool_density, 0.0, 0.0,
-			look.wind.x, look.wind.y, 0.0, 0.0])
+			_packed_wind.x * look.wind_share, _packed_wind.y * look.wind_share, 0.0, 0.0])
 		if not look.changed.is_connected(_on_look_changed):
 			look.changed.connect(_on_look_changed)
 	_looks = f
 	_looks_version += 1
+
+
+# The board's wind, or still air with no source.
+func _wind() -> Vector2:
+	return wind_source.call() if wind_source.is_valid() else Vector2.ZERO
 
 
 func _on_look_changed() -> void:

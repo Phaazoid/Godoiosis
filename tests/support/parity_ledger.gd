@@ -88,7 +88,7 @@ static func axes() -> Array[Dictionary]:
 	return [
 		ring_verbs(), action_types(), gear_verbs(), hud_doors(), board_keys(),
 		outcome_fields(), plan_lists(),
-		tile_states(), gases(), weathers(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
+		tile_states(), gases(), weathers(), winds(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
 		ground_kinds(), element_states(),
 	]
 
@@ -397,6 +397,24 @@ static func gases() -> Dictionary:
 			K.THUNDER: {"ai": inert()},
 			K.SULFUR: {"ai": inert()},
 		},
+	}
+
+
+# The winds a board may name (#1286). CALM is left out the way CLEAR is: it blows nothing. A look only --
+# nothing a rule reads, so neither the Play API nor the AI has anything to answer. The day a wind gains
+# a rule (#277's Tempest row), these two lines are what has to change.
+static func winds() -> Dictionary:
+	var members: Array = []
+	for kind: int in Wind.Kind.values():
+		if kind != Wind.Kind.CALM:
+			members.append(kind)
+	return {
+		"name": "winds (Wind.Kind)",
+		"members": members,
+		"label": _enum_label(Wind.Kind.keys()),
+		"play_all": never("a look only: nothing headless draws the wind"),
+		"ai_all": never("a look only: no rule reads the wind"),
+		"rows": {},
 	}
 
 

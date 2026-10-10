@@ -27,7 +27,7 @@ enum Extra { WISP, SOOT, BUBBLE, SNOW, BOLT, CURL }
 @export var coverage_boost := 1.4         # how much of the column the billows fill
 @export var pool_height := 0.12           # the crisp layer on the cells, world units deep
 @export var pool_density := 0.35
-@export var wind := Vector2(0.05, 0.03)   # drift on x / z, world units a second
+@export var wind_share := 0.04           # the share of the board's wind (#1286) the billows drift with
 @export var emission := Color(0, 0, 0)    # a gas's own glow
 @export var flash := 0.0                  # 1 = lightning strikes inside it
 

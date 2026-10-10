@@ -6,8 +6,6 @@
 script = ExtResource("1_kyfc8")
 density = 6.0
 fall_speed = 17.0
-wind_x = 1.6
-wind_z = 0.6
 streak_texels = 8
 drop_color = Color(0.8, 0.87, 1, 0.65)
 splash_rate = 2.4

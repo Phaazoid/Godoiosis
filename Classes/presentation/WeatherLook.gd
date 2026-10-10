@@ -11,7 +11,8 @@ class_name WeatherLook
 # fall's.
 #
 # Every number is a feel value, so every one is a row (ROWS) on that page. A kind with no file draws
-# nothing; CLEAR has none.
+# nothing; CLEAR has none. The wind is not a weather's own (#1286): it is the board's, a WindLook,
+# and a look only says how much of it a fall takes (the fog's drift share).
 
 const FOLDER := "res://Resources/WeatherLooks/"
 
@@ -22,8 +23,6 @@ enum Fall { RAIN, SNOW, FOG }
 @export_group("Falling")
 @export var density := 3.0                  # drops or flakes born per cell of view per second
 @export var fall_speed := 14.0              # world units a second
-@export var wind_x := 0.8                   # sideways drift, world units a second (east)
-@export var wind_z := 0.3                   # (south)
 
 @export_group("Drops")
 @export var streak_texels := 6              # how long a drop is, in art pixels
@@ -135,10 +134,6 @@ const ROWS: Array[Dictionary] = [
 		"tip": "How many drops or flakes are born over each cell of the view every second."},
 	{"prop": "fall_speed", "label": "Fall speed", "min": 0.5, "max": 40.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
 		"tip": "How fast it falls, in cells a second. Rain reads heavier faster; snow drifts slow."},
-	{"prop": "wind_x", "label": "Wind east", "min": -8.0, "max": 8.0, "step": 0.1,
-		"tip": "Sideways drift, cells a second. Slants the rain, carries the snow, drives the ground drift and drifts the fog."},
-	{"prop": "wind_z", "label": "Wind south", "min": -8.0, "max": 8.0, "step": 0.1,
-		"tip": "Sideways drift toward the bottom of the map, cells a second."},
 	{"prop": "streak_texels", "label": "Streak length", "min": 1.0, "max": 16.0, "step": 1.0, "fall": Fall.RAIN,
 		"tip": "How long a drop is, in art pixels -- the same pixels the sprites are drawn in."},
 	{"prop": "drop_color", "label": "Drop colour", "fall": Fall.RAIN, "tip": "Colour and opacity of a drop."},

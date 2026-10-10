@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WindLook" format=3 uid="uid://dr0eqg1yycr4e"]
+
+[ext_resource type="Script" uid="uid://dknfs8mtvw1c5" path="res://Classes/presentation/WindLook.gd" id="1_t6gp7"]
+
+[resource]
+script = ExtResource("1_t6gp7")
+speed = 4.0
+gust = 0.5
+gust_period = 2.5
+sway_lean = 0.25
+sway_flutter = 0.06
+sway_speed = 2.6
+speck_rate = 0.8
+speck_life = 1.6
+speck_flutter = 1.0
+speck_leaves = 0.4
+cloud_cover = 0.45
+cloud_darkness = 0.28

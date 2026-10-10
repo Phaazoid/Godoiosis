@@ -170,7 +170,7 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	var install_id := TelemetryStore.install_id()
 	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
 		_view_note(), look, _devtools_note(), _trace_note(), reporter, install_id, _recording_note(),
-		Weather.display_name(game.scenario_manager.current_weather)))
+		_weather_note()))
 	md.close()
 
 	# The dev's key poses as pictures (#705), K1 first, three across -- the section in report.md says
@@ -265,6 +265,16 @@ func _devtools_note() -> String:
 	if panel == null:
 		return ""
 	return panel.current_tab_title()
+
+# The sky over the board as one line: the weather (#1260), and the wind when it blows (#1286).
+func _weather_note() -> String:
+	var weather: Weather.Kind = game.scenario_manager.current_weather
+	var wind: Wind.Kind = game.scenario_manager.current_wind
+	var direction: Wind.Direction = game.scenario_manager.current_wind_direction
+	var note := Weather.display_name(weather)
+	if wind != Wind.Kind.CALM:
+		note += ", %s toward %s" % [Wind.display_name(wind), Wind.direction_name(direction)]
+	return note
 
 func _view_note() -> String:
 	if not view_source.is_valid():

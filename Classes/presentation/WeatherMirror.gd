@@ -3,7 +3,9 @@ class_name WeatherMirror
 
 # What the board's weather LOOKS like (#1260), resident under battle3d like GasMirror and ArcLightning.
 # It reads the weather the host hands it each frame (ScenarioManager.current_weather, the RULE store,
-# so the board can never look like one weather and soak like another) and that kind's WeatherLook:
+# so the board can never look like one weather and soak like another) and that kind's WeatherLook,
+# and the board's wind (#1286, WindLook.vector), which every fall drifts with -- a weather has no wind
+# of its own, so a calm board's rain falls straight:
 #
 #   - RAIN: one GPUParticles3D on rain.gdshader. Drops are born in a box fitted to the camera's own
 #     frustum every frame, so the rain fills the view at any zoom, and die on the surface under them
@@ -57,6 +59,7 @@ const COVER_SETTLE := 0.15
 const WALL_FADE := 0.55
 
 var weather_source: Callable          # () -> Weather.Kind
+var wind_source: Callable             # () -> Vector2: the board's wind, world units a second on x / z
 var grid: BoardGrid
 var heights: BoardHeights
 var camera: Camera3D
@@ -94,6 +97,7 @@ var _side: DirectionalLight3D
 
 var _rect := Rect2i()
 var _mask_versions := []
+var _mask: ImageTexture = null
 var _ground_key := 0
 var _streak_texels := -1
 var _strip_built := false
@@ -225,10 +229,11 @@ func _process(delta: float) -> void:
 	if look != _look or kind != _kind:
 		_switch(kind, look)
 	# Every frame, the clear ones too: a grade eases OUT as well as in.
-	_grade.drive(_look, Vector2(_look.wind_x, _look.wind_z) if _look != null else Vector2.ZERO, delta)
+	_grade.drive(_look, _wind(), delta)
+	# Whatever the weather: the wind's specks land on this mask too (#1286).
+	_sync_mask()
 	if _look == null:
 		return
-	_sync_mask()
 	if _raining():
 		_sync_ground()
 		_place_rain()
@@ -242,6 +247,11 @@ func _process(delta: float) -> void:
 		_place_fog(delta)
 		_style_fog()
 	_storm()
+
+
+# The board's wind (#1286), or still air with no source.
+func _wind() -> Vector2:
+	return wind_source.call() if wind_source.is_valid() else Vector2.ZERO
 
 
 func _raining() -> bool:
@@ -313,11 +323,27 @@ func _sync_mask() -> void:
 	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
 	_span = WeatherMask.span(image)
 	var texture := ImageTexture.create_from_image(image)
+	_mask = texture
 	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process, _drift_process,
 			_fog_process, _fog_pass_material]:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
+
+
+# The board's surface mask and its first cell, as every weather shader reads it -- the ONE build of it,
+# which the wind's specks (#1286) read through here. Null until a board is drawn.
+func mask() -> ImageTexture:
+	return _mask
+
+
+func mask_origin() -> Vector2:
+	return Vector2(_rect.position)
+
+
+# The weather being drawn, as the board names it: the wind's specks (#1286) blow under a clear sky only.
+func kind() -> Weather.Kind:
+	return _kind
 
 
 # Where a cell is DRAWN relative to its rules surface: lifted onto the stage by a tear-out (#521), and
@@ -403,8 +429,9 @@ func _fit(decal: Decal) -> void:
 # the camera looks at, plus the camera's own column, grown by how far the wind carries a particle on
 # its way down and by `wander` either way. The floor is below where the LOWEST frame edge leaves the
 # farthest particle's fall, so one over the void leaves the screen before it dies. Empty with no camera.
-# Keys: lo, hi (Vector2, x/z), top, floor_y, fall (seconds from top to floor), area.
-func _view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
+# Keys: lo, hi (Vector2, x/z), top, floor_y, fall (seconds from top to floor), area. Public because the
+# wind's specks (#1286) are born in the same box.
+func view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
 	if camera == null or not camera.is_inside_tree():
 		return {}
 	var eye := camera.global_position
@@ -440,7 +467,8 @@ func _view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
 
 func _place_rain() -> void:
 	var speed := maxf(_look.fall_speed, 0.5)
-	var box := _view_box(speed, Vector2(_look.wind_x, _look.wind_z), 0.0)
+	var wind := _wind()
+	var box := view_box(speed, wind, 0.0)
 	if box.is_empty():
 		return
 	var lo: Vector2 = box["lo"]
@@ -450,21 +478,21 @@ func _place_rain() -> void:
 	_rain_process.set_shader_parameter("box_min", Vector3(lo.x, top - 0.5, lo.y))
 	_rain_process.set_shader_parameter("box_max", Vector3(hi.x, top, hi.y))
 	_rain_process.set_shader_parameter("floor_y", box["floor_y"])
-	_rain_process.set_shader_parameter("velocity", Vector3(_look.wind_x, -speed, _look.wind_z))
-	_size(_rain, _rain_process, _look.density * area, float(box["fall"]) + 0.25, MAX_DROPS)
+	_rain_process.set_shader_parameter("velocity", Vector3(wind.x, -speed, wind.y))
+	size_emitter(_rain, _rain_process, _look.density * area, float(box["fall"]) + 0.25, MAX_DROPS)
 	_splash_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
 	_splash_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
 	_splash_process.set_shader_parameter("floor_y", box["floor_y"])
 	if _look.splashes:
-		_size(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
+		size_emitter(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
 
 
 # Flakes fall slowly and wander, so they get a longer life than their fall -- an eddy can hold one up --
 # and the settle on top. The box is padded by an eddy's width either way.
 func _place_snow() -> void:
 	var speed := maxf(_look.fall_speed, 0.5)
-	var wind := Vector2(_look.wind_x, _look.wind_z)
-	var box := _view_box(speed, wind, _look.swirl_scale + _look.flake_sway)
+	var wind := _wind()
+	var box := view_box(speed, wind, _look.swirl_scale + _look.flake_sway)
 	if box.is_empty():
 		return
 	var lo: Vector2 = box["lo"]
@@ -481,24 +509,25 @@ func _place_snow() -> void:
 	_snow_process.set_shader_parameter("big", _look.big_flakes)
 	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
 	var life := float(box["fall"]) * 1.3 + maxf(_look.flake_settle, 0.0) + 0.25
-	_size(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
+	size_emitter(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
 	_place_drift(lo, hi, box["floor_y"], wind)
 
 
-# The ground drift streams along the wind, born on the ground over the same box at its own rate.
+# The ground drift streams along the wind, born on the ground over the same box at its own rate. On a
+# calm board there is nothing for it to stream along, so it stops (#1286).
 func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> void:
-	var on := _look.drift_rate > 0.0
+	var on := _look.drift_rate > 0.0 and wind.length() > 0.001
 	_drift.emitting = on
 	_drift.visible = on
 	if not on:
 		return
-	var along := wind.normalized() if wind.length() > 0.001 else Vector2.RIGHT
+	var along := wind.normalized()
 	_drift_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
 	_drift_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
 	_drift_process.set_shader_parameter("floor_y", floor_y)
 	_drift_process.set_shader_parameter("velocity", Vector3(along.x, 0.0, along.y) * _look.drift_speed)
 	_drift_process.set_shader_parameter("hover", 1.0 / UnitSprite3D.texels_per_unit)
-	_size(_drift, _drift_process, _look.drift_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.drift_life, 0.05),
+	size_emitter(_drift, _drift_process, _look.drift_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.drift_life, 0.05),
 			MAX_DRIFT)
 
 
@@ -508,7 +537,7 @@ func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> vo
 # on every zoom -- big slow wisps jumping to new shapes (dev report). Fog only stands on the board, so
 # the board is its box, and the count moves only when the board or a card dial does.
 func _place_fog(delta: float) -> void:
-	var wind := Vector2(_look.wind_x, _look.wind_z) * _look.fog_speed
+	var wind := _wind() * _look.fog_speed
 	_fog_drift += wind * delta
 	if not _rect.has_area():
 		return
@@ -521,7 +550,7 @@ func _place_fog(delta: float) -> void:
 	_fog_process.set_shader_parameter("lift", _look.card_lift)
 	_fog_process.set_shader_parameter("sink", _look.card_sink)
 	_fog_process.set_shader_parameter("dissolve", _look.card_dissolve)
-	_size(_fog_cards, _fog_process, _look.card_amount * (hi.x - lo.x) * (hi.y - lo.y) / life, life, MAX_FOG_CARDS)
+	size_emitter(_fog_cards, _fog_process, _look.card_amount * (hi.x - lo.x) * (hi.y - lo.y) / life, life, MAX_FOG_CARDS)
 
 
 # A card's world size: a wisp at the ground art's pixel size, times the look's card size.
@@ -540,7 +569,7 @@ static func fog_tint(look: WeatherLook, horizon: Color) -> Color:
 # they move only when the wanted value strays far, and `keep` trims the births in between so the
 # density on screen is the authored one whatever the box is doing. PURE in its arithmetic -- see
 # amount_for -- so a case can pin it with no renderer.
-func _size(system: GPUParticles3D, material: ShaderMaterial, per_second: float, life: float,
+static func size_emitter(system: GPUParticles3D, material: ShaderMaterial, per_second: float, life: float,
 		cap: int) -> void:
 	var wanted := amount_for(per_second, life)
 	var stale := system.lifetime < life or wanted > system.amount \

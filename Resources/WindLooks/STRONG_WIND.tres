@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script_class="WindLook" format=3 uid="uid://5tvu0lvwqa74"]
+
+[ext_resource type="Script" uid="uid://dknfs8mtvw1c5" path="res://Classes/presentation/WindLook.gd" id="1_ghw8g"]
+
+[resource]
+script = ExtResource("1_ghw8g")

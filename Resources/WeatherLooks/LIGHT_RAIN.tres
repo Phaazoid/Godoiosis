@@ -6,8 +6,6 @@
 script = ExtResource("1_tk3ag")
 density = 1.2
 fall_speed = 11.0
-wind_x = 0.4
-wind_z = 0.1
 streak_texels = 4
 drop_color = Color(0.8, 0.87, 1, 0.45)
 splash_rate = 0.5

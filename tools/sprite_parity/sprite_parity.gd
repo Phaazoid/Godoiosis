@@ -5,6 +5,9 @@ extends Node3D
 # renderer draws nothing. This renders each case twice -- the engine's material, then the status
 # material with every state at zero -- and diffs the frames. Zero differing pixels is the pass.
 #
+# The wind's plant sway (#1286) draws through the same copy (sprite_material.gdshaderinc), so a plant's
+# billboard and its snow cap are cases too, against the very material BoardMirror hands them at no lean.
+#
 # Re-run it after ANY engine upgrade, and after touching the replica half of the include:
 #
 #     godot --path . res://tools/sprite_parity/sprite_parity.tscn
@@ -27,6 +30,9 @@ func _ready() -> void:
 	failures += await _parity("real sprite (prepass, shadow, flip, faction tint)", _real_sprite())
 	failures += await _parity("ghost (alpha, priority)", _ghost())
 	failures += await _parity("atlas frame", _atlas_frame())
+	failures += await _sway_parity("plant (prepass, shadow, atlas region)", _plant(), false)
+	failures += await _sway_parity("plant's snow cap (alpha, priority)", _plant_cap(), true)
+	await _lean()
 	for clock: float in [0.3, 1.9]:
 		await _look("wet", 1.0, 0.0, 0.0, clock)
 		await _look("chilled", 0.0, 1.0, 1.0, clock)
@@ -112,6 +118,59 @@ func _parity(label: String, sprite: UnitSprite3D) -> int:
 	var diff := _diff(engine, replica)
 	print("  %s: %d differing px, max %.1f/255" % [label, diff.x, diff.y])
 	return 0 if diff.x == 0 else 1
+
+
+# A plant's billboard exactly as BoardMirror._make_prop_billboard builds one (#1286).
+func _plant() -> Sprite3D:
+	var frame := AtlasTexture.new()
+	frame.atlas = ART
+	frame.region = Rect2(8, 16, 48, 48)
+	var sprite := Sprite3D.new()
+	sprite.texture = frame
+	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
+	sprite.shaded = true
+	sprite.pixel_size = 1.0 / float(GridUtils.TILE_SIZE)
+	sprite.offset = Vector2(0, frame.region.size.y * 0.5)
+	return sprite
+
+
+# ...and its snow cap, as BoardMirror._make_cap builds one: an alpha blend drawn after the plant.
+func _plant_cap() -> Sprite3D:
+	var sprite := _plant()
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	sprite.render_priority = 1
+	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sprite.modulate = Color(0.93, 0.95, 0.99)
+	return sprite
+
+
+# Returns 1 when the engine's plant and the sway material at no lean differ.
+func _sway_parity(label: String, sprite: Sprite3D, cap: bool) -> int:
+	add_child(sprite)
+	var engine := await _grab()
+	sprite.material_override = BoardMirror.sway_material(sprite.texture, cap, sprite.render_priority)
+	var replica := await _grab()
+	sprite.queue_free()
+	var diff := _diff(engine, replica)
+	print("  %s: %d differing px, max %.1f/255" % [label, diff.x, diff.y])
+	return 0 if diff.x == 0 else 1
+
+
+# What a plant leaning in a gale looks like, for an eye check.
+func _lean() -> void:
+	var sprite := _plant()
+	var material := BoardMirror.sway_material(sprite.texture, false)
+	material.set_shader_parameter("wind_heading", Vector2(1.0, 0.0))
+	material.set_shader_parameter("lean", 0.25)
+	sprite.material_override = material
+	add_child(sprite)
+	var image := await _grab()
+	var path := "%s/plant_leaning.png" % OUT_DIR
+	image.save_png(path)
+	print("  saved %s" % ProjectSettings.globalize_path(path))
+	sprite.queue_free()
 
 
 # A close look at a state on the real art, through the one door the game uses. An untinted sprite,

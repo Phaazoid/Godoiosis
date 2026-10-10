@@ -92,3 +92,44 @@ func _label_texts(kind: Weather.Kind) -> Array[String]:
 			texts.append((node as Button).text)
 	page.free()
 	return texts
+
+
+# The wind's strengths are on the page too (#1286), each look's every field one row, the weather's law.
+func test_every_wind_look_field_has_one_row_and_every_row_a_field() -> void:
+	var fields := _exported(WindLook.new())
+	var rows: Array[String] = []
+	for row: Dictionary in WindLook.ROWS:
+		rows.append(row["prop"])
+		assert_bool(fields.has(row["prop"])).override_failure_message(
+				"wind row '%s' names no field" % row["prop"]).is_true()
+		assert_str(row.get("tip", "")).override_failure_message("wind row '%s' has no tooltip" % row["prop"]).is_not_empty()
+	for field in fields:
+		assert_int(rows.count(field)).override_failure_message(
+				"wind field '%s' has %d rows on the Weather page" % [field, rows.count(field)]).is_equal(1)
+
+
+# Every strength but calm has a look file and a picker entry, and its slider moves the look the board
+# blows with.
+func test_a_wind_slider_moves_the_look_the_board_blows_with() -> void:
+	for kind: Wind.Kind in Wind.Kind.values():
+		if kind != Wind.Kind.CALM:
+			assert_object(WindLook.for_kind(kind)).override_failure_message(
+					"Wind.Kind.%s has no look file" % Wind.name_of(kind)).is_not_null()
+	var look := WindLook.for_kind(Wind.Kind.GALE)
+	var was := look.speed
+	var page := WeatherTool.new()
+	add_child(page)
+	auto_free(page)
+	page.init(null)
+	page._show_wind(Wind.Kind.GALE)
+	assert_str(page._picker.get_item_text(page._picker.selected)).is_equal("Wind: Gale")
+	var slider := _slider_after(page, "Wind speed")
+	assert_object(slider).override_failure_message("the page drew no Wind speed slider").is_not_null()
+	var target := was + 1.0
+	slider.value = target
+	await await_idle_frame()
+	await await_idle_frame()
+	var landed := WindLook.for_kind(Wind.Kind.GALE).speed
+	look.speed = was
+	assert_float(landed).override_failure_message("the slider moved and the wind did not").is_equal_approx(target, 0.01)
+	assert_bool(page.has_unsaved_changes()).override_failure_message("an edit left Save unmarked").is_true()

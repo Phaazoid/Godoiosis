@@ -1,22 +1,16 @@
 // A unit sprite wearing an element state (#358). Included by unit_status.gdshader (real sprites) and
 // unit_status_ghost.gdshader (planning ghosts), which differ only in render_mode.
 //
-// THE FIRST HALF IS A HAND COPY OF THE ENGINE'S OWN Sprite3D MATERIAL: BaseMaterial3D's code for a
-// shaded, double-sided, FIXED_Y-billboarded sprite whose albedo comes from the vertex colour. Measured
-// pixel-identical to the engine sprite on 4.7.1 (tools/sprite_parity/), shadows and flip included. The
-// engine stays authoritative; after an engine upgrade, re-run that probe before trusting this half.
-// A sprite only carries this material while it wears a state, a tint brighter than its art (#1251)
-// or the weather's snow cap (#1269), so everything else keeps the engine's.
+// THE FIRST HALF IS THE HAND COPY OF THE ENGINE'S OWN Sprite3D MATERIAL, sprite_material.gdshaderinc
+// (shared with the wind's plant sway, #1286). A sprite only carries this material while it wears a
+// state, a tint brighter than its art (#1251) or the weather's snow cap (#1269), so everything else
+// keeps the engine's.
 //
 // The second half draws the state from StatusArt's effect map. Tint goes to ALBEDO, so it is lit
 // with the sprite; the bright marks go to EMISSION, so they still read on a dark board. Every mark
 // sits on the art's own texel grid, and time is status_time, never TIME, so a hitstop freezes it.
 
-uniform vec4 albedo : source_color = vec4(1.0);
-uniform sampler2D texture_albedo : source_color, filter_nearest, repeat_enable;
-uniform float roughness : hint_range(0.0, 1.0) = 1.0;
-uniform float specular : hint_range(0.0, 1.0, 0.01) = 0.5;
-uniform float metallic : hint_range(0.0, 1.0, 0.01) = 0.0;
+#include "res://Classes/presentation/sprite_material.gdshaderinc"
 
 uniform sampler2D status_map : filter_nearest, repeat_enable;
 uniform float wet = 0.0;
@@ -70,20 +64,12 @@ vec3 status_to_linear(vec3 c) {
 }
 
 void vertex() {
-	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
-			vec4(normalize(cross(vec3(0.0, 1.0, 0.0), MAIN_CAM_INV_VIEW_MATRIX[2].xyz)), 0.0),
-			vec4(0.0, 1.0, 0.0, 0.0),
-			vec4(normalize(cross(MAIN_CAM_INV_VIEW_MATRIX[0].xyz, vec3(0.0, 1.0, 0.0))), 0.0),
-			MODEL_MATRIX[3]);
+	MODELVIEW_MATRIX = VIEW_MATRIX * sprite_billboard(MAIN_CAM_INV_VIEW_MATRIX, MODEL_MATRIX);
 	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
 }
 
 void fragment() {
-	vec4 tint = COLOR;
-	if (!OUTPUT_IS_SRGB) {
-		tint.rgb = mix(pow((tint.rgb + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)),
-				tint.rgb * (1.0 / 12.92), lessThan(tint.rgb, vec3(0.04045)));
-	}
+	vec4 tint = sprite_tint(COLOR, OUTPUT_IS_SRGB);
 	vec4 art = texture(texture_albedo, UV);
 	vec4 albedo_tex = art * tint;
 	vec3 rgb = albedo.rgb * albedo_tex.rgb;

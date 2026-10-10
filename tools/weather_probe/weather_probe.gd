@@ -12,7 +12,10 @@ extends Node
 #     grade greys the board while the HUD's pixels stay exactly as they were;
 #   - that the blizzard's whiteout has no seams (#1278): drawn alone, no step between neighbours;
 #   - that each FOG strength changes the board, leaves the HUD alone and puts nothing in the void well
-#     past the board's edge (#1285: fog never hangs over nothing), and what it costs the GPU.
+#     past the board's edge (#1285: fog never hangs over nothing), and what it costs the GPU;
+#   - that each WIND strength (#1286) changes a clear board on its own -- specks and cloud shadows --
+#     more the harder it blows, leaves the HUD alone and the void past the edge untouched, and what the
+#     cloud pass costs the GPU.
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -61,7 +64,9 @@ func _ready() -> void:
 	failures += await _snow(clear)
 	failures += await _veil()
 	failures += await _fog()
+	failures += await _wind()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -151,7 +156,7 @@ func _snow(_ford_clear: Image) -> int:
 		print("  %s: board saturation %.3f (clear %.3f), grade %s, veil %.2f, %d HUD px moved" % [
 				Weather.name_of(kind), sat, clear_sat, mirror.grade().rect().visible, mirror.grade().veil, moved])
 		var look := WeatherLook.for_kind(kind)
-		var box: Dictionary = mirror._view_box(maxf(look.fall_speed, 0.5), Vector2(look.wind_x, look.wind_z),
+		var box: Dictionary = mirror.view_box(maxf(look.fall_speed, 0.5), mirror._wind(),
 				look.swirl_scale + look.flake_sway)
 		var wanted := look.density * float(box["area"]) * mirror._snow.lifetime
 		print("  %s: %d sampled px whitened; a system of %d flakes for %d wanted (box %.0f m2, fall %.1fs)"
@@ -197,6 +202,87 @@ func _fog() -> int:
 	failures += await _fog_void()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	return 0 if failures == 0 else 1
+
+
+# The wind (#1286), on grass under a clear sky: each strength against two calm frames the same time apart
+# (the water and the idle units move on their own), more of the board moved the harder it blows, the HUD
+# untouched, and then the void past the edge untouched by a gale.
+func _wind() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(SNOW_MISSION)
+	var rid := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	await _wait(1.0)
+	var calm := await _grab("wind_calm")
+	var calm_gpu := await _gpu_ms(60)
+	await _wait(4.0)
+	var baseline := _lum_changed(calm, await _grab("wind_calm_later"))
+	print("  wind: calm GPU %.2f ms, %d sampled px move on their own" % [calm_gpu, baseline])
+	var failures := 0
+	var counts := {}
+	for kind: Wind.Kind in [Wind.Kind.BREEZE, Wind.Kind.STRONG_WIND, Wind.Kind.GALE]:
+		_game.scenario_manager.current_wind = kind
+		await _wait(4.0)
+		var frame := await _grab("wind_" + Wind.name_of(kind).to_lower())
+		var gpu := await _gpu_ms(60)
+		var changed := _lum_changed(calm, frame)
+		var hud := _hud_moved(calm, frame)
+		counts[kind] = changed
+		print("  %s: %d sampled px changed (calm moves %d), %d HUD px moved; GPU %.2f ms (%+.2f)"
+				% [Wind.name_of(kind), changed, baseline, hud, gpu, gpu - calm_gpu])
+		if changed < baseline + 300 or hud > 0:
+			failures += 1
+	if int(counts[Wind.Kind.GALE]) <= int(counts[Wind.Kind.BREEZE]):
+		print("  wind: FAILED -- a gale moves no more of the board than a breeze")
+		failures += 1
+	failures += await _wind_void()
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	return 0 if failures == 0 else 1
+
+
+# On the fog's board, zoomed out as its void check is (Level_1 fills the frame even zoomed out): a gale's
+# specks die over the void and its shadows skip the sky, so the void past the edge is as calm left it.
+func _wind_void() -> int:
+	await _open(FOG_MISSION)
+	var rig: CameraRig3D = _scene._rig
+	var opening := rig._target_distance
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	rig.set_zoom(opening * 2.0)
+	await _wait(2.0)
+	var calm := await _grab("wind_calm_wide")
+	var void_rect := _void_left_of_board(FOG_CLEAR_MARGIN)
+	var failures := 0
+	if not void_rect.has_area():
+		print("  wind void: FAILED -- no void left of the board in the wide frame to check")
+		failures += 1
+	else:
+		_game.scenario_manager.current_wind = Wind.Kind.GALE
+		await _wait(4.0)
+		var frame := await _grab("wind_gale_wide")
+		var in_void := 0
+		var checked := 0
+		for y in range(int(void_rect.position.y), int(void_rect.end.y), 2):
+			for x in range(int(void_rect.position.x), int(void_rect.end.x), 2):
+				checked += 1
+				if absf(frame.get_pixel(x, y).get_luminance() - calm.get_pixel(x, y).get_luminance()) > FOG_VOID_TOLERANCE:
+					in_void += 1
+		print("  GALE void: %d of %d sampled px past the board's edge touched" % [in_void, checked])
+		if in_void > 0:
+			failures += 1
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	rig.set_zoom(opening)
+	return failures
+
+
+# Sampled pixels whose luminance moved past the fog's own threshold.
+func _lum_changed(a: Image, b: Image) -> int:
+	var changed := 0
+	for y in range(0, a.get_height(), 2):
+		for x in range(0, a.get_width(), 2):
+			if absf(b.get_pixel(x, y).get_luminance() - a.get_pixel(x, y).get_luminance()) > 0.04:
+				changed += 1
+	return changed
 
 
 # Zoomed out to twice the opening distance so there is void beside the board to look at.
