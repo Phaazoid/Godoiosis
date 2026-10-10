@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://e3n4br6lvthd"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_xud8g"]
+
+[resource]
+script = ExtResource("1_xud8g")
+fall = 5
+density = 1.0
+fall_speed = 0.9
+flake_sway = 0.5
+flake_swirl = 0.2
+big_flakes = 0.2
+flake_color = Color(0.46, 0.44, 0.43, 0.9)
+flake_settle = 1.5
+snow_cover = 0.25
+slope_cover = 0.5
+snow_frost = 0.15
+snow_flecks = 0.0
+snow_color = Color(0.36, 0.35, 0.35, 1)
+snow_roughness = 1.0
+snow_relief = 0.0
+snow_bumps = 0.0
+unit_cap_color = Color(0.74, 0.72, 0.7, 1)
+drift_speed = 4.0
+drift_life = 0.7
+drift_color = Color(0.55, 0.53, 0.51, 0.55)
+mote_rate = 0.03
+mote_rise = 0.6
+mote_life = 2.2
+mote_height = 1.2
+mote_size = 2.0
+grade_saturation = 0.8
+grade_brightness = 0.9
+grade_tint = Color(0.95, 0.35, 0.2, 0.04)
+veil_color = Color(0.36, 0.33, 0.31, 1)

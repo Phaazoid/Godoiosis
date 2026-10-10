@@ -28,6 +28,11 @@ class_name WeatherMirror
 #   - AURORA (#1298): AuroraLights, a child this node builds and drives -- glowing curtains on the
 #     ground, the aurora's own light and rising motes, easing in and out with the weather. An Aetheric
 #     Storm's discharges are THE STORM above, its corona in the look's bolt_element.
+#   - SAND and ASH (#1302) draw no part of their own but the grit: sand is the snow's flakes (as specks),
+#     cover and drift in sand, the fog's pass and cards as dust, and GRIT (sand_grit.gdshader), streaks
+#     flying along the wind over the board; ash is the flakes, a soot cover and caps, and embers -- a
+#     RisingMotes of this node's, the aurora's motes in the look's mote colour. Which falls draw which
+#     part is WeatherLook's part lists, and every path below is gated on them.
 #   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
 #     easing between weathers. Any fall may author one; every shipped rain leaves it at identity.
 #
@@ -45,6 +50,7 @@ const MAX_SPLASHES := 12000
 const MAX_FLAKES := 200000
 const MAX_DRIFT := 20000
 const MAX_FOG_CARDS := 20000
+const MAX_GRIT := 30000
 # How far above the camera drops are born, so none ever appears inside the frame.
 const SPAWN_ABOVE := 2.0
 # The decals' height: from well under the board to well over the tear-out's stage, which shares the
@@ -90,6 +96,10 @@ var _fog_pass_material: ShaderMaterial
 var _fog_cards: GPUParticles3D
 var _fog_process: ShaderMaterial
 var _fog_draw: ShaderMaterial
+var _grit: GPUParticles3D
+var _grit_process: ShaderMaterial
+var _grit_draw: ShaderMaterial
+var _embers: RisingMotes
 var _wet: Decal
 var _puddles: Decal
 var _snow_cover: Decal
@@ -107,6 +117,7 @@ var _streak_texels := -1
 var _strip_built := false
 var _flakes_built := false
 var _drift_texels := -1
+var _grit_texels := -1
 var _wet_roughness := -1.0
 var _puddle_roughness := -1.0
 var _snow_key := 0
@@ -150,6 +161,12 @@ func _ready() -> void:
 	_fog_pass_material = draw_material("res://Classes/presentation/fog_pass.gdshader")
 	_fog_pass_material.render_priority = BoardOverlays.FOG_RENDER_PRIORITY
 	_fog_pass = BoardOverlays.make_screen_pass(self, _fog_pass_material)
+	_grit_process = process_material("res://Classes/presentation/sand_grit.gdshader")
+	_grit_draw = draw_material("res://Classes/presentation/rain_drop.gdshader")
+	_grit_draw.set_shader_parameter("age_fade", 1.0)
+	_grit = particles(self, _grit_process, _grit_draw, PlaneMesh.FACE_Z)
+	_embers = RisingMotes.new()
+	add_child(_embers)
 	_aurora = AuroraLights.new()
 	_aurora.weather = self
 	add_child(_aurora)
@@ -191,7 +208,7 @@ func cover_volume(volume: AABB) -> void:
 # Every particle system this node draws: the one list the cull sweep walks, so a new one cannot be
 # left out of it.
 func emitters() -> Array[GPUParticles3D]:
-	var systems: Array[GPUParticles3D] = [_rain, _splash, _snow, _drift, _fog_cards]
+	var systems: Array[GPUParticles3D] = [_rain, _splash, _snow, _drift, _fog_cards, _grit, _embers.system]
 	systems.append_array(_aurora.emitters())
 	return systems
 
@@ -200,7 +217,7 @@ func emitters() -> Array[GPUParticles3D]:
 # this weather caps them and 0 otherwise -- UnitMirror.snow_source. Read off the look the mirror is
 # drawing, so a flat view caps nobody.
 func unit_snow() -> Color:
-	if not _snowing() or not _look.caps_units:
+	if not _draws(WeatherLook.CAPS) or not _look.caps_units:
 		return Color(1.0, 1.0, 1.0, 0.0)
 	return Color(_look.unit_cap_color.r, _look.unit_cap_color.g, _look.unit_cap_color.b, 1.0)
 
@@ -243,14 +260,21 @@ func _process(delta: float) -> void:
 		_sync_ground()
 		_place_rain()
 		_style()
-	elif _snowing():
+	if _draws(WeatherLook.COVER):
 		_sync_snow_ground()
+	if _draws(WeatherLook.FLAKES):
 		_place_snow()
-		_style_snow()
-	elif _fogging():
+	_style_snow()
+	if _draws(WeatherLook.HAZE):
 		_sync_fog()
 		_place_fog(delta)
 		_style_fog()
+	if _draws(WeatherLook.GRIT):
+		_place_grit()
+		_style_grit()
+	if _embering():
+		_embers.style(_look, _look.mote_color)
+		_embers.place(_look, self)
 	_storm()
 
 
@@ -267,12 +291,18 @@ func _snowing() -> bool:
 	return _look != null and _look.fall == WeatherLook.Fall.SNOW
 
 
-func _fogging() -> bool:
-	return _look != null and _look.fall == WeatherLook.Fall.FOG
-
-
 func _auroring() -> bool:
 	return _look != null and _look.fall == WeatherLook.Fall.AURORA
+
+
+# Whether the look draws a part: one of WeatherLook's part lists, the same the Weather page's rows read.
+func _draws(part: Array) -> bool:
+	return _look != null and part.has(_look.fall)
+
+
+# Motes that are not an aurora's: an ashfall's embers. An aurora's are AuroraLights'.
+func _embering() -> bool:
+	return _draws(WeatherLook.MOTES) and not _auroring()
 
 
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
@@ -285,21 +315,28 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_splash.visible = rain and look.splashes
 	_wet.visible = rain
 	_puddles.visible = rain and look.puddles
-	var snow := _snowing()
-	_snow.emitting = snow
-	_snow.visible = snow
-	_snow_cover.visible = snow
-	_caps.visible = snow and look.caps_props
+	var flakes := _draws(WeatherLook.FLAKES)
+	_snow.emitting = flakes
+	_snow.visible = flakes
+	_snow_cover.visible = _draws(WeatherLook.COVER)
+	var caps := _draws(WeatherLook.CAPS)
+	_caps.visible = caps and look.caps_props
 	if snow_on_props.is_valid():
-		snow_on_props.call(snow and look.caps_props, look.snow_color if snow else Color.WHITE, snow)
-	_drift.emitting = snow and look.drift_rate > 0.0
+		snow_on_props.call(caps and look.caps_props, look.snow_color if caps else Color.WHITE, caps)
+	_drift.emitting = _draws(WeatherLook.DRIFT) and look.drift_rate > 0.0
 	_drift.visible = _drift.emitting
-	var fog := _fogging()
-	_fog_pass.visible = fog
-	_fog_cards.emitting = fog
-	_fog_cards.visible = fog
+	var haze := _draws(WeatherLook.HAZE)
+	_fog_pass.visible = haze
+	_fog_cards.emitting = haze
+	_fog_cards.visible = haze
+	_grit.emitting = _draws(WeatherLook.GRIT) and look.grit_rate > 0.0
+	_grit.visible = _grit.emitting
+	var embers := _embering() and look.mote_rate > 0.0
+	_embers.system.emitting = embers
+	_embers.system.visible = embers
 	_fog_key = 0
 	_drift_texels = -1
+	_grit_texels = -1
 	_snow_key = 0
 	_snow_roughness = -1.0
 	_mask_versions = []
@@ -334,7 +371,7 @@ func _sync_mask() -> void:
 	var texture := ImageTexture.create_from_image(image)
 	_mask = texture
 	var masked: Array[ShaderMaterial] = [_rain_process, _splash_process, _snow_process, _drift_process,
-			_fog_process, _fog_pass_material]
+			_fog_process, _fog_pass_material, _grit_process, _embers.process]
 	masked.append_array(_aurora.masked())
 	for material: ShaderMaterial in masked:
 		material.set_shader_parameter("mask", texture)
@@ -425,12 +462,13 @@ func _sync_snow_ground() -> void:
 func _sync_fog() -> void:
 	if grid == null:
 		return
-	var key := hash([_mask_versions.slice(0, 3), _look.pool_share, _look.pool_depth, _look.edge_fade])
+	var key := hash([_mask_versions.slice(0, 3), BoardSpace.basin_version, _look.pool_share, _look.pool_depth,
+			_look.edge_fade, _look.water_haze])
 	if key == _fog_key:
 		return
 	_fog_key = key
 	var texture := ImageTexture.create_from_image(FogGround.field(grid, heights, _rect, _look.pool_share,
-			_look.pool_depth, _look.edge_fade))
+			_look.pool_depth, _look.edge_fade, _look.water_haze))
 	for material: ShaderMaterial in [_fog_process, _fog_pass_material]:
 		material.set_shader_parameter("fog_field", texture)
 
@@ -511,7 +549,7 @@ func _place_rain() -> void:
 # and the settle on top. The box is padded by an eddy's width either way.
 func _place_snow() -> void:
 	var speed := maxf(_look.fall_speed, 0.5)
-	var wind := _wind()
+	var wind := _wind() * _look.flake_wind
 	var box := view_box(speed, wind, _look.swirl_scale + _look.flake_sway)
 	if box.is_empty():
 		return
@@ -530,13 +568,13 @@ func _place_snow() -> void:
 	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
 	var life := float(box["fall"]) * 1.3 + maxf(_look.flake_settle, 0.0) + 0.25
 	size_emitter(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
-	_place_drift(lo, hi, box["floor_y"], wind)
+	_place_drift(lo, hi, box["floor_y"], _wind())
 
 
 # The ground drift streams along the wind, born on the ground over the same box at its own rate. On a
 # calm board there is nothing for it to stream along, so it stops (#1286).
 func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> void:
-	var on := _look.drift_rate > 0.0 and wind.length() > 0.001
+	var on := _draws(WeatherLook.DRIFT) and _look.drift_rate > 0.0 and wind.length() > 0.001
 	_drift.emitting = on
 	_drift.visible = on
 	if not on:
@@ -571,6 +609,27 @@ func _place_fog(delta: float) -> void:
 	_fog_process.set_shader_parameter("sink", _look.card_sink)
 	_fog_process.set_shader_parameter("dissolve", _look.card_dissolve)
 	size_emitter(_fog_cards, _fog_process, _look.card_amount * (hi.x - lo.x) * (hi.y - lo.y) / life, life, MAX_FOG_CARDS)
+
+
+# A sandstorm's grit flies along the wind at a share of it, born over the whole BOARD -- sand flies only
+# over the board, and a count sized off the view would re-deal it on every zoom (#1301's rule). A calm
+# board has nothing for it to fly along, so it stops and the specks swirl alone.
+func _place_grit() -> void:
+	var wind := _wind() * _look.grit_share
+	var on := _look.grit_rate > 0.0 and wind.length() > 0.001 and _rect.has_area()
+	_grit.emitting = on
+	_grit.visible = on
+	if not on:
+		return
+	var lo := Vector2(_rect.position) * BoardSpace.CELL_SIZE
+	var hi := Vector2(_rect.end) * BoardSpace.CELL_SIZE
+	_grit_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
+	_grit_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
+	_grit_process.set_shader_parameter("velocity", Vector3(wind.x, 0.0, wind.y))
+	_grit_process.set_shader_parameter("hover", 1.0 / UnitSprite3D.texels_per_unit)
+	_grit_process.set_shader_parameter("rise", maxf(_look.grit_height, 0.0))
+	size_emitter(_grit, _grit_process, _look.grit_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.grit_life, 0.05),
+			MAX_GRIT)
 
 
 # A card's world size: a wisp at the ground art's pixel size, times the look's card size.
@@ -643,28 +702,43 @@ func _style() -> void:
 		_puddles.texture_orm = _orm(_puddle_roughness)
 
 
+# The flakes, the drift, the cover and the caps, each where its part is drawn.
 func _style_snow() -> void:
-	if not _flakes_built:
-		_flakes_built = true
-		_snow_draw.set_shader_parameter("flakes", ImageTexture.create_from_image(WeatherArt.flakes(Color.WHITE)))
-	_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
-	_snow_draw.set_shader_parameter("tint", _look.flake_color)
-	_snow_cover.albedo_mix = 1.0
-	if _look.drift_texels != _drift_texels:
-		_drift_texels = _look.drift_texels
-		_drift_draw.set_shader_parameter("streak", ImageTexture.create_from_image(
-				WeatherArt.streak(_drift_texels, Color.WHITE)))
-	var texel := 1.0 / UnitSprite3D.texels_per_unit
-	_drift_draw.set_shader_parameter("size", Vector2(texel, texel * float(maxi(_drift_texels, 1))))
-	_drift_draw.set_shader_parameter("tint", _look.drift_color)
-	if not is_equal_approx(_look.snow_roughness, _snow_roughness):
-		_snow_roughness = _look.snow_roughness
-		_snow_cover.texture_orm = _orm(_snow_roughness)
-		_caps.texture_orm = _snow_cover.texture_orm
-	_caps.visible = _look.caps_props
+	if _draws(WeatherLook.FLAKES):
+		if not _flakes_built:
+			_flakes_built = true
+			_snow_draw.set_shader_parameter("flakes", ImageTexture.create_from_image(WeatherArt.flakes(Color.WHITE)))
+		_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
+		_snow_draw.set_shader_parameter("tint", _look.flake_color)
+	if _draws(WeatherLook.DRIFT):
+		if _look.drift_texels != _drift_texels:
+			_drift_texels = _look.drift_texels
+			_drift_draw.set_shader_parameter("streak", ImageTexture.create_from_image(
+					WeatherArt.streak(_drift_texels, Color.WHITE)))
+		var texel := 1.0 / UnitSprite3D.texels_per_unit
+		_drift_draw.set_shader_parameter("size", Vector2(texel, texel * float(maxi(_drift_texels, 1))))
+		_drift_draw.set_shader_parameter("tint", _look.drift_color)
+	if _draws(WeatherLook.COVER):
+		_snow_cover.albedo_mix = 1.0
+		if not is_equal_approx(_look.snow_roughness, _snow_roughness):
+			_snow_roughness = _look.snow_roughness
+			_snow_cover.texture_orm = _orm(_snow_roughness)
+			_caps.texture_orm = _snow_cover.texture_orm
+	var caps := _draws(WeatherLook.CAPS)
+	_caps.visible = caps and _look.caps_props
 	_caps.modulate = _look.snow_color
-	if snow_on_props.is_valid():
-		snow_on_props.call(_look.caps_props, _look.snow_color, true)   # returns at once when nothing moved
+	if snow_on_props.is_valid():   # returns at once when nothing moved
+		snow_on_props.call(caps and _look.caps_props, _look.snow_color if caps else Color.WHITE, caps)
+
+
+func _style_grit() -> void:
+	if _look.grit_texels != _grit_texels:
+		_grit_texels = _look.grit_texels
+		_grit_draw.set_shader_parameter("streak", ImageTexture.create_from_image(
+				WeatherArt.streak(_grit_texels, Color.WHITE)))
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	_grit_draw.set_shader_parameter("size", Vector2(texel, texel * float(maxi(_grit_texels, 1))))
+	_grit_draw.set_shader_parameter("tint", _look.grit_color)
 
 
 func _style_fog() -> void:

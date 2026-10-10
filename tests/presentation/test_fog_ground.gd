@@ -110,3 +110,19 @@ func test_a_larger_share_pools_on_a_superset() -> void:
 			assert_bool(not a or b).override_failure_message("a larger share left (%d, %d) dry" % [x, y]).is_true()
 			grew = grew or (b and not a)
 	assert_bool(grew).override_failure_message("the larger share pooled nowhere new").is_true()
+
+
+# Over water the fog stands at `water_haze` of what it would (#1302: a sandstorm's dust thin over a
+# river), and a land cell is untouched. Water is a cell drawn in its basin, which BoardMirror marks.
+func test_water_haze_thins_the_fog_over_water_alone() -> void:
+	var water := Vector2i(3, 3)
+	var land := Vector2i(4, 3)
+	BoardSpace.mark_basin(water, true)
+	var full := _field(1.0)
+	var thin := FogGround.field(board.grid, _heights(), _rect(), 1.0, DEPTH, 2.0, 0.3)
+	BoardSpace.mark_basin(water, false)
+	assert_float(_at(full, water).r).override_failure_message("fixture: the water cell took no fog").is_greater(0.0)
+	assert_float(_at(thin, water).r).override_failure_message("the fog stood as thick over water")\
+			.is_equal_approx(_at(full, water).r * 0.3, 0.001)
+	assert_float(_at(thin, land).r).override_failure_message("the dial thinned the fog over land")\
+			.is_equal_approx(_at(full, land).r, 0.001)

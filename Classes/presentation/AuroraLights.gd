@@ -9,20 +9,14 @@ class_name AuroraLights
 #   - LIGHT: a DirectionalLight3D in the curtains' colours, coming in from in front of the camera at the
 #     look's elevation, since units and plants are camera-facing sprites that a light from overhead would
 #     miss. No shadows, and kept out of the volumetric fog and the sky.
-#   - MOTES: one particle system (aurora_mote.gdshader) rising off the ground anywhere on the board, on
-#     the weather's own ground mask, drawn as dots or streaks (WeatherLook.MoteShape).
+#   - MOTES: a RisingMotes (#1302 hoisted it, an ashfall's embers being the second), rising off the
+#     ground anywhere on the board, on the weather's own ground mask, drawn as dots or streaks.
 #
 # ONE colour cycle drives all three (scheme_at): each scheme holds, then blends into the next. The light
 # and the curtains share one slow pulse, which #217's photosensitivity setting holds at its mean; the
 # cycle and the ripple stay, being gradual. The whole aurora eases in and out with the weather over the
 # look's grade_fade, as the grade does. The storm's discharges are WeatherMirror's strike, not this node's.
 
-const MAX_MOTES := 20000
-# A mote's sideways wander, as a share of its rise: a dot drifts, a streak rises nearly straight.
-const DOT_WANDER := 0.3
-const STREAK_WANDER := 0.07
-# The share of the board's wind a mote drifts with.
-const MOTE_WIND := 0.5
 # How far a mote's colour is eased from the cycle's fringe toward white.
 const MOTE_WHITEN := 0.35
 # The pulse's two slow swings, a second apart in period so it never repeats exactly.
@@ -35,9 +29,7 @@ var weather: WeatherMirror            # the camera, the board rect and the wind
 var _curtains: MeshInstance3D
 var _curtain_material: ShaderMaterial
 var _light: DirectionalLight3D
-var _motes: GPUParticles3D
-var _mote_process: ShaderMaterial
-var _mote_draw: ShaderMaterial
+var _motes: RisingMotes
 var _look: WeatherLook = null         # the aurora being drawn, kept while it fades out
 var _fade := 0.0
 var _clock := 0.0
@@ -56,20 +48,18 @@ func _ready() -> void:
 	_light.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
 	_light.visible = false
 	add_child(_light)
-	_mote_process = WeatherMirror.process_material("res://Classes/presentation/aurora_mote.gdshader")
-	_mote_draw = WeatherMirror.draw_material("res://Classes/presentation/aurora_mote_draw.gdshader")
-	_mote_draw.render_priority = BoardOverlays.MOTE_RENDER_PRIORITY
-	_motes = WeatherMirror.particles(self, _mote_process, _mote_draw, PlaneMesh.FACE_Z)
+	_motes = RisingMotes.new()
+	add_child(_motes)
 
 
 # The particle systems this node draws, for WeatherMirror.emitters' cull sweep.
 func emitters() -> Array[GPUParticles3D]:
-	return [_motes]
+	return [_motes.system]
 
 
 # The materials that read the weather's ground mask, for WeatherMirror._sync_mask.
 func masked() -> Array[ShaderMaterial]:
-	return [_mote_process]
+	return [_motes.process]
 
 
 # How far in the aurora is, 0..1.
@@ -96,8 +86,8 @@ func drive(look: WeatherLook, delta: float) -> void:
 	_curtains.visible = on
 	_light.visible = on and _look.light_energy > 0.0
 	var rising := look != null and _look.mote_rate > 0.0
-	_motes.emitting = rising
-	_motes.visible = on and _look.mote_rate > 0.0
+	_motes.system.emitting = rising
+	_motes.system.visible = on and _look.mote_rate > 0.0
 	if not on:
 		_look = null
 		return
@@ -174,28 +164,7 @@ func _style_light() -> void:
 
 
 func _style_motes(rising: bool) -> void:
-	var streaks := _look.mote_shape == WeatherLook.MoteShape.STREAKS
 	var tint := _colours[1].lerp(Color.WHITE, MOTE_WHITEN)
-	_mote_draw.set_shader_parameter("tint", Color(tint.r, tint.g, tint.b, _fade))
-	_mote_draw.set_shader_parameter("texel", 1.0 / UnitSprite3D.texels_per_unit)
-	_mote_draw.set_shader_parameter("shape", 1.0 if streaks else 0.0)
-	if not rising or weather == null:
-		return
-	# Born over the whole BOARD, never the view: setting a system's amount restarts it, so an amount sized
-	# off the camera re-dealt every mote on each zoom (#1289's lesson, the fog cards'). The board is the
-	# box, so the count moves only when the board or a mote dial does.
-	var rect := weather.board_rect()
-	if not rect.has_area():
-		return
-	var life := maxf(_look.mote_life, 0.2)
-	var wind := weather.board_wind() * MOTE_WIND
-	var lo := Vector2(rect.position) * BoardSpace.CELL_SIZE
-	var hi := Vector2(rect.end) * BoardSpace.CELL_SIZE
-	_mote_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
-	_mote_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
-	_mote_process.set_shader_parameter("rise", _look.mote_rise)
-	_mote_process.set_shader_parameter("wander", STREAK_WANDER if streaks else DOT_WANDER)
-	_mote_process.set_shader_parameter("wind", wind)
-	_mote_process.set_shader_parameter("height", _look.mote_height)
-	WeatherMirror.size_emitter(_motes, _mote_process, _look.mote_rate * (hi.x - lo.x) * (hi.y - lo.y), life,
-			MAX_MOTES)
+	_motes.style(_look, Color(tint.r, tint.g, tint.b, _fade))
+	if rising and weather != null:
+		_motes.place(_look, weather)

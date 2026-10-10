@@ -630,6 +630,11 @@ static func basin_drop(cell: Vector2i) -> float:
 	return basin_depth()
 
 
+# Whether this cell is drawn as flat water, in a basin -- whatever the depth knob says.
+static func is_basin(cell: Vector2i) -> bool:
+	return _basin_cells.has(cell)
+
+
 static func mark_basin(cell: Vector2i, on: bool) -> void:
 	if on == _basin_cells.has(cell):
 		return

@@ -7,20 +7,33 @@ class_name WeatherLook
 #
 # What falls is the FALL field (#1269): rain draws drops, splashes, a wet sheen and puddles; snow draws
 # flakes, a snow cover, caps, drift and breath; fog (#1285) draws a thin fog pass and drifting pixel
-# cards; an aurora (#1298) draws glowing curtains on the ground, its own light and rising motes. The
-# fields of the other falls are ignored, and the page hides their rows. The grade is any fall's, and the
-# storm's strikes are rain's and the aurora's.
+# cards; an aurora (#1298) draws glowing curtains on the ground, its own light and rising motes; sand
+# (#1302) draws specks, airborne grit, a sand cover, drift and dust (the fog's pass and cards); ash draws
+# flakes, a soot cover, caps and rising embers (the aurora's motes). Which falls draw a PART is the part
+# lists below, read by WeatherMirror and by the page's rows alike, so a row shows exactly where its part
+# is drawn. The grade is any fall's, and the storm's strikes are rain's and the aurora's.
 #
 # Every number is a feel value, so every one is a row (ROWS) on that page. A kind with no file draws
 # nothing; CLEAR has none. The wind is not a weather's own (#1286): it is the board's, a WindLook,
-# and a look only says how much of it a fall takes (the fog's drift share).
+# and a look only says how much of it a part takes (the fog's drift share, the flakes' and the grit's).
 
 const FOLDER := "res://Resources/WeatherLooks/"
 # Elemental.Element's members in order, for the bolt colour's picker; test_weather_tool keeps the two equal.
 const ELEMENT_NAMES := ["None", "Fire", "Water", "Shock", "Ice", "Earth", "Air", "Aether", "Corrosion"]
 
-enum Fall { RAIN, SNOW, FOG, AURORA }
+enum Fall { RAIN, SNOW, FOG, AURORA, SAND, ASH }
 enum MoteShape { DOTS, STREAKS }
+
+# The parts, each the falls that draw it.
+const FLAKES := [Fall.SNOW, Fall.SAND, Fall.ASH]      # snow's flakes, sand's specks, falling ash
+const FALLING := [Fall.RAIN] + FLAKES                 # what is born above the view and falls through it
+const COVER := [Fall.SNOW, Fall.SAND, Fall.ASH]       # the ground cover (SnowGround)
+const CAPS := [Fall.SNOW, Fall.ASH]                   # caps on props and units; the tufts buried
+const DRIFT := [Fall.SNOW, Fall.SAND, Fall.ASH]       # loose stuff streaming along the ground
+const HAZE := [Fall.FOG, Fall.SAND]                   # the fog pass and cards: fog, or a sandstorm's dust
+const GRIT := [Fall.SAND]                             # airborne grit streaks
+const MOTES := [Fall.AURORA, Fall.ASH]                # rising motes: an aurora's, or an ashfall's embers
+const STORM := [Fall.RAIN, Fall.AURORA]               # the strikes beyond the board
 
 @export var fall := Fall.RAIN
 
@@ -66,15 +79,16 @@ enum MoteShape { DOTS, STREAKS }
 @export var flake_sway := 0.3               # world units a second a flake wanders side to side
 @export var flake_swirl := 0.0              # world units a second of eddy: a blizzard loops its flakes
 @export var swirl_scale := 1.5              # world units across one eddy
+@export var flake_wind := 1.0               # the share of the board's wind a flake drifts with
 @export var big_flakes := 0.15              # share of flakes drawn as a plus rather than one pixel
 @export var flake_color := Color(0.96, 0.98, 1.0, 0.9)
 @export var flake_settle := 0.8             # seconds a landed flake lies before it melts away
 
-@export_group("Snow ground")
-@export var snow_cover := 0.5               # 0..1: how much of the ground lies under snow
+@export_group("Ground cover")
+@export var snow_cover := 0.5               # 0..1: how much of the ground lies under snow, sand or ash
 @export var slope_cover := 1.0              # 0..1: the share of that cover a ramp or hillside keeps
 @export var snow_frost := 0.2               # 0..1: the faint whitening over all of it
-@export var snow_flecks := 0.04             # share of the ground's art pixels flecked white
+@export var snow_flecks := 0.04             # share of the ground's art pixels flecked with it
 @export var snow_color := Color(0.93, 0.95, 0.99)
 @export var snow_roughness := 0.85
 @export var snow_relief := 6.0              # how hard the patches' edges and lumps catch the light; 0 is flat
@@ -83,17 +97,25 @@ enum MoteShape { DOTS, STREAKS }
 @export var bump_size := 5.0                # art pixels across one lump
 
 @export_group("Settles")
-@export var caps_props := false             # snow on the tops of rocks, walls, crates and trees
+@export var caps_props := false             # the cover on the tops of rocks, walls, crates and trees
 @export var caps_units := false             # ...and on the units' heads and shoulders
 @export var unit_cap_color := Color(0.32, 0.58, 0.98)   # the units' caps: ice blue, to read against white ground
 @export var breath := false                 # every standing unit's breath fogs
 
 @export_group("Drift")
-@export var drift_rate := 0.0               # streaks of loose snow per cell of view per second
+@export var drift_rate := 0.0               # streaks of loose snow, sand or ash per cell of view per second
 @export var drift_speed := 5.0              # world units a second along the wind
 @export var drift_texels := 5               # how long a streak is, in art pixels
 @export var drift_life := 0.6               # seconds a streak lives
 @export var drift_color := Color(0.95, 0.97, 1.0, 0.5)
+
+@export_group("Grit")
+@export var grit_rate := 0.0                # airborne streaks born per cell of the board per second
+@export var grit_share := 3.0               # times the board's wind a streak flies at; none on a calm board
+@export var grit_height := 1.6              # world units over the ground a streak flies, at most
+@export var grit_texels := 6                # how long a streak is, in art pixels
+@export var grit_life := 1.2                # seconds a streak lives
+@export var grit_color := Color(0.98, 0.9, 0.72, 0.85)
 
 @export_group("Fog")
 @export var fog_strength := 0.55            # the thin fog pass's density
@@ -107,6 +129,7 @@ enum MoteShape { DOTS, STREAKS }
 @export var bank_size := 7.0                # cells across one bank
 @export var fog_breakup := 0.6              # 0..1: how much drifting noise breaks the fog up
 @export var edge_fade := 1.0                # cells over which fog thins before the board's edge or a hole
+@export var water_haze := 1.0               # 0..1: the share of it that stands over water
 @export var pixel_steps := false            # the pass snapped to the ground's art grid, its opacity in steps
 @export var fog_color := Color(0.86, 0.89, 0.93)
 @export var sky_tint := 0.3                 # 0..1: how far the fog takes the sky's horizon colour
@@ -142,11 +165,15 @@ enum MoteShape { DOTS, STREAKS }
 @export var light_energy := 1.2             # the aurora's own light on units, props and ground
 @export var light_pulse := 0.25             # 0..1: how far the light and the curtains swell and ebb
 @export var light_elevation := 40.0         # degrees above the horizon the light comes in at
+
+@export_group("Motes")
 @export var mote_shape := MoteShape.DOTS
-@export var mote_rate := 0.15               # motes born per cell of view per second
+@export var mote_rate := 0.15               # motes born per cell of the board per second
 @export var mote_rise := 0.3                # world units a second a mote rises
 @export var mote_life := 4.0                # seconds a mote lives
 @export var mote_height := 0.6              # world units over the ground a mote is born, at most
+@export var mote_size := 1.0                # times a mote's own art size
+@export var mote_color := Color(1.0, 0.51, 0.35)   # an ashfall's embers; an aurora's motes take its colour cycle
 
 @export_group("Grade")
 @export var grade_saturation := 1.0         # 1 leaves the board's colours; lower greys them
@@ -160,13 +187,13 @@ enum MoteShape { DOTS, STREAKS }
 
 # The Weather page's rows, in the order drawn. Declared beside the fields they name, where a field
 # added later is one line away from its row; `test_weather_tool` refuses a field with none. A row
-# with a "fall" key shows only on a look of that fall.
+# with a "fall" key shows only on a look of that fall, or of a fall in that list -- a part's list above.
 const ROWS: Array[Dictionary] = [
-	{"prop": "fall", "label": "Draws as", "options": ["Rain", "Snow", "Fog", "Aurora"],
-		"tip": "What this weather draws: drops, splashes and a wet sheen; flakes, snow cover and caps; fog and drifting fog cards; or an aurora's curtains of light, its glow and rising motes."},
-	{"prop": "density", "label": "Density", "min": 0.0, "max": 12.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
-		"tip": "How many drops or flakes are born over each cell of the view every second."},
-	{"prop": "fall_speed", "label": "Fall speed", "min": 0.5, "max": 40.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
+	{"prop": "fall", "label": "Draws as", "options": ["Rain", "Snow", "Fog", "Aurora", "Sand", "Ash"],
+		"tip": "What this weather draws: drops, splashes and a wet sheen; flakes, snow cover and caps; fog and drifting fog cards; an aurora's curtains of light, its glow and rising motes; sand's specks, grit, cover and dust (the fog rows); or ash's flakes, soot, caps and embers (the mote rows)."},
+	{"prop": "density", "label": "Density", "min": 0.0, "max": 12.0, "step": 0.1, "fall": FALLING,
+		"tip": "How many drops, flakes or specks are born over each cell of the view every second."},
+	{"prop": "fall_speed", "label": "Fall speed", "min": 0.5, "max": 40.0, "step": 0.1, "fall": FALLING,
 		"tip": "How fast it falls, in cells a second. Rain reads heavier faster; snow drifts slow."},
 	{"prop": "streak_texels", "label": "Streak length", "min": 1.0, "max": 16.0, "step": 1.0, "fall": Fall.RAIN,
 		"tip": "How long a drop is, in art pixels -- the same pixels the sprites are drawn in."},
@@ -190,121 +217,136 @@ const ROWS: Array[Dictionary] = [
 		"tip": "The puddle's colour; its alpha is how opaque the water reads."},
 	{"prop": "puddle_roughness", "label": "Puddle gloss", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.RAIN,
 		"tip": "The puddle's roughness: lower is more mirror-like."},
-	{"prop": "lightning", "label": "Lightning", "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "lightning", "label": "Lightning", "fall": STORM,
 		"tip": "Strikes in the sky and beyond the board's edge. Never onto a cell."},
-	{"prop": "strike_every_min", "label": "Strike every (min)", "min": 0.5, "max": 30.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "strike_every_min", "label": "Strike every (min)", "min": 0.5, "max": 30.0, "step": 0.1, "fall": STORM,
 		"tip": "The shortest wait between strikes, seconds."},
-	{"prop": "strike_every_max", "label": "Strike every (max)", "min": 0.5, "max": 60.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "strike_every_max", "label": "Strike every (max)", "min": 0.5, "max": 60.0, "step": 0.1, "fall": STORM,
 		"tip": "The longest wait between strikes, seconds."},
-	{"prop": "flash_peak", "label": "Screen flash", "min": 0.0, "max": 1.0, "step": 0.01, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "flash_peak", "label": "Screen flash", "min": 0.0, "max": 1.0, "step": 0.01, "fall": STORM,
 		"tip": "The screen's white-out at a strike. The photosensitivity setting caps it."},
-	{"prop": "side_light_energy", "label": "Strike light", "min": 0.0, "max": 12.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "side_light_energy", "label": "Strike light", "min": 0.0, "max": 12.0, "step": 0.1, "fall": STORM,
 		"tip": "How bright the strike lights the board from the side it hit, with long shadows."},
-	{"prop": "side_light_color", "label": "Strike light colour", "fall": [Fall.RAIN, Fall.AURORA], "tip": "The colour of the strike's light."},
-	{"prop": "side_light_elevation", "label": "Strike light angle", "min": 2.0, "max": 60.0, "step": 1.0, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "side_light_color", "label": "Strike light colour", "fall": STORM, "tip": "The colour of the strike's light."},
+	{"prop": "side_light_elevation", "label": "Strike light angle", "min": 2.0, "max": 60.0, "step": 1.0, "fall": STORM,
 		"tip": "Degrees above the horizon the strike's light comes in at. Lower throws longer shadows."},
-	{"prop": "cloud_glow", "label": "Cloud glow", "min": 0.0, "max": 6.0, "step": 0.05, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "cloud_glow", "label": "Cloud glow", "min": 0.0, "max": 6.0, "step": 0.05, "fall": STORM,
 		"tip": "How much brighter the sky gets at a strike."},
-	{"prop": "bolt_life", "label": "Bolt time", "min": 0.05, "max": 2.0, "step": 0.01, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "bolt_life", "label": "Bolt time", "min": 0.05, "max": 2.0, "step": 0.01, "fall": STORM,
 		"tip": "Seconds a bolt takes to fade."},
-	{"prop": "bolt_width_scale", "label": "Bolt width", "min": 0.5, "max": 20.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "bolt_width_scale", "label": "Bolt width", "min": 0.5, "max": 20.0, "step": 0.1, "fall": STORM,
 		"tip": "Times the shock attack's own bolt width. A sky bolt is far off, so it needs more."},
-	{"prop": "bolt_distance", "label": "Bolt distance", "min": 1.0, "max": 40.0, "step": 0.5, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "bolt_distance", "label": "Bolt distance", "min": 1.0, "max": 40.0, "step": 0.5, "fall": STORM,
 		"tip": "Cells beyond the board's edge a bolt lands."},
-	{"prop": "bolt_height", "label": "Bolt height", "min": 4.0, "max": 120.0, "step": 1.0, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "bolt_height", "label": "Bolt height", "min": 4.0, "max": 120.0, "step": 1.0, "fall": STORM,
 		"tip": "How far above the board a bolt starts."},
-	{"prop": "bolt_element", "label": "Bolt colour", "options": ELEMENT_NAMES, "fall": [Fall.RAIN, Fall.AURORA],
+	{"prop": "bolt_element", "label": "Bolt colour", "options": ELEMENT_NAMES, "fall": STORM,
 		"tip": "Whose colour a bolt's glow takes: a thunderstorm's is Shock, an aetheric storm's Aether."},
-	{"prop": "flake_sway", "label": "Flake sway", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.SNOW,
+	{"prop": "flake_sway", "label": "Flake sway", "min": 0.0, "max": 3.0, "step": 0.05, "fall": FLAKES,
 		"tip": "How far a flake wanders side to side as it falls, cells a second."},
-	{"prop": "flake_swirl", "label": "Swirl", "min": 0.0, "max": 8.0, "step": 0.05, "fall": Fall.SNOW,
+	{"prop": "flake_swirl", "label": "Swirl", "min": 0.0, "max": 8.0, "step": 0.05, "fall": FLAKES,
 		"tip": "Eddies that loop the flakes rather than letting them fall straight -- what keeps a blizzard from reading as rain."},
-	{"prop": "swirl_scale", "label": "Swirl size", "min": 0.2, "max": 8.0, "step": 0.05, "fall": Fall.SNOW,
+	{"prop": "swirl_scale", "label": "Swirl size", "min": 0.2, "max": 8.0, "step": 0.05, "fall": FLAKES,
 		"tip": "How wide one eddy is, in cells."},
-	{"prop": "big_flakes", "label": "Big flakes", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
+	{"prop": "flake_wind", "label": "Flake wind", "min": 0.0, "max": 4.0, "step": 0.05, "fall": FLAKES,
+		"tip": "The share of the board's wind a flake drifts with. 1 is the wind itself; a sandstorm's specks fly faster."},
+	{"prop": "big_flakes", "label": "Big flakes", "min": 0.0, "max": 1.0, "step": 0.01, "fall": FLAKES,
 		"tip": "The share of flakes drawn as a plus rather than a single art pixel."},
-	{"prop": "flake_color", "label": "Flake colour", "fall": Fall.SNOW, "tip": "Colour and opacity of a flake."},
-	{"prop": "flake_settle", "label": "Flake settle", "min": 0.0, "max": 4.0, "step": 0.05, "fall": Fall.SNOW,
+	{"prop": "flake_color", "label": "Flake colour", "fall": FLAKES, "tip": "Colour and opacity of a flake."},
+	{"prop": "flake_settle", "label": "Flake settle", "min": 0.0, "max": 4.0, "step": 0.05, "fall": FLAKES,
 		"tip": "Seconds a landed flake lies on the ground before it melts away. 0 is gone on landing."},
-	{"prop": "snow_cover", "label": "Snow cover", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
-		"tip": "How much of the ground lies under snow: low leaves clumps, mid lies in patches, high covers nearly all. Never on water or a hole, and never past a tile."},
-	{"prop": "slope_cover", "label": "Slopes keep", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
-		"tip": "The share of the cover a ramp or a hillside keeps: snow slides off, so a low value shows the hills by their thin sides. 1 treats a slope like flat ground."},
-	{"prop": "snow_frost", "label": "Frost", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
-		"tip": "A faint whitening over all the ground the snow could lie on."},
-	{"prop": "snow_flecks", "label": "Flecks", "min": 0.0, "max": 0.3, "step": 0.005, "fall": Fall.SNOW,
-		"tip": "The share of the ground's art pixels flecked white between the patches."},
-	{"prop": "snow_color", "label": "Snow colour", "fall": Fall.SNOW,
-		"tip": "The settled snow's colour: on the ground and on the props' caps. The units' caps have their own colour."},
-	{"prop": "snow_roughness", "label": "Snow gloss", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
-		"tip": "The snow's roughness: 1 is matte powder, lower catches the light like a crust."},
-	{"prop": "snow_relief", "label": "Relief", "min": 0.0, "max": 20.0, "step": 0.1, "fall": Fall.SNOW,
-		"tip": "How much the snow stands up off the ground: patch edges and lumps catch the light and cast a little shade. 0 is flat."},
-	{"prop": "relief_softness", "label": "Edge softness", "min": 0.0, "max": 3.0, "step": 0.1, "fall": Fall.SNOW,
+	{"prop": "snow_cover", "label": "Ground cover", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
+		"tip": "How much of the ground lies under the snow, sand or ash: low leaves clumps, mid lies in patches, high covers nearly all. Never on water or a hole, and never past a tile."},
+	{"prop": "slope_cover", "label": "Slopes keep", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
+		"tip": "The share of the cover a ramp or a hillside keeps: it slides off, so a low value shows the hills by their thin sides. 1 treats a slope like flat ground."},
+	{"prop": "snow_frost", "label": "Frost", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
+		"tip": "A faint wash of the cover's colour over all the ground it could lie on."},
+	{"prop": "snow_flecks", "label": "Flecks", "min": 0.0, "max": 0.3, "step": 0.005, "fall": COVER,
+		"tip": "The share of the ground's art pixels flecked with the cover's colour between the patches."},
+	{"prop": "snow_color", "label": "Cover colour", "fall": COVER,
+		"tip": "The cover's colour: on the ground and on the props' caps. The units' caps have their own colour."},
+	{"prop": "snow_roughness", "label": "Cover gloss", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
+		"tip": "The cover's roughness: 1 is matte powder, lower catches the light like a crust."},
+	{"prop": "snow_relief", "label": "Relief", "min": 0.0, "max": 20.0, "step": 0.1, "fall": COVER,
+		"tip": "How much the cover stands up off the ground: patch edges and lumps catch the light and cast a little shade. 0 is flat."},
+	{"prop": "relief_softness", "label": "Edge softness", "min": 0.0, "max": 3.0, "step": 0.1, "fall": COVER,
 		"tip": "How many art pixels a patch's edge slopes over. 0 is a sharp step."},
-	{"prop": "snow_bumps", "label": "Lumps", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.SNOW,
-		"tip": "How lumpy the top of the snow is. 0 is smooth."},
-	{"prop": "bump_size", "label": "Lump size", "min": 2.0, "max": 16.0, "step": 0.5, "fall": Fall.SNOW,
+	{"prop": "snow_bumps", "label": "Lumps", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
+		"tip": "How lumpy the top of the cover is. 0 is smooth."},
+	{"prop": "bump_size", "label": "Lump size", "min": 2.0, "max": 16.0, "step": 0.5, "fall": COVER,
 		"tip": "How wide one lump is, in art pixels."},
-	{"prop": "caps_props", "label": "Caps on props", "fall": Fall.SNOW,
-		"tip": "Snow on the tops of rocks, walls, crates, barrels, trees and lanterns. Tall grass and flowers hide in any snow."},
-	{"prop": "caps_units", "label": "Caps on units", "fall": Fall.SNOW,
-		"tip": "Snow on every unit's head and shoulders. A look only: no rule is behind it yet."},
-	{"prop": "unit_cap_color", "label": "Unit cap colour", "fall": Fall.SNOW,
-		"tip": "The colour of the snow on the units' heads. Blue reads as ice and stands out against a white ground."},
+	{"prop": "caps_props", "label": "Caps on props", "fall": CAPS,
+		"tip": "The cover on the tops of rocks, walls, crates, barrels, trees and lanterns. Tall grass and flowers hide in any snow or ash."},
+	{"prop": "caps_units", "label": "Caps on units", "fall": CAPS,
+		"tip": "The cover on every unit's head and shoulders. A look only: no rule is behind it yet."},
+	{"prop": "unit_cap_color", "label": "Unit cap colour", "fall": CAPS,
+		"tip": "The colour of the cover on the units' heads, chosen to stand out against the ground: snow's is ice blue."},
 	{"prop": "breath", "label": "Breath", "fall": Fall.SNOW,
 		"tip": "Every standing unit's breath fogs, the puff a Chilled unit breathes. A look only."},
-	{"prop": "drift_rate", "label": "Ground drift", "min": 0.0, "max": 8.0, "step": 0.05, "fall": Fall.SNOW,
-		"tip": "Streaks of loose snow blown along the ground, per cell of view per second. 0 is none."},
-	{"prop": "drift_speed", "label": "Drift speed", "min": 0.5, "max": 20.0, "step": 0.1, "fall": Fall.SNOW,
-		"tip": "How fast the loose snow streams along the wind, cells a second."},
-	{"prop": "drift_texels", "label": "Drift length", "min": 1.0, "max": 16.0, "step": 1.0, "fall": Fall.SNOW,
-		"tip": "How long a streak of loose snow is, in art pixels."},
-	{"prop": "drift_life", "label": "Drift time", "min": 0.1, "max": 3.0, "step": 0.05, "fall": Fall.SNOW,
+	{"prop": "drift_rate", "label": "Ground drift", "min": 0.0, "max": 8.0, "step": 0.05, "fall": DRIFT,
+		"tip": "Streaks of loose snow, sand or ash blown along the ground, per cell of view per second. 0 is none."},
+	{"prop": "drift_speed", "label": "Drift speed", "min": 0.5, "max": 20.0, "step": 0.1, "fall": DRIFT,
+		"tip": "How fast the loose stuff streams along the wind, cells a second."},
+	{"prop": "drift_texels", "label": "Drift length", "min": 1.0, "max": 16.0, "step": 1.0, "fall": DRIFT,
+		"tip": "How long a streak of it is, in art pixels."},
+	{"prop": "drift_life", "label": "Drift time", "min": 0.1, "max": 3.0, "step": 0.05, "fall": DRIFT,
 		"tip": "Seconds a streak lives; it fades in and out."},
-	{"prop": "drift_color", "label": "Drift colour", "fall": Fall.SNOW, "tip": "Colour and opacity of the loose snow."},
-	{"prop": "fog_strength", "label": "Fog strength", "min": 0.0, "max": 6.0, "step": 0.05, "fall": Fall.FOG,
-		"tip": "How thick the fog pass under the cards is. The cards carry the look; this is the soft body between them."},
-	{"prop": "layer_amount", "label": "Ground layer", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "drift_color", "label": "Drift colour", "fall": DRIFT, "tip": "Colour and opacity of the loose stuff."},
+	{"prop": "grit_rate", "label": "Grit", "min": 0.0, "max": 12.0, "step": 0.05, "fall": GRIT,
+		"tip": "Streaks of sand flying through the air, born per cell of the board per second. None on a calm board, where only the specks swirl."},
+	{"prop": "grit_share", "label": "Grit speed", "min": 0.0, "max": 8.0, "step": 0.05, "fall": GRIT,
+		"tip": "Times the board's wind a streak flies at."},
+	{"prop": "grit_height", "label": "Grit height", "min": 0.0, "max": 4.0, "step": 0.05, "fall": GRIT,
+		"tip": "How high over the ground a streak flies, in cells, at most. Most fly low."},
+	{"prop": "grit_texels", "label": "Grit length", "min": 1.0, "max": 16.0, "step": 1.0, "fall": GRIT,
+		"tip": "How long a streak is, in art pixels."},
+	{"prop": "grit_life", "label": "Grit time", "min": 0.1, "max": 4.0, "step": 0.05, "fall": GRIT,
+		"tip": "Seconds a streak lives; it fades in and out."},
+	{"prop": "grit_color", "label": "Grit colour", "fall": GRIT, "tip": "Colour and opacity of a streak."},
+	{"prop": "fog_strength", "label": "Fog strength", "min": 0.0, "max": 6.0, "step": 0.05, "fall": HAZE,
+		"tip": "How thick the fog pass under the cards is. The cards carry the look; this is the soft body between them. On a sandstorm, the dust."},
+	{"prop": "layer_amount", "label": "Ground layer", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "A low sheet of fog over every surface, high ground and low alike. 0 is none."},
-	{"prop": "layer_depth", "label": "Layer depth", "min": 0.05, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "layer_depth", "label": "Layer depth", "min": 0.05, "max": 3.0, "step": 0.05, "fall": HAZE,
 		"tip": "How high the sheet stands over its own ground, in cells. A unit is about one tall."},
-	{"prop": "pool_amount", "label": "Pooling", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "pool_amount", "label": "Pooling", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "Fog lying in the low ground, with the high ground standing clear. 0 is none."},
-	{"prop": "pool_share", "label": "Low ground share", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "pool_share", "label": "Low ground share", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "How much of the board counts as low ground, lowest first: the fog pools on that share of its surfaces."},
-	{"prop": "pool_depth", "label": "Pool depth", "min": 0.05, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "pool_depth", "label": "Pool depth", "min": 0.05, "max": 3.0, "step": 0.05, "fall": HAZE,
 		"tip": "How deep the pooled fog stands over its own ground, in cells -- at most, so it never stands as a box over a drop."},
-	{"prop": "bank_amount", "label": "Banks", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "bank_amount", "label": "Banks", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "Big drifting patches of fog, tall enough to swallow units, with clearer ground between. 0 is none."},
-	{"prop": "bank_height", "label": "Bank height", "min": 0.2, "max": 4.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "bank_height", "label": "Bank height", "min": 0.2, "max": 4.0, "step": 0.05, "fall": HAZE,
 		"tip": "How tall a bank stands over its ground, in cells."},
-	{"prop": "bank_size", "label": "Bank size", "min": 2.0, "max": 24.0, "step": 0.5, "fall": Fall.FOG,
+	{"prop": "bank_size", "label": "Bank size", "min": 2.0, "max": 24.0, "step": 0.5, "fall": HAZE,
 		"tip": "Roughly how many cells across one bank is."},
-	{"prop": "fog_breakup", "label": "Breakup", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "fog_breakup", "label": "Breakup", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "How much drifting noise thins the fog in places. 0 is an even sheet."},
-	{"prop": "edge_fade", "label": "Edge fade", "min": 0.0, "max": 6.0, "step": 0.1, "fall": Fall.FOG,
+	{"prop": "edge_fade", "label": "Edge fade", "min": 0.0, "max": 6.0, "step": 0.1, "fall": HAZE,
 		"tip": "Over how many cells the fog thins out before the board's edge or a hole, so it never hangs over nothing."},
-	{"prop": "pixel_steps", "label": "Pixel steps", "fall": Fall.FOG,
+	{"prop": "water_haze", "label": "Over water", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
+		"tip": "The share of the fog that stands over water. 1 is as thick as over ground; lower keeps the river clear."},
+	{"prop": "pixel_steps", "label": "Pixel steps", "fall": HAZE,
 		"tip": "Snaps the fog pass to the ground's art pixels and steps its opacity, so its edges read as pixel art."},
-	{"prop": "fog_color", "label": "Fog colour", "fall": Fall.FOG, "tip": "The colour of the fog, the cards and the pass alike."},
-	{"prop": "sky_tint", "label": "Takes the sky", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "fog_color", "label": "Fog colour", "fall": HAZE, "tip": "The colour of the fog, the cards and the pass alike. On a sandstorm, the dust's."},
+	{"prop": "sky_tint", "label": "Takes the sky", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "How far the fog takes the colour of the board's sky at the horizon, so a night fog darkens and a dusk one warms. The sky is read, never changed."},
-	{"prop": "card_amount", "label": "Cards", "min": 0.0, "max": 6.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "card_amount", "label": "Cards", "min": 0.0, "max": 6.0, "step": 0.05, "fall": HAZE,
 		"tip": "How many pixel fog cards drift over each cell of the board. They only show where there is fog."},
-	{"prop": "card_opacity", "label": "Card opacity", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "card_opacity", "label": "Card opacity", "min": 0.0, "max": 1.0, "step": 0.01, "fall": HAZE,
 		"tip": "How solid a card is at its thickest."},
-	{"prop": "card_size", "label": "Card size", "min": 0.25, "max": 4.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "card_size", "label": "Card size", "min": 0.25, "max": 4.0, "step": 0.05, "fall": HAZE,
 		"tip": "Times a wisp's own size. 1 draws it at the ground tiles' pixel size."},
-	{"prop": "card_life", "label": "Card life", "min": 1.0, "max": 30.0, "step": 0.5, "fall": Fall.FOG,
+	{"prop": "card_life", "label": "Card life", "min": 1.0, "max": 30.0, "step": 0.5, "fall": HAZE,
 		"tip": "Seconds a card takes to fade in, drift and fade out."},
-	{"prop": "card_lift", "label": "Card height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "card_lift", "label": "Card height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": HAZE,
 		"tip": "How high over the ground a card floats, in cells, at most. Higher cards cross more of a unit."},
-	{"prop": "card_sink", "label": "Card sink", "min": 0.02, "max": 3.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "card_sink", "label": "Card sink", "min": 0.02, "max": 3.0, "step": 0.01, "fall": HAZE,
 		"tip": "How fast a card sinks when it drifts off higher ground, in cells a second at most. Low values let fog spill slowly off a ledge."},
-	{"prop": "card_dissolve", "label": "Card dissolve", "min": 0.1, "max": 5.0, "step": 0.05, "fall": Fall.FOG,
+	{"prop": "card_dissolve", "label": "Card dissolve", "min": 0.1, "max": 5.0, "step": 0.05, "fall": HAZE,
 		"tip": "Seconds a card takes to fade out when it meets higher ground or drifts past the board's edge."},
-	{"prop": "fog_speed", "label": "Fog drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": Fall.FOG,
+	{"prop": "fog_speed", "label": "Fog drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": HAZE,
 		"tip": "The share of the wind the fog drifts with, its cards and its banks alike. 0 hangs still."},
 	{"prop": "glow_strength", "label": "Glow", "min": 0.0, "max": 3.0, "step": 0.01, "fall": Fall.AURORA,
 		"tip": "How bright the curtains of light on the ground are. They add light; they never darken."},
@@ -350,21 +392,25 @@ const ROWS: Array[Dictionary] = [
 		"tip": "How far the light and the curtains slowly swell and ebb. The photosensitivity setting holds it still."},
 	{"prop": "light_elevation", "label": "Light angle", "min": 5.0, "max": 85.0, "step": 1.0, "fall": Fall.AURORA,
 		"tip": "Degrees above the horizon the aurora's light comes in at, always from in front of the camera so it reaches the units' faces."},
-	{"prop": "mote_shape", "label": "Motes", "options": ["Dots", "Streaks"], "fall": Fall.AURORA,
+	{"prop": "mote_shape", "label": "Motes", "options": ["Dots", "Streaks"], "fall": MOTES,
 		"tip": "What rises off the ground: slow dots, or thin streaks that rise fast."},
-	{"prop": "mote_rate", "label": "Motes per cell", "min": 0.0, "max": 3.0, "step": 0.01, "fall": Fall.AURORA,
-		"tip": "How many motes rise off each cell of ground in view every second. 0 is none."},
-	{"prop": "mote_rise", "label": "Mote rise", "min": 0.02, "max": 4.0, "step": 0.01, "fall": Fall.AURORA,
+	{"prop": "mote_rate", "label": "Motes per cell", "min": 0.0, "max": 3.0, "step": 0.01, "fall": MOTES,
+		"tip": "How many motes rise off each cell of the board every second: an aurora's motes, an ashfall's embers. 0 is none."},
+	{"prop": "mote_rise", "label": "Mote rise", "min": 0.02, "max": 4.0, "step": 0.01, "fall": MOTES,
 		"tip": "How fast a mote rises, in cells a second. It drifts with the wind too."},
-	{"prop": "mote_life", "label": "Mote life", "min": 0.2, "max": 12.0, "step": 0.1, "fall": Fall.AURORA,
+	{"prop": "mote_life", "label": "Mote life", "min": 0.2, "max": 12.0, "step": 0.1, "fall": MOTES,
 		"tip": "Seconds a mote takes to fade in, rise and fade out."},
-	{"prop": "mote_height", "label": "Mote height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.AURORA,
+	{"prop": "mote_height", "label": "Mote height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": MOTES,
 		"tip": "How high over the ground a mote is born, in cells, at most."},
+	{"prop": "mote_size", "label": "Mote size", "min": 0.5, "max": 4.0, "step": 0.25, "fall": MOTES,
+		"tip": "Times a mote's own size, a dot of two art pixels or a thin streak."},
+	{"prop": "mote_color", "label": "Mote colour", "fall": [Fall.ASH],
+		"tip": "The embers' colour. An aurora's motes take its colour cycle instead."},
 	{"prop": "grade_saturation", "label": "Grade saturation", "min": 0.0, "max": 1.5, "step": 0.01,
 		"tip": "The weather's own grade over the board's look: 1 leaves the colours, lower greys them. The HUD is never graded."},
 	{"prop": "grade_brightness", "label": "Grade brightness", "min": 0.5, "max": 1.5, "step": 0.01,
 		"tip": "The weather's grade: how much brighter or darker the board is drawn."},
-	{"prop": "grade_tint", "label": "Grade tint", "tip": "A colour mixed over the board; its alpha is how much. The cold of a snowfall."},
+	{"prop": "grade_tint", "label": "Grade tint", "tip": "A colour mixed over the board; its alpha is how much. The cold of a snowfall, the warmth of a sandstorm."},
 	{"prop": "veil", "label": "Whiteout", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "A whiteout drifting across the view, in slow bands. 0 is none."},
 	{"prop": "veil_speed", "label": "Whiteout speed", "min": 0.0, "max": 0.5, "step": 0.005,

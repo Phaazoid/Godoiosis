@@ -11,7 +11,10 @@
 #   - the board's wind (#1286) reaches every fall, the specks, the clouds and the plants, and saves;
 #   - an aurora (#1298) draws its curtains, light and motes and nothing else, eases out, sorts under the
 #     markup, cycles its colours through all three at once, and holds its pulse under #217's setting; a
-#     bolt's corona is its look's element, and a strike is aimed where the camera looks.
+#     bolt's corona is its look's element, and a strike is aimed where the camera looks;
+#   - sand (#1302) draws its specks, grit, drift, cover and dust, ash its flakes, soot, caps and embers,
+#     each and nothing else; a calm board grounds the grit; the embers take the look's colour; and no
+#     zoom re-deals anything born over the board.
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
@@ -83,7 +86,8 @@ func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -
 	assert_bool(mirror._rain.emitting or mirror._rain.visible or mirror._wet.visible \
 			or mirror._puddles.visible or mirror._splash.visible or mirror._snow.visible \
 			or mirror._fog_pass.visible or mirror._fog_cards.visible or mirror.aurora()._curtains.visible \
-			or mirror.aurora()._light.visible or mirror.aurora()._motes.visible).override_failure_message(
+			or mirror.aurora()._light.visible or mirror.aurora()._motes.system.visible or mirror._grit.visible \
+			or mirror._embers.system.visible or mirror._caps.visible).override_failure_message(
 			"a clear board still draws weather").is_false()
 
 
@@ -119,9 +123,15 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror.aurora()._curtain_material: ["noise_tex", "color_low", "color_high", "strength", "bands", "spacing",
 				"band_width", "wave", "wave_length", "time", "rays", "ray_spacing", "pulse", "angle", "centre",
 				"pixel_steps", "art_pixels", "cell_size"],
-		mirror.aurora()._mote_process: ["mask", "mask_origin", "cell_size", "box_min", "box_max", "keep", "rise",
+		mirror.aurora()._motes.process: ["mask", "mask_origin", "cell_size", "box_min", "box_max", "keep", "rise",
 				"wander", "wind", "height"],
-		mirror.aurora()._mote_draw: ["tint", "texel", "shape"],
+		mirror.aurora()._motes.draw: ["tint", "texel", "shape"],
+		mirror._grit_process: ["mask", "mask_origin", "cell_size", "box_min", "box_max", "keep", "velocity", "hover",
+				"rise"],
+		mirror._grit_draw: ["streak", "size", "tint", "age_fade"],
+		mirror._embers.process: ["mask", "mask_origin", "cell_size", "box_min", "box_max", "keep", "rise", "wander",
+				"wind", "height"],
+		mirror._embers.draw: ["tint", "texel", "shape"],
 		BoardMirror.sway_material(art, false): sway,
 		BoardMirror.sway_material(art, true): sway,
 	}
@@ -488,17 +498,17 @@ func test_an_aurora_board_draws_its_three_parts_and_eases_out() -> void:
 	_scene.game.scenario_manager.current_weather = kind
 	mirror._process(0.016)
 	mirror._process(look.grade_fade + 0.1)
-	var drawn := aurora._curtains.visible and aurora._light.visible and aurora._motes.visible \
-			and aurora._motes.emitting
+	var drawn := aurora._curtains.visible and aurora._light.visible and aurora._motes.system.visible \
+			and aurora._motes.system.emitting
 	var level := aurora.level()
-	var masked := aurora._mote_process.get_shader_parameter("mask") != null
+	var masked := aurora._motes.process.get_shader_parameter("mask") != null
 	var other := mirror._rain.visible or mirror._snow.visible or mirror._wet.visible or mirror._snow_cover.visible \
 			or mirror._fog_pass.visible or mirror._fog_cards.visible
 	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	mirror._process(look.grade_fade * 0.25)
 	var easing := aurora._curtains.visible and aurora.level() > 0.0 and aurora.level() < level
 	mirror._process(look.grade_fade + 0.1)
-	var gone := not (aurora._curtains.visible or aurora._light.visible or aurora._motes.visible)
+	var gone := not (aurora._curtains.visible or aurora._light.visible or aurora._motes.system.visible)
 	assert_bool(drawn).override_failure_message("the board wears an aurora and the mirror drew no aurora").is_true()
 	assert_float(level).override_failure_message("the aurora never came all the way in").is_equal_approx(1.0, 0.001)
 	assert_bool(masked).override_failure_message("the motes rose with no ground to rise off").is_true()
@@ -519,8 +529,8 @@ func test_the_aurora_sorts_under_every_piece_of_markup() -> void:
 	assert_int(curtains).override_failure_message("the curtains sort over the markup").is_less(lowest)
 	assert_int(curtains).override_failure_message("the curtains sort over the cloud shadows")\
 			.is_less(BoardOverlays.CLOUD_RENDER_PRIORITY)
-	assert_int(aurora._mote_draw.render_priority).is_equal(BoardOverlays.MOTE_RENDER_PRIORITY)
-	assert_int(aurora._mote_draw.render_priority).is_less(lowest)
+	assert_int(aurora._motes.draw.render_priority).is_equal(BoardOverlays.MOTE_RENDER_PRIORITY)
+	assert_int(aurora._motes.draw.render_priority).is_less(lowest)
 
 
 # ONE colour cycle reaches all three: once the clock is inside the second scheme, the curtains hold its
@@ -539,7 +549,7 @@ func test_the_colour_cycle_reaches_the_curtains_the_light_and_the_motes() -> voi
 	mirror._process(look.scheme_seconds * 1.25 - 0.016)
 	var low: Color = aurora._curtain_material.get_shader_parameter("color_low")
 	var high: Color = aurora._curtain_material.get_shader_parameter("color_high")
-	var mote: Color = aurora._mote_draw.get_shader_parameter("tint")
+	var mote: Color = aurora._motes.draw.get_shader_parameter("tint")
 	var light := aurora._light.light_color
 	look.scheme_blend = was_blend
 	_clear_aurora(mirror)
@@ -567,7 +577,7 @@ func test_zooming_never_re_deals_the_aurora_motes() -> void:
 	var mirror := _mirror()
 	_scene.game.scenario_manager.current_weather = _aurora_kind(false)
 	mirror._process(0.016)
-	var motes := mirror.aurora()._motes
+	var motes := mirror.aurora()._motes.system
 	var amount := motes.amount
 	var lifetime := motes.lifetime
 	var camera: Camera3D = mirror.camera
@@ -596,10 +606,10 @@ func test_the_mote_shape_reaches_the_motes() -> void:
 	_scene.game.scenario_manager.current_weather = kind
 	look.mote_shape = WeatherLook.MoteShape.STREAKS
 	mirror._process(0.016)
-	var streaks: float = mirror.aurora()._mote_draw.get_shader_parameter("shape")
+	var streaks: float = mirror.aurora()._motes.draw.get_shader_parameter("shape")
 	look.mote_shape = WeatherLook.MoteShape.DOTS
 	mirror._process(0.016)
-	var dots: float = mirror.aurora()._mote_draw.get_shader_parameter("shape")
+	var dots: float = mirror.aurora()._motes.draw.get_shader_parameter("shape")
 	look.mote_shape = was
 	_clear_aurora(mirror)
 	assert_float(streaks).override_failure_message("a streak look drew dots").is_equal(1.0)
@@ -834,3 +844,116 @@ func test_the_board_wind_saves_with_the_board() -> void:
 	assert_int(data.wind_direction).is_equal(Wind.Direction.NORTH_WEST)
 	assert_int(sm.current_wind).override_failure_message("the wind did not come back on load").is_equal(Wind.Kind.GALE)
 	assert_int(sm.current_wind_direction).is_equal(Wind.Direction.NORTH_WEST)
+
+
+# ---- Sand and ash (#1302) ----------------------------------------------------------------------
+
+# The first weather the board can name whose look has this fall and passes `wanted`: which kinds draw
+# what is authored, so no case names one.
+func _kind_drawing(fall: WeatherLook.Fall, wanted: Callable = Callable()) -> Weather.Kind:
+	for kind: Weather.Kind in Weather.Kind.values():
+		var look := WeatherLook.for_kind(kind)
+		if look != null and look.fall == fall and (not wanted.is_valid() or bool(wanted.call(look))):
+			return kind
+	return Weather.Kind.CLEAR
+
+
+# A sandstorm in the wind draws its specks, grit, drift, sand cover and dust (the fog's pass and cards),
+# with the ground mask handed to the grit -- and no rain, caps, embers or aurora.
+func test_a_sand_board_draws_specks_grit_drift_cover_and_dust() -> void:
+	var mirror := _mirror()
+	var kind := _kind_drawing(WeatherLook.Fall.SAND,
+			func(look: WeatherLook) -> bool: return look.grit_rate > 0.0 and look.drift_rate > 0.0)
+	assert_int(kind).override_failure_message("fixture: no sand weather blows grit and drift").is_not_equal(
+			Weather.Kind.CLEAR)
+	_scene.game.scenario_manager.current_wind = Wind.Kind.STRONG_WIND
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	mirror._process(0.016)
+	var specks := mirror._snow.emitting and mirror._snow.visible
+	var grit := mirror._grit.emitting and mirror._grit.visible
+	var masked := mirror._grit_process.get_shader_parameter("mask") != null
+	var drift := mirror._drift.emitting and mirror._drift.visible
+	var cover := mirror._snow_cover.visible and mirror._snow_cover.texture_albedo != null
+	var dust := mirror._fog_pass.visible and mirror._fog_cards.emitting and mirror._fog_cards.visible
+	var other := mirror._rain.visible or mirror._wet.visible or mirror._caps.visible \
+			or mirror._embers.system.visible or mirror.aurora()._curtains.visible
+	assert_bool(specks).override_failure_message("a sand board drew no specks").is_true()
+	assert_bool(grit).override_failure_message("a sandstorm in the wind blew no grit").is_true()
+	assert_bool(masked).override_failure_message("the grit flies with no ground to fly over").is_true()
+	assert_bool(drift).override_failure_message("a sandstorm in the wind drifted no sand").is_true()
+	assert_bool(cover).override_failure_message("a sand board laid no sand").is_true()
+	assert_bool(dust).override_failure_message("a sand board drew no dust").is_true()
+	assert_bool(other).override_failure_message("a sand board draws rain, caps, embers or an aurora").is_false()
+
+
+# On a calm board there is no wind for grit to fly along, so it stops; the specks still swirl.
+func test_a_calm_sandstorm_drops_its_grit_and_keeps_its_specks() -> void:
+	var mirror := _mirror()
+	var kind := _kind_drawing(WeatherLook.Fall.SAND, func(look: WeatherLook) -> bool: return look.grit_rate > 0.0)
+	_scene.game.scenario_manager.current_wind = Wind.Kind.CALM
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	mirror._process(0.016)
+	assert_bool(mirror._grit.emitting or mirror._grit.visible).override_failure_message(
+			"grit blew on a calm board").is_false()
+	assert_bool(mirror._snow.emitting and mirror._snow.visible).override_failure_message(
+			"a calm sandstorm drew no specks").is_true()
+
+
+# An ashfall draws its flakes, a soot cover, caps on the props and rising embers on the ground mask --
+# and no dust, grit or aurora. The embers take the look's own colour (the aurora's take its cycle).
+func test_an_ash_board_draws_flakes_soot_caps_and_embers() -> void:
+	var mirror := _mirror()
+	var kind := _kind_drawing(WeatherLook.Fall.ASH,
+			func(look: WeatherLook) -> bool: return look.caps_props and look.mote_rate > 0.0)
+	assert_int(kind).override_failure_message("fixture: no ash weather caps props and raises embers")\
+			.is_not_equal(Weather.Kind.CLEAR)
+	var look := WeatherLook.for_kind(kind)
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	mirror._process(0.016)
+	var flakes := mirror._snow.emitting and mirror._snow.visible
+	var cover := mirror._snow_cover.visible and mirror._snow_cover.texture_albedo != null
+	var embers := mirror._embers.system.emitting and mirror._embers.system.visible
+	var masked := mirror._embers.process.get_shader_parameter("mask") != null
+	var tint: Color = mirror._embers.draw.get_shader_parameter("tint")
+	var other := mirror._fog_pass.visible or mirror._fog_cards.visible or mirror._grit.visible \
+			or mirror.aurora()._curtains.visible or mirror.aurora()._motes.system.visible
+	assert_bool(flakes).override_failure_message("an ash board drew no falling ash").is_true()
+	assert_bool(cover).override_failure_message("an ash board laid no soot").is_true()
+	assert_bool(mirror._caps.visible).override_failure_message("an ash look that caps props capped none").is_true()
+	assert_bool(embers).override_failure_message("an ash board raised no embers").is_true()
+	assert_bool(masked).override_failure_message("the embers rose with no ground to rise off").is_true()
+	assert_bool(Color(tint.r, tint.g, tint.b).is_equal_approx(Color(look.mote_color.r, look.mote_color.g,
+			look.mote_color.b))).override_failure_message("the embers are not the look's colour: %s" % tint).is_true()
+	assert_bool(other).override_failure_message("an ash board draws dust, grit or an aurora").is_false()
+
+
+# The grit and the embers are born over the BOARD, never the view (#1301's rule): the camera is moved
+# far out and back, and neither system may take a new amount or lifetime.
+func test_zooming_never_re_deals_the_grit_or_the_embers() -> void:
+	var mirror := _mirror()
+	var sand := _kind_drawing(WeatherLook.Fall.SAND, func(look: WeatherLook) -> bool: return look.grit_rate > 0.0)
+	var ash := _kind_drawing(WeatherLook.Fall.ASH, func(look: WeatherLook) -> bool: return look.mote_rate > 0.0)
+	var camera: Camera3D = mirror.camera
+	assert_object(camera).override_failure_message("fixture: the mirror has no camera").is_not_null()
+	_scene.game.scenario_manager.current_wind = Wind.Kind.STRONG_WIND
+	for case: Array in [[sand, mirror._grit], [ash, mirror._embers.system]]:
+		var system: GPUParticles3D = case[1]
+		_scene.game.scenario_manager.current_weather = case[0]
+		mirror._process(0.016)
+		var amount := system.amount
+		var lifetime := system.lifetime
+		var was := camera.global_position
+		var seen: Array[Vector2] = []
+		for rise: float in [30.0, 60.0, 0.0]:
+			camera.global_position = was + Vector3(0.0, rise, 0.0)
+			mirror._process(0.016)
+			seen.append(Vector2(system.amount, system.lifetime))
+		camera.global_position = was
+		assert_int(amount).override_failure_message("fixture: %s sized no particles" % system.name).is_greater(1)
+		for at: Vector2 in seen:
+			assert_int(int(at.x)).override_failure_message("%s was re-dealt by a zoom: amount %d -> %d"
+					% [system.name, amount, int(at.x)]).is_equal(amount)
+			assert_float(at.y).is_equal_approx(lifetime, 0.0001)   # a Vector2 holds single precision

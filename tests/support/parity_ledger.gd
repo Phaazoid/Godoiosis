@@ -445,6 +445,12 @@ static func weathers() -> Dictionary:
 			K.FAINT_AURORA: {"ai": inert()},
 			K.AURORA: {"ai": inert()},
 			K.AETHERIC_STORM: {"ai": inert()},
+			K.DUST: {"ai": inert()},
+			K.SANDSTORM: {"ai": inert()},
+			K.DUST_WALL: {"ai": inert()},
+			K.LIGHT_ASHFALL: {"ai": inert()},
+			K.ASHFALL: {"ai": inert()},
+			K.ASH_STORM: {"ai": inert()},
 		},
 	}
 

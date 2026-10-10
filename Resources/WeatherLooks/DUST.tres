@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://chg75v0552hmt"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_5hc20"]
+
+[resource]
+script = ExtResource("1_5hc20")
+fall = 4
+density = 0.4
+fall_speed = 2.0
+flake_sway = 0.5
+flake_swirl = 0.8
+flake_wind = 2.0
+big_flakes = 0.0
+flake_color = Color(0.88, 0.74, 0.5, 0.8)
+flake_settle = 0.15
+snow_cover = 0.12
+slope_cover = 0.3
+snow_frost = 0.08
+snow_flecks = 0.05
+snow_color = Color(0.84, 0.7, 0.47, 1)
+snow_roughness = 0.95
+snow_relief = 4.0
+relief_softness = 1.5
+snow_bumps = 0.5
+bump_size = 8.0
+drift_rate = 1.0
+drift_speed = 7.0
+drift_texels = 6
+drift_life = 0.8
+drift_color = Color(0.86, 0.72, 0.48, 0.55)
+grit_rate = 0.6
+grit_texels = 4
+fog_strength = 0.05
+layer_amount = 1.0
+layer_depth = 0.84
+pool_amount = 0.0
+bank_height = 1.76
+fog_breakup = 0.7
+water_haze = 0.3
+pixel_steps = true
+fog_color = Color(0.78, 0.6, 0.38, 1)
+sky_tint = 0.1
+card_amount = 0.2
+card_opacity = 0.25
+card_size = 1.1
+card_life = 4.0
+card_sink = 0.5
+card_dissolve = 0.6
+fog_speed = 1.5
+grade_saturation = 0.95
+grade_brightness = 0.98
+grade_tint = Color(1, 0.72, 0.4, 0.06)
+veil = 0.04
+veil_speed = 0.15
+veil_color = Color(0.8, 0.62, 0.4, 1)
