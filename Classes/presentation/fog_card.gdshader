@@ -1,9 +1,11 @@
 // The fog's cards (#1285): pixel wisps that carry the fog's look (the dev's pick, "cards lead"). Born on
 // the ground anywhere on the board (the box WeatherMirror hands it) at up to `lift` above it,
 // but only where fog_field says there is fog on the ground below. They drift with the wind, ride the
-// surface as they go, die over the void, and re-read the fog every frame: CUSTOM.x is how present the
+// surface DOWN as they go but never up (a card meeting higher ground holds its height and dissolves
+// against the face), die over the void, and re-read the fog every frame: CUSTOM.x is how present the
 // fog is on the ground under the card, so one drifting out of it fades. CUSTOM.y is its age (0..1),
-// CUSTOM.z its frame, CUSTOM.w its own height over the ground.
+// CUSTOM.z its frame, CUSTOM.w its own height over the ground; COLOR.a is how much of it has not yet
+// dissolved.
 shader_type particles;
 
 #include "res://Classes/presentation/fog_field.gdshaderinc"
@@ -20,11 +22,18 @@ uniform float frames = 3.0;
 const float BORN_ABOVE = 0.05;
 const float FULL = 0.2;
 const float AT_GROUND = 0.05;
+// How far the ground under a card may rise before it counts as climbing (floating noise on flat ground
+// never trips it), and how long a card takes to dissolve once it has.
+const float RISE_TOLERANCE = 0.05;
+const float DISSOLVE_SECONDS = 0.5;
 
 void start() {
 	uint seed = weather_hash(NUMBER + uint(41) + RANDOM_SEED);
 	if (RESTART_CUSTOM) {
 		CUSTOM = vec4(0.0);
+	}
+	if (RESTART_COLOR) {
+		COLOR = vec4(1.0);
 	}
 	if (RESTART_POSITION) {
 		vec2 p = mix(box_min.xz, box_max.xz, vec2(weather_rand(seed), weather_rand(seed)));
@@ -50,8 +59,18 @@ void process() {
 	if (s < WEATHER_VOID * 0.5) {
 		ACTIVE = false;
 	} else {
-		// Eased onto the surface, so a card drifting up a terrace climbs rather than jumps.
-		TRANSFORM[3].y = mix(at.y, s + CUSTOM.w, 1.0 - exp(-4.0 * DELTA));
+		float rides = s + CUSTOM.w;
+		if (COLOR.a < 1.0 || rides > at.y + RISE_TOLERANCE) {
+			// Fog never climbs (dev): the ground rose under it, so it holds its height and dissolves
+			// against the face, and once begun it finishes.
+			COLOR.a = max(COLOR.a - DELTA / DISSOLVE_SECONDS, 0.0);
+			if (COLOR.a <= 0.0) {
+				ACTIVE = false;
+			}
+		} else {
+			// Eased down onto lower ground, so a card rolls off a ledge rather than dropping.
+			TRANSFORM[3].y = mix(at.y, rides, 1.0 - exp(-4.0 * DELTA));
+		}
 		CUSTOM.x = smoothstep(0.0, FULL, fog_amount(vec3(at.x, s + AT_GROUND, at.z)));
 	}
 }
