@@ -94,7 +94,7 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror._drift_process: mask + ["velocity", "hover"],
 		mirror._drift_draw: ["streak", "size", "tint", "age_fade"],
 		mirror.grade()._material: ["saturation", "brightness", "tint", "veil", "veil_color", "veil_offset"],
-		mirror._fog_process: fog + ["box_min", "box_max", "keep", "velocity", "lift", "frames"],
+		mirror._fog_process: fog + ["box_min", "box_max", "keep", "velocity", "lift", "sink", "dissolve", "frames"],
 		mirror._fog_draw: ["wisps", "tint", "size", "frames"],
 		mirror._fog_pass_material: fog + ["tint", "strength", "pixel_steps", "art_pixels", "slab_low", "slab_high"],
 	}
@@ -402,3 +402,23 @@ func test_zooming_never_re_deals_the_fog_cards() -> void:
 				rise, amount, mirror._fog_cards.amount]).is_equal(amount)
 		assert_float(mirror._fog_cards.lifetime).is_equal(lifetime)
 	camera.global_position = was
+
+
+# The card's sink and dissolve dials reach its material (#1285): the parse case proves the shader
+# DECLARES them, this proves the mirror FEEDS them, so a dial that moves nothing cannot ship.
+func test_the_card_sink_and_dissolve_dials_reach_the_cards() -> void:
+	var mirror := _mirror()
+	var look := WeatherLook.for_kind(Weather.Kind.FOG)
+	assert_object(look).override_failure_message("fixture: fog has no look file").is_not_null()
+	var was_sink := look.card_sink
+	var was_dissolve := look.card_dissolve
+	look.card_sink = 0.77
+	look.card_dissolve = 2.5
+	_scene.game.scenario_manager.current_weather = Weather.Kind.FOG
+	mirror._process(0.016)
+	var sink: float = mirror._fog_process.get_shader_parameter("sink")
+	var dissolve: float = mirror._fog_process.get_shader_parameter("dissolve")
+	look.card_sink = was_sink
+	look.card_dissolve = was_dissolve
+	assert_float(sink).override_failure_message("the Card sink dial never reached the cards").is_equal_approx(0.77, 0.0001)
+	assert_float(dissolve).override_failure_message("the Card dissolve dial never reached the cards").is_equal_approx(2.5, 0.0001)

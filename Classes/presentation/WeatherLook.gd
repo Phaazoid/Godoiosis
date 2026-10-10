@@ -111,6 +111,8 @@ enum Fall { RAIN, SNOW, FOG }
 @export var card_size := 1.0                # times a wisp's own size, 44x14 ground art pixels
 @export var card_life := 8.0                # seconds a card takes to fade in and out
 @export var card_lift := 0.4                # world units above the ground a card floats, at most
+@export var card_sink := 0.25               # world units a second a card sinks off higher ground, at most
+@export var card_dissolve := 1.0            # seconds a card takes to dissolve against a rise or past the edge
 @export var fog_speed := 0.3                # the share of the wind the fog drifts with, its cards and banks alike
 
 @export_group("Grade")
@@ -267,6 +269,10 @@ const ROWS: Array[Dictionary] = [
 		"tip": "Seconds a card takes to fade in, drift and fade out."},
 	{"prop": "card_lift", "label": "Card height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.FOG,
 		"tip": "How high over the ground a card floats, in cells, at most. Higher cards cross more of a unit."},
+	{"prop": "card_sink", "label": "Card sink", "min": 0.02, "max": 3.0, "step": 0.01, "fall": Fall.FOG,
+		"tip": "How fast a card sinks when it drifts off higher ground, in cells a second at most. Low values let fog spill slowly off a ledge."},
+	{"prop": "card_dissolve", "label": "Card dissolve", "min": 0.1, "max": 5.0, "step": 0.05, "fall": Fall.FOG,
+		"tip": "Seconds a card takes to fade out when it meets higher ground or drifts past the board's edge."},
 	{"prop": "fog_speed", "label": "Fog drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": Fall.FOG,
 		"tip": "The share of the wind the fog drifts with, its cards and its banks alike. 0 hangs still."},
 	{"prop": "grade_saturation", "label": "Grade saturation", "min": 0.0, "max": 1.5, "step": 0.01,

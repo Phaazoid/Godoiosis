@@ -519,6 +519,8 @@ func _place_fog(delta: float) -> void:
 	_fog_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
 	_fog_process.set_shader_parameter("velocity", Vector3(wind.x, 0.0, wind.y))
 	_fog_process.set_shader_parameter("lift", _look.card_lift)
+	_fog_process.set_shader_parameter("sink", _look.card_sink)
+	_fog_process.set_shader_parameter("dissolve", _look.card_dissolve)
 	_size(_fog_cards, _fog_process, _look.card_amount * (hi.x - lo.x) * (hi.y - lo.y) / life, life, MAX_FOG_CARDS)
 
 
