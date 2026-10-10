@@ -176,8 +176,8 @@ func _poll_staging() -> bool:
 	return true
 
 
-# Has the water basin moved since the last frame (#654) -- the experiment flipped, its depth knob was
-# dragged, or a cell started or stopped dipping? A fill diffs on its CELLS, which a dip leaves alone, so
+# Has the water basin moved since the last frame (#654) -- its depth knob was dragged, or a cell
+# started or stopped dipping? A fill diffs on its CELLS, which a dip leaves alone, so
 # its gate reads this (#308's law: gate on the store the render reads). Markers need nothing: they diff
 # on the positions _anchor computes, and _anchor subtracts the drop.
 func _poll_basin() -> bool:
@@ -898,7 +898,7 @@ func _anchor(cell: Vector2i) -> Dictionary:
 	# that cell went. One line, because this is the one answer for every marker in the file.
 	var surface := BoardSpace.surface_transform(cell, heights)
 	surface.origin += BoardSpace.staged_offset(cell)
-	# ...and down to the water, where the basin experiment has dropped it (#654). Markup lies ON the
+	# ...and down to the water, where the basin has dropped it (#654). Markup lies ON the
 	# drawn surface; the knockback drop pointer reads the rules height itself and never comes here.
 	surface.origin.y -= BoardSpace.basin_drop(cell)
 	return {"surface": surface,

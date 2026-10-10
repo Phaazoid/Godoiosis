@@ -232,8 +232,8 @@ var snow_source: Callable     # () -> Color
 var breath_source: Callable   # () -> bool
 
 # The game's board, for the WATER BASIN's wading (#654): who is standing IN the water rather than on
-# it is RulesService.wets_in's question, and that reads a BoardContext. Asked once per frame, and only
-# while the experiment is on, so the ordinary board pays nothing for it. Unset means nobody wades.
+# it is RulesService.wets_in's question, and that reads a BoardContext. Asked once per frame. Unset
+# means nobody wades.
 var board_source: Callable
 var _frame_board: BoardContext
 # How far below its stand height each unit is drawn right now, eased toward basin_drop + wade so a
@@ -379,7 +379,7 @@ func _refresh_facing_on_camera_turn() -> void:
 
 # `delta` is the status fade step (#358); a bare call advances no fade and only re-pushes what is held.
 func reconcile(delta := 0.0) -> void:
-	_frame_board = board_source.call() if BoardSpace.basin_on() and board_source.is_valid() else null
+	_frame_board = board_source.call() if board_source.is_valid() else null
 	# Asked ONCE per frame, not once per unit: it is a board-wide question, and calling it per unit
 	# would re-derive every other unit's projected cell for each unit on the board.
 	var hovered := _hovered_unit()
@@ -820,8 +820,8 @@ static func fall_depth(unit: Unit, heights: BoardHeights) -> float:
 
 # How much further a unit standing IN water sinks (#654), so the opaque surface hides its legs.
 # RulesService.wets_in is the one answer to "in the water, not on it": shallow and deep alike, a
-# body in deep water too, and never a Waterwalker or anyone standing on FROZEN water. Zero while the
-# basin experiment is off, because no board is built then.
+# body in deep water too, and never a Waterwalker or anyone standing on FROZEN water. Zero with no
+# board_source, because no board is built then.
 func wade_at(unit: Unit, cell: Vector2i) -> float:
 	if _frame_board == null or unit == null:
 		return 0.0
@@ -863,7 +863,7 @@ func _sync(unit: Unit, sprite: UnitSprite3D, delta := 0.0) -> void:
 	# from PIXELS above rather than from BoardSpace, which is why the offset is added to the whole
 	# placement here instead of hiding inside surface_point.
 	stand += BoardSpace.staged_offset(over)
-	# ...and down into the water, while the basin experiment is on (#654). Here and never inside
+	# ...and down into the water, into the basin (#654). Here and never inside
 	# stand_height, which also feeds fall_depth and the camera: a recess is not a fall (dev ruling).
 	stand.y -= _eased_sink(unit, over, delta)
 	# The attack lunge and the invalid-order shake (#321) tween $MapSprite's LOCAL position, which

@@ -281,9 +281,8 @@ const SHARED_GLOBALS := ["water_depth_range", "water_shore_fade_range"]
 const SHOCK_GLOBALS := ["water_shock_mask", "water_shock_age", "water_shock_life",
 		"water_shock_step", "water_shock_color"]
 
-# EXPERIMENT data: the FOURTH declared exemption (#654), and a kind of its own again. The basin drop
-# is DERIVED -- the depth knob while Experiments.WATER_BASIN is on, zero while it is off -- so it has
-# no Water knob row (the knob is a BoardSpace static on the CLASS_KNOBS table) and names neither water,
+# BASIN data: the FOURTH declared exemption (#654), and a kind of its own again. The basin drop is
+# DERIVED -- the depth knob, clamped -- so it has no Water knob row (the knob is a BoardSpace static on the CLASS_KNOBS table) and names neither water,
 # because every water cell dips by the one amount (dev ruling, 2026-10-08). Closed, both directions.
 const BASIN_GLOBALS := ["water_basin_drop"]
 
@@ -325,7 +324,7 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 	for name in declared:
 		# Board data and event data are both spelled in TWO of the three places -- no knob row,
 		# because nobody tunes the shape of the board and the shock's own values live on the effect.
-		# ...and so is the basin drop, which is derived from a static knob and an Experiment flag.
+		# ...and so is the basin drop, which is derived from a static knob.
 		if not BOARD_GLOBALS.has(name) and not SHOCK_GLOBALS.has(name) and not BASIN_GLOBALS.has(name):
 			tunable.append(name)
 
@@ -409,7 +408,7 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 			% [SHOCK_GLOBALS, shock_side] + "describes the WATER rather than something happening " \
 			+ "to it belongs in a deep/shallow pair").contains_exactly_in_any_order(SHOCK_GLOBALS)
 	assert_array(basin_side).override_failure_message(
-			"the experiment exemption is declared as %s and the shader's is %s -- a value a dev tunes " \
+			"the basin exemption is declared as %s and the shader's is %s -- a value a dev tunes " \
 			% [BASIN_GLOBALS, basin_side] + "belongs on a knob row, not in here") \
 			.contains_exactly_in_any_order(BASIN_GLOBALS)
 
@@ -521,9 +520,9 @@ func test_no_phase_knob_is_interpolated_across_a_seam() -> void:
 			+ "Evaluate both wave fields and mix the RESULT instead").is_empty()
 
 
-# THE BASIN TWINS (#654). The water basin experiment draws a flat column's TOP block as its twin, whose
-# material lets the shader drop that block's top half; everything else in the column keeps the base
-# item, so the column's walls stay whole. Four promises, each a way the experiment fails in silence:
+# THE BASIN TWINS (#654). The water basin draws a flat column's TOP block as its twin, whose material
+# lets the shader drop that block's top half; everything else in the column keeps the base item, so
+# the column's walls stay whole. Four promises, each a way the basin fails in silence:
 # a water block with no twin never dips; a twin that is not the SAME mesh dips a different block; a
 # base that carries the flag drops every buried block's top and opens the column; and shallow and deep
 # twins on different materials bake depth per material again, the thing the board mask replaced.

@@ -104,7 +104,7 @@ const RAMP_ITEM_NAMES: Dictionary[int, String] = {
 const RAMP_FILL_ITEM_NAME := "ramp_fill"
 
 # THE BASIN TWIN (#654): the same water block, wearing a material that lets the water shader drop its
-# top half while Experiments.WATER_BASIN is on. One per FLAT water item, named off it, so the mirror
+# top half by the basin depth. One per FLAT water item, named off it, so the mirror
 # finds a twin by asking the meshlib rather than by knowing which items are water. It ends in
 # "_block" on purpose: the meshlib laws sort items by NAME, and a twin is a ground block, never a cap.
 const BASIN_TWIN_SUFFIX := "_basin_block"
@@ -254,11 +254,11 @@ const FLAME_FRAMES := 8
 # The colour's ALPHA is how hard the foam lands. One knob rather than two, because a foam hue and a
 # foam strength are not separately meaningful — you pick a surf colour and how much of it there is.
 #
-# Deep and shallow start DIFFERENT rather than matched: a shallow shore laps, so it gets the wider
-# softer band, while deep water meeting a wall stops dead and gets a narrow hard one. A guess to
-# react to, not an answer — the whole point of it being a knob.
-@export var water_deep_foam_width := 0.19: set = _set_water_deep_foam_width
-@export var water_shallow_foam_width := 0.37: set = _set_water_shallow_foam_width
+# Both widths start at 0, which is OFF: the surf sits right on the submerged bank's upper edge, and
+# the dev turned it off in the mockup he approved the bank from (#654, 2026-10-10). The colours are
+# kept for whoever drags a width back up.
+@export var water_deep_foam_width := 0.0: set = _set_water_deep_foam_width
+@export var water_shallow_foam_width := 0.0: set = _set_water_shallow_foam_width
 @export var water_deep_foam_color := Color(0.2196, 0.6, 0.96, 0.7): set = _set_water_deep_foam_color
 @export var water_shallow_foam_color := Color(0.86, 0.93, 0.96, 0.5): set = _set_water_shallow_foam_color
 
@@ -278,11 +278,10 @@ const FLAME_FRAMES := 8
 @export var water_deep_shore_darken := 0.76: set = _set_water_deep_shore_darken
 @export var water_shallow_shore_darken := 0.26: set = _set_water_shallow_shore_darken
 
-# THE SUBMERGED BANK (#654, behind Experiments.WATER_BANK): how far down through the water a bank wall
-# stays in view, in world units, and how hard the waves bend the view of it. Per type, like every
-# water dial; a depth of 0 turns it off for that water. Nothing draws unless the experiment is on,
-# because the walls ride the board mask's alpha and only get baked then. The defaults are the dev's
-# own slider picks off the approved mockup (2026-10-10).
+# THE SUBMERGED BANK (#654): how far down through the water a bank wall stays in view, in world units,
+# and how hard the waves bend the view of it. Per type, like every water dial; a depth of 0 turns it
+# off for that water. The walls ride the board mask's alpha. The defaults are the dev's own slider
+# picks off the approved mockup (2026-10-10).
 @export var water_deep_bank_depth := 0.6: set = _set_water_deep_bank_depth
 @export var water_shallow_bank_depth := 0.6: set = _set_water_shallow_bank_depth
 @export var water_deep_bank_wobble := 0.55: set = _set_water_deep_bank_wobble
@@ -380,9 +379,6 @@ var _basin_twin_library: MeshLibrary
 # The basin drop last pushed to the shader (#654). battle3d reads it to re-push only when the knob
 # moved, and it is recorded IN the push so it cannot claim a value the shader was never sent.
 var basin_drop_pushed := 0.0
-# The submerged bank's switch (#654): whether the mask's alpha carries the bank walls. battle3d owns
-# the poll and flips it through set_submerged_bank, which rebuilds the mask.
-var submerged_bank := false
 # The board mask as last pushed. Kept because a headless ImageTexture reads back only the FIRST image
 # it was ever given, so a test asking the texture would be green on a mask that stopped updating.
 var water_mask_built: Image
@@ -990,11 +986,11 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 	# That is what stopped an outer corner's flat half being drawn twice into one plane. Stop writing
 	# this block and that half becomes a hole; draw it AND the cap's floor triangle and they fight.
 	var climb := Terrain.climb_of_corners(corners)
-	# THE BASIN (#654): while the experiment is on, a FLAT column's top block is its basin twin, which
-	# the water shader lets drop its top half. The blocks under it keep the item they always had, so the
-	# column's walls stay whole. A sloped column's top is its cap, so it has no block top to drop.
+	# THE BASIN (#654): a FLAT column's top block is its basin twin, which the water shader lets drop
+	# its top half. The blocks under it keep the item they always had, so the column's walls stay whole.
+	# A sloped column's top is its cap, so it has no block top to drop. Only water has a twin.
 	# Published as it is drawn, so BoardSpace.basin_drop() and the drawn columns are one answer.
-	var top_item := basin_twin_of(item) if climb == 0 and BoardSpace.basin_on() else item
+	var top_item := basin_twin_of(item) if climb == 0 else item
 	BoardSpace.mark_basin(cell, top_item != item)
 	for y in range(floor_row, top_row + 1):
 		var at := Vector3i(cell.x, y, cell.y)
@@ -1469,8 +1465,8 @@ func _push_water(uniform: StringName, value: Variant) -> void:
 	RenderingServer.global_shader_parameter_set(uniform, value)
 
 
-# The basin's drop (#654), pushed as the EFFECTIVE value: battle3d hands over the depth knob while the
-# experiment is on and zero while it is off, so the shader never needs to know the flag exists.
+# The basin's drop (#654): the depth knob, clamped by BoardSpace.basin_depth(). battle3d re-pushes it
+# when the knob moves, since a knob writes a static and nothing announces it.
 func push_basin_drop(drop: float) -> void:
 	basin_drop_pushed = drop
 	_push_water(&"water_basin_drop", drop)
@@ -1480,7 +1476,7 @@ func push_basin_drop(drop: float) -> void:
 # defaults until someone happens to move a slider, which is the same born-dead-knob failure #264
 # shipped and #380 named.
 func _push_all_water() -> void:
-	push_basin_drop(BoardSpace.basin_depth() if BoardSpace.basin_on() else 0.0)
+	push_basin_drop(BoardSpace.basin_depth())
 	_push_water(&"water_deep_wave_speed", water_deep_wave_speed)
 	_push_water(&"water_shallow_wave_speed", water_shallow_wave_speed)
 	_push_water(&"water_deep_wave_scale", water_deep_wave_scale)
@@ -1530,7 +1526,7 @@ func _push_all_water() -> void:
 # BOARD DATA, so it is derived rather than an @export -- but it rides _push_water like every water
 # global, because "how does a water value reach the shader" should have one answer.
 #
-# Its ALPHA carries the submerged bank's walls since #654 (_bank_bits_at), zero while that is off.
+# Its ALPHA carries the submerged bank's walls since #654 (_bank_bits_at).
 #
 # Held as a MEMBER on purpose: the global uniform stores the texture's RID, and a local would free
 # the ImageTexture the moment this returns.
@@ -1639,10 +1635,9 @@ func _rebuild_water_mask(grid: TileMapLayer, heights: BoardHeights) -> void:
 			# light as it leaves the land -- a DARK depth cue rather than another bright one. Land
 			# falls out at 0 for free, its own distance to dry being zero.
 			var b := clampf((to_dry[i] - 0.5) / MASK_RANGE, 0.0, 1.0)
-			# A: the submerged bank's bits (#654), zero everywhere while the experiment is off --
-			# which is what keeps the shader drawing today's water then.
+			# A: the submerged bank's bits (#654), water cells only.
 			var bank := 0
-			if submerged_bank and wet[i] == 1:
+			if wet[i] == 1:
 				bank = _bank_bits_at(grid, heights, rect.position + Vector2i(x, y))
 			image.set_pixel(x, y, Color(r, _deepness_at(wet, depth, w, h, x, y), b, float(bank) / 255.0))
 	# A 2D cell's y IS the world z (BoardSpace.flat), and a cell is one world unit across, so the
@@ -1711,18 +1706,10 @@ func _chamfer(seed: PackedByteArray, w: int, h: int) -> PackedFloat32Array:
 	return d
 
 
-# Flips the submerged bank (#654) and rebuilds the mask it rides, the only thing it changes.
-func set_submerged_bank(on: bool, grid: TileMapLayer, heights: BoardHeights) -> void:
-	submerged_bank = on
-	_rebuild_water_mask(grid, heights)
-
-
 # The submerged bank's bits in the mask's ALPHA (#654), which the water shader reads back with
-# texelFetch: one bit per edge of a water cell that has a bank behind it, plus BANK_ON on every water
-# cell so the shader can tell the experiment is on (it turns the foam off). A wall is GROUND -- not
+# texelFetch: one bit per edge of a water cell that has a bank behind it. A wall is GROUND -- not
 # water, not a hole, not off the board -- standing at least as high as the water at their shared
-# edge, because only then does the neighbour's side face reach down into the water.
-const BANK_ON := 16
+# edge, because only then does the neighbour's side face reach down into the water. Bits 4-7 are free.
 const BANK_SIDES: Dictionary[int, Vector2i] = {
 	1: Vector2i(0, -1), # north
 	2: Vector2i(1, 0), # east
@@ -1732,7 +1719,7 @@ const BANK_SIDES: Dictionary[int, Vector2i] = {
 
 
 func _bank_bits_at(grid: TileMapLayer, heights: BoardHeights, cell: Vector2i) -> int:
-	var bits := BANK_ON
+	var bits := 0
 	for side: int in BANK_SIDES:
 		var dir: Vector2i = BANK_SIDES[side]
 		var near := cell + dir

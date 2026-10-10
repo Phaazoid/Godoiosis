@@ -481,24 +481,12 @@ func test_the_open_water_field_grows_with_distance_from_land() -> void:
 	grid.free()
 
 
-# --- The SUBMERGED BANK's bits (#654, an Experiment) ---------------------------------------------
+# --- The SUBMERGED BANK's bits (#654) -------------------------------------------------------------
 
 func _bank_bits(cell: Vector2i) -> int:
 	var image := _pushed_mask_image()
 	var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
 	return int(round(image.get_pixel(cell.x - int(rect.x), cell.y - int(rect.y)).a * 255.0))
-
-
-# With the experiment off the alpha is zero everywhere, which is what keeps the shader drawing today's
-# water: it meets no wall, and its own cell never says the experiment is on.
-func test_the_mask_carries_no_bank_bits_while_the_experiment_is_off() -> void:
-	var grid := _grid_with([Vector2i(5, 3)],
-			[Vector2i(4, 3), Vector2i(6, 3), Vector2i(5, 2), Vector2i(5, 4)])
-	_mirror._rebuild_water_mask(grid, null)
-	for cell in grid.get_used_cells():
-		assert_int(_bank_bits(cell)).override_failure_message(
-				"cell %s carries bank bits with the experiment off" % cell).is_equal(0)
-	grid.free()
 
 
 # A wall is ground standing behind an edge. Each kind of neighbour that is NOT one gets its own side:
@@ -512,19 +500,15 @@ func test_a_bank_bit_marks_each_water_edge_with_ground_behind_it() -> void:
 	var corner := Vector2i(4, 4)
 	var grid := _grid_with([water, Vector2i(5, 4), corner],
 			[Vector2i(4, 2), Vector2i(5, 2), Vector2i(6, 3)])
-	_mirror.submerged_bank = true
 	_mirror._rebuild_water_mask(grid, null)
 	var bits := _bank_bits(water)
-	assert_int(bits & BoardMirror.BANK_ON).override_failure_message(
-			"a water cell does not say the experiment is on").is_equal(BoardMirror.BANK_ON)
 	assert_int(bits & 1).override_failure_message("ground to the north is a bank").is_equal(1)
 	assert_int(bits & 2).override_failure_message("ground to the east is a bank").is_equal(2)
 	assert_int(bits & 4).override_failure_message("water to the south is not a bank").is_equal(0)
 	assert_int(bits & 8).override_failure_message("a hole to the west is not a bank").is_equal(0)
 	assert_int(_bank_bits(corner)).override_failure_message(
-			"the board's own edge, a hole and water are all walls to %s" % corner) \
-			.is_equal(BoardMirror.BANK_ON)
-	# Land carries nothing, not even the on bit: only a water cell draws a bank.
+			"the board's own edge, a hole and water are all walls to %s" % corner).is_equal(0)
+	# Land carries nothing: only a water cell draws a bank.
 	assert_int(_bank_bits(Vector2i(5, 2))).is_equal(0)
 	grid.free()
 
@@ -537,7 +521,6 @@ func test_ground_lower_than_the_water_is_not_a_bank() -> void:
 	var heights := BoardHeights.new()
 	heights.set_corners(water, Vector4i(2, 2, 2, 2))
 	heights.set_corners(Vector2i(6, 3), Vector4i(4, 4, 4, 4))
-	_mirror.submerged_bank = true
 	_mirror._rebuild_water_mask(grid, heights)
 	var bits := _bank_bits(water)
 	assert_int(bits & 8).override_failure_message(
@@ -555,7 +538,6 @@ func test_painting_a_bank_over_with_water_clears_its_bit() -> void:
 	var water := Vector2i(5, 3)
 	var north := Vector2i(5, 2)
 	var grid := _grid_with([water], [north, Vector2i(5, 4)])
-	_mirror.submerged_bank = true
 	_mirror.sync(grid, heights)
 	assert_int(_bank_bits(water) & 1).override_failure_message("the north bank never baked").is_equal(1)
 	var wet := _a_tile_of(true)
