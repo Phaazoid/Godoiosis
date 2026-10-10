@@ -11,6 +11,7 @@ shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_disabled, fog_disabled, shadows_disabled;
 
 #include "res://Classes/presentation/fog_field.gdshaderinc"
+#include "res://Classes/presentation/screen_ground.gdshaderinc"
 
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform vec4 tint : source_color = vec4(0.86, 0.89, 0.93, 1.0);
@@ -22,8 +23,6 @@ uniform float art_pixels = 16.0;   // the ground's art pixels a cell
 
 const int STEPS = 24;
 const float BANDS = 6.0;
-// Past this, a ray has hit nothing but sky.
-const float FAR = 0.00001;
 
 void vertex() {
 	POSITION = vec4(VERTEX.xy, 1.0, 1.0);
@@ -31,8 +30,7 @@ void vertex() {
 
 void fragment() {
 	float d = texture(depth_tex, SCREEN_UV).r;
-	vec4 world = INV_VIEW_MATRIX * INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, max(d, FAR), 1.0);
-	vec3 end = world.xyz / world.w;
+	vec3 end = screen_world(max(d, SCREEN_SKY), SCREEN_UV, INV_VIEW_MATRIX, INV_PROJECTION_MATRIX);
 	vec3 eye = (INV_VIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	vec3 ray = end - eye;
 	float len = length(ray);
@@ -52,14 +50,14 @@ void fragment() {
 		for (int i = 0; i < STEPS; i++) {
 			vec3 p = eye + dir * (t0 + (float(i) + jitter) * dt);
 			if (pixel_steps > 0.5) {
-				p.xz = (floor(p.xz * art_pixels / cell_size) + 0.5) * cell_size / art_pixels;
+				p.xz = screen_art_snap(p.xz, art_pixels, cell_size);
 			}
 			tau += fog_amount(p) * strength * dt;
 		}
 	}
 	float a = 1.0 - exp(-tau);
 	if (pixel_steps > 0.5) {
-		a = floor(a * BANDS + 0.5) / BANDS;
+		a = screen_steps(a, BANDS);
 	}
 	ALBEDO = tint.rgb;
 	ALPHA = a * tint.a;

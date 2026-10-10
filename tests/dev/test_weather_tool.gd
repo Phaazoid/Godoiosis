@@ -59,15 +59,16 @@ func _slider_after(root: Node, label: String) -> Range:
 
 
 # A look draws only the rows of what it drops (#1269): a snow page lists no splashes, a rain page no
-# swirl, a fog page (#1285) neither and no fall speed, and all list the shared ones. Asked of the built
-# page, not of the table.
+# swirl, a fog page (#1285) neither and no fall speed, an aurora page (#1298) its curtains and the storm's
+# strike rows, and all list the shared ones. Asked of the built page, not of the table.
 func test_a_page_lists_only_its_falls_rows() -> void:
 	var pages := {
 		WeatherLook.Fall.SNOW: _label_texts(Weather.Kind.SNOW),
 		WeatherLook.Fall.RAIN: _label_texts(Weather.Kind.RAIN),
 		WeatherLook.Fall.FOG: _label_texts(Weather.Kind.FOG),
+		WeatherLook.Fall.AURORA: _label_texts(Weather.Kind.AURORA),
 	}
-	for kind: Weather.Kind in [Weather.Kind.SNOW, Weather.Kind.FOG]:
+	for kind: Weather.Kind in [Weather.Kind.SNOW, Weather.Kind.FOG, Weather.Kind.AURORA]:
 		assert_object(WeatherLook.for_kind(kind)).override_failure_message(
 				"fixture: %s has no look file" % Weather.name_of(kind)).is_not_null()
 	for row: Dictionary in WeatherLook.ROWS:
@@ -77,6 +78,15 @@ func test_a_page_lists_only_its_falls_rows() -> void:
 					or (row["fall"] is int and row["fall"] == fall)
 			assert_bool((pages[fall] as Array[String]).has(label)).override_failure_message(
 					"%s page, row '%s'" % [WeatherLook.Fall.keys()[fall], label]).is_equal(shown)
+
+
+# The bolt colour's picker lists Elemental.Element's members in order (#1298): its options are a literal
+# a const table can hold, and a picked index is stored as the element, so the two must not drift apart.
+func test_the_bolt_colour_picker_lists_every_element_in_order() -> void:
+	var names: Array = []
+	for key: String in Elemental.Element.keys():
+		names.append(key.capitalize())
+	assert_array(WeatherLook.ELEMENT_NAMES).is_equal(names)
 
 
 func _label_texts(kind: Weather.Kind) -> Array[String]:

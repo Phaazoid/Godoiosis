@@ -104,6 +104,28 @@ const FOG_CARD_RENDER_PRIORITY := FOG_RENDER_PRIORITY + 1
 # the fog cards -- both still under every piece of markup, so a move tile is never shaded or crossed.
 const CLOUD_RENDER_PRIORITY := FOG_RENDER_PRIORITY - 1
 const SPECK_RENDER_PRIORITY := FOG_CARD_RENDER_PRIORITY + 1
+# The aurora (#1298): its curtains of light lie on the ground under the clouds' slot, the fog and every
+# piece of markup. Its rising motes share the specks' slot, declared: the specks blow under a clear sky
+# only, so the two never draw together.
+const AURORA_RENDER_PRIORITY := CLOUD_RENDER_PRIORITY - 1
+const MOTE_RENDER_PRIORITY := SPECK_RENDER_PRIORITY
+
+
+# A full-screen pass over the board (the fog's, the clouds', the aurora's): a 2x2 quad its shader's
+# vertex stage pins to the whole screen, never culled, casting nothing, on the world's render layer so
+# no ground decal paints it. Hidden until its owner shows it.
+static func make_screen_pass(parent: Node, material: ShaderMaterial) -> MeshInstance3D:
+	var pass_node := MeshInstance3D.new()
+	var screen := QuadMesh.new()
+	screen.size = Vector2(2.0, 2.0)
+	pass_node.mesh = screen
+	pass_node.material_override = material
+	pass_node.extra_cull_margin = 16384.0
+	pass_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	pass_node.layers = WORLD_RENDER_LAYER
+	pass_node.visible = false
+	parent.add_child(pass_node)
+	return pass_node
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	# BLUE since #1066, and it is the player's half of a Fire Emblem readout: your unit says where it

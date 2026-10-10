@@ -7,16 +7,20 @@ class_name WeatherLook
 #
 # What falls is the FALL field (#1269): rain draws drops, splashes, a wet sheen and puddles; snow draws
 # flakes, a snow cover, caps, drift and breath; fog (#1285) draws a thin fog pass and drifting pixel
-# cards. The fields of the other falls are ignored, and the page hides their rows. The grade is any
-# fall's.
+# cards; an aurora (#1298) draws glowing curtains on the ground, its own light and rising motes. The
+# fields of the other falls are ignored, and the page hides their rows. The grade is any fall's, and the
+# storm's strikes are rain's and the aurora's.
 #
 # Every number is a feel value, so every one is a row (ROWS) on that page. A kind with no file draws
 # nothing; CLEAR has none. The wind is not a weather's own (#1286): it is the board's, a WindLook,
 # and a look only says how much of it a fall takes (the fog's drift share).
 
 const FOLDER := "res://Resources/WeatherLooks/"
+# Elemental.Element's members in order, for the bolt colour's picker; test_weather_tool keeps the two equal.
+const ELEMENT_NAMES := ["None", "Fire", "Water", "Shock", "Ice", "Earth", "Air", "Aether", "Corrosion"]
 
-enum Fall { RAIN, SNOW, FOG }
+enum Fall { RAIN, SNOW, FOG, AURORA }
+enum MoteShape { DOTS, STREAKS }
 
 @export var fall := Fall.RAIN
 
@@ -56,6 +60,7 @@ enum Fall { RAIN, SNOW, FOG }
 @export var bolt_width_scale := 5.0         # times the shock bolt's own width (a sky bolt is far off)
 @export var bolt_distance := 7.0            # cells beyond the board's edge a bolt lands
 @export var bolt_height := 32.0             # world units above the board it falls from
+@export var bolt_element := Elemental.Element.SHOCK   # whose colour a bolt's corona glows (ElementPalette)
 
 @export_group("Flakes")
 @export var flake_sway := 0.3               # world units a second a flake wanders side to side
@@ -114,6 +119,35 @@ enum Fall { RAIN, SNOW, FOG }
 @export var card_dissolve := 1.0            # seconds a card takes to dissolve against a rise or past the edge
 @export var fog_speed := 0.3                # the share of the wind the fog drifts with, its cards and banks alike
 
+@export_group("Aurora")
+@export var glow_strength := 0.7            # how bright the curtains of light on the ground are
+@export var bands := 3                      # how many curtains
+@export var band_width := 1.4               # world units across one curtain
+@export var band_spacing := 6.0             # world units between curtains
+@export var band_wave := 2.5                # world units a curtain swings either side of its line
+@export var wave_length := 14.0             # world units along one swing
+@export var band_angle := 28.6              # degrees the curtains lie at across the board
+@export var ripple_speed := 0.8             # how fast the curtains ripple and their rays drift
+@export var ray_strength := 0.6             # 0..1: how much the rays break a curtain up
+@export var ray_spacing := 0.6              # world units between rays
+@export var curtain_pixels := true          # snapped to the ground's art grid and glowing in steps; off is soft
+@export var scheme_a_low := Color(0.25, 1.0, 0.55)
+@export var scheme_a_fringe := Color(1.0, 0.35, 0.7)
+@export var scheme_b_low := Color(0.878, 0.486, 0.753)
+@export var scheme_b_fringe := Color(0.55, 0.4, 1.0)
+@export var scheme_c_low := Color(0.2, 0.85, 0.85)
+@export var scheme_c_fringe := Color(0.878, 0.486, 0.753)
+@export var scheme_seconds := 12.0          # seconds each colour scheme lasts
+@export var scheme_blend := 0.34            # 0..1: the share of a scheme spent blending into the next
+@export var light_energy := 1.2             # the aurora's own light on units, props and ground
+@export var light_pulse := 0.25             # 0..1: how far the light and the curtains swell and ebb
+@export var light_elevation := 40.0         # degrees above the horizon the light comes in at
+@export var mote_shape := MoteShape.DOTS
+@export var mote_rate := 0.15               # motes born per cell of view per second
+@export var mote_rise := 0.3                # world units a second a mote rises
+@export var mote_life := 4.0                # seconds a mote lives
+@export var mote_height := 0.6              # world units over the ground a mote is born, at most
+
 @export_group("Grade")
 @export var grade_saturation := 1.0         # 1 leaves the board's colours; lower greys them
 @export var grade_brightness := 1.0
@@ -121,15 +155,15 @@ enum Fall { RAIN, SNOW, FOG }
 @export var veil := 0.0                     # 0..1: the whiteout drifting across the view
 @export var veil_speed := 0.06              # screen widths a second the whiteout drifts
 @export var veil_color := Color(0.92, 0.94, 0.97)
-@export var grade_fade := 1.5               # seconds the grade takes to come and go
+@export var grade_fade := 1.5               # seconds the grade and an aurora take to come and go
 
 
 # The Weather page's rows, in the order drawn. Declared beside the fields they name, where a field
 # added later is one line away from its row; `test_weather_tool` refuses a field with none. A row
 # with a "fall" key shows only on a look of that fall.
 const ROWS: Array[Dictionary] = [
-	{"prop": "fall", "label": "Falls as", "options": ["Rain", "Snow", "Fog"],
-		"tip": "What this weather draws: drops, splashes and a wet sheen; flakes, snow cover and caps; or fog and drifting fog cards."},
+	{"prop": "fall", "label": "Draws as", "options": ["Rain", "Snow", "Fog", "Aurora"],
+		"tip": "What this weather draws: drops, splashes and a wet sheen; flakes, snow cover and caps; fog and drifting fog cards; or an aurora's curtains of light, its glow and rising motes."},
 	{"prop": "density", "label": "Density", "min": 0.0, "max": 12.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
 		"tip": "How many drops or flakes are born over each cell of the view every second."},
 	{"prop": "fall_speed", "label": "Fall speed", "min": 0.5, "max": 40.0, "step": 0.1, "fall": [Fall.RAIN, Fall.SNOW],
@@ -156,29 +190,31 @@ const ROWS: Array[Dictionary] = [
 		"tip": "The puddle's colour; its alpha is how opaque the water reads."},
 	{"prop": "puddle_roughness", "label": "Puddle gloss", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.RAIN,
 		"tip": "The puddle's roughness: lower is more mirror-like."},
-	{"prop": "lightning", "label": "Lightning", "fall": Fall.RAIN,
+	{"prop": "lightning", "label": "Lightning", "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "Strikes in the sky and beyond the board's edge. Never onto a cell."},
-	{"prop": "strike_every_min", "label": "Strike every (min)", "min": 0.5, "max": 30.0, "step": 0.1, "fall": Fall.RAIN,
+	{"prop": "strike_every_min", "label": "Strike every (min)", "min": 0.5, "max": 30.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "The shortest wait between strikes, seconds."},
-	{"prop": "strike_every_max", "label": "Strike every (max)", "min": 0.5, "max": 60.0, "step": 0.1, "fall": Fall.RAIN,
+	{"prop": "strike_every_max", "label": "Strike every (max)", "min": 0.5, "max": 60.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "The longest wait between strikes, seconds."},
-	{"prop": "flash_peak", "label": "Screen flash", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.RAIN,
+	{"prop": "flash_peak", "label": "Screen flash", "min": 0.0, "max": 1.0, "step": 0.01, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "The screen's white-out at a strike. The photosensitivity setting caps it."},
-	{"prop": "side_light_energy", "label": "Strike light", "min": 0.0, "max": 12.0, "step": 0.1, "fall": Fall.RAIN,
+	{"prop": "side_light_energy", "label": "Strike light", "min": 0.0, "max": 12.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "How bright the strike lights the board from the side it hit, with long shadows."},
-	{"prop": "side_light_color", "label": "Strike light colour", "fall": Fall.RAIN, "tip": "The colour of the strike's light."},
-	{"prop": "side_light_elevation", "label": "Strike light angle", "min": 2.0, "max": 60.0, "step": 1.0, "fall": Fall.RAIN,
+	{"prop": "side_light_color", "label": "Strike light colour", "fall": [Fall.RAIN, Fall.AURORA], "tip": "The colour of the strike's light."},
+	{"prop": "side_light_elevation", "label": "Strike light angle", "min": 2.0, "max": 60.0, "step": 1.0, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "Degrees above the horizon the strike's light comes in at. Lower throws longer shadows."},
-	{"prop": "cloud_glow", "label": "Cloud glow", "min": 0.0, "max": 6.0, "step": 0.05, "fall": Fall.RAIN,
+	{"prop": "cloud_glow", "label": "Cloud glow", "min": 0.0, "max": 6.0, "step": 0.05, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "How much brighter the sky gets at a strike."},
-	{"prop": "bolt_life", "label": "Bolt time", "min": 0.05, "max": 2.0, "step": 0.01, "fall": Fall.RAIN,
+	{"prop": "bolt_life", "label": "Bolt time", "min": 0.05, "max": 2.0, "step": 0.01, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "Seconds a bolt takes to fade."},
-	{"prop": "bolt_width_scale", "label": "Bolt width", "min": 0.5, "max": 20.0, "step": 0.1, "fall": Fall.RAIN,
+	{"prop": "bolt_width_scale", "label": "Bolt width", "min": 0.5, "max": 20.0, "step": 0.1, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "Times the shock attack's own bolt width. A sky bolt is far off, so it needs more."},
-	{"prop": "bolt_distance", "label": "Bolt distance", "min": 1.0, "max": 40.0, "step": 0.5, "fall": Fall.RAIN,
+	{"prop": "bolt_distance", "label": "Bolt distance", "min": 1.0, "max": 40.0, "step": 0.5, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "Cells beyond the board's edge a bolt lands."},
-	{"prop": "bolt_height", "label": "Bolt height", "min": 4.0, "max": 120.0, "step": 1.0, "fall": Fall.RAIN,
+	{"prop": "bolt_height", "label": "Bolt height", "min": 4.0, "max": 120.0, "step": 1.0, "fall": [Fall.RAIN, Fall.AURORA],
 		"tip": "How far above the board a bolt starts."},
+	{"prop": "bolt_element", "label": "Bolt colour", "options": ELEMENT_NAMES, "fall": [Fall.RAIN, Fall.AURORA],
+		"tip": "Whose colour a bolt's glow takes: a thunderstorm's is Shock, an aetheric storm's Aether."},
 	{"prop": "flake_sway", "label": "Flake sway", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.SNOW,
 		"tip": "How far a flake wanders side to side as it falls, cells a second."},
 	{"prop": "flake_swirl", "label": "Swirl", "min": 0.0, "max": 8.0, "step": 0.05, "fall": Fall.SNOW,
@@ -270,6 +306,60 @@ const ROWS: Array[Dictionary] = [
 		"tip": "Seconds a card takes to fade out when it meets higher ground or drifts past the board's edge."},
 	{"prop": "fog_speed", "label": "Fog drift", "min": 0.0, "max": 2.0, "step": 0.01, "fall": Fall.FOG,
 		"tip": "The share of the wind the fog drifts with, its cards and its banks alike. 0 hangs still."},
+	{"prop": "glow_strength", "label": "Glow", "min": 0.0, "max": 3.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "How bright the curtains of light on the ground are. They add light; they never darken."},
+	{"prop": "bands", "label": "Curtains", "min": 1.0, "max": 6.0, "step": 1.0, "fall": Fall.AURORA,
+		"tip": "How many curtains of light lie across the board."},
+	{"prop": "band_width", "label": "Curtain width", "min": 0.2, "max": 6.0, "step": 0.05, "fall": Fall.AURORA,
+		"tip": "How wide one curtain is, in cells."},
+	{"prop": "band_spacing", "label": "Curtain spacing", "min": 1.0, "max": 20.0, "step": 0.1, "fall": Fall.AURORA,
+		"tip": "How far apart the curtains lie, in cells."},
+	{"prop": "band_wave", "label": "Curtain swing", "min": 0.0, "max": 10.0, "step": 0.05, "fall": Fall.AURORA,
+		"tip": "How far a curtain swings either side of its line, in cells. 0 lays it straight."},
+	{"prop": "wave_length", "label": "Swing length", "min": 2.0, "max": 60.0, "step": 0.5, "fall": Fall.AURORA,
+		"tip": "How long one swing of a curtain is, in cells."},
+	{"prop": "band_angle", "label": "Curtain angle", "min": 0.0, "max": 180.0, "step": 1.0, "fall": Fall.AURORA,
+		"tip": "The angle the curtains lie at across the board, in degrees."},
+	{"prop": "ripple_speed", "label": "Ripple speed", "min": 0.0, "max": 5.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "How fast the curtains ripple and their rays drift along them. The aetheric storm's run fastest."},
+	{"prop": "ray_strength", "label": "Rays", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "How much bright and dim rays break a curtain up along its length. 0 is an even band."},
+	{"prop": "ray_spacing", "label": "Ray spacing", "min": 0.1, "max": 4.0, "step": 0.05, "fall": Fall.AURORA,
+		"tip": "How far apart the rays are, in cells."},
+	{"prop": "curtain_pixels", "label": "Curtain pixel steps", "fall": Fall.AURORA,
+		"tip": "Snaps the curtains to the ground's art pixels and steps their glow, so they read as pixel art. Off draws them soft."},
+	{"prop": "scheme_a_low", "label": "Scheme A colour", "fall": Fall.AURORA,
+		"tip": "The first colour scheme: the colour at a curtain's heart."},
+	{"prop": "scheme_a_fringe", "label": "Scheme A fringe", "fall": Fall.AURORA,
+		"tip": "The first colour scheme: the colour at a curtain's edge, which the motes take too."},
+	{"prop": "scheme_b_low", "label": "Scheme B colour", "fall": Fall.AURORA,
+		"tip": "The second colour scheme: the colour at a curtain's heart."},
+	{"prop": "scheme_b_fringe", "label": "Scheme B fringe", "fall": Fall.AURORA,
+		"tip": "The second colour scheme: the colour at a curtain's edge."},
+	{"prop": "scheme_c_low", "label": "Scheme C colour", "fall": Fall.AURORA,
+		"tip": "The third colour scheme: the colour at a curtain's heart."},
+	{"prop": "scheme_c_fringe", "label": "Scheme C fringe", "fall": Fall.AURORA,
+		"tip": "The third colour scheme: the colour at a curtain's edge."},
+	{"prop": "scheme_seconds", "label": "Scheme time", "min": 1.0, "max": 120.0, "step": 0.5, "fall": Fall.AURORA,
+		"tip": "Seconds each colour scheme lasts before the next, A then B then C and round again. The curtains, the light and the motes change together."},
+	{"prop": "scheme_blend", "label": "Scheme blend", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "The share of a scheme's time spent blending into the next. 0 cuts straight across; 1 is always blending."},
+	{"prop": "light_energy", "label": "Aurora light", "min": 0.0, "max": 8.0, "step": 0.05, "fall": Fall.AURORA,
+		"tip": "How brightly the aurora lights the units, props and ground, in its own colours."},
+	{"prop": "light_pulse", "label": "Pulse", "min": 0.0, "max": 1.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "How far the light and the curtains slowly swell and ebb. The photosensitivity setting holds it still."},
+	{"prop": "light_elevation", "label": "Light angle", "min": 5.0, "max": 85.0, "step": 1.0, "fall": Fall.AURORA,
+		"tip": "Degrees above the horizon the aurora's light comes in at, always from in front of the camera so it reaches the units' faces."},
+	{"prop": "mote_shape", "label": "Motes", "options": ["Dots", "Streaks"], "fall": Fall.AURORA,
+		"tip": "What rises off the ground: slow dots, or thin streaks that rise fast."},
+	{"prop": "mote_rate", "label": "Motes per cell", "min": 0.0, "max": 3.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "How many motes rise off each cell of ground in view every second. 0 is none."},
+	{"prop": "mote_rise", "label": "Mote rise", "min": 0.02, "max": 4.0, "step": 0.01, "fall": Fall.AURORA,
+		"tip": "How fast a mote rises, in cells a second. It drifts with the wind too."},
+	{"prop": "mote_life", "label": "Mote life", "min": 0.2, "max": 12.0, "step": 0.1, "fall": Fall.AURORA,
+		"tip": "Seconds a mote takes to fade in, rise and fade out."},
+	{"prop": "mote_height", "label": "Mote height", "min": 0.0, "max": 3.0, "step": 0.05, "fall": Fall.AURORA,
+		"tip": "How high over the ground a mote is born, in cells, at most."},
 	{"prop": "grade_saturation", "label": "Grade saturation", "min": 0.0, "max": 1.5, "step": 0.01,
 		"tip": "The weather's own grade over the board's look: 1 leaves the colours, lower greys them. The HUD is never graded."},
 	{"prop": "grade_brightness", "label": "Grade brightness", "min": 0.5, "max": 1.5, "step": 0.01,
@@ -281,7 +371,7 @@ const ROWS: Array[Dictionary] = [
 		"tip": "How fast the whiteout's bands drift, screen widths a second. They drift with the wind."},
 	{"prop": "veil_color", "label": "Whiteout colour", "tip": "The whiteout's colour."},
 	{"prop": "grade_fade", "label": "Grade fade", "min": 0.0, "max": 6.0, "step": 0.05,
-		"tip": "Seconds the grade and whiteout take to come in when the weather changes, and to go."},
+		"tip": "Seconds the grade, the whiteout and an aurora take to come in when the weather changes, and to go."},
 ]
 
 

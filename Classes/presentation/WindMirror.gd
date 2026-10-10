@@ -42,38 +42,13 @@ var _volume := AABB()
 
 
 func _ready() -> void:
-	_speck_process = ShaderMaterial.new()
-	_speck_process.shader = load("res://Classes/presentation/wind_speck.gdshader") as Shader
-	_speck_draw = ShaderMaterial.new()
-	_speck_draw.shader = load("res://Classes/presentation/wind_speck_draw.gdshader") as Shader
+	_speck_process = WeatherMirror.process_material("res://Classes/presentation/wind_speck.gdshader")
+	_speck_draw = WeatherMirror.draw_material("res://Classes/presentation/wind_speck_draw.gdshader")
 	_speck_draw.render_priority = BoardOverlays.SPECK_RENDER_PRIORITY
-	_specks = GPUParticles3D.new()
-	_specks.process_material = _speck_process
-	_specks.local_coords = false
-	_specks.amount = 1
-	_specks.lifetime = 1.0
-	_specks.emitting = false
-	_specks.visible = false
-	_specks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_specks.layers = BoardOverlays.WORLD_RENDER_LAYER   # the wet decal must never paint a speck
-	var quad := QuadMesh.new()
-	quad.orientation = PlaneMesh.FACE_Z
-	quad.material = _speck_draw
-	_specks.draw_pass_1 = quad
-	add_child(_specks)
-	_cloud_material = ShaderMaterial.new()
-	_cloud_material.shader = load("res://Classes/presentation/cloud_shadow.gdshader") as Shader
+	_specks = WeatherMirror.particles(self, _speck_process, _speck_draw, PlaneMesh.FACE_Z)
+	_cloud_material = WeatherMirror.draw_material("res://Classes/presentation/cloud_shadow.gdshader")
 	_cloud_material.render_priority = BoardOverlays.CLOUD_RENDER_PRIORITY
-	_clouds = MeshInstance3D.new()
-	var screen := QuadMesh.new()
-	screen.size = Vector2(2.0, 2.0)   # the vertex stage pins it to the whole screen
-	_clouds.mesh = screen
-	_clouds.material_override = _cloud_material
-	_clouds.extra_cull_margin = 16384.0
-	_clouds.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_clouds.layers = BoardOverlays.WORLD_RENDER_LAYER
-	_clouds.visible = false
-	add_child(_clouds)
+	_clouds = BoardOverlays.make_screen_pass(self, _cloud_material)
 	if _volume.has_volume():
 		cover_volume(_volume)
 
