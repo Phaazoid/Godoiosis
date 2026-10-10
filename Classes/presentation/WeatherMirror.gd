@@ -25,6 +25,9 @@ class_name WeatherMirror
 #     full-screen quad marching each view ray through the fog. Both read fog_field.gdshaderinc, the one
 #     answer to how thick the fog is at a point, over the rain's mask and FogGround's field (where fog
 #     thins at an edge, and how deep it pools over its own ground). Both sort under every piece of markup.
+#   - AURORA (#1298): AuroraLights, a child this node builds and drives -- glowing curtains on the
+#     ground, the aurora's own light and rising motes, easing in and out with the weather. An Aetheric
+#     Storm's discharges are THE STORM above, its corona in the look's bolt_element.
 #   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
 #     easing between weathers. Any fall may author one; every shipped rain leaves it at identity.
 #
@@ -92,6 +95,7 @@ var _puddles: Decal
 var _snow_cover: Decal
 var _caps: Decal
 var _bolts: StormBolts
+var _aurora: AuroraLights
 var _grade: WeatherGrade
 var _side: DirectionalLight3D
 
@@ -114,7 +118,6 @@ var _fog_drift := Vector2.ZERO
 var _span := Vector2.ZERO
 var _wisps_built := false
 var _volume := AABB()
-var _aim_y := 0.0
 
 var _clock := 0.0
 var _strikes := 0
@@ -126,36 +129,30 @@ var _sky_base := -1.0
 
 
 func _ready() -> void:
-	_rain_process = _process_material("res://Classes/presentation/rain.gdshader")
-	_rain_draw = _draw_material("res://Classes/presentation/rain_drop.gdshader")
-	_rain = _particles(_rain_process, _rain_draw, PlaneMesh.FACE_Z)
-	_splash_process = _process_material("res://Classes/presentation/splash.gdshader")
-	_splash_draw = _draw_material("res://Classes/presentation/splash_draw.gdshader")
+	_rain_process = process_material("res://Classes/presentation/rain.gdshader")
+	_rain_draw = draw_material("res://Classes/presentation/rain_drop.gdshader")
+	_rain = particles(self, _rain_process, _rain_draw, PlaneMesh.FACE_Z)
+	_splash_process = process_material("res://Classes/presentation/splash.gdshader")
+	_splash_draw = draw_material("res://Classes/presentation/splash_draw.gdshader")
 	_splash_draw.set_shader_parameter("frames", float(WeatherArt.SPLASH_FRAMES))
-	_splash = _particles(_splash_process, _splash_draw, PlaneMesh.FACE_Y)
-	_snow_process = _process_material("res://Classes/presentation/snow.gdshader")
-	_snow_draw = _draw_material("res://Classes/presentation/snow_flake.gdshader")
-	_snow = _particles(_snow_process, _snow_draw, PlaneMesh.FACE_Z)
-	_drift_process = _process_material("res://Classes/presentation/snow_drift.gdshader")
-	_drift_draw = _draw_material("res://Classes/presentation/rain_drop.gdshader")
+	_splash = particles(self, _splash_process, _splash_draw, PlaneMesh.FACE_Y)
+	_snow_process = process_material("res://Classes/presentation/snow.gdshader")
+	_snow_draw = draw_material("res://Classes/presentation/snow_flake.gdshader")
+	_snow = particles(self, _snow_process, _snow_draw, PlaneMesh.FACE_Z)
+	_drift_process = process_material("res://Classes/presentation/snow_drift.gdshader")
+	_drift_draw = draw_material("res://Classes/presentation/rain_drop.gdshader")
 	_drift_draw.set_shader_parameter("age_fade", 1.0)
-	_drift = _particles(_drift_process, _drift_draw, PlaneMesh.FACE_Z)
-	_fog_process = _process_material("res://Classes/presentation/fog_card.gdshader")
-	_fog_draw = _draw_material("res://Classes/presentation/fog_card_draw.gdshader")
+	_drift = particles(self, _drift_process, _drift_draw, PlaneMesh.FACE_Z)
+	_fog_process = process_material("res://Classes/presentation/fog_card.gdshader")
+	_fog_draw = draw_material("res://Classes/presentation/fog_card_draw.gdshader")
 	_fog_draw.render_priority = BoardOverlays.FOG_CARD_RENDER_PRIORITY
-	_fog_cards = _particles(_fog_process, _fog_draw, PlaneMesh.FACE_Z)
-	_fog_pass_material = _draw_material("res://Classes/presentation/fog_pass.gdshader")
+	_fog_cards = particles(self, _fog_process, _fog_draw, PlaneMesh.FACE_Z)
+	_fog_pass_material = draw_material("res://Classes/presentation/fog_pass.gdshader")
 	_fog_pass_material.render_priority = BoardOverlays.FOG_RENDER_PRIORITY
-	_fog_pass = MeshInstance3D.new()
-	var screen := QuadMesh.new()
-	screen.size = Vector2(2.0, 2.0)   # the vertex stage pins it to the whole screen
-	_fog_pass.mesh = screen
-	_fog_pass.material_override = _fog_pass_material
-	_fog_pass.extra_cull_margin = 16384.0
-	_fog_pass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_fog_pass.layers = BoardOverlays.WORLD_RENDER_LAYER
-	_fog_pass.visible = false
-	add_child(_fog_pass)
+	_fog_pass = BoardOverlays.make_screen_pass(self, _fog_pass_material)
+	_aurora = AuroraLights.new()
+	_aurora.weather = self
+	add_child(_aurora)
 	_wet = _decal()
 	_puddles = _decal()
 	_snow_cover = _decal()
@@ -194,7 +191,9 @@ func cover_volume(volume: AABB) -> void:
 # Every particle system this node draws: the one list the cull sweep walks, so a new one cannot be
 # left out of it.
 func emitters() -> Array[GPUParticles3D]:
-	return [_rain, _splash, _snow, _drift, _fog_cards]
+	var systems: Array[GPUParticles3D] = [_rain, _splash, _snow, _drift, _fog_cards]
+	systems.append_array(_aurora.emitters())
+	return systems
 
 
 # The colour of the units' caps (#1269; their own since #1278, not the ground's), its alpha 1 while
@@ -209,6 +208,11 @@ func unit_snow() -> Color:
 # The grade drawn over the board right now (#1269).
 func grade() -> WeatherGrade:
 	return _grade
+
+
+# The aurora drawn over the board right now (#1298).
+func aurora() -> AuroraLights:
+	return _aurora
 
 
 # Whether every standing unit's breath fogs (#1269) -- UnitMirror.breath_source.
@@ -228,10 +232,11 @@ func _process(delta: float) -> void:
 	var look := WeatherLook.for_kind(kind) if kind != Weather.Kind.CLEAR and not down else null
 	if look != _look or kind != _kind:
 		_switch(kind, look)
-	# Every frame, the clear ones too: a grade eases OUT as well as in.
+	# Every frame, the clear ones too: a grade and an aurora ease OUT as well as in.
 	_grade.drive(_look, _wind(), delta)
 	# Whatever the weather: the wind's specks land on this mask too (#1286).
 	_sync_mask()
+	_aurora.drive(_look if _auroring() else null, delta)
 	if _look == null:
 		return
 	if _raining():
@@ -264,6 +269,10 @@ func _snowing() -> bool:
 
 func _fogging() -> bool:
 	return _look != null and _look.fall == WeatherLook.Fall.FOG
+
+
+func _auroring() -> bool:
+	return _look != null and _look.fall == WeatherLook.Fall.AURORA
 
 
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
@@ -324,8 +333,10 @@ func _sync_mask() -> void:
 	_span = WeatherMask.span(image)
 	var texture := ImageTexture.create_from_image(image)
 	_mask = texture
-	for material: ShaderMaterial in [_rain_process, _splash_process, _snow_process, _drift_process,
-			_fog_process, _fog_pass_material]:
+	var masked: Array[ShaderMaterial] = [_rain_process, _splash_process, _snow_process, _drift_process,
+			_fog_process, _fog_pass_material]
+	masked.append_array(_aurora.masked())
+	for material: ShaderMaterial in masked:
 		material.set_shader_parameter("mask", texture)
 		material.set_shader_parameter("mask_origin", Vector2(rect.position))
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
@@ -344,6 +355,16 @@ func mask_origin() -> Vector2:
 # The weather being drawn, as the board names it: the wind's specks (#1286) blow under a clear sky only.
 func kind() -> Weather.Kind:
 	return _kind
+
+
+# The board's rect, in cells, as the mask was last built over it.
+func board_rect() -> Rect2i:
+	return _rect
+
+
+# The board's wind (#1286), world units a second on x / z: still air with no source.
+func board_wind() -> Vector2:
+	return _wind()
 
 
 # Where a cell is DRAWN relative to its rules surface: lifted onto the stage by a tear-out (#521), and
@@ -435,9 +456,8 @@ func view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
 	if camera == null or not camera.is_inside_tree():
 		return {}
 	var eye := camera.global_position
-	var aim: Vector3 = aim_source.call() if aim_source.is_valid() else Vector3.ZERO
+	var aim := _aim()
 	var rise := maxf(eye.y - aim.y, 2.0)
-	_aim_y = aim.y
 	var view := camera.get_viewport().get_visible_rect().size
 	var lo := Vector2(eye.x, eye.z)
 	var hi := lo
@@ -689,6 +709,11 @@ func _orm(roughness: float) -> ImageTexture:
 
 # ---- The storm ---------------------------------------------------------------------------------
 
+# Where the camera is looking, or the origin with no source.
+func _aim() -> Vector3:
+	return aim_source.call() if aim_source.is_valid() else Vector3.ZERO
+
+
 func _storm() -> void:
 	if not _look.lightning:
 		if _level > 0.0 or _side.visible:
@@ -722,11 +747,12 @@ func _strike() -> void:
 	_strike_at = _clock
 	_next_strike = _clock + _wait(_strikes)
 	# Measured from where the camera looks, so a bolt over the tear-out's stage falls past the stage
-	# rather than from under it.
-	var plan := StormBolts.plan_strike(_rect, _strikes, _look.bolt_distance, _look.bolt_height, _aim_y,
-			_aim_y - BOLT_BELOW)
+	# rather than from under it -- asked here, never left over from a fall's birth box (an aurora has none).
+	var aim_y := _aim().y
+	var plan := StormBolts.plan_strike(_rect, _strikes, _look.bolt_distance, _look.bolt_height, aim_y,
+			aim_y - BOLT_BELOW)
 	_bearing = plan["bearing"]
-	_bolts.strike(plan["path"], _rect, _strikes, _look.bolt_life, _look.bolt_width_scale)
+	_bolts.strike(plan["path"], _rect, _strikes, _look.bolt_life, _look.bolt_width_scale, _look.bolt_element)
 	# The strike's own light comes in from its side, low, toward the board's centre.
 	var tilt := deg_to_rad(clampf(_look.side_light_elevation, 1.0, 85.0))
 	var travel := -_bearing * cos(tilt) + Vector3.DOWN * sin(tilt)
@@ -760,21 +786,24 @@ func _glow(level: float) -> void:
 
 
 # ---- Construction ------------------------------------------------------------------------------
+# Static, so every weather-shaped emitter is built one way: the wind's (#1286) and the aurora's (#1298) too.
 
-func _process_material(path: String) -> ShaderMaterial:
+static func process_material(path: String) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = load(path) as Shader
 	return material
 
 
-func _draw_material(path: String) -> ShaderMaterial:
+static func draw_material(path: String) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = load(path) as Shader
 	material.render_priority = BoardOverlays.EFFECT_RENDER_PRIORITY
 	return material
 
 
-func _particles(process: ShaderMaterial, draw: ShaderMaterial, facing: PlaneMesh.Orientation) -> GPUParticles3D:
+# A particle system under the parent, idle and hidden until its owner starts it.
+static func particles(parent: Node, process: ShaderMaterial, draw: ShaderMaterial,
+		facing: PlaneMesh.Orientation) -> GPUParticles3D:
 	var system := GPUParticles3D.new()
 	system.process_material = process
 	system.local_coords = false
@@ -788,7 +817,7 @@ func _particles(process: ShaderMaterial, draw: ShaderMaterial, facing: PlaneMesh
 	quad.orientation = facing
 	quad.material = draw
 	system.draw_pass_1 = quad
-	add_child(system)
+	parent.add_child(system)
 	return system
 
 

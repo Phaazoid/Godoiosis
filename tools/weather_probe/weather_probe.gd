@@ -15,7 +15,10 @@ extends Node
 #     past the board's edge (#1285: fog never hangs over nothing), and what it costs the GPU;
 #   - that each WIND strength (#1286) changes a clear board on its own -- specks and cloud shadows --
 #     more the harder it blows, leaves the HUD alone and the void past the edge untouched, and what the
-#     cloud pass costs the GPU.
+#     cloud pass costs the GPU;
+#   - that each AURORA strength (#1298) changes more of the board than the one below it, leaves the HUD
+#     alone and, zoomed out with its grade and strikes held off, leaves the void past the edge untouched
+#     (its curtains skip the sky and its motes die over the void), and what it costs the GPU.
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -65,6 +68,7 @@ func _ready() -> void:
 	failures += await _veil()
 	failures += await _fog()
 	failures += await _wind()
+	failures += await _aurora()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	_game.scenario_manager.current_wind = Wind.Kind.CALM
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
@@ -271,6 +275,85 @@ func _wind_void() -> int:
 		if in_void > 0:
 			failures += 1
 	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	rig.set_zoom(opening)
+	return failures
+
+
+const AURORAS: Array[Weather.Kind] = [Weather.Kind.FAINT_AURORA, Weather.Kind.AURORA, Weather.Kind.AETHERIC_STORM]
+
+
+# The aurora (#1298), on the fog's board: each strength against the clear frame, more of the board changed
+# the stronger it is, the HUD untouched; then the void past the edge, zoomed out, untouched by each.
+func _aurora() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(FOG_MISSION)
+	var rid := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	await _wait(1.0)
+	var clear := await _grab("aurora_clear")
+	var clear_gpu := await _gpu_ms(60)
+	print("  aurora: clear GPU %.2f ms" % clear_gpu)
+	var failures := 0
+	var last := -1
+	for kind: Weather.Kind in AURORAS:
+		_game.scenario_manager.current_weather = kind
+		await _wait(4.0)
+		var name := Weather.name_of(kind).to_lower()
+		var frame := await _grab(name)
+		_save_zoom(frame, name + "_zoom")
+		var gpu := await _gpu_ms(60)
+		var changed := _lum_changed(clear, frame)
+		var hud := _hud_moved(clear, frame)
+		print("  %s: %d sampled px changed, %d HUD px moved; GPU %.2f ms (%+.2f)"
+				% [Weather.name_of(kind), changed, hud, gpu, gpu - clear_gpu])
+		if changed < 500 or hud > 0 or changed <= last:
+			failures += 1
+		last = changed
+	failures += await _aurora_void()
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	return 0 if failures == 0 else 1
+
+
+# Zoomed out as the fog's void check is, each aurora with its grade at identity and its strikes off (a
+# bolt lands past the edge on purpose): what is left in the void would be the curtains or the motes.
+func _aurora_void() -> int:
+	var rig: CameraRig3D = _scene._rig
+	var opening := rig._target_distance
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	rig.set_zoom(opening * 2.0)
+	await _wait(2.0)
+	var clear := await _grab("aurora_clear_wide")
+	var void_rect := _void_left_of_board(FOG_CLEAR_MARGIN)
+	var failures := 0
+	if not void_rect.has_area():
+		print("  aurora void: FAILED -- no void left of the board in the wide frame to check")
+		failures += 1
+	for kind: Weather.Kind in ([] as Array[Weather.Kind] if failures > 0 else AURORAS):
+		var look := WeatherLook.for_kind(kind)
+		var held := [look.grade_saturation, look.grade_brightness, look.grade_tint, look.lightning]
+		look.grade_saturation = 1.0
+		look.grade_brightness = 1.0
+		look.grade_tint = Color(1.0, 1.0, 1.0, 0.0)
+		look.lightning = false
+		_game.scenario_manager.current_weather = kind
+		await _wait(4.0)
+		var frame := await _grab(Weather.name_of(kind).to_lower() + "_wide")
+		look.grade_saturation = held[0]
+		look.grade_brightness = held[1]
+		look.grade_tint = held[2]
+		look.lightning = held[3]
+		var in_void := 0
+		var checked := 0
+		for y in range(int(void_rect.position.y), int(void_rect.end.y), 2):
+			for x in range(int(void_rect.position.x), int(void_rect.end.x), 2):
+				checked += 1
+				if absf(frame.get_pixel(x, y).get_luminance() - clear.get_pixel(x, y).get_luminance()) > FOG_VOID_TOLERANCE:
+					in_void += 1
+		print("  %s void: %d of %d sampled px past the board's edge touched" % [Weather.name_of(kind), in_void, checked])
+		if in_void > 0:
+			failures += 1
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	rig.set_zoom(opening)
 	return failures
 

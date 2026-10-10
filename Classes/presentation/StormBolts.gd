@@ -5,7 +5,9 @@ class_name StormBolts
 # (dev, 2026-10-08) -- a bolt landing on a tile would read as an attack in a game where shock is a
 # rule. Drawn the way a shock's bolt is (#887): one ImmediateMesh pair, a narrow core and a wide
 # corona, through BoardOverlays.add_beam_strip and ArcLightning's own look, so there is one answer to
-# what lightning looks like and the weather only says how far off and how big.
+# what lightning looks like and the weather only says how far off and how big. Each bolt's corona glows
+# in its OWN element's colour (ElementPalette), carried on the strip's vertex colour with the corona
+# material left white: a thunderstorm's SHOCK, an Aetheric Storm's AETHER (#1298).
 #
 # plan_strike and keep_outside are pure and static: a headless case asserts no point of any bolt is
 # ever over the board, over many seeds.
@@ -21,12 +23,15 @@ class Bolt:
 	var life := 0.5
 	var width_scale := 1.0
 	var rect := Rect2i()
+	var element := Elemental.Element.SHOCK
 
 var _core: MeshInstance3D
 var _corona: MeshInstance3D
 var _bolts: Array[Bolt] = []
 var _elapsed := 0.0
 var bolts_drawn := 0
+# The corona colour of every bolt drawn on the last rebuild: a readout, for the suite.
+var coronas_drawn: Array[Color] = []
 
 
 func _ready() -> void:
@@ -78,9 +83,11 @@ static func keep_outside(line: PackedVector3Array, rect: Rect2i) -> PackedVector
 	return out
 
 
-func strike(path: PackedVector3Array, rect: Rect2i, key: int, life: float, width_scale: float) -> void:
+func strike(path: PackedVector3Array, rect: Rect2i, key: int, life: float, width_scale: float,
+		element := Elemental.Element.SHOCK) -> void:
 	var bolt := Bolt.new()
 	bolt.rect = rect
+	bolt.element = element
 	bolt.path = path
 	bolt.key = key
 	bolt.born = _elapsed
@@ -115,6 +122,7 @@ func _rebuild() -> void:
 	corona.clear_surfaces()
 	var frozen: bool = PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
 	var scale := 1.0
+	coronas_drawn.clear()
 	for bolt in _bolts:
 		var age := _elapsed - bolt.born
 		var alpha := ArcLightning.envelope(age / bolt.life, ArcLightning.afterimage)
@@ -124,17 +132,17 @@ func _rebuild() -> void:
 				else hash([bolt.key, int(age * ArcLightning.flicker_rate)])
 		var line := keep_outside(ArcLightning.jagged(bolt.path, key, bolt.path.size() - 1,
 				ArcLightning.bolt_jag * 0.15), bolt.rect)
-		var tint := Color(1.0, 1.0, 1.0, alpha)
-		if BoardOverlays.add_beam_strip(core, line, tint):
-			BoardOverlays.add_beam_strip(corona, line, tint)
+		var glow := ElementPalette.color_for_element(bolt.element)
+		if BoardOverlays.add_beam_strip(core, line, Color(1.0, 1.0, 1.0, alpha)):
+			BoardOverlays.add_beam_strip(corona, line, Color(glow.r, glow.g, glow.b, alpha))
+			coronas_drawn.append(glow)
 		scale = bolt.width_scale
 	bolts_drawn = core.get_surface_count()
 	_core.visible = bolts_drawn > 0
 	_corona.visible = bolts_drawn > 0
 	var width := ArcLightning.bolt_width * scale
 	_shade(_core, ArcLightning.core_color, width, ArcLightning.core_intensity)
-	_shade(_corona, ElementPalette.color_for_element(Elemental.Element.SHOCK),
-			width * ArcLightning.corona_scale, ArcLightning.corona_intensity)
+	_shade(_corona, Color.WHITE, width * ArcLightning.corona_scale, ArcLightning.corona_intensity)
 
 
 func _shade(node: MeshInstance3D, color: Color, width: float, intensity: float) -> void:

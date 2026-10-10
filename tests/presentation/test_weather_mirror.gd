@@ -8,7 +8,10 @@
 #   - a clear board draws nothing, and the board's weather is what the mirror draws;
 #   - the box arithmetic carries the authored births whatever the amount;
 #   - the sky glow can never fight a Look preset, because no Look knob names what it writes;
-#   - the board's wind (#1286) reaches every fall, the specks, the clouds and the plants, and saves.
+#   - the board's wind (#1286) reaches every fall, the specks, the clouds and the plants, and saves;
+#   - an aurora (#1298) draws its curtains, light and motes and nothing else, eases out, sorts under the
+#     markup, cycles its colours through all three at once, and holds its pulse under #217's setting; a
+#     bolt's corona is its look's element, and a strike is aimed where the camera looks.
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
@@ -79,7 +82,8 @@ func test_the_board_weather_is_what_the_mirror_draws_and_clear_draws_nothing() -
 	mirror._process(0.016)
 	assert_bool(mirror._rain.emitting or mirror._rain.visible or mirror._wet.visible \
 			or mirror._puddles.visible or mirror._splash.visible or mirror._snow.visible \
-			or mirror._fog_pass.visible or mirror._fog_cards.visible).override_failure_message(
+			or mirror._fog_pass.visible or mirror._fog_cards.visible or mirror.aurora()._curtains.visible \
+			or mirror.aurora()._light.visible or mirror.aurora()._motes.visible).override_failure_message(
 			"a clear board still draws weather").is_false()
 
 
@@ -112,6 +116,12 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		wind._speck_draw: ["specks", "leaf_tint", "dust_tint", "size", "leaf_frames", "dust_frames", "tumbles"],
 		wind._cloud_material: ["cloud_noise", "drift", "cover", "darkness", "cloud_size", "softness", "pixel_steps",
 				"art_pixels", "cell_size"],
+		mirror.aurora()._curtain_material: ["noise_tex", "color_low", "color_high", "strength", "bands", "spacing",
+				"band_width", "wave", "wave_length", "time", "rays", "ray_spacing", "pulse", "angle", "centre",
+				"pixel_steps", "art_pixels", "cell_size"],
+		mirror.aurora()._mote_process: ["mask", "mask_origin", "cell_size", "box_min", "box_max", "keep", "rise",
+				"wander", "wind", "height"],
+		mirror.aurora()._mote_draw: ["tint", "texel", "shape"],
 		BoardMirror.sway_material(art, false): sway,
 		BoardMirror.sway_material(art, true): sway,
 	}
@@ -446,6 +456,215 @@ func test_the_card_sink_and_dissolve_dials_reach_the_cards() -> void:
 	look.card_dissolve = was_dissolve
 	assert_float(sink).override_failure_message("the Card sink dial never reached the cards").is_equal_approx(0.77, 0.0001)
 	assert_float(dissolve).override_failure_message("the Card dissolve dial never reached the cards").is_equal_approx(2.5, 0.0001)
+
+
+# ---- The aurora (#1298) ------------------------------------------------------------------------
+
+# Clears the board and lets every aurora part ease all the way out, so the next case starts dark.
+func _clear_aurora(mirror: WeatherMirror) -> void:
+	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	mirror._process(60.0)
+	mirror._process(0.016)
+
+
+# The first weather the board can name that draws an aurora: which kinds do is authored.
+func _aurora_kind(lightning: bool) -> Weather.Kind:
+	for kind: Weather.Kind in Weather.Kind.values():
+		var look := WeatherLook.for_kind(kind)
+		if look != null and look.fall == WeatherLook.Fall.AURORA and look.lightning == lightning:
+			return kind
+	return Weather.Kind.CLEAR
+
+
+# An aurora board draws its curtains, its light and its motes, with the ground mask handed to the motes,
+# and no rain, snow or fog. Leaving it EASES them out -- still drawn a moment after, gone once the fade has
+# run -- and a clear board draws none of them.
+func test_an_aurora_board_draws_its_three_parts_and_eases_out() -> void:
+	var mirror := _mirror()
+	var kind := _aurora_kind(false)
+	assert_int(kind).override_failure_message("fixture: no weather draws an aurora").is_not_equal(Weather.Kind.CLEAR)
+	var look := WeatherLook.for_kind(kind)
+	var aurora := mirror.aurora()
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	mirror._process(look.grade_fade + 0.1)
+	var drawn := aurora._curtains.visible and aurora._light.visible and aurora._motes.visible \
+			and aurora._motes.emitting
+	var level := aurora.level()
+	var masked := aurora._mote_process.get_shader_parameter("mask") != null
+	var other := mirror._rain.visible or mirror._snow.visible or mirror._wet.visible or mirror._snow_cover.visible \
+			or mirror._fog_pass.visible or mirror._fog_cards.visible
+	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	mirror._process(look.grade_fade * 0.25)
+	var easing := aurora._curtains.visible and aurora.level() > 0.0 and aurora.level() < level
+	mirror._process(look.grade_fade + 0.1)
+	var gone := not (aurora._curtains.visible or aurora._light.visible or aurora._motes.visible)
+	assert_bool(drawn).override_failure_message("the board wears an aurora and the mirror drew no aurora").is_true()
+	assert_float(level).override_failure_message("the aurora never came all the way in").is_equal_approx(1.0, 0.001)
+	assert_bool(masked).override_failure_message("the motes rose with no ground to rise off").is_true()
+	assert_bool(other).override_failure_message("an aurora board draws rain, snow or fog").is_false()
+	assert_bool(easing).override_failure_message("leaving the aurora popped it rather than easing it out").is_true()
+	assert_bool(gone).override_failure_message("the aurora outlived its weather").is_true()
+
+
+# The ruling that markup draws over the weather, for the aurora: its curtains sort under every layer and
+# under the clouds' slot and the fog, and its motes take the specks' slot, which never draws beside them.
+func test_the_aurora_sorts_under_every_piece_of_markup() -> void:
+	var aurora := _mirror().aurora()
+	var lowest := BoardOverlays.GAS_FLOOR_SORT
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		lowest = mini(lowest, int(BoardOverlays.LAYERS[layer]["sort"]) - 1)
+	var curtains := aurora._curtain_material.render_priority
+	assert_int(curtains).is_equal(BoardOverlays.AURORA_RENDER_PRIORITY)
+	assert_int(curtains).override_failure_message("the curtains sort over the markup").is_less(lowest)
+	assert_int(curtains).override_failure_message("the curtains sort over the cloud shadows")\
+			.is_less(BoardOverlays.CLOUD_RENDER_PRIORITY)
+	assert_int(aurora._mote_draw.render_priority).is_equal(BoardOverlays.MOTE_RENDER_PRIORITY)
+	assert_int(aurora._mote_draw.render_priority).is_less(lowest)
+
+
+# ONE colour cycle reaches all three: once the clock is inside the second scheme, the curtains hold its
+# pair, the motes its fringe eased toward white, and the light a colour between its two -- and none of
+# them the first scheme's. Read off what each draws with.
+func test_the_colour_cycle_reaches_the_curtains_the_light_and_the_motes() -> void:
+	var mirror := _mirror()
+	var kind := _aurora_kind(false)
+	var look := WeatherLook.for_kind(kind)
+	var was_blend := look.scheme_blend
+	look.scheme_blend = 0.2
+	var aurora := mirror.aurora()
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	var a_low: Color = aurora._curtain_material.get_shader_parameter("color_low")
+	mirror._process(look.scheme_seconds * 1.25 - 0.016)
+	var low: Color = aurora._curtain_material.get_shader_parameter("color_low")
+	var high: Color = aurora._curtain_material.get_shader_parameter("color_high")
+	var mote: Color = aurora._mote_draw.get_shader_parameter("tint")
+	var light := aurora._light.light_color
+	look.scheme_blend = was_blend
+	_clear_aurora(mirror)
+	assert_bool(look.scheme_a_low.is_equal_approx(look.scheme_b_low)).override_failure_message(
+			"fixture: schemes A and B share a colour, so no case can tell them apart").is_false()
+	assert_bool(a_low.is_equal_approx(look.scheme_a_low)).override_failure_message(
+			"the curtains did not open on the first scheme").is_true()
+	assert_bool(low.is_equal_approx(look.scheme_b_low) and high.is_equal_approx(look.scheme_b_fringe)) \
+			.override_failure_message("the curtains never reached the second scheme: %s / %s" % [low, high]).is_true()
+	var whitened := look.scheme_b_fringe.lerp(Color.WHITE, AuroraLights.MOTE_WHITEN)
+	assert_bool(Color(mote.r, mote.g, mote.b).is_equal_approx(whitened)).override_failure_message(
+			"the motes never took the second scheme's fringe: %s" % mote).is_true()
+	for channel in 3:
+		var a: float = look.scheme_b_low[channel]
+		var b: float = look.scheme_b_fringe[channel]
+		assert_float(light[channel]).override_failure_message("the light is not in the second scheme: %s" % light)\
+				.is_between(minf(a, b) - 0.001, maxf(a, b) + 0.001)
+
+
+# A look's mote shape reaches what the motes are drawn as: dots one way, streaks the other.
+func test_the_mote_shape_reaches_the_motes() -> void:
+	var mirror := _mirror()
+	var kind := _aurora_kind(false)
+	var look := WeatherLook.for_kind(kind)
+	var was := look.mote_shape
+	_scene.game.scenario_manager.current_weather = kind
+	look.mote_shape = WeatherLook.MoteShape.STREAKS
+	mirror._process(0.016)
+	var streaks: float = mirror.aurora()._mote_draw.get_shader_parameter("shape")
+	look.mote_shape = WeatherLook.MoteShape.DOTS
+	mirror._process(0.016)
+	var dots: float = mirror.aurora()._mote_draw.get_shader_parameter("shape")
+	look.mote_shape = was
+	_clear_aurora(mirror)
+	assert_float(streaks).override_failure_message("a streak look drew dots").is_equal(1.0)
+	assert_float(dots).override_failure_message("a dot look drew streaks").is_equal(0.0)
+
+
+# Under #217's setting the slow pulse the light and the curtains share holds at its mean; without it, it
+# swells. Driven through the mirror, read off what the curtain and the light draw with.
+func test_the_aurora_pulse_holds_under_photosensitivity() -> void:
+	var mirror := _mirror()
+	var kind := _aurora_kind(false)
+	var look := WeatherLook.for_kind(kind)
+	var was := look.light_pulse
+	look.light_pulse = 0.5
+	_scene.game.scenario_manager.current_weather = kind
+	var aurora := mirror.aurora()
+	mirror._process(look.grade_fade + 0.1)
+	var swelling: Array[float] = []
+	for step in 4:
+		mirror._process(0.7)
+		swelling.append(float(aurora._curtain_material.get_shader_parameter("pulse")))
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
+	var held: Array[float] = []
+	var energies: Array[float] = []
+	for step in 4:
+		mirror._process(0.7)
+		held.append(float(aurora._curtain_material.get_shader_parameter("pulse")))
+		energies.append(aurora._light.light_energy)
+	PlayerSettings.reset_for_test()
+	look.light_pulse = was
+	_clear_aurora(mirror)
+	var spread: float = swelling.max() - swelling.min()
+	assert_float(spread).override_failure_message("fixture: the pulse never moved, so a hold cannot be seen")\
+			.is_greater(0.05)
+	for pulse in held:
+		assert_float(pulse).override_failure_message("the pulse moved under photosensitivity").is_equal(1.0)
+	for energy in energies:
+		assert_float(energy).override_failure_message("the light swelled under photosensitivity")\
+				.is_equal_approx(look.light_energy, 0.0001)
+
+
+# A bolt's corona glows in its look's element (ElementPalette), carried per bolt: the same storm struck
+# under two elements draws each in its own colour. Read off what the bolts drew, after a real strike.
+func test_a_bolt_glows_in_its_looks_element() -> void:
+	var mirror := _mirror()
+	var look := WeatherLook.for_kind(Weather.Kind.THUNDERSTORM)
+	var was := look.bolt_element
+	_scene.game.scenario_manager.current_weather = Weather.Kind.THUNDERSTORM
+	mirror._process(0.016)
+	var drawn := {}
+	for element: Elemental.Element in [Elemental.Element.AETHER, Elemental.Element.SHOCK]:
+		look.bolt_element = element
+		mirror._bolts.clear()
+		mirror._next_strike = mirror._clock
+		mirror._process(0.016)
+		mirror._bolts._process(0.02)
+		drawn[element] = mirror._bolts.coronas_drawn.duplicate()
+	look.bolt_element = was
+	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	mirror._process(0.016)
+	for element: Elemental.Element in drawn:
+		var colours: Array = drawn[element]
+		assert_int(colours.size()).override_failure_message("fixture: the strike drew no bolt").is_greater(0)
+		assert_bool((colours[0] as Color).is_equal_approx(ElementPalette.color_for_element(element))) \
+				.override_failure_message("a %s bolt glowed %s" % [Elemental.Element.keys()[element], colours[0]]).is_true()
+
+
+# A strike falls from above where the camera LOOKS, asked at the strike -- an aurora storm with no motes
+# runs no birth box, which is where the height used to be left over from (#1298's fix).
+func test_a_strike_is_aimed_where_the_camera_looks_with_nothing_falling() -> void:
+	var mirror := _mirror()
+	var kind := _aurora_kind(true)
+	assert_int(kind).override_failure_message("fixture: no aurora strikes").is_not_equal(Weather.Kind.CLEAR)
+	var look := WeatherLook.for_kind(kind)
+	var was_rate := look.mote_rate
+	var was_aim := mirror.aim_source
+	look.mote_rate = 0.0
+	var aim_y := 25.0
+	mirror.aim_source = func() -> Vector3: return Vector3(0.0, aim_y, 0.0)
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	mirror._bolts.clear()
+	mirror._next_strike = mirror._clock
+	mirror._process(0.016)
+	var top := -INF
+	for bolt in mirror._bolts._bolts:
+		for point in bolt.path:
+			top = maxf(top, point.y)
+	mirror.aim_source = was_aim
+	look.mote_rate = was_rate
+	_clear_aurora(mirror)
+	assert_float(top).override_failure_message("the bolt fell from %.1f, not from above the aim" % top)\
+			.is_equal_approx(aim_y + look.bolt_height, 2.0)
 
 
 # ---- The wind (#1286) --------------------------------------------------------------------------

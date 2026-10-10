@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://tiay4fovxny2"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_76pex"]
+
+[resource]
+script = ExtResource("1_76pex")
+fall = 3
+lightning = true
+bolt_element = 7
+glow_strength = 1.0
+bands = 4
+band_width = 1.7
+ripple_speed = 1.6
+light_energy = 1.6
+light_pulse = 0.4
+mote_shape = 1
+mote_rate = 0.4
+mote_rise = 0.9
+mote_life = 2.5
+grade_saturation = 0.84
+grade_brightness = 0.65
+grade_tint = Color(0.55, 0.5, 1, 0.32)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeatherLook" format=3 uid="uid://ca2dsomt6gri6"]
+
+[ext_resource type="Script" uid="uid://djvvaobt1xphk" path="res://Classes/presentation/WeatherLook.gd" id="1_j3nba"]
+
+[resource]
+script = ExtResource("1_j3nba")
+fall = 3
+glow_strength = 0.35
+bands = 2
+band_width = 1.1
+ripple_speed = 0.5
+light_energy = 0.6
+light_pulse = 0.15
+mote_rate = 0.05
+grade_saturation = 0.92
+grade_brightness = 0.88
+grade_tint = Color(0.55, 0.5, 1, 0.15)
