@@ -11,20 +11,24 @@ class_name FogGround
 #        level. It is a depth over the cell's OWN ground, never a level the fog fills up to, so pooled
 #        fog cannot stand as a box over a drop (dev, 2026-10-09: the rectangle over the ramp off the
 #        stage).
+#   B -- the share of the fog that stands here (#1302): `water_haze` over water (a cell drawn in its
+#        basin, BoardSpace.is_basin), 1 everywhere else, so a sandstorm's dust and its cards stand thin
+#        over a river. A share apart from R because a card reads R through a curve that is already full
+#        at a little fog, and this must thin the card itself.
 #
 # The pool level is the height `pool_share` of the board's surfaces lie at or under, so a board's low
 # ground is its own and no number here is a fact about one map. What has ground is GridUtils.has_surface,
-# the mask's own test. Pure and static.
+# the mask's own test. Static, and pure but for the basin cells BoardMirror marks.
 
 # How far above the pool level the pooled fog eases out, world units: half a level.
 const POOL_EASE := 0.5
 
 
 static func field(grid: TileMapLayer, heights: BoardHeights, rect: Rect2i, pool_share: float,
-		pool_depth: float, edge_fade: float) -> Image:
+		pool_depth: float, edge_fade: float, water_haze := 1.0) -> Image:
 	var w := maxi(rect.size.x, 1)
 	var h := maxi(rect.size.y, 1)
-	var image := Image.create_empty(w, h, false, Image.FORMAT_RGF)
+	var image := Image.create_empty(w, h, false, Image.FORMAT_RGBF)
 	if grid == null:
 		return image
 	var level := pool_level(grid, heights, rect, pool_share)
@@ -36,7 +40,8 @@ static func field(grid: TileMapLayer, heights: BoardHeights, rect: Rect2i, pool_
 				continue
 			var fade := clampf((float(steps[y * w + x]) - 0.5) / (maxf(edge_fade, 0.0) + 0.5), 0.0, 1.0)
 			var pooled := maxf(pool_depth, 0.0) * (1.0 - smoothstep(level, level + POOL_EASE, ground_of(cell, heights)))
-			image.set_pixel(x, y, Color(fade, pooled, 0.0))
+			var share := clampf(water_haze, 0.0, 1.0) if BoardSpace.is_basin(cell) else 1.0
+			image.set_pixel(x, y, Color(fade, pooled, share))
 	return image
 
 

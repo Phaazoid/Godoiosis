@@ -18,7 +18,11 @@ extends Node
 #     cloud pass costs the GPU;
 #   - that each AURORA strength (#1298) changes more of the board than the one below it, leaves the HUD
 #     alone and, zoomed out with its grade and strikes held off, leaves the void past the edge untouched
-#     (its curtains skip the sky and its motes die over the void), and what it costs the GPU.
+#     (its curtains skip the sky and its motes die over the void), and what it costs the GPU;
+#   - that each SAND and ASH strength (#1302) changes more of the board than the one below it and leaves
+#     the HUD alone; that, zoomed out with the grade held and the falling specks or ash off (they fill the
+#     view by design), the grit, dust, drift, soot and embers leave the void untouched; and how much the
+#     dust stands over the river with the look's water_haze against at 1 (the river ruling).
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -69,6 +73,8 @@ func _ready() -> void:
 	failures += await _fog()
 	failures += await _wind()
 	failures += await _aurora()
+	failures += await _sand()
+	failures += await _ash()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	_game.scenario_manager.current_wind = Wind.Kind.CALM
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
@@ -356,6 +362,194 @@ func _aurora_void() -> int:
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	rig.set_zoom(opening)
 	return failures
+
+
+const SANDS: Array[Weather.Kind] = [Weather.Kind.DUST, Weather.Kind.SANDSTORM, Weather.Kind.DUST_WALL]
+const ASHES: Array[Weather.Kind] = [Weather.Kind.LIGHT_ASHFALL, Weather.Kind.ASHFALL, Weather.Kind.ASH_STORM]
+
+
+# Sand (#1302) on the fog's board in a strong wind, against a calm clear frame: each strength changes
+# more than the one below and leaves the HUD; then the void and the river.
+func _sand() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(FOG_MISSION)
+	var failures := await _strengths("sand", SANDS, Wind.Kind.STRONG_WIND)
+	failures += await _held_void("sand", SANDS, Wind.Kind.STRONG_WIND)
+	failures += await _sand_river()
+	return failures
+
+
+# Ash on grass, where the soot shows, calm: each strength changes more than the one below, the HUD stays.
+func _ash() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(FOG_MISSION)
+	var failures := await _strengths("ash", ASHES, Wind.Kind.CALM)
+	failures += await _held_void("ash", ASHES, Wind.Kind.CALM)
+	return failures
+
+
+# Each kind against a calm clear frame, in `wind`: more of the board changed the stronger it is, the
+# HUD untouched, and the GPU cost printed.
+func _strengths(family: String, kinds: Array[Weather.Kind], wind: Wind.Kind) -> int:
+	var rid := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _wait(1.0)
+	var clear := await _grab(family + "_clear")
+	var clear_gpu := await _gpu_ms(60)
+	print("  %s: clear GPU %.2f ms" % [family, clear_gpu])
+	_game.scenario_manager.current_wind = wind
+	var failures := 0
+	var last := -1
+	for kind: Weather.Kind in kinds:
+		_game.scenario_manager.current_weather = kind
+		await _wait(4.0)
+		var name := Weather.name_of(kind).to_lower()
+		var frame := await _grab(name)
+		_save_zoom(frame, name + "_zoom")
+		var gpu := await _gpu_ms(60)
+		var changed := _lum_changed(clear, frame)
+		var hud := _hud_moved(clear, frame)
+		print("  %s: %d sampled px changed, %d HUD px moved; GPU %.2f ms (%+.2f)"
+				% [Weather.name_of(kind), changed, hud, gpu, gpu - clear_gpu])
+		if changed < 500 or hud > 0 or changed <= last:
+			failures += 1
+		last = changed
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	return failures
+
+
+# Zoomed out, each kind with its grade and veil held at identity and its falling specks or ash off (they
+# are born over the view and fill it by design, the snow's way): what is left in the void past the board
+# would be grit, dust, drift, soot or embers, every one of which belongs to the board.
+func _held_void(family: String, kinds: Array[Weather.Kind], wind: Wind.Kind) -> int:
+	var rig: CameraRig3D = _scene._rig
+	var opening := rig._target_distance
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	rig.set_zoom(opening * 2.0)
+	await _wait(2.0)
+	var clear := await _grab(family + "_clear_wide")
+	var void_rect := _void_left_of_board(FOG_CLEAR_MARGIN)
+	var failures := 0
+	if not void_rect.has_area():
+		print("  %s void: FAILED -- no void left of the board in the wide frame to check" % family)
+		failures += 1
+	_game.scenario_manager.current_wind = wind
+	for kind: Weather.Kind in ([] as Array[Weather.Kind] if failures > 0 else kinds):
+		var look := WeatherLook.for_kind(kind)
+		var held := [look.grade_saturation, look.grade_brightness, look.grade_tint, look.veil, look.density,
+				look.grade_fade]
+		look.grade_saturation = 1.0
+		look.grade_brightness = 1.0
+		look.grade_tint = Color(1.0, 1.0, 1.0, 0.0)
+		look.veil = 0.0
+		look.density = 0.0
+		look.grade_fade = 0.0
+		_game.scenario_manager.current_weather = kind
+		await _wait(4.0)
+		var frame := await _grab(Weather.name_of(kind).to_lower() + "_wide")
+		look.grade_saturation = held[0]
+		look.grade_brightness = held[1]
+		look.grade_tint = held[2]
+		look.veil = held[3]
+		look.density = held[4]
+		look.grade_fade = held[5]
+		var touched := _void_touched(void_rect, clear, frame)
+		print("  %s void: %d of %d sampled px past the board's edge touched" % [Weather.name_of(kind), touched.x,
+				touched.y])
+		if touched.x > 0:
+			failures += 1
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	rig.set_zoom(opening)
+	return failures
+
+
+# The river under a sandstorm (#1302's ruling: the dust turned it pale): on Level_1, the mean luminance
+# moved over the water's pixels against a clear frame, with the look's water_haze and with 1 (the dust
+# as thick over water as over land), the grade, veil and specks held off. The dial must thin it.
+func _sand_river() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(SNOW_MISSION)
+	await _wait(1.0)
+	var clear := await _grab("river_clear")
+	var water := _water_pixels()
+	if water.size() < 20:
+		print("  river: FAILED -- the board shows %d water pixels to measure" % water.size())
+		return 1
+	# The water moves on its own: how far it drifts between two clear frames is the floor.
+	await _wait(4.0)
+	var later := await _grab("river_clear_later")
+	var floor_moved := 0.0
+	for at: Vector2i in water:
+		floor_moved += absf(later.get_pixelv(at).get_luminance() - clear.get_pixelv(at).get_luminance())
+	floor_moved /= water.size()
+	var look := WeatherLook.for_kind(Weather.Kind.SANDSTORM)
+	var held := [look.grade_saturation, look.grade_brightness, look.grade_tint, look.veil, look.density,
+			look.water_haze]
+	look.grade_saturation = 1.0
+	look.grade_brightness = 1.0
+	look.grade_tint = Color(1.0, 1.0, 1.0, 0.0)
+	look.veil = 0.0
+	look.density = 0.0
+	_game.scenario_manager.current_wind = Wind.Kind.STRONG_WIND
+	_game.scenario_manager.current_weather = Weather.Kind.SANDSTORM
+	var moved := {}
+	for haze: float in [1.0, float(held[5])]:
+		look.water_haze = haze
+		await _wait(4.0)
+		var frame := await _grab("river_haze_%d" % int(haze * 100.0))
+		var total := 0.0
+		for at: Vector2i in water:
+			total += absf(frame.get_pixelv(at).get_luminance() - clear.get_pixelv(at).get_luminance())
+		moved[haze] = total / water.size()
+	look.grade_saturation = held[0]
+	look.grade_brightness = held[1]
+	look.grade_tint = held[2]
+	look.veil = held[3]
+	look.density = held[4]
+	look.water_haze = held[5]
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	var full: float = moved[1.0]
+	var thin: float = moved[float(held[5])]
+	print("  river: the water's pixels moved %.3f in luminance with the dust as thick as over land, %.3f at"
+			% [full, thin] + " the look's water_haze %.2f; %.3f on their own (%d px)" % [float(held[5]), floor_moved,
+			water.size()])
+	return 0 if thin - floor_moved < (full - floor_moved) * 0.8 else 1
+
+
+# The screen pixels of every water cell's centre on the board, where the frame shows it.
+func _water_pixels() -> Array[Vector2i]:
+	var camera := get_viewport().get_camera_3d()
+	var size := Vector2i(get_viewport().get_visible_rect().size)
+	var pixels: Array[Vector2i] = []
+	for cell: Vector2i in BoardSpace._basin_cells:
+		var at := BoardSpace.surface_point(cell, _game.board_heights) - Vector3(0.0, BoardSpace.basin_drop(cell), 0.0)
+		if camera.is_position_behind(at):
+			continue
+		var px := Vector2i(camera.unproject_position(at))
+		if Rect2i(Vector2i(0, 40), size - Vector2i(0, 140)).has_point(px):
+			pixels.append(px)
+	return pixels
+
+
+# (touched, checked): sampled pixels in `rect` whose luminance moved past FOG_VOID_TOLERANCE.
+func _void_touched(rect: Rect2, clear: Image, frame: Image) -> Vector2i:
+	var touched := 0
+	var checked := 0
+	for y in range(int(rect.position.y), int(rect.end.y), 2):
+		for x in range(int(rect.position.x), int(rect.end.x), 2):
+			checked += 1
+			if absf(frame.get_pixel(x, y).get_luminance() - clear.get_pixel(x, y).get_luminance()) > FOG_VOID_TOLERANCE:
+				touched += 1
+	return Vector2i(touched, checked)
 
 
 # Sampled pixels whose luminance moved past the fog's own threshold.

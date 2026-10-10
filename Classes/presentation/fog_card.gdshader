@@ -3,10 +3,9 @@
 // but only where fog_field says there is fog on the ground below. They drift with the wind, ride the
 // surface DOWN as they go, no faster than `sink`, but never up: a card meeting higher ground, or
 // drifting out over the void, holds its height and dissolves over `dissolve` seconds. They re-read the
-// fog every frame: CUSTOM.x is how present the
-// fog is on the ground under the card, so one drifting out of it fades. CUSTOM.y is its age (0..1),
-// CUSTOM.z its frame, CUSTOM.w its own height over the ground; COLOR.a is how much of it has not yet
-// dissolved.
+// fog every frame: CUSTOM.x is how present the fog is on the ground under the card, times its share
+// over water (#1302), so one drifting out of it fades. CUSTOM.y is its age (0..1), CUSTOM.z its frame,
+// CUSTOM.w its own height over the ground; COLOR.a is how much of it has not yet dissolved.
 shader_type particles;
 
 #include "res://Classes/presentation/fog_field.gdshaderinc"
@@ -73,6 +72,6 @@ void process() {
 		TRANSFORM[3].y = at.y - drop;
 	}
 	if (!over_void) {
-		CUSTOM.x = smoothstep(0.0, FULL, fog_amount(vec3(at.x, s + AT_GROUND, at.z)));
+		CUSTOM.x = smoothstep(0.0, FULL, fog_amount(vec3(at.x, s + AT_GROUND, at.z))) * fog_share(at.xz);
 	}
 }
