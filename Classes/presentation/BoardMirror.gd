@@ -1530,6 +1530,8 @@ func _push_all_water() -> void:
 # BOARD DATA, so it is derived rather than an @export -- but it rides _push_water like every water
 # global, because "how does a water value reach the shader" should have one answer.
 #
+# Its ALPHA carries the submerged bank's walls since #654 (_bank_bits_at), zero while that is off.
+#
 # Held as a MEMBER on purpose: the global uniform stores the texture's RID, and a local would free
 # the ImageTexture the moment this returns.
 var _water_mask := ImageTexture.new()
