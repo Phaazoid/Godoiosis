@@ -8,11 +8,13 @@ class_name WindMirror
 #   - SPECKS: leaves and dust blown across the board, one GPUParticles3D on wind_speck.gdshader, born
 #     in the weather's own view box (WeatherMirror.view_box) on the weather's own ground mask
 #     (WeatherMirror.mask), so the wind adds no second answer to where the camera looks or where the
-#     ground is. Drawn at the sprites' art density, under every piece of markup, and under a CLEAR sky
-#     only (dev, 2026-10-10): rain, snow and fog already fill the air.
+#     ground is. Drawn at the sprites' art density, under every piece of markup.
 #   - CLOUD SHADOWS: a full-screen pass (cloud_shadow.gdshader) darkening the ground under passing
 #     clouds that drift at a small share of the wind (dev, 2026-10-10: clouds are far off, so their
 #     shadows move slower than the specks), sorted under the fog and the markup.
+#
+# Both halves draw under a CLEAR sky only (dev, 2026-10-10): rain, snow and fog already fill the air,
+# and an overcast sky casts no cloud shadows.
 #
 # What the wind does to everything else is read where that thing is drawn: the rain, snow and fog off
 # WeatherMirror, the gas's drift off GasMirror, the plants' sway off BoardMirror -- all from the one
@@ -103,8 +105,9 @@ func _process(delta: float) -> void:
 		_kind = kind
 		_look = look
 	var blowing := _look != null
-	_clouds.visible = blowing and _look.cloud_cover > 0.0 and _look.cloud_darkness > 0.0
-	var specks := blowing and _look.speck_rate > 0.0 and (weather == null or weather.kind() == Weather.Kind.CLEAR)
+	var clear_sky := weather == null or weather.kind() == Weather.Kind.CLEAR
+	_clouds.visible = blowing and clear_sky and _look.cloud_cover > 0.0 and _look.cloud_darkness > 0.0
+	var specks := blowing and clear_sky and _look.speck_rate > 0.0
 	_specks.emitting = specks
 	_specks.visible = specks
 	if not blowing:

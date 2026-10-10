@@ -479,7 +479,7 @@ func test_the_board_wind_reaches_the_falls_and_calm_falls_straight() -> void:
 
 
 # A calm board draws no wind; a blowing one draws its specks, on the weather's own ground mask, and its
-# cloud shadows -- under a clear sky, since a wind is not a weather.
+# cloud shadows -- under a clear sky, the only sky it draws under (the case below).
 func test_a_calm_board_draws_no_wind_and_a_blowing_one_draws_specks_and_clouds() -> void:
 	var weather := _mirror()
 	var wind: WindMirror = _scene._wind
@@ -503,25 +503,30 @@ func test_a_calm_board_draws_no_wind_and_a_blowing_one_draws_specks_and_clouds()
 	assert_object(mask).override_failure_message("the specks read a second mask, not the weather's").is_same(weather.mask())
 
 
-# Under another weather the wind keeps its cloud shadows and drops its specks: rain, snow and fog already
-# fill the air (dev, 2026-10-10). Asked of the weather the board names, through both mirrors.
-func test_specks_blow_only_under_a_clear_sky() -> void:
+# Under any other weather the wind draws neither its specks nor its cloud shadows: rain, snow and fog
+# already fill the air, and an overcast sky casts no shadows (dev, 2026-10-10). Asked of every weather
+# the board can name, through both mirrors; the plants and the falls still take the wind.
+func test_the_wind_draws_specks_and_clouds_only_under_a_clear_sky() -> void:
 	var weather := _mirror()
 	var wind: WindMirror = _scene._wind
 	var sm = _manager()
 	sm.current_wind = Wind.Kind.STRONG_WIND
-	sm.current_weather = Weather.Kind.RAIN
-	weather._process(0.016)
-	wind._process(0.016)
-	var rain_specks := wind._specks.emitting or wind._specks.visible
-	var rain_clouds := wind._clouds.visible
+	for kind: Weather.Kind in Weather.Kind.values():
+		if kind == Weather.Kind.CLEAR:
+			continue
+		sm.current_weather = kind
+		weather._process(0.016)
+		wind._process(0.016)
+		assert_bool(wind._specks.emitting or wind._specks.visible).override_failure_message(
+				"the wind blew specks through %s" % Weather.name_of(kind)).is_false()
+		assert_bool(wind._clouds.visible).override_failure_message(
+				"%s's sky still casts the wind's cloud shadows" % Weather.name_of(kind)).is_false()
 	sm.current_weather = Weather.Kind.CLEAR
 	weather._process(0.016)
 	wind._process(0.016)
-	var clear_specks := wind._specks.emitting and wind._specks.visible
-	assert_bool(rain_specks).override_failure_message("the wind blew specks through the rain").is_false()
-	assert_bool(rain_clouds).override_failure_message("the rain took the wind's cloud shadows too").is_true()
-	assert_bool(clear_specks).override_failure_message("a clear sky blew no specks").is_true()
+	assert_bool(wind._specks.emitting and wind._specks.visible).override_failure_message(
+			"a clear sky blew no specks").is_true()
+	assert_bool(wind._clouds.visible).override_failure_message("a clear sky cast no cloud shadows").is_true()
 
 
 # The wind's drawing sorts under every piece of markup, the shadows under the fog too, so a move tile is
