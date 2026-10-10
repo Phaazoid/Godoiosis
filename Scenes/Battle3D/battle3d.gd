@@ -735,6 +735,14 @@ func _poll_basin() -> void:
 		BoardSpace.touch_basin()
 
 
+# The submerged bank (#654, an Experiment), polled for the basin's reason: Experiments has no signal.
+# It rides the board mask, so a flip rebuilds that and nothing else.
+func _poll_bank() -> void:
+	var on := Experiments.is_on(Experiments.Flag.WATER_BANK)
+	if on != _board_mirror.submerged_bank:
+		_board_mirror.set_submerged_bank(on, game.grid, game.board_heights)
+
+
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
@@ -1062,6 +1070,7 @@ func _process(_delta: float) -> void:
 	_tick_pass_clock(_delta)
 	_sync_terrain_while_authoring()
 	_poll_basin()
+	_poll_bank()
 	_drive_transition(_delta)
 	_sync_staging()
 	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the

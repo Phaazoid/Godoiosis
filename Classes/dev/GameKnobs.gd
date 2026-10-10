@@ -357,6 +357,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "What colour deep water IS. It was the tile's own modulate baked into the atlas until #578, which is why the shallow/deep boundary changed colour in a single texel while every other dial glided across it -- a shader cannot unbake a per-tile tint. 3D ONLY: the flat view still reads the tileset, so moving this makes the two views disagree until you edit the tile to match."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_shore_darken", "label": "Shore darken", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How much light deep water loses as it gets further from land. The one depth cue that is DARK rather than bright, which is the direction your #552 sweep moved everything -- 0 turns it off and leaves a flat colour out to the horizon."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_bank_depth", "label": "Bank depth", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How far down through deep water the bank stays visible, in world units, before the water swallows it. Acts only with Experiments > Water submerged bank on. 0 turns it off for deep water."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_bank_wobble", "label": "Bank wobble", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How hard the waves bend your view of the bank through deep water. 0 is a still pane of glass; 1 bends it as much as the surface highlight bends. Acts only with the submerged bank experiment on."},
 
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_wave_speed", "label": "Wave speed", "min": 0.0, "max": 6.0, "step": 0.01,
 		"tip": "How fast shallow water's bands travel. It also carries the CAUSTICS, whose speed is derived from this rather than taking a dial of its own -- it is the same water moving."},
@@ -392,6 +396,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "What colour shallow water IS -- the base the bed and the bands are composited over. Same #578 story as deep's, and the same 3D-only caveat: the flat view keeps reading the tileset's modulate."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_shore_darken", "label": "Shore darken", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How much light shallow water loses with distance from land. Usually wants LESS than deep's -- shallow water that is far from any shore is a contradiction, so this mostly shows up on a wide shelf."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bank_depth", "label": "Bank depth", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How far down through shallow water the bank stays visible, in world units, before the water swallows it. Acts only with Experiments > Water submerged bank on. 0 turns it off for shallow water."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bank_wobble", "label": "Bank wobble", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How hard the waves bend your view of the bank through shallow water. 0 is a still pane of glass; 1 bends it as much as the surface highlight bends. Acts only with the submerged bank experiment on."},
 
 	# SHARED, and the reason they are a third group rather than a pair: both describe the TRANSITION
 	# between the two waters, so there is nothing for a per-type version to mean. The water laws know

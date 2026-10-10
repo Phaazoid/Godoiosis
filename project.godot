@@ -325,3 +325,19 @@ water_basin_drop={
 "type": "float",
 "value": 0.0
 }
+water_deep_bank_depth={
+"type": "float",
+"value": 0.6
+}
+water_shallow_bank_depth={
+"type": "float",
+"value": 0.6
+}
+water_deep_bank_wobble={
+"type": "float",
+"value": 0.55
+}
+water_shallow_bank_wobble={
+"type": "float",
+"value": 0.55
+}

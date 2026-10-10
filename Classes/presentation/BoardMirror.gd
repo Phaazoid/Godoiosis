@@ -278,6 +278,16 @@ const FLAME_FRAMES := 8
 @export var water_deep_shore_darken := 0.76: set = _set_water_deep_shore_darken
 @export var water_shallow_shore_darken := 0.26: set = _set_water_shallow_shore_darken
 
+# THE SUBMERGED BANK (#654, behind Experiments.WATER_BANK): how far down through the water a bank wall
+# stays in view, in world units, and how hard the waves bend the view of it. Per type, like every
+# water dial; a depth of 0 turns it off for that water. Nothing draws unless the experiment is on,
+# because the walls ride the board mask's alpha and only get baked then. The defaults are the dev's
+# own slider picks off the approved mockup (2026-10-10).
+@export var water_deep_bank_depth := 0.6: set = _set_water_deep_bank_depth
+@export var water_shallow_bank_depth := 0.6: set = _set_water_shallow_bank_depth
+@export var water_deep_bank_wobble := 0.55: set = _set_water_deep_bank_wobble
+@export var water_shallow_bank_wobble := 0.55: set = _set_water_shallow_bank_wobble
+
 # SHARED, and they name neither water on purpose: both describe the transition BETWEEN the two
 # rather than either one, so there is nothing for a per-type pair to mean. The water laws know this
 # category by name (SHARED_GLOBALS) exactly as they know the board-data one.
@@ -370,6 +380,12 @@ var _basin_twin_library: MeshLibrary
 # The basin drop last pushed to the shader (#654). battle3d reads it to re-push only when the knob
 # moved, and it is recorded IN the push so it cannot claim a value the shader was never sent.
 var basin_drop_pushed := 0.0
+# The submerged bank's switch (#654): whether the mask's alpha carries the bank walls. battle3d owns
+# the poll and flips it through set_submerged_bank, which rebuilds the mask.
+var submerged_bank := false
+# The board mask as last pushed. Kept because a headless ImageTexture reads back only the FIRST image
+# it was ever given, so a test asking the texture would be green on a mask that stopped updating.
+var water_mask_built: Image
 # The tear-out's second lattice (#521): same mesh library, same cell_size, same cell coordinates,
 # and a NODE transform carrying the staged offset. A staged cell's column is written here and
 # cleared from `board`, leaving the socket the exit will thud back into. Null outside Battle3D --
@@ -766,7 +782,7 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 		for cell: Vector3i in map.get_used_cells():
 			if not live.has(BoardSpace.flat(cell)) or cell.y < floor_row:
 				map.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
-	_rebuild_water_mask(grid)
+	_rebuild_water_mask(grid, heights)
 
 
 # The INCREMENTAL door (#319), and the whole reason sync() above was split. Same reconcile, over the
@@ -801,7 +817,7 @@ func sync_cells(grid: TileMapLayer, cells: Array[Vector2i], heights: BoardHeight
 				continue
 			seen[near] = true
 			reconcile_cell(grid, near, heights, floor_row)
-	_rebuild_water_mask(grid)
+	_rebuild_water_mask(grid, heights)
 
 
 # ONE cell, in whatever direction it moved — the single implementation both sync() and sync_cells()
@@ -1494,6 +1510,10 @@ func _push_all_water() -> void:
 	_push_water(&"water_shallow_color", water_shallow_color)
 	_push_water(&"water_deep_shore_darken", water_deep_shore_darken)
 	_push_water(&"water_shallow_shore_darken", water_shallow_shore_darken)
+	_push_water(&"water_deep_bank_depth", water_deep_bank_depth)
+	_push_water(&"water_shallow_bank_depth", water_shallow_bank_depth)
+	_push_water(&"water_deep_bank_wobble", water_deep_bank_wobble)
+	_push_water(&"water_shallow_bank_wobble", water_shallow_bank_wobble)
 	_push_water(&"water_depth_range", water_depth_range)
 	_push_water(&"water_shore_fade_range", water_shore_fade_range)
 
@@ -1509,6 +1529,8 @@ func _push_all_water() -> void:
 #
 # BOARD DATA, so it is derived rather than an @export -- but it rides _push_water like every water
 # global, because "how does a water value reach the shader" should have one answer.
+#
+# Its ALPHA carries the submerged bank's walls since #654 (_bank_bits_at), zero while that is off.
 #
 # Held as a MEMBER on purpose: the global uniform stores the texture's RID, and a local would free
 # the ImageTexture the moment this returns.
@@ -1549,12 +1571,12 @@ const CHAMFER_DIAGONAL := 1.41421356
 # Called from BOTH sync doors rather than from reconcile_cell: the mask is a whole-board artifact
 # and reconcile_cell is per-cell, so there is nothing to write there. One implementation, two call
 # sites -- which is not a second answer to anything.
-func _rebuild_water_mask(grid: TileMapLayer) -> void:
+func _rebuild_water_mask(grid: TileMapLayer, heights: BoardHeights) -> void:
 	var rect := grid.get_used_rect()
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		# An empty board still owes the shader a DEFINED mask. An unset sampler reads as white,
 		# which would mean "every cell is water" -- and therefore no shore anywhere.
-		_push_mask(Image.create(1, 1, false, Image.FORMAT_RGB8), Vector4(0.0, 0.0, 1.0, 1.0))
+		_push_mask(Image.create(1, 1, false, Image.FORMAT_RGBA8), Vector4(0.0, 0.0, 1.0, 1.0))
 		return
 	var w := rect.size.x
 	var h := rect.size.y
@@ -1603,7 +1625,7 @@ func _rebuild_water_mask(grid: TileMapLayer) -> void:
 		var toward := (to_shallow[i] - 0.5) if deep[i] == 1 else -(to_deep[i] - 0.5)
 		depth[i] = clampf(0.5 + toward / (2.0 * MASK_RANGE), 0.0, 1.0)
 
-	var image := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var image := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	for y in h:
 		for x in w:
 			var i := y * w + x
@@ -1617,7 +1639,12 @@ func _rebuild_water_mask(grid: TileMapLayer) -> void:
 			# light as it leaves the land -- a DARK depth cue rather than another bright one. Land
 			# falls out at 0 for free, its own distance to dry being zero.
 			var b := clampf((to_dry[i] - 0.5) / MASK_RANGE, 0.0, 1.0)
-			image.set_pixel(x, y, Color(r, _deepness_at(wet, depth, w, h, x, y), b, 1.0))
+			# A: the submerged bank's bits (#654), zero everywhere while the experiment is off --
+			# which is what keeps the shader drawing today's water then.
+			var bank := 0
+			if submerged_bank and wet[i] == 1:
+				bank = _bank_bits_at(grid, heights, rect.position + Vector2i(x, y))
+			image.set_pixel(x, y, Color(r, _deepness_at(wet, depth, w, h, x, y), b, float(bank) / 255.0))
 	# A 2D cell's y IS the world z (BoardSpace.flat), and a cell is one world unit across, so the
 	# used rect doubles as the world rect with no conversion.
 	_push_mask(image, Vector4(rect.position.x, rect.position.y, rect.size.x, rect.size.y))
@@ -1684,7 +1711,43 @@ func _chamfer(seed: PackedByteArray, w: int, h: int) -> PackedFloat32Array:
 	return d
 
 
+# Flips the submerged bank (#654) and rebuilds the mask it rides, the only thing it changes.
+func set_submerged_bank(on: bool, grid: TileMapLayer, heights: BoardHeights) -> void:
+	submerged_bank = on
+	_rebuild_water_mask(grid, heights)
+
+
+# The submerged bank's bits in the mask's ALPHA (#654), which the water shader reads back with
+# texelFetch: one bit per edge of a water cell that has a bank behind it, plus BANK_ON on every water
+# cell so the shader can tell the experiment is on (it turns the foam off). A wall is GROUND -- not
+# water, not a hole, not off the board -- standing at least as high as the water at their shared
+# edge, because only then does the neighbour's side face reach down into the water.
+const BANK_ON := 16
+const BANK_SIDES: Dictionary[int, Vector2i] = {
+	1: Vector2i(0, -1), # north
+	2: Vector2i(1, 0), # east
+	4: Vector2i(0, 1), # south
+	8: Vector2i(-1, 0), # west
+}
+
+
+func _bank_bits_at(grid: TileMapLayer, heights: BoardHeights, cell: Vector2i) -> int:
+	var bits := BANK_ON
+	for side: int in BANK_SIDES:
+		var dir: Vector2i = BANK_SIDES[side]
+		var near := cell + dir
+		if not GridUtils.has_ground(grid, near) or GridUtils.is_void_at(grid, near) \
+				or GridUtils.get_terrain_kind_at_cell(grid, near) == Terrain.Kind.WATER:
+			continue
+		if heights != null and BoardSpace.surface_height_at_edge(near, -dir, heights) \
+				< BoardSpace.surface_height_at_edge(cell, dir, heights) - 0.001:
+			continue
+		bits |= side
+	return bits
+
+
 func _push_mask(image: Image, rect: Vector4) -> void:
+	water_mask_built = image
 	# set_image unconditionally rather than branching to the cheaper ImageTexture.update() when the
 	# size happens to match. Two code paths for an operation that runs when TERRAIN IS EDITED buys
 	# nothing measurable, and only one of them would ever be exercised by a board that never
@@ -1760,6 +1823,26 @@ func _set_water_deep_shore_darken(value: float) -> void:
 func _set_water_shallow_shore_darken(value: float) -> void:
 	water_shallow_shore_darken = value
 	_push_water(&"water_shallow_shore_darken", value)
+
+
+func _set_water_deep_bank_depth(value: float) -> void:
+	water_deep_bank_depth = value
+	_push_water(&"water_deep_bank_depth", value)
+
+
+func _set_water_shallow_bank_depth(value: float) -> void:
+	water_shallow_bank_depth = value
+	_push_water(&"water_shallow_bank_depth", value)
+
+
+func _set_water_deep_bank_wobble(value: float) -> void:
+	water_deep_bank_wobble = value
+	_push_water(&"water_deep_bank_wobble", value)
+
+
+func _set_water_shallow_bank_wobble(value: float) -> void:
+	water_shallow_bank_wobble = value
+	_push_water(&"water_shallow_bank_wobble", value)
 
 
 func _set_water_depth_range(value: float) -> void:

@@ -24,6 +24,7 @@ enum Flag {
 	GAS_STYLE,
 	GAS_OVER_UNITS,
 	WATER_BASIN,
+	WATER_BANK,
 }
 
 # Per-flag metadata. Literal-only, so it can be a compile-time const (like STAT_DEFAULTS).
@@ -61,6 +62,11 @@ const DEFS := {
 	Flag.WATER_BASIN: {
 		"title": "Water basin",
 		"desc": "On: water sits below the ground around it, so its banks show in dirt, and units standing in it wade with their legs under the surface. Off: today's flush water. #654 -- tune the depth on Game > Water > Water basin. If the look stays this becomes the default; if not, it is deleted with everything it gates.",
+		"default": false,
+	},
+	Flag.WATER_BANK: {
+		"title": "Water submerged bank",
+		"desc": "On: the water surface draws the bank you would see a short way down through it, traced from the camera so it shows on the far side of a pond, and the shoreline foam is off. Off: today's water. #654 -- tune Bank depth and Bank wobble on Game > Water. Works with or without Water basin. If the look stays this becomes the default; if not, it is deleted with everything it gates.",
 		"default": false,
 	},
 }
