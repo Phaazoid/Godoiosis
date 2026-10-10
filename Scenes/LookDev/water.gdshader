@@ -8,7 +8,7 @@
 //
 // Two rules it must not break. It never DISPLACES a vertex per frame or per fragment --
 // BoardSpace.lie_on, the hover bracket and every markup quad assume a flat top face at a known Y. The
-// one displacement is the basin experiment's (#654): a basin twin drops its top half by a single
+// one displacement is the basin's (#654): a basin twin drops its top half by a single
 // uniform, flat, and BoardSpace.basin_drop() reports that drop to every reader that places something
 // on the cell, so the top is still flat at a Y everyone knows. And it stays OPAQUE, so it owes none
 // of the depth-sorting checks presentation-effects.md catalogues for a new transparent surface.
@@ -137,9 +137,9 @@ global uniform float water_shore_fade_range;
 //   BLUE  how far out from land, over that same range. It is what lets deep water lose light as it
 //         leaves the shore, and it cannot reuse RED: RED is encoded over two cells so the foam band
 //         keeps sub-art-pixel precision, and widening it that far would step the surf visibly.
-//   ALPHA the submerged bank's bits (#654, an Experiment): which of a water cell's edges has a ground
-//         wall behind it, plus BANK_ON. BITS, so they are read with texelFetch and never through the
-//         linear filter. Zero everywhere while the experiment is off.
+//   ALPHA the submerged bank's bits (#654): which of a water cell's edges has a ground wall behind
+//         it. BITS, so they are read with texelFetch and never through the linear filter. Zero on
+//         land, and on water with no bank beside it.
 //
 // Clamped rather than repeated, so water running off the edge of the board meets its own value
 // there and does not foam against the void.
@@ -157,31 +157,28 @@ global uniform float water_board_shore_range;
 // water_depth_range, applied after this decodes.
 global uniform float water_board_mask_range;
 
-// THE BASIN (#654, an Experiment): how far a column's TOP block drops its top half, so the water sits
-// below the ground around it and the ground's own side faces show as a bank. Pushed by BoardMirror as
-// the EFFECTIVE value -- the depth knob while Experiments.WATER_BASIN is on, zero otherwise -- so it
-// is derived rather than tuned here. Only a basin twin reads it: the blocks under the top one must
-// keep their walls whole.
+// THE BASIN (#654): how far a column's TOP block drops its top half, so the water sits below the
+// ground around it and the ground's own side faces show as a bank. Pushed by BoardMirror off the depth
+// knob (a BoardSpace static), so it is derived rather than tuned here. Only a basin twin reads it: the
+// blocks under the top one must keep their walls whole.
 global uniform float water_basin_drop;
 // Set on the basin twins alone (gen_lookdev_assets); every other water item leaves it false.
 uniform bool basin_surface = false;
 
-// THE SUBMERGED BANK (#654, an Experiment): how far down through the water a bank wall stays in view,
-// in world units, and how hard the waves bend the view of it. Per type, like every dial here; a depth
-// of 0 turns it off for that water. Nothing draws unless the mask's alpha carries the walls, which
-// BoardMirror bakes only while Experiments.WATER_BANK is on.
+// THE SUBMERGED BANK (#654): how far down through the water a bank wall stays in view, in world units,
+// and how hard the waves bend the view of it. Per type, like every dial here; a depth of 0 turns it off
+// for that water. The walls are the mask's alpha bits.
 global uniform float water_deep_bank_depth;
 global uniform float water_shallow_bank_depth;
 global uniform float water_deep_bank_wobble;
 global uniform float water_shallow_bank_wobble;
 
 // The mask's alpha bits (BoardMirror._bank_bits_at): one per edge of a water cell with a wall behind
-// it, north being -z, plus one saying the experiment is on at all.
+// it, north being -z. Bits 4-7 are free.
 const int BANK_N = 1;
 const int BANK_E = 2;
 const int BANK_S = 4;
 const int BANK_W = 8;
-const int BANK_ON = 16;
 // How much a ray bends going into water, and how a wall seen through it is coloured: the water's hue
 // at BANK_TINT strength, darkening by BANK_DIM by the time it fades out. The numbers in the mockup the
 // dev approved (2026-10-10).
@@ -440,12 +437,11 @@ void fragment() {
 		// Deep water is opaque and unchanged; shallow lets its bottom show.
 		vec3 col = mix(base, through, clamp(water_shallow_bed * (1.0 - d), 0.0, 1.0));
 
-		// --- The SUBMERGED BANK (#654, an Experiment) -------------------------------------------
+		// --- The SUBMERGED BANK (#654) ---------------------------------------------------------
 		// In front of the bed, since a wall the ray meets first hides what lies beyond it, and under
-		// every surface layer below. The fragment's own cell says whether the experiment is on.
-		bool bank_on = (bank_bits(floor(world_pos.xz)) & BANK_ON) != 0;
+		// every surface layer below.
 		float bank_vis = mix(water_shallow_bank_depth, water_deep_bank_depth, d);
-		if (bank_on && bank_vis > 0.0) {
+		if (bank_vis > 0.0) {
 			float wobble = mix(water_shallow_bank_wobble, water_deep_bank_wobble, d);
 			vec3 through_n = normalize(vec3(-(wx - w) * ripple * wobble, 1.0,
 					-(wz - w) * ripple * wobble));
@@ -501,10 +497,8 @@ void fragment() {
 		float shore = (texture(water_board_mask, pixel_uv).r - 0.5)
 				* 2.0 * water_board_shore_range + w * FOAM_WOBBLE * foam_width;
 		// Width 0 means OFF, not a hairline: a zero-wide smoothstep still fires on whichever pixel
-		// lands exactly on the boundary.
-		// The submerged bank turns the foam off (dev, off the approved mockup): it sits right on the
-		// bank's upper edge.
-		float foam = (foam_width <= 0.0 || bank_on)
+		// lands exactly on the boundary. Both widths default to 0 since the submerged bank (#654).
+		float foam = (foam_width <= 0.0)
 				? 0.0
 				: 1.0 - smoothstep(0.0, 0.5 * foam_width, shore);
 		col = mix(col, foam_color.rgb, foam * foam_color.a);

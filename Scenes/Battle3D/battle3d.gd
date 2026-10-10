@@ -282,8 +282,7 @@ func _ready() -> void:
 	# Whether a cell's ground is water, for the damp blot (#358): the AUTHORED kind, frozen or not.
 	_unit_mirror.water_at = func(cell: Vector2i) -> bool:
 		return GridUtils.get_terrain_kind_at_cell(game.grid, cell) == Terrain.Kind.WATER
-	# Who is standing IN the water rather than on it, for the basin's wading (#654). One board per frame,
-	# and only while the experiment is on.
+	# Who is standing IN the water rather than on it, for the basin's wading (#654). One board per frame.
 	_unit_mirror.board_source = func() -> BoardContext: return game._board()
 	_unit_mirror.snow_source = _weather.unit_snow
 	_unit_mirror.breath_source = _weather.breathes
@@ -718,29 +717,14 @@ func _sync_staging() -> void:
 			_board_mirror.floor_row_of(game.board_heights))
 
 
-# THE WATER BASIN (#654), an Experiment. Its flag and its depth knob live in two stores that announce
-# nothing (Experiments has no signal, and a knob writes a static), so this polls both and publishes the
-# EFFECTIVE state: BoardSpace for everything placed on a water cell, the shader global for the drop
-# itself. Flipping the flag rewrites every column, because the top block of each flat water column
-# changes item; moving the knob only re-pushes. One push site serves both, since a flipped flag also
-# moves the effective drop.
+# THE WATER BASIN's depth (#654). The knob writes a static that announces nothing, so this polls it and
+# publishes a move twice: the shader global for the drop itself, and BoardSpace's version for
+# everything placed on a water cell.
 func _poll_basin() -> void:
-	var on := Experiments.is_on(Experiments.Flag.WATER_BASIN)
-	var drop := BoardSpace.basin_depth() if on else 0.0
-	if on != BoardSpace.basin_on():
-		BoardSpace.set_basin_on(on)
-		_board_mirror.sync(game.grid, game.board_heights)
+	var drop := BoardSpace.basin_depth()
 	if not is_equal_approx(drop, _board_mirror.basin_drop_pushed):
 		_board_mirror.push_basin_drop(drop)
 		BoardSpace.touch_basin()
-
-
-# The submerged bank (#654, an Experiment), polled for the basin's reason: Experiments has no signal.
-# It rides the board mask, so a flip rebuilds that and nothing else.
-func _poll_bank() -> void:
-	var on := Experiments.is_on(Experiments.Flag.WATER_BANK)
-	if on != _board_mirror.submerged_bank:
-		_board_mirror.set_submerged_bank(on, game.grid, game.board_heights)
 
 
 func _sync_terrain_while_authoring() -> void:
@@ -1070,7 +1054,6 @@ func _process(_delta: float) -> void:
 	_tick_pass_clock(_delta)
 	_sync_terrain_while_authoring()
 	_poll_basin()
-	_poll_bank()
 	_drive_transition(_delta)
 	_sync_staging()
 	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the

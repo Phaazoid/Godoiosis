@@ -1,8 +1,7 @@
-# The WATER BASIN experiment (#654): water drawn below the ground around it, behind a flag.
-#
-# Every claim is pinned on BOTH sides of Experiments.WATER_BASIN, because the experiment's whole
-# promise is that off is today's water: a case that only ever turned it on could not see the flag
-# leaking into the ordinary board.
+# The WATER BASIN (#654): water drawn below the ground around it, and the SUBMERGED BANK's walls the
+# board mask carries beside it. Both were Experiments until the dev ruled them in (2026-10-10), so
+# there is no off side left to pin; what can still drift is the depth knob's poll and every reader
+# that places something off the drop.
 #
 # The cases paint their OWN water onto whatever board loads and flatten it, so nothing here leans on
 # what a mission contains (the content razor), and they set every depth they assert against, so a
@@ -11,7 +10,7 @@
 # WHAT NO CASE HERE CAN SEE: whether the dip LOOKS right. The drop happens in the water shader's
 # vertex stage, which a headless renderer never runs; what these cases pin is everything that can
 # DRIFT -- which item each column's top block is, what BoardSpace says the drop is, where every reader
-# places itself off that, and the poll that turns the flag into all of it.
+# places itself off that, and the poll that turns the depth knob into all of it.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -43,10 +42,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	# The experiment is undone IN the case: the reset's board reload draws columns before the frame
-	# whose poll would flip them back.
-	Experiments.set_on(Experiments.Flag.WATER_BASIN, false)
-	Experiments.set_on(Experiments.Flag.WATER_BANK, false)
 	BoardSpace.WATER_BASIN_DEPTH = _saved["depth"]
 	BoardSpace.WATER_WADE_DEPTH = _saved["wade"]
 	BoardSpace.WATER_STEP_TIME = _saved["step"]
@@ -62,11 +57,6 @@ func _settle() -> void:
 	# process_frame resumes coroutines BEFORE node _process, so one frame reads stale.
 	await await_idle_frame()
 	await await_idle_frame()
-
-
-func _basin(on: bool) -> void:
-	Experiments.set_on(Experiments.Flag.WATER_BASIN, on)
-	await _settle()
 
 
 # A 1x1 tile off the tileset: WATER of a stated depth, or flat walkable GROUND.
@@ -153,24 +143,12 @@ func _a_unit() -> Unit:
 	return null
 
 
-func test_off_draws_todays_columns_and_nothing_dips() -> void:
+func test_every_flat_water_column_dips() -> void:
 	var lake := await _lake()
 	for key: String in ["shallow", "deep"]:
 		var cell: Vector2i = lake[key]
 		assert_str(_top_item_name(cell)).override_failure_message(
-				"with the basin OFF the %s column's top is %s, not its own block" % [key, _top_item_name(cell)]) \
-				.is_equal(_base_name(lake, key))
-		assert_float(BoardSpace.basin_drop(cell)).is_equal(0.0)
-	assert_float(_mirror().basin_drop_pushed).is_equal(0.0)
-
-
-func test_on_dips_every_flat_water_column_and_off_puts_it_back() -> void:
-	var lake := await _lake()
-	await _basin(true)
-	for key: String in ["shallow", "deep"]:
-		var cell: Vector2i = lake[key]
-		assert_str(_top_item_name(cell)).override_failure_message(
-				"with the basin ON the %s column's top block is not its basin twin" % key) \
+				"the %s column's top block is not its basin twin" % key) \
 				.is_equal(BoardMirror.basin_twin_name(_base_name(lake, key)))
 		# The block UNDER the top keeps its own item, or the column's walls would open.
 		var below := _top_item_name(cell, 1)
@@ -179,22 +157,12 @@ func test_on_dips_every_flat_water_column_and_off_puts_it_back() -> void:
 		assert_float(BoardSpace.basin_drop(cell)).is_equal_approx(DEPTH, 0.0001)
 	assert_bool(_top_item_name(lake["dry"]).ends_with(BoardMirror.BASIN_TWIN_SUFFIX)).is_false()
 	assert_float(BoardSpace.basin_drop(lake["dry"])).is_equal(0.0)
-	# The poll is what turns the flag into the shader's drop -- the wire.
+	# The poll is what turns the depth knob into the shader's drop -- the wire.
 	assert_float(_mirror().basin_drop_pushed).is_equal_approx(DEPTH, 0.0001)
-
-	await _basin(false)
-	for key: String in ["shallow", "deep"]:
-		var cell: Vector2i = lake[key]
-		assert_str(_top_item_name(cell)).override_failure_message(
-				"turning the basin OFF left the %s column on its twin" % key) \
-				.is_equal(_base_name(lake, key))
-		assert_float(BoardSpace.basin_drop(cell)).is_equal(0.0)
-	assert_float(_mirror().basin_drop_pushed).is_equal(0.0)
 
 
 func test_moving_the_depth_knob_reaches_the_shader_and_the_drop() -> void:
 	var lake := await _lake()
-	await _basin(true)
 	BoardSpace.WATER_BASIN_DEPTH = DEPTH * 0.5
 	await _settle()
 	assert_float(_mirror().basin_drop_pushed).is_equal_approx(DEPTH * 0.5, 0.0001)
@@ -205,7 +173,6 @@ func test_moving_the_depth_knob_reaches_the_shader_and_the_drop() -> void:
 # column CLEARER. Each has to unpublish the drop, so the case walks both.
 func test_repainting_or_erasing_dipped_water_stops_it_dipping() -> void:
 	var lake := await _lake()
-	await _basin(true)
 	var cell: Vector2i = lake["shallow"]
 	assert_float(BoardSpace.basin_drop(cell)).is_greater(0.0)
 	_game.grid.paint(cell, lake["tiles"]["dry"]["source"], lake["tiles"]["dry"]["coords"])
@@ -230,12 +197,6 @@ func test_a_unit_wades_in_water_and_stands_on_frozen_water() -> void:
 	var shallow: Vector2i = lake["shallow"]
 	unit.movement.set_cell(shallow)
 	await _settle()
-	var off_y := mirror.sprite_for(unit).position.y
-	assert_float(off_y).override_failure_message(
-			"with the basin OFF a unit in water is not standing on the rules surface") \
-			.is_equal_approx(_rules_y(shallow), 0.0001)
-
-	await _basin(true)
 	assert_float(mirror.sprite_for(unit).position.y).override_failure_message(
 			"a unit in water should stand in the basin AND wade") \
 			.is_equal_approx(_rules_y(shallow) - DEPTH - WADE, 0.0001)
@@ -258,7 +219,6 @@ func test_a_unit_wades_in_water_and_stands_on_frozen_water() -> void:
 
 func test_a_recess_is_not_a_drop() -> void:
 	var lake := await _lake()
-	await _basin(true)
 	assert_float(BoardSpace.basin_drop(lake["shallow"])).is_greater(0.0)
 	# The knockback edge-drop pair reads these, and the dev ruled a recess is not a fall: the edge a
 	# shove crosses from the bank into the water must still MEET at the rules height.
@@ -272,7 +232,6 @@ func test_a_recess_is_not_a_drop() -> void:
 
 func test_markup_on_water_lies_on_the_dropped_surface() -> void:
 	var lake := await _lake()
-	await _basin(true)
 	var shallow: Vector2i = lake["shallow"]
 	var dry: Vector2i = lake["dry"]
 	var mirror := _scene.get_node("OverlayMirror") as OverlayMirror
@@ -301,8 +260,8 @@ func test_markup_on_water_lies_on_the_dropped_surface() -> void:
 
 
 # The WIRE for an already-drawn fill: its cells and the heights have not moved, so only the basin's
-# own version can tell OverlayMirror to re-place it (#308's law).
-func test_a_fill_already_drawn_re_places_when_the_basin_turns_on() -> void:
+# own version can tell OverlayMirror to re-place it when the depth knob moves (#308's law).
+func test_a_fill_already_drawn_re_places_when_the_depth_moves() -> void:
 	var lake := await _lake()
 	var deep: Vector2i = lake["deep"]
 	var om := _game.overlay_manager as OverlayManager
@@ -316,11 +275,13 @@ func test_a_fill_already_drawn_re_places_when_the_basin_turns_on() -> void:
 	assert_int(index).override_failure_message("the reach never reached the 3D layer").is_greater_equal(0)
 	var before := (overlays._pool_for(BoardOverlays.Layer.ATTACK)[index] as Node3D).position.y
 
-	await _basin(true)
+	BoardSpace.WATER_BASIN_DEPTH = DEPTH * 0.5
+	await _settle()
 	index = overlays.cells_of(BoardOverlays.Layer.ATTACK).find(at)
 	var after := (overlays._pool_for(BoardOverlays.Layer.ATTACK)[index] as Node3D).position.y
 	assert_float(after - before).override_failure_message(
-			"the reach fill over water stayed put when the basin turned on").is_equal_approx(-DEPTH, 0.0001)
+			"the reach fill over water stayed put when the basin depth moved") \
+			.is_equal_approx(DEPTH * 0.5, 0.0001)
 	om.show_attack_reach([] as Array[Vector2i], [] as Array[Vector2i])
 
 
@@ -332,24 +293,13 @@ func _mask_bits(cell: Vector2i) -> int:
 	return int(round(image.get_pixel(cell.x - origin.x, cell.y - origin.y).a * 255.0))
 
 
-# The WIRE for the submerged bank: the flag reaches the mask through battle3d's poll, and turning it
-# off takes every bit back out. The lake runs dry, shallow, deep from west to east, so the shallow
-# cell has ground behind its west edge and water behind its east one.
-func test_the_bank_flag_reaches_the_mask() -> void:
+# The real board's mask carries the banks, through the same sync doors a brush stroke takes. The lake
+# runs dry, shallow, deep from west to east, so the shallow cell has ground behind its west edge and
+# water behind its east one.
+func test_the_real_board_bakes_its_banks() -> void:
 	var lake := await _lake()
-	var shallow: Vector2i = lake["shallow"]
-	assert_int(_mask_bits(shallow)).override_failure_message(
-			"the mask carries bank bits with the experiment off").is_equal(0)
-
-	Experiments.set_on(Experiments.Flag.WATER_BANK, true)
-	await _settle()
-	var bits := _mask_bits(shallow)
-	assert_int(bits & BoardMirror.BANK_ON).override_failure_message(
-			"turning the experiment on never reached the mask").is_equal(BoardMirror.BANK_ON)
+	var bits := _mask_bits(lake["shallow"])
 	assert_int(bits & 8).override_failure_message("the dry cell to the west is not a bank").is_equal(8)
 	assert_int(bits & 2).override_failure_message("the deep water to the east is a bank").is_equal(0)
-
-	Experiments.set_on(Experiments.Flag.WATER_BANK, false)
-	await _settle()
-	assert_int(_mask_bits(shallow)).override_failure_message(
-			"turning the experiment off left bank bits in the mask").is_equal(0)
+	assert_int(_mask_bits(lake["dry"])).override_failure_message(
+			"a land cell carries bank bits; only water draws a bank").is_equal(0)

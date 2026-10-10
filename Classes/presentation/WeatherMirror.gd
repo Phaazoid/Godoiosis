@@ -347,8 +347,8 @@ func kind() -> Weather.Kind:
 
 
 # Where a cell is DRAWN relative to its rules surface: lifted onto the stage by a tear-out (#521), and
-# lowered into its basin when the water experiment is on (#654) -- that experiment's rule is that every
-# reader which lays something on a water cell subtracts the drop, and a raindrop lands on one.
+# lowered into its basin on a water cell (#654) -- the basin's rule is that every reader which lays
+# something on a water cell subtracts the drop, and a raindrop lands on one.
 static func drawn_offset(cell: Vector2i) -> Vector3:
 	return BoardSpace.staged_offset(cell) - Vector3(0.0, BoardSpace.basin_drop(cell), 0.0)
 

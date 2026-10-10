@@ -247,11 +247,11 @@ water_shallow_caustics_scale={
 }
 water_deep_foam_width={
 "type": "float",
-"value": 0.3
+"value": 0.0
 }
 water_shallow_foam_width={
 "type": "float",
-"value": 0.5
+"value": 0.0
 }
 water_deep_foam_color={
 "type": "color",

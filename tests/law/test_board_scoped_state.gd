@@ -46,7 +46,7 @@ const BOARD_SCOPED := {
 	"_camera_lift_driven": "BoardSpace.clear_staging(",
 	# #602 round 7: the cut flag rides the lift channel and dies in release_camera_lift with it.
 	"_camera_lift_snap": "BoardSpace.clear_staging(",
-	# The water basin (#654): which cells the experiment dipped, and the count pollers watch. The next
+	# The water basin (#654): which cells dip, and the count pollers watch. The next
 	# board re-marks its own cells as BoardMirror draws them.
 	"_basin_cells": "BoardSpace.clear_basin(",
 	"basin_version": "BoardSpace.clear_basin(",
@@ -72,7 +72,6 @@ const PROCESS_SCOPED := [
 	"_caps_by_frame",                             # SnowCapArt (#1269): each prop art's snow cap, keyed by sheet and frame
 	"_badges",                                    # StrikeMarks2D (#1247): baked badge art, keyed by (icon, colour)
 	"GUARD_RING_SCALE",                           # tuning, no knob
-	"_basin_on",                                  # BoardSpace (#654): the Water basin flag, re-published by battle3d every frame
 	"texels_per_unit",                            # tuning, no knob
 ]
 

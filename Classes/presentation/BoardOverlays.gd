@@ -1419,8 +1419,8 @@ func _pool_for(layer: Layer) -> Array:
 # No `heights` needed: cell.y is already the picked column's TOP row (battle3d's _tops), so the
 # surface is right there.
 func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) -> Transform3D:
-	# Both forms sit on the DRAWN surface, which the water basin experiment drops below the rules
-	# height on a water cell (#654). Zero everywhere else, and everywhere while it is off.
+	# Both forms sit on the DRAWN surface, which the water basin drops below the rules height on a
+	# flat water cell (#654). Zero everywhere else.
 	var drop := BoardSpace.basin_drop(BoardSpace.flat(cell))
 	if spec["kind"] == Kind.BRACKET:
 		var centre := BoardSpace.cell_center(cell)

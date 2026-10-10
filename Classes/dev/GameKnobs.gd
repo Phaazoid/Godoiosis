@@ -350,7 +350,7 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_body_shade", "label": "Body shade", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a deep block's WALLS and top rim read than its surface -- the body of the water rather than the face of it. Only visible where water meets a lower cell or the board's edge."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_foam_width", "label": "Foam width", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre. Deep water usually meets a wall rather than a beach, so a NARROWER band than shallow's reads better: water stopping dead, not running out."},
+		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre. Deep water usually meets a wall rather than a beach, so a NARROWER band than shallow's reads better: water stopping dead, not running out. 0, the default since the submerged bank (#654), turns foam off."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_foam_color", "label": "Foam colour",
 		"tip": "The surf's own colour, and its ALPHA is how hard it lands. Deep water breaking against something wants the harder, brighter edge -- it is the one place on a deep expanse where a bright highlight is doing work rather than adding glare."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_color", "label": "Colour",
@@ -358,9 +358,9 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_shore_darken", "label": "Shore darken", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How much light deep water loses as it gets further from land. The one depth cue that is DARK rather than bright, which is the direction your #552 sweep moved everything -- 0 turns it off and leaves a flat colour out to the horizon."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_bank_depth", "label": "Bank depth", "min": 0.0, "max": 1.5, "step": 0.01,
-		"tip": "How far down through deep water the bank stays visible, in world units, before the water swallows it. Acts only with Experiments > Water submerged bank on. 0 turns it off for deep water."},
+		"tip": "How far down through deep water the bank stays visible, in world units, before the water swallows it. 0 turns it off for deep water."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_bank_wobble", "label": "Bank wobble", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How hard the waves bend your view of the bank through deep water. 0 is a still pane of glass; 1 bends it as much as the surface highlight bends. Acts only with the submerged bank experiment on."},
+		"tip": "How hard the waves bend your view of the bank through deep water. 0 is a still pane of glass; 1 bends it as much as the surface highlight bends."},
 
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_wave_speed", "label": "Wave speed", "min": 0.0, "max": 6.0, "step": 0.01,
 		"tip": "How fast shallow water's bands travel. It also carries the CAUSTICS, whose speed is derived from this rather than taking a dial of its own -- it is the same water moving."},
@@ -389,7 +389,7 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_caustics_scale", "label": "Caustics scale", "min": 1.0, "max": 30.0, "step": 0.5,
 		"tip": "How tightly the light net is woven, in radians per cell. Low is a few broad shifting patches; high is a fine mesh. Worth keeping clearly different from Wave scale -- if the two agree, the bottom and the surface stop reading as separate layers."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_foam_width", "label": "Foam width", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre, which is as far as a one-texel-per-cell mask can see. 0 turns foam off entirely. A shallow shore laps, so it can afford a wider softer band than deep water does."},
+		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre, which is as far as a one-texel-per-cell mask can see. 0 turns foam off entirely, and is the default since the submerged bank (#654). A shallow shore laps, so it can afford a wider softer band than deep water does."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_foam_color", "label": "Foam colour",
 		"tip": "The surf's own colour, and its ALPHA is how hard it lands -- those are one decision, not two. Cool white is the safe read; pushing it warm makes shallow water read as a beach rather than a lake. Alpha 0 is the other way to turn foam off."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_color", "label": "Colour",
@@ -397,9 +397,9 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_shore_darken", "label": "Shore darken", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How much light shallow water loses with distance from land. Usually wants LESS than deep's -- shallow water that is far from any shore is a contradiction, so this mostly shows up on a wide shelf."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bank_depth", "label": "Bank depth", "min": 0.0, "max": 1.5, "step": 0.01,
-		"tip": "How far down through shallow water the bank stays visible, in world units, before the water swallows it. Acts only with Experiments > Water submerged bank on. 0 turns it off for shallow water."},
+		"tip": "How far down through shallow water the bank stays visible, in world units, before the water swallows it. 0 turns it off for shallow water."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bank_wobble", "label": "Bank wobble", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How hard the waves bend your view of the bank through shallow water. 0 is a still pane of glass; 1 bends it as much as the surface highlight bends. Acts only with the submerged bank experiment on."},
+		"tip": "How hard the waves bend your view of the bank through shallow water. 0 is a still pane of glass; 1 bends it as much as the surface highlight bends."},
 
 	# SHARED, and the reason they are a third group rather than a pair: both describe the TRANSITION
 	# between the two waters, so there is nothing for a per-type version to mean. The water laws know
@@ -1551,17 +1551,17 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"profile": "cinematic", "script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
 		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from. Nothing stages at all with the battle zoom off."},
 
-	# THE WATER BASIN (#654), an Experiment: all three are BoardSpace statics, read by everything that
-	# places something on a water cell, and inert until Session > Experiments > Water basin is on.
-	{"group": "Water basin (experiment)", "label": "Basin depth", "static": "WATER_BASIN_DEPTH",
+	# THE WATER BASIN (#654): all three are BoardSpace statics, read by everything that places something
+	# on a water cell.
+	{"group": "Water basin", "label": "Basin depth", "static": "WATER_BASIN_DEPTH",
 		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 0.45, "step": 0.01,
-		"tip": "How far water sits below the ground around it, in cells, so its banks show. Every water cell dips by this one amount, shallow and deep alike. Only while the Water basin experiment is on."},
-	{"group": "Water basin (experiment)", "label": "Wade depth", "static": "WATER_WADE_DEPTH",
+		"tip": "How far water sits below the ground around it, in cells, so its banks show. Every water cell dips by this one amount, shallow and deep alike. 0 puts water flush with the ground."},
+	{"group": "Water basin", "label": "Wade depth", "static": "WATER_WADE_DEPTH",
 		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 0.4, "step": 0.01,
-		"tip": "How much further a unit standing in the water sinks, so the surface hides its legs. Waterwalkers and anyone on frozen water stand on top. Only while the Water basin experiment is on."},
-	{"group": "Water basin (experiment)", "label": "Step time", "static": "WATER_STEP_TIME",
+		"tip": "How much further a unit standing in the water sinks, so the surface hides its legs. Waterwalkers and anyone on frozen water stand on top."},
+	{"group": "Water basin", "label": "Step time", "static": "WATER_STEP_TIME",
 		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "Seconds a unit takes to step down into the water or back up out of it. 0 snaps. Only while the Water basin experiment is on."},
+		"tip": "Seconds a unit takes to step down into the water or back up out of it. 0 snaps."},
 
 	# The cliff follow (#602). NO profile tag on any of these, and that is the section's own rule: a
 	# fall is an animation running in real time in both profiles, so it is flat like the linger and
@@ -1826,7 +1826,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Water (deep)": "Water",
 	"Water (shallow)": "Water",
 	"Water (shared)": "Water",
-	"Water basin (experiment)": "Water",
+	"Water basin": "Water",
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
 	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
