@@ -559,6 +559,34 @@ func test_the_colour_cycle_reaches_the_curtains_the_light_and_the_motes() -> voi
 				.is_between(minf(a, b) - 0.001, maxf(a, b) + 0.001)
 
 
+# The motes are born over the BOARD, never the view (#1289's rule, met again): setting a particle system's
+# amount restarts it, and an amount sized off the camera re-dealt every rising mote on each zoom (dev
+# report). The camera is moved far out and back under an aurora, and the system must keep its amount
+# and lifetime throughout.
+func test_zooming_never_re_deals_the_aurora_motes() -> void:
+	var mirror := _mirror()
+	_scene.game.scenario_manager.current_weather = _aurora_kind(false)
+	mirror._process(0.016)
+	var motes := mirror.aurora()._motes
+	var amount := motes.amount
+	var lifetime := motes.lifetime
+	var camera: Camera3D = mirror.camera
+	assert_object(camera).override_failure_message("fixture: the mirror has no camera").is_not_null()
+	var was := camera.global_position
+	var seen: Array[Vector2] = []
+	for rise: float in [30.0, 60.0, 0.0]:
+		camera.global_position = was + Vector3(0.0, rise, 0.0)
+		mirror._process(0.016)
+		seen.append(Vector2(motes.amount, motes.lifetime))
+	camera.global_position = was
+	_clear_aurora(mirror)
+	assert_int(amount).override_failure_message("fixture: the aurora sized no motes").is_greater(1)
+	for at: Vector2 in seen:
+		assert_int(int(at.x)).override_failure_message(
+				"the motes were re-dealt by a zoom: amount %d -> %d" % [amount, int(at.x)]).is_equal(amount)
+		assert_float(at.y).is_equal_approx(lifetime, 0.0001)   # a Vector2 holds single precision
+
+
 # A look's mote shape reaches what the motes are drawn as: dots one way, streaks the other.
 func test_the_mote_shape_reaches_the_motes() -> void:
 	var mirror := _mirror()

@@ -9,8 +9,8 @@ class_name AuroraLights
 #   - LIGHT: a DirectionalLight3D in the curtains' colours, coming in from in front of the camera at the
 #     look's elevation, since units and plants are camera-facing sprites that a light from overhead would
 #     miss. No shadows, and kept out of the volumetric fog and the sky.
-#   - MOTES: one particle system (aurora_mote.gdshader) rising off the ground in the weather's own view
-#     box and on its own ground mask, drawn as dots or streaks (WeatherLook.MoteShape).
+#   - MOTES: one particle system (aurora_mote.gdshader) rising off the ground anywhere on the board, on
+#     the weather's own ground mask, drawn as dots or streaks (WeatherLook.MoteShape).
 #
 # ONE colour cycle drives all three (scheme_at): each scheme holds, then blends into the next. The light
 # and the curtains share one slow pulse, which #217's photosensitivity setting holds at its mean; the
@@ -30,7 +30,7 @@ const PULSE_RATES := Vector2(0.9, 0.37)
 # How fast the light's colour swings between the scheme's two.
 const LIGHT_SWING := 0.31
 
-var weather: WeatherMirror            # the view box, the camera, the board rect and the wind
+var weather: WeatherMirror            # the camera, the board rect and the wind
 
 var _curtains: MeshInstance3D
 var _curtain_material: ShaderMaterial
@@ -181,16 +181,16 @@ func _style_motes(rising: bool) -> void:
 	_mote_draw.set_shader_parameter("shape", 1.0 if streaks else 0.0)
 	if not rising or weather == null:
 		return
+	# Born over the whole BOARD, never the view: setting a system's amount restarts it, so an amount sized
+	# off the camera re-dealt every mote on each zoom (#1289's lesson, the fog cards'). The board is the
+	# box, so the count moves only when the board or a mote dial does.
+	var rect := weather.board_rect()
+	if not rect.has_area():
+		return
 	var life := maxf(_look.mote_life, 0.2)
 	var wind := weather.board_wind() * MOTE_WIND
-	var box := weather.view_box(1.0, Vector2.ZERO, 0.5)
-	if box.is_empty():
-		return
-	var lo: Vector2 = box["lo"]
-	var hi: Vector2 = box["hi"]
-	var carry := wind * life
-	lo = lo.min(lo - carry)
-	hi = hi.max(hi - carry)
+	var lo := Vector2(rect.position) * BoardSpace.CELL_SIZE
+	var hi := Vector2(rect.end) * BoardSpace.CELL_SIZE
 	_mote_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
 	_mote_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
 	_mote_process.set_shader_parameter("rise", _look.mote_rise)
