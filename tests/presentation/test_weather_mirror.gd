@@ -14,7 +14,9 @@
 #     bolt's corona is its look's element, and a strike is aimed where the camera looks;
 #   - sand (#1302) draws its specks, grit, drift, cover and dust, ash its flakes, soot, caps and embers,
 #     each and nothing else; a calm board grounds the grit; the embers take the look's colour; and no
-#     zoom re-deals anything born over the board.
+#     zoom re-deals anything born over the board;
+#   - every system born in the camera's box is held at its cap, so no zoom re-sizes one (#1304), and a
+#     held system still carries the authored births.
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
@@ -957,3 +959,85 @@ func test_zooming_never_re_deals_the_grit_or_the_embers() -> void:
 			assert_int(int(at.x)).override_failure_message("%s was re-dealt by a zoom: amount %d -> %d"
 					% [system.name, amount, int(at.x)]).is_equal(amount)
 			assert_float(at.y).is_equal_approx(lifetime, 0.0001)   # a Vector2 holds single precision
+
+
+# Every system born in the CAMERA's box is held at its cap (#1304): a re-size restarts a system and
+# replays its whole lifetime in one frame, which froze zooms for up to 1.4 s. The camera is moved far out
+# and back under rain, each flake fall and a gale's specks; no held system may take another amount, and
+# the flakes' keep rises with the view, so the authored density follows it.
+func test_zooming_never_re_sizes_what_follows_the_camera() -> void:
+	var mirror := _mirror()
+	var wind: WindMirror = _scene._wind
+	var sm = _manager()
+	var camera: Camera3D = mirror.camera
+	assert_object(camera).override_failure_message("fixture: the mirror has no camera").is_not_null()
+	var drifts := func(look: WeatherLook) -> bool: return look.drift_rate > 0.0
+	var cases := [
+		[_kind_drawing(WeatherLook.Fall.RAIN, func(look: WeatherLook) -> bool: return look.splashes),
+				Wind.Kind.STRONG_WIND],
+		[_kind_drawing(WeatherLook.Fall.SNOW), Wind.Kind.STRONG_WIND],
+		[_kind_drawing(WeatherLook.Fall.SNOW, drifts), Wind.Kind.STRONG_WIND],
+		[_kind_drawing(WeatherLook.Fall.SAND, drifts), Wind.Kind.STRONG_WIND],
+		[_kind_drawing(WeatherLook.Fall.ASH, drifts), Wind.Kind.STRONG_WIND],
+		[Weather.Kind.CLEAR, Wind.Kind.GALE],
+	]
+	var held := [[mirror._rain, WeatherMirror.MAX_DROPS, "rain"],
+			[mirror._splash, WeatherMirror.MAX_SPLASHES, "splashes"],
+			[mirror._snow, WeatherMirror.MAX_FLAKES, "flakes"], [mirror._drift, WeatherMirror.MAX_DRIFT, "drift"],
+			[wind._specks, WindMirror.MAX_SPECKS, "wind specks"]]
+	var was := camera.global_position
+	var checked := {}
+	for case: Array in cases:
+		if case[1] != Wind.Kind.GALE:
+			assert_int(case[0]).override_failure_message("fixture: no weather draws one of the held falls") \
+					.is_not_equal(Weather.Kind.CLEAR)
+		sm.current_weather = case[0]
+		sm.current_wind = case[1]
+		camera.global_position = was
+		mirror._process(0.016)
+		wind._process(0.016)
+		var keep_near := float(mirror._snow_process.get_shader_parameter("keep"))
+		for rise: float in [30.0, 60.0, 0.0]:
+			camera.global_position = was + Vector3(0.0, rise, 0.0)
+			mirror._process(0.016)
+			wind._process(0.016)
+			for pair: Array in held:
+				var system: GPUParticles3D = pair[0]
+				if not system.emitting:
+					continue
+				checked[pair[2]] = true
+				assert_int(system.amount).override_failure_message("the %s were re-sized by a zoom under %s: %d, not the cap %d"
+						% [pair[2], Weather.name_of(case[0]), system.amount, int(pair[1])]).is_equal(int(pair[1]))
+			if rise == 30.0 and mirror._snow.emitting and keep_near < 1.0:
+				assert_float(float(mirror._snow_process.get_shader_parameter("keep"))).override_failure_message(
+						"the flakes' births did not follow a wider view under %s" % Weather.name_of(case[0])) \
+						.is_greater(keep_near)
+	camera.global_position = was
+	for pair: Array in held:
+		assert_bool(checked.has(pair[2])).override_failure_message(
+				"fixture: the %s never drew, so nothing asked whether they are held" % pair[2]).is_true()
+
+
+# hold_emitter's arithmetic on a bare system: the amount is the cap whatever is asked of it, the lifetime
+# follows the life both ways, and the births it lets through are the authored ones below the cap.
+func test_a_held_system_carries_the_authored_births() -> void:
+	var system := GPUParticles3D.new()
+	var material := ShaderMaterial.new()
+	material.shader = _mirror()._snow_process.shader
+	var cap := 5000
+	for spec: Array in [[120.0, 2.5], [40.0, 30.0], [300.0, 9.0], [3.0, 0.3], [9000.0, 4.0]]:
+		var per_second: float = spec[0]
+		var life: float = spec[1]
+		WeatherMirror.hold_emitter(system, material, per_second, life, cap)
+		var keep := float(material.get_shader_parameter("keep"))
+		assert_int(system.amount).override_failure_message("a held system took an amount of its own").is_equal(cap)
+		assert_float(system.lifetime).override_failure_message("the lifetime %.2f did not follow a life of %.2f"
+				% [system.lifetime, life]).is_between(life, life * 2.0)
+		assert_float(keep).is_less_equal(1.0)
+		var births := keep * float(cap) / system.lifetime
+		if per_second * system.lifetime <= float(cap):
+			assert_float(births).override_failure_message("a held system carries %.1f births for %.1f a second"
+					% [births, per_second]).is_equal_approx(per_second, per_second * 0.02 + 0.01)
+		else:
+			assert_float(keep).override_failure_message("past the cap every slot is born").is_equal(1.0)
+	system.free()

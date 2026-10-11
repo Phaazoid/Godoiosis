@@ -36,15 +36,20 @@ class_name WeatherMirror
 #   - THE GRADE (#1269): WeatherGrade, the weather's own grade and whiteout over the finished 3D frame,
 #     easing between weathers. Any fall may author one; every shipped rain leaves it at identity.
 #
+# Every system born in the camera's box (rain, splashes, flakes, drift, the wind's specks) is HELD at its
+# cap and never re-sized by the camera (#1304): see hold_emitter.
+#
 # 3D only, declared on #292: the flat view's WET icons are its readout of the rule.
 
 # How far past the board the particles may be drawn and still not be culled (#656's trap: a
 # GPUParticles3D culls its WHOLE system to its own visibility_aabb). The rain box follows the camera
 # off the board's edge and falls well below it, so this is generous on purpose; a big box costs nothing.
 const COVER_MARGIN := 120.0
-# A fresh amount is only taken when the wanted one strays this far: setting amount or lifetime
-# restarts a particle system, so a zoom must not reshuffle the rain every frame.
+# A board-sized system takes a fresh amount only when the wanted one strays this far: setting amount
+# restarts a particle system (setting lifetime does not -- measured, #1304).
 const AMOUNT_SLACK := 0.35
+# A lifetime's headroom over the longest life a particle is given.
+const LIFE_PAD := 1.15
 const MAX_DROPS := 60000
 const MAX_SPLASHES := 12000
 const MAX_FLAKES := 200000
@@ -334,6 +339,11 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	var embers := _embering() and look.mote_rate > 0.0
 	_embers.system.emitting = embers
 	_embers.system.visible = embers
+	# A held system keeps its amount across a switch, so it is restarted: the new weather starts already
+	# falling rather than the old one's flakes taking the new look in mid-air (#1304).
+	for system: GPUParticles3D in [_rain, _splash, _snow, _drift]:
+		if system.emitting:
+			system.restart()
 	_fog_key = 0
 	_drift_texels = -1
 	_grit_texels = -1
@@ -537,12 +547,12 @@ func _place_rain() -> void:
 	_rain_process.set_shader_parameter("box_max", Vector3(hi.x, top, hi.y))
 	_rain_process.set_shader_parameter("floor_y", box["floor_y"])
 	_rain_process.set_shader_parameter("velocity", Vector3(wind.x, -speed, wind.y))
-	size_emitter(_rain, _rain_process, _look.density * area, float(box["fall"]) + 0.25, MAX_DROPS)
+	hold_emitter(_rain, _rain_process, _look.density * area, float(box["fall"]) + 0.25, MAX_DROPS)
 	_splash_process.set_shader_parameter("box_min", Vector3(lo.x, 0.0, lo.y))
 	_splash_process.set_shader_parameter("box_max", Vector3(hi.x, 0.0, hi.y))
 	_splash_process.set_shader_parameter("floor_y", box["floor_y"])
 	if _look.splashes:
-		size_emitter(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
+		hold_emitter(_splash, _splash_process, _look.splash_rate * area, maxf(_look.splash_life, 0.02), MAX_SPLASHES)
 
 
 # Flakes fall slowly and wander, so they get a longer life than their fall -- an eddy can hold one up --
@@ -567,7 +577,7 @@ func _place_snow() -> void:
 	_snow_process.set_shader_parameter("big", _look.big_flakes)
 	_snow_process.set_shader_parameter("lift", 1.5 / UnitSprite3D.texels_per_unit)
 	var life := float(box["fall"]) * 1.3 + maxf(_look.flake_settle, 0.0) + 0.25
-	size_emitter(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
+	hold_emitter(_snow, _snow_process, _look.density * float(box["area"]), life, MAX_FLAKES)
 	_place_drift(lo, hi, box["floor_y"], _wind())
 
 
@@ -585,7 +595,7 @@ func _place_drift(lo: Vector2, hi: Vector2, floor_y: float, wind: Vector2) -> vo
 	_drift_process.set_shader_parameter("floor_y", floor_y)
 	_drift_process.set_shader_parameter("velocity", Vector3(along.x, 0.0, along.y) * _look.drift_speed)
 	_drift_process.set_shader_parameter("hover", 1.0 / UnitSprite3D.texels_per_unit)
-	size_emitter(_drift, _drift_process, _look.drift_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.drift_life, 0.05),
+	hold_emitter(_drift, _drift_process, _look.drift_rate * (hi.x - lo.x) * (hi.y - lo.y), maxf(_look.drift_life, 0.05),
 			MAX_DRIFT)
 
 
@@ -644,19 +654,35 @@ static func fog_tint(look: WeatherLook, horizon: Color) -> Color:
 	return Color(color.r, color.g, color.b, 1.0)
 
 
-# Births per second -> an amount and a lifetime, with slack: either property restarts the system, so
-# they move only when the wanted value strays far, and `keep` trims the births in between so the
-# density on screen is the authored one whatever the box is doing. PURE in its arithmetic -- see
-# amount_for -- so a case can pin it with no renderer.
+# A system born over the BOARD: births per second -> an amount and a lifetime, with slack. Setting the
+# amount restarts the system, so it moves only when the wanted value strays far (a board or a dial, never
+# the camera), and `keep` trims the births in between so the density on screen is the authored one.
+# PURE in its arithmetic -- see amount_for -- so a case can pin it with no renderer.
 static func size_emitter(system: GPUParticles3D, material: ShaderMaterial, per_second: float, life: float,
 		cap: int) -> void:
 	var wanted := amount_for(per_second, life)
 	var stale := system.lifetime < life or wanted > system.amount \
 			or float(wanted) < float(system.amount) * (1.0 - AMOUNT_SLACK)
 	if stale and wanted > 0:
-		system.lifetime = life * 1.15
+		system.lifetime = life * LIFE_PAD
 		system.amount = mini(int(ceil(float(wanted) * 1.2)), cap)
 		system.preprocess = system.lifetime
+	material.set_shader_parameter("keep", keep_for(per_second, system.lifetime, system.amount))
+
+
+# A system born in the CAMERA's box is held at its cap and never re-sized (#1304): a restart replays its
+# whole lifetime in one frame, and a zoom re-sized 200k flakes living a minute -- frames of up to 1.4 s
+# (measured). Only the lifetime follows the view, which restarts nothing (measured), and `keep` trims
+# births to the authored density; past the cap the density thins. The one restart, here or a weather
+# switch's, replays a lifetime so the sky starts full.
+static func hold_emitter(system: GPUParticles3D, material: ShaderMaterial, per_second: float, life: float,
+		cap: int) -> void:
+	if system.amount != cap:
+		system.amount = cap
+	var lifetime := maxf(life, 0.01) * LIFE_PAD
+	if not is_equal_approx(system.lifetime, lifetime):
+		system.lifetime = lifetime
+		system.preprocess = lifetime
 	material.set_shader_parameter("keep", keep_for(per_second, system.lifetime, system.amount))
 
 
