@@ -22,7 +22,10 @@ extends Node
 #   - that each SAND and ASH strength (#1302) changes more of the board than the one below it and leaves
 #     the HUD alone; that, zoomed out with the grade held and the falling specks or ash off (they fill the
 #     view by design), the grit, dust, drift, soot and embers leave the void untouched; and how much the
-#     dust stands over the river with the look's water_haze against at 1 (the river ruling).
+#     dust stands over the river with the look's water_haze against at 1 (the river ruling);
+#   - that a wheel sweep out and back under the slow falls (#1304) re-sizes no system born in the
+#     camera's box and stalls no frame past ZOOM_STALL_MS, and that switching from one snow to another
+#     starts the new one already falling (the held flakes' restart replays a lifetime).
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -38,6 +41,9 @@ const FOG_MISSION := "res://Scenarios/missions/Terraces.tres"
 const FOG_CLEAR_MARGIN := 3.0
 # A void pixel counts as touched past this much luminance: a card or the pass moves it far more.
 const FOG_VOID_TOLERANCE := 0.02
+# A frame slower than this while zooming is a stall: before #1304 a re-size replayed a flake's whole
+# lifetime in one frame (229-1363 ms measured); held, the worst was 30 ms.
+const ZOOM_STALL_MS := 100.0
 const OUT_DIR := "user://weather_probe"
 
 var _scene: Node3D
@@ -75,6 +81,8 @@ func _ready() -> void:
 	failures += await _aurora()
 	failures += await _sand()
 	failures += await _ash()
+	failures += await _zoom()
+	failures += await _switch_fills()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	_game.scenario_manager.current_wind = Wind.Kind.CALM
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
@@ -169,8 +177,10 @@ func _snow(_ford_clear: Image) -> int:
 		var box: Dictionary = mirror.view_box(maxf(look.fall_speed, 0.5), mirror._wind(),
 				look.swirl_scale + look.flake_sway)
 		var wanted := look.density * float(box["area"]) * mirror._snow.lifetime
-		print("  %s: %d sampled px whitened; a system of %d flakes for %d wanted (box %.0f m2, fall %.1fs)"
-				% [Weather.name_of(kind), flakes, mirror._snow.amount, int(wanted), box["area"], box["fall"]])
+		var keep := float(mirror._snow_process.get_shader_parameter("keep"))
+		print("  %s: %d sampled px whitened; flakes held at %d, keep %.3f, so %d of %d wanted (box %.0f m2, fall %.1fs)"
+				% [Weather.name_of(kind), flakes, mirror._snow.amount, keep, int(keep * mirror._snow.amount),
+				int(wanted), box["area"], box["fall"]])
 	var light: int = counts[Weather.Kind.LIGHT_SNOW]
 	var blizzard: int = counts[Weather.Kind.BLIZZARD]
 	return 0 if light > 20 and blizzard > light and greyed == 3 and hud_moved == 0 else 1
@@ -523,6 +533,95 @@ func _sand_river() -> int:
 			% [full, thin] + " the look's water_haze %.2f; %.3f on their own (%d px)" % [float(held[5]), floor_moved,
 			water.size()])
 	return 0 if thin - floor_moved < (full - floor_moved) * 0.8 else 1
+
+
+# A wheel sweep out to the widest view and back (#1304), a notch every three frames, under each slow
+# fall: no system born in the camera's box may take another amount on any frame, and no frame may stall
+# past ZOOM_STALL_MS. On Level_1, whose opening shot is close and whose widest is the whole board.
+func _zoom() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(SNOW_MISSION)
+	var mirror: WeatherMirror = _scene._weather
+	var rig: CameraRig3D = _scene._rig
+	var opening := rig._target_distance
+	var failures := 0
+	for c: Array in [[Weather.Kind.LIGHT_SNOW, Wind.Kind.BREEZE], [Weather.Kind.BLIZZARD, Wind.Kind.STRONG_WIND],
+			[Weather.Kind.SANDSTORM, Wind.Kind.STRONG_WIND], [Weather.Kind.DUST_WALL, Wind.Kind.GALE],
+			[Weather.Kind.ASH_STORM, Wind.Kind.GALE]]:
+		_game.scenario_manager.current_weather = c[0]
+		_game.scenario_manager.current_wind = c[1]
+		await _wait(3.0)
+		var held := _held_amounts(mirror)
+		var resized := 0
+		var frames: Array[float] = []
+		var last := Time.get_ticks_usec()
+		for direction: int in [1, -1]:
+			for notch in 17:
+				rig.zoom_by(direction)
+				for f in 3:
+					await get_tree().process_frame
+					var now := Time.get_ticks_usec()
+					frames.append(float(now - last) / 1000.0)
+					last = now
+					if _held_amounts(mirror) != held:
+						resized += 1
+		frames.sort()
+		var name := "%s / %s" % [Weather.name_of(c[0]), Wind.name_of(c[1])]
+		print("  zoom %s: worst frame %.0f ms, median %.1f ms over %d frames; %d frame(s) re-sized a held system"
+				% [name, frames[-1], frames[frames.size() / 2], frames.size(), resized])
+		if frames[-1] > ZOOM_STALL_MS or resized > 0:
+			print("  zoom: FAILED under %s" % name)
+			failures += 1
+		rig.set_zoom(opening)
+		await _wait(2.0)
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	return 0 if failures == 0 else 1
+
+
+# The amount of every system born in the camera's box, -1 for one that is not drawing.
+func _held_amounts(mirror: WeatherMirror) -> Array[int]:
+	var wind: WindMirror = _scene._wind
+	var amounts: Array[int] = []
+	for system: GPUParticles3D in [mirror._rain, mirror._splash, mirror._snow, mirror._drift, wind._specks]:
+		amounts.append(system.amount if system.emitting else -1)
+	return amounts
+
+
+# Switching from one snow to another restarts the held flakes (#1304), and the restart must replay a
+# lifetime so the new weather starts already falling: straight after the switch at least half as much
+# moves as once it has settled. Pixels that change between two consecutive frames are the flakes (the
+# ground holds still); a restart that replayed nothing leaves only the first births, above the camera.
+# The switch's own two frames are printed, since they pay for that replay. Runs on _zoom's board.
+func _switch_fills() -> int:
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	_game.scenario_manager.current_weather = Weather.Kind.LIGHT_SNOW
+	await _wait(4.0)
+	var before := Time.get_ticks_usec()
+	_game.scenario_manager.current_weather = Weather.Kind.BLIZZARD
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var stall := float(Time.get_ticks_usec() - before) / 1000.0
+	var fresh := await _moving()
+	await _wait(5.0)
+	var settled := await _moving()
+	print("  switch Light Snow -> Blizzard: %d moving px straight after, %d settled; the switch's two frames took %.0f ms"
+			% [fresh, settled, stall])
+	return 0 if settled > 200 and fresh * 2 >= settled else 1
+
+
+# Sampled pixels whose luminance changes between two consecutive frames.
+func _moving() -> int:
+	await RenderingServer.frame_post_draw
+	var a := get_viewport().get_texture().get_image()
+	await RenderingServer.frame_post_draw
+	var b := get_viewport().get_texture().get_image()
+	var count := 0
+	for y in range(0, a.get_height(), 2):
+		for x in range(0, a.get_width(), 2):
+			if absf(a.get_pixel(x, y).get_luminance() - b.get_pixel(x, y).get_luminance()) > 0.08:
+				count += 1
+	return count
 
 
 # The screen pixels of every water cell's centre on the board, where the frame shows it.
