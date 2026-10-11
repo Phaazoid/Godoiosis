@@ -272,7 +272,7 @@ func test_transmutation_carving_can_heal_too() -> void:
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan)
 
-	assert_int(attack.resolved.heal_amount).is_equal(8)   # power + 0 aura (no sigils inscribed)
+	assert_int(attack.resolved.heal_amount).is_equal(8)   # power + 0 aura (no recipe, nothing delivered)
 	assert_int(attack.resolved.damage).is_equal(0)
 
 

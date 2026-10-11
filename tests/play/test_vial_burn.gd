@@ -32,7 +32,7 @@ func _fireball() -> TransmutationData:
 	var t := TransmutationData.new()
 	t.display_name = "Fireball"
 	t.power = 4
-	t.sigils.assign([FIRE])
+	t.recipe = "Push(F2)"
 	t.targets = EquippableData.TargetMode.UNIT
 	P.point(t, 2)
 	return t

@@ -87,7 +87,7 @@ func test_rescue_invalidated_when_target_is_no_longer_down() -> void:
 # exactly the aimed cell.
 func _gust(distance: int) -> TransmutationData:
 	var carving := TransmutationData.new()
-	carving.sigils.assign([Elemental.Element.AIR])
+	carving.recipe = "Push(A2)"
 	carving.deals_no_damage = true
 	carving.hits_allies = true
 	carving.knockback = distance

@@ -146,15 +146,14 @@ func test_the_section_comes_back_when_the_element_does() -> void:
 	).is_true()
 
 
-# A CARVING's element is DERIVED -- Fire plus Quickening resolves to SHOCK -- so the section is
-# offered on the thing the rule produces rather than on a field somebody typed.
+# A CARVING's element is DERIVED -- a recipe that pushes lightning delivers SHOCK -- so the section
+# is offered on the thing the rule produces rather than on a field somebody typed.
 func test_a_carving_that_resolves_to_shock_is_offered_the_section_too() -> void:
 	var carving := TransmutationData.new()
 	carving.display_name = "Probe Rune"
-	carving.sigils = [Elemental.Element.FIRE] as Array[Elemental.Element]
-	carving.flourishes = [Flourish.Type.QUICKENING] as Array[Flourish.Type]
+	carving.recipe = "Push(QF)"
 	assert_array(carving.authored_elements()).override_failure_message(
-		"Fire + Quickening stopped resolving to SHOCK, so this case is testing nothing"
+		"Push(QF) stopped resolving to SHOCK, so this case is testing nothing"
 	).contains([Elemental.Element.SHOCK])
 
 	_editor._mode = AttackEditorTool.Mode.TRANSMUTATION

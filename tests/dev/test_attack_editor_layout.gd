@@ -150,16 +150,24 @@ func test_the_headings_are_drawn_in_the_order_the_resource_declares() -> void:
 		previous = at
 
 
-func test_a_carving_gets_its_sigils_section_between_identity_and_the_geometry() -> void:
+# The recipe's heading is found by the FIELD it holds, never by its wording -- the title is the
+# resource's to declare, and a rename must not read as a missing section.
+func test_a_carving_gets_its_recipe_section_between_identity_and_the_geometry() -> void:
 	_editor._mode = AttackEditorTool.Mode.TRANSMUTATION
 	_editor.current = TransmutationData.new()
 	_editor._stage_fields()
 	_editor.populate()
+	var recipe_title := ""
+	for section: Dictionary in TransmutationData.property_sections():
+		if (section["fields"] as PackedStringArray).has("recipe"):
+			recipe_title = section["title"]
+	assert_str(recipe_title).override_failure_message(
+		"no section declares the recipe field").is_not_empty()
 	var identity := _index_of("Identity")
-	var sigils := _index_of("Sigils and flourishes")
+	var recipe := _index_of(recipe_title)
 	var geometry := _index_of("Range and shape")
-	assert_int(sigils).override_failure_message("no sigils heading in the carving form").is_greater(identity)
-	assert_int(geometry).is_greater(sigils)
+	assert_int(recipe).override_failure_message("no recipe heading in the carving form").is_greater(identity)
+	assert_int(geometry).is_greater(recipe)
 
 
 # --- hiding is live, and it reflows rather than rebuilding -----------------------------------

@@ -22,10 +22,10 @@ func before_test() -> void:
 	_sm = H.make_manager(self)
 
 
-func _carving(element: Elemental.Element, power: int = 4) -> TransmutationData:
+func _carving(recipe: String, power: int = 4) -> TransmutationData:
 	var t := TransmutationData.new()
 	t.power = power
-	t.sigils.assign([element])
+	t.recipe = recipe
 	return t
 
 
@@ -79,7 +79,7 @@ func test_a_rune_offers_every_carving() -> void:
 	# interchangeable equals and hiding whichever one happens to sort first would be arbitrary.
 	# Since #166 "all" means the whole catalogue, channelable or not — see the aura-dry case below.
 	var alch := _alchemist({ Elemental.Element.FIRE: 4 })
-	_wielding(alch, _rune_with([_carving(Elemental.Element.FIRE), _carving(Elemental.Element.FIRE, 6)]))
+	_wielding(alch, _rune_with([_carving("Push(F2)"), _carving("Push(F2)", 6)]))
 	assert_int(alch.get_transmutation_choices().size()).is_equal(2)
 	assert_bool(alch.has_transmutations()).is_true()
 
@@ -90,7 +90,7 @@ func test_the_category_opens_for_a_SINGLE_carving() -> void:
 	# much as a picker — hover descriptions and blotted-out unqualified carvings are coming
 	# (visual-clarity.md), and those make it worth a row even with no alternative to choose.
 	var alch := _alchemist({ Elemental.Element.FIRE: 4 })
-	_wielding(alch, _rune_with([_carving(Elemental.Element.FIRE)]))
+	_wielding(alch, _rune_with([_carving("Push(F2)")]))
 	assert_int(alch.get_transmutation_choices().size()).is_equal(1)
 	assert_bool(alch.has_transmutations()).is_true()
 
@@ -101,7 +101,7 @@ func test_an_aura_dry_wielder_gets_no_category_but_still_sees_the_carvings() -> 
 	# reason) — but the category itself still needs something ACTIONABLE to open, exactly as
 	# has_weapon_actions() requires. Row closed, contents intact.
 	var broke: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {}, false)
-	_wielding(broke, _rune_with([_carving(Elemental.Element.FIRE)]))
+	_wielding(broke, _rune_with([_carving("Push(F2)")]))
 	assert_int(broke.get_transmutation_choices().size()).is_equal(1)
 	assert_bool(broke.has_transmutations()).is_false()
 
@@ -114,8 +114,8 @@ func test_attack_with_no_pick_fires_the_runes_default_carving() -> void:
 	# channelable()[0] — precisely the pick the old rune branch used to assign by hand. If this
 	# ever diverges, pressing Attack on a rune silently fires the wrong carving.
 	var alch := _alchemist({ Elemental.Element.FIRE: 4 })
-	var first := _carving(Elemental.Element.FIRE)
-	_wielding(alch, _rune_with([first, _carving(Elemental.Element.FIRE, 6)]))
+	var first := _carving("Push(F2)")
+	_wielding(alch, _rune_with([first, _carving("Push(F2)", 6)]))
 
 	alch.active_attack = null
 	assert_object(alch.get_fired_attack()).is_same(first)
@@ -124,8 +124,8 @@ func test_attack_with_no_pick_fires_the_runes_default_carving() -> void:
 
 func test_a_live_pick_still_wins_over_the_default() -> void:
 	var alch := _alchemist({ Elemental.Element.FIRE: 4 })
-	var second := _carving(Elemental.Element.FIRE, 6)
-	_wielding(alch, _rune_with([_carving(Elemental.Element.FIRE), second]))
+	var second := _carving("Push(F2)", 6)
+	_wielding(alch, _rune_with([_carving("Push(F2)"), second]))
 
 	alch.active_attack = second
 	assert_object(alch.get_fired_attack()).is_same(second)
@@ -137,7 +137,7 @@ func test_weapon_action_and_transmutation_never_both_fill() -> void:
 	# One equipped slot, so exactly one of the two submenu sources can be non-empty. Pinning it
 	# because the failure mode is a top-level menu showing both categories for one item.
 	var alch := _alchemist({ Elemental.Element.FIRE: 4 })
-	_wielding(alch, _rune_with([_carving(Elemental.Element.FIRE), _carving(Elemental.Element.FIRE, 6)]))
+	_wielding(alch, _rune_with([_carving("Push(F2)"), _carving("Push(F2)", 6)]))
 	assert_bool(alch.has_transmutations()).is_true()
 	assert_array(alch.get_weapon_secondary_attacks()).is_empty()
 	assert_bool(alch.has_weapon_actions()).is_false()

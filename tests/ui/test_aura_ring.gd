@@ -368,9 +368,9 @@ static func _walk(root: Node) -> Array[Node]:
 # states, plus the two arithmetic properties a wrong constant would break silently. Whether a hollow
 # bar reads as empty at 116px is the dev's to play.
 
-func _circle(sigils: Array[Elemental.Element], utility := false) -> TransmutationData:
+func _circle(recipe: String, utility := false) -> TransmutationData:
 	var carving := TransmutationData.new()
-	carving.sigils = sigils.duplicate()
+	carving.recipe = recipe
 	carving.deals_no_damage = utility
 	return carving
 
@@ -383,12 +383,12 @@ func _demand_row(target: Unit, carving: TransmutationData,
 	return null
 
 
-# Repeats are WEIGHT, so a 2-Fire circle asks for two Fire and the row carries the count rather than a
-# deficit -- the deficit and the surplus are both derived from it, and a stored deficit could not say
-# which ticks a halo belongs on.
-func test_a_carving_asks_sector_by_sector_and_repeats_are_weight() -> void:
+# Atoms are WEIGHT, so a recipe whose arguments hold two Fire atoms asks for two Fire and the row
+# carries the count rather than a deficit -- the deficit and the surplus are both derived from it, and
+# a stored deficit could not say which ticks a halo belongs on.
+func test_a_carving_asks_sector_by_sector_and_atoms_are_weight() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
-	var circle := _circle([FIRE, FIRE, EARTH])
+	var circle := _circle("Break(F, E) + Push(F)")   # Fire 2, Earth 1
 
 	assert_int(_demand_row(celest, circle, FIRE).wanted).is_equal(2)
 	assert_int(_demand_row(celest, circle, EARTH).wanted).is_equal(1)
@@ -397,13 +397,29 @@ func test_a_carving_asks_sector_by_sector_and_repeats_are_weight() -> void:
 	assert_int(_demand_row(celest, circle, AETHER).wanted).is_equal(0)
 
 
+# A row SCALES only where the carving's damage does -- the elements of what it DELIVERS. The recipe
+# above spends Earth to free its fire and delivers only a fire atom, so Earth is asked for and does not
+# scale; that one flag is what keeps a halo off aura the hit never reads.
+func test_only_a_delivered_element_scales() -> void:
+	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
+	var circle := _circle("Break(F, E) + Push(F)")
+
+	assert_bool(_demand_row(celest, circle, FIRE).scales).is_true()
+	assert_bool(_demand_row(celest, circle, EARTH).scales).override_failure_message(
+		"an element the recipe only spends was marked as scaling the hit").is_false()
+	assert_bool(_demand_row(celest, circle, WATER).scales).is_false()
+	# No carving shown, nothing scales.
+	for row: AuraRing.Row in AuraRing.rows(celest):
+		assert_bool(row.scales).is_false()
+
+
 # THE POOL IS UNTOUCHED BY THE DEMAND LAID OVER IT. A mutant that folded the recipe into `depth` --
 # the tempting simplification, since the picture only ever shows their difference -- would render
 # identically for a carrier who covers the recipe exactly and lie about everyone else.
 func test_showing_a_carving_changes_nothing_about_the_pool_underneath() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
 	var plain := AuraRing.rows(celest)
-	var over := AuraRing.rows(celest, _circle([FIRE, FIRE, EARTH]))
+	var over := AuraRing.rows(celest, _circle("Break(F, E) + Push(F)"))
 
 	assert_int(over.size()).is_equal(plain.size())
 	for i in plain.size():
@@ -416,7 +432,7 @@ func test_showing_a_carving_changes_nothing_about_the_pool_underneath() -> void:
 # not an empty model, which is what the old null contract gave. `rows(null)` on its own is still
 # empty, unchanged: nothing to say about nobody, when nothing is being asked either.
 func test_a_carving_with_no_carrier_is_still_a_model() -> void:
-	var circle := _circle([WATER, WATER, AIR])
+	var circle := _circle("Break(A, W) + Push(W)")
 	var demanded := AuraRing.rows(null, circle)
 
 	assert_int(demanded.size()).is_equal(Elemental.SIGIL_ELEMENTS.size())
@@ -438,12 +454,13 @@ func test_a_carving_with_no_carrier_is_still_a_model() -> void:
 func test_the_readout_names_only_the_marks_that_are_actually_drawn() -> void:
 	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
 
-	var exact := AuraRing.readout(celest, _circle([FIRE, FIRE, EARTH]))
+	var exact := AuraRing.readout(celest, _circle("Break(F, E) + Push(F)"))
 	assert_int(exact.find("hollow")).is_equal(-1)
 	assert_int(exact.find("halo")).is_equal(-1)
 
-	# One Earth short of a 2-Earth circle, and one Fire past what it asks for.
-	var lopsided := AuraRing.readout(celest, _circle([FIRE, EARTH, EARTH]))
+	# One Earth short of an Earth 2 recipe, and one Fire past what it asks for -- in the element it
+	# delivers, so the spare Fire is damage and wears a halo.
+	var lopsided := AuraRing.readout(celest, _circle("Push(E2) + Push(F)"))
 	assert_int(lopsided.find("hollow")).is_greater(-1)
 	assert_int(lopsided.find("halo")).is_greater(-1)
 
@@ -452,15 +469,27 @@ func test_the_readout_names_only_the_marks_that_are_actually_drawn() -> void:
 	assert_int(AuraRing.readout(celest).find("halo")).is_equal(-1)
 
 
-# A halo is drawn because surplus aura is DAMAGE -- base_damage sums the pool over every sigil and is
-# uncapped. A utility carving suppresses that scaling outright (#126), so the same picture must not
-# carry the same promise: the readout would be pledging a number the resolver never adds.
+# THE HALO IS DRAWN ONLY WHERE THE ROW SCALES. The same carrier, the same spare Fire point -- but this
+# recipe spends its Fire and delivers an earth atom, so the spare Fire buys no damage and the readout
+# must not promise a halo for it. The Earth it is short of is still hollow.
+func test_aura_past_an_element_the_recipe_only_spends_draws_no_halo() -> void:
+	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
+	var spent := AuraRing.readout(celest, _circle("Break(F, E) + Push(E)"))   # Fire 1, Earth 2
+
+	assert_int(spent.find("hollow")).is_greater(-1)
+	assert_int(spent.find("halo")).override_failure_message(
+		"spare aura in an element the hit never scales off was promised as a halo").is_equal(-1)
+
+
+# A halo is drawn because surplus aura is DAMAGE -- base_damage adds the pool once for each element the
+# hit delivers, uncapped. A utility carving suppresses that scaling outright (#126), so the same picture
+# must not carry the same promise: the readout would be pledging a number the resolver never adds.
 func test_a_utility_circles_surplus_promises_no_damage() -> void:
 	var celest := _alchemist([FIRE], {FIRE: 3})
-	assert_int(_flat(AuraRing.readout(celest, _circle([FIRE]))).find("is damage")).is_greater(-1)
-	assert_int(_flat(AuraRing.readout(celest, _circle([FIRE], true))).find("is damage")).is_equal(-1)
+	assert_int(_flat(AuraRing.readout(celest, _circle("Push(F2)"))).find("is damage")).is_greater(-1)
+	assert_int(_flat(AuraRing.readout(celest, _circle("Push(F2)", true))).find("is damage")).is_equal(-1)
 	# ...and still says a halo is there, because one is.
-	assert_int(_flat(AuraRing.readout(celest, _circle([FIRE], true))).find("halo")).is_greater(-1)
+	assert_int(_flat(AuraRing.readout(celest, _circle("Push(F2)", true))).find("halo")).is_greater(-1)
 
 
 # UiText.wrap breaks a line wherever its width runs out, so a PHRASE is searched with the wrapping
@@ -528,7 +557,7 @@ func _demand_ring(target: Unit, demand: TransmutationData, box_px: float) -> Aur
 func test_only_a_ring_showing_a_demand_gives_up_room_for_the_arc() -> void:
 	var celest := _alchemist([FIRE], {FIRE: 2})
 	var plain := await _demand_ring(celest, null, 116.0)
-	var asking := await _demand_ring(celest, _circle([FIRE]), 116.0)
+	var asking := await _demand_ring(celest, _circle("Push(F2)"), 116.0)
 
 	assert_float(plain._arc_room).override_failure_message(
 		"a ring with no carving reserved room for an arc it will never draw").is_equal(0.0)

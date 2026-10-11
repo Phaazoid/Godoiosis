@@ -25,10 +25,10 @@ func _alchemist(aura: Dictionary[Elemental.Element, int], affinity: Array[Elemen
 	u.unit_instance.affinity = affinity
 	return u
 
-func _carving(sigils: Array[Elemental.Element]) -> TransmutationData:
+func _carving(recipe: String) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = 5
-	t.sigils.assign(sigils)
+	t.recipe = recipe
 	return t
 
 func _rune(carvings: Array[TransmutationData], size: RuneData.Size = RuneData.Size.LARGE) -> RuneData:
@@ -38,9 +38,9 @@ func _rune(carvings: Array[TransmutationData], size: RuneData.Size = RuneData.Si
 		assert_bool(rune.inscribe(c)).override_failure_message("fixture carving failed to inscribe").is_true()
 	return rune
 
-# A single-FIRE-sigil carving on a SMALL rune: channelable iff the wielder has FIRE aura >= 1.
+# A one-verb carving asking Fire 1, on a SMALL rune: channelable iff the wielder has FIRE aura >= 1.
 func _single_carving_rune() -> RuneData:
-	var carvings: Array[TransmutationData] = [_carving([FIRE])]
+	var carvings: Array[TransmutationData] = [_carving("Push(F)")]
 	return _rune(carvings, RuneData.Size.SMALL)
 
 # ==============================================================================
@@ -78,14 +78,13 @@ func test_exactly_enough_aura_equips() -> void:
 	assert_object(u.get_equipped_weapon()).is_same(rune)
 
 # The partial case the gate's threshold exists for: one channelable carving of two is good gear.
-# (Was one-of-three until the 2026-08-10 wildcard model made the [FIRE, FIRE] middle carving
-# channelable at fire-1; a second dead carving no longer fits a LARGE rune's capacity beside
-# these two, so the pair carries the premise.)
+# (Was one-of-three until the 2026-08-10 wildcard model made a Fire 2 middle carving channelable
+# at fire-1; the pair carries the premise.)
 func test_one_channelable_carving_of_two_equips() -> void:
 	var u: Unit = _alchemist({ FIRE: 1 }, [FIRE])
 	var carvings: Array[TransmutationData] = [
-		_carving([FIRE]),                  # deficit 0 — channelable
-		_carving([FIRE, FIRE, FIRE]),      # deficit 2 past the wildcard — not
+		_carving("Push(F)"),              # deficit 0 — channelable
+		_carving("Push(F) + Push(F2)"),  # Fire 3: deficit 2 past the wildcard — not
 	]
 	var rune: RuneData = _rune(carvings)
 	assert_int(rune.channelable(u).size()).override_failure_message("premise: exactly one carving channelable").is_equal(1)

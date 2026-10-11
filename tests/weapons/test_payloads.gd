@@ -641,7 +641,7 @@ func test_a_carving_payload_scales_off_the_throwers_aura() -> void:
 	var carving := TransmutationData.new()
 	carving.display_name = "Spark"
 	carving.power = 2
-	carving.sigils.assign([Elemental.Element.FIRE])
+	carving.recipe = "Push(F2)"
 	carving.targets = BOTH   # it has to hit the foe to resolve any damage; a map-only carving cannot
 	P.point(carving, 1)
 	var carrier := _attack("Lob", MAP)

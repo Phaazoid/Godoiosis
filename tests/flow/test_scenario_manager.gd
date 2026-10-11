@@ -358,8 +358,7 @@ func test_affinity_survives_so_a_loaded_alchemist_can_still_channel() -> void:
 	assert_int(b.unit_instance.get_element_aura(Elemental.Element.AETHER)).is_equal(3)
 
 	var carving := TransmutationData.new()
-	var sigils: Array[Elemental.Element] = [Elemental.Element.AETHER]
-	carving.sigils = sigils
+	carving.recipe = "Bind(Q, Q)"   # asks Aether 2
 	assert_bool(carving.can_channel(b, Elemental.Element.AETHER)).is_true()
 
 func test_a_unit_with_no_affinity_stays_rebecca_after_a_round_trip() -> void:

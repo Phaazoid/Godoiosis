@@ -48,7 +48,7 @@ func _line_carving(display_name: String, power: int, length: int) -> Transmutati
 	t.display_name = display_name
 	t.power = power
 	P.line(t, length)
-	t.sigils.assign([FIRE] as Array[Elemental.Element])
+	t.recipe = "Push(F2)"   # Fire 2, delivers flame: a FIRE hit
 	return t
 
 
@@ -57,7 +57,7 @@ func _wide_carving(display_name: String, power: int, length: int, width: int) ->
 	t.display_name = display_name
 	t.power = power
 	P.wide(t, length, width)
-	t.sigils.assign([FIRE] as Array[Elemental.Element])
+	t.recipe = "Push(F2)"   # Fire 2, delivers flame: a FIRE hit
 	return t
 
 
@@ -97,9 +97,9 @@ func test_a_rune_line_names_every_carvings_power_and_pattern() -> void:
 	assert_str(text).contains("Emberwash pow2 Facing[#/#/+]")
 
 
-func test_a_carvings_element_comes_from_its_sigils() -> void:
-	# elemental_damage_type is WeaponAttackData-only; a carving carries FIRE in `sigils`, and
-	# reading the weapon field here would be a runtime error rather than a blank.
+func test_a_carvings_element_comes_from_what_it_delivers() -> void:
+	# elemental_damage_type is WeaponAttackData-only; a carving's FIRE is what its recipe delivers
+	# (flame), and reading the weapon field here would be a runtime error rather than a blank.
 	var alch := _spawn("Isaac")
 	_give_aura(alch, FIRE)
 	alch.add_item(_rune_of([_line_carving("Emberline", 4, 3)]))
@@ -118,12 +118,13 @@ func test_an_unchannelable_carving_is_still_listed_and_carries_its_reason() -> v
 	#
 	# The wielder must still be able to WIELD the rune: can_equip (#157) needs one channelable
 	# carving, so "an alchemist with no aura" renders (unarmed) and cannot exercise this at all.
-	# Aura FIRE 1 pays the cheap carving and leaves the expensive one 2 wildcards short of 1.
+	# Aura FIRE 1 channels the cheap carving on the universal wildcard and leaves the expensive one
+	# 2 wildcards short of 1.
 	var alch := _spawn("Rebecca")
 	_give_aura(alch, FIRE, 1)
-	var payable := _line_carving("Emberline", 4, 3)                 # sigils [FIRE]
+	var payable := _line_carving("Emberline", 4, 3)                 # Fire 2
 	var unpayable := _line_carving("Emberstorm", 6, 3)
-	unpayable.sigils.assign([FIRE, FIRE, WATER] as Array[Elemental.Element])
+	unpayable.recipe = "Break(F, W) + Push(F)"   # Fire 2, Water 1
 	var rune := _rune_of([payable, unpayable])                      # payable first: it sets temper
 
 	# Preconditions, or the case passes vacuously on a rune nobody could hold.
