@@ -8,7 +8,7 @@
 >
 > **Wording note (immersion):** in-game language stays inside the fantasy — *channeling, transmutation, carving, marks* — never "chemistry," even though the designers know exactly what it is.
 >
-> **Canon checked through #1315 (2026-10-11; Phase 2 superseded banner added 2026-10-11).**
+> **Canon checked through #699 (2026-09-02); Phase 2 superseded banner added 2026-10-11.**
 >
 > **SUPERSEDED as a MECHANISM by Deep Alchemy Phase 2 (2026-10-11).** A carving is now a recipe of verbs with substances as their arguments (`Break(F, A) + Push(F2)`). Canon: [deep-alchemy.md](deep-alchemy.md) → *What is built*. Phase 2 replaced:
 > - **the anatomy**: weighted sigils + shaping flourishes are gone; `TransmutationData.recipe` replaces both;
