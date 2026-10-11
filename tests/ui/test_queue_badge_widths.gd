@@ -137,6 +137,7 @@ func test_every_world_event_badge_fits_the_dock() -> void:
 		ActionQueueRow.BADGE_TANK,
 		ActionQueueRow.BADGE_SPLIT,
 		ActionQueueRow.BADGE_SPLITS % 9,
+		ActionQueueRow.BADGE_FIZZLED,
 	]
 	var over: Array[String] = []
 	for badge: String in badges:

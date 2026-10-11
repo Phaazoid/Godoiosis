@@ -364,8 +364,17 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 
 # One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
 # unchannelable carving, #166) stays LISTED but disabled — the menu shows it, it never hides it.
+#
+# A carving that would FIZZLE greys the same way (Deep Alchemy Phase 2), judged from where the unit
+# will STAND after its queued moves -- get_projected_destination is Unit.projected_cell over its own
+# squad's queue, the origin the queue gate reads -- and asked of the same CellSubstances.fizzle_reason,
+# so this row and a refused order cannot disagree. Asked only of an otherwise fireable attack: the
+# readiness or channel reason comes first.
 func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
-	return _with_gauge(_entry(attack.display_name, unit.attack_block_reason(attack),
+	var reason := unit.attack_block_reason(attack)
+	if reason == "":
+		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), game._board(), unit)
+	return _with_gauge(_entry(attack.display_name, reason,
 		_with_ally_line(unit.attack_detail(attack), unit, attack)), unit, attack)
 
 # Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring

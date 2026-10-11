@@ -21,8 +21,12 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const MD := preload("res://tests/support/menu_drive.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
+const WATER_ATLAS := Vector2i(5, 6)   # play/board_builder.gd's: terrain_type WATER in TestTiles.tres
 
-const FIRE := Elemental.Element.FIRE
+# The partial rune is carved in AETHER because free aether is in every cell's air: no carving of it
+# can FIZZLE (Deep Alchemy Phase 2), so these cases measure channeling alone. Free fire is in nobody's.
+const AETHER := Elemental.Element.AETHER
+const WATER := Elemental.Element.WATER
 
 var _main: Node
 var game: Node2D
@@ -62,20 +66,20 @@ func _carving(recipe: String, name: String) -> TransmutationData:
 
 # An alchemist wielding a three-carving rune with a mixed verdict — #157's partial case, which is
 # precisely why this readout is owed: the rune equips legally and the dead carving still needs to
-# explain itself. At fire-1 under the wildcard model (2026-08-10): Ember covered, Pyre channels
+# explain itself. At aether-1 under the wildcard model (2026-08-10): Ember covered, Pyre channels
 # via the universal +1, Inferno's deficit of 2 is past any pool.
 func _alchemist_with_a_partial_rune() -> Unit:
 	var alch := _spawn(Vector2i(1, 0))
-	alch.unit_instance.aura = { FIRE: 1 }
-	alch.unit_instance.affinity = [FIRE]
+	alch.unit_instance.aura = { AETHER: 1 }
+	alch.unit_instance.affinity = [AETHER]
 
 	var rune := RuneData.new()
 	rune.size = RuneData.Size.LARGE
 	rune.display_name = "Test Rune"
-	# One, two and three verbs asking Fire 1, 2 and 3 -- six verbs, the LARGE rune's whole capacity.
-	assert_bool(rune.inscribe(_carving("Push(F)", "Ember"))).is_true()                            # deficit 0
-	assert_bool(rune.inscribe(_carving("Focus(F) + Push(F)", "Pyre"))).is_true()                  # deficit 1 — wildcarded
-	assert_bool(rune.inscribe(_carving("Focus(F) + Spread(F) + Push(F)", "Inferno"))).is_true()   # deficit 2 — dead
+	# One, two and three verbs asking Aether 1, 2 and 3 -- six verbs, the LARGE rune's whole capacity.
+	assert_bool(rune.inscribe(_carving("Push(Q)", "Ember"))).is_true()                            # deficit 0
+	assert_bool(rune.inscribe(_carving("Focus(Q) + Push(Q)", "Pyre"))).is_true()                  # deficit 1 — wildcarded
+	assert_bool(rune.inscribe(_carving("Focus(Q) + Spread(Q) + Push(Q)", "Inferno"))).is_true()   # deficit 2 — dead
 	alch.add_item(rune)
 	assert_object(alch.get_equipped_weapon()).override_failure_message("fixture failed to equip the rune").is_same(rune)
 	return alch
@@ -527,3 +531,63 @@ func test_a_watch_row_says_whether_its_shot_hits_allies() -> void:
 	assert_str(watch).override_failure_message(
 		"the ally line replaced the watch's own explanation:\n%s" % watch) \
 		.contains(UiText.wrap(Glossary.short(Glossary.Term.OVERWATCH)).split("\n")[0])
+
+
+# ==============================================================================
+#  Deep Alchemy Phase 2: a carving that would FIZZLE greys, with the reason
+# ==============================================================================
+
+# Pressure Spray's shape, which needs water beside the caster. Channelable at water-4, so the fizzle is
+# the only thing that can grey it.
+func _spray_alchemist(cell: Vector2i) -> Unit:
+	var alch := _spawn(cell)
+	alch.unit_instance.aura = { WATER: 4 }
+	alch.unit_instance.affinity = [WATER]
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.MEDIUM
+	rune.display_name = "Spray Rune"
+	assert_bool(rune.inscribe(_carving("Focus(W2) + Push(W2)", "Spray"))).is_true()
+	alch.add_item(rune)
+	assert_object(alch.get_equipped_weapon()).override_failure_message("fixture failed to equip the rune").is_same(rune)
+	return alch
+
+
+# The reason on the row is CellSubstances' own, asked from the cell the queue gate asks it from -- so a
+# greyed row and a refused order say the same thing.
+func test_a_carving_that_would_fizzle_is_greyed_with_the_reason() -> void:
+	var alch := _spray_alchemist(Vector2i(1, 0))
+	var spray: AttackData = alch.get_transmutation_choices()[0]
+	assert_bool(alch.is_attack_fireable(spray)).override_failure_message(
+			"fixture: the carving must be channelable, or channeling is what greys it").is_true()
+	var reason := CellSubstances.fizzle_reason(spray, alch.get_projected_destination(), game._board(), alch)
+	assert_str(reason).override_failure_message(
+			"fixture: the grass row holds no water, so the carving must fizzle").is_not_empty()
+
+	await _enter_attack_ring(alch)
+	var row := _row_named(_open_rows(), "Spray")
+	assert_bool(row.is_empty()).override_failure_message("the carving was not listed").is_false()
+	assert_bool(_disabled(row)).override_failure_message("a carving that fizzles was left pickable").is_true()
+	assert_str(_tooltip(row).replace("\n", " ")).override_failure_message(
+			"the greyed row did not say why: '%s'" % _tooltip(row)).contains(reason)
+
+
+# Judged from where the unit will STAND after its queued moves: a walk to the water makes the row live
+# while the unit still stands far from it. A menu reading the live cell keeps it greyed.
+func test_the_row_is_judged_from_where_the_unit_will_stand() -> void:
+	game.grid.set_cell(Vector2i(7, 0), GRASS_SOURCE, WATER_ATLAS)
+	var alch := _spray_alchemist(Vector2i(1, 0))
+	await _enter_attack_ring(alch)
+	assert_bool(_disabled(_row_named(_open_rows(), "Spray"))).override_failure_message(
+			"fixture: from (1, 0) the water must be out of reach").is_true()
+	_controller().dismiss()
+	await await_idle_frame()
+
+	var walk := MoveAction.new()
+	var path: Array[Vector2i] = [Vector2i(1, 0), Vector2i(6, 0)]
+	walk.init(alch, path, null)
+	assert_bool(game.squad_manager.queue_action(alch.squad, walk)).is_true()
+	assert_that(alch.get_projected_destination()).is_equal(Vector2i(6, 0))
+
+	await _enter_attack_ring(alch)
+	assert_bool(_disabled(_row_named(_open_rows(), "Spray"))).override_failure_message(
+			"the row was judged from the live cell, not from where the queued walk ends").is_false()

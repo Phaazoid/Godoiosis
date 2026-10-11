@@ -435,6 +435,10 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 	for attack in unit.get_selectable_attacks():
 		if not unit.is_attack_fireable(attack):
 			continue
+		# A carving that FIZZLES from this origin is no candidate: the queue gate would refuse it, the
+		# player's row is greyed. The same CellSubstances.fizzle_reason, asked from the same cell.
+		if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+			continue
 		var marks: Dictionary = patients if attack.heals else hostiles
 		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
 			continue
@@ -956,6 +960,9 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 	if attack == null:
 		return false
 	var origin := unit.get_projected_destination()   # the fallback walk runs AFTER the group move is queued
+	# A watch whose carving would fizzle here could only ever fire a fizzle: not worth the main action.
+	if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+		return false
 	var plan := squad_manager.resolve_plan(unit.squad, board)
 	var saved := AIController.stand_on_projected(squad_manager)
 	var aim := origin

@@ -110,3 +110,77 @@ func test_an_argument_must_name_a_real_substance() -> void:
 func test_a_break_must_split_and_a_bind_must_make_a_real_molecule() -> void:
 	assert_str(_parse("Break(F, W)").error).contains("nothing to break")
 	assert_str(_parse("Bind(F, W)").error).contains("makes nothing real")
+
+
+# --- the fizzle walk (Deep Alchemy Phase 2: a verb whose argument is not present fizzles) -------
+
+# Every argument the walk below can name, with display names so the reason's wording is the parse's.
+func _fizzle_catalog() -> Dictionary:
+	var catalog := _catalog()
+	for id: String in catalog:
+		(catalog[id] as Substance).display_name = id.capitalize()
+	catalog["salt"] = _sub("E2")
+	catalog["ash"] = _sub("AE")
+	return catalog
+
+
+func _walk(recipe: String, available: Array[String]) -> String:
+	var catalog := _fizzle_catalog()
+	var parsed := CarvingRecipe.parse(recipe, catalog)
+	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
+			% [recipe, parsed.error]).is_empty()
+	return parsed.fizzle_reason(available, catalog)
+
+
+func _ambient() -> Array[String]:
+	var ids: Array[String] = []
+	ids.assign(CellSubstances.AMBIENT)
+	return ids
+
+
+# Break frees the air and water out of vapor, the water pairs into W2, and the Push finds it: Splash
+# works anywhere, on the ambient air alone.
+func test_a_break_makes_what_the_next_verb_needs() -> void:
+	assert_str(_walk("Break(A, W) + Push(W2)", _ambient())).is_empty()
+
+
+# A Break needs the BOND it splits present -- vapor is ambient, the molecule F+W is not one at all, so
+# the case that bites is a Break of something absent.
+func test_a_break_needs_its_molecule() -> void:
+	assert_str(_walk("Break(F, A)", _ambient())).is_empty()
+	var no_air: Array[String] = ["atom_aether"]
+	assert_str(_walk("Break(F, A)", no_air)).contains("vital")
+
+
+func test_a_tied_carving_fizzles_without_its_material_and_works_with_it() -> void:
+	assert_str(_walk("Focus(W2) + Push(W2)", _ambient())).is_not_empty()
+	var by_water := _ambient()
+	by_water.append("water")
+	assert_str(_walk("Focus(W2) + Push(W2)", by_water)).is_empty()
+
+
+func test_lightning_from_nowhere_fizzles() -> void:
+	assert_str(_walk("Extract(QF) + Push(QF)", _ambient())).is_not_empty()
+
+
+func test_a_bind_needs_both_halves() -> void:
+	assert_str(_walk("Bind(Q, Q)", _ambient())).is_empty()
+	assert_str(_walk("Break(A, W) + Bind(Q, W)", _ambient())).is_empty()
+	var no_aether: Array[String] = ["vapor"]
+	assert_str(_walk("Break(A, W) + Bind(Q, W)", no_aether)).contains("aether")
+
+
+# Rock Throw: salt is no ambient substance, so it needs dirt's (or stone's) parts beside it.
+func test_a_push_of_salt_works_where_salt_is_present() -> void:
+	assert_str(_walk("Push(E2)", _ambient())).is_not_empty()
+	var by_dirt := _ambient()
+	by_dirt.append_array(["dirt", "salt", "ash"])
+	assert_str(_walk("Push(E2)", by_dirt)).is_empty()
+
+
+# The reason NAMES the first missing substance, by its display name lower-cased.
+func test_the_reason_names_the_missing_substance() -> void:
+	var reason := _walk("Focus(W2) + Push(W2)", _ambient())
+	assert_str(reason).contains("water")
+	assert_str(reason).contains("Fizzles")
+	assert_str(_walk("Extract(QF) + Push(QF)", _ambient())).contains("lightning")

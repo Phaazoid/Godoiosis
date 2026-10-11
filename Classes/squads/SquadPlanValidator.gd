@@ -184,6 +184,17 @@ static func _revalidate_unit_attacks(actions: Array[BaseAction], plan: ResolvedP
 		var aim := action as AttackAction
 		if aim_whiffs(aim, _plan_found_a_target(plan, aim)):
 			aim.add_validation_error("Nothing left to hit on that cell")
+		# ...and the fizzle (Deep Alchemy Phase 2): the resolve marked this aim's carving fizzled where
+		# the pass has its caster, so a re-plan has walked them away from what it needs. RED, still
+		# queued -- one-way validity, the whiff's own rule. The resolve's answer, never a re-derivation.
+		if _plan_fizzled(plan, aim):
+			aim.add_validation_error("Fizzles here now")
+
+static func _plan_fizzled(plan: ResolvedPlan, aim: AttackAction) -> bool:
+	for resolved_attack in plan.attacks:
+		if resolved_attack.source_aim == aim and resolved_attack.resolved != null and resolved_attack.resolved.fizzled:
+			return true
+	return false
 
 static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
 	for resolved_attack in plan.attacks:

@@ -464,6 +464,9 @@ func get_outcome_summary() -> String:
 	if resolved == null or target == null:   # cell attack (#47) — no unit outcome to summarize
 		return ""
 
+	# A fizzle (Deep Alchemy Phase 2) is skipped too, and says why in the resolver's own word.
+	if resolved.fizzled:
+		return PlanResolver.FIZZLED_POPUP
 	# R7 liveness (#1005): the actor was felled before this swing. Said rather than shown as a
 	# damage number the pass will never deal — the row stays, so it has to stop claiming an outcome.
 	# PLACEHOLDER WORDING, for the dev to replace: player-facing prose is his.

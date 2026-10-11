@@ -32,7 +32,9 @@ func _fireball() -> TransmutationData:
 	var t := TransmutationData.new()
 	t.display_name = "Fireball"
 	t.power = 4
-	t.recipe = "Push(F2)"
+	# Makes its flame out of the ambient air: on a board with no fire anywhere a lone Push(F2) has
+	# nothing to push and FIZZLES (Deep Alchemy Phase 2), which is not what this suite is about.
+	t.recipe = "Break(F, A) + Push(F2)"
 	t.targets = EquippableData.TargetMode.UNIT
 	P.point(t, 2)
 	return t

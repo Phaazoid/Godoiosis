@@ -70,11 +70,12 @@ func _shock_electrocute(bonus: int = 5) -> ElementalReaction:
 
 
 # A lightning bolt: it pushes lightning (QF), which hits as SHOCK and scales off Aether and Fire --
-# so an alchemist with Fire alone still adds the fire.
+# so an alchemist with Fire alone still adds the fire. It BINDS that lightning out of the air first,
+# Zap Cannon's shape, so it never fizzles (Deep Alchemy Phase 2): no board here holds any lightning.
 func _lightning_bolt(power: int, mode: EquippableData.TargetMode = EquippableData.TargetMode.UNIT) -> TransmutationData:
 	var t := TransmutationData.new()
 	t.power = power
-	t.recipe = "Push(QF)"
+	t.recipe = "Break(F, A) + Bind(Q, F) + Push(QF)"
 	t.targets = mode
 	return t
 

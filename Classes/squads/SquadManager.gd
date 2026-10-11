@@ -476,10 +476,28 @@ static func _plan_refusal(action: BaseAction) -> String:
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 	validate_squad_plan_preview(squad, action)
-	if action.is_valid and _candidate_aim_connects(squad, action) and _candidate_rescue_target_ok(squad, action):
+	if action.is_valid and _candidate_carving_holds(squad, action) and _candidate_aim_connects(squad, action) \
+			and _candidate_rescue_target_ok(squad, action):
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
+	return false
+
+# The fizzle half of the gate (Deep Alchemy Phase 2), the whiff clause's sibling: a candidate carving
+# must find its arguments where the caster will STAND to cast it -- its projected origin, read the way
+# aim_finds_a_target reads it. The same CellSubstances.fizzle_reason the menu row greys with, so a
+# greyed row and a refused order cannot disagree. A stored aim's answer comes from the resolve
+# (SquadPlanValidator's "Fizzles here now"). Non-attack candidates pass straight through.
+func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
+	if not (action is AttackAction):
+		return true
+	var aim := action as AttackAction
+	var one: Array[BaseAction] = [action]
+	var origin := Unit.projected_cell(aim.actor, _hypothetical_actions(squad, one), true, true)
+	var reason := CellSubstances.fizzle_reason(aim.fired_attack, origin, board_source.call(), aim.actor)
+	if reason == "":
+		return true
+	aim.add_validation_error(reason)
 	return false
 
 # The whiff half of the gate: only a CANDIDATE may be asked this -- a stored aim's answer comes

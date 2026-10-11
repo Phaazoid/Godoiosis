@@ -296,9 +296,14 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		return pick
 	var origin := unit.get_projected_destination()
 	var aiming: AttackData = pick.attack
+	var board := _board()
+	# A carving that fizzles from here has no aim the queue would take (SquadManager's fizzle gate), so
+	# say why up front rather than listing cells every one of which would be refused.
+	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, unit)
+	if fizzle != "":
+		return {"ok": false, "error": "%s can't fire %s from %s: %s" % [handle, _attack_label(aiming), str(origin), fizzle]}
 	# Armed for the loop's declare(), whose stamp the whiff policy reads -- queue_attack's arming.
 	unit.active_attack = aiming
-	var board := _board()
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
 	# can_hit_cell_from is what narrows it to the aim actually available. Both of queue_attack's
@@ -1303,6 +1308,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("drowns")
 	if r.removed:
 		events.append("into the void")
+	if r.fizzled:
+		events.append("fizzles")
 	if r.insulated:
 		events.append("insulated")
 	if r.burned_vial != null:
@@ -1335,6 +1342,7 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 	var hp_after := r.target_hp_after if r != null else -1
 	var lethality := r.lethality if r != null else ResolvedOutcome.Lethality.NONE
 	var skipped := r.skipped if r != null else false
+	var fizzled := r.fizzled if r != null else false
 	return {
 		"actor": handle_for(atk.actor),
 		"target": handle_for(atk.target),
@@ -1343,6 +1351,7 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 		"hp_after": hp_after,
 		"lethality": lethality,   # NONE / DOWNED / KILLED (mirrors Unit.take_damage — Law #2)
 		"skipped": skipped,       # counter-er was downed/killed earlier this pass -> no counter
+		"fizzled": fizzled,       # ...or its carving had nothing to work with where it stood
 	}
 
 # ---- execute (headless application of the resolved plan) ----
