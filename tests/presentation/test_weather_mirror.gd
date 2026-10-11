@@ -16,7 +16,9 @@
 #     each and nothing else; a calm board grounds the grit; the embers take the look's colour; and no
 #     zoom re-deals anything born over the board;
 #   - every system born in the camera's box is held at its cap, so no zoom re-sizes one (#1304), and a
-#     held system still carries the authored births.
+#     held system still carries the authored births;
+#   - a flake is born under its look's ceiling and lives only to land, so zooming out stops stretching its
+#     life, and the fade rows reach the draw (#1305).
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
@@ -110,7 +112,7 @@ func test_every_weather_shader_parses_and_declares_what_the_mirror_sets() -> voi
 		mirror._splash_process: mask,
 		mirror._splash_draw: ["strip", "tint", "frames"],
 		mirror._snow_process: mask + ["velocity", "sway", "swirl", "swirl_scale", "settle", "big", "lift"],
-		mirror._snow_draw: ["flakes", "size", "tint"],
+		mirror._snow_draw: ["flakes", "size", "tint", "fade_in", "fade_out"],
 		mirror._drift_process: mask + ["velocity", "hover"],
 		mirror._drift_draw: ["streak", "size", "tint", "age_fade"],
 		mirror.grade()._material: ["saturation", "brightness", "tint", "veil", "veil_color", "veil_offset"],
@@ -1041,3 +1043,69 @@ func test_a_held_system_carries_the_authored_births() -> void:
 		else:
 			assert_float(keep).override_failure_message("past the cap every slot is born").is_equal(1.0)
 	system.free()
+
+
+# A falling flake is born no higher than its look's ceiling above the ground in view (#1305): a
+# camera raised far over the board births its flakes down there, where they are seen, and one close to the
+# board still births them just above the eye, as before.
+func test_a_raised_camera_births_flakes_under_the_ceiling() -> void:
+	var mirror := _mirror()
+	var camera: Camera3D = mirror.camera
+	assert_object(camera).override_failure_message("fixture: the mirror has no camera").is_not_null()
+	var kind := _kind_drawing(WeatherLook.Fall.SNOW)
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	var ceiling := mirror._aim().y + WeatherLook.for_kind(kind).flake_ceiling
+	var was := camera.global_position
+	camera.global_position = Vector3(was.x, ceiling + 60.0, was.z)
+	mirror._process(0.016)
+	var high := (mirror._snow_process.get_shader_parameter("box_max") as Vector3).y
+	camera.global_position = Vector3(was.x, ceiling - WeatherMirror.SPAWN_ABOVE - 3.0, was.z)
+	mirror._process(0.016)
+	var low := (mirror._snow_process.get_shader_parameter("box_max") as Vector3).y
+	var close_eye := camera.global_position.y
+	camera.global_position = was
+	assert_float(high).override_failure_message("a camera far above the board births flakes at %.1f, over the ceiling %.1f"
+			% [high, ceiling]).is_less_equal(ceiling + 0.001)
+	assert_float(low).override_failure_message("a camera under the ceiling no longer births flakes just above itself") \
+			.is_equal_approx(close_eye + WeatherMirror.SPAWN_ABOVE, 0.001)
+
+
+# The point of the ceiling (#1305): once the camera is above it, raising it further no longer stretches the
+# flakes' life -- a life sized to fall past the frame grew with every zoom out, and the held budget renewed
+# that much slower, so a zoomed-out board drew a sliver of its flakes.
+func test_the_flakes_life_stops_growing_once_the_camera_is_above_the_ceiling() -> void:
+	var mirror := _mirror()
+	var camera: Camera3D = mirror.camera
+	var kind := _kind_drawing(WeatherLook.Fall.SNOW)
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	var ceiling := mirror._aim().y + WeatherLook.for_kind(kind).flake_ceiling
+	var was := camera.global_position
+	var lives: Array[float] = []
+	for rise: float in [30.0, 60.0]:
+		camera.global_position = Vector3(was.x, ceiling + rise, was.z)
+		mirror._process(0.016)
+		lives.append(mirror._snow.lifetime)
+	camera.global_position = was
+	assert_float(lives[1]).override_failure_message("raising the camera from %.0f to %.0f over the ceiling stretched the flakes' life %.1fs -> %.1fs"
+			% [30.0, 60.0, lives[0], lives[1]]).is_equal_approx(lives[0], 0.01)
+
+
+# The look's two fade rows reach the flakes' draw, so a slider moves them (#1305).
+func test_the_fade_rows_reach_the_flakes() -> void:
+	var mirror := _mirror()
+	var kind := _kind_drawing(WeatherLook.Fall.SNOW)
+	var look := WeatherLook.for_kind(kind)
+	var was_in := look.flake_fade_in
+	var was_out := look.flake_fade_out
+	look.flake_fade_in = 0.25
+	look.flake_fade_out = 0.375
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	var got_in := float(mirror._snow_draw.get_shader_parameter("fade_in"))
+	var got_out := float(mirror._snow_draw.get_shader_parameter("fade_out"))
+	look.flake_fade_in = was_in
+	look.flake_fade_out = was_out
+	assert_float(got_in).override_failure_message("the fade-in row never reached the flakes").is_equal(0.25)
+	assert_float(got_out).override_failure_message("the fade-out row never reached the flakes").is_equal(0.375)

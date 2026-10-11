@@ -83,6 +83,9 @@ const STORM := [Fall.RAIN, Fall.AURORA]               # the strikes beyond the b
 @export var big_flakes := 0.15              # share of flakes drawn as a plus rather than one pixel
 @export var flake_color := Color(0.96, 0.98, 1.0, 0.9)
 @export var flake_settle := 0.8             # seconds a landed flake lies before it melts away
+@export var flake_ceiling := 12.0           # world units above the ground in view a flake is born at most
+@export var flake_fade_in := 0.06           # share of its life a flake takes to appear
+@export var flake_fade_out := 0.15          # share of its life a flake takes to go
 
 @export_group("Ground cover")
 @export var snow_cover := 0.5               # 0..1: how much of the ground lies under snow, sand or ash
@@ -255,6 +258,12 @@ const ROWS: Array[Dictionary] = [
 	{"prop": "flake_color", "label": "Flake colour", "fall": FLAKES, "tip": "Colour and opacity of a flake."},
 	{"prop": "flake_settle", "label": "Flake settle", "min": 0.0, "max": 4.0, "step": 0.05, "fall": FLAKES,
 		"tip": "Seconds a landed flake lies on the ground before it melts away. 0 is gone on landing."},
+	{"prop": "flake_ceiling", "label": "Flake ceiling", "min": 0.5, "max": 40.0, "step": 0.5, "fall": FLAKES,
+		"tip": "How high above the ground at the centre of the view a flake is born, at most, and so how far it falls. Zoomed out, it keeps the flakes around the board instead of up by the camera."},
+	{"prop": "flake_fade_in", "label": "Flake fade in", "min": 0.0, "max": 0.5, "step": 0.01, "fall": FLAKES,
+		"tip": "The share of a flake's life it takes to appear, so one born in view never pops in."},
+	{"prop": "flake_fade_out", "label": "Flake fade out", "min": 0.0, "max": 0.5, "step": 0.01, "fall": FLAKES,
+		"tip": "The share of a flake's life it takes to go, so one still falling past the board's edge never pops out."},
 	{"prop": "snow_cover", "label": "Ground cover", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
 		"tip": "How much of the ground lies under the snow, sand or ash: low leaves clumps, mid lies in patches, high covers nearly all. Never on water or a hole, and never past a tile."},
 	{"prop": "slope_cover", "label": "Slopes keep", "min": 0.0, "max": 1.0, "step": 0.01, "fall": COVER,
