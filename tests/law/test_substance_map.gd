@@ -6,9 +6,7 @@
 extends GdUnitTestSuite
 
 const VIALS_WITHOUT_SUBSTANCE := {
-	"res://Resources/Vials/NitreVial.tres": "nitre has no formula yet (codev)",
 	"res://Resources/Vials/IchorVial.tres": "ichor has no formula yet (codev)",
-	"res://Resources/Vials/VitriolVial.tres": "vitriol has no formula yet (codev)",
 	"res://Resources/Vials/AlkahestVial.tres": "alkahest is the prima materia, not a formula",
 }
 

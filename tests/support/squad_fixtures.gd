@@ -202,6 +202,7 @@ static func stripping(incoming: Elemental.Element, required: Elemental.State) ->
 	reaction.remove_states.assign([required])
 	return reaction
 
-# A SHOCK hit on a WET unit strips the soaking: the shape of the shipped electrocution.
+# A SHOCK hit on a WET unit strips the soaking. The shipped electrocution stopped drying the unit on
+# 2026-10-11; this one keeps the strip because the strip is what lets a case see WHEN the soak landed.
 static func only_electrocution() -> void:
 	only_reactions([stripping(Elemental.Element.SHOCK, Elemental.State.WET)])

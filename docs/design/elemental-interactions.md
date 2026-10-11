@@ -157,7 +157,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 ### SHOCK
 | × state | reaction | effect |
 |---|---|---|
-| ◆★ WET | Electrocuted | **[BUILT 2026-06-19]** ++dmg, remove WET (`shock_wet_electrocute.tres`) |
+| ◆★ WET | Electrocuted | **[BUILT 2026-06-19]** ++dmg (`shock_wet_electrocute.tres`). **The unit stays WET since 2026-10-11** (c3potheds@ and Phaazoid@: the water conducts and is not used up, see [deep-alchemy.md](deep-alchemy.md) → *What is built*); how a unit dries off is a balance question for later |
 | ★ *(water or a wet body)* | Chain Lightning | **[BUILT 2026-09-10, #884]** the current FLOODS from whatever conductor the shot touched, orthogonally, `Conduction.SHOCK_ARC_RANGE` cells, through water (unless FROZEN) and through WET units, which RELAY. Everything standing in it is caught and resolves as an ordinary volley member — so each wet victim electrocutes on its own row. **It does not check tags**: allies and a shooter standing in the water are caught. **Nor `targets`** (dev, 2026-09-28, [#1135](https://github.com/Phaazoid/Godoiosis/issues/1135)): a MAP-only shock hits no unit itself, but the water it lights still catches whoever is in it — a soaked body on the aimed cell included, since a wet body conducts wherever it stands. Not a per-attack field: the reach is a game constant, since arcing through water is a property of electricity. That line held when #900 made the LOOK per-attack: an attack may author what its shock looks like (a shared `EffectLook`) and may not author how far it travels. FERROUS is the unbuilt half |
 | FERROUS / **conductive armor** | Overload | ++dmg, **STAGGERED** (can't counter — the gated counter-denial) |
 | ⚗ OILED | Spark | small dmg, apply BURNING (sparks light it) |

@@ -582,27 +582,51 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-11. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1239 (2026-10-07).**
+**Canon checked through #1308 (2026-10-11).**
 
-**Phase 1: formulas and a lint, with no gameplay change.** Agreed in #iosis-talk on 2026-10-06. Nothing in play reads any of it yet.
+**Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it.
 
 - **Substances** are one `.tres` each in `Resources/Substances/` (`Classes/alchemy/Substance.gd`). The id is the file name. `formula` is a molecule (`FW`, or a `*` composition) or a compound of other substances joined by `+` (`AE + A2`). The atoms are the five sigil elements the game already has. `phase` is unbound, solid, liquid or gas.
-- **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id, which leaves room for ice and water both being `W2`. A compound is only ever named by id.
+- **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id. A compound is only ever named by id.
 - **Equations** are one line of text on each reaction, `ElementalReaction.equation` and `TerrainReaction.equation`, written as above (`F2 + W2 -> 2FW`).
-- **What each game thing is made of** is `SubstanceMap`: one row for every element, unit state, tile state, ground and gas, each a substance id or a reasoned NONE or PENDING line. A vial carries its own `substance` field.
-- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps a PENDING ledger of the reactions still waiting on a design answer, and it only shrinks honestly.
+- **What each game thing is made of** is `SubstanceMap`: one row for every element, unit state, tile state, ground and gas. Every row names a substance except COVER and VOID, which hold none. A vial carries its own `substance` field; ichor's is still open.
+- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty since 2026-10-11, kept so a new reaction without an equation still reds), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later.
 
-**Written so far:** Douse, Boils and Quick Dry are all `F2 + W2 -> 2FW`. Quick Dry's equation says steam is made, which the game does not do yet. Water setting Wet is `W2 -> W2`.
+**The rulings behind the equations** (c3potheds@ and Phaazoid@ in #claude-sessions, 2026-10-08 to 2026-10-11):
 
-**Waiting on c3potheds@, as of 2026-10-07:**
+- **Rule of cool.** An equation explains an effect and never vetoes it. When a wanted effect will not balance, the chemistry gains a substance, a source or some lore, and the effect stays. The lint still refuses unbalanced books.
+- **The circle owns the geometry, the cell owns the chemistry.** A carving's shape is its transmutation circle, and the chemistry runs in each cell it covers. A line of ice is Freeze with a line shape.
+- **Every cell has an ambient baseline**: inert air, vital air, a trace of vapor and a trace of aether, and the ground's own substance. A real source (a river, a fire, a vial) empowers a cast.
+- **Aether is the heavens, not cold.** Ice is `QW`, water with heaven bound into it, and cold is not a substance. A Freeze hit carries free aether, which binds the first water it meets: a frozen tile and a wet unit freeze their own water, a dry unit takes frost out of the air's vapor. Chilled is frost on the body, which is also why Chilled beats Wet.
+- **Melting is heat.** Flame decays to heat (`F`), and the heat melts the ice.
+- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting.
+- **Electrocution's water conducts and is not used up**, so a shock no longer dries a wet unit (2026-10-11, c3potheds@ and Phaazoid@). How a unit dries off is a balance question for later.
+- **Plants store phlogiston as vital air.** Dry fuel doubles its flame, which is why tall grass spreads further; green plants burn off their water as steam. Burning gives off exactly one ash per inert air, which is where smoke's `AE + A2` comes from.
+- **Thunder is lightning in air**, its own natural reaction (`2QF + 2A2 -> 2QA + FA2 + F`, ozone `FA2` as the byproduct), which Electrocute's equation carries.
+- **Materia that is not consumed may gate a stronger or rarer transmutation**: [alchemy-kit.md](alchemy-kit.md) → *Materia*.
 
-- what ice is, which blocks Freeze, Frozen, Melt and the three Chilled reactions
-- organic matter's proportions, which block grass and tree ignition
-- what lightning through water makes, which blocks Electrocute
-- formulas for stone, dirt, mud, nitre, ichor and vitriol
-- smoke's ratio, entered as `AE + A2` one-to-one as a placeholder
-- sulfur gas is entered as `FAE`, the alchemical-order spelling of the `AFE` proposed in chat
+**Written:**
+
+| Reaction | Equation |
+|---|---|
+| Douse, Boils, Quick Dry | `F2 + W2 -> 2FW` |
+| Water sets Wet | `W2 -> W2` |
+| Frozen, Deep Chill | `2Q + W2 -> 2QW` |
+| Chilled | `2Q + 2AW -> 2QW + A2` |
+| Melt, Temperature Shock | `F2 + 2QW -> Q2 + W2 + 2F` |
+| Burning (trees), GrassIgnites | `F2 + green_plant -> F2 + 2FW + smoke` |
+| TallGrassIgnites | `F2 + dry_plant -> 2F2 + smoke` |
+| Electrocute | `2QF + 2A2 + W2 -> 2QA + FA2 + F + W2` |
+
+New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dry plant `AE + 2FA`, dirt `E2 + AE` (salt and carbon, mineralogy later), mud `dirt + W2`, silica `QFAE2`, stone `E2 + QFAE2` (a placeholder), nitre `FA2E`, vitriol `FE + W2 + FA` (oil of vitriol), ozone `FA2`. Sulfur gas `FAE` and smoke `AE + A2` are confirmed.
+
+**Still open:**
+
+- ichor's formula (c3potheds@)
+- **Phase 2, what a carving is.** Settled so far: transmutations stay carvings, and Break, Bind, Push and Pull join the flourishes; no verb means no effect, so every carving names its verbs; Break and Bind take both arguments, with no defaults; Push/Pull and Infuse/Extract stay separate marks; rune sizes are flexible. Open: whether a basic Push works away from its material (Splash with no water nearby).
+- whether gas spread must conserve matter (deferred)
+- light and shadow
 
 **Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. **Still open:** Whether gas spread must conserve matter is deferred.

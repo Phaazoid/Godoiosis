@@ -10,5 +10,6 @@ required_state = 2
 damage_bonus = 5
 remove_states = Array[int]([2])
 short_name = "Shatter"
+equation = "F2 + 2QW -> Q2 + W2 + 2F"
 popup = "Temperature Shock!"
 icon = ExtResource("2_tshck")

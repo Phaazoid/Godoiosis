@@ -16,41 +16,41 @@ const ELEMENTS: Dictionary[Elemental.Element, String] = {
 	Elemental.Element.FIRE: "flame",
 	Elemental.Element.WATER: "water",
 	Elemental.Element.SHOCK: "lightning",
-	Elemental.Element.ICE: PENDING + "what ice is made of is open",
+	Elemental.Element.ICE: "atom_aether",  # free aether, which binds the first water it meets
 	Elemental.Element.EARTH: "salt",
 	Elemental.Element.AIR: "inert_air",
 	Elemental.Element.AETHER: "essence",
-	Elemental.Element.CORROSION: PENDING + "vitriol has no formula yet",
+	Elemental.Element.CORROSION: "vitriol",
 }
 
 const STATES: Dictionary[Elemental.State, String] = {
 	Elemental.State.WET: "water",
-	Elemental.State.CHILLED: PENDING + "cold is open",
+	Elemental.State.CHILLED: "ice",
 }
 
 const TILE_STATES: Dictionary[Terrain.TileState, String] = {
 	Terrain.TileState.BURNING: "flame",
-	Terrain.TileState.FROZEN: PENDING + "what ice is made of is open",
+	Terrain.TileState.FROZEN: "ice",
 	Terrain.TileState.COVER: NONE + "an entrenchment is a shape dug in the ground",
 	Terrain.TileState.SCORCHED: "ash",
 }
 
 const KINDS: Dictionary[Terrain.Kind, String] = {
-	Terrain.Kind.GRASS: PENDING + "organic matter's proportions are open",
-	Terrain.Kind.MUD: PENDING + "mud has no formula yet",
-	Terrain.Kind.ROCK: PENDING + "stone has no formula yet",
-	Terrain.Kind.TREE: PENDING + "organic matter's proportions are open",
+	Terrain.Kind.GRASS: "green_plant",
+	Terrain.Kind.MUD: "mud",
+	Terrain.Kind.ROCK: "stone",
+	Terrain.Kind.TREE: "green_plant",
 	Terrain.Kind.WATER: "water",
-	Terrain.Kind.DIRT: PENDING + "dirt has no formula yet",
+	Terrain.Kind.DIRT: "dirt",
 	Terrain.Kind.VOID: NONE + "a hole holds nothing",
-	Terrain.Kind.TALL_GRASS: PENDING + "organic matter's proportions are open",
+	Terrain.Kind.TALL_GRASS: "dry_plant",
 }
 
 const GASES: Dictionary[Gas.Kind, String] = {
 	Gas.Kind.STEAM: "steam",
 	Gas.Kind.SMOKE: "smoke",
 	Gas.Kind.POISON: "chlorine",
-	Gas.Kind.FROST: PENDING + "frost cloud is ice in air, and ice is open",
+	Gas.Kind.FROST: "frost",
 	Gas.Kind.THUNDER: "thunder",
 	Gas.Kind.SULFUR: "sulfur_gas",
 }

@@ -12,5 +12,6 @@ add_state_turns = Dictionary[int, int]({
 1: 3
 })
 spread_and_a_half = true
+equation = "F2 + dry_plant -> 2F2 + smoke"
 popup = "Ignites!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"
