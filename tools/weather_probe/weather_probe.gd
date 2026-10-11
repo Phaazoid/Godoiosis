@@ -25,7 +25,9 @@ extends Node
 #     dust stands over the river with the look's water_haze against at 1 (the river ruling);
 #   - that a wheel sweep out and back under the slow falls (#1304) re-sizes no system born in the
 #     camera's box and stalls no frame past ZOOM_STALL_MS, and that switching from one snow to another
-#     starts the new one already falling (the held flakes' restart replays a lifetime).
+#     starts the new one already falling (the held flakes' restart replays a lifetime);
+#   - that zoomed out to the widest, the falling flakes stay around the board (#1305): as many on screen
+#     as at the opening shot, within COVER_KEPT.
 #
 #     godot --path . res://tools/weather_probe/weather_probe.tscn
 #
@@ -44,6 +46,9 @@ const FOG_VOID_TOLERANCE := 0.02
 # A frame slower than this while zooming is a stall: before #1304 a re-size replayed a flake's whole
 # lifetime in one frame (229-1363 ms measured); held, the worst was 30 ms.
 const ZOOM_STALL_MS := 100.0
+# The share of the opening shot's falling flakes the widest view must keep (#1305): before the ceiling,
+# Ashfall kept 22% and Ash Storm 17%; with it, 133-264% were measured.
+const COVER_KEPT := 0.75
 const OUT_DIR := "user://weather_probe"
 
 var _scene: Node3D
@@ -83,6 +88,7 @@ func _ready() -> void:
 	failures += await _ash()
 	failures += await _zoom()
 	failures += await _switch_fills()
+	failures += await _zoomed_out_cover()
 	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	_game.scenario_manager.current_wind = Wind.Kind.CALM
 	print("WEATHER PROBE: %s" % ("OK" if failures == 0 else "%d CHECK(S) FAILED" % failures))
@@ -610,6 +616,65 @@ func _switch_fills() -> int:
 	return 0 if settled > 200 and fresh * 2 >= settled else 1
 
 
+# Zoomed out, the flakes stay around the board (#1305): on Level_1 the falling flakes are counted at the
+# opening shot and at the widest, tinted magenta so grey ash shows on soot, and the widest must keep
+# COVER_KEPT of the opening's count. Each weather is switched to at its zoom, so the restart fills it.
+# Sand is left out: its moving dust swamps the count.
+func _zoomed_out_cover() -> int:
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	await _open(SNOW_MISSION)
+	var mirror: WeatherMirror = _scene._weather
+	var rig: CameraRig3D = _scene._rig
+	var opening := rig._target_distance
+	var falls := [[Weather.Kind.LIGHT_SNOW, Wind.Kind.BREEZE], [Weather.Kind.BLIZZARD, Wind.Kind.STRONG_WIND],
+			[Weather.Kind.ASHFALL, Wind.Kind.STRONG_WIND], [Weather.Kind.ASH_STORM, Wind.Kind.GALE]]
+	var tints := {}
+	for c: Array in falls:
+		var look := WeatherLook.for_kind(c[0])
+		tints[c[0]] = look.flake_color
+		look.flake_color = Color(1.0, 0.0, 1.0, 1.0)
+	var counts := {}
+	for distance: float in [opening, rig.max_distance]:
+		rig.set_zoom(distance)
+		await _wait(2.5)
+		for c: Array in falls:
+			_game.scenario_manager.current_weather = c[0]
+			_game.scenario_manager.current_wind = c[1]
+			await _wait(5.0)
+			var label := "cover_%s_%s" % [Weather.name_of(c[0]).to_lower(), "opening" if distance == opening else "widest"]
+			counts[label] = await _flake_pixels(mirror, label)
+	for c: Array in falls:
+		WeatherLook.for_kind(c[0]).flake_color = tints[c[0]]
+	_game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	_game.scenario_manager.current_wind = Wind.Kind.CALM
+	rig.set_zoom(opening)
+	var failures := 0
+	for c: Array in falls:
+		var name := Weather.name_of(c[0]).to_lower()
+		var near: int = counts["cover_%s_opening" % name]
+		var wide: int = counts["cover_%s_widest" % name]
+		print("  cover %s: %d flake px at the opening shot, %d at the widest (%.0f%%)"
+				% [Weather.name_of(c[0]), near, wide, 100.0 * wide / maxf(near, 1.0)])
+		if near < 200 or wide < near * COVER_KEPT:
+			print("  cover: FAILED under %s" % Weather.name_of(c[0]))
+			failures += 1
+	return 0 if failures == 0 else 1
+
+
+# Sampled pixels the flakes paint: a frame with them drawn against the next with only them hidden, less
+# what two consecutive hidden frames already differ by (the board moves on its own).
+func _flake_pixels(mirror: WeatherMirror, label: String) -> int:
+	var drawn := await _grab(label)
+	mirror._snow.visible = false
+	await RenderingServer.frame_post_draw
+	var bare := get_viewport().get_texture().get_image()
+	await RenderingServer.frame_post_draw
+	var bare_next := get_viewport().get_texture().get_image()
+	mirror._snow.visible = true
+	return maxi(_diff(drawn, bare, 0.12) - _diff(bare, bare_next, 0.12), 0)
+
+
 # Sampled pixels whose luminance changes between two consecutive frames.
 func _moving() -> int:
 	await RenderingServer.frame_post_draw
@@ -850,12 +915,12 @@ func _grab(label: String) -> Image:
 	return image
 
 
-func _diff(a: Image, b: Image) -> int:
+func _diff(a: Image, b: Image, threshold := 4.0 / 255.0) -> int:
 	var count := 0
 	for y in range(0, a.get_height(), 2):
 		for x in range(0, a.get_width(), 2):
 			var d := a.get_pixel(x, y) - b.get_pixel(x, y)
-			if maxf(maxf(absf(d.r), absf(d.g)), absf(d.b)) > 4.0 / 255.0:
+			if maxf(maxf(absf(d.r), absf(d.g)), absf(d.b)) > threshold:
 				count += 1
 	return count
 

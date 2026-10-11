@@ -15,8 +15,9 @@ class_name WeatherMirror
 #   - THE GROUND: two board-sized decals painted by WetGround -- darkened and glossy, and puddles.
 #   - THE STORM: bolts beyond the board (StormBolts), a screen flash this node only REPORTS (battle3d's
 #     white-out composes it with the others), a light from the strike's side, and the sky's glow.
-#   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box, wandering as they fall and lying a
-#     moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
+#   - SNOW (#1269): flakes on snow.gdshader, born in the rain's box (but no higher than the look's ceiling
+#     above the ground in view, living only to land and fading in and out by age, #1305), wandering as they fall
+#     and lying a moment where they land, and a third ground decal painted by SnowGround. A blizzard adds DRIFT,
 #     loose snow streaming along the ground (snow_drift.gdshader, drawn as rain's streak). Snow that
 #     settles on props: a decal masked to PROP_RENDER_LAYER caps the block props' upward faces, and
 #     snow_on_props tells BoardMirror to cap the billboards and bury the tufts. Which of the two a look draws
@@ -500,7 +501,11 @@ func _fit(decal: Decal) -> void:
 # farthest particle's fall, so one over the void leaves the screen before it dies. Empty with no camera.
 # Keys: lo, hi (Vector2, x/z), top, floor_y, fall (seconds from top to floor), area. Public because the
 # wind's specks (#1286) are born in the same box.
-func view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
+#
+# A finite `ceiling` (#1305) births no higher than that far above the ground the camera looks at, and the
+# fall (the life and the wind's pad) runs only down to that ground: zoomed out, a flake born above the
+# camera spent most of the budget where nobody sees it. Anything still falling past it fades instead.
+func view_box(speed: float, wind: Vector2, wander: float, ceiling := INF) -> Dictionary:
 	if camera == null or not camera.is_inside_tree():
 		return {}
 	var eye := camera.global_position
@@ -525,6 +530,9 @@ func view_box(speed: float, wind: Vector2, wander: float) -> Dictionary:
 	var top := eye.y + SPAWN_ABOVE
 	var floor_y := aim.y - rise * 4.0 if slope == INF else eye.y - far * slope - 1.0
 	var fall := (top - floor_y) / maxf(speed, 0.5)
+	if ceiling < INF:
+		top = minf(top, aim.y + ceiling)
+		fall = minf(fall, maxf(top - aim.y, 0.5) / maxf(speed, 0.5))
 	var drift := wind * fall
 	var pad := Vector2.ONE * (1.0 + maxf(wander, 0.0))
 	lo = lo.min(lo - drift) - pad
@@ -560,7 +568,7 @@ func _place_rain() -> void:
 func _place_snow() -> void:
 	var speed := maxf(_look.fall_speed, 0.5)
 	var wind := _wind() * _look.flake_wind
-	var box := view_box(speed, wind, _look.swirl_scale + _look.flake_sway)
+	var box := view_box(speed, wind, _look.swirl_scale + _look.flake_sway, maxf(_look.flake_ceiling, 0.5))
 	if box.is_empty():
 		return
 	var lo: Vector2 = box["lo"]
@@ -736,6 +744,8 @@ func _style_snow() -> void:
 			_snow_draw.set_shader_parameter("flakes", ImageTexture.create_from_image(WeatherArt.flakes(Color.WHITE)))
 		_snow_draw.set_shader_parameter("size", float(WeatherArt.FLAKE_SIDE) / UnitSprite3D.texels_per_unit)
 		_snow_draw.set_shader_parameter("tint", _look.flake_color)
+		_snow_draw.set_shader_parameter("fade_in", _look.flake_fade_in)
+		_snow_draw.set_shader_parameter("fade_out", _look.flake_fade_out)
 	if _draws(WeatherLook.DRIFT):
 		if _look.drift_texels != _drift_texels:
 			_drift_texels = _look.drift_texels

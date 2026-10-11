@@ -6,7 +6,8 @@
 // divergence-free field of eddies that loops the flakes when it outruns the fall -- what keeps a
 // blizzard from reading as rain (dev, 2026-10-09).
 //
-// CUSTOM: x and w a flake's two phases, y how far it has melted (0..1), z 1 for a big flake.
+// CUSTOM: x and w a flake's two phases, y how far it has melted (0..1), z 1 for a big flake. COLOR.r is its
+// age, 0..1 of the lifetime, which snow_flake fades by (#1305).
 shader_type particles;
 
 #include "res://Classes/presentation/weather_mask.gdshaderinc"
@@ -50,6 +51,9 @@ void start() {
 	if (RESTART_VELOCITY) {
 		VELOCITY = velocity;
 	}
+	if (RESTART_COLOR) {
+		COLOR = vec4(0.0, 1.0, 1.0, 1.0);
+	}
 	if (RESTART_CUSTOM) {
 		CUSTOM = vec4(weather_rand(seed) * 6.2832, 0.0, weather_rand(seed) < big ? 1.0 : 0.0,
 				weather_rand(seed) * 6.2832);
@@ -59,6 +63,7 @@ void start() {
 // A particles processor may not `return`, so the three states are one chain: lying (melting away),
 // landing this frame, falling.
 void process() {
+	COLOR.r = min(COLOR.r + DELTA / max(LIFETIME, 0.001), 1.0);
 	vec3 at = TRANSFORM[3].xyz;
 	float ground = weather_surface(at.xz);
 	if (CUSTOM.y > 0.0) {
