@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("1_gust")
-sigils = Array[int]([6])
+recipe = "Push(A2)"
 display_name = "Gust"
 max_range = 3
 hits_allies = true

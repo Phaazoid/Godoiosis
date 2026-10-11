@@ -403,8 +403,8 @@ func _carving_row(carving: TransmutationData) -> Control:
 	var reason := _block_reason(carving)
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", QueueStyle.channel_box(_box_state(state), false))
-	var tip := "%s\n%s" % [carving.sigil_text(), _rune.attack_detail(_wielder, carving)] \
-		if _wielder != null else carving.sigil_text()
+	var tip := "%s\n%s" % [carving.demand_text(), _rune.attack_detail(_wielder, carving)] \
+		if _wielder != null else carving.demand_text()
 	if reason != "":
 		tip += "\n%s" % reason
 	row.tooltip_text = UiText.wrap(tip)
@@ -479,16 +479,17 @@ func _cost_bars(carving: TransmutationData) -> Control:
 	var left: Dictionary[Elemental.Element, int] = {}
 	for element: Elemental.Element in carving.distinct_elements():
 		left[element] = _wielder.get_element_aura(element) if _wielder != null else 0
-	for element: Elemental.Element in carving.sigils:
-		var paid: bool = left.get(element, 0) > 0
-		if paid:
-			left[element] = left[element] - 1
-		bars.add_child(_cost_bar(element, 1.0 if paid else HOLLOW_SWATCH_FILL, not paid))
+	for element: Elemental.Element in carving.distinct_elements():
+		for _i in range(carving.demand_of(element)):
+			var paid: bool = left.get(element, 0) > 0
+			if paid:
+				left[element] = left[element] - 1
+			bars.add_child(_cost_bar(element, 1.0 if paid else HOLLOW_SWATCH_FILL, not paid))
 
 	# What is LEFT after paying is the spare -- the halo's own number, said again in the list so the
 	# ring and the row cannot disagree about how much is going spare.
 	var spare: Array[Elemental.Element] = []
-	for element: Elemental.Element in carving.distinct_elements():
+	for element: Elemental.Element in carving.damage_elements():
 		for _i in range(maxi(0, left.get(element, 0))):
 			spare.append(element)
 	if not spare.is_empty():
@@ -543,7 +544,7 @@ func _refresh_hint() -> void:
 static func _carving_name(carving: TransmutationData) -> String:
 	if carving == null:
 		return ""
-	return carving.display_name if carving.display_name != "" else carving.sigil_text()
+	return carving.display_name if carving.display_name != "" else carving.recipe
 
 
 static func _clear(container: Node) -> void:

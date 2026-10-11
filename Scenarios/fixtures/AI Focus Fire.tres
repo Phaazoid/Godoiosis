@@ -417,7 +417,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_mclay"]
 script = ExtResource("34_vdqk7")
-sigils = Array[int]([7])
+recipe = "Bind(Q, Q)"
 display_name = "Heal"
 power = 6
 min_range = 0

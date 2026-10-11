@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("2_fa0vc")
-sigils = Array[int]([7])
+recipe = "Bind(Q, Q)"
 display_name = "Heal"
 power = 6
 min_range = 0

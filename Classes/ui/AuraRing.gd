@@ -136,11 +136,14 @@ class Row:
 	var element: Elemental.Element = Elemental.Element.NONE
 	var affine := false
 	var depth := 0
-	# How many sigils of this element the shown carving asks for; 0 when no carving is shown, and 0
-	# for an element an off-recipe sector. Kept as the raw weight rather than as a deficit, because
+	# How many atoms of this element the shown carving asks for; 0 when no carving is shown, and 0
+	# for an off-recipe sector. Kept as the raw weight rather than as a deficit, because
 	# the deficit is `wanted - depth` and the SURPLUS is `depth - wanted` -- one number answers both,
 	# and a stored deficit could not say which ticks the halo belongs on.
 	var wanted := 0
+	# Whether the shown carving scales its damage off this element -- the elements of what it
+	# delivers. Only there is aura past the recipe damage, so only there is the halo drawn.
+	var scales := false
 
 
 var unit: Unit
@@ -184,7 +187,8 @@ static func rows(target: Unit, demand: TransmutationData = null) -> Array[Row]:
 		row.element = element
 		row.affine = target != null and target.has_affinity(element)
 		row.depth = target.get_element_aura(element) if target != null else 0
-		row.wanted = demand.sigils.count(element) if demand != null else 0
+		row.wanted = demand.demand_of(element) if demand != null else 0
+		row.scales = demand != null and demand.damage_elements().has(element)
 		result.append(row)
 	return result
 
@@ -244,7 +248,7 @@ static func _mark_lines(model: Array[Row], demand: TransmutationData) -> Array[S
 	var spare := false
 	for row: Row in model:
 		short = short or row.wanted > row.depth
-		spare = spare or (row.wanted > 0 and row.depth > row.wanted)
+		spare = spare or (row.wanted > 0 and row.scales and row.depth > row.wanted)
 	if short:
 		lines.append("A hollow mark is aura this circle asks for that is not there.")
 	# The damage clause is the carving's own to make: a utility carving suppresses scaling outright
@@ -469,7 +473,7 @@ func _draw_sector(row: Row, index: int, width: float, spread: float, demanded: b
 				ink.a = DIM_ALPHA if row.affine else FAINT_ALPHA
 				if not row.affine:
 					ink = _neutral_ink(ink.a)
-		elif row.wanted > 0 and k >= row.wanted:
+		elif row.wanted > 0 and row.scales and k >= row.wanted:
 			# HELD PAST THE RECIPE. Drawn BEHIND the bar rather than instead of it: the tick is an
 			# ordinary aura point and the glow is the surplus, which is exactly what it buys.
 			var glow := lit

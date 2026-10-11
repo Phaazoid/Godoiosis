@@ -5,8 +5,7 @@
 
 [resource]
 script = ExtResource("2_5456j")
-sigils = Array[int]([5])
-flourishes = Array[int]([1])
+recipe = "Push(E2)"
 display_name = "Rock Throw"
 power = 7
 min_range = 2

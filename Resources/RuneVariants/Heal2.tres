@@ -6,7 +6,7 @@
 
 [sub_resource type="Resource" id="Resource_fvwxf"]
 script = ExtResource("1_fvwxf")
-sigils = Array[int]([7])
+recipe = "Bind(Q, Q)"
 display_name = "Heal"
 power = 6
 min_range = 0

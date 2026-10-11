@@ -431,7 +431,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_mpdgd"]
 script = ExtResource("19_j3sob")
-sigils = Array[int]([6])
+recipe = "Push(A2)"
 display_name = "Gust"
 max_range = 3
 hits_allies = true
@@ -496,7 +496,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_mfdw7"]
 script = ExtResource("19_j3sob")
-sigils = Array[int]([6])
+recipe = "Push(A2)"
 display_name = "Gust"
 max_range = 3
 hits_allies = true
@@ -713,7 +713,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_inpo2"]
 script = ExtResource("19_j3sob")
-sigils = Array[int]([6])
+recipe = "Push(A2)"
 display_name = "Gust"
 max_range = 3
 hits_allies = true

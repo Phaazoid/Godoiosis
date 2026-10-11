@@ -6,8 +6,7 @@
 
 [resource]
 script = ExtResource("2_24q66")
-sigils = Array[int]([2, 2])
-flourishes = Array[int]([4, 3])
+recipe = "Break(A, W) + Bind(Q, W)"
 display_name = "Freeze"
 power = 4
 max_range = 0

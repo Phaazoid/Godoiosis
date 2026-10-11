@@ -22,7 +22,7 @@ move_sprite = ExtResource("4_bijhs")
 downed_sprite = ExtResource("1_6qlil")
 base_aura = Dictionary[int, int]({
 1: 1,
-2: 1,
+2: 2,
 5: 1,
 6: 1,
 7: 1

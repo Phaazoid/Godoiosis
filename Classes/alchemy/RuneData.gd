@@ -5,9 +5,9 @@ extends EquippableData
 # INSCRIBES transmutation carvings onto it. The carvings (TransmutationData) are the attacks;
 # the rune is the customizable LOADOUT that holds them (docs/design/alchemy-kit.md).
 #
-# Size = TWO knobs (transmutation-model-proposal.md, grilled 2026-07-04): CIRCLE_CAP bounds the
-# raw sigil count of any ONE inscribed carving; CAPACITY bounds the summed sigil count across
-# ALL carvings. Channeling a held carving = anchor + wildcards (dev, 2026-08-10 — see
+# Size = TWO knobs, counted in VERBS since Deep Alchemy Phase 2 (2026-10-11): CIRCLE_CAP bounds the
+# verbs of any ONE inscribed carving; CAPACITY bounds the verbs summed across ALL carvings. Each verb
+# brings its own argument slots, so the arguments are not counted again. Channeling a held carving = anchor + wildcards (dev, 2026-08-10 — see
 # TransmutationData.channel_block_reason): real aura in one of the CARVING's elements, and the
 # total deficit covered by the rune's universal +1 wildcard OR the wielder's spare temper aura,
 # never both. The temper's only channel-side role is keying that second pool — its GATE role is
@@ -21,16 +21,16 @@ extends EquippableData
 enum Size { SMALL, MEDIUM, LARGE }   # APPEND-ONLY (serialized as int)
 
 const CAPACITY := {
-	Size.SMALL: 1,    # pures + single flourishes — the low-risk sandbox
-	Size.MEDIUM: 3,   # a pair with a pure riding along
-	Size.LARGE: 6,    # two triples, or a triple + pair + pure
-}   # pseudo-locked 2026-07-04 — playtest-tunable, not a shape change
+	Size.SMALL: 1,    # one one-verb basic
+	Size.MEDIUM: 4,   # two two-verb carvings (raised from 3, Phase 2: Freeze + Splash)
+	Size.LARGE: 6,    # two three-verb carvings, or three two-verb ones
+}   # playtest-tunable, not a shape change
 
 const CIRCLE_CAP := {
-	Size.SMALL: 1,    # pures only — twins are impossible by construction
-	Size.MEDIUM: 2,   # the Conjunction (pairs) table
-	Size.LARGE: 3,    # triples
-}   # max raw sigils in a SINGLE carving inscribed on this size
+	Size.SMALL: 1,    # the tied basics: Push(A2), Push(E2), Bind(Q, Q)
+	Size.MEDIUM: 2,   # the anywhere basics: Break(F, A) + Push(F2)
+	Size.LARGE: 3,    # Break(F, A) + Bind(Q, F) + Push(QF)
+}   # max verbs in a SINGLE carving inscribed on this size
 
 @export var size: Size = Size.SMALL
 @export var inscriptions: Array[TransmutationData] = []
@@ -52,9 +52,9 @@ func remaining_capacity() -> int:
 	return capacity() - used_capacity()
 
 func can_inscribe(t: TransmutationData) -> bool:
-	if t == null or t.sigils.is_empty():
+	if t == null or not t.is_legal():
 		return false
-	if t.sigils.size() > CIRCLE_CAP[size]:
+	if t.cost() > CIRCLE_CAP[size]:
 		return false
 	if t.cost() > remaining_capacity():
 		return false
@@ -62,14 +62,14 @@ func can_inscribe(t: TransmutationData) -> bool:
 		return false
 	return true
 
-# The temper rule: every later carving must CONTAIN the temper element and can never be
-# primarily another element — off-temper weight <= temper weight; ties are legal.
+# The temper rule: every later carving must DEMAND the temper element and can never be primarily
+# another element -- off-temper demand <= temper demand; ties are legal.
 func _fits_temper(t: TransmutationData) -> bool:
-	var temper_weight := t.sigils.count(temper)
+	var temper_weight := t.demand_of(temper)
 	if temper_weight == 0:
 		return false
 	for e in t.distinct_elements():
-		if t.sigils.count(e) > temper_weight:
+		if t.demand_of(e) > temper_weight:
 			return false
 	return true
 
@@ -88,7 +88,7 @@ func is_legal() -> bool:
 	if used_capacity() > capacity():
 		return false
 	for t in inscriptions:
-		if t.sigils.size() > CIRCLE_CAP[size]:
+		if not t.is_legal() or t.cost() > CIRCLE_CAP[size]:
 			return false
 	if not inscriptions.is_empty():
 		if temper == Elemental.Element.NONE:

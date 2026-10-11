@@ -9,8 +9,7 @@
 
 [sub_resource type="Resource" id="Resource_7thox"]
 script = ExtResource("1_xnjhm")
-sigils = Array[int]([2, 2])
-flourishes = Array[int]([3, 5])
+recipe = "Focus(W2) + Push(W2)"
 display_name = "Pressure Spray"
 power = 5
 max_range = 0
@@ -22,7 +21,7 @@ damage_kind = 2
 
 [sub_resource type="Resource" id="Resource_dqqr4"]
 script = ExtResource("1_xnjhm")
-sigils = Array[int]([2])
+recipe = "Break(A, W) + Push(W2)"
 popup = "It wasn't very effective"
 icon = ExtResource("5_aii63")
 display_name = "Splash"

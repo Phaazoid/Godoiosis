@@ -258,8 +258,7 @@ squad_id = 2
 
 [sub_resource type="Resource" id="Resource_nrv7u"]
 script = ExtResource("18_qsyhc")
-sigils = Array[int]([2, 2])
-flourishes = Array[int]([4, 3])
+recipe = "Break(A, W) + Bind(Q, W)"
 display_name = "Freeze"
 power = 4
 max_range = 0
@@ -270,7 +269,7 @@ targets = 2
 
 [sub_resource type="Resource" id="Resource_ubnfa"]
 script = ExtResource("18_qsyhc")
-sigils = Array[int]([2])
+recipe = "Break(A, W) + Push(W2)"
 popup = "It wasn't very effective"
 icon = ExtResource("21_56m1w")
 display_name = "Splash"
@@ -303,7 +302,7 @@ move_sprite = ExtResource("25_ubnfa")
 downed_sprite = ExtResource("23_nrv7u")
 base_aura = Dictionary[int, int]({
 1: 1,
-2: 1,
+2: 2,
 5: 1,
 6: 1,
 7: 1
@@ -332,7 +331,7 @@ inventory = Array[ExtResource("5_iwu1s")]([SubResource("Resource_ne4ag")])
 equipped_index = 0
 aura = Dictionary[int, int]({
 1: 1,
-2: 1,
+2: 2,
 5: 1,
 6: 1,
 7: 1
@@ -578,7 +577,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 
 [sub_resource type="Resource" id="Resource_jibd0"]
 script = ExtResource("18_qsyhc")
-sigils = Array[int]([7])
+recipe = "Bind(Q, Q)"
 display_name = "heal2"
 power = 6
 min_range = 0
