@@ -8,7 +8,8 @@ class_name WindMirror
 #   - SPECKS: leaves and dust blown across the board, one GPUParticles3D on wind_speck.gdshader, born
 #     in the weather's own view box (WeatherMirror.view_box) on the weather's own ground mask
 #     (WeatherMirror.mask), so the wind adds no second answer to where the camera looks or where the
-#     ground is. Drawn at the sprites' art density, under every piece of markup.
+#     ground is. Held at its cap like every system in that box (WeatherMirror.hold_emitter, #1304), so a
+#     zoom never re-deals them. Drawn at the sprites' art density, under every piece of markup.
 #   - CLOUD SHADOWS: a full-screen pass (cloud_shadow.gdshader) darkening the ground under passing
 #     clouds that drift at a small share of the wind (dev, 2026-10-10: clouds are far off, so their
 #     shadows move slower than the specks), sorted under the fog and the markup.
@@ -163,10 +164,9 @@ func _place_specks(wind: Vector2) -> void:
 	_speck_draw.set_shader_parameter("leaf_frames", float(WeatherArt.LEAF_FRAMES))
 	_speck_draw.set_shader_parameter("dust_frames", float(WeatherArt.DUST_FRAMES))
 	_speck_draw.set_shader_parameter("tumbles", life * 3.0)
-	# Sized for the peak of a gust, so the count never re-deals as the wind rises and falls; keep carries
-	# the gust itself.
+	# Held at the cap, so neither a zoom nor a gust re-deals the specks; keep carries the gust itself.
 	var per_second := _look.speck_rate * (hi.x - lo.x) * (hi.y - lo.y)
-	WeatherMirror.size_emitter(_specks, _speck_process, per_second * (1.0 + _look.gust), life, MAX_SPECKS)
+	WeatherMirror.hold_emitter(_specks, _speck_process, per_second * (1.0 + _look.gust), life, MAX_SPECKS)
 	_speck_process.set_shader_parameter("keep", WeatherMirror.keep_for(per_second * gust_at(_look, _clock),
 			_specks.lifetime, _specks.amount))
 
