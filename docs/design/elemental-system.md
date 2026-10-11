@@ -4,7 +4,7 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
-**Canon checked through #892 (2026-09-11); Deep Alchemy phase 1 (reaction equations) folded in 2026-10-07; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #508's steam soak folded in 2026-10-04; #1260's weather folded in 2026-10-08.**
+**Canon checked through #892 (2026-09-11); Deep Alchemy phase 1 (reaction equations) folded in 2026-10-07; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #508's steam soak folded in 2026-10-04; #1260's weather folded in 2026-10-08; Deep Alchemy Phase 2 folded in 2026-10-11.**
 
 ## What it is
 
@@ -55,7 +55,8 @@ Derived-from-plan logic — same family as `SquadManager.calculate_reactions_for
 
 `PlanResolver.elements_of(actor, attack)` is still the one answer, and the fork on KIND moved down
 into the attacks themselves. **What an attack AUTHORS is `AttackData.authored_elements()`** — a
-carving resolves each distinct sigil through its flourishes, a weapon attack names one field, the
+carving's elements are what its recipe delivers (`SubstanceMap` read backwards; Deep Alchemy Phase 2,
+2026-10-11), a weapon attack names one field, the
 base carries none — and **what a WIELDER adds is the fitted mods on top**, which only `elements_of`
 knows about.
 

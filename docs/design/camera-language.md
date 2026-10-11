@@ -5,7 +5,7 @@ NAMES things and POINTS at the code that owns them. It deliberately does not re-
 came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
 camera sections, and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1280 (the pivot on the ground, the hand rates per screen) folded in 2026-10-09.**
+**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1280 (the pivot on the ground, the hand rates per screen) folded in 2026-10-09; Deep Alchemy Phase 2 folded in 2026-10-11.**
 
 ## Why this page exists
 
@@ -58,8 +58,9 @@ is a displacement laid over where the camera looks rather than a place it is goi
 summed AFTER `pan_limit`'s clamp and is zero unless the view is borrowed.
 
 > **`flourish` means two unrelated things in this codebase.** `CameraRig3D.flourish()` is the camera
-> addend above. `class_name Flourish` (`Classes/alchemy/Flourish.gd`) is a shaping mark carved around
-> a transmutation's sigil core. Nothing connects them; say "the camera flourish" when it could be
+> addend above. `class_name Flourish` (`Classes/alchemy/Flourish.gd`) is the alchemy verb lexicon a
+> carving's recipe is written in (a shaping mark around a sigil core until Deep Alchemy Phase 2,
+> 2026-10-11). Nothing connects them; say "the camera flourish" when it could be
 > either.
 
 ---
