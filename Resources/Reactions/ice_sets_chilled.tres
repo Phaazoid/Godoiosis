@@ -6,4 +6,5 @@
 script = ExtResource("1_chill")
 incoming_element = 4
 add_states = Array[int]([2])
+equation = "2Q + 2AW -> 2QW + A2"
 popup = "Chilled!"

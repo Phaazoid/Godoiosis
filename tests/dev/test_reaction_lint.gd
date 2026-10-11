@@ -8,18 +8,22 @@
 # it waits on. It only shrinks honestly: a listed reaction that gains an equation reds the sweep until
 # its line goes, and a line naming a file that is gone reds too. A NEW reaction with no equation reds
 # until it gets one or a line here.
+#
+# NOT_YET_FOLLOWED is codev's list (#claude-sessions, 2026-10-08) of what an equation says that the game
+# does not do yet, to work through one by one or all together later. Each line names a reaction that
+# exists and has an equation, and no reaction is both pending and listed.
 extends GdUnitTestSuite
 
-const PENDING := {
-	"res://Resources/TerrainReactions/Melt.tres": "what ice is made of (codev)",
-	"res://Resources/TerrainReactions/Frozen.tres": "what ice is made of (codev)",
-	"res://Resources/Reactions/ice_sets_chilled.tres": "what ice and cold are (codev)",
-	"res://Resources/Reactions/ice_wet_deep_chill.tres": "what ice and cold are (codev)",
-	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "what cold is (codev)",
-	"res://Resources/TerrainReactions/Burning.tres": "organic matter's proportions (codev)",
-	"res://Resources/TerrainReactions/GrassIgnites.tres": "organic matter's proportions (codev)",
-	"res://Resources/TerrainReactions/TallGrassIgnites.tres": "organic matter's proportions (codev)",
-	"res://Resources/Reactions/shock_wet_electrocute.tres": "what lightning through water makes (codev)",
+const PENDING := {}
+
+const NOT_YET_FOLLOWED := {
+	"res://Resources/Reactions/fire_wet_quickdry.tres": "the steam is not released",
+	"res://Resources/TerrainReactions/Melt.tres": "the essence (ice-pack healing) and the heat are not released",
+	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the essence and heat are not released and the meltwater does not wet the unit; the +5 is the temperature change, not chemistry (Phaazoid)",
+	"res://Resources/TerrainReactions/Burning.tres": "the steam and smoke are not released",
+	"res://Resources/TerrainReactions/GrassIgnites.tres": "the steam and smoke are not released",
+	"res://Resources/TerrainReactions/TallGrassIgnites.tres": "the smoke is not released",
+	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder, ozone and heat are not made",
 }
 
 
@@ -96,9 +100,12 @@ func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 	assert_str(found[0]["text"]).contains("steam")
 
 
-func test_a_pending_map_entry_is_skipped_rather_than_faulted() -> void:
-	# ICE has no substance yet, so an ICE reaction cannot be held to naming one.
-	assert_array(ReactionLint.check(_elemental("W2 -> W2", Elemental.Element.ICE), _catalog())).is_empty()
+func test_a_map_entry_with_no_substance_is_skipped_rather_than_faulted() -> void:
+	# COVER is a shape dug in the ground (a NONE line), so a reaction on it cannot be held to naming one.
+	var r := TerrainReaction.new()
+	r.required_tile_state = Terrain.TileState.COVER
+	r.equation = "W2 -> W2"
+	assert_array(ReactionLint.check(r, _catalog())).is_empty()
 
 
 func _shipped() -> Array[Resource]:
@@ -138,4 +145,19 @@ func test_every_pending_line_names_a_reaction_that_exists() -> void:
 	for path: String in PENDING:
 		if not paths.has(path):
 			stale.append(path)
+	assert_array(stale).is_empty()
+
+
+func test_every_not_yet_followed_line_names_a_reaction_with_an_equation() -> void:
+	var equations := {}
+	for reaction: Resource in _shipped():
+		equations[reaction.resource_path] = String(reaction.get("equation")).strip_edges()
+	var stale: Array[String] = []
+	for path: String in NOT_YET_FOLLOWED:
+		if not equations.has(path):
+			stale.append("%s is listed but no such reaction exists" % path)
+		elif equations[path] == "":
+			stale.append("%s is listed but has no equation for the game to follow" % path)
+		if PENDING.has(path):
+			stale.append("%s is both pending and listed" % path)
 	assert_array(stale).is_empty()

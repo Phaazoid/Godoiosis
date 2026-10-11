@@ -7,5 +7,6 @@ script = ExtResource("1_dfo0j")
 incoming_element = 4
 required_kind = 5
 add_tile_states = Array[int]([2])
+equation = "2Q + W2 -> 2QW"
 popup = "Freezes!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

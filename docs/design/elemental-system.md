@@ -82,13 +82,13 @@ Small resources, edited in the reflection-based dev editor (same grain as `Weapo
 | `popup` | feedback hook ("Electrocuted!") — the DRAMATIC word, read by the glossary's composed interaction line and the bug report |
 | ~~`vfx_tag`~~ | **declared and read by NOTHING** (grepped #887, 2026-09-10). It was proposed as this table's hook for "what does this reaction LOOK like", and the row above used to claim both fields were read, which was true of `popup` alone. What actually draws an elemental event is the attack that carried it, not the reaction it fired: `ArcLightning` reads the volley's own element and route (#887). Kept as a field because a reaction-specific look is still plausible; the correction stands as the record that a hook nobody consumes is not a seam. **#900 makes the distinction sharper rather than filling it**: what an ATTACK plays is now authorable per attack (a shared `EffectLook` keyed by element, see presentation-effects.md), and this field is the REACTION-side question -- still unfilled, still out of scope, and not the same seam. |
 | `short_name` | the BADGE word ("Shock"), for a surface with no room for the dramatic one — the action queue's chip is ~40px (#685). Blank means the popup already fits, so only a long reaction needs one. A **declared** second representation per Law #4: two questions (what does this SHOUT vs what fits a badge), `badge_name()` is the one accessor, and every compact surface reads it rather than re-deriving a truncation. |
-| `equation` | Deep Alchemy’s balanced equation for the reaction, one line of text (`F2 + W2 -> 2FW`). **Read by `ReactionLint` only, nothing in play** (Deep Alchemy phase 1, 2026-10-07). `TerrainReaction` carries the same field. Empty means not written yet, which `tests/dev/test_reaction_lint.gd`’s PENDING ledger must declare. See [deep-alchemy.md](deep-alchemy.md) → *What is built*. |
+| `equation` | Deep Alchemy’s balanced equation for the reaction, one line of text (`F2 + W2 -> 2FW`). **Read by `ReactionLint` only, nothing in play** (Deep Alchemy phase 1, 2026-10-07). `TerrainReaction` carries the same field. Empty means not written yet, which `tests/dev/test_reaction_lint.gd`’s PENDING ledger must declare; its NOT_YET_FOLLOWED list records what a written equation says that the game does not do yet (2026-10-11). See [deep-alchemy.md](deep-alchemy.md) → *What is built*. |
 
 Resolution against a target: collect *every* reaction with a trigger matching the snapshot's `(element ∈ attack.elements) × (state ∈ target.states)`, fire them all, compose per E8.
 
 ## Law #2 requirement (preview honesty)
 
-The attack preview **must surface the reacted outcome** — the combo'd damage and the state changes ("Electrocuted!", WET removed), including *stacked* results. Same obligation the lethality design carries: resolution must never produce a surprise the queue didn't show. Since the resolver runs at plan time (E1–E4, E8), the queue already *has* the reacted numbers; the UI just renders them.
+The attack preview **must surface the reacted outcome** — the combo'd damage and the state changes ("Electrocuted!", WET removed — the slice-1 example; since 2026-10-11 a shock leaves the unit WET, see deep-alchemy.md), including *stacked* results. Same obligation the lethality design carries: resolution must never produce a surprise the queue didn't show. Since the resolver runs at plan time (E1–E4, E8), the queue already *has* the reacted numbers; the UI just renders them.
 
 ## First build target
 
@@ -96,7 +96,7 @@ Not a throwaway demo — the foundation is built **general and solid** (set-of-e
 
 - **Units only** (tile states come next, not cut).
 - **Boolean states**, battle-scoped on `Unit`.
-- **One reaction:** `SHOCK × WET → bonus damage, remove WET`.
+- **One reaction:** `SHOCK × WET → bonus damage, remove WET`. *(Slice 1 as specified; since 2026-10-11 the shipped reaction leaves the unit WET.)*
 - **Resolved at plan time** through the resolver (E1–E8).
 
 Success looks like: alchemist hits WATER (sets WET, shown in queue), mechanist hits SHOCK (queue shows the stacked bonus + "Electrocuted"), execution matches the preview exactly. Spine validated; everything else is additive content + layers.
@@ -105,7 +105,7 @@ Success looks like: alchemist hits WATER (sets WET, shown in queue), mechanist h
 
 De-randomized from the wiki, plus a stacking example. Traced one first:
 
-1. **SHOCK × WET → Electrocuted** *(the first slice).* Pass: attack A (WATER) writes `add WET`. Attack B (SHOCK) sees WET, applies `damage_mult`, writes `remove WET`. Both numbers land in the queue pre-execution. Replay: WATER lands, WET icon appears; SHOCK lands boosted, "Electrocuted!" pops, WET clears.
+1. **SHOCK × WET → Electrocuted** *(the first slice).* Pass: attack A (WATER) writes `add WET`. Attack B (SHOCK) sees WET, applies `damage_mult`, writes `remove WET`. Both numbers land in the queue pre-execution. Replay: WATER lands, WET icon appears; SHOCK lands boosted, "Electrocuted!" pops, WET clears. *(The slice as built; since 2026-10-11 the shipped electrocution no longer clears WET.)*
 2. **FIRE × WET → QuickDry.** Fire on a wet target does *reduced* damage and removes WET (water buys one hit of protection, then it's spent). Punishes mis-ordered combos. **BUILT 2026-08-12** (`fire_wet_quickdry.tres`, ×0.5), alongside the ICE→CHILLED line and the terrain douse set — the shipped roster is [elemental-interactions.md](elemental-interactions.md)'s [BUILT] tags.
 3. **Stacked: SHOCK on a WET + OILED target.** Both `SHOCK×WET→Electrocuted` and (say) `SHOCK×OILED→Overload` match the pre-hit snapshot (E8); multipliers multiply, both states resolve their removes — one hit, two reactions, a deterministic crescendo. This is combomaxing in one line.
 
