@@ -55,17 +55,30 @@ func _tied(watch := false) -> TransmutationData:
 
 
 func _alchemist(faction: Team.Faction, cell: Vector2i, carving: TransmutationData) -> Unit:
+	var carvings: Array[TransmutationData] = [carving]
+	return _alchemist_with(faction, cell, carvings)
+
+
+func _alchemist_with(faction: Team.Faction, cell: Vector2i, carvings: Array[TransmutationData]) -> Unit:
 	var u := H.spawn_solo(self, _sm, faction, cell, { Stats.Stat.MHP: 60 }, false)
-	u.unit_instance.aura = { WATER: 4 }
-	var affinity: Array[Elemental.Element] = [WATER]
+	u.unit_instance.aura = { WATER: 4, Elemental.Element.AIR: 1 }
+	var affinity: Array[Elemental.Element] = [WATER, Elemental.Element.AIR]
 	u.unit_instance.affinity = affinity
 	var rune := RuneData.new()
 	rune.size = RuneData.Size.MEDIUM
-	assert_bool(rune.inscribe(carving)).override_failure_message("fixture carving failed to inscribe").is_true()
+	for carving in carvings:
+		assert_bool(rune.inscribe(carving)).override_failure_message("fixture carving failed to inscribe").is_true()
 	u.equipped_weapon = rune
-	assert_bool(u.is_attack_fireable(carving)).override_failure_message(
-			"fixture: the carving must be channelable, or the fizzle is not what is measured").is_true()
+	for carving in carvings:
+		assert_bool(u.is_attack_fireable(carving)).override_failure_message(
+				"fixture: the carving must be channelable, or the fizzle is not what is measured").is_true()
 	return u
+
+
+func _watch(watcher: Unit, carving: TransmutationData, aim: Vector2i) -> OverwatchAction:
+	var order := OverwatchAction.new()
+	order.init(watcher, aim, carving)
+	return order
 
 
 func _foe(cell: Vector2i) -> Unit:
@@ -268,3 +281,65 @@ func test_a_watch_shot_whose_carving_fizzles_lands_nothing() -> void:
 	assert_int(wet.watch_shots[0].resolved.damage).is_greater(0)
 	_break_volleys(plan)
 	_break_volleys(wet)
+
+
+# ==============================================================================
+#  A WATCH is asked the same question: Pressure Spray is watch-only
+# ==============================================================================
+
+func test_the_queue_gate_refuses_a_watch_that_fizzles_and_says_why() -> void:
+	var carving := _tied(true)
+	var watcher := _alchemist(PLAYER, DRY, carving)
+	var expected := CellSubstances.fizzle_reason(carving, DRY, _board(), watcher)
+	assert_str(expected).override_failure_message("fixture: the carving must fizzle at DRY").is_not_empty()
+
+	var refusal := _sm.try_queue_action(watcher.squad, _watch(watcher, carving, DRY_FOE))
+	assert_str(refusal).override_failure_message("a fizzling watch was armed").contains(expected)
+	assert_bool(watcher.squad.action_queue.any(func(a: BaseAction) -> bool: return a is OverwatchAction)).is_false()
+
+
+func test_beside_its_material_the_same_watch_is_armed() -> void:
+	var carving := _tied(true)
+	var watcher := _alchemist(PLAYER, NEAR, carving)
+	assert_str(_sm.try_queue_action(watcher.squad, _watch(watcher, carving, NEAR_FOE))).is_empty()
+
+
+# One-way validity for a watch: queued beside the spring, then its watcher planned back to the dry cell.
+func test_a_stored_watch_goes_red_when_its_watcher_is_planned_away_from_the_material() -> void:
+	var carving := _tied(true)
+	var watcher := _alchemist(PLAYER, DRY, carving)
+	assert_bool(_sm.queue_action(watcher.squad, _move(watcher, NEAR))).is_true()
+	var order := _watch(watcher, carving, DRY_FOE)
+	assert_bool(_sm.queue_action(watcher.squad, order)).override_failure_message(
+			"fixture: the watch must be legal while the walk to the spring stands").is_true()
+
+	_sm.cancel_move_for_unit(watcher)   # the re-plan: the watch now arms at DRY
+	var plan := _sm.resolve_plan(watcher.squad, _board())
+	_sm.validate_squad_plan(watcher.squad, plan)
+
+	assert_bool(watcher.squad.action_queue.has(order)).override_failure_message(
+			"the watch was dropped -- validity is one-way, it goes red and stays").is_true()
+	assert_that(order.resolved_anchor).override_failure_message(
+			"fixture: the resolve must arm the watch at DRY").is_equal(DRY)
+	assert_bool(order.is_valid).override_failure_message("a watch that would fizzle stayed valid").is_false()
+	assert_array(order.validation_errors).is_not_empty()
+	_break_volleys(plan)
+
+
+# The F / Shift+F aim cycle offers no carving that would fizzle where the unit stands, so it never
+# lands on an aim whose click the queue gate silently refuses. Without the board it asks nothing.
+func test_the_aim_cycle_skips_a_carving_that_fizzles_here() -> void:
+	var splash := _tied()
+	splash.display_name = "Splash"
+	splash.recipe = "Break(A, W) + Push(W2)"   # makes its own water: it never fizzles
+	var tied := _tied()
+	var carvings: Array[TransmutationData] = [splash, tied]
+	var caster := _alchemist_with(PLAYER, DRY, carvings)
+
+	var everything: Array = caster.aim_options(false).map(func(o: Unit.AimOption) -> AttackData: return o.attack)
+	assert_bool(everything.has(tied)).override_failure_message(
+			"fixture: without a board the tied carving must be offered").is_true()
+	var here: Array = caster.aim_options(false, _board()).map(func(o: Unit.AimOption) -> AttackData: return o.attack)
+	assert_bool(here.has(splash)).is_true()
+	assert_bool(here.has(tied)).override_failure_message(
+			"the aim cycle offered a carving that fizzles from where the unit stands").is_false()

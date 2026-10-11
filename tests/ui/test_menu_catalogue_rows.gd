@@ -591,3 +591,38 @@ func test_the_row_is_judged_from_where_the_unit_will_stand() -> void:
 	await _enter_attack_ring(alch)
 	assert_bool(_disabled(_row_named(_open_rows(), "Spray"))).override_failure_message(
 			"the row was judged from the live cell, not from where the queued walk ends").is_false()
+
+
+# Pressure Spray is watch-only, so the WATCH row greys the same way (the one shipped tied carving).
+# The control is the same rune on a caster carrying its own water.
+func test_a_watch_carving_that_would_fizzle_greys_its_watch_row_with_the_reason() -> void:
+	var alch := _spawn(Vector2i(1, 0))
+	alch.unit_instance.aura = { WATER: 4, Elemental.Element.AIR: 1 }
+	alch.unit_instance.affinity = [WATER, Elemental.Element.AIR]
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.MEDIUM
+	rune.display_name = "Spray Rune"
+	assert_bool(rune.inscribe(_carving("Break(A, W) + Push(W2)", "Splash"))).is_true()
+	var spray := _carving("Focus(W2) + Push(W2)", "Spray")
+	spray.can_overwatch = true
+	assert_bool(rune.inscribe(spray)).is_true()
+	alch.add_item(rune)
+	assert_object(alch.get_equipped_weapon()).override_failure_message("fixture failed to equip the rune").is_same(rune)
+	assert_bool(alch.is_attack_fireable(spray)).override_failure_message(
+			"fixture: the watch carving must be channelable, or channeling is what greys it").is_true()
+	var reason := CellSubstances.fizzle_reason(spray, alch.get_projected_destination(), game._board(), alch)
+	assert_str(reason).override_failure_message("fixture: the grass row holds no water").is_not_empty()
+
+	await _enter_attack_ring(alch)
+	var row := _row_named(_open_rows(), "Spray")
+	assert_bool(row.is_empty()).override_failure_message("the kit slice drew no watch row for the carving").is_false()
+	assert_bool(_disabled(row)).override_failure_message("a watch that would fizzle was left pickable").is_true()
+	assert_str(_tooltip(row).replace("\n", " ")).override_failure_message(
+			"the greyed watch row did not say why: '%s'" % _tooltip(row)).contains(reason)
+	_controller().dismiss()
+	await await_idle_frame()
+
+	alch.add_element_state(Elemental.State.WET)
+	await _enter_attack_ring(alch)
+	assert_bool(_disabled(_row_named(_open_rows(), "Spray"))).override_failure_message(
+			"a caster carrying its own water still had its watch row greyed").is_false()

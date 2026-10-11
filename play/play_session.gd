@@ -336,6 +336,11 @@ func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Diction
 		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
 	var origin := unit.get_projected_destination()
 	var board := _board()
+	# A watch whose carving fizzles from here is refused at the queue (SquadManager's fizzle gate), so
+	# it has no spot to offer -- legal_targets' rule for a fire pick, one verb over.
+	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, unit)
+	if fizzle != "":
+		return {"ok": false, "error": "%s can't watch with %s from %s: %s" % [handle, _attack_label(watch), str(origin), fizzle]}
 	var out: Array[Dictionary] = []
 	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, watch):
 		if not Reach.can_aim_at(unit, origin, aim, watch, board):

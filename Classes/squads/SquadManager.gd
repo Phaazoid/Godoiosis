@@ -486,18 +486,23 @@ func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 # The fizzle half of the gate (Deep Alchemy Phase 2), the whiff clause's sibling: a candidate carving
 # must find its arguments where the caster will STAND to cast it -- its projected origin, read the way
 # aim_finds_a_target reads it. The same CellSubstances.fizzle_reason the menu row greys with, so a
-# greyed row and a refused order cannot disagree. A stored aim's answer comes from the resolve
-# (SquadPlanValidator's "Fizzles here now"). Non-attack candidates pass straight through.
+# greyed row and a refused order cannot disagree. Asked of an aim and of a WATCH, whose shot fires
+# from that same cell (Pressure Spray is watch-only); a stored order's answer is the validator's
+# ("Fizzles here now"). Every other candidate passes straight through.
 func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
-	if not (action is AttackAction):
+	var attack: AttackData = null
+	if action is AttackAction:
+		attack = (action as AttackAction).fired_attack
+	elif action is OverwatchAction:
+		attack = (action as OverwatchAction).fired_attack
+	else:
 		return true
-	var aim := action as AttackAction
 	var one: Array[BaseAction] = [action]
-	var origin := Unit.projected_cell(aim.actor, _hypothetical_actions(squad, one), true, true)
-	var reason := CellSubstances.fizzle_reason(aim.fired_attack, origin, board_source.call(), aim.actor)
+	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
+	var reason := CellSubstances.fizzle_reason(attack, origin, board_source.call(), action.actor)
 	if reason == "":
 		return true
-	aim.add_validation_error(reason)
+	action.add_validation_error(reason)
 	return false
 
 # The whiff half of the gate: only a CANDIDATE may be asked this -- a stored aim's answer comes
