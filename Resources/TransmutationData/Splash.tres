@@ -7,7 +7,7 @@
 
 [resource]
 script = ExtResource("1_6nsqn")
-sigils = Array[int]([2])
+recipe = "Break(A, W) + Push(W2)"
 popup = "It wasn't very effective"
 icon = ExtResource("2_emron")
 display_name = "Splash"

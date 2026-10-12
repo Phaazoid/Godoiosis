@@ -47,7 +47,7 @@ distance = 13.401895
 
 [sub_resource type="Resource" id="Resource_8ihxj"]
 script = ExtResource("25_facq7")
-sigils = Array[int]([1, 1, 6])
+recipe = "Break(F, A) + Bind(Q, F) + Push(QF)"
 display_name = "Zap Cannon"
 power = 7
 max_range = 0
@@ -57,7 +57,7 @@ hits_allies = true
 
 [sub_resource type="Resource" id="Resource_3peij"]
 script = ExtResource("25_facq7")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("27_4ji6m")
 display_name = "Fireball"
@@ -340,7 +340,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 
 [sub_resource type="Resource" id="Resource_a1ncn"]
 script = ExtResource("25_facq7")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("27_4ji6m")
 display_name = "Fireball"
@@ -397,7 +397,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_f8j6y")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 2
+1: 3
 })
 affinity = Array[int]([1])
 affinity_saved = true
@@ -410,7 +410,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_tnex3"]
 script = ExtResource("25_facq7")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("27_4ji6m")
 display_name = "Fireball"
@@ -467,7 +467,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_0lehi")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 2
+1: 3
 })
 affinity = Array[int]([1])
 affinity_saved = true
@@ -790,7 +790,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 
 [sub_resource type="Resource" id="Resource_n2b8h"]
 script = ExtResource("25_facq7")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("27_4ji6m")
 display_name = "Fireball"
@@ -847,7 +847,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_4fepy")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 2
+1: 3
 })
 affinity = Array[int]([1])
 affinity_saved = true
@@ -860,7 +860,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_3efpw"]
 script = ExtResource("25_facq7")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("27_4ji6m")
 display_name = "Fireball"
@@ -917,7 +917,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_bssrp")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 2
+1: 3
 })
 affinity = Array[int]([1])
 affinity_saved = true

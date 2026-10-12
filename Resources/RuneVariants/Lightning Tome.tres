@@ -8,7 +8,7 @@
 
 [sub_resource type="Resource" id="Resource_vbu1b"]
 script = ExtResource("1_bs7q6")
-sigils = Array[int]([1, 1, 6])
+recipe = "Break(F, A) + Bind(Q, F) + Push(QF)"
 display_name = "Zap Cannon"
 power = 7
 max_range = 0
@@ -18,7 +18,7 @@ hits_allies = true
 
 [sub_resource type="Resource" id="Resource_vd2sa"]
 script = ExtResource("1_bs7q6")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("4_qddlg")
 display_name = "Fireball"

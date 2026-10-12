@@ -42,10 +42,10 @@ func _adept() -> Unit:
 	return unit
 
 
-func _carving(sigils: Array[Elemental.Element]) -> TransmutationData:
+func _carving(recipe: String) -> TransmutationData:
 	var carving := TransmutationData.new()
 	carving.power = 5
-	carving.sigils.assign(sigils)
+	carving.recipe = recipe
 	return carving
 
 
@@ -140,8 +140,8 @@ func test_a_runes_refusal_carries_its_carvings_own_sentences() -> void:
 	var rune := RuneData.new()
 	rune.size = RuneData.Size.LARGE
 	rune.display_name = "Test Rune"
-	var hot := _carving([FIRE])
-	var hotter := _carving([FIRE, FIRE, FIRE])
+	var hot := _carving("Push(F)")
+	var hotter := _carving("Push(F) + Push(F2)")
 	assert_bool(rune.inscribe(hot)).is_true()
 	assert_bool(rune.inscribe(hotter)).is_true()
 

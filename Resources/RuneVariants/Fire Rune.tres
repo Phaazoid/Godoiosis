@@ -6,7 +6,7 @@
 
 [sub_resource type="Resource" id="Resource_2aefx"]
 script = ExtResource("1_tgbeh")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("3_vrxf1")
 display_name = "Fireball"

@@ -27,7 +27,7 @@ map_sprite = ExtResource("2_q2f78")
 move_sprite = ExtResource("3_u06gf")
 downed_sprite = ExtResource("1_k0y5m")
 base_aura = Dictionary[int, int]({
-1: 2,
+1: 3,
 5: 1,
 7: 2
 })

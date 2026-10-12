@@ -2,15 +2,15 @@
 # effect stays damageless no matter how good its wielder is at it.
 #
 # The flag exists because a wind transmutation cannot otherwise reach 0 damage. A carving's damage is
-# `power + aura summed over its sigils`, and channeling anchors on real aura in one of the carving's
-# elements (the 2026-08-10 wildcard model; it REQUIRED temper aura before that) — so the alchemists
+# `power + aura in each element it delivers`, and channeling anchors on real aura in one of the
+# elements its recipe demands (the 2026-08-10 wildcard model; it REQUIRED temper aura before that) — so the alchemists
 # who fire an AIR carving mostly ARE the ones whose aura would sneak damage into it, and even a
 # wildcard-anchored outsider scales off whatever relevant aura they do hold. Same hazard one layer
 # over: a `power = 0` weapon attack still collects the family's stat blend.
 #
 # What the flag does NOT do (dev, 2026-08-08): suppress an elemental reaction's damage_bonus. That
 # bonus is not part of the original transmutation — it is what the WORLD did with the element the
-# attack carried — and it stays real. Gusting a wet body with a Quickened fire carving electrocutes
+# attack carried — and it stays real. Gusting a wet body with a carving that pushes lightning electrocutes
 # it, and if the body was downed, it dies. That is the player's mistake to avoid, and it is pinned
 # here as a decision so it cannot be "tidied" into a resolver clamp later.
 #
@@ -37,9 +37,9 @@ func _alchemist(aura: Dictionary[Elemental.Element, int]) -> Unit:
 	unit.unit_instance.affinity = affinity
 	return unit
 
-func _carving(element: Elemental.Element, no_damage: bool) -> TransmutationData:
+func _carving(recipe: String, no_damage: bool) -> TransmutationData:
 	var carving := TransmutationData.new()
-	carving.sigils.assign([element])
+	carving.recipe = recipe
 	carving.deals_no_damage = no_damage
 	return carving
 
@@ -66,11 +66,11 @@ func test_a_no_damage_carving_ignores_the_wielders_aura() -> void:
 
 	# Control: the same carving WITHOUT the flag is worth its wielder's air aura.
 	var scaled := H.stamped_attack(caster, foe)
-	scaled.fired_attack = _carving(Elemental.Element.AIR, false)
+	scaled.fired_attack = _carving("Push(A2)", false)
 	assert_int(_resolve(scaled, no_reactions).damage).is_equal(4)
 
 	var utility := H.stamped_attack(caster, foe)
-	utility.fired_attack = _carving(Elemental.Element.AIR, true)
+	utility.fired_attack = _carving("Push(A2)", true)
 	assert_int(_resolve(utility, no_reactions).damage).is_equal(0)
 
 func test_a_no_damage_weapon_attack_ignores_the_stat_blend() -> void:
@@ -91,15 +91,14 @@ func test_a_no_damage_weapon_attack_ignores_the_stat_blend() -> void:
 # ---- what the flag deliberately does NOT suppress ----
 
 func test_an_elemental_reaction_still_damages_through_a_no_damage_attack() -> void:
-	# The real content shape: FIRE + QUICKENING derives SHOCK (Flourish.DERIVED), and the authored
+	# The real content shape: pushing lightning (QF) delivers a SHOCK hit, and the authored
 	# shock_wet_electrocute reaction pays +5 into a WET target. The carving contributes nothing; the
 	# reaction is not the carving's to suppress.
 	var caster := _alchemist({Elemental.Element.FIRE: 3})
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20})
 	foe.add_element_state(Elemental.State.WET)
 
-	var carving := _carving(Elemental.Element.FIRE, true)
-	carving.flourishes.assign([Flourish.Type.QUICKENING])
+	var carving := _carving("Push(QF)", true)
 	assert_array(carving.get_elements()).contains([Elemental.Element.SHOCK])
 
 	var action := H.stamped_attack(caster, foe)
@@ -115,8 +114,7 @@ func test_a_no_damage_attack_that_a_reaction_arms_still_finishes_a_downed_body()
 	var ally := _downed_ally(Vector2i(1, 0))
 	ally.add_element_state(Elemental.State.WET)
 
-	var carving := _carving(Elemental.Element.FIRE, true)
-	carving.flourishes.assign([Flourish.Type.QUICKENING])
+	var carving := _carving("Push(QF)", true)
 	carving.hits_allies = true
 
 	var action := H.stamped_attack(caster, ally)
@@ -135,7 +133,7 @@ func test_a_no_damage_shove_moves_a_downed_ally_instead_of_killing_it() -> void:
 	var ally := _downed_ally(Vector2i(1, 0))
 	var no_reactions: Array[ElementalReaction] = []
 
-	var gust := _carving(Elemental.Element.AIR, true)
+	var gust := _carving("Push(A2)", true)
 	gust.hits_allies = true
 	gust.knockback = 2
 

@@ -32,7 +32,7 @@ class_name AttackEditorTool
 # deleting -- #808), the EFFECT LOOKS (the same, once per element, with a page of override rows
 # under each -- #900), the EFFECT pair (two bools over one three-way question), the damage KIND
 # (NONE is answered by rule and must never be offered) and the empowered form (a picker, never a
-# nested editor). The blend, sigils and flourishes were already bespoke for their own reasons.
+# nested editor). The blend and the recipe were already bespoke for their own reasons.
 #
 # A SECTION HIDES WITH ITS ROWS since #900 -- the look section is the first that can be empty, and a
 # heading drawn over nothing is worse than an absent section. Derived in _draw_sections rather than
@@ -374,7 +374,7 @@ func populate():
 #
 # `rows` collects field -> the nodes drawing it, for the one bind_hidden_fields call at the end.
 # A drawer registers its own rows only where hiding is meaningful; a block nothing can hide (the
-# sigils, the shape) simply does not, and an unregistered field is ignored by the binder.
+# the recipe, the shape) simply does not, and an unregistered field is ignored by the binder.
 func _draw_sections() -> void:
 	var rows := {}
 	var drawn := {}
@@ -441,12 +441,9 @@ func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
 		"payload":
 			_populate_payload()
 			return PackedStringArray(["payload"])
-		"sigils":
-			_populate_sigils(current as TransmutationData)
-			return PackedStringArray(["sigils"])
-		"flourishes":
-			_populate_flourishes(current as TransmutationData)
-			return PackedStringArray(["flourishes"])
+		"recipe":
+			_populate_recipe(current as TransmutationData)
+			return PackedStringArray(["recipe"])
 	var added := DevWidgets.add_property_row(editor_container, current, field, populate)
 	if not added.is_empty():
 		rows[field] = added
@@ -1078,75 +1075,36 @@ func _populate_carriers() -> void:
 	else:
 		DevWidgets.add_label(editor_container, "Carried by: %s" % ", ".join(carriers))
 
-# Sigils as per-element weights ("2 Fire, 1 Earth"). Weight changes append/remove
-# occurrences instead of rebuilding, so first-inscribed tie-break order survives edits.
-func _populate_sigils(carving: TransmutationData):
+# The recipe as one line of codev's notation, with what it resolves to read back live: the verbs (its
+# rune cost), the aura it asks for, what it delivers, or why it does not parse. The readout is
+# relabelled in place on every keystroke rather than rebuilt -- a rebuild from the field's own signal
+# would free the node mid-edit (#741).
+func _populate_recipe(carving: TransmutationData):
 	var first := editor_container.get_child_count()
-	DevWidgets.add_label(editor_container, "Sigils (weight per element):")
-	for e in Elemental.SIGIL_ELEMENTS:
-		var element: Elemental.Element = e
-		var on_weight := func(v):
-			_set_sigil_weight(carving, element, int(v))
-		DevWidgets.add_spinbox(editor_container, Elemental.display_name(element), carving.sigils.count(element), on_weight)
-	DevWidgets.add_label(editor_container, "Cost %d | Tier %d | Flourish slots %d" % [carving.cost(), carving.tier(), carving.flourish_slots()])
-	DevWidgets.add_label(editor_container, "Resolves to: %s" % _tags_label(carving))
-	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(carving, "sigils"))
+	var field := LineEdit.new()
+	field.text = carving.recipe
+	field.placeholder_text = "Break(F, A) + Push(F2)"
+	field.custom_minimum_size = Vector2(320, 0)
+	editor_container.add_child(field)
+	var readout := Label.new()
+	readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	readout.text = _recipe_readout(carving)
+	editor_container.add_child(readout)
+	field.text_changed.connect(func(text: String) -> void:
+		carving.recipe = text.strip_edges()
+		carving.emit_changed()
+		readout.text = _recipe_readout(carving))
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(carving, "recipe"))
 
-func _set_sigil_weight(carving: TransmutationData, element: Elemental.Element, weight: int):
-	var target := maxi(0, weight)
-	var delta = target - carving.sigils.count(element)
-	for i in range(delta):
-		carving.sigils.append(element)
-	for i in range(-delta):
-		carving.sigils.remove_at(carving.sigils.rfind(element))
-	# Fewer sigils can mean fewer slots — trim overflow so the circle stays legal.
-	while carving.flourishes.size() > carving.flourish_slots():
-		push_warning("Slot lost: removed %s" % Flourish.Type.keys()[carving.flourishes.pop_back()])
-	populate()
 
-func _populate_flourishes(carving: TransmutationData):
-	var first := editor_container.get_child_count()
-	DevWidgets.add_label(editor_container, "Flourishes (%d / %d slots):" % [carving.flourishes.size(), carving.flourish_slots()])
-	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(carving, "flourishes"))
-	for i in range(carving.flourishes.size()):
-		var idx := i
-		var row := HBoxContainer.new()
-		var label := Label.new()
-		label.text = Flourish.Type.keys()[carving.flourishes[idx]].capitalize()
-		label.custom_minimum_size = Vector2(160, 0)
-		row.add_child(label)
-		var remove := Button.new()
-		remove.text = "Remove"
-		remove.pressed.connect(func():
-			carving.flourishes.remove_at(idx)
-			populate()
-		)
-		row.add_child(remove)
-		editor_container.add_child(row)
+static func _recipe_readout(carving: TransmutationData) -> String:
+	if carving.recipe_error() != "":
+		return "Not carvable: %s" % carving.recipe_error()
+	return "Verbs %d (rune cost) | Asks %s | Hits as %s" % [carving.cost(), carving.demand_text(), _tags_label(carving)]
 
-	var add_row := HBoxContainer.new()
-	var picker := OptionButton.new()
-	var types: Array = Flourish.Type.values().filter(func(t): return t != Flourish.Type.NONE)
-	for t in types:
-		picker.add_item(Flourish.Type.keys()[t].capitalize())
-	add_row.add_child(picker)
-	var add_btn := Button.new()
-	add_btn.text = "Carve"
-	add_btn.pressed.connect(func():
-		var chosen: Flourish.Type = types[picker.selected]
-		if carving.can_add_flourish(chosen):
-			carving.flourishes.append(chosen)
-			populate()
-		else:
-			push_warning("Can't carve %s (no free slot, or its opposite is already carved)" % Flourish.Type.keys()[chosen])
-	)
-	add_row.add_child(add_btn)
-	editor_container.add_child(add_row)
 
-func _tags_label(carving: TransmutationData) -> String:
-	if carving.sigils.is_empty():
-		return "(nothing — add a sigil)"
-	var names := []
+static func _tags_label(carving: TransmutationData) -> String:
+	var names: Array[String] = []
 	for e in carving.get_elements():
 		names.append(Elemental.display_name(e))
-	return ", ".join(names)
+	return ", ".join(names) if not names.is_empty() else "nothing that carries an element"

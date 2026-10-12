@@ -23,6 +23,13 @@ const ELEMENTS: Dictionary[Elemental.Element, String] = {
 	Elemental.Element.CORROSION: "vitriol",
 }
 
+# What a hit carries when it delivers a substance -- ELEMENTS read backwards (flame is FIRE), plus
+# the one product no ELEMENTS row names: ice, which a Freeze's free aether becomes once it binds water.
+# A carving's hit element is derived from this (TransmutationData.get_elements).
+const CARRIED_AS_TOO: Dictionary[String, Elemental.Element] = {
+	"ice": Elemental.Element.ICE,
+}
+
 const STATES: Dictionary[Elemental.State, String] = {
 	Elemental.State.WET: "water",
 	Elemental.State.CHILLED: "ice",
@@ -81,3 +88,11 @@ static func of_kind(kind: Terrain.Kind) -> String:
 
 static func of_gas(kind: Gas.Kind) -> String:
 	return id_of(GASES.get(kind, ""))
+
+
+# The element a hit delivering this substance carries, or NONE.
+static func element_carried_by(substance_id: String) -> Elemental.Element:
+	for element: Elemental.Element in ELEMENTS:
+		if of_element(element) == substance_id:
+			return element
+	return CARRIED_AS_TOO.get(substance_id, Elemental.Element.NONE)

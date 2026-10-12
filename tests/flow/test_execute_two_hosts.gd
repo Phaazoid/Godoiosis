@@ -377,7 +377,7 @@ func test_a_vial_burn() -> void:
 		var fireball := TransmutationData.new()
 		fireball.display_name = "Fireball"
 		fireball.power = 4
-		fireball.sigils.assign([fire])
+		fireball.recipe = "Push(F2)"
 		fireball.targets = EquippableData.TargetMode.UNIT
 		P.point(fireball, 2)
 		var rune := RuneData.new()

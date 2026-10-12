@@ -34,7 +34,7 @@
 
 [sub_resource type="Resource" id="Resource_qdkju"]
 script = ExtResource("6_5ic8h")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("8_vt82v")
 display_name = "Fireball"
@@ -109,7 +109,7 @@ limb_states = Dictionary[int, int]({
 
 [sub_resource type="Resource" id="Resource_1nr8c"]
 script = ExtResource("6_5ic8h")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("8_vt82v")
 display_name = "Fireball"
@@ -145,7 +145,7 @@ map_sprite = ExtResource("13_68336")
 move_sprite = ExtResource("14_f4d70")
 downed_sprite = ExtResource("11_r5jfu")
 base_aura = Dictionary[int, int]({
-1: 1
+1: 3
 })
 base_affinity = Array[int]([1])
 base_is_alkahest_affine = true
@@ -172,7 +172,7 @@ current_hp = 40
 inventory = Array[ExtResource("5_63umr")]([SubResource("Resource_4fber")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 1
+1: 3
 })
 affinity = Array[int]([1])
 is_alkahest_affine = true

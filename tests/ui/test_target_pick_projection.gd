@@ -64,7 +64,7 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 
 func _gust() -> TransmutationData:
 	var carving := TransmutationData.new()
-	carving.sigils.assign([Elemental.Element.AIR])
+	carving.recipe = "Push(A2)"
 	carving.deals_no_damage = true
 	carving.hits_allies = true
 	carving.knockback = 2

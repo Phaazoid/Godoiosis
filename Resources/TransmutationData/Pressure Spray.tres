@@ -6,8 +6,7 @@
 
 [resource]
 script = ExtResource("3_t8oom")
-sigils = Array[int]([2, 2])
-flourishes = Array[int]([3, 5])
+recipe = "Focus(W2) + Push(W2)"
 display_name = "Pressure Spray"
 power = 5
 max_range = 0

@@ -48,11 +48,12 @@ func _alchemist(aura: Dictionary[Elemental.Element, int], cell := Vector2i(0, 0)
 	u.unit_instance.affinity = affinity
 	return u
 
-# Sigils REPEAT as weight, which is what makes the "+1 per matching sigil" claim testable.
-func _carving(power: int, sigils: Array) -> TransmutationData:
+# A carving in the Phase 2 recipe notation. The charge is +1 aura in an element the hit DELIVERS,
+# once per element, however many atoms the recipe spends to get there.
+func _carving(power: int, recipe: String) -> TransmutationData:
 	var t := TransmutationData.new()
 	t.power = power
-	t.sigils.assign(sigils)
+	t.recipe = recipe
 	t.targets = EquippableData.TargetMode.UNIT
 	return t
 
@@ -140,31 +141,31 @@ func test_a_vial_replaces_nothing_when_nothing_is_held() -> void:
 
 func test_a_charge_empowers_a_cast_away_from_any_source() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
-	var bare: AttackAction = _cast(alch, _carving(5, [FIRE]), _board())
+	var bare: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
 	assert_int(bare.resolved.damage).is_equal(9)          # power 5 + fire aura 4
 
 	alch.attunement = _vial(FIRE)
-	var lit: AttackAction = _cast(alch, _carving(5, [FIRE]), _board())
+	var lit: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
 	assert_int(lit.resolved.damage).is_equal(10)          # +1 effective aura
 
-# Repeated sigils weight the bonus, exactly as they weight the real pool (#694's rule, unchanged --
-# a vial grants what a source grants and never more).
-func test_repeated_sigils_weight_the_charge() -> void:
+# The charge counts exactly as the real pool does -- once per delivered element, however many fire
+# atoms the recipe spends (#694's rule, unchanged: a vial grants what a source grants and never more).
+func test_the_charge_counts_once_per_delivered_element() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(FIRE)
-	var atk: AttackAction = _cast(alch, _carving(5, [FIRE, FIRE]), _board())
-	assert_int(atk.resolved.damage).is_equal(15)          # 5 + (4+1) + (4+1)
+	var atk: AttackAction = _cast(alch, _carving(5, "Push(F) + Push(F2)"), _board())
+	assert_int(atk.resolved.damage).is_equal(10)          # 5 + (4+1), not once per fire atom
 
 func test_an_alkahest_charge_empowers_any_element() -> void:
 	var alch: Unit = _alchemist({ WATER: 3 })
 	alch.attunement = _vial(Elemental.Element.NONE, true)
-	var atk: AttackAction = _cast(alch, _carving(2, [WATER]), _board())
+	var atk: AttackAction = _cast(alch, _carving(2, "Push(W2)"), _board())
 	assert_int(atk.resolved.damage).is_equal(6)           # 2 + (3+1)
 
 func test_a_charge_in_the_wrong_element_changes_nothing() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(WATER)
-	var atk: AttackAction = _cast(alch, _carving(5, [FIRE]), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
 	assert_int(atk.resolved.damage).is_equal(9)
 
 # --- the DIFFERENTIAL burn --------------------------------------------------------------------
@@ -173,7 +174,7 @@ func test_the_burn_is_recorded_when_the_charge_paid() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	var vial := _vial(FIRE)
 	alch.attunement = vial
-	var atk: AttackAction = _cast(alch, _carving(5, [FIRE]), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
 	assert_object(atk.resolved.burned_vial).is_same(vial)
 
 # THE case the rule exists for: the terrain already granted fire, so the charge bought nothing and
@@ -181,15 +182,15 @@ func test_the_burn_is_recorded_when_the_charge_paid() -> void:
 func test_standing_on_a_source_pays_instead_of_the_vial() -> void:
 	var alch: Unit = _alchemist({ WATER: 4 })
 	alch.attunement = _vial(WATER)
-	var atk: AttackAction = _cast(alch, _carving(5, [WATER]),
+	var atk: AttackAction = _cast(alch, _carving(5, "Push(W2)"),
 			_board({ alch.movement.cell: Terrain.Kind.WATER }))
 	assert_int(atk.resolved.damage).is_equal(10)          # empowered -- by the river, not the vial
 	assert_object(atk.resolved.burned_vial).is_null()
 
-func test_a_charge_no_sigil_matches_is_not_burned() -> void:
+func test_a_charge_no_delivered_element_matches_is_not_burned() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(WATER)
-	var atk: AttackAction = _cast(alch, _carving(5, [FIRE]), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
 	assert_object(atk.resolved.burned_vial).is_null()
 
 # A carving that deals no damage has its scaling suppressed, so the charge cannot change the answer
@@ -197,25 +198,25 @@ func test_a_charge_no_sigil_matches_is_not_burned() -> void:
 func test_a_no_damage_carving_does_not_burn_the_charge() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(FIRE)
-	var carving := _carving(5, [FIRE])
+	var carving := _carving(5, "Push(F2)")
 	carving.deals_no_damage = true
 	var atk: AttackAction = _cast(alch, carving, _board())
 	assert_object(atk.resolved.burned_vial).is_null()
 
 # Partial credit still counts: the water half was already free, but FIRE was load-bearing, so the
 # vial paid for something and is spent.
-func test_a_multi_sigil_carving_burns_when_only_one_element_needed_it() -> void:
+func test_a_multi_element_carving_burns_when_only_one_element_needed_it() -> void:
 	var alch: Unit = _alchemist({ FIRE: 3, WATER: 3 })
 	var vial := _vial(FIRE)
 	alch.attunement = vial
-	var atk: AttackAction = _cast(alch, _carving(2, [FIRE, WATER]),
+	var atk: AttackAction = _cast(alch, _carving(2, "Break(F, W)"),
 			_board({ alch.movement.cell: Terrain.Kind.WATER }))
 	assert_object(atk.resolved.burned_vial).is_same(vial)
 	assert_int(atk.resolved.damage).is_equal(10)          # 2 + (3+1 fire, vial) + (3+1 water, river)
 
 func test_an_unattuned_caster_records_no_burn() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
-	var atk: AttackAction = _cast(alch, _carving(5, [FIRE]), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
 	assert_object(atk.resolved.burned_vial).is_null()
 
 # --- the invariants: a charge is a DAMAGE term and nothing else (#694's three, re-asked) --------

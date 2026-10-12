@@ -527,9 +527,9 @@ A fourth erratum surfaced in a later human editing pass and was fixed in the sam
 ### Convergences with existing canon (worth citing in the room)
 
 - **The −1 is already canon.** The shipped channeling model (anchor + wildcards, 2026-08-10) grants every rune a universal +1 of deficit coverage, attributed in-lore to the stone's own alkahest. Same mechanism, same lore justification, independently derived. The two systems disagree **only at one sigil** — which isolates the Rebecca fork exactly (below).
-- **Break/Bind ≈ Solve et Coagula ≈ Quickening/Stillness.** [transmutation-model-proposal.md](transmutation-model-proposal.md) declares Stillness/Quickening as the Solve-et-Coagula polarity, and Push already exists as a flourish. Break/Bind can be presented as the substance-level *semantics* of marks that already exist, rather than a rival verb set.
+- **Break/Bind ≈ Solve et Coagula ≈ Quickening/Stillness.** [transmutation-model-proposal.md](transmutation-model-proposal.md) declares Stillness/Quickening as the Solve-et-Coagula polarity, and Push already exists as a flourish. Break/Bind can be presented as the substance-level *semantics* of marks that already exist, rather than a rival verb set. *(Superseded 2026-10-11, Phase 2: the verbs replaced the marks outright. Break/Bind are their own pair, and Quicken/Still now act on time only; see What is built.)*
 - **The planetary metals table already exists** in [elemental-interactions.md](elemental-interactions.md) (mechanist side), with matching traits — lead shock-resistant, iron rusting. Two authors converged on one table; merge, don't fork.
-- **Ice/lightning as aether compounds vs derived tags:** shipped code derives ICE = Water+Stillness and SHOCK = Fire+Quickening (`Flourish.DERIVED`); this doc composes them as `QW`/`QF`. Two answers to one question — though note `QW` ("water fixed by the heavens") and Water+Stillness are nearly the same sentence, so unification is plausible IF Q-as-cold survives, which the doc itself flags as open. Canon Aether = life/spirit/the heavens is [LOCKED] in [alchemy-kit.md](alchemy-kit.md).
+- **Ice/lightning as aether compounds vs derived tags:** shipped code derives ICE = Water+Stillness and SHOCK = Fire+Quickening (`Flourish.DERIVED`); this doc composes them as `QW`/`QF`. Two answers to one question — though note `QW` ("water fixed by the heavens") and Water+Stillness are nearly the same sentence, so unification is plausible IF Q-as-cold survives, which the doc itself flags as open. Canon Aether = life/spirit/the heavens is [LOCKED] in [alchemy-kit.md](alchemy-kit.md). *(Resolved 2026-10-11, Phase 2: `Flourish.DERIVED` is gone. A hit's element is the substance it delivers read back through `SubstanceMap`, so ice `QW` is ICE and lightning `QF` is SHOCK; aether is the heavens, not cold.)*
 
 ### Ratified rulings this proposal touches (the repeal-record list)
 
@@ -537,7 +537,7 @@ The project's culture runs on explicit repeal records; name these rather than co
 
 1. **The materia law** (#693, [alchemy-kit.md](alchemy-kit.md), ratified 2026-08-29): *materia never gates function — it supercharges it.* The `Extract` family's "requires materia" is a reagent gate. Sanctioned doors: the exotic-reagent exception (#698), or the mechanist-device reframe below.
 2. **The anchor / Rebecca rule + the equip gate** (#157, shipped code): Level 0 as proposed relaxes it.
-3. **Rune sizing + cost doctrine** (#60): circle cap 3 / capacity 6 is the carvable ceiling, and Alkahest at 5 sigils is *deliberately* uncarvable story silhouette — the level 5–7 transmutations here exceed the ceiling. Cost-derived-from-recipe is canon and this doc's rule satisfies it; the **distribution rule** is the missing half (see spec gaps).
+3. **Rune sizing + cost doctrine** (#60): circle cap 3 / capacity 6 is the carvable ceiling, and Alkahest at 5 sigils is *deliberately* uncarvable story silhouette — the level 5–7 transmutations here exceed the ceiling. Cost-derived-from-recipe is canon and this doc's rule satisfies it; the **distribution rule** is the missing half (see spec gaps). *(Phase 2, 2026-10-11: both knobs now count VERBS, 1/2/3 and 1/4/6, and aura demand is the atoms across every argument; see What is built.)*
 4. **Effects-first, tools-first** (co-dev ratification 2026-07-11, Stop 5) and *"the fix is not emergence"* ([transmutation-model-proposal.md](transmutation-model-proposal.md)): a full theory of matter first is a decided question being reopened — argue it knowingly, or scope this doc as the authoring-side order *behind* the authored table.
 5. **The state layer owns "is this tile on fire"** (Law #4): BURNING/WET/FROZEN/CHILLED are shipped stores. A substance field answering the same questions must declare which representation is authoritative and which is derived.
 6. **Axiom 1 — no permanent deletion of player investment** ([elemental-interactions.md](elemental-interactions.md)): rusting weapons via slow reactions is the cut "melt the prosthetic" in slow motion; AMALGAMATED (temporary fouling, never destruction) is the sanctioned shape for metallurgy attacks on gear.
@@ -584,9 +584,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-11. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1308 (2026-10-11).**
+**Canon checked through #1315 (2026-10-11).**
 
-**Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it.
+**Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
 - **Substances** are one `.tres` each in `Resources/Substances/` (`Classes/alchemy/Substance.gd`). The id is the file name. `formula` is a molecule (`FW`, or a `*` composition) or a compound of other substances joined by `+` (`AE + A2`). The atoms are the five sigil elements the game already has. `phase` is unbound, solid, liquid or gas.
 - **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id. A compound is only ever named by id.
@@ -622,10 +622,40 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dry plant `AE + 2FA`, dirt `E2 + AE` (salt and carbon, mineralogy later), mud `dirt + W2`, silica `QFAE2`, stone `E2 + QFAE2` (a placeholder), nitre `FA2E`, vitriol `FE + W2 + FA` (oil of vitriol), ozone `FA2`. Sulfur gas `FAE` and smoke `AE + A2` are confirmed.
 
+**Phase 2: what a carving is.** Settled by Phaazoid@ and c3potheds@ in #claude-sessions, 2026-10-08 to 2026-10-11; built 2026-10-11. It replaces the sigil/flourish anatomy of [transmutation-model-proposal.md](transmutation-model-proposal.md), whose banner says what went.
+
+- **A carving is a recipe.** `TransmutationData.recipe` is one line in c3potheds@'s notation, verbs with substances as their arguments: `Break(F, A) + Push(F2)`. `CarvingRecipe` parses it. `sigils` (the weighted element list) and `flourishes` (the shaping marks) are gone. A lone formula does nothing: no verbs, no effect, so an empty recipe is illegal.
+- **Ten verbs, five apart/together pairs** (solve et coagula; `Flourish` is now the verb lexicon). Break/Bind act on a bond and both take two arguments, with no defaults. Extract/Infuse act on a body, a unit or a materia. Push/Pull run along the line of the cast, away from or toward the caster. Spread/Focus work around the target, outward or inward. Quicken/Still act on time: they change WHEN, never how much. **Opposites combine rather than cancel** (Push + Pull is a twister, Spread + Focus a ring). The old opposite-rejection and the derived table (Water + Stillness → ICE, Fire + Quickening → SHOCK) are gone.
+- **Cost on a rune = verbs.** Each verb brings its own argument slots, so the arguments are not counted again. Still derived from the recipe, never author-set (#60). `RuneData` counts verbs: circle cap 1/2/3 per carving, capacity 1/4/6 per rune (S/M/L). Medium rose from 3 to 4 so two two-verb carvings fit (Freeze + Splash).
+- **Aura demand = atoms summed across every argument.** `Break(F, A) + Push(F2)` asks Fire 3, Air 1. This is c3potheds@'s level rule (atoms minus one, the appendix above) seen from the alchemist; the −1 is the rune's universal wildcard. The channel ladder (anchor + wildcards) is unchanged and is fed the demand. Temper = the most-demanded element, and the temper rule reads demand.
+- **What a hit carries** is what the LAST delivering verb leaves at the target. Push, Infuse, Focus and Spread leave their substance, Bind its product, and Break its two halves with lone atoms paired (`F` → flame). Pull, Extract, Quicken and Still leave nothing there, so the hit reads past them. The hit's element is that substance read back through `SubstanceMap.element_carried_by`: flame FIRE, lightning SHOCK, free aether ICE, essence AETHER, and ice ICE through the one-row `CARRIED_AS_TOO`.
+- **Damage = power + aura in each element of the delivered substance, once each.** Fireball's flame scales off fire once, as a one-sigil carving did. Vial and terrain empowerment add +1 per matching delivered element. The AuraRing halo and the rune card's spare marks count delivered elements only: spare aura in an element a carving only spends is not damage.
+- **Verbs never move geometry.** Shape, range, shove, power and states stay authored on `AttackData`. Push, Spread and Focus never moved anything before either.
+- **Basics come TIED or ANYWHERE.** A tied basic is one verb on a small rune and needs its material present (`Push(A2)`, `Push(E2)`, `Bind(Q, Q)`). An anywhere basic sits on a medium rune and makes its material from the air (`Break(F, A) + Push(F2)`). **A Push with no material FIZZLES** (Phaazoid@). Materia supplies ARGUMENTS, never verbs. A tool may carry built-in verbs and a fitted materia source; that source's name is open ("focus" is the verb's).
+
+**Shipped recipes:**
+
+| Carving | Recipe | Verbs | Demand | Delivers |
+|---|---|---|---|---|
+| Gust | `Push(A2)` | 1 | Air 2 | inert air (AIR) |
+| Rock Throw | `Push(E2)` | 1 | Earth 2 | salt (EARTH) |
+| Heal | `Bind(Q, Q)` | 1 | Aether 2 | essence (AETHER) |
+| Blow Dry | `Break(F, A)` | 1 | Fire 1, Air 1 | flame + inert air (FIRE, AIR) |
+| Splash | `Break(A, W) + Push(W2)` | 2 | Water 3, Air 1 | water (WATER) |
+| Fireball | `Break(F, A) + Push(F2)` | 2 | Fire 3, Air 1 | flame (FIRE) |
+| Freeze | `Break(A, W) + Bind(Q, W)` | 2 | Water 2, Air 1, Aether 1 | ice (ICE): frost from the air |
+| Pressure Spray | `Focus(W2) + Push(W2)` | 2 | Water 4 | water (WATER); tied to water |
+| Zap | `Extract(QF) + Push(QF)` | 2 | Aether 2, Fire 2 | lightning (SHOCK); needs a yellow diamond, fizzles once fizzle lands |
+| Zap Cannon | `Break(F, A) + Bind(Q, F) + Push(QF)` | 3 | Fire 3, Aether 2, Air 1 | lightning (SHOCK); was FIRE + AIR |
+
+**Aura raised inside affinity** so every carrier keeps what it could channel before: Celest Fire 2→3; Isaac Water 1→2 (cast file, missions/2) and Fire 1→2 (Prolog, verticality's BFire, whose rune moved small→medium); Marco Water 1→3; Castle Assault's soldiers, Ashwright and Kilnmaster Fire 2→3; AI Dry Alchemist's armed Isaac Fire 1→3.
+
+**Still open in Phase 2:** fizzle (the next PR); Quicken/Still's round clock (#1311); conduit materia, the yellow diamond, lightning tiles and storm rods (#1312); embedded carving copies drifted from the library (#1313); alkahest's guard under the verb grammar (#1314, c3potheds@'s open question 14: three verbs can name all five elements, and silica `QFAE2` is a two-verb shortcut to `QFAWE`); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
+
 **Still open:**
 
 - ichor's formula (c3potheds@)
-- **Phase 2, what a carving is.** Settled so far: transmutations stay carvings, and Break, Bind, Push and Pull join the flourishes; no verb means no effect, so every carving names its verbs; Break and Bind take both arguments, with no defaults; Push/Pull and Infuse/Extract stay separate marks; rune sizes are flexible. Open: whether a basic Push works away from its material (Splash with no water nearby).
+- **Phase 2, what a carving is.** *Answered 2026-10-11, see the block above.* Settled first: transmutations stay carvings, and Break, Bind, Push and Pull join the flourishes; no verb means no effect, so every carving names its verbs; Break and Bind take both arguments, with no defaults; Push/Pull and Infuse/Extract stay separate marks; rune sizes are flexible. Its last question, whether a basic Push works away from its material: **a Push with no material fizzles.** Splash is `Break(A, W) + Push(W2)`, which makes its own water from the air, so it works anywhere and a river empowers it with no special rule.
 - whether gas spread must conserve matter (deferred)
 - light and shadow
 

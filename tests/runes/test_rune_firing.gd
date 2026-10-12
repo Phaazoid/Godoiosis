@@ -39,7 +39,7 @@ func _alchemist(aura: Dictionary[Elemental.Element, int]) -> Unit:
 func _fireball(power: int, mode: EquippableData.TargetMode) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.sigils.assign([Elemental.Element.FIRE])
+	t.recipe = "Push(F2)"   # delivers flame: a FIRE hit
 	t.targets = mode
 	return t
 
@@ -203,7 +203,7 @@ const SPRING := Vector2i(5, 5)     # the lone water tile these cases stand besid
 func _water_carving(power: int) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.sigils.assign([Elemental.Element.WATER])
+	t.recipe = "Push(W2)"   # delivers water: a WATER hit
 	t.targets = EquippableData.TargetMode.UNIT
 	return t
 
@@ -211,7 +211,7 @@ func _water_carving(power: int) -> TransmutationData:
 # cast that follows would be refused for a reason that has nothing to do with materia.
 func _shove(distance: int) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
-	t.sigils.assign([Elemental.Element.AIR])
+	t.recipe = "Push(A2)"
 	t.deals_no_damage = true
 	t.hits_allies = true
 	t.knockback = distance

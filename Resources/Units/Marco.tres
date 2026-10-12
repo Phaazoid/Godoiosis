@@ -27,7 +27,7 @@ map_sprite = ExtResource("3_6kta4")
 move_sprite = ExtResource("4_yfntj")
 downed_sprite = ExtResource("1_hmnsi")
 base_aura = Dictionary[int, int]({
-2: 1
+2: 3
 })
 base_affinity = Array[int]([2])
 starting_inventory = Array[ExtResource("7_t847d")]([ExtResource("9_7m3fw"), ExtResource("10_x7a4n")])

@@ -33,7 +33,7 @@ func _board(units: Array[Unit]) -> BoardContext:
 func _fireball(power: int) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.sigils.assign([Elemental.Element.FIRE])
+	t.recipe = "Push(F2)"
 	t.targets = EquippableData.TargetMode.UNIT
 	return t
 

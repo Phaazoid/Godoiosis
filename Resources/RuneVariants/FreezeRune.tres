@@ -9,8 +9,7 @@
 
 [sub_resource type="Resource" id="Resource_g65og"]
 script = ExtResource("1_vjyh4")
-sigils = Array[int]([2, 2])
-flourishes = Array[int]([4, 3])
+recipe = "Break(A, W) + Bind(Q, W)"
 display_name = "Freeze"
 power = 4
 max_range = 0
@@ -21,7 +20,7 @@ targets = 2
 
 [sub_resource type="Resource" id="Resource_fgoxm"]
 script = ExtResource("1_vjyh4")
-sigils = Array[int]([2])
+recipe = "Break(A, W) + Push(W2)"
 popup = "It wasn't very effective"
 icon = ExtResource("4_yyaq7")
 display_name = "Splash"

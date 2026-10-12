@@ -13,7 +13,7 @@
 #
 # Loads real .tres on purpose -- tests/README.md rule 4's declared shape for a content law, as
 # test_weapon_template_lint.gd and test_attack_lint.gd already do. Nothing here asserts what the
-# content CONTAINS: no size, temper, sigil or count (rule 9's content razor). The claim is only that
+# content CONTAINS: no size, temper, recipe or count (rule 9's content razor). The claim is only that
 # the shipped set survives its own catalog, and the non-vacuity guards are messages, not thresholds.
 extends GdUnitTestSuite
 
@@ -46,6 +46,6 @@ func test_every_shipped_carving_reaches_the_carving_catalog() -> void:
 	var dropped := _dropped(on_disk, TransmutationCatalog.get_all())
 	assert_array(dropped).override_failure_message(
 		("TransmutationCatalog refused %s -- a refused carving cannot be offered for inscription "
-		+ "by the rune editor. Re-author it legal (TransmutationData.is_legal: base-element sigils "
-		+ "only, within the largest circle cap) or delete the file.") % ", ".join(dropped)
+		+ "by the rune editor. Re-author it legal (TransmutationData.is_legal: a recipe that parses, "
+		+ "with no more verbs than the largest circle cap) or delete the file.") % ", ".join(dropped)
 	).is_empty()

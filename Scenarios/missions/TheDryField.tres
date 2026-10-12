@@ -361,7 +361,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 
 [sub_resource type="Resource" id="Resource_rdfi3"]
 script = ExtResource("18_vnqxw")
-sigils = Array[int]([1])
+recipe = "Break(F, A) + Push(F2)"
 popup = "Fireball!"
 icon = ExtResource("20_tbmit")
 display_name = "Fireball"
@@ -411,7 +411,7 @@ map_sprite = ExtResource("13_n31xq")
 move_sprite = ExtResource("14_pq3r2")
 downed_sprite = ExtResource("12_4gknw")
 base_aura = Dictionary[int, int]({
-1: 2
+1: 3
 })
 base_affinity = Array[int]([1])
 starting_inventory = Array[ExtResource("5_6wroh")]([ExtResource("22_k7nrn"), ExtResource("17_2ljva")])
@@ -440,7 +440,7 @@ inventory = Array[ExtResource("5_6wroh")]([SubResource("Resource_twq6n"), SubRes
 equipped_index = 0
 worn_armor_index = 1
 aura = Dictionary[int, int]({
-1: 2
+1: 3
 })
 affinity = Array[int]([1])
 affinity_saved = true

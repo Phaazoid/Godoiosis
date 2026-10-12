@@ -5,8 +5,7 @@
 
 [sub_resource type="Resource" id="Resource_r24jr"]
 script = ExtResource("1_6pdr4")
-sigils = Array[int]([1, 6])
-flourishes = Array[int]([3, 5])
+recipe = "Extract(QF) + Push(QF)"
 display_name = "Zap"
 power = 5
 min_range = 2

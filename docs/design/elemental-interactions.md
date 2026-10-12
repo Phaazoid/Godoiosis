@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
-**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #1260's weather folded in 2026-10-08; #1286's wind folded in 2026-10-10; #1269's snows folded in 2026-10-09; #1285's fogs the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #1260's weather folded in 2026-10-08; #1286's wind folded in 2026-10-10; #1269's snows folded in 2026-10-09; #1285's fogs the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10; Deep Alchemy Phase 2 (Blow Dry's recipe) folded in 2026-10-11.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -138,7 +138,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 ### FIRE
 | × state | reaction | effect |
 |---|---|---|
-| ◆ WET | QuickDry | **[BUILT 2026-08-12]** ×0.5 dmg, remove WET (`fire_wet_quickdry.tres`) — and the **Blow Dry** carving (damageless FIRE, `hits_allies`) exists purely to deliver it to friends. The tile→STEAM half stays deferred 🔗 |
+| ◆ WET | QuickDry | **[BUILT 2026-08-12]** ×0.5 dmg, remove WET (`fire_wet_quickdry.tres`) — and the **Blow Dry** carving (damageless FIRE, `hits_allies`; `Break(F, A)` since Phase 2, so it carries AIR beside FIRE, which no reaction keys on) exists purely to deliver it to friends. The tile→STEAM half stays deferred 🔗 |
 | ★ OILED | Conflagration | ++dmg, apply BURNING, *keep* OILED (non-consume) |
 | ◆ FROZEN | Thermal Shock | +dmg, FROZEN → WET |
 | CHILLED | ~~Thaw~~ **Temperature Shock** | **[BUILT 2026-08-12]** +5 dmg AND remove CHILLED (`fire_chilled_temp_shock.tres`) — the dev upgraded the bench's plain thaw: going from extreme cold to heat is painful. NB it fires on Blow Dry too (a damageless hit still carries its element — #126 ruling), so blow-drying a chilled ally hurts them. Designed, not a bug |

@@ -767,16 +767,12 @@ static func _rune_str(rune: RuneData, wielder: Unit) -> String:
 # One attack by name, for a carving or a weapon's alternate: the name is what `attack` takes.
 static func _attack_str(source: EquippableData, wielder: Unit, attack: AttackData, counters: bool) -> String:
 	var s := "%s pow%d %s" % [attack.display_name, attack.power, _pattern_str(attack)]
-	# A carving's element is its SIGILS (repeats = weight, so dedupe). elemental_damage_type is
-	# WeaponAttackData-only — reading it on a TransmutationData is a runtime error, not a blank.
+	# A carving's element is what its recipe DELIVERS -- the tags the resolver reacts on.
+	# elemental_damage_type is WeaponAttackData-only; reading it on a carving is a runtime error.
 	var carving := attack as TransmutationData
 	if carving != null:
-		var seen: Array[Elemental.Element] = []
-		for sigil in carving.sigils:
-			if sigil == Elemental.Element.NONE or seen.has(sigil):
-				continue
-			seen.append(sigil)
-			s += "/" + Elemental.Element.keys()[sigil]
+		for element: Elemental.Element in carving.get_elements():
+			s += "/" + Elemental.Element.keys()[element]
 	var swing := attack as WeaponAttackData
 	if swing != null and swing.elemental_damage_type != Elemental.Element.NONE:
 		s += "/" + Elemental.Element.keys()[swing.elemental_damage_type]

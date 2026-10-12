@@ -69,12 +69,12 @@ func _shock_electrocute(bonus: int = 5) -> ElementalReaction:
 	return r
 
 
-# A lightning bolt: FIRE aura QUICKENED into SHOCK (SHOCK is a derived exotic, never a sigil).
+# A lightning bolt: it pushes lightning (QF), which hits as SHOCK and scales off Aether and Fire --
+# so an alchemist with Fire alone still adds the fire.
 func _lightning_bolt(power: int, mode: EquippableData.TargetMode = EquippableData.TargetMode.UNIT) -> TransmutationData:
 	var t := TransmutationData.new()
 	t.power = power
-	t.sigils.assign([Elemental.Element.FIRE])
-	t.flourishes.assign([Flourish.Type.QUICKENING])
+	t.recipe = "Push(QF)"
 	t.targets = mode
 	return t
 
@@ -145,7 +145,7 @@ func test_insulation_is_element_specific() -> void:
 
 	var fireball := TransmutationData.new()
 	fireball.power = 5
-	fireball.sigils.assign([Elemental.Element.FIRE])   # no quickening -> stays FIRE
+	fireball.recipe = "Push(F2)"   # delivers flame -> a FIRE hit
 	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = fireball
 	var plan := ResolvedPlan.new()
@@ -225,7 +225,7 @@ func test_fire_insulation_strips_a_reaction_that_was_helping_the_target() -> voi
 
 	var fireball := TransmutationData.new()
 	fireball.power = 5
-	fireball.sigils.assign([Elemental.Element.FIRE])   # no quickening -> stays FIRE
+	fireball.recipe = "Push(F2)"   # delivers flame -> a FIRE hit
 	var atk := _attack(alch, foe)
 	atk.fired_attack = fireball
 	var plan := ResolvedPlan.new()

@@ -72,11 +72,11 @@ func _alchemist(aura: Dictionary[Elemental.Element, int], cell := Vector2i.ZERO)
 	return u
 
 
-func _circle(sigils: Array[Elemental.Element], name: String) -> TransmutationData:
+func _circle(recipe: String, name: String) -> TransmutationData:
 	var carving := TransmutationData.new()
 	carving.display_name = name
 	carving.power = 4
-	carving.sigils.assign(sigils)
+	carving.recipe = recipe
 	return carving
 
 
@@ -224,9 +224,9 @@ static func _wanted(card: RuneDetailCard, element: Elemental.Element) -> int:
 # one rune, identical in every field the recipe-and-damage line reads and differing only in KNOCKBACK,
 # must not render the same picture.
 func test_picking_another_carving_moves_what_is_drawn() -> void:
-	var shove := _circle([FIRE], "Shove")
+	var shove := _circle("Push(F)", "Shove")
 	shove.knockback = 2
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Tap"), shove]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Tap"), shove]
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3}))
 
@@ -245,9 +245,9 @@ func test_picking_another_carving_moves_what_is_drawn() -> void:
 # that had, until the first pair of near-identical carvings. The two carvings that differ are SHAPED,
 # because a one-cell carving says nothing about allies either way (#1083).
 func test_a_carvings_own_channels_reach_the_readout() -> void:
-	var splash := _shaped(_circle([FIRE], "Splash"))
+	var splash := _shaped(_circle("Push(F)", "Splash"))
 	splash.hits_allies = true
-	var carvings: Array[TransmutationData] = [_shaped(_circle([FIRE], "Plain")), splash]
+	var carvings: Array[TransmutationData] = [_shaped(_circle("Push(F)", "Plain")), splash]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
 
 	card._on_carving_picked(0)
@@ -260,9 +260,9 @@ func test_a_carvings_own_channels_reach_the_readout() -> void:
 # rulings 2026-09-27 and 2026-09-28). The single-target carving authors hits_allies on purpose: that
 # is the state that used to print "Splashes allies" for an attack that can only hit an ally you aim at.
 func test_the_ally_line_speaks_for_an_area_carving_and_not_for_a_single_target_one() -> void:
-	var zap := _circle([FIRE], "Zap")
+	var zap := _circle("Push(F)", "Zap")
 	zap.hits_allies = true
-	var carvings: Array[TransmutationData] = [_shaped(_circle([FIRE], "Sweep")), zap]
+	var carvings: Array[TransmutationData] = [_shaped(_circle("Push(F)", "Sweep")), zap]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
 
 	card._on_carving_picked(0)
@@ -285,11 +285,11 @@ func _shaped(carving: TransmutationData) -> TransmutationData:
 # A payload reaches the card too (#1058, ruling 53), one line per level of the chain -- the deeper
 # line is the one a readout that only looked at `payload` would drop.
 func test_a_carvings_payload_chain_reaches_the_readout() -> void:
-	var blast := _circle([FIRE], "Blast")
-	blast.payload = _circle([FIRE], "Spring")
-	var lob := _circle([FIRE], "Lob")
+	var blast := _circle("Push(F)", "Blast")
+	blast.payload = _circle("Push(F)", "Spring")
+	var lob := _circle("Push(F)", "Lob")
 	lob.payload = blast
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Plain"), lob]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Plain"), lob]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
 
 	card._on_carving_picked(0)
@@ -304,7 +304,7 @@ func test_a_carvings_payload_chain_reaches_the_readout() -> void:
 # The ring is the element half of that same wire. Asserted through rows() rather than through pixels,
 # which is AuraRing's own division: rows() is the model and _draw only renders it.
 func test_the_ring_follows_the_picked_carving() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Tap"), _circle([FIRE, EARTH], "Split")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Tap"), _circle("Break(F, E)", "Split")]
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3}))
 
@@ -324,7 +324,7 @@ func test_the_ring_follows_the_picked_carving() -> void:
 # whole reason aura_text asks the ladder before it builds anything.
 func test_a_carving_the_carrier_cannot_channel_says_the_ladders_own_words() -> void:
 	var alch := _alchemist({FIRE: 3})
-	var carvings: Array[TransmutationData] = [_circle([WATER, WATER], "Douse")]
+	var carvings: Array[TransmutationData] = [_circle("Push(W2)", "Douse")]
 	var rune := _rune(carvings)
 	var card := await _open(rune, alch)
 
@@ -336,9 +336,9 @@ func test_a_carving_the_carrier_cannot_channel_says_the_ladders_own_words() -> v
 
 
 # Surplus aura is real damage and the card says how much -- the number the halo beside it is drawn
-# for. Fire 3 against a one-sigil Fire circle is two spare points, weighted once.
+# for. Fire 3 against a recipe asking Fire 1 (and delivering it) is two spare points, counted once.
 func test_a_channelable_carving_names_the_damage_its_spare_aura_buys() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
 
 	assert_str(card._aura.text).contains("Channels on")
@@ -350,7 +350,7 @@ func test_a_channelable_carving_names_the_damage_its_spare_aura_buys() -> void:
 # A rune in the stash is held by NOBODY, so the ring shows demand with nothing paid and the card gives
 # no verdict at all: channeling is a property of the pairing, not of either half.
 func test_a_rune_nobody_holds_shows_the_demand_and_gives_no_verdict() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F2)", "Ember")]
 	var card := await _open(_rune(carvings), null)
 
 	assert_int(_wanted(card, FIRE)).is_equal(2)
@@ -379,39 +379,46 @@ func test_a_blank_rune_opens_and_says_it_is_blank() -> void:
 
 # --- the list ---------------------------------------------------------------------------------------
 
-# The recipe as MARKS, one per sigil, so weight is visible rather than written. cost() is the raw
-# sigil count (#60: cost is derived from the recipe, never author-set), and the bars ARE that count --
-# which is what stops the picture and the capacity line under it from disagreeing.
-func test_a_carvings_cost_bars_are_one_per_sigil() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE, EARTH], "Cinder")]
+# The recipe's DEMAND as MARKS, one per atom it asks for, so weight is visible rather than written.
+# PHASE 2 SPLIT WHAT THESE USED TO SHARE: a rune's capacity is now paid in VERBS (cost(), #60's
+# derived-never-authored rule unchanged), while the bars draw the AURA the recipe asks -- so the bars
+# count the demand and the capacity line under them counts the verbs, and the two differ on purpose.
+func test_a_carvings_cost_bars_are_one_per_demanded_atom() -> void:
+	var carvings: Array[TransmutationData] = [_circle("Break(F, E) + Push(F)", "Cinder")]   # Fire 2, Earth 1
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3, EARTH: 1}))
 
+	var carving := rune.inscriptions[0]
+	var asked := 0
+	for element: Elemental.Element in carving.distinct_elements():
+		asked += carving.demand_of(element)
 	var marks := _marks_of(_rows_of(card)[0])
-	assert_int(marks["cost"]).is_equal(rune.inscriptions[0].cost())
+	assert_int(marks["cost"]).is_equal(asked)
 	assert_int(marks["cost"]).is_equal(3)
-	assert_str(card._hint.text).contains("3 of 6")
+	# ...and the capacity line counts what the rune pays: two verbs.
+	assert_int(carving.cost()).is_equal(2)
+	assert_str(card._hint.text).contains("%d of 6" % carving.cost())
 
 
-# THE BARS CARRY THE RING'S OWN STATES (#1022). Shipped flat at #1019 -- one rectangle per sigil in
+# THE BARS CARRY THE RING'S OWN STATES (#1022). Shipped flat at #1019 -- one rectangle per mark in
 # the element's colour and nothing else -- which is why they said so little: the shape was right and
 # the vocabulary was missing. A carrier who covers half a recipe must see which half.
-func test_a_cost_bar_says_whether_that_sigil_is_paid() -> void:
-	# Fire 1 against a 2-Fire recipe: one paid, one asked-for-and-unpaid.
-	var carvings: Array[TransmutationData] = [_circle([FIRE, FIRE], "Ember")]
+func test_a_cost_bar_says_whether_that_atom_is_paid() -> void:
+	# Fire 1 against a Fire 2 recipe: one paid, one asked-for-and-unpaid.
+	var carvings: Array[TransmutationData] = [_circle("Push(F2)", "Ember")]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 1}))
 
 	var marks := _marks_of(_rows_of(card)[0])
 	assert_int(marks["cost"]).is_equal(2)
 	assert_int(marks["hollow"]).override_failure_message(
-		"the unpaid sigil drew the same bar as the paid one").is_equal(1)
+		"the unpaid atom drew the same bar as the paid one").is_equal(1)
 
 
 # The SPARE, past a `+` -- the halo's own number said again in the list, so the ring and the row
 # cannot disagree about how much aura is going spare.
 func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
-	# Fire 3 against a one-sigil Fire circle: one paid, two spare.
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	# Fire 3 against a Fire 1 recipe: one paid, two spare.
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
 
 	var marks := _marks_of(_rows_of(card)[0])
@@ -420,9 +427,22 @@ func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
 	assert_int(marks["spare"]).is_equal(2)
 
 	# ...and a carrier who covers the recipe exactly has none, rather than a zero drawn as nothing.
-	var same: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var same: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var exact := await _open(_rune(same), _alchemist({FIRE: 1}, Vector2i(1, 0)))
 	assert_int(_marks_of(_rows_of(exact)[0])["spare"]).is_equal(0)
+
+
+# A spare mark is DAMAGE, so it is counted only in what the carving DELIVERS -- the halo's own rule.
+# This recipe spends Earth to free its fire and delivers a fire atom: the carrier's two spare Earth buy
+# nothing and draw nothing, and only the one spare Fire is marked.
+func test_spare_marks_count_only_the_elements_the_carving_delivers() -> void:
+	var carvings: Array[TransmutationData] = [_circle("Break(F, E) + Push(F)", "Cinder")]   # Fire 2, Earth 1
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3, EARTH: 3}))
+
+	var marks := _marks_of(_rows_of(card)[0])
+	assert_int(marks["hollow"]).is_equal(0)
+	assert_int(marks["spare"]).override_failure_message(
+		"spare aura in an element the recipe only spends was drawn as surplus").is_equal(1)
 
 
 # A ROW SAYS HOW COMFORTABLY IT CHANNELS, in three states (dev: "red for pressure spray since the
@@ -431,9 +451,9 @@ func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
 # through a colour -- the tint is chrome, and which of the three a carving is in is the rule.
 func test_a_row_says_how_comfortably_it_channels() -> void:
 	var alch := _alchemist({FIRE: 2})
-	var comfortable := _circle([FIRE], "Fireball")
-	var leaning := _circle([FIRE, FIRE, AIR], "Zap Cannon")      # Air 0: one wildcard covers it
-	var refused := _circle([WATER, WATER], "Pressure Spray")     # no Water anywhere: no anchor
+	var comfortable := _circle("Push(F)", "Fireball")
+	var leaning := _circle("Break(F, A) + Push(F)", "Zap Cannon")   # Air 0: one wildcard covers it
+	var refused := _circle("Push(W2)", "Pressure Spray")              # no Water anywhere: no anchor
 
 	assert_that(comfortable.channel_state(alch, FIRE)).override_failure_message(
 		"a recipe paid outright read as anything but clear"
@@ -458,8 +478,7 @@ func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
 	# A carrier one Air short, so the WILDCARD half of mechanical_text is genuinely present to be
 	# left out -- a fixture with no deficit cannot tell the two readouts apart, which is how the
 	# first version of this case passed against a mutant printing the whole sentence.
-	var recipe: Array[Elemental.Element] = [FIRE, FIRE, AIR]
-	var carvings: Array[TransmutationData] = [_circle(recipe, "Zap")]
+	var carvings: Array[TransmutationData] = [_circle("Break(F, A) + Push(F)", "Zap")]   # Fire 2, Air 1
 	var rune := _rune(carvings)
 	var alch := _alchemist({FIRE: 2})
 	var card := await _open(rune, alch)
@@ -474,7 +493,7 @@ func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
 	# again underneath -- that is the same fact twice on one row (dev).
 	assert_str(text).override_failure_message(
 		"the row printed the recipe the bars beside it already draw"
-		).not_contains(rune.inscriptions[0].sigil_text())
+		).not_contains(rune.inscriptions[0].demand_text())
 	assert_str(text).override_failure_message(
 		"the row printed the wildcard count its own tint already says").not_contains("Wildcards")
 
@@ -485,7 +504,7 @@ func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
 # make -- a second builder beside it is what would leave one surface with rune chips and the other
 # without, which is how #732's chip reached only half the surfaces it was meant to.
 func test_a_rune_gets_its_chip_from_the_same_fork_a_weapon_does() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
 	assert_object(chip).is_not_null()
 	assert_str(chip.text).is_equal("1/6")
@@ -507,7 +526,7 @@ func test_a_rune_gets_its_chip_from_the_same_fork_a_weapon_does() -> void:
 func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void:
 	if not await _enter_phase():
 		return
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	_screen()._on_detail_requested(_rune(carvings), null)
 	await await_idle_frame()
 
@@ -533,7 +552,7 @@ func test_the_screens_own_door_opens_the_rune_card_and_not_the_weapons() -> void
 # at one pixel wide the gap is the separator's own 8px and every assertion below passes. Pinning one
 # of a tensioned pair is pinning neither.
 func test_the_cost_bars_sit_beside_the_name_rather_than_at_the_far_edge() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
 	await await_idle_frame()
 
@@ -571,7 +590,7 @@ func test_every_clipped_label_on_the_card_draws_what_is_written_in_it() -> void:
 	# Both recipes anchor on FIRE because the first carving IS the rune's temper. The second leans on
 	# a wildcard, so the sweep runs over a caution row and a clear one rather than two alike.
 	var carvings: Array[TransmutationData] = [
-		_circle([FIRE], "Ember"), _circle([FIRE, FIRE, AIR], "Pressure Spray")]
+		_circle("Push(F)", "Ember"), _circle("Break(F, A) + Push(F)", "Pressure Spray")]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
 	await await_idle_frame()
 
@@ -615,7 +634,7 @@ func test_every_clipped_label_on_the_card_draws_what_is_written_in_it() -> void:
 # both asked for one pixel there. Nothing here pins the ceiling's VALUE, which is a feel call.
 func test_a_long_carving_name_widens_its_row_without_widening_the_card() -> void:
 	var long_name := "Cataclysmic Inundation of the Drowned Cantonment ".repeat(5)
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember"), _circle([FIRE], long_name)]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember"), _circle("Push(F)", long_name)]
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 2}))
 	await await_idle_frame()
 
@@ -654,7 +673,7 @@ static func _name_label_of(row: Control) -> Label:
 # already carries -- so what is pinned is that it HAS a box and that the box MOVES when the pointer
 # lands, which together are the whole of "this is pressable". Which colours those are is the dev's.
 func test_the_detail_chip_paints_its_own_chrome_and_answers_the_pointer() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
 
 	# ASK FOR THE OVERRIDE, NOT FOR A BOX. `get_theme_stylebox` falls back to the THEME's own Button
@@ -681,7 +700,7 @@ func test_the_detail_chip_paints_its_own_chrome_and_answers_the_pointer() -> voi
 # ONE BUILDER FOR BOTH CARDS, so "make it pop" stays a one-place change. A weapon chip and a rune
 # chip differ in what they COUNT and in nothing else.
 func test_both_kinds_of_chip_wear_the_same_chrome() -> void:
-	var carvings: Array[TransmutationData] = [_circle([FIRE], "Ember")]
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
 	var rune_chip: Button = auto_free(ItemDetail.chip_for(_rune(carvings)))
 	var plain: Button = auto_free(ItemDetail.chip("1/3", "whatever"))
 

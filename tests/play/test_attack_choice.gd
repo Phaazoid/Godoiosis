@@ -126,7 +126,7 @@ func test_a_rune_with_nothing_channelable_fires_nothing() -> void:
 	var carving := TransmutationData.new()
 	carving.display_name = "Spark"
 	carving.power = 3
-	carving.sigils.assign([Elemental.Element.FIRE])
+	carving.recipe = "Push(F)"
 	carving.targets = EquippableData.TargetMode.UNIT
 	var rune := RuneData.new()
 	rune.size = RuneData.Size.MEDIUM
