@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_dfo0j")
 incoming_element = 1
+also_triggered_by = Array[int]([9])
 required_tile_state = 2
 remove_tile_states = Array[int]([2])
 equation = "F2 + 2QW -> Q2 + W2 + 2F"

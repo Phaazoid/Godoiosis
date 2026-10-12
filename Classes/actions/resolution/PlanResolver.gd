@@ -694,7 +694,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	var removes: Array[Elemental.State] = []
 	var add_turns: Dictionary[Elemental.State, int] = {}
 	for reaction in reactions:
-		if not elements.has(reaction.incoming_element):
+		if not reaction.fires_for(elements):
 			continue
 		if reaction.required_state != Elemental.State.NONE and not target_hypo.states.has(reaction.required_state):
 			continue
@@ -1508,7 +1508,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 	effect.cell = cell
 	var fired := false
 	for reaction in terrain_reactions:
-		if not elements.has(reaction.incoming_element):
+		if not reaction.fires_for(elements):
 			continue
 		# The kind/state gate is the reaction's own predicate — shared with the tile hover card's
 		# interaction list (#135), so the card can never promise a deposit this filter refuses.

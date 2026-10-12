@@ -19,6 +19,7 @@ static var ELEMENT_EARTH := Color(0.812, 0.639, 0.306)
 static var ELEMENT_AIR := Color(0.486, 0.788, 0.58)
 static var ELEMENT_AETHER := Color(0.878, 0.486, 0.753)
 static var ELEMENT_CORROSION := Color(0.694, 0.804, 0.216)
+static var ELEMENT_HEAT := Color(0.976, 0.62, 0.122)
 
 # What a row with no element wears -- the rail's off state, and the reason a neutral is here rather
 # than at the caller: an insulated hit and a plain sword swing must not be told apart by accident.
@@ -35,6 +36,7 @@ static func color_for_element(element: Elemental.Element) -> Color:
 		Elemental.Element.AIR: return ELEMENT_AIR
 		Elemental.Element.AETHER: return ELEMENT_AETHER
 		Elemental.Element.CORROSION: return ELEMENT_CORROSION
+		Elemental.Element.HEAT: return ELEMENT_HEAT
 	return NEUTRAL
 
 

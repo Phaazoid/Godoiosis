@@ -17,7 +17,8 @@ enum Id {
 	INSULATED_SHOCK,
 	CRISIS,
 	BRACE,
-	INSULATED_FIRE
+	INSULATED_FIRE,
+	INSULATED_HEAT
 }
 
 const IRON_WILL_DAMAGE_CAP := 6      # playtest-tunable
@@ -55,4 +56,5 @@ const CRISIS_SURGE_TURNS := 3                          # playtest-tunable: a gam
 const INSULATION: Dictionary[Elemental.Element, Id] = {
 	Elemental.Element.SHOCK: Id.INSULATED_SHOCK,
 	Elemental.Element.FIRE: Id.INSULATED_FIRE,
+	Elemental.Element.HEAT: Id.INSULATED_HEAT,
 }

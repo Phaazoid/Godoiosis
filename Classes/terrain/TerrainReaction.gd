@@ -8,8 +8,13 @@ class_name TerrainReaction
 #
 # NONE on either gate = "don't care": required_kind NONE matches any tile; required_tile_state
 # NONE needs no pre-existing state (the setup half — e.g. WATER -> WET tile).
+#
+# `also_triggered_by` is ElementalReaction's field, for the same reason: the other elements this
+# answers to (Heat melts and boils what fire does), asked through fires_for, never by a second file.
+# Ignition (TerrainReactionCatalog.fuel_for_kind) reads the PRIMARY alone, so heat lights nothing.
 
 @export var incoming_element: Elemental.Element = Elemental.Element.NONE
+@export var also_triggered_by: Array[Elemental.Element] = []
 @export var required_kind: Terrain.Kind = Terrain.Kind.NONE
 @export var required_tile_state: Terrain.TileState = Terrain.TileState.NONE
 
@@ -54,6 +59,11 @@ class_name TerrainReaction
 
 @export var popup: String = ""
 @export var icon: Texture2D
+
+# Does a hit carrying `elements` set this reaction off? Elemental.triggered is the one rule.
+func fires_for(elements: Array[Elemental.Element]) -> bool:
+	return Elemental.triggered(incoming_element, also_triggered_by, elements)
+
 
 # The tile gate as ONE predicate (#135 round 2): the resolver's deposit filter and the hover
 # card's "what can touch this tile" list read the same clauses, so they can never drift.

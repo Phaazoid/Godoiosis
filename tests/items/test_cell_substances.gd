@@ -163,6 +163,21 @@ func test_a_lit_prop_offers_flame() -> void:
 	assert_bool(_present(board).has("flame")).is_true()
 
 
+# Flame decays to heat (the Melt ruling), so fire beside the caster offers free heat as well.
+func test_a_burning_cell_and_a_lit_prop_give_off_heat() -> void:
+	var burning := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
+	assert_bool(_present(burning).has("atom_fire")).is_true()
+	var lit := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, {}, { NEXT_DOOR: true })
+	assert_bool(_present(lit).has("atom_fire")).is_true()
+	assert_bool(_present(_board({ NEXT_DOOR: Terrain.Kind.ROCK })).has("atom_fire")).override_failure_message("heat is present with no fire anywhere near").is_false()
+
+
+func test_a_push_of_heat_holds_by_a_fire_and_fizzles_away_from_one() -> void:
+	var by_fire := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
+	assert_str(_fizzle("Push(F)", by_fire)).is_empty()
+	assert_str(_fizzle("Push(F)", _board({ NEXT_DOOR: Terrain.Kind.ROCK }))).is_not_empty()
+
+
 func test_a_gas_on_a_neighbour_is_present() -> void:
 	var gas := GasField.new()
 	gas.set_level(NEXT_DOOR, Gas.Kind.STEAM, 1)

@@ -147,7 +147,7 @@ static func terrain_reaction_lines() -> Array[String]:
 # Public since #685: a queue row hovering a fired reaction explains the combo in the same composed
 # words the glossary page uses, rather than growing a second phrasing of one catalog entry.
 static func reaction_line(r: ElementalReaction) -> String:
-	var trigger: String = Elemental.display_name(r.incoming_element)
+	var trigger: String = Elemental.trigger_names(r.incoming_element, r.also_triggered_by)
 	if r.required_state != Elemental.State.NONE:
 		trigger += " vs a %s target" % Elemental.state_display_name(r.required_state)
 	else:
@@ -164,7 +164,7 @@ static func reaction_line(r: ElementalReaction) -> String:
 	return _assemble_line(trigger, effects, r.popup)
 
 static func _terrain_reaction_line(r: TerrainReaction) -> String:
-	var trigger: String = Elemental.display_name(r.incoming_element)
+	var trigger: String = Elemental.trigger_names(r.incoming_element, r.also_triggered_by)
 	if r.required_kind != Terrain.Kind.NONE:
 		trigger += " on %s" % Terrain.kind_display_name(r.required_kind)
 	if r.required_tile_state != Terrain.TileState.NONE:
@@ -195,7 +195,7 @@ static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.Tile
 		var effects := _terrain_effects(reaction)
 		if effects.is_empty():
 			continue
-		lines.append("%s → %s" % [Elemental.display_name(reaction.incoming_element), ", ".join(effects)])
+		lines.append("%s → %s" % [Elemental.trigger_names(reaction.incoming_element, reaction.also_triggered_by), ", ".join(effects)])
 	return lines
 
 static func _assemble_line(trigger: String, effects: Array[String], popup: String) -> String:
@@ -432,7 +432,8 @@ static func _build_entries() -> Dictionary:
 		"long": "The elements: %s. An attack tagged with one deposits it on impact, " % _element_roster()
 			+ "where it reacts with whatever state the target already holds. See Reactions. Fire, "
 			+ "Water, Earth, Air and Aether are the five an alchemist channels. The others come from "
-			+ "what a carving makes out of them. Lightning hits as Shock, and ice hits as Ice."}
+			+ "what a carving makes out of them. Lightning hits as Shock, and ice hits as Ice. "
+			+ "Heat warms without burning. It melts, dries and boils, but never sets anything alight."}
 	e[Term.AFFINITY] = {"category": Category.ELEMENTAL, "title": "Affinity",
 		"short": "Which elements a unit can ever channel. Inherited, fixed for life, and not the "
 			+ "same thing as how deep they run.",

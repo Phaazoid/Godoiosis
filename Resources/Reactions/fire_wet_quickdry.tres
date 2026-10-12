@@ -7,6 +7,7 @@
 script = ExtResource("1_qkdry")
 incoming_element = 1
 required_state = 1
+also_triggered_by = Array[int]([9])
 damage_mult = 0.5
 remove_states = Array[int]([1])
 short_name = "Dried"

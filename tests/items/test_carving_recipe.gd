@@ -52,6 +52,15 @@ func test_a_push_delivers_what_it_pushes() -> void:
 	assert_array(r.hit_elements()).is_equal([Elemental.Element.FIRE])
 
 
+# A lone fire atom is free HEAT (2026-10-12): it hits as Heat, and still scales off Fire aura, since
+# damage reads the atoms delivered rather than the hit's tag.
+func test_a_lone_fire_atom_delivers_heat() -> void:
+	var r := _parse("Break(F, A) + Push(F)")
+	assert_array(r.delivered()).is_equal(["atom_fire"])
+	assert_array(r.hit_elements()).is_equal([Elemental.Element.HEAT])
+	assert_array(r.damage_elements()).is_equal([Elemental.Element.FIRE])
+
+
 # Flame is two fire atoms, and still scales off fire ONCE -- what kept a one-element hit's damage
 # where a one-sigil carving's was.
 func test_damage_scales_off_each_delivered_element_once() -> void:

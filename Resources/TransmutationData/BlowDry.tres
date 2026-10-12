@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("1_bldry")
-recipe = "Break(F, A)"
+recipe = "Break(F, A) + Push(F)"
 display_name = "Blow Dry"
 max_range = 2
 hits_allies = true
