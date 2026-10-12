@@ -22,15 +22,21 @@ func before_test() -> void:
 
 class _StubBoard extends BoardContext:
 	var kinds: Dictionary
-	func _init(g: TileMapLayer, u: Array[Unit], m: SquadManager, k: Dictionary) -> void:
-		super(g, u, m)
+	func _init(g: TileMapLayer, u: Array[Unit], m: SquadManager, k: Dictionary, gas_field: GasField = null) -> void:
+		super(g, u, m, null, null, null, gas_field)
 		kinds = k
 	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 		return kinds.get(cell, Terrain.Kind.NONE)
 
-func _board(kinds: Dictionary = {}) -> _StubBoard:
+func _board(kinds: Dictionary = {}, gas: GasField = null) -> _StubBoard:
 	var none: Array[Unit] = []
-	return _StubBoard.new(null, none, _sm, kinds)
+	return _StubBoard.new(null, none, _sm, kinds, gas)
+
+# Recipes that make their own material out of the ambient air, so no case below FIZZLES (Deep Alchemy
+# Phase 2) on a board with no fire or water on it: what these cases pin is the charge, not presence.
+# Each delivers one element, FIRE and WATER, and spends more than one atom of it.
+const FIREBALL := "Break(F, A) + Push(F2)"
+const SPLASH := "Break(A, W) + Push(W2)"
 
 func _vial(element: Elemental.Element, alkahest := false) -> VialData:
 	var v := VialData.new()
@@ -141,11 +147,11 @@ func test_a_vial_replaces_nothing_when_nothing_is_held() -> void:
 
 func test_a_charge_empowers_a_cast_away_from_any_source() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
-	var bare: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
+	var bare: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_int(bare.resolved.damage).is_equal(9)          # power 5 + fire aura 4
 
 	alch.attunement = _vial(FIRE)
-	var lit: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
+	var lit: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_int(lit.resolved.damage).is_equal(10)          # +1 effective aura
 
 # The charge counts exactly as the real pool does -- once per delivered element, however many fire
@@ -153,19 +159,19 @@ func test_a_charge_empowers_a_cast_away_from_any_source() -> void:
 func test_the_charge_counts_once_per_delivered_element() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(FIRE)
-	var atk: AttackAction = _cast(alch, _carving(5, "Push(F) + Push(F2)"), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_int(atk.resolved.damage).is_equal(10)          # 5 + (4+1), not once per fire atom
 
 func test_an_alkahest_charge_empowers_any_element() -> void:
 	var alch: Unit = _alchemist({ WATER: 3 })
 	alch.attunement = _vial(Elemental.Element.NONE, true)
-	var atk: AttackAction = _cast(alch, _carving(2, "Push(W2)"), _board())
+	var atk: AttackAction = _cast(alch, _carving(2, SPLASH), _board())
 	assert_int(atk.resolved.damage).is_equal(6)           # 2 + (3+1)
 
 func test_a_charge_in_the_wrong_element_changes_nothing() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(WATER)
-	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_int(atk.resolved.damage).is_equal(9)
 
 # --- the DIFFERENTIAL burn --------------------------------------------------------------------
@@ -174,7 +180,7 @@ func test_the_burn_is_recorded_when_the_charge_paid() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	var vial := _vial(FIRE)
 	alch.attunement = vial
-	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_object(atk.resolved.burned_vial).is_same(vial)
 
 # THE case the rule exists for: the terrain already granted fire, so the charge bought nothing and
@@ -190,7 +196,7 @@ func test_standing_on_a_source_pays_instead_of_the_vial() -> void:
 func test_a_charge_no_delivered_element_matches_is_not_burned() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(WATER)
-	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_object(atk.resolved.burned_vial).is_null()
 
 # A carving that deals no damage has its scaling suppressed, so the charge cannot change the answer
@@ -198,7 +204,7 @@ func test_a_charge_no_delivered_element_matches_is_not_burned() -> void:
 func test_a_no_damage_carving_does_not_burn_the_charge() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
 	alch.attunement = _vial(FIRE)
-	var carving := _carving(5, "Push(F2)")
+	var carving := _carving(5, FIREBALL)
 	carving.deals_no_damage = true
 	var atk: AttackAction = _cast(alch, carving, _board())
 	assert_object(atk.resolved.burned_vial).is_null()
@@ -209,14 +215,17 @@ func test_a_multi_element_carving_burns_when_only_one_element_needed_it() -> voi
 	var alch: Unit = _alchemist({ FIRE: 3, WATER: 3 })
 	var vial := _vial(FIRE)
 	alch.attunement = vial
+	# Break(F, W) splits STEAM, so steam hangs over the caster: with none present it would fizzle.
+	var steam := GasField.new()
+	steam.set_level(alch.movement.cell, Gas.Kind.STEAM, 1)
 	var atk: AttackAction = _cast(alch, _carving(2, "Break(F, W)"),
-			_board({ alch.movement.cell: Terrain.Kind.WATER }))
+			_board({ alch.movement.cell: Terrain.Kind.WATER }, steam))
 	assert_object(atk.resolved.burned_vial).is_same(vial)
 	assert_int(atk.resolved.damage).is_equal(10)          # 2 + (3+1 fire, vial) + (3+1 water, river)
 
 func test_an_unattuned_caster_records_no_burn() -> void:
 	var alch: Unit = _alchemist({ FIRE: 4 })
-	var atk: AttackAction = _cast(alch, _carving(5, "Push(F2)"), _board())
+	var atk: AttackAction = _cast(alch, _carving(5, FIREBALL), _board())
 	assert_object(atk.resolved.burned_vial).is_null()
 
 # --- the invariants: a charge is a DAMAGE term and nothing else (#694's three, re-asked) --------

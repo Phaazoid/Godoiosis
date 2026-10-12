@@ -19,7 +19,7 @@ extends AttackData
 @export var popup: String = ""
 @export var icon: Texture2D
 # materia: casting needs no fuel (ratified 2026-08-29). A verb whose argument is not present
-#   fizzles -- Deep Alchemy Phase 2's second half.
+#   fizzles -- CellSubstances.fizzle_reason, asked with the cell the cast is made from.
 
 var _parsed: CarvingRecipe
 

@@ -325,11 +325,12 @@ func _transmutation_children(unit: Unit) -> Array:
 # -- which is exactly the name its own fire row already wore, so build_tree's duplicate guard ate
 # the watch row and the ONLY reachable overwatch was the weapon main's.
 # The row greys with its attack's own reason, so a dry carbine says why it cannot stand watch --
-# #166's law, reached through the same door every attack row uses.
+# #166's law, reached through the same door every attack row uses -- and so does a watch carving that
+# would fizzle where the unit will stand (_use_reason).
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		var row := _entry(atk.display_name, unit.attack_block_reason(atk),
+		var row := _entry(atk.display_name, _use_reason(unit, atk),
 			_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, atk))
 		rows.append(_synthetic_leaf(_with_gauge(row, unit, atk),
 			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
@@ -365,8 +366,19 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 # One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
 # unchannelable carving, #166) stays LISTED but disabled — the menu shows it, it never hides it.
 func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
-	return _with_gauge(_entry(attack.display_name, unit.attack_block_reason(attack),
+	return _with_gauge(_entry(attack.display_name, _use_reason(unit, attack),
 		_with_ally_line(unit.attack_detail(attack), unit, attack)), unit, attack)
+
+# Why this attack's row is greyed, or "" -- for a fire row and a watch row alike. A carving that would
+# FIZZLE greys (Deep Alchemy Phase 2), judged from where the unit will STAND after its queued moves
+# (get_projected_destination is Unit.projected_cell over its own squad's queue, the origin the queue
+# gate reads) and asked of the same CellSubstances.fizzle_reason, so a row and a refused order cannot
+# disagree. Asked only of an otherwise usable attack: the readiness or channel reason comes first.
+func _use_reason(unit: Unit, attack: AttackData) -> String:
+	var reason := unit.attack_block_reason(attack)
+	if reason == "":
+		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), game._board(), unit)
+	return reason
 
 # Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring
 # carries (dev, 2026-09-28: the readout stays succinct; the full list is the item's card). COMPOSED

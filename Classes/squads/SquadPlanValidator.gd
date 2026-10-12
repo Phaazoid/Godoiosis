@@ -42,6 +42,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 	if plan != null:
 		_revalidate_unit_attacks(actions, plan)
 		_revalidate_rescue_targets(actions, board, plan)
+		_revalidate_watch_material(actions, board)
 
 	for action in actions:
 		if not action.is_valid:
@@ -184,6 +185,30 @@ static func _revalidate_unit_attacks(actions: Array[BaseAction], plan: ResolvedP
 		var aim := action as AttackAction
 		if aim_whiffs(aim, _plan_found_a_target(plan, aim)):
 			aim.add_validation_error("Nothing left to hit on that cell")
+		# ...and the fizzle (Deep Alchemy Phase 2): the resolve marked this aim's carving fizzled where
+		# the pass has its caster, so a re-plan has walked them away from what it needs. RED, still
+		# queued -- one-way validity, the whiff's own rule. The resolve's answer, never a re-derivation.
+		if _plan_fizzled(plan, aim):
+			aim.add_validation_error("Fizzles where they'll be standing")
+
+# A stored WATCH's twin of the clause above (Deep Alchemy Phase 2): the resolve stamped where the watch
+# arms (OverwatchAction.resolved_anchor), and a carving that fizzles from there could only ever fire a
+# fizzle -- so a re-plan that walked the watcher off its material reds it, still queued. Asked from
+# the resolve's own stamp, beside the attacks for their reason; an empty footprint is "nothing to
+# arm" (a felled watcher, #1005) and is asked nothing.
+static func _revalidate_watch_material(actions: Array[BaseAction], board: BoardContext) -> void:
+	for action in actions:
+		var watch := action as OverwatchAction
+		if watch == null or watch.resolved_footprint.is_empty():
+			continue
+		if CellSubstances.fizzle_reason(watch.fired_attack, watch.resolved_anchor, board, watch.actor) != "":
+			watch.add_validation_error("Fizzles where they'll be standing")
+
+static func _plan_fizzled(plan: ResolvedPlan, aim: AttackAction) -> bool:
+	for resolved_attack in plan.attacks:
+		if resolved_attack.source_aim == aim and resolved_attack.resolved != null and resolved_attack.resolved.fizzled:
+			return true
+	return false
 
 static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
 	for resolved_attack in plan.attacks:

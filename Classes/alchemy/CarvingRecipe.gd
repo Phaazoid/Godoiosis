@@ -9,11 +9,15 @@ class_name CarvingRecipe
 #   cost      -- how many verbs
 #   demand    -- atoms summed across every argument (what the alchemist's aura pays)
 #   delivered -- what the last delivering verb leaves at the target
+#   fizzle    -- the first argument a cast is missing, given what is present (fizzle_reason)
 # Pure on its catalog (id -> Substance), passed in like AlchemyFormula's, so a test can hand it one.
 
 class Step:
 	var verb: Flourish.Type
 	var args: Array[String] = []   # substance ids, resolved
+	# What must be PRESENT for the step to work, resolved at parse: a Break's molecule (the bond it
+	# splits), a Bind's two halves, every other verb's one argument.
+	var needs: Array[String] = []
 	# What the step makes, resolved at parse: a Bind's product, a Break's freed atoms and the pairs
 	# lone atoms settle into. Empty for verbs that move or hold rather than make.
 	var makes: Array[String] = []
@@ -73,6 +77,8 @@ static func parse(text: String, catalog: Dictionary = {}) -> CarvingRecipe:
 
 # A Bind must make a real molecule and a Break must split one; both answer what they leave behind.
 static func _resolve_makes(step: Step, catalog: Dictionary) -> String:
+	if step.verb != Flourish.Type.BREAK:
+		step.needs = step.args.duplicate()
 	if step.verb != Flourish.Type.BREAK and step.verb != Flourish.Type.BIND:
 		match step.verb:
 			Flourish.Type.PUSH, Flourish.Type.INFUSE, Flourish.Type.FOCUS, Flourish.Type.SPREAD:
@@ -86,6 +92,7 @@ static func _resolve_makes(step: Step, catalog: Dictionary) -> String:
 		step.makes.append(joined.id)
 		step.leaves.append(joined.id)
 		return ""
+	step.needs.append(joined.id)
 	for id: String in step.args:
 		var paired := _paired(id, catalog)
 		for made: String in [id, paired]:
@@ -173,3 +180,28 @@ func damage_elements() -> Array[Elemental.Element]:
 # What a hit carries into the combinatrix: each delivered substance read backwards through SubstanceMap.
 func hit_elements() -> Array[Elemental.Element]:
 	return _hit_elements
+
+
+# Why a cast FIZZLES given the substances present (CellSubstances.available_near), or "" when every
+# step finds what it needs. Walked in order over a working copy: a step that passes adds what it
+# makes, so `Break(A, W) + Push(W2)` works anywhere -- the Break frees the water the Push needs. The
+# FIRST missing substance is named. Asked of a legal parse; an illegal one has no steps to miss.
+func fizzle_reason(available: Array[String], catalog: Dictionary = {}) -> String:
+	var present: Array[String] = available.duplicate()
+	for step: Step in steps:
+		for id: String in step.needs:
+			if not present.has(id):
+				return "Fizzles: needs %s nearby" % _named(id, catalog)
+		for id: String in step.makes:
+			if not present.has(id):
+				present.append(id)
+	return ""
+
+
+static func _named(id: String, catalog: Dictionary) -> String:
+	if catalog.is_empty():
+		catalog = SubstanceCatalog.get_all()
+	var substance := catalog.get(id) as Substance
+	if substance == null or substance.display_name == "":
+		return id
+	return substance.display_name.to_lower()

@@ -30,11 +30,19 @@ func _board(units: Array[Unit]) -> BoardContext:
 	return BoardContext.new(_sm.grid, units, _sm)
 
 
+# Makes its flame out of the ambient air, so it fires anywhere (Deep Alchemy Phase 2's fizzle is not
+# what the fists regression is about); _tied_fireball below is the one that needs a fire beside it.
 func _fireball(power: int) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.recipe = "Push(F2)"
+	t.recipe = "Break(F, A) + Push(F2)"
 	t.targets = EquippableData.TargetMode.UNIT
+	return t
+
+
+func _tied_fireball(power: int) -> TransmutationData:
+	var t := _fireball(power)
+	t.recipe = "Push(F2)"
 	return t
 
 
@@ -80,6 +88,29 @@ func test_ai_rune_attack_fires_the_carving_not_fists() -> void:
 	# Aura-scaled (power 5 + fire aura 4), NOT the bare-STR punch the null fallback produced.
 	var plan: ResolvedPlan = _resolve_aim(alch, aim, units)
 	assert_int(plan.attacks[0].resolved.damage).is_equal(9)
+
+
+# --- a carving that would FIZZLE is no candidate (Deep Alchemy Phase 2) ---
+#
+# Push(F2) needs flame beside the caster, and the fixture's grass holds none. The candidate builder is
+# asked directly as well as the chooser: the queue gate refuses the same carving, so "nothing queued"
+# alone would pass with the AI's own filter deleted.
+func test_the_ai_offers_no_candidate_for_a_carving_that_fizzles_where_it_stands() -> void:
+	var tied: TransmutationData = _tied_fireball(5)
+	var alch: Unit = _rune_alchemist(ENEMY, Vector2i(0, 0), tied)
+	var victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
+	var units: Array[Unit] = [alch, victim]
+	var board := _board(units)
+	assert_bool(alch.is_attack_fireable(tied)).override_failure_message(
+			"fixture: the carving must be channelable, or the fizzle is not what refuses it").is_true()
+	assert_str(CellSubstances.fizzle_reason(tied, alch.movement.cell, board, alch)).override_failure_message(
+			"fixture: the carving must fizzle on this board").is_not_empty()
+
+	assert_array(AITactics._attack_candidates(alch, board, alch.movement.cell, {})).override_failure_message(
+			"the AI offered a carving that fizzles from where it stands").is_empty()
+	assert_bool(AITactics.queue_main_action(alch, board, _sm, ATTACK_ONLY)).is_false()
+	assert_bool(alch.squad.action_queue.any(func(a: BaseAction) -> bool: return a is AttackAction)) \
+		.override_failure_message("an attack was queued anyway").is_false()
 
 
 # --- nothing to fire, nothing queued (#1215) ---

@@ -1,0 +1,114 @@
+class_name CellSubstances
+extends Object
+
+# Which SUBSTANCES are present for a cast, and so whether a carving FIZZLES (docs/design/deep-alchemy.md
+# -> What is built, Phase 2: a verb whose argument is not present fizzles, dev ruling 2026-10-11).
+# Materia answers which ELEMENTS empower a cast and can refuse nothing; this is the presence check
+# that can. Every caller asks fizzle_reason with a POSITION -- the menu row, the queue gate, the
+# validator (through the resolve), the resolver, the AI and the Play API -- one predicate, many cells.
+#
+# Materia's shape: static, the board passed in, read through BoardContext METHODS only (a stub board
+# carries a null grid and a null state store), and its "stand by your source" footprint, Materia.REACH.
+#
+# THE BOARD AS IT STANDS: live tile states, gas and unit positions, never a pass's own deposits --
+# the limit empowerment already declares. A fire this plan lights is not present for a later cast in
+# the same plan.
+
+# Every cell holds these (the ambient baseline, c3potheds@ and Phaazoid@ 2026-10-08): inert air, vital
+# air, a trace of vapor and a trace of aether.
+const AMBIENT: Array[String] = ["inert_air", "vital_air", "vapor", "atom_aether"]
+
+# Plant matter is present as ITSELF but lends none of its parts (c3potheds@): organic matter is too
+# complex to Break or Bind, so a grass field holds no water for a cast to draw on.
+const LENDS_NOTHING: Array[String] = ["green_plant", "dry_plant"]
+
+# Ground that grows something stands on dirt too -- a DECLARED default until the mineralogy pass says
+# what each ground sits on (#1315), so Rock Throw's Push(E2) keeps working wherever it works today.
+const ON_DIRT: Array[Terrain.Kind] = [Terrain.Kind.GRASS, Terrain.Kind.TALL_GRASS, Terrain.Kind.TREE]
+
+# A compound's parts, by formula text, for the shared catalog only -- resolving a part scans the whole
+# catalog, and the AI asks this per origin.
+static var _parts_memo: Dictionary = {}
+
+
+# The substance ids present for a cast from `cell`: the ambient baseline, then everything within
+# Materia.REACH -- the ground, its tile states, any gas, a lit prop, and the states of whoever stands
+# there -- then every compound's parts, recursively. Deduped, in that order.
+#
+# `caster` is counted wherever it is: `cell` IS where it casts from, which is often a cell it has only
+# queued a move to, so the live scan below would not find it there.
+static func available_near(cell: Vector2i, board: BoardContext, caster: Unit = null,
+		catalog: Dictionary = {}) -> Array[String]:
+	var shared := catalog.is_empty()
+	if shared:
+		catalog = SubstanceCatalog.get_all()
+	var found: Array[String] = []
+	for id: String in AMBIENT:
+		_add(found, id)
+	if board != null:
+		for near: Vector2i in GridUtils.cells_within_manhattan_range(cell, Materia.REACH):
+			_add_cell(found, near, board)
+	if caster != null and is_instance_valid(caster):
+		for state: Elemental.State in caster.element_states:
+			_add(found, SubstanceMap.of_state(state))
+	var i := 0
+	while i < found.size():
+		for part: String in _parts_of(found[i], catalog, shared):
+			_add(found, part)
+		i += 1
+	return found
+
+
+# Why `attack` fizzles cast from `cell`, or "". Only a carving can fizzle, and only one that parses; a
+# null board is no world to judge against, so nothing fizzles there.
+static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContext, caster: Unit = null) -> String:
+	var carving := attack as TransmutationData
+	if carving == null or board == null:
+		return ""
+	var recipe := carving.parsed()
+	if not recipe.is_legal():
+		return ""
+	return recipe.fizzle_reason(available_near(cell, board, caster))
+
+
+static func _add_cell(found: Array[String], cell: Vector2i, board: BoardContext) -> void:
+	var kind := board.terrain_kind_at(cell)
+	# Ice is a floor, not a well (Materia's rule): frozen water offers its ice, through the tile state
+	# below, and not its water.
+	if not (kind == Terrain.Kind.WATER and board.has_tile_state(cell, Terrain.TileState.FROZEN)):
+		_add(found, SubstanceMap.of_kind(kind))
+	if ON_DIRT.has(kind):
+		_add(found, SubstanceMap.of_kind(Terrain.Kind.DIRT))
+	for state: Terrain.TileState in board.tile_states_at(cell):
+		_add(found, SubstanceMap.of_tile_state(state))
+	if board.gas != null:
+		for gas: Gas.Kind in Gas.kinds_in(board.gas.packed_at(cell)):
+			_add(found, SubstanceMap.of_gas(gas))
+	# A lit prop is a fire, made of what a burning tile is.
+	if board.prop_lit_at(cell):
+		_add(found, SubstanceMap.of_tile_state(Terrain.TileState.BURNING))
+	var unit := board.unit_at_cell(cell)
+	if unit != null:
+		for state: Elemental.State in unit.element_states:
+			_add(found, SubstanceMap.of_state(state))
+
+
+# The substances a compound is mixed from (`dirt` is `E2 + AE`: salt and ash). A molecule has none,
+# and plant matter lends none.
+static func _parts_of(id: String, catalog: Dictionary, shared: bool) -> Array[String]:
+	var none: Array[String] = []
+	var substance := catalog.get(id) as Substance
+	if substance == null or not substance.is_compound() or LENDS_NOTHING.has(id):
+		return none
+	if shared and _parts_memo.has(substance.formula):
+		return _parts_memo[substance.formula]
+	var parts := AlchemyFormula.side(substance.formula, catalog)
+	var ids: Array[String] = parts.ids if parts.error == "" else none
+	if shared:
+		_parts_memo[substance.formula] = ids
+	return ids
+
+
+static func _add(found: Array[String], id: String) -> void:
+	if id != "" and not found.has(id):
+		found.append(id)

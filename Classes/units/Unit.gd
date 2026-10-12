@@ -1308,7 +1308,10 @@ class AimOption:
 # Each is asked WITH IT IN HAND, so the equip door decides which sources count (armour and a rune nobody
 # can channel contribute nothing) and the queue's own gate decides which attacks do -- one an empty
 # magazine or a sprung spear cannot fire right now is left out. `watch` walks the watch view (#590).
-func aim_options(watch: bool) -> Array[AimOption]:
+# Handed the BOARD, a carving that would fizzle from where this unit will stand is left out as well
+# (CellSubstances, the queue gate's own fizzle question); with none, presence is not asked.
+func aim_options(watch: bool, board: BoardContext = null) -> Array[AimOption]:
+	var origin := get_projected_destination()
 	var sources: Array[EquippableData] = []
 	if equipped_weapon != null:
 		sources.append(equipped_weapon)
@@ -1321,7 +1324,8 @@ func aim_options(watch: bool) -> Array[AimOption]:
 		with_weapon_in_hand(source, func() -> void:
 			var attacks: Array[AttackData] = overwatch_attacks() if watch else get_selectable_attacks()
 			for attack: AttackData in attacks:
-				if AttackAction.fire_block_reason(self, attack) == "":
+				if AttackAction.fire_block_reason(self, attack) == "" \
+						and CellSubstances.fizzle_reason(attack, origin, board, self) == "":
 					options.append(AimOption.new(source, attack)))
 	return options
 

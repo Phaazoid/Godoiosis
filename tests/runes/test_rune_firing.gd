@@ -39,7 +39,9 @@ func _alchemist(aura: Dictionary[Elemental.Element, int]) -> Unit:
 func _fireball(power: int, mode: EquippableData.TargetMode) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.recipe = "Push(F2)"   # delivers flame: a FIRE hit
+	# Delivers flame (a FIRE hit) made from the ambient air, so it never fizzles: what these cases
+	# pin is firing, and a lone Push(F2) has no flame to push on a board with no fire on it.
+	t.recipe = "Break(F, A) + Push(F2)"
 	t.targets = mode
 	return t
 
@@ -203,7 +205,10 @@ const SPRING := Vector2i(5, 5)     # the lone water tile these cases stand besid
 func _water_carving(power: int) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.recipe = "Push(W2)"   # delivers water: a WATER hit
+	# Delivers water (a WATER hit) made from the ambient vapor -- Splash's shape, so a caster carried
+	# off the bank still CASTS and the case below measures empowerment, not the fizzle (a lone
+	# Push(W2) is tied to its water; test_fizzle_wires.gd pins that half).
+	t.recipe = "Break(A, W) + Push(W2)"
 	t.targets = EquippableData.TargetMode.UNIT
 	return t
 

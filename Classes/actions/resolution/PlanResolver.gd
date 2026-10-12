@@ -9,6 +9,7 @@ const FELL_POPUP := "Fell %d!"
 const DROWNING_POPUP := "Drowning!"
 const VOID_POPUP := "Into the void!"
 const HELD_POPUP := "Held %d!"   # #120: tiles of a shove the target's weight absorbed
+const FIZZLED_POPUP := "Fizzled!"   # a carving whose argument was not present (CellSubstances)
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
@@ -52,6 +53,14 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 			no_op.skipped = true
 			atk.resolved = no_op
 		return
+	# A carving that FIZZLES where the caster stands in the pass is the same no-op, expanded and then
+	# marked for the same two reasons (the whiff clause, the concede branch) -- and asked here, above the
+	# guards and the deposits, for the same reasons too. Below liveness: a felled caster is down, not
+	# fizzled. Not asked of a payload, which is already in flight.
+	if not group.is_empty() and group[0].dropped_by == null and _fizzles(group[0], board, hypo):
+		for atk in group:
+			atk.resolved = _fizzled_outcome()
+		return
 	_apply_guards(group, plan, hypo)
 	for atk in group:
 		_resolve_one(atk, plan, reactions, hypo, board)
@@ -83,6 +92,8 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
 			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
+		elif _fizzles(ctr, board, hypo):
+			ctr.resolved = _fizzled_outcome()       # its carving has nothing to work with there
 		else:
 			_resolve_one(ctr, plan, reactions, hypo, board)
 			if board != null and not ctr.is_secondary_hit:
@@ -1292,6 +1303,23 @@ static func actor_is_live(actor: Unit, hypo: Dictionary) -> bool:
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 	return actor_is_live(action.actor, hypo)
+
+# Does this order's carving fizzle where the PASS has its caster (Deep Alchemy Phase 2)? The threaded
+# position, the way _source_base_damage reads empowerment: a caster shoved off the riverbank casts dry.
+# The board is the plain one -- the pass's own deposits are not present yet, empowerment's limit.
+static func _fizzles(action: AttackAction, board: BoardContext, hypo: Dictionary) -> bool:
+	return CellSubstances.fizzle_reason(action.fired_attack, projected_position(action.actor, hypo),
+			board, action.actor) != ""
+
+# The fizzle's no-op: R7's `skipped` (so every "will not happen" reader -- counters, execution, the
+# beat sheet, the AI's score -- already ignores it), plus why. It read no HP, so the queue prints none.
+static func _fizzled_outcome() -> ResolvedOutcome:
+	var no_op := ResolvedOutcome.new()
+	no_op.skipped = true
+	no_op.fizzled = true
+	no_op.reads_hp = false
+	no_op.popups.append(FIZZLED_POPUP)
+	return no_op
 
 # --- Reading the threaded hypothetical from outside the pass (R4) ---
 # A derivation that runs MID-pass -- SquadManager's reaction targeting, after the attacks have

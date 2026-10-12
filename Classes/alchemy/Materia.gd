@@ -3,7 +3,8 @@ extends Object
 
 # The materia SOURCE layer: which elements a cell offers, and which a caster standing there may
 # draw on. Canon: docs/design/alchemy-kit.md -> Materia -- THE ONE LAW is that materia never gates
-# function, it supercharges it, so nothing here can refuse a cast. It only ever adds.
+# function, it supercharges it, so nothing here can refuse a cast. It only ever adds. The presence
+# check that CAN refuse one -- a carving whose material is absent fizzles -- is CellSubstances.
 #
 # Static, with the board as an explicit parameter -- the RulesService/SquadCohesion shape. Terrain
 # state changes mid-battle (a fire is doused, ice melts), so a cached board would answer for a

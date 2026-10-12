@@ -377,7 +377,9 @@ func test_a_vial_burn() -> void:
 		var fireball := TransmutationData.new()
 		fireball.display_name = "Fireball"
 		fireball.power = 4
-		fireball.recipe = "Push(F2)"
+		# Its flame made out of the ambient air: a lone Push(F2) FIZZLES on a board with no fire on it
+		# (Deep Alchemy Phase 2), and a fizzle burns no vial.
+		fireball.recipe = "Break(F, A) + Push(F2)"
 		fireball.targets = EquippableData.TargetMode.UNIT
 		P.point(fireball, 2)
 		var rune := RuneData.new()

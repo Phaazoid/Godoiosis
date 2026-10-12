@@ -39,6 +39,7 @@ const BADGE_VIAL := "Vial"
 const BADGE_TANK := "Tank"
 const BADGE_SPLIT := "Split"        # the dev's word (#367); one unit leaves its squad
 const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
+const BADGE_FIZZLED := "Fizzle"     # a carving with nothing to work with
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -166,6 +167,10 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	#
 	# Reading facts also deletes the string bookkeeping this loop used to need: nothing has to work
 	# out which popup belonged to which reaction, because the two channels no longer share one list.
+	# A FIZZLE (Deep Alchemy Phase 2): the carving lands nothing, which the row would otherwise say only
+	# by dimming. Its outcome reads no HP, so this badge is the whole readout.
+	if outcome.fizzled:
+		_add_event(BADGE_FIZZLED, PlanResolver.FIZZLED_POPUP)
 	if outcome.insulated:
 		_add_event(BADGE_INSULATED, PlanResolver.INSULATED_POPUP)
 	# A fully held shove draws no trail, so this badge is the queue's whole account of it (Law #2).

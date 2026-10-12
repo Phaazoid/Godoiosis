@@ -338,7 +338,11 @@ static func _build_entries() -> Dictionary:
 	e[Term.TRANSMUTATION] = {"category": Category.ACTIONS, "title": "Transmutation",
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
-			+ "aura. A carving the wielder cannot pay for is listed greyed, with the reason."}
+			+ "aura. A carving the wielder cannot pay for is listed greyed, with the reason. "
+			+ ("A carving also needs what it works on within %d tile%s of the caster, or it fizzles "
+				% [Materia.REACH, "" if Materia.REACH == 1 else "s"])
+			+ "and does nothing. The air is everywhere, so carvings that work on the air never "
+			+ "fizzle. One that would fizzle is listed greyed too, naming what it needs."}
 	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
 	# terms of the same name; these two name a grouping the game had no word for before the ring.
 	# A third, "Turn", died in round 2 along with the category — the turn's verbs are the HUD's.
@@ -427,8 +431,8 @@ static func _build_entries() -> Dictionary:
 		"short": "Attacks can carry an element; on impact it reacts with what the target already holds.",
 		"long": "The elements: %s. An attack tagged with one deposits it on impact, " % _element_roster()
 			+ "where it reacts with whatever state the target already holds. See Reactions. Fire, "
-			+ "Water, Earth, Air and Aether are the five base sigils; the rest arise from "
-			+ "combinations."}
+			+ "Water, Earth, Air and Aether are the five an alchemist channels. The others come from "
+			+ "what a carving makes out of them. Lightning hits as Shock, and ice hits as Ice."}
 	e[Term.AFFINITY] = {"category": Category.ELEMENTAL, "title": "Affinity",
 		"short": "Which elements a unit can ever channel. Inherited, fixed for life, and not the "
 			+ "same thing as how deep they run.",
@@ -438,10 +442,11 @@ static func _build_entries() -> Dictionary:
 	e[Term.AURA] = {"category": Category.ELEMENTAL, "title": "Aura",
 		"short": "How deep a unit's pull on an element runs. It scales every transmutation they "
 			+ "channel through it.",
-		"long": "A pool per element, seeded at birth and grown rarely. A carving's damage scales off "
-			+ "the sum of the wielder's aura across the elements it is made of, and a pool must hold "
-			+ "at least 1 to channel that element at all. Every lost limb docks a point off the "
-			+ "deepest pool."}
+		"long": "A pool per element, seeded at birth and grown rarely. A carving asks for aura in the "
+			+ "elements its recipe names. Wildcards can make up a shortfall, as long as the wielder "
+			+ "holds some aura in at least one of those elements. Its damage scales off the wielder's "
+			+ "aura in each element of what it delivers, so a Fireball, which delivers flame, scales "
+			+ "off Fire. Every lost limb docks a point off the deepest pool."}
 	e[Term.WET] = {"category": Category.ELEMENTAL, "title": "Wet",
 		"short": "Soaked through, and a conductor. Some elements react hard with a wet target.",
 		"long": "The soaked condition, left by a water attack or by being in water. Harmless on its "

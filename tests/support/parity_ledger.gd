@@ -329,6 +329,8 @@ static func outcome_fields() -> Dictionary:
 			"lethality": {"play": covered(SESSION, ".lethality"), "ai": covered(TACTICS, ".lethality")},
 			"severed_limb": {"play": covered(SESSION, ".severed_limb"), "ai": covered(TACTICS, ".severed_limb")},
 			"skipped": {"play": covered(SESSION, ".skipped"), "ai": covered(CONTROLLER, ".skipped")},
+			"fizzled": {"play": covered(SESSION, ".fizzled"),
+					"ai": covered(TACTICS, "CellSubstances.fizzle_reason")},
 			"iron_will_held": {"play": never("a presentation beat; the HP it leaves prints"), "ai": never(IN_DAMAGE)},
 			"hp_before": {"play": covered(SESSION, ".hp_before"), "ai": covered(TACTICS, ".hp_before")},
 			"reads_hp": {"play": covered(SESSION, ".reads_hp"), "ai": never("a display flag")},

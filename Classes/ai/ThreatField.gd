@@ -227,6 +227,11 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 		for attack in attacks:
 			if not unit.is_attack_fireable(attack):
 				continue
+			# A carving that fizzles from this origin threatens nothing from it -- the AI's own candidate
+			# filter (AITactics._attack_candidates), asked of the same cell, so the field stays a superset
+			# of what it could aim.
+			if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+				continue
 			var out: Dictionary = by_attack.get_or_add(attack, {})
 			for cell in Reach.get_all_attack_cells_from(unit, origin, attack):
 				if not zone.is_empty() and not zone.has(cell):
@@ -260,6 +265,8 @@ static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[V
 	var counter := unit.get_counter_attack()
 	var out: Dictionary = by_attack.get_or_add(counter, {})
 	for origin in origins:
+		if CellSubstances.fizzle_reason(counter, origin, board, unit) != "":
+			continue   # a counter that would fizzle there lands nothing (PlanResolver.resolve_counters)
 		for cell in Reach.get_all_attack_cells_from(unit, origin, counter):
 			if not Reach.is_directional_attack(counter) and not Reach.vertical_aim_ok(counter, origin, cell, board):
 				continue
@@ -283,6 +290,8 @@ static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vec
 		return
 	var out: Dictionary = by_attack.get_or_add(attack, {})
 	for origin in origins:
+		if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+			continue   # AITactics._try_overwatch arms no watch that would fizzle there
 		var lanes := AITactics.watch_lanes(unit, origin, attack, board)
 		for dir in lanes:
 			for cell: Vector2i in lanes[dir]:

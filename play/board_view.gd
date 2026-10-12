@@ -101,7 +101,7 @@ static func render_focus(session, handle: String) -> String:
 	lines.append("")
 	lines.append("  " + _unit_line(session, unit))
 	lines.append("  " + _stats_line(unit))
-	for line in _attack_lines(unit):
+	for line in _attack_lines(unit, session._board()):
 		lines.append("    " + line)
 	return "\n".join(lines)
 
@@ -125,17 +125,22 @@ static func _stats_line(unit: Unit) -> String:
 
 
 # Each attack the unit could fire or stand watch with, in the game's own hover words
-# (Unit.attack_detail): the damage it really deals, mods and scaling included.
-static func _attack_lines(unit: Unit) -> Array[String]:
+# (Unit.attack_detail): the damage it really deals, mods and scaling included. A carving that would
+# fizzle from where the unit will stand says so, in the words the menu greys its row with.
+static func _attack_lines(unit: Unit, board: BoardContext) -> Array[String]:
 	var lines: Array[String] = []
 	for attack in unit.get_selectable_attacks():
-		lines.append(_attack_line(unit, attack, ""))
+		lines.append(_attack_line(unit, attack, "", board))
 	for attack in unit.overwatch_attacks():
-		lines.append(_attack_line(unit, attack, "watch "))
+		lines.append(_attack_line(unit, attack, "watch ", board))
 	return lines
 
-static func _attack_line(unit: Unit, attack: AttackData, prefix: String) -> String:
-	return "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
+static func _attack_line(unit: Unit, attack: AttackData, prefix: String, board: BoardContext) -> String:
+	var line := "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
+	var fizzle := CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), board, unit)
+	if fizzle != "":
+		line += " (%s)" % fizzle
+	return line
 
 # The ground's shape (#46), which the 3-char overview has no room for: each cell's height in the
 # rules' half-level units (Terrain.UNITS_PER_LEVEL to a level), then n/e/s/w for the side a ramp

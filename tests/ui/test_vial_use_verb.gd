@@ -79,7 +79,9 @@ func _fireball() -> TransmutationData:
 	var t := TransmutationData.new()
 	t.display_name = "Fireball"
 	t.power = 4
-	t.recipe = "Push(F2)"
+	# Its flame made out of the ambient air, so the queued cast is legal on a board with no fire on
+	# it: a lone Push(F2) FIZZLES there (Deep Alchemy Phase 2) and the queue gate refuses it.
+	t.recipe = "Break(F, A) + Push(F2)"
 	t.targets = EquippableData.TargetMode.UNIT
 	P.point(t, 3)
 	return t
