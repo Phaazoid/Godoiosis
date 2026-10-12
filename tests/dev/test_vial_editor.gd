@@ -2,6 +2,7 @@
 # rather than hand-typed as a .tres. Pins what is a decision rather than plumbing: the blank entry
 # authors a vial, Load lists the vials and hands out a COPY, a new vial is saved beside the others,
 # and the substance is picked from the LIBRARY as a reference -- never a fresh inline Substance.
+# The conduit mode (#1312) shares the vial's form and picker, so its cases live here too.
 #
 # No case writes to disk (test_prototype_editor's rule): the save folder is asserted at the
 # predicate, and the substance pick at the object it leaves on the vial.
@@ -111,3 +112,43 @@ func test_the_substance_is_picked_from_the_library_by_reference() -> void:
 			"the pick did not land the library's own substance on the vial").is_same(wanted)
 	assert_str(vial.substance.resource_path).override_failure_message(
 			"the picked substance has no path, so it would save inline").is_not_empty()
+
+
+# --- Conduit mode (#1312): a vial's shape minus the attunement, through the same substance picker ---
+
+func _new_conduit() -> ConduitData:
+	var tool_ref := _tool()
+	tool_ref._rebase_on_type(tool_ref._base_catalog().keys().find(ItemEditorTool.NEW_CONDUIT_KEY))
+	return tool_ref.current_item as ConduitData
+
+
+func test_the_blank_conduit_entry_authors_a_conduit() -> void:
+	var tool_ref := _tool()
+	tool_ref._rebase_on_type(tool_ref._base_catalog().keys().find(ItemEditorTool.NEW_CONDUIT_KEY))
+	var made: Resource = tool_ref.current_item
+	assert_bool(made is ConduitData).override_failure_message("the blank conduit entry built no conduit").is_true()
+
+
+func test_a_new_conduit_is_saved_beside_the_others() -> void:
+	assert_str(_tool()._save_dir_for(ConduitData.new())).is_equal(ConduitCatalog.VARIANT_DIR)
+
+
+func test_the_conduit_picks_its_substance_from_the_library_by_reference() -> void:
+	var substances := SubstanceCatalog.get_all()
+	if substances.is_empty():
+		push_warning("no substances on disk, so there is nothing to pick")
+		return
+	var conduit := _new_conduit()
+	var option := _find_option(_tool().editor_container, "Substance")
+	assert_object(option).override_failure_message("the conduit form draws no Substance picker").is_not_null()
+	var wanted: Substance = substances.values()[0]
+	var index := -1
+	for i in option.item_count:
+		if option.get_item_text(i).ends_with("(%s)" % substances.keys()[0]) \
+				or option.get_item_text(i) == substances.keys()[0]:
+			index = i
+	assert_int(index).override_failure_message("the picker does not offer the library's substances").is_not_equal(-1)
+	option.select(index)
+	option.item_selected.emit(index)
+	assert_object(conduit.substance).override_failure_message(
+			"the pick did not land the library's own substance on the conduit").is_same(wanted)

@@ -66,6 +66,24 @@ func test_a_vial_survives_a_grant_copy() -> void:
 		assert_array(granted.granted_elements()).is_not_empty()
 
 
+
+# Conduits (#1312) are the second carried kind, and the same gap would hide them: an Item that is not
+# an EquippableData reaches no picker unless the picker is told about it.
+func test_every_authored_conduit_is_in_the_catalog() -> void:
+	var on_disk := ResourceDir.files_with_extension(ConduitCatalog.VARIANT_DIR, "tres")
+	assert_int(ConduitCatalog.get_variants().size()).override_failure_message(
+			"%d conduit files on disk, %d in the catalog -- one of them cannot be granted"
+			% [on_disk.size(), ConduitCatalog.get_variants().size()]).is_equal(on_disk.size())
+
+
+func test_the_editors_item_picker_offers_conduits() -> void:
+	var tool_node: UnitEditorTool = auto_free(UnitEditorTool.new())
+	var offered: Array = tool_node._item_catalog().keys()
+	for name: String in ConduitCatalog.get_variants():
+		assert_bool(offered.has(name)).override_failure_message(
+				"the dev editors cannot offer %s -- it exists and nobody can be given one" % name
+				).is_true()
+
 # The weapon half. A template is authored in MainVarieties/ or Prototypes/ and is not itself
 # carryable, so the picker offers the DERIVED generic built on it (#835). Sweeps whatever is on
 # disk and passes vacuously on an empty scan -- the claim is reachability, not which weapons exist.

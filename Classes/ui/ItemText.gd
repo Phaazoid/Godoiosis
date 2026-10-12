@@ -88,6 +88,13 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 			lines.append(attunes)
 		return lines
 
+	var conduit := item as ConduitData
+	if conduit != null:
+		var holds: String = conduit.mechanical_text()
+		if holds != "":
+			lines.append(holds)
+		return lines
+
 	var mod := item as WeaponModData
 	if mod != null:
 		# The card composes size and fitting refusal around this same sentence; here it is the

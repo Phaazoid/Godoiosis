@@ -9,13 +9,13 @@ class_name ItemEditorTool
 @onready var delete_button: Button = %DeleteItemButton
 @onready var status_label: Label = %ItemStatusLabel
 
-# Authors a WeaponInstance, a RuneData, a WeaponModData, a prototype WeaponData, or a VialData. The
-# first two fill the equip slot; the third is a COMPONENT fitted into one of a weapon's spaces, and it
-# lives here (#74) because this is already where a mod gets fitted -- authoring one anywhere else would
-# mean two tabs to make one weapon. A vial (#791) is CARRIED, never slotted, and is here because this
-# is the tab that authors carried things. The type dropdown lists weapon bases + prototypes + rune
-# sizes + the blank mod + the blank prototype + the blank vial; the field area renders a bespoke
-# editor per kind. Carvings are authored in the Attack Editor tab.
+# Authors a WeaponInstance, a RuneData, a WeaponModData, a prototype WeaponData, a VialData or a
+# ConduitData. The first two fill the equip slot; the third is a COMPONENT fitted into one of a
+# weapon's spaces, and it lives here (#74) because this is already where a mod gets fitted -- authoring
+# one anywhere else would mean two tabs to make one weapon. A vial (#791) and a conduit (#1312) are
+# CARRIED, never slotted, and are here because this is the tab that authors carried things. The type
+# dropdown lists weapon bases + prototypes + rune sizes + the blank mod + the blank prototype + the
+# blank vial and conduit; the field area renders a bespoke editor per kind. Carvings are authored in the Attack Editor tab.
 #
 # The PROTOTYPE mode (#486) is the one that edits a TEMPLATE rather than a carried item, which is
 # why the read-only rule below does not cover it: that rule forbids editing a shared family
@@ -47,6 +47,7 @@ func _ready():
 const NEW_MOD_KEY := "Weapon Mod (blank)"
 const NEW_PROTOTYPE_KEY := "Weapon Prototype (new)"
 const NEW_VIAL_KEY := "Vial (blank)"
+const NEW_CONDUIT_KEY := "Conduit (blank)"
 
 func _base_catalog() -> Dictionary:
 	var bases := {}
@@ -59,6 +60,7 @@ func _base_catalog() -> Dictionary:
 	bases[NEW_MOD_KEY] = WeaponModData.new()
 	bases[NEW_PROTOTYPE_KEY] = _blank_prototype()
 	bases[NEW_VIAL_KEY] = VialData.new()
+	bases[NEW_CONDUIT_KEY] = ConduitData.new()
 	return bases
 
 func _blank_prototype() -> WeaponData:
@@ -87,6 +89,9 @@ func _refresh_variant_list(select_name := ""):
 	var vials := VialCatalog.get_variants()
 	for v in vials:
 		_variants[v] = vials[v]
+	var conduits := ConduitCatalog.get_variants()
+	for v in conduits:
+		_variants[v] = conduits[v]
 	for v in _variants:
 		load_dropdown.add_item(v)
 
@@ -259,6 +264,8 @@ func populate():
 		_populate_prototype_editor(current_item)
 	elif current_item is VialData:
 		_populate_vial_editor(current_item)
+	elif current_item is ConduitData:
+		_populate_conduit_editor(current_item)
 	else:
 		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "display_name"])
 
@@ -628,6 +635,8 @@ func _save_dir_for(item: Resource) -> String:
 		return WeaponCatalog.PROTOTYPE_DIR
 	if item is VialData:
 		return VialCatalog.VARIANT_DIR
+	if item is ConduitData:
+		return ConduitCatalog.VARIANT_DIR
 	return WeaponCatalog.SAVED_DIR
 
 # --- Prototype mode (#486) ---
@@ -813,7 +822,13 @@ const NO_SUBSTANCE_KEY := "(none)"
 
 func _populate_vial_editor(vial: VialData) -> void:
 	DevWidgets.build_resource_editor(editor_container, vial, populate, ["display_name", "substance"])
-	_populate_vial_substance(vial)
+	_populate_substance(vial)
+
+# A conduit (#1312) is a vial's shape minus the attunement: the same reflective fields and the same
+# substance picker, for the same inline-copy reason.
+func _populate_conduit_editor(conduit: ConduitData) -> void:
+	DevWidgets.build_resource_editor(editor_container, conduit, populate, ["display_name", "substance"])
+	_populate_substance(conduit)
 
 func _substance_choices() -> Dictionary:
 	var choices := {NO_SUBSTANCE_KEY: null}
@@ -824,13 +839,15 @@ func _substance_choices() -> Dictionary:
 		choices[label] = substance
 	return choices
 
-func _populate_vial_substance(vial: VialData) -> void:
+# The substance picker for any carried kind that HOLDS one (a vial, a conduit): both declare
+# `substance`, and the field is asked by name so neither kind needs a base the other lacks.
+func _populate_substance(item: Item) -> void:
 	var first := editor_container.get_child_count()
 	var choices := _substance_choices()
 	DevWidgets.add_option(editor_container, "Substance", choices.keys(),
-		_key_for(choices, vial.substance, NO_SUBSTANCE_KEY),
+		_key_for(choices, item.get("substance") as Substance, NO_SUBSTANCE_KEY),
 		func(s: String):
-			vial.substance = choices[s]
+			item.set("substance", choices[s])
 			populate()
 	)
-	_tip_from(first, DevWidgets.property_tip(vial, "substance"))
+	_tip_from(first, DevWidgets.property_tip(item, "substance"))
