@@ -31,6 +31,7 @@
 [ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="29_ylrfi"]
 [ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="30_0q6fv"]
 [ext_resource type="Resource" uid="uid://do43xhhg1ueb8" path="res://Resources/TransmutationData/Zap.tres" id="30_giowq"]
+[ext_resource type="Resource" uid="uid://bin62phny7rvg" path="res://Resources/Conduits/YellowDiamond.tres" id="31_giowq"]
 
 [sub_resource type="Resource" id="Resource_ss67t"]
 script = ExtResource("1_vk2ak")
@@ -313,7 +314,7 @@ base_aura = Dictionary[int, int]({
 1: 1
 })
 base_affinity = Array[int]([1])
-starting_inventory = Array[ExtResource("6_ynwst")]([ExtResource("30_0q6fv")])
+starting_inventory = Array[ExtResource("6_ynwst")]([ExtResource("30_0q6fv"), ExtResource("31_giowq")])
 starting_equipped_index = 0
 
 [sub_resource type="Resource" id="Resource_dyx32"]
@@ -331,7 +332,7 @@ stats = Dictionary[int, int]({
 7: 4
 })
 current_hp = 20
-inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_en6ks")])
+inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_en6ks"), ExtResource("31_giowq")])
 equipped_index = 0
 aura = Dictionary[int, int]({
 1: 1

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ConduitData" format=3 uid="uid://bin62phny7rvg"]
+
+[ext_resource type="Script" uid="uid://r164wfj5hc04" path="res://Classes/alchemy/ConduitData.gd" id="1_laqy1"]
+[ext_resource type="Resource" path="res://Resources/Substances/lightning.tres" id="2_b38wj"]
+
+[resource]
+script = ExtResource("1_laqy1")
+substance = ExtResource("2_b38wj")
+display_name = "Yellow Diamond"
+weight = 1
