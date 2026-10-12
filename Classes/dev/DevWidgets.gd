@@ -1683,6 +1683,19 @@ static func restore_uids(path: String, prior: Dictionary) -> bool:
 # RuneCatalog, TransmutationCatalog, WeaponAttackCatalog, ScenarioManager) all re-scan disk per
 # call rather than caching, so a caller's own dropdown refresh is enough to drop the deleted
 # entry -- no separate cache to invalidate.
+# True when something still names the file at `path`, after saying who. A dangling ext_resource is
+# a hard PARSE error that takes the whole referring file down (#596), so a file in use is refused
+# rather than warned about -- asked before the confirm, so the refusal is the whole answer.
+static func refuse_delete_in_use(path: String, status_label: Label = null) -> bool:
+	var users := ResourceCatalog.users_of(path)
+	if users.is_empty():
+		return false
+	var msg := "%s is used by %s -- re-point them first" % [path.get_file(), ", ".join(users)]
+	push_warning(msg)
+	if status_label != null:
+		status_label.text = msg
+	return true
+
 static func delete_saved_file(path: String, noun: String, status_label: Label = null) -> bool:
 	if path == "":
 		var msg := "No %s file on disk to delete" % noun

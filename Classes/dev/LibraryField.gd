@@ -248,13 +248,7 @@ func _delete() -> void:
 	var path := _held_path()
 	if path == "":
 		return
-	# A dangling ext_resource is a hard PARSE error that takes the whole referring file down, so a
-	# file in use is refused rather than warned about (CLAUDE.md's ContentRepair edge).
-	var users := ResourceCatalog.users_of(path)
-	if not users.is_empty():
-		var msg := "%s is used by %s -- re-point them first" % [path.get_file(), ", ".join(users)]
-		push_warning(msg)
-		status.text = msg
+	if DevWidgets.refuse_delete_in_use(path, status):
 		return
 	DevWidgets.confirm_delete(host, "%s '%s'" % [noun, path.get_file()], func() -> void:
 		if DevWidgets.delete_saved_file(path, noun, status):
