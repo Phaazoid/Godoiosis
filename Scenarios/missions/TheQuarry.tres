@@ -16,11 +16,10 @@
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="14_156yv"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="15_frf67"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="16_qhv3w"]
-[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="17_k03yt"]
-[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="18_oh8q3"]
+[ext_resource type="Resource" uid="uid://df4pvueay4oiy" path="res://Resources/TransmutationData/Fireball.tres" id="17_vw7mx"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="19_en6ks"]
-[ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="20_qiv5i"]
 [ext_resource type="Resource" uid="uid://cmgupqw3gkgbv" path="res://Resources/Abilities/HeatInsulation.tres" id="20_htins"]
+[ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="20_qiv5i"]
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="21_dyx32"]
 [ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="22_aoega"]
 [ext_resource type="Resource" uid="uid://oysqp74gyp72" path="res://Resources/Armor/AsbestosShroud.tres" id="23_rs5gf"]
@@ -31,6 +30,7 @@
 [ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="28_d6gq5"]
 [ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="29_ylrfi"]
 [ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="30_0q6fv"]
+[ext_resource type="Resource" uid="uid://do43xhhg1ueb8" path="res://Resources/TransmutationData/Zap.tres" id="30_giowq"]
 
 [sub_resource type="Resource" id="Resource_ss67t"]
 script = ExtResource("1_vk2ak")
@@ -85,26 +85,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_j83om"]
-script = ExtResource("16_qhv3w")
-recipe = "Break(F, A) + Push(F2)"
-popup = "Fireball!"
-icon = ExtResource("18_oh8q3")
-display_name = "Fireball"
-power = 5
-min_range = 2
-max_range = 2
-max_and_a_half = true
-hits_allies = true
-targets = 2
-up_tolerance = 6
-arc_clearance = 6
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_qcx71"]
 script = ExtResource("19_en6ks")
 size = 1
-inscriptions = Array[ExtResource("16_qhv3w")]([SubResource("Resource_j83om")])
+inscriptions = Array[ExtResource("16_qhv3w")]([ExtResource("17_vw7mx")])
 temper = 1
 display_name = "Fire Rune"
 weight = 1
@@ -309,26 +293,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_oh8q3"]
-script = ExtResource("16_qhv3w")
-recipe = "Extract(QF) + Push(QF)"
-display_name = "Zap"
-power = 5
-min_range = 2
-max_range = 2
-hits_allies = true
-hits_self = true
-targets = 2
-up_tolerance = 99
-down_tolerance = 99
-arc_clearance = 99
-pierces_guard = true
-damage_kind = 4
-
 [sub_resource type="Resource" id="Resource_en6ks"]
 script = ExtResource("19_en6ks")
 size = 1
-inscriptions = Array[ExtResource("16_qhv3w")]([SubResource("Resource_oh8q3")])
+inscriptions = Array[ExtResource("16_qhv3w")]([ExtResource("30_giowq")])
 temper = 1
 display_name = "Electric Rune"
 weight = 1

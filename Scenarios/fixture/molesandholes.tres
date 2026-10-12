@@ -6,7 +6,6 @@
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_lrogb"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_5qx3r"]
 [ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="6_bopqh"]
-[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="7_p4rrl"]
 [ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="8_adqjh"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="9_ggc8e"]
 [ext_resource type="Texture2D" uid="uid://lwdxls0bwe07" path="res://Art/Units/MapSprites/Orc_Downed.png" id="10_wsn0r"]
@@ -15,8 +14,8 @@
 [ext_resource type="Texture2D" uid="uid://cuw76kdqfrbjw" path="res://Art/Units/MapSprites/Orc_Moving.png" id="13_ljvvr"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="14_tviya"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="15_gnsc6"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="16_g6pwf"]
 [ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="17_22von"]
+[ext_resource type="Resource" uid="uid://cxhr4ihodwbgm" path="res://Resources/TransmutationData/Gust.tres" id="18_bq7yd"]
 [ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="18_gvau7"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="19_j3sob"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="21_qlc3e"]
@@ -42,7 +41,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_p4rrl"]
 script = ExtResource("4_lrogb")
@@ -97,7 +96,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_wsn0r"]
 script = ExtResource("4_lrogb")
@@ -150,7 +149,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_ljvvr"]
 script = ExtResource("4_lrogb")
@@ -204,7 +203,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_g6pwf"]
 script = ExtResource("4_lrogb")
@@ -253,7 +252,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_j3sob"]
 script = ExtResource("4_lrogb")
@@ -304,7 +303,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_8idap"]
 script = ExtResource("4_lrogb")
@@ -352,7 +351,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_jejrg"]
 script = ExtResource("4_lrogb")
@@ -402,7 +401,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_75yjd"]
 script = ExtResource("4_lrogb")
@@ -429,19 +428,9 @@ limb_states = Dictionary[int, int]({
 3: 0
 })
 
-[sub_resource type="Resource" id="Resource_mpdgd"]
-script = ExtResource("19_j3sob")
-recipe = "Push(A2)"
-display_name = "Gust"
-max_range = 3
-hits_allies = true
-knockback = 2
-deals_no_damage = true
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_httdr"]
 script = ExtResource("21_qlc3e")
-inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_mpdgd")])
+inscriptions = Array[ExtResource("19_j3sob")]([ExtResource("18_bq7yd")])
 temper = 6
 display_name = "woosh"
 weight = 1
@@ -463,7 +452,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_tha1c"]
 script = ExtResource("4_lrogb")
@@ -494,19 +483,9 @@ limb_states = Dictionary[int, int]({
 3: 0
 })
 
-[sub_resource type="Resource" id="Resource_mfdw7"]
-script = ExtResource("19_j3sob")
-recipe = "Push(A2)"
-display_name = "Gust"
-max_range = 3
-hits_allies = true
-knockback = 2
-deals_no_damage = true
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_1id6q"]
 script = ExtResource("21_qlc3e")
-inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_mfdw7")])
+inscriptions = Array[ExtResource("19_j3sob")]([ExtResource("18_bq7yd")])
 temper = 6
 display_name = "woosh"
 weight = 1
@@ -528,7 +507,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_mb4c7"]
 script = ExtResource("4_lrogb")
@@ -583,7 +562,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_3we3l"]
 script = ExtResource("4_lrogb")
@@ -632,7 +611,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_0kyje"]
 script = ExtResource("4_lrogb")
@@ -682,7 +661,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_5wua6"]
 script = ExtResource("4_lrogb")
@@ -711,19 +690,9 @@ limb_states = Dictionary[int, int]({
 3: 0
 })
 
-[sub_resource type="Resource" id="Resource_inpo2"]
-script = ExtResource("19_j3sob")
-recipe = "Push(A2)"
-display_name = "Gust"
-max_range = 3
-hits_allies = true
-knockback = 2
-deals_no_damage = true
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_ppp6a"]
 script = ExtResource("21_qlc3e")
-inscriptions = Array[ExtResource("19_j3sob")]([SubResource("Resource_inpo2")])
+inscriptions = Array[ExtResource("19_j3sob")]([ExtResource("18_bq7yd")])
 temper = 6
 display_name = "woosh"
 weight = 1
@@ -744,7 +713,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_2afcj"]
 script = ExtResource("4_lrogb")
@@ -798,7 +767,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_lc44r"]
 script = ExtResource("4_lrogb")
@@ -848,7 +817,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_gsa3c"]
 script = ExtResource("4_lrogb")
@@ -898,7 +867,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_7t40n"]
 script = ExtResource("4_lrogb")
@@ -949,7 +918,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_v0dsv"]
 script = ExtResource("4_lrogb")
@@ -998,7 +967,7 @@ faction = 1
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_s0yfg"]
 script = ExtResource("4_lrogb")
@@ -1048,7 +1017,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_b1381"]
 script = ExtResource("4_lrogb")
@@ -1103,7 +1072,7 @@ base_stats = Dictionary[int, int]({
 map_sprite = ExtResource("12_aw0nw")
 move_sprite = ExtResource("13_ljvvr")
 downed_sprite = ExtResource("10_wsn0r")
-starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("16_g6pwf")])
+starting_inventory = Array[ExtResource("5_5qx3r")]([ExtResource("18_gvau7")])
 
 [sub_resource type="Resource" id="Resource_ahfha"]
 script = ExtResource("4_lrogb")
