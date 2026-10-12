@@ -2,10 +2,10 @@
 # (RuneData.is_legal, TransmutationData.is_legal). Deep Alchemy Phase 2 (2026-10-11) replaced a
 # carving's sigils with a recipe line, and a scenario EMBEDS its runes -- a snapshot entry carries
 # its own copy of the inventory, and an embedded character carries its own starting kit -- so the
-# catalogs' own guard (tests/items/test_alchemy_catalogs.gd) cannot see them: nothing under
-# Resources/ is read on that path. A copy whose recipe no longer parses, or names more verbs than
-# any rune can hold, loads as a carving nobody can inscribe and a rune is_legal refuses, and nothing
-# else says so (the embedded-content sweep rule, CLAUDE.md).
+# catalogs' own guard (tests/items/test_alchemy_catalogs.gd) cannot see those runes. Their carvings
+# are library references since #1313, which that guard does read, but a rune is still the scenario's
+# own: one resized below its carvings, or tempered against one, loads as a rune is_legal refuses, and
+# nothing else says so (the embedded-content sweep rule, CLAUDE.md).
 #
 # Walks every scenario file the real scan finds (ScenarioManager.get_saved_scenarios, recursive --
 # tests/flow/test_scenario_load_integrity.gd's precedent), so a new mission or fixture is covered

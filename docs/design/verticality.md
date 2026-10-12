@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01; #46's shared execute steps folded in 2026-10-04; #1228's `has_surface` folded in 2026-10-05.**
+**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01; #46's shared execute steps folded in 2026-10-04; #1228's `has_surface` folded in 2026-10-05; #1313 (runes hold library carvings) folded in 2026-10-12.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -684,6 +684,9 @@ and `.tres` omits defaulted fields — so a board saved before `arc_clearance` e
 embedded Fireball with clearance 0 and lobs it flat (plus `up_tolerance` unlimited). That was the
 "lob can't clear a 1-wall" bug report in its entirety; the fix was content (patch the embedded
 copy), not rules. Boards saved before an `AttackData` field existed need a re-save to pick it up.
+For carvings the trap is closed since [#1313](https://github.com/Phaazoid/Godoiosis/issues/1313)
+(2026-10-12): a rune holds the library carving by reference, so a board names the library file and
+picks up a new field with no re-save, and `tests/law/test_no_embedded_carvings.gd` keeps it so.
 
 ---
 
