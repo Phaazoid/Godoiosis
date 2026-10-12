@@ -19,7 +19,7 @@ class_name WeatherLook
 
 const FOLDER := "res://Resources/WeatherLooks/"
 # Elemental.Element's members in order, for the bolt colour's picker; test_weather_tool keeps the two equal.
-const ELEMENT_NAMES := ["None", "Fire", "Water", "Shock", "Ice", "Earth", "Air", "Aether", "Corrosion"]
+const ELEMENT_NAMES := ["None", "Fire", "Water", "Shock", "Ice", "Earth", "Air", "Aether", "Corrosion", "Heat"]
 
 enum Fall { RAIN, SNOW, FOG, AURORA, SAND, ASH }
 enum MoteShape { DOTS, STREAKS }

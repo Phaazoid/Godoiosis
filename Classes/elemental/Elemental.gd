@@ -26,6 +26,10 @@ enum Element {
 	# NOT the same thing as AttackData.Kind.CORROSION, which is the DELIVERY axis (#424) -- the two
 	# vocabularies already share FIRE and SHOCK for the same reason, so a grep hits both.
 	CORROSION,
+	# Free heat, a lone F (Deep Alchemy, 2026-10-12): a derived hit tag like ICE, not a sigil and not
+	# aura-bearing. It WARMS but never ignites -- a reaction answers to it only by listing it in
+	# also_triggered_by, and no ignition does (tests/law/test_heat_never_ignites.gd).
+	HEAT,
 }
 
 enum State {
@@ -48,6 +52,23 @@ static func is_sigil_element(e: Element) -> bool:
 # enum key keep doing so — this is the player-facing spelling, not a general stringifier.
 static func display_name(e: Element) -> String:
 	return Element.keys()[e].capitalize()
+
+# Does a hit carrying `hit_elements` set off a reaction keyed on `primary` that also answers to
+# `also`? The ONE rule for both reaction kinds (ElementalReaction / TerrainReaction.fires_for).
+static func triggered(primary: Element, also: Array[Element], hit_elements: Array[Element]) -> bool:
+	if hit_elements.has(primary):
+		return true
+	for e: Element in also:
+		if hit_elements.has(e):
+			return true
+	return false
+
+# Every element a reaction answers to, as the player reads it: "Fire or Heat".
+static func trigger_names(primary: Element, also: Array[Element]) -> String:
+	var names: Array[String] = [display_name(primary)]
+	for e: Element in also:
+		names.append(display_name(e))
+	return " or ".join(names)
 
 # The State twin ("Wet") — same rule, same reason (StateIcons' fallback label and the Glossary's
 # composed reaction lines both need it).

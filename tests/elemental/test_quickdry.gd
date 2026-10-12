@@ -1,8 +1,8 @@
 # The FIRE half of the thermal loop, tested against the AUTHORED catalog (unlike
 # test_elemental_reactions.gd, which injects in-code reactions to verify the resolver's logic
-# alone): fire on a WET target dries it off at reduced damage (fire_wet_quickdry.tres), and the
-# Blow Dry carving is a damageless FIRE delivery whose only effect IS that reaction. A wrong enum
-# int in a .tres fails here, where an injected twin would stay green.
+# alone): fire on a WET target dries it off at reduced damage (fire_wet_quickdry.tres), and a
+# damageless HEAT carving (Blow Dry's shape) dries an ally through the same reaction, which answers
+# to heat too. A wrong enum int in a .tres fails here, where an injected twin would stay green.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -62,13 +62,15 @@ func test_fire_on_a_dry_target_is_plain_damage() -> void:
 	assert_int(attack.resolved.damage).is_equal(BASE)
 	assert_bool(attack.resolved.states_removed.is_empty()).is_true()
 
-func test_blow_dry_is_a_damageless_ally_safe_fire_delivery() -> void:
-	# The carving carries no payload of its own: deals_no_damage suppresses scaling, hits_allies
-	# lets it aim at a friend, and the QuickDry reaction does the actual drying.
-	var carving: TransmutationData = load("res://Resources/TransmutationData/BlowDry.tres")
-	assert_bool(carving.deals_no_damage).is_true()
-	assert_bool(carving.hits_allies).is_true()
-	assert_bool(carving.get_elements().has(Elemental.Element.FIRE)).is_true()
+func test_a_damageless_heat_carving_dries_an_ally_without_hurting_them() -> void:
+	# Built here rather than loaded (the content razor): deals_no_damage suppresses scaling,
+	# hits_allies lets it aim at a friend, the recipe delivers free heat, and the QuickDry reaction,
+	# which answers to heat as well as fire, does the actual drying.
+	var carving := TransmutationData.new()
+	carving.recipe = "Break(F, A) + Push(F)"
+	carving.deals_no_damage = true
+	carving.hits_allies = true
+	assert_array(carving.get_elements()).contains_exactly([Elemental.Element.HEAT])
 
 	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, BASE)
 	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 50})

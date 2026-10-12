@@ -26,6 +26,11 @@ const LENDS_NOTHING: Array[String] = ["green_plant", "dry_plant"]
 # what each ground sits on (#1315), so Rock Throw's Push(E2) keeps working wherever it works today.
 const ON_DIRT: Array[Terrain.Kind] = [Terrain.Kind.GRASS, Terrain.Kind.TALL_GRASS, Terrain.Kind.TREE]
 
+# What a present substance GIVES OFF without being broken (Heat, 2026-10-12): flame decays to heat,
+# the Melt ruling, so a burning tile or a lit prop beside the caster offers free heat as well as
+# flame. Expanded with the parts below, so a gift can itself lend.
+const GIVES_OFF: Dictionary[String, String] = {"flame": "atom_fire"}
+
 # A compound's parts, by formula text, for the shared catalog only -- resolving a part scans the whole
 # catalog, and the AI asks this per origin.
 static var _parts_memo: Dictionary = {}
@@ -33,7 +38,7 @@ static var _parts_memo: Dictionary = {}
 
 # The substance ids present for a cast from `cell`: the ambient baseline, then everything within
 # Materia.REACH -- the ground, its tile states, any gas, a lit prop, and the states of whoever stands
-# there -- then every compound's parts, recursively. Deduped, in that order.
+# there -- then every compound's parts (and what flame gives off), recursively. Deduped, in that order.
 #
 # `caster` is counted wherever it is: `cell` IS where it casts from, which is often a cell it has only
 # queued a move to, so the live scan below would not find it there.
@@ -55,6 +60,7 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: Unit = n
 	while i < found.size():
 		for part: String in _parts_of(found[i], catalog, shared):
 			_add(found, part)
+		_add(found, GIVES_OFF.get(found[i], ""))
 		i += 1
 	return found
 

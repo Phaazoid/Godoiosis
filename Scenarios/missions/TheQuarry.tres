@@ -20,6 +20,7 @@
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="18_oh8q3"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="19_en6ks"]
 [ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="20_qiv5i"]
+[ext_resource type="Resource" uid="uid://cmgupqw3gkgbv" path="res://Resources/Abilities/HeatInsulation.tres" id="20_htins"]
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="21_dyx32"]
 [ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="22_aoega"]
 [ext_resource type="Resource" uid="uid://oysqp74gyp72" path="res://Resources/Armor/AsbestosShroud.tres" id="23_rs5gf"]
@@ -113,7 +114,7 @@ metadata/_custom_type_script = "uid://ckrp1phgirys0"
 script = ExtResource("21_dyx32")
 flat_def = 2
 covered_kinds = Array[int]([3])
-granted_abilities = Array[ExtResource("11_jweqb")]([ExtResource("20_qiv5i")])
+granted_abilities = Array[ExtResource("11_jweqb")]([ExtResource("20_qiv5i"), ExtResource("20_htins")])
 display_name = "Asbestos Shroud"
 weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"

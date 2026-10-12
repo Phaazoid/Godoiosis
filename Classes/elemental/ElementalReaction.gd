@@ -8,15 +8,19 @@ class_name ElementalReaction
 # Resolution collects EVERY matching reaction and composes them per E8:
 #   final = round(base * Π(damage_mult) + Σ(damage_bonus))   (state-deltas union)
 #
-# v1 = a single (element × state) trigger per reaction. The doc's "collection of
-# triggers" (multiple routes to one reaction) is a later generalization — for now,
-# author one reaction per route. Stacking ACROSS reactions (E8) works regardless.
+# One primary element per reaction, plus `also_triggered_by` for the other elements it answers to
+# (Heat, 2026-10-12: heat dries and melts what fire does). The primary is what the equation and
+# ReactionLint explain; the extras are lore ("flame decays to heat"). A reaction fires at most ONCE
+# per hit however many of its elements the hit carries, which is why the extras are a list here and
+# never a second file (a second file would fire twice). Matching asks fires_for, never the field.
+# Stacking ACROSS reactions (E8) works regardless.
 #
 # `required_state = NONE` means "no pre-existing state needed" — the reaction fires
 # on the element alone. That's the SETUP half of a combo (e.g. WATER -> WET).
 
 @export var incoming_element: Elemental.Element = Elemental.Element.NONE
 @export var required_state: Elemental.State = Elemental.State.NONE
+@export var also_triggered_by: Array[Elemental.Element] = []
 
 # Deterministic damage change (Law #1 — no chance).
 @export var damage_mult: float = 1.0
@@ -48,6 +52,10 @@ class_name ElementalReaction
 # own named line, or is already fully said by the state chip it produced (#685).
 func is_combo() -> bool:
 	return required_state != Elemental.State.NONE
+
+# Does a hit carrying `elements` set this reaction off? The one question both resolver sites ask.
+func fires_for(elements: Array[Elemental.Element]) -> bool:
+	return Elemental.triggered(incoming_element, also_triggered_by, elements)
 
 # The BADGE word, for a surface with no room for the dramatic one. A DECLARED second representation
 # (Law #4): `popup` is what a reaction SHOUTS -- the glossary's composed interaction line and the bug

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://cmgupqw3gkgbv"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_htins"]
+
+[resource]
+script = ExtResource("1_htins")
+id = 9
+display_name = "Heat Insulation"
+kind = 2
+description = "HEAT is erased from any hit that carries it. A heat-carrying hit still lands its damage."
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

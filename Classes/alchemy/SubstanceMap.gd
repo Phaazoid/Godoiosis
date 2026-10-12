@@ -21,6 +21,7 @@ const ELEMENTS: Dictionary[Elemental.Element, String] = {
 	Elemental.Element.AIR: "inert_air",
 	Elemental.Element.AETHER: "essence",
 	Elemental.Element.CORROSION: "vitriol",
+	Elemental.Element.HEAT: "atom_fire",  # free heat: flame decays to it, and it melts ice
 }
 
 # What a hit carries when it delivers a substance -- ELEMENTS read backwards (flame is FIRE), plus

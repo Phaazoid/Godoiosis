@@ -140,6 +140,15 @@ func _paint_rail(outcome: ResolvedOutcome) -> void:
 # row without clipping. It costs ~19px each, which is what decides whether a second chip WRAPS, and
 # the loudest complaint about this panel was height. `badge_name()` is the other half: the badge word
 # is what fits, and the dramatic one keeps its place in the tooltip and the glossary.
+# Which of the hit's elements set this reaction off -- its ink. A reaction answers to more than its
+# primary (heat dries what fire does), so a heat hit's Quick Dry wears Heat, not Fire.
+static func _setter_of(reaction: ElementalReaction, outcome: ResolvedOutcome) -> Elemental.Element:
+	for e: Elemental.Element in outcome.elements:
+		var one: Array[Elemental.Element] = [e]
+		if reaction.fires_for(one):
+			return e
+	return reaction.incoming_element
+
 func _build_consequence(outcome: ResolvedOutcome) -> void:
 	for state in outcome.states_added:
 		if state == Elemental.State.NONE:
@@ -155,7 +164,7 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	for reaction: ElementalReaction in outcome.fired_reactions:
 		if not reaction.is_combo() or reaction.badge_name() == "":
 			continue
-		consequence.add_child(_chip(QueueStyle.element_ink(reaction.incoming_element),
+		consequence.add_child(_chip(QueueStyle.element_ink(_setter_of(reaction, outcome)),
 				reaction.badge_name(), UiText.wrap(Glossary.reaction_line(reaction))))
 
 	# What the WORLD did, read off the outcome's own recorded FACTS rather than parsed back out of

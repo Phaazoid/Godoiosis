@@ -937,7 +937,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# property because the store is a static on ElementPalette, which KNOBS cannot reach.
 	#
 	# TUNE THEM AS A SET, against the queue panel's slate ground AND against each other -- the whole
-	# job of these eight is that a glance at a row says which element without reading a word.
+	# job of these nine is that a glance at a row says which element without reading a word.
 	{"group": "Element colours", "label": "Fire", "static": "ELEMENT_FIRE", "script": ELEMENT_PALETTE_SCRIPT,
 		"tip": "Fire's colour wherever the UI names an element. The loudest of the set by default, since a burn is usually the consequence a player most wants to spot in a queued plan."},
 	{"group": "Element colours", "label": "Water", "static": "ELEMENT_WATER", "script": ELEMENT_PALETTE_SCRIPT,
@@ -954,6 +954,8 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "Aether's colour. The rarest of the sigils, so it can afford to be the most distinctive -- nothing else on screen should be near it."},
 	{"group": "Element colours", "label": "Corrosion", "static": "ELEMENT_CORROSION", "script": ELEMENT_PALETTE_SCRIPT,
 		"tip": "Corrosion's colour -- the Chemical Spitter's element (#97). Not a sigil and not aura-bearing, so it never appears on a carving; where you WILL see it is a Spray's rail and a Vitriol vial. Its near-neighbours are Earth and Air, which is the pair to tune it against."},
+	{"group": "Element colours", "label": "Heat", "static": "ELEMENT_HEAT", "script": ELEMENT_PALETTE_SCRIPT,
+		"tip": "Heat's colour: free heat, which melts, dries and boils but never ignites. Not a sigil, so a carving only ever DELIVERS it. Its near-neighbours are Fire and Earth; it should read as Fire's warmer, gentler cousin rather than as Fire."},
 
 	# --- THE SHOCK ARC (#887) -------------------------------------------------------------------
 	#
@@ -2300,6 +2302,7 @@ static func read_static(name: String) -> Variant:
 		"ELEMENT_AIR": return ElementPalette.ELEMENT_AIR
 		"ELEMENT_AETHER": return ElementPalette.ELEMENT_AETHER
 		"ELEMENT_CORROSION": return ElementPalette.ELEMENT_CORROSION
+		"ELEMENT_HEAT": return ElementPalette.ELEMENT_HEAT
 		"EVENT_TINT": return QueueStyle.EVENT_TINT
 		"PARCHMENT_INK_DEPTH": return QueueStyle.PARCHMENT_INK_DEPTH
 		"PARCHMENT_INK_SATURATION": return QueueStyle.PARCHMENT_INK_SATURATION
@@ -3125,6 +3128,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"ELEMENT_CORROSION":
 			ElementPalette.ELEMENT_CORROSION = value
+			_restyle_action_queue(host)
+			return
+		"ELEMENT_HEAT":
+			ElementPalette.ELEMENT_HEAT = value
 			_restyle_action_queue(host)
 			return
 		"EVENT_TINT":

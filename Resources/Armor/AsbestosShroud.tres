@@ -2,13 +2,14 @@
 
 [ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_ccbcd"]
 [ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="2_bjmtt"]
+[ext_resource type="Resource" uid="uid://cmgupqw3gkgbv" path="res://Resources/Abilities/HeatInsulation.tres" id="2_htins"]
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="3_4lc5w"]
 
 [resource]
 script = ExtResource("3_4lc5w")
 flat_def = 2
 covered_kinds = Array[int]([3])
-granted_abilities = Array[ExtResource("1_ccbcd")]([ExtResource("2_bjmtt")])
+granted_abilities = Array[ExtResource("1_ccbcd")]([ExtResource("2_bjmtt"), ExtResource("2_htins")])
 display_name = "Asbestos Shroud"
 weight = 2
 metadata/_custom_type_script = "uid://dj0617uewvdny"
