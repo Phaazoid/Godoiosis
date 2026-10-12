@@ -141,7 +141,7 @@ var skipped: bool = false
 # The carving FIZZLED: a verb's argument was not present where the caster stood in the pass
 # (CellSubstances, Deep Alchemy Phase 2). Always beside `skipped`, which is what every reader of
 # "will not happen" already reads -- this only says WHY, for the queue's badge, the Play API and the
-# validator's red ("Fizzles here now"). Nothing lands: no damage, no reaction, no deposit, no payload.
+# validator's red ("Fizzles where they'll be standing"). Nothing lands: no damage, no reaction, no deposit, no payload.
 var fizzled: bool = false
 
 # The Iron Will cap actually BIT on this hit (#524): incoming damage exceeded the cap and was

@@ -9,7 +9,7 @@ const FELL_POPUP := "Fell %d!"
 const DROWNING_POPUP := "Drowning!"
 const VOID_POPUP := "Into the void!"
 const HELD_POPUP := "Held %d!"   # #120: tiles of a shove the target's weight absorbed
-const FIZZLED_POPUP := "Fizzled"   # a carving whose argument was not present (CellSubstances)
+const FIZZLED_POPUP := "Fizzled!"   # a carving whose argument was not present (CellSubstances)
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a

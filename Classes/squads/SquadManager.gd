@@ -488,7 +488,7 @@ func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 # aim_finds_a_target reads it. The same CellSubstances.fizzle_reason the menu row greys with, so a
 # greyed row and a refused order cannot disagree. Asked of an aim and of a WATCH, whose shot fires
 # from that same cell (Pressure Spray is watch-only); a stored order's answer is the validator's
-# ("Fizzles here now"). Every other candidate passes straight through.
+# ("Fizzles where they'll be standing"). Every other candidate passes straight through.
 func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
 	var attack: AttackData = null
 	if action is AttackAction:

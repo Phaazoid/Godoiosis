@@ -39,7 +39,7 @@ const BADGE_VIAL := "Vial"
 const BADGE_TANK := "Tank"
 const BADGE_SPLIT := "Split"        # the dev's word (#367); one unit leaves its squad
 const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
-const BADGE_FIZZLED := PlanResolver.FIZZLED_POPUP   # a carving with nothing to work with (one word, it fits)
+const BADGE_FIZZLED := "Fizzle"     # a carving with nothing to work with
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture

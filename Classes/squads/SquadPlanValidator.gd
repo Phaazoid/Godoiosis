@@ -189,7 +189,7 @@ static func _revalidate_unit_attacks(actions: Array[BaseAction], plan: ResolvedP
 		# the pass has its caster, so a re-plan has walked them away from what it needs. RED, still
 		# queued -- one-way validity, the whiff's own rule. The resolve's answer, never a re-derivation.
 		if _plan_fizzled(plan, aim):
-			aim.add_validation_error("Fizzles here now")
+			aim.add_validation_error("Fizzles where they'll be standing")
 
 # A stored WATCH's twin of the clause above (Deep Alchemy Phase 2): the resolve stamped where the watch
 # arms (OverwatchAction.resolved_anchor), and a carving that fizzles from there could only ever fire a
@@ -202,7 +202,7 @@ static func _revalidate_watch_material(actions: Array[BaseAction], board: BoardC
 		if watch == null or watch.resolved_footprint.is_empty():
 			continue
 		if CellSubstances.fizzle_reason(watch.fired_attack, watch.resolved_anchor, board, watch.actor) != "":
-			watch.add_validation_error("Fizzles here now")
+			watch.add_validation_error("Fizzles where they'll be standing")
 
 static func _plan_fizzled(plan: ResolvedPlan, aim: AttackAction) -> bool:
 	for resolved_attack in plan.attacks:
