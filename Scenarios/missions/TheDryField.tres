@@ -9,8 +9,8 @@
 [ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="6_krd68"]
 [ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="7_emg0v"]
 [ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="8_4g15e"]
-[ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="9_u1883"]
 [ext_resource type="Resource" uid="uid://cmgupqw3gkgbv" path="res://Resources/Abilities/HeatInsulation.tres" id="9_htins"]
+[ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="9_u1883"]
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="10_1huae"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="11_kuxfe"]
 [ext_resource type="Texture2D" uid="uid://lwdxls0bwe07" path="res://Art/Units/MapSprites/Orc_Downed.png" id="12_4gknw"]
@@ -20,8 +20,7 @@
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="16_khbsf"]
 [ext_resource type="Resource" uid="uid://oysqp74gyp72" path="res://Resources/Armor/AsbestosShroud.tres" id="17_2ljva"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="18_vnqxw"]
-[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="19_l7cbb"]
-[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="20_tbmit"]
+[ext_resource type="Resource" uid="uid://df4pvueay4oiy" path="res://Resources/TransmutationData/Fireball.tres" id="21_ewwln"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="21_un4od"]
 [ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="22_k7nrn"]
 [ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="23_rdfi3"]
@@ -360,26 +359,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_rdfi3"]
-script = ExtResource("18_vnqxw")
-recipe = "Break(F, A) + Push(F2)"
-popup = "Fireball!"
-icon = ExtResource("20_tbmit")
-display_name = "Fireball"
-power = 5
-min_range = 2
-max_range = 2
-max_and_a_half = true
-hits_allies = true
-targets = 2
-up_tolerance = 6
-arc_clearance = 6
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_twq6n"]
 script = ExtResource("21_un4od")
 size = 1
-inscriptions = Array[ExtResource("18_vnqxw")]([SubResource("Resource_rdfi3")])
+inscriptions = Array[ExtResource("18_vnqxw")]([ExtResource("21_ewwln")])
 temper = 1
 display_name = "Fire Rune"
 weight = 1

@@ -34,7 +34,7 @@
 [ext_resource type="Resource" uid="uid://ceqrjbp6yyh2" path="res://Resources/Abilities/IronWill.tres" id="32_bggmo"]
 [ext_resource type="Texture2D" uid="uid://cum85ohppxgiq" path="res://Art/Units/Portraits/hair_mcgee_orange.png" id="33_qv257"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="34_vdqk7"]
-[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="35_ojued"]
+[ext_resource type="Resource" uid="uid://n88c221tsymv" path="res://Resources/TransmutationData/heal2.tres" id="35_rdur1"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="36_cgs71"]
 [ext_resource type="Texture2D" uid="uid://jatc26kj1u3" path="res://Art/Units/MapSprites/Priest_Downed.png" id="37_q4yx8"]
 [ext_resource type="Texture2D" uid="uid://utcba4ppc03" path="res://Art/Units/MapSprites/Priest.png" id="38_niknp"]
@@ -415,20 +415,9 @@ limb_states = Dictionary[int, int]({
 3: 0
 })
 
-[sub_resource type="Resource" id="Resource_mclay"]
-script = ExtResource("34_vdqk7")
-recipe = "Bind(Q, Q)"
-display_name = "Heal"
-power = 6
-min_range = 0
-max_range = 2
-hits_allies = true
-hits_self = true
-heals = true
-
 [sub_resource type="Resource" id="Resource_nu5bx"]
 script = ExtResource("36_cgs71")
-inscriptions = Array[ExtResource("34_vdqk7")]([SubResource("Resource_mclay")])
+inscriptions = Array[ExtResource("34_vdqk7")]([ExtResource("35_rdur1")])
 temper = 7
 display_name = "Heal Rune"
 weight = 1

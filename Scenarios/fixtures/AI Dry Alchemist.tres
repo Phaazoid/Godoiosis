@@ -6,8 +6,7 @@
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_7orwp"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_63umr"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="6_5ic8h"]
-[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="7_qwjpt"]
-[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="8_vt82v"]
+[ext_resource type="Resource" uid="uid://df4pvueay4oiy" path="res://Resources/TransmutationData/Fireball.tres" id="7_pr0at"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="9_6yayx"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="10_yisu2"]
 [ext_resource type="Texture2D" uid="uid://c3hqfuhr1eyhm" path="res://Art/Units/MapSprites/Wizard_Downed.png" id="11_r5jfu"]
@@ -32,26 +31,10 @@
 [ext_resource type="Texture2D" uid="uid://cxhdc55u1688e" path="res://Art/Units/MapSprites/Soldier.png" id="30_gl0de"]
 [ext_resource type="Texture2D" uid="uid://d3w5utgjfoulc" path="res://Art/Units/MapSprites/Soldier_Moving.png" id="31_udjwv"]
 
-[sub_resource type="Resource" id="Resource_qdkju"]
-script = ExtResource("6_5ic8h")
-recipe = "Break(F, A) + Push(F2)"
-popup = "Fireball!"
-icon = ExtResource("8_vt82v")
-display_name = "Fireball"
-power = 5
-min_range = 2
-max_range = 2
-max_and_a_half = true
-hits_allies = true
-targets = 2
-up_tolerance = 6
-arc_clearance = 6
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_1m7eu"]
 script = ExtResource("9_6yayx")
 size = 1
-inscriptions = Array[ExtResource("6_5ic8h")]([SubResource("Resource_qdkju")])
+inscriptions = Array[ExtResource("6_5ic8h")]([ExtResource("7_pr0at")])
 temper = 1
 display_name = "Fire Rune"
 weight = 1
@@ -107,26 +90,10 @@ limb_states = Dictionary[int, int]({
 3: 0
 })
 
-[sub_resource type="Resource" id="Resource_1nr8c"]
-script = ExtResource("6_5ic8h")
-recipe = "Break(F, A) + Push(F2)"
-popup = "Fireball!"
-icon = ExtResource("8_vt82v")
-display_name = "Fireball"
-power = 5
-min_range = 2
-max_range = 2
-max_and_a_half = true
-hits_allies = true
-targets = 2
-up_tolerance = 6
-arc_clearance = 6
-metadata/_custom_type_script = "uid://bgbidu2bbf33l"
-
 [sub_resource type="Resource" id="Resource_4fber"]
 script = ExtResource("9_6yayx")
 size = 1
-inscriptions = Array[ExtResource("6_5ic8h")]([SubResource("Resource_1nr8c")])
+inscriptions = Array[ExtResource("6_5ic8h")]([ExtResource("7_pr0at")])
 temper = 1
 display_name = "Fire Rune"
 weight = 1

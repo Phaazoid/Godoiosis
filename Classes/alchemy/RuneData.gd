@@ -33,7 +33,7 @@ const CIRCLE_CAP := {
 }   # max verbs in a SINGLE carving inscribed on this size
 
 @export var size: Size = Size.SMALL
-@export var inscriptions: Array[TransmutationData] = []
+@export var inscriptions: Array[TransmutationData] = []   # library carvings by reference, never copies (#1313)
 @export var temper: Elemental.Element = Elemental.Element.NONE   # set PERMANENTLY by the first carving
 
 static func max_circle_cap() -> int:

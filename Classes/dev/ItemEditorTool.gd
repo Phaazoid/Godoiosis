@@ -310,7 +310,7 @@ func _populate_rune_editor(rune: RuneData):
 	add_btn.text = "Inscribe"
 	add_btn.pressed.connect(func():
 		var key = carvings.keys()[picker.selected]
-		if rune.inscribe(carvings[key].duplicate(true)):
+		if rune.inscribe(carvings[key]):   # the library carving itself, never a copy (#1313)
 			populate()
 		else:
 			push_warning("Won't fit %s: capacity, circle cap, or temper rule" % key)

@@ -268,3 +268,31 @@ func test_attack_update_asks_before_overwriting() -> void:
 	tool.update_button.pressed.emit()
 
 	assert_object(_find_dialog(tool)).is_not_null()
+
+
+# A rune, mod or family names its attacks by reference (#1313), so deleting one something uses
+# would leave every referrer a hard parse error (#596). The refusal comes BEFORE the confirm, and
+# nothing here presses Yes, so the case cannot delete content even if the refusal is gone.
+func test_attack_delete_refuses_a_carving_something_uses() -> void:
+	var tool: AttackEditorTool = overlay.get_node("%Attack Editor")
+	tool._on_transmutation_mode_selected()
+	var target := ""
+	var users: Array[String] = []
+	for i in tool.load_dropdown.item_count:
+		var entry := tool.load_dropdown.get_item_text(i)
+		users = ResourceCatalog.users_of((tool._items[entry] as Resource).resource_path)
+		if not users.is_empty():
+			target = entry
+			tool.load_dropdown.select(i)
+			break
+	if target == "":   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no library carving is referenced by anything, so there is nothing to refuse")
+		return
+	var path := (tool._items[target] as Resource).resource_path
+
+	tool.delete_button.pressed.emit()
+
+	assert_object(_find_dialog(tool)).override_failure_message(
+		"Delete offered to remove '%s' while %s still use it" % [target, ", ".join(users)]).is_null()
+	assert_str(tool.status_label.text).contains(users[0])
+	assert_bool(FileAccess.file_exists(path)).is_true()
