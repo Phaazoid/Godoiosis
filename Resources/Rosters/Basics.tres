@@ -22,9 +22,10 @@
 [ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="21_vt8pn"]
 [ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="22_6pjdb"]
 [ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="23_6emta"]
+[ext_resource type="Resource" uid="uid://bin62phny7rvg" path="res://Resources/Conduits/YellowDiamond.tres" id="23_vdcdv"]
 [ext_resource type="Resource" uid="uid://bxva1ht20h7en" path="res://Resources/RuneVariants/Wind Rune.tres" id="27_alpn7"]
 [ext_resource type="Resource" uid="uid://j6ier50surn8" path="res://Resources/RuneVariants/Water Rune.tres" id="28_t12a0"]
-[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="29_t64p3"]
+[ext_resource type="Resource" uid="uid://dk136huv8a4cx" path="res://Resources/RuneVariants/FreezeRune.tres" id="29_t64p3"]
 [ext_resource type="Resource" uid="uid://dq8xjurnrp551" path="res://Resources/RuneVariants/Heal2.tres" id="30_235a0"]
 [ext_resource type="Resource" uid="uid://g207p44clmyf" path="res://Resources/RuneVariants/Earth Rune.tres" id="31_7hm0t"]
 
@@ -76,5 +77,5 @@ state_saved = false
 [resource]
 script = ExtResource("15_refa6")
 entries = Array[ExtResource("2_pvic4")]([SubResource("Resource_de2c0"), SubResource("Resource_vdcdv"), SubResource("Resource_bse08"), SubResource("Resource_limnl"), SubResource("Resource_alpn7"), SubResource("Resource_t12a0"), SubResource("Resource_t64p3"), SubResource("Resource_235a0"), SubResource("Resource_7hm0t")])
-stash = Array[ExtResource("3_4c54j")]([ExtResource("16_glu08"), ExtResource("17_vg61c"), ExtResource("18_3muxw"), ExtResource("19_ea14v"), ExtResource("20_tof68"), ExtResource("21_vt8pn"), ExtResource("22_6pjdb"), ExtResource("23_6emta"), ExtResource("27_alpn7"), ExtResource("28_t12a0"), ExtResource("29_t64p3"), ExtResource("30_235a0"), ExtResource("31_7hm0t")])
+stash = Array[ExtResource("3_4c54j")]([ExtResource("16_glu08"), ExtResource("17_vg61c"), ExtResource("18_3muxw"), ExtResource("19_ea14v"), ExtResource("20_tof68"), ExtResource("21_vt8pn"), ExtResource("22_6pjdb"), ExtResource("23_6emta"), ExtResource("23_vdcdv"), ExtResource("27_alpn7"), ExtResource("28_t12a0"), ExtResource("29_t64p3"), ExtResource("30_235a0"), ExtResource("31_7hm0t")])
 offers_every_job = false

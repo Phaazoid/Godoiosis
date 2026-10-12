@@ -253,3 +253,18 @@ func test_an_alkahest_vial_says_it_answers_to_anything() -> void:
 func test_a_vial_that_attunes_to_nothing_says_nothing() -> void:
 	assert_str(_vial(Elemental.Element.NONE).mechanical_text()).override_failure_message(
 		"a vial with no element authored invented a readout for itself").is_empty()
+
+
+# A conduit (#1312) says what it holds, through the one readout every hover surface reads.
+func test_a_conduit_hovers_what_it_holds() -> void:
+	var held := Substance.new()
+	held.display_name = "Test Spark"
+	var conduit := ConduitData.new()
+	conduit.display_name = "Test Conduit"
+	conduit.substance = held
+
+	var says := conduit.mechanical_text()
+	assert_str(says).override_failure_message(
+		"the fixture's conduit describes itself as nothing, so this case cannot fail").is_not_empty()
+	assert_str(says).contains(held.display_name)
+	_assert_says(ItemText.hover(conduit), says, "a conduit hovers as its name alone")

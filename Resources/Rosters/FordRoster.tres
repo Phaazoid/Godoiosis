@@ -20,9 +20,10 @@
 [ext_resource type="Resource" uid="uid://bxva1ht20h7en" path="res://Resources/RuneVariants/Wind Rune.tres" id="18_jilnb"]
 [ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="19_4je2g"]
 [ext_resource type="Resource" uid="uid://g207p44clmyf" path="res://Resources/RuneVariants/Earth Rune.tres" id="20_mah4l"]
+[ext_resource type="Resource" uid="uid://bin62phny7rvg" path="res://Resources/Conduits/YellowDiamond.tres" id="20_qqvny"]
 [ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="21_kkfs0"]
 [ext_resource type="Resource" uid="uid://dq8xjurnrp551" path="res://Resources/RuneVariants/Heal2.tres" id="22_aki5w"]
-[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="23_pdw14"]
+[ext_resource type="Resource" uid="uid://dk136huv8a4cx" path="res://Resources/RuneVariants/FreezeRune.tres" id="23_pdw14"]
 
 [sub_resource type="Resource" id="Resource_u24sa"]
 script = ExtResource("2_qqvny")
@@ -57,5 +58,5 @@ state_saved = false
 [resource]
 script = ExtResource("11_qvlfp")
 entries = Array[ExtResource("2_qqvny")]([SubResource("Resource_u24sa"), SubResource("Resource_8ru5b"), SubResource("Resource_1ula4"), SubResource("Resource_jq8ag"), SubResource("Resource_egnjn"), SubResource("Resource_e7dfs")])
-stash = Array[ExtResource("3_4uk1i")]([ExtResource("12_xhy4c"), ExtResource("13_ef53g"), ExtResource("14_q5i0o"), ExtResource("15_wx2e7"), ExtResource("16_p3fa2"), ExtResource("17_pgbla"), ExtResource("18_jilnb"), ExtResource("19_4je2g"), ExtResource("20_mah4l"), ExtResource("21_kkfs0"), ExtResource("22_aki5w"), ExtResource("23_pdw14")])
+stash = Array[ExtResource("3_4uk1i")]([ExtResource("12_xhy4c"), ExtResource("13_ef53g"), ExtResource("14_q5i0o"), ExtResource("15_wx2e7"), ExtResource("16_p3fa2"), ExtResource("17_pgbla"), ExtResource("18_jilnb"), ExtResource("19_4je2g"), ExtResource("20_qqvny"), ExtResource("20_mah4l"), ExtResource("21_kkfs0"), ExtResource("22_aki5w"), ExtResource("23_pdw14")])
 offers_every_job = false

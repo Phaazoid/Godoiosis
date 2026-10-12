@@ -34,6 +34,7 @@ const SECTION_TITLES := {
 	ArmorCatalog.VARIANT_DIR: "Armour",
 	RuneCatalog.VARIANT_DIR: "Runes",
 	VialCatalog.VARIANT_DIR: "Vials",
+	ConduitCatalog.VARIANT_DIR: "Conduits",
 }
 const MOD_TITLE := "Weapon mods"
 const CHARACTER_TITLE := "Characters (BLD)"

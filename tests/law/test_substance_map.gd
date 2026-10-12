@@ -78,3 +78,15 @@ func test_every_vial_names_its_substance_or_says_why_not() -> void:
 		elif vial.substance != null and declared:
 			faults.append("%s now has a substance: take it off VIALS_WITHOUT_SUBSTANCE" % path)
 	assert_array(faults).is_empty()
+
+
+# A conduit (#1312) exists only to supply its substance, so one holding nothing is a file that does
+# nothing. Every one is authored with one; an empty catalog passes (rule 9).
+func test_every_conduit_names_its_substance() -> void:
+	var conduits := ConduitCatalog.get_variants()
+	var faults: Array[String] = []
+	for key: String in conduits:
+		var conduit := conduits[key] as ConduitData
+		if conduit.substance == null:
+			faults.append("%s holds no substance, so it supplies nothing" % conduit.resource_path)
+	assert_array(faults).is_empty()

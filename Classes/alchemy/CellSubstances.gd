@@ -38,7 +38,8 @@ static var _parts_memo: Dictionary = {}
 
 # The substance ids present for a cast from `cell`: the ambient baseline, then everything within
 # Materia.REACH -- the ground, its tile states, any gas, a lit prop, and the states of whoever stands
-# there -- then every compound's parts (and what flame gives off), recursively. Deduped, in that order.
+# there -- then the caster's own states and the conduits it carries, then every compound's parts (and
+# what flame gives off), recursively. Deduped, in that order.
 #
 # `caster` is counted wherever it is: `cell` IS where it casts from, which is often a cell it has only
 # queued a move to, so the live scan below would not find it there.
@@ -56,6 +57,11 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: Unit = n
 	if caster != null and is_instance_valid(caster):
 		for state: Elemental.State in caster.element_states:
 			_add(found, SubstanceMap.of_state(state))
+		# What the caster carries in a conduit (#1312) -- the carrier's alone, never a neighbour's.
+		for item: Item in caster.inventory:
+			var conduit := item as ConduitData
+			if conduit != null and conduit.substance != null:
+				_add(found, conduit.substance.id())
 	var i := 0
 	while i < found.size():
 		for part: String in _parts_of(found[i], catalog, shared):

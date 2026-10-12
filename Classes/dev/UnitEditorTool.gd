@@ -429,7 +429,8 @@ func _stage_unit_name(new_name: String) -> void:
 # Everything a unit can be given, by display name. NOT equippables only since #697 -- a vial is
 # CARRIED and never slotted, and leaving it out made the four authored ones unreachable from any
 # editor. The Equip/Wear checkbox beside each slot already reads `is EquippableData` and greys
-# itself, so a carried non-equippable needs nothing else here.
+# itself, so a carried non-equippable needs nothing else here. A conduit (#1312) is the second
+# carried kind.
 func _item_catalog() -> Dictionary:
 	var items := {}
 	var weapons := WeaponCatalog.get_editable()
@@ -444,6 +445,9 @@ func _item_catalog() -> Dictionary:
 	var vials := VialCatalog.get_editable()
 	for k in vials:
 		items[k] = vials[k]
+	var conduits := ConduitCatalog.get_editable()
+	for k in conduits:
+		items[k] = conduits[k]
 	return items
 
 func _add_inventory_section(into: VBoxContainer):

@@ -35,6 +35,7 @@ const SOURCES: Array[String] = [
 	ArmorCatalog.VARIANT_DIR,
 	RuneCatalog.VARIANT_DIR,
 	VialCatalog.VARIANT_DIR,
+	ConduitCatalog.VARIANT_DIR,
 ]
 
 # Every authored item, in no particular order. The unkeyed form, because the two callers key it

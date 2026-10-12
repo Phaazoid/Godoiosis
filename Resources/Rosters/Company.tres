@@ -23,12 +23,13 @@
 [ext_resource type="Resource" path="res://Resources/Vials/FireVial.tres" id="19_firevial"]
 [ext_resource type="Resource" path="res://Resources/Vials/WaterVial.tres" id="20_watervial"]
 [ext_resource type="Resource" path="res://Resources/Vials/EarthVial.tres" id="21_earthvial"]
+[ext_resource type="Resource" uid="uid://bin62phny7rvg" path="res://Resources/Conduits/YellowDiamond.tres" id="21_rmfhh"]
 [ext_resource type="Resource" path="res://Resources/Vials/AlkahestVial.tres" id="22_alkavial"]
 [ext_resource type="Resource" path="res://Resources/Vials/IchorVial.tres" id="23_ichorvial"]
 [ext_resource type="Resource" path="res://Resources/Vials/NitreVial.tres" id="24_nitrevial"]
 [ext_resource type="Resource" path="res://Resources/Vials/VitriolVial.tres" id="25_vitriolvial"]
 [ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="26_electric"]
-[ext_resource type="Resource" path="res://Resources/RuneVariants/woosh.tres" id="27_woosh"]
+[ext_resource type="Resource" uid="uid://dnaegm286jmsk" path="res://Resources/RuneVariants/woosh.tres" id="27_woosh"]
 [ext_resource type="Resource" uid="uid://oysqp74gyp72" path="res://Resources/Armor/AsbestosShroud.tres" id="30_lm1pw"]
 
 [sub_resource type="Resource" id="Resource_pigdt"]
@@ -84,5 +85,5 @@ state_saved = false
 [resource]
 script = ExtResource("1_roster")
 entries = Array[ExtResource("2_entry")]([SubResource("Resource_pigdt"), SubResource("Resource_rmfhh"), SubResource("Resource_lm1pw"), SubResource("Resource_jr831"), SubResource("Resource_iabcq"), SubResource("Resource_xmxdn"), SubResource("Resource_rpl22"), SubResource("Resource_2xny6"), SubResource("Resource_e0k1q"), SubResource("Resource_bnb6y")])
-stash = Array[ExtResource("13_equippable")]([ExtResource("14_bulwark"), ExtResource("15_mail"), ExtResource("16_ballast"), ExtResource("17_fire"), ExtResource("26_electric"), ExtResource("27_woosh"), ExtResource("18_gun"), ExtResource("19_firevial"), ExtResource("20_watervial"), ExtResource("21_earthvial"), ExtResource("22_alkavial"), ExtResource("23_ichorvial"), ExtResource("24_nitrevial"), ExtResource("25_vitriolvial"), ExtResource("30_lm1pw")])
+stash = Array[ExtResource("13_equippable")]([ExtResource("14_bulwark"), ExtResource("15_mail"), ExtResource("16_ballast"), ExtResource("17_fire"), ExtResource("26_electric"), ExtResource("21_rmfhh"), ExtResource("27_woosh"), ExtResource("18_gun"), ExtResource("19_firevial"), ExtResource("20_watervial"), ExtResource("21_earthvial"), ExtResource("22_alkavial"), ExtResource("23_ichorvial"), ExtResource("24_nitrevial"), ExtResource("25_vitriolvial"), ExtResource("30_lm1pw")])
 offers_every_job = false
