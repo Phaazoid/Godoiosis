@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-11. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -646,7 +646,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 | Fireball | `Break(F, A) + Push(F2)` | 2 | Fire 3, Air 1 | flame (FIRE) |
 | Freeze | `Break(A, W) + Bind(Q, W)` | 2 | Water 2, Air 1, Aether 1 | ice (ICE): frost from the air |
 | Pressure Spray | `Focus(W2) + Push(W2)` | 2 | Water 4 | water (WATER); tied to water: open water, or a wet unit, within reach |
-| Zap | `Extract(QF) + Push(QF)` | 2 | Aether 2, Fire 2 | lightning (SHOCK); needs a yellow diamond, so it fizzles on every board until #1312 brings one |
+| Zap | `Extract(QF) + Push(QF)` | 2 | Aether 2, Fire 2 | lightning (SHOCK); needs a carried yellow diamond, a conduit (#1312), so it fizzles for anyone without one |
 | Zap Cannon | `Break(F, A) + Bind(Q, F) + Push(QF)` | 3 | Fire 3, Aether 2, Air 1 | lightning (SHOCK); was FIRE + AIR |
 
 **Aura raised inside affinity** so every carrier keeps what it could channel before: Celest Fire 2→3; Isaac Water 1→2 (cast file, missions/2) and Fire 1→2 (Prolog, verticality's BFire, whose rune moved small→medium); Marco Water 1→3; Castle Assault's soldiers, Ashwright and Kilnmaster Fire 2→3; AI Dry Alchemist's armed Isaac Fire 1→3.
@@ -663,7 +663,9 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 
 **Built 2026-10-12: runes hold the library carving, not a copy ([#1313](https://github.com/Phaazoid/Godoiosis/issues/1313)).** Every rune once held its own copy of each carving, so the Phase 2 migration rewrote the library and left the copies behind. All 37 now reference the library file, and the library's numbers won: Fireball, Freeze and Zap Cannon deal fire, cold and shock damage, and the Earth Rune's Rock Throw is power 7. A library edit now reaches every rune and board; the rule itself is in [alchemy-kit.md](alchemy-kit.md) → *Runes*.
 
-**Still open in Phase 2:** Quicken/Still's round clock (#1311); conduit materia, the yellow diamond, lightning tiles and storm rods (#1312); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
+**Built 2026-10-12: conduits, the yellow diamond ([#1312](https://github.com/Phaazoid/Godoiosis/issues/1312)).** A carried conduit is never used up, and its substance is present for its carrier's casts, so Zap fires for whoever carries a Yellow Diamond. The lightning tiles moved to #696 (they are a kind of vein) and the storm rods to #1271 (they need storm strikes). The rule and where the diamonds are: [alchemy-kit.md](alchemy-kit.md) → *Conduits*.
+
+**Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
 **Still open:**
 
