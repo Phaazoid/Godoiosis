@@ -366,9 +366,10 @@ func is_reorderable() -> bool:
 func actor_block_reason() -> String:
 	return AttackAction.fire_block_reason(actor, fired_attack)
 
-# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick (a sprung
-# Spring, or Stab too if the family locks the whole weapon) can't be queued even bypassing the menu
-# (Law #3; the menu merely hides/disables what this refuses). Shared with OverwatchAction.
+# Verb lock (will-and-death.md limb model) + the source's own gate: ownership first (#1283), then
+# readiness (#73) — an unfireable pick (a sprung Spring, or Stab too if the family locks the whole
+# weapon) can't be queued even bypassing the menu (Law #3; the menu merely hides/disables what this
+# refuses). Shared with OverwatchAction, and re-asked of every stored one by SquadPlanValidator.
 static func fire_block_reason(shooter: Unit, attack: AttackData) -> String:
 	var locked := shooter.wield_block_reason()
 	if locked != "":

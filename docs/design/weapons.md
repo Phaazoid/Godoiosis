@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09; its follow-up (the strip catches its clicks, its arrows cycle) folded in 2026-10-09; Deep Alchemy Phase 2 folded in 2026-10-11.**
+**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09; its follow-up (the strip catches its clicks, its arrows cycle) folded in 2026-10-09; Deep Alchemy Phase 2 folded in 2026-10-11; #1283's ownership gate folded in 2026-10-14.**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -151,7 +151,13 @@ The dev's scratchpad ask (2026-09-12): *"cycle through your available weapons an
 - **Declared gaps:**
   - The forecast is 3D only, because the flat view has no predicted bars (#292).
   - The AI's version of the question (#117, the issue's fork 5) is not wired. `aim_options` and `preview_aim(source)` are that query.
-- **Found and filed, not fixed:** equipping another weapon in the dock with an attack already queued fires the old attack through the new weapon ([#1283](https://github.com/Phaazoid/Godoiosis/issues/1283)).
+- **An order fires only what the weapon in hand carries (FIXED, [#1283](https://github.com/Phaazoid/Godoiosis/issues/1283), 2026-10-14).**
+  - Found here: queue Slash with a sword, Equip a mace in the dock, and the pass played a Slash with the mace's numbers. The stamp kept the attack while all eight weapon reads asked the mace. Unequip and an already-armed watch had the same hole.
+  - **The fire gate asks ownership first.** `Unit.attack_block_reason` refuses an attack the source in hand does not carry (`EquippableData.carries`, a projection of `repertoire`; a weapon's also counts both forms of its main), and any attack from an empty hand. Every menu, AI and preview caller already asks about the source's own lists, so only a stamp that outlived its weapon is touched.
+  - **A queued order goes red and stays queued.** `SquadPlanValidator` re-asks `AttackAction.fire_block_reason` of every stored attack and watch, plan-armed beside the whiff clause, and Execute names the reason. Swapping back makes it green again.
+  - **An armed watch goes dormant** through `Watch.is_armed`'s own fire-gate read, the dry watch's shape (#810), and wakes when the weapon is back.
+  - **A second copy of the same family keeps the order:** both carry the one shared attack object, so it fires that copy's Slash with that copy's mods. That is an attack the new weapon really throws.
+  - **The dock's Equip is deliberately NOT refused.** `game._commit_aim` equips through the same `GearVerbs.perform(EQUIP)` door before it queues, while the old order is still queued, so a refusal there would break re-aiming from another weapon.
 
 ## Cross-cutting principles ([WORKSHOP])
 

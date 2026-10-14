@@ -89,6 +89,12 @@ func choice_attacks(_wielder: Unit) -> Array[AttackData]:
 func repertoire(_wielder: Unit) -> Array[AttackData]:
 	return []
 
+# Is this attack one this source throws at all (#1283)? Asked by Unit.attack_block_reason before the
+# economy, so a queued order or an armed watch stamped off ANOTHER weapon is refused rather than
+# fired through this one's numbers. A projection of the repertoire, never a second list.
+func carries(wielder: Unit, attack: AttackData) -> bool:
+	return repertoire(wielder).has(attack)
+
 # The watch view. Unit.overwatch_attacks is its only caller, so the menu's Overwatch rows and the
 # kit-slice gate reach it through one door and can never disagree. Reads the FULL repertoire, not
 # the affordable subset -- #166's law, an unusable row lists and greys with its own reason.

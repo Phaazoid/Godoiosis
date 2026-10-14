@@ -433,6 +433,11 @@ func is_main_form(wielder: Unit, attack: AttackData) -> bool:
 func default_attack(wielder: Unit) -> AttackData:
 	return effective_main(wielder)
 
+# The repertoire lists the main in its LIVE form only, so while a tank is hot the base form is
+# missing from it and is still this weapon's main (#1283).
+func carries(wielder: Unit, attack: AttackData) -> bool:
+	return is_main_form(wielder, attack) or super(wielder, attack)
+
 # ALWAYS main, ignoring any live active_attack pick (#72 ruling; overwatch-style alt-attack
 # countering is out of scope, #73). This is the divergence from RuneData.counter_attack.
 func counter_attack(wielder: Unit) -> AttackData:
