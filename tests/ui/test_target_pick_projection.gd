@@ -71,6 +71,18 @@ func _gust() -> TransmutationData:
 	return carving
 
 
+# The gust is a carving, so the caster holds it on a rune it can channel. A unit fires only what the
+# source in hand carries (#1283); this fixture used to fire it through the sword _spawn hands out.
+func _hold(caster: Unit, carving: TransmutationData) -> void:
+	caster.unit_instance.aura = { Elemental.Element.AIR: 4 }
+	var affinity: Array[Elemental.Element] = [Elemental.Element.AIR]
+	caster.unit_instance.affinity = affinity
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	rune.inscriptions.assign([carving])
+	caster.equipped_weapon = rune
+
+
 # Caster and rescuer share a squad (as they did in the report), so one resolve publishes the shove AND
 # validates the rescue. Returns the two of them with the body already downed, ejected, and shoved.
 func _board_with_a_shoved_body() -> Dictionary:
@@ -85,8 +97,10 @@ func _board_with_a_shoved_body() -> Dictionary:
 	assert_bool(body.is_downed()).override_failure_message("fixture failed to DOWN the body").is_true()
 	await game.order_executor.execute_orders(bystander)   # an empty pass: settles the ejection
 
+	var gust := _gust()
+	_hold(caster, gust)
 	var aim := AttackAction.create(caster, CASTER_CELL, null, BODY_CELL)
-	aim.fired_attack = _gust()
+	aim.fired_attack = gust
 	assert_bool(game.squad_manager.queue_action(caster.squad, aim)) \
 		.override_failure_message("fixture failed to queue the gust").is_true()
 	game.refresh_action_queue(caster.squad)   # the real path: resolve -> publish the shove -> validate

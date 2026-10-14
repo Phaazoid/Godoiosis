@@ -14,7 +14,8 @@ class_name SquadPlanValidator
 #
 # Actions carrying their own queueing requirements (move-before-main, verb locks) enforce those in
 # BaseAction.actor_block_reason at queue time. This is the separate, plan-CONTEXT layer: leader
-# range, destination conflicts, and adjacency that a re-planned move can silently break.
+# range, destination conflicts, and adjacency that a re-planned move can silently break. The one
+# queue-time gate it re-asks is the FIRE gate, which a dock swap can break after queueing (#1283).
 
 # `board` (#151): cohesion is path distance, so the validator reads terrain. Taken as a PARAMETER,
 # not looked up -- SquadManager.board_source resolves it fresh per validate, so a mid-battle terrain
@@ -43,6 +44,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 		_revalidate_unit_attacks(actions, plan)
 		_revalidate_rescue_targets(actions, board, plan)
 		_revalidate_watch_material(actions, board)
+		_revalidate_fire_gates(actions)
 
 	for action in actions:
 		if not action.is_valid:
@@ -203,6 +205,26 @@ static func _revalidate_watch_material(actions: Array[BaseAction], board: BoardC
 			continue
 		if CellSubstances.fizzle_reason(watch.fired_attack, watch.resolved_anchor, board, watch.actor) != "":
 			watch.add_validation_error("Fizzles where they'll be standing")
+
+# The gate that ADMITTED a stored aim or watch, asked again (#1283): the dock can swap the weapon in
+# hand after the order was queued, and the stamped attack then belongs to nothing being held. RED,
+# still queued, and green again when the weapon comes back -- the whiff clause's one-way validity.
+#
+# Plan-armed ONLY because every plan-armed validate runs before a pass (refresh_action_queue refuses
+# mid-pass, #361). The plan-less one a death runs mid-pass would re-ask readiness this pass has
+# already spent, and red an order that has just fired.
+static func _revalidate_fire_gates(actions: Array[BaseAction]) -> void:
+	for action in actions:
+		var stamped: AttackData
+		if action is AttackAction:
+			stamped = (action as AttackAction).fired_attack
+		elif action is OverwatchAction:
+			stamped = (action as OverwatchAction).fired_attack
+		else:
+			continue
+		var reason := AttackAction.fire_block_reason(action.actor, stamped)
+		if reason != "":
+			action.add_validation_error(reason)
 
 static func _plan_fizzled(plan: ResolvedPlan, aim: AttackAction) -> bool:
 	for resolved_attack in plan.attacks:

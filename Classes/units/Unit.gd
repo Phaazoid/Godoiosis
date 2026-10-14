@@ -1464,10 +1464,20 @@ func attack_source_can_counter() -> bool:
 
 # Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
 # can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers
-# aura (#166). An empty slot and a null attack both answer "" — see is_attack_fireable below.
+# aura (#166). A null attack answers "" (bare fists) — see is_attack_fireable below.
+#
+# Before the economy, OWNERSHIP (#1283): an attack the source in hand does not carry is refused, as
+# is any attack at all from an empty hand. Every menu, AI and preview caller already asks about the
+# source's own lists, so this bites only a STAMP that outlived its weapon -- a queued order or an
+# armed watch after the dock swapped what is held. Fired anyway, the resolver would read the new
+# weapon for every number. The wording of both refusals is a placeholder.
 func attack_block_reason(attack: AttackData) -> String:
-	if attack == null or equipped_weapon == null:
+	if attack == null:
 		return ""
+	if equipped_weapon == null:
+		return "%s has nothing in hand to fire %s with." % [get_unit_name(), attack.display_name]
+	if not equipped_weapon.carries(self, attack):
+		return "%s doesn't have %s." % [equipped_weapon.shown_name(), attack.display_name]
 	return equipped_weapon.attack_block_reason(self, attack)
 
 # What this attack does for this unit, for hover readouts. Same delegation, different question.
