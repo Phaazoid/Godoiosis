@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-16. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slice 2 the same day.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -705,9 +705,15 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **The queue row's number** names the air's share, one line per `ResolvedOutcome.air_steps` entry ("Rich vital air: +2", "Thin vapor: -1"). A heal shows its air lines too: a heal has no damage kind, and `damage_tip` used to return nothing for one.
 - **`SubstanceCatalog.name_of(id)`** is the one substance-name spelling these readouts, the Play API and the Scenario tab share.
 
+**Built 2026-10-16: slice 3, the reading during the battle.** A board with no roster never opens the pre-mission screen, and on every board the CONDITIONS region goes once Begin is pressed. Rulings by Phaazoid@ in a Claude session (2026-10-16), approving a plan:
+- **The corner HUD (`MissionStatusPanel`) lists whatever is off Normal**, below the objectives and FAIL IF and above a tutorial's instruction row, under `Atmosphere.GROUPS`' headings: "Vital air — 30%, +2". A group all at Normal draws no heading, and a Normal board draws nothing. That is "changes it, visibly"; the full reading stays on the pre-mission screen. Hovering a row shows the glossary's short text.
+- **Every board, not only the roster-less ones**, so the HUD never forks per board.
+- **Not the tile card**, which would put a board-wide fact on a per-tile card (the "check tile by tile" ruled out above); it is the home for a *local* reading once a gas moves an area. **Not the Glossary**, which has no board when the title screen opens it; it now says the corner lists what is off Normal.
+- **Weather stays out of the HUD**: the board draws it, and the pre-mission screen lists it only because that screen covers the board.
+- `Atmosphere.off_normal(reading)` is the one answer to which substances are off Normal (`is_normal` derives from it, and the bug report's air line uses it), and `percent_text`/`steps_text` the one wording both surfaces print. `MissionStatusPanel.air_rows` is kept out of `briefing()`, whose pre-mission reader has its own Conditions region. `game.refresh_mission_status`'s hide gate asks about the air, or a board with air but no objectives hides its own reading (#101's trap). The Scenario tab's air spins refresh the HUD as they move.
+
 **Next:**
-- **A board with no pre-mission phase** (no roster) shows its reading nowhere but the queue tooltip.
-- **After that:** weather nudging the reading (rain adds vapor), and atmosphere gases that raise or lower an area (the first gas that subtracts).
+- **Weather nudging the reading** (rain adds vapor), and atmosphere gases that raise or lower an area (the first gas that subtracts).
 - **Still open:** source amounts (`Push(3W2)`, "needs a real source", proposed 2026-10-14) and whether such a number counts toward aura demand (asked of c3potheds@, unanswered).
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.

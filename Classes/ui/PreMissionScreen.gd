@@ -513,9 +513,8 @@ func _refresh_conditions() -> void:
 	_weather_value.text = Weather.display_name(sm.current_weather)
 	for id: String in _air_rows:
 		var labels: Array = _air_rows[id]
-		(labels[1] as Label).text = "%d%%" % Atmosphere.percent_of(id, sm.current_atmosphere)
-		var steps := Atmosphere.steps_of(id, sm.current_atmosphere)
-		(labels[2] as Label).text = "%+d" % steps if steps != 0 else ""
+		(labels[1] as Label).text = Atmosphere.percent_text(id, sm.current_atmosphere)
+		(labels[2] as Label).text = Atmosphere.steps_text(id, sm.current_atmosphere)
 
 
 func _refresh_stash() -> void:

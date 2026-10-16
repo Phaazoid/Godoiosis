@@ -65,7 +65,25 @@ static func bonus_of(steps: Dictionary[String, int]) -> int:
 
 
 static func is_normal(reading: Dictionary) -> bool:
+	return off_normal(reading).is_empty()
+
+
+# The substances whose percent is not Normal, in SUBSTANCES order. The one answer to "what is off
+# Normal": the corner HUD lists these, and the bug report names them.
+static func off_normal(reading: Dictionary) -> Array[String]:
+	var out: Array[String] = []
 	for id: String in SUBSTANCES:
 		if percent_of(id, reading) != int(NORMAL[id]):
-			return false
-	return true
+			out.append(id)
+	return out
+
+
+# How a reading is worded, for every surface that shows one: "30%", and its steps from Normal as
+# "+2", or nothing at Normal's own step (Weather.display_name's shape).
+static func percent_text(id: String, reading: Dictionary) -> String:
+	return "%d%%" % percent_of(id, reading)
+
+
+static func steps_text(id: String, reading: Dictionary) -> String:
+	var steps := steps_of(id, reading)
+	return "%+d" % steps if steps != 0 else ""
