@@ -163,8 +163,7 @@ func _build_air_row() -> void:
 		line.add_child(heading)
 		for id: String in Atmosphere.GROUPS[group]:
 			var name_label := Label.new()
-			var substance := SubstanceCatalog.by_id(id)
-			name_label.text = substance.display_name if substance != null else id
+			name_label.text = SubstanceCatalog.name_of(id)
 			line.add_child(name_label)
 			var spin := SpinBox.new()
 			spin.min_value = 0

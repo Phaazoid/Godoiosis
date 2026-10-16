@@ -754,6 +754,64 @@ func test_the_damage_number_names_the_def_it_subtracted() -> void:
 	assert_str(row.readout.tooltip_text).contains("DEF %d subtracted" % outcome.mitigation)
 
 
+# --- ...and names what the board's air added (#1324) ---
+#
+# Through the real wire: the live store, game._board(), the resolve, the row. The recipe is a literal
+# string, never an authored carving (tests/README.md #9), and the substance it draws is asked of the
+# recipe rather than typed, so a change to what a Break needs never reds this.
+
+func test_the_damage_number_names_what_the_air_added() -> void:
+	var carving := TransmutationData.new()
+	carving.display_name = "Air Test"
+	carving.power = 5
+	carving.targets = EquippableData.TargetMode.BOTH
+	carving.recipe = "Break(F, A) + Push(F2)"
+	var drawn: Array[String] = carving.parsed().drawn_from(Atmosphere.SUBSTANCES)
+	assert_array(drawn).override_failure_message(
+		"the fixture recipe draws nothing from the air, so the air cannot move it").is_not_empty()
+	var id: String = drawn[0]
+
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var aura: Dictionary[Elemental.Element, int] = {}
+	var affinity: Array[Elemental.Element] = []
+	for e: Elemental.Element in carving.distinct_elements():
+		aura[e] = 6
+		affinity.append(e)
+	attacker.unit_instance.aura = aura
+	attacker.unit_instance.affinity = affinity
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(carving)).override_failure_message("fixture carving failed to inscribe").is_true()
+	attacker.equipped_weapon = rune
+
+	var reading: Dictionary[String, int] = {}
+	reading[id] = int(Atmosphere.NORMAL[id]) + 2 * int(Atmosphere.STEP[id])
+	game.scenario_manager.current_atmosphere = reading
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+
+	var row := _attack_row()
+	assert_object(row).override_failure_message("the carving was not queued").is_not_null()
+	assert_str(row.readout.tooltip_text).contains(
+		"Rich %s: +2" % SubstanceCatalog.name_of(id).to_lower())
+
+
+# A heal has no damage kind, and it draws on the air too, so its number names the air and nothing else.
+func test_a_hit_with_no_kind_still_names_the_air() -> void:
+	var outcome := ResolvedOutcome.new()
+	var id: String = Atmosphere.SUBSTANCES[0]
+	outcome.air_steps[id] = -1
+	var tip := ActionQueueRow.damage_tip(outcome, null)
+	assert_str(tip).contains("Thin %s: -1" % SubstanceCatalog.name_of(id).to_lower())
+	assert_str(tip).not_contains("damage")
+	outcome.air_steps.clear()
+	assert_str(ActionQueueRow.damage_tip(outcome, null)).override_failure_message(
+		"a hit with no kind and no air should say nothing").is_empty()
+
+
 # ------------------------------------------------------------------------------------------------
 #  8. A unit fills its slot (#1082)
 # ------------------------------------------------------------------------------------------------
