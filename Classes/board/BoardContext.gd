@@ -12,11 +12,14 @@ var squad_manager: SquadManager
 var terrain_states: TerrainStateManager
 var zones: ZoneManager
 var heights: BoardHeights
-# The atmosphere (#508). Null on a board with no gas, which reads as no gas anywhere.
+# The gas over the board (#508). Null on a board with no gas, which reads as no gas anywhere.
 var gas: GasField
 # The weather over the board (#1260). Set after construction by the builders that have one (game,
 # the Play API), so every other builder -- the test fixtures above all -- reads CLEAR.
 var weather: Weather.Kind = Weather.Kind.CLEAR
+# The air's reading (#1324, Atmosphere): substance id -> percent. Set beside the weather, so every
+# other builder reads a Normal board.
+var atmosphere: Dictionary[String, int] = {}
 # Terrain deposits not yet in the store, read as if they had landed (with_deposits). Empty on every
 # board the game builds.
 var deposits: Array[ResolvedCellEffect] = []
@@ -167,6 +170,7 @@ func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
 	var board := BoardContext.new(grid, units, squad_manager, terrain_states, zones, heights, gas, mission)
 	board.weather = weather
+	board.atmosphere = atmosphere
 	board.deposits = effects.duplicate()
 	return board
 

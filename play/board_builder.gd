@@ -104,6 +104,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 				units.append(child)
 		var context := BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field)
 		context.weather = weather_of(board)
+		context.atmosphere = atmosphere_of(board)
 		return context
 
 	board.merge({
@@ -125,6 +126,12 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 static func weather_of(board: Dictionary) -> Weather.Kind:
 	var scenario: ScenarioData = board.get("scenario")
 	return scenario.weather if scenario != null else Weather.Kind.CLEAR
+
+# And its air (#1324): the loaded scenario's reading, Normal before one is loaded.
+static func atmosphere_of(board: Dictionary) -> Dictionary[String, int]:
+	var scenario: ScenarioData = board.get("scenario")
+	var none: Dictionary[String, int] = {}
+	return scenario.atmosphere if scenario != null else none
 
 static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 	for x in range(rect.position.x, rect.end.x):

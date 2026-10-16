@@ -156,8 +156,7 @@ func test_an_unchannelable_carving_cannot_be_QUEUED() -> void:
 
 
 # A recipe that makes its own fire out of the ambient air, so the fizzle gate (Deep Alchemy Phase 2) is
-# not what this case measures: Push(F) alone fizzles away from a fire, free heat being no ambient
-# substance.
+# not what this case measures.
 func test_a_channelable_carving_still_queues() -> void:
 	var alch: Unit = _alchemist({ FIRE: 1, Elemental.Element.AIR: 1 })
 	var affordable: TransmutationData = _carving("Break(F, A)", "Ember")

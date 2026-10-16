@@ -65,6 +65,11 @@ class_name ScenarioData
 @export var wind: Wind.Kind = Wind.Kind.CALM
 @export var wind_direction: Wind.Direction = Wind.Direction.EAST
 
+# What the air over this board holds (#1324, Atmosphere): substance id -> percent, a missing key
+# reading Normal, so empty is a Normal board. A rule input like the weather: a carving drawing a
+# substance from the air hits a step harder or softer for it.
+@export var atmosphere: Dictionary[String, int] = {}
+
 # Which Roster this mission offers (#735) -- who the player may bring into it, and the loose gear
 # they may bring. A NAME resolved against RosterCatalog.ROSTER_DIR, never a Roster reference, for
 # the two reasons stated for look_preset directly above; the filename IS a roster's identity, so

@@ -164,11 +164,17 @@ func _board() -> BoardContext:
 	var board := BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission)
 	board.weather = _weather()
+	board.atmosphere = _atmosphere()
 	return board
 
 # The weather over this board (#1260): the scenario's, as the game's ScenarioManager.current_weather is.
 func _weather() -> Weather.Kind:
 	return scenario_data.weather if scenario_data != null else Weather.Kind.CLEAR
+
+# And its air (#1324), the same way: Normal before a scenario is loaded.
+func _atmosphere() -> Dictionary[String, int]:
+	var none: Dictionary[String, int] = {}
+	return scenario_data.atmosphere if scenario_data != null else none
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -1319,6 +1325,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("insulated")
 	if r.burned_vial != null:
 		events.append("burns %s" % r.burned_vial.display_name)
+	for id: String in r.air_steps:
+		events.append("air: %s %+d" % [_substance_name(id), r.air_steps[id]])
 	if r.charge_spent:
 		events.append("spends a charge")
 	if r.severed_limb != -1:
@@ -1581,6 +1589,11 @@ const RUNG_WORDS := {
 # A limb in the words the inspect panel's chips use (UnitInstance.LIMB_FULL), lower-cased for a line.
 static func _limb_name(slot: int) -> String:
 	return UnitInstance.LIMB_FULL[slot].to_lower()
+
+# A substance by its catalog name, lower-cased for a line ("vital air").
+static func _substance_name(id: String) -> String:
+	var substance := SubstanceCatalog.by_id(id)
+	return substance.display_name.to_lower() if substance != null and substance.display_name != "" else id
 
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 	return " (%s)" % RUNG_WORDS[lethality] if RUNG_WORDS.has(lethality) else ""

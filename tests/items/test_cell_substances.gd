@@ -83,21 +83,21 @@ func _fizzle(recipe: String, board: BoardContext, caster: Unit = null) -> String
 
 # --- the baseline ---------------------------------------------------------------------------
 
-func test_the_ambient_four_are_present_everywhere() -> void:
+func test_the_ambient_air_is_present_everywhere() -> void:
 	var present := _present(_board({}))
-	for id: String in CellSubstances.AMBIENT:
+	for id: String in Atmosphere.SUBSTANCES:
 		assert_bool(present.has(id)).override_failure_message("ambient '%s' missing" % id).is_true()
 
 
 func test_a_null_board_still_has_the_ambient_air() -> void:
 	assert_array(CellSubstances.available_near(HERE, null, null, _catalog())) \
-		.contains_exactly(CellSubstances.AMBIENT)
+		.contains_exactly(Atmosphere.SUBSTANCES)
 
 
 # The ids this file names are real substances -- a renamed file would otherwise leave a silent hole.
 func test_every_id_cell_substances_names_is_a_real_substance() -> void:
 	var real := SubstanceCatalog.get_all()
-	for id: String in CellSubstances.AMBIENT + CellSubstances.LENDS_NOTHING:
+	for id: String in Atmosphere.SUBSTANCES + CellSubstances.LENDS_NOTHING:
 		assert_bool(real.has(id)).override_failure_message("'%s' names no substance file" % id).is_true()
 
 
@@ -137,7 +137,7 @@ func test_plant_matter_lends_no_water_and_grass_stands_on_dirt() -> void:
 
 func test_a_hole_offers_nothing() -> void:
 	var present := _present(_board({ HERE: Terrain.Kind.VOID, NEXT_DOOR: Terrain.Kind.VOID }))
-	assert_array(present).contains_exactly(CellSubstances.AMBIENT)
+	assert_array(present).contains_exactly(Atmosphere.SUBSTANCES)
 
 
 # Ice is a floor, not a well: frozen water offers its ice and not its water.
@@ -163,19 +163,16 @@ func test_a_lit_prop_offers_flame() -> void:
 	assert_bool(_present(board).has("flame")).is_true()
 
 
-# Flame decays to heat (the Melt ruling), so fire beside the caster offers free heat as well.
-func test_a_burning_cell_and_a_lit_prop_give_off_heat() -> void:
-	var burning := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
-	assert_bool(_present(burning).has("atom_fire")).is_true()
-	var lit := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, {}, { NEXT_DOOR: true })
-	assert_bool(_present(lit).has("atom_fire")).is_true()
-	assert_bool(_present(_board({ NEXT_DOOR: Terrain.Kind.ROCK })).has("atom_fire")).override_failure_message("heat is present with no fire anywhere near").is_false()
-
-
-func test_a_push_of_heat_holds_by_a_fire_and_fizzles_away_from_one() -> void:
+# Heat is in the air everywhere (#1324, Phaazoid@ 2026-10-16), so a lone Push(F) holds with no fire
+# near; flame is not, so a tied fire basic still needs a real fire.
+func test_heat_is_in_the_air_and_flame_is_not() -> void:
+	var bare := _board({ NEXT_DOOR: Terrain.Kind.ROCK })
+	assert_bool(_present(bare).has("atom_fire")).override_failure_message(
+			"heat is missing with no fire near").is_true()
+	assert_str(_fizzle("Push(F)", bare)).is_empty()
+	assert_str(_fizzle("Push(F2)", bare)).is_not_empty()
 	var by_fire := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
-	assert_str(_fizzle("Push(F)", by_fire)).is_empty()
-	assert_str(_fizzle("Push(F)", _board({ NEXT_DOOR: Terrain.Kind.ROCK }))).is_not_empty()
+	assert_str(_fizzle("Push(F2)", by_fire)).is_empty()
 
 
 func test_a_gas_on_a_neighbour_is_present() -> void:
