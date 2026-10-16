@@ -973,11 +973,18 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# origin_cell the geometry uses: a shove earlier in this pass moves the BODY, and a body
 		# knocked off the bank casts unempowered. The aim it declared is what stays frozen.
 		var terrain := Materia.empowered_at(projected_position(attacker, hypo), board)
+		# The board's air (#1324): one step per substance the recipe draws from it, the same on every
+		# cell, so no position enters. Stamped for the readouts, and passed to every base_damage below
+		# so the vial's differential compares like with like.
+		var air_steps := Atmosphere.steps_for(carving.parsed(), board.atmosphere if board != null else {})
+		var air := Atmosphere.bonus_of(air_steps)
+		if outcome != null and not carving.deals_no_damage:
+			outcome.air_steps = air_steps
 		var charge := attacker.attunement_elements()
 		# A PAYLOAD burns no vial (#1058): it was never fired, so it spends nothing. Terrain still
 		# empowers it, being where the thrower stands rather than something they would spend.
 		if charge.is_empty() or action.dropped_by != null:
-			return carving.base_damage(attacker, terrain)
+			return carving.base_damage(attacker, terrain, air)
 
 		# A burned vial (#697) is NOT positional, so it unions in HERE rather than inside Materia,
 		# beside the terrain answer -- the spot Materia.sources_at's header reserved for it.
@@ -994,8 +1001,8 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# Recorded on the outcome rather than re-derived downstream (brace_bonus's precedent): the
 		# queue row names the vial from here and AttackAction.execute spends it from here, so the
 		# preview and the spend cannot disagree (Law #2).
-		var with_charge := carving.base_damage(attacker, empowered)
-		if outcome != null and with_charge != carving.base_damage(attacker, terrain):
+		var with_charge := carving.base_damage(attacker, empowered, air)
+		if outcome != null and with_charge != carving.base_damage(attacker, terrain, air):
 			outcome.burned_vial = attacker.attunement
 		return with_charge
 	if action.fired_attack is WeaponAttackData:

@@ -10,6 +10,7 @@ class_name CarvingRecipe
 #   demand    -- atoms summed across every argument (what the alchemist's aura pays)
 #   delivered -- what the last delivering verb leaves at the target
 #   fizzle    -- the first argument a cast is missing, given what is present (fizzle_reason)
+#   drawn     -- which ambient substances it takes from the air (drawn_from), what Atmosphere scales
 # Pure on its catalog (id -> Substance), passed in like AlchemyFormula's, so a test can hand it one.
 
 class Step:
@@ -196,6 +197,22 @@ func fizzle_reason(available: Array[String], catalog: Dictionary = {}) -> String
 			if not present.has(id):
 				present.append(id)
 	return ""
+
+
+# Which of `ambient` the recipe takes from the AIR: every need that is ambient and that no earlier
+# step made, once each. `Break(F, A) + Bind(Q, F)` draws vital air and aether; its heat comes from
+# its own Break. Fizzle_reason's walk, asking where a need came from rather than whether it is there.
+func drawn_from(ambient: Array[String]) -> Array[String]:
+	var made: Array[String] = []
+	var drawn: Array[String] = []
+	for step: Step in steps:
+		for id: String in step.needs:
+			if ambient.has(id) and not made.has(id) and not drawn.has(id):
+				drawn.append(id)
+		for id: String in step.makes:
+			if not made.has(id):
+				made.append(id)
+	return drawn
 
 
 static func _named(id: String, catalog: Dictionary) -> String:

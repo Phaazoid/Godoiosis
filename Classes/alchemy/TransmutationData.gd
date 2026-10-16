@@ -79,7 +79,10 @@ func damage_elements() -> Array[Elemental.Element]:
 # and the wildcard pools all read wielder.get_element_aura directly, and RuneData.can_equip_reason
 # derives from channel_block_reason — so leaving that accessor alone is what keeps empowerment out
 # of all three at once. Never make get_element_aura position-aware.
-func base_damage(wielder: Unit, empowered: Array[Elemental.Element] = []) -> int:
+#
+# `air` is the board's atmosphere bonus (#1324, Atmosphere.bonus_of), passed for empowered's reason.
+# It is added after the damageless guard, so a utility carving stays at 0, and floored there.
+func base_damage(wielder: Unit, empowered: Array[Elemental.Element] = [], air := 0) -> int:
 	if deals_no_damage:
 		return 0
 	var scaling := 0
@@ -87,7 +90,7 @@ func base_damage(wielder: Unit, empowered: Array[Elemental.Element] = []) -> int
 		scaling += wielder.get_element_aura(e)
 		if empowered.has(e):
 			scaling += 1
-	return power + scaling
+	return maxi(0, power + scaling + air)
 
 # --- Channeling: anchor + wildcards (dev, 2026-08-10 — REPLACES the 2026-07-04 temper/leeway
 # model; repeal record in transmutation-model-proposal.md -> Temper & channeling) ---

@@ -296,6 +296,27 @@ func test_the_headless_board_source_sees_the_loaded_weather() -> void:
 	var board: BoardContext = dst.squad_manager.board_source.call()
 	assert_int(board.weather).is_equal(made[1])
 
+# The air (#1324) rides both headless boards the way the weather does: the session's own, which the
+# preview resolves through, and the builder's board_source, which the AI reads.
+func test_both_headless_boards_see_the_loaded_air() -> void:
+	var src: Dictionary = BoardBuilder.build(self, "AirSrc")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 4, 4))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	var id: String = Atmosphere.SUBSTANCES[0]
+	var percent := int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+	scenario.atmosphere[id] = percent
+	var dst: Dictionary = BoardBuilder.build(self, "AirDst")
+	auto_free(dst.root)
+	await BoardBuilder.apply_scenario(dst, scenario)
+	var sess := PlaySession.new(dst)
+	assert_int(Atmosphere.percent_of(id, sess._board().atmosphere)).override_failure_message(
+			"the session's board dropped the loaded air").is_equal(percent)
+	var source_board: BoardContext = dst.squad_manager.board_source.call()
+	assert_int(Atmosphere.percent_of(id, source_board.atmosphere)).override_failure_message(
+			"the builder's board_source dropped the loaded air").is_equal(percent)
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:

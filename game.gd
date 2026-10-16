@@ -2405,6 +2405,7 @@ func _board() -> BoardContext:
 	var board := BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission_controller.mission if mission_controller != null else null)
 	board.weather = scenario_manager.current_weather   # #1260
+	board.atmosphere = scenario_manager.current_atmosphere   # #1324
 	return board
 
 func _all_units() -> Array[Unit]:

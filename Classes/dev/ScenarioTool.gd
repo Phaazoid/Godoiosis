@@ -2,9 +2,9 @@ extends VBoxContainer
 class_name ScenarioTool
 
 # The Properties page (#382): what this mission DECLARES -- objectives (#96), what loses it (#101),
-# the look preset it wears (#253), the weather over it (#1260), and where its camera opens (#234). The
-# file ops that headed this tab live on ScenarioHeader now (the persistent header over the whole
-# window), and the board's occupants (AI toggles, squad rows) live on SquadsAiTool -- what a mission
+# the look preset it wears (#253), the weather and air over it (#1260, #1324), and where its camera
+# opens (#234). The file ops that headed this tab live on ScenarioHeader now (the persistent header
+# over the whole window), and the board's occupants (AI toggles, squad rows) live on SquadsAiTool -- what a mission
 # requires versus who is standing on it, split at the seam.
 #
 # Every edit here is scenario content, so each one marks the header modified. The one exception is
@@ -26,6 +26,8 @@ var _look_row: HBoxContainer
 var _roster_row: HBoxContainer
 var _camera_row: HBoxContainer
 var _in_demo_box: CheckBox
+var _air_row: VBoxContainer
+var _air_spins := {}   # substance id -> SpinBox
 var _report_box: VBoxContainer
 
 const NO_LOOK_LABEL := "(none - default)"
@@ -49,6 +51,7 @@ func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -
 	_build_objectives()
 	_build_lose_conditions()
 	_build_check_section()
+	_build_air_row()       # before the look row, which pins it directly beneath itself
 	refresh_look_row()
 	refresh_roster_row()   # between the two: each row pins itself to index 0, so this is the order
 	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
@@ -82,6 +85,8 @@ func refresh_look_row() -> void:
 	_add_weather_picker(_look_row)
 	_add_wind_pickers(_look_row)
 	move_child(_look_row, 0)
+	if _air_row != null:
+		move_child(_air_row, 1)
 
 
 # The weather over this board (#1260), riding the look row for the roster cap's reason: the two are
@@ -143,6 +148,71 @@ func _on_weather_picked(kind: Weather.Kind) -> void:
 	_mark()
 	# The open plan's END OF TURN rows read the weather, so re-resolve it now rather than leave the
 	# forecast saying what the last weather would have done.
+	game.refresh_action_queue(game.squad_manager.active_squad)
+
+
+# The air over this board (#1324): one percentage per ambient substance, under the weather it sits
+# beside. Built once and refreshed in place, the in-demo box's shape, since Atmosphere.SUBSTANCES is
+# a const and there is nothing to re-enumerate on a load.
+func _build_air_row() -> void:
+	_air_row = VBoxContainer.new()
+	for group: String in Atmosphere.GROUPS:
+		var line := HBoxContainer.new()
+		var heading := Label.new()
+		heading.text = group
+		line.add_child(heading)
+		for id: String in Atmosphere.GROUPS[group]:
+			var name_label := Label.new()
+			var substance := SubstanceCatalog.by_id(id)
+			name_label.text = substance.display_name if substance != null else id
+			line.add_child(name_label)
+			var spin := SpinBox.new()
+			spin.min_value = 0
+			spin.max_value = 100
+			spin.suffix = "%"
+			spin.value = Atmosphere.percent_of(id, scenario_manager.current_atmosphere)
+			spin.value_changed.connect(func(value: float) -> void: _on_air_changed(id, int(value)))
+			line.add_child(spin)
+			_air_spins[id] = spin
+		_air_row.add_child(line)
+	var normal := Button.new()
+	normal.text = "Normal air"
+	normal.pressed.connect(_on_air_normal_pressed)
+	(_air_row.get_child(_air_row.get_child_count() - 1) as HBoxContainer).add_child(normal)
+	DevWidgets.apply_tooltip(_air_row, DevWidgets.wrap_tooltip(
+		"What the air over this board holds, for the whole battle. A carving that draws a substance "
+		+ "from the air hits one harder for each step above Normal and one softer below: Fireball "
+		+ "breaks vital air, Freeze takes vapor and aether, Heal binds aether. A carving fed by a "
+		+ "real source, like Pressure Spray by a river, ignores it. A thin reading never makes a "
+		+ "carving fizzle. Normal and the step size per substance are Atmosphere.NORMAL and STEP. "
+		+ "Saved with the board."))
+	add_child(_air_row)
+
+
+func _refresh_air_row() -> void:
+	for id: String in _air_spins:
+		(_air_spins[id] as SpinBox).set_value_no_signal(
+				Atmosphere.percent_of(id, scenario_manager.current_atmosphere))
+
+
+# A substance at Normal is erased rather than stored, so the board follows a retuned Normal (#648).
+func _on_air_changed(id: String, percent: int) -> void:
+	if percent == int(Atmosphere.NORMAL[id]):
+		scenario_manager.current_atmosphere.erase(id)
+	else:
+		scenario_manager.current_atmosphere[id] = percent
+	_air_edited()
+
+
+func _on_air_normal_pressed() -> void:
+	scenario_manager.current_atmosphere.clear()
+	_refresh_air_row()
+	_air_edited()
+
+
+# The open plan's carving rows read the air, so re-resolve it, the weather picker's reason.
+func _air_edited() -> void:
+	_mark()
 	game.refresh_action_queue(game.squad_manager.active_squad)
 
 
@@ -316,6 +386,7 @@ func refresh_on_show() -> void:
 	refresh_objectives()
 	refresh_lose_conditions()   # ...and what loses it (#101)
 	refresh_look_row()   # a board load changes which preset this board wears
+	_refresh_air_row()   # ...and the air over it (#1324)
 	refresh_roster_row()   # ...and who it offers (#735)
 	refresh_camera_row()   # ...and where it opens (#234)
 	_refresh_in_demo_box()   # ...and whether a shipped build lists it (#860)

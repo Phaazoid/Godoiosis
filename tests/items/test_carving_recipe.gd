@@ -143,7 +143,7 @@ func _walk(recipe: String, available: Array[String]) -> String:
 
 func _ambient() -> Array[String]:
 	var ids: Array[String] = []
-	ids.assign(CellSubstances.AMBIENT)
+	ids.assign(Atmosphere.SUBSTANCES)
 	return ids
 
 

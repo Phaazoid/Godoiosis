@@ -83,6 +83,10 @@ var current_weather: Weather.Kind = Weather.Kind.CLEAR
 var current_wind: Wind.Kind = Wind.Kind.CALM
 var current_wind_direction: Wind.Direction = Wind.Direction.EAST
 
+# The air over the CURRENT board (#1324): the weather's shape, a rule input read through game._board().
+# A copy on both doors, so editing it never writes into the cached ScenarioData it came from.
+var current_atmosphere: Dictionary[String, int] = {}
+
 # Where the CURRENT board opens the camera (#234); null = derive from the player's units. Same
 # store/writer shape as the look right above -- apply_scenario sets it, clear_board zeroes it, the
 # dev Scenario tab captures into it, capture_scenario reads it back out.
@@ -247,6 +251,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.weather = current_weather                       # #1260: and the weather over it
 	scenario.wind = current_wind                             # #1286: and the wind, a look only
 	scenario.wind_direction = current_wind_direction
+	scenario.atmosphere = current_atmosphere.duplicate()     # #1324: and the air it holds
 	scenario.roster = current_roster                         # #735: who it offers, if anyone
 	scenario.deployment_cap = current_deployment_cap         # #736: and how many of them
 	scenario.offers_pre_mission = current_offers_pre_mission   # #46: and whether they get a screen
@@ -343,6 +348,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	current_weather = scenario.weather            # #1260: a rule input, read through game._board()
 	current_wind = scenario.wind                  # #1286: a look only
 	current_wind_direction = scenario.wind_direction
+	current_atmosphere = scenario.atmosphere.duplicate()   # #1324: a rule input, like the weather
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded
 	current_roster = scenario.roster              # #735; the mission-start doors draw from it (#737)
 	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
@@ -461,6 +467,8 @@ func clear_board():
 	# And the wind (#1286), for the look's reason: a sandbox must not blow the last mission's gale.
 	current_wind = Wind.Kind.CALM
 	current_wind_direction = Wind.Direction.EAST
+	# And the air (#1324), for the weather's reason: a sandbox breathes Normal air.
+	current_atmosphere = {}
 	# And the camera start (#234): a sandbox spawn must not open on the last mission's authored shot.
 	current_camera_start = null
 	# And the roster (#735), for exactly the look preset's reason and with a sharper consequence:

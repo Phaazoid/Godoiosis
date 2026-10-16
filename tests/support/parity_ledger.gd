@@ -311,6 +311,7 @@ static func outcome_fields() -> Dictionary:
 			"knockback_landing_index": {"play": never(ANIMATION), "ai": never(ANIMATION)},
 			"knockback_held": {"play": covered(SESSION, ".knockback_held"), "ai": never(NOT_SCORED)},
 			"burned_vial": {"play": covered(SESSION, ".burned_vial"), "ai": never(NOT_SCORED)},
+			"air_steps": {"play": covered(SESSION, ".air_steps"), "ai": never(IN_DAMAGE)},
 			"charge_spent": {"play": covered(SESSION, ".charge_spent"), "ai": never(NOT_SCORED)},
 			"cancels_watch": {"play": never("the game shows it as the watch going away, which the unit line mirrors"),
 					"ai": never(NOT_SCORED)},

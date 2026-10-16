@@ -47,6 +47,9 @@ var knockback_held: int = 0
 # spent. Recorded rather than re-derived so the queue row can name it and execute() can spend it
 # from the same answer (brace_bonus's reason, one stage over).
 var burned_vial: VialData = null
+# What the board's air added to this carving's base (#1324): substance id -> steps, non-zero only.
+# Already in base_damage; recorded so a readout can name it (Atmosphere.steps_for).
+var air_steps: Dictionary[String, int] = {}
 # This hit SPENT a supercharge out of the weapon's tank (#97). burned_vial's twin one economy over:
 # the resolver stamps it when the empowered form is what actually fired, and both execution twins
 # and the queue row read THIS rather than re-asking the live tank -- which is what stops a counter
