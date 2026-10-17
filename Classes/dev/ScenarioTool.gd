@@ -209,10 +209,12 @@ func _on_air_normal_pressed() -> void:
 	_air_edited()
 
 
-# The open plan's carving rows read the air, so re-resolve it, the weather picker's reason.
+# The open plan's carving rows read the air, so re-resolve it, the weather picker's reason; and the
+# corner HUD lists what is off Normal, so redraw that too.
 func _air_edited() -> void:
 	_mark()
 	game.refresh_action_queue(game.squad_manager.active_squad)
+	game.refresh_mission_status()
 
 
 # Which roster this board offers (#735). The look row's shape exactly, and for the same reason:

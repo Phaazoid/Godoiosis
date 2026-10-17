@@ -6,7 +6,7 @@ class_name Glossary
 # the tooltips and the Glossary screen can never drift apart. Read by GlossaryScreen (the page),
 # MainActionMenu (menu-row hover text via ACTION_DATA "term" keys), info_panel (stat rows) and
 # StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode),
-# and PreMissionScreen (the air's reading under Conditions).
+# and PreMissionScreen and MissionStatusPanel (the air's reading, before and during the battle).
 #
 # Two content rules, both Law #4:
 #   - Numbers are INTERPOLATED from the constants that rule them (DOWNED_TURNS, COVER_DEF, ...),
@@ -481,7 +481,8 @@ static func _build_entries() -> Dictionary:
 		"short": "What the air over this map holds, the same everywhere for the whole battle. A "
 			+ "carving that draws a substance from the air hits 1 harder for each step above Normal "
 			+ "and 1 softer for each step below. Thin air never makes it fizzle.",
-		"long": "Every map has its own air, and the pre-mission screen shows it under Conditions. A "
+		"long": "Every map has its own air. The pre-mission screen shows it under Conditions, and "
+			+ "during the battle the corner panel lists whatever is off Normal. A "
 			+ "carving draws from the air whatever its recipe needs and did not make itself. For "
 			+ "each step a substance sits above Normal, a carving that draws it hits 1 harder, or "
 			+ "heals 1 more. For each step below, it hits 1 softer, down to nothing. A carving fed "

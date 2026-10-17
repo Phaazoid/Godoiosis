@@ -277,11 +277,8 @@ func _weather_note() -> String:
 		note += ", %s toward %s" % [Wind.display_name(wind), Wind.direction_name(direction)]
 	var air: Dictionary[String, int] = game.scenario_manager.current_atmosphere
 	var off: Array[String] = []
-	for id: String in Atmosphere.SUBSTANCES:
-		if Atmosphere.percent_of(id, air) != int(Atmosphere.NORMAL[id]):
-			var substance := SubstanceCatalog.by_id(id)
-			off.append("%s %d%%" % [substance.display_name if substance != null else id,
-					Atmosphere.percent_of(id, air)])
+	for id: String in Atmosphere.off_normal(air):
+		off.append("%s %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, air)])
 	if not off.is_empty():
 		note += "; air: " + ", ".join(off)
 	return note

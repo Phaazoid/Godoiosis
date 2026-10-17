@@ -353,3 +353,129 @@ func test_a_clock_with_no_limit_says_so_rather_than_disappearing() -> void:
 
 	assert_array(_row_texts()).contains(["Round Limit — not set"])
 	assert_bool(_row_color("Round Limit — not set").is_equal_approx(MissionStatusPanel.UNWINNABLE_COLOR)).is_true()
+
+
+# ==============================================================================
+#  The air's reading (#1324): what is off Normal, below the briefing
+# ==============================================================================
+# Every expectation is derived from Atmosphere.NORMAL / STEP / GROUPS, so a retune never reds this
+# (tests/README.md rule 8), and the air arrives through the real load path or the real Scenario-tab
+# spin, never by writing the store and refreshing by hand.
+
+# The heading a substance is listed under, off Atmosphere.GROUPS.
+func _group_of(id: String) -> String:
+	for group: String in Atmosphere.GROUPS:
+		if (Atmosphere.GROUPS[group] as Array).has(id):
+			return group
+	fail("'%s' is in no Atmosphere group" % id)
+	return ""
+
+
+# This board, saved and loaded back with `reading` authored as its air.
+func _load_with_air(reading: Dictionary[String, int]) -> void:
+	var snapshot: ScenarioData = game.scenario_manager.capture_scenario("air")
+	snapshot.atmosphere = reading
+	game.scenario_manager.apply_scenario(snapshot)
+	await await_idle_frame()
+
+
+func _air_row(id: String) -> Label:
+	for label in _row_labels():
+		if label.text.begins_with(SubstanceCatalog.name_of(id) + " — "):
+			return label
+	fail("No air row for '%s' -- rows are %s" % [id, _row_texts()])
+	return null
+
+
+func test_a_normal_board_draws_no_air_rows() -> void:
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	_objectives([MissionRules.Objective.ROUT])
+	var rows := _row_texts()
+	for group: String in Atmosphere.GROUPS:
+		assert_array(rows).override_failure_message("a Normal board drew the %s heading: %s" % [group, rows]) \
+			.not_contains([group.to_upper()])
+
+
+# The gate in game.refresh_mission_status: a board declaring no objectives still has its air to show.
+# Its own group's heading and nothing else -- a group all at Normal draws no heading.
+func test_off_normal_air_shows_without_objectives_under_its_own_heading() -> void:
+	var id: String = Atmosphere.SUBSTANCES[0]
+	var percent := int(Atmosphere.NORMAL[id]) + 2 * int(Atmosphere.STEP[id])
+	await _load_with_air({id: percent})
+
+	assert_bool(panel._panel.visible) \
+		.override_failure_message("a board whose only news is its air hid the panel -- the #101 gate") \
+		.is_true()
+	assert_array(_row_texts()).contains_exactly([_group_of(id).to_upper(),
+			"%s — %d%%, +2" % [SubstanceCatalog.name_of(id), percent]])
+
+
+# Off Normal is any percent but Normal's own: one short of a step still shows, with no step.
+func test_air_off_normal_by_less_than_a_step_shows_its_percent_alone() -> void:
+	var id := ""
+	for candidate: String in Atmosphere.SUBSTANCES:
+		if int(Atmosphere.STEP[candidate]) > 1:
+			id = candidate
+			break
+	if id == "":
+		return   # every step is 1, so every off-Normal percent is a whole step
+	var percent := int(Atmosphere.NORMAL[id]) + 1
+	await _load_with_air({id: percent})
+	assert_array(_row_texts()).contains(["%s — %d%%" % [SubstanceCatalog.name_of(id), percent]])
+
+
+func test_the_air_reads_after_the_objectives() -> void:
+	var id: String = Atmosphere.SUBSTANCES[0]
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	_objectives([MissionRules.Objective.ROUT])
+	await _load_with_air({id: int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])})
+	var rows := _row_texts()
+	assert_int(rows.find("OBJECTIVES")).is_equal(0)
+	assert_int(rows.find(_group_of(id).to_upper())).is_greater(rows.find("OBJECTIVES"))
+
+
+# A plain Label is never picked, so its tooltip would be dead however correct the text is.
+func test_an_air_row_carries_the_glossary_tooltip_and_stops_the_mouse() -> void:
+	var id: String = Atmosphere.SUBSTANCES[0]
+	await _load_with_air({id: int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])})
+	var row := _air_row(id)
+	assert_str(row.tooltip_text).is_equal(UiText.wrap(Glossary.short(Glossary.Term.ATMOSPHERE)))
+	assert_int(row.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
+
+
+# The dev's spin on Scenario > Properties redraws the corner at once, and back at Normal it goes.
+func test_editing_the_air_on_the_scenario_tab_redraws_the_corner() -> void:
+	var id: String = Atmosphere.SUBSTANCES[0]
+	var spin: SpinBox = game.dev_overlay.scenario_tool._air_spins[id]
+	spin.value = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+	assert_bool(panel._panel.visible).override_failure_message("an air edit did not reach the HUD").is_true()
+	assert_object(_air_row(id)).is_not_null()
+
+	spin.value = int(Atmosphere.NORMAL[id])
+	assert_bool(panel._panel.visible).override_failure_message("air set back to Normal still showed").is_false()
+
+
+# The riskiest assumption in the plan: the worst case, every substance off Normal on top of a full
+# briefing, still fits the viewport and clears the corner strip.
+func test_every_substance_off_normal_still_fits_beside_the_corner_strip() -> void:
+	_paint("North", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
+	_paint("Exit", ZoneManager.Kind.EXTRACTION, [Vector2i(1, 1)])
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	_objectives([MissionRules.Objective.ROUT, MissionRules.Objective.CAPTURE, MissionRules.Objective.EXTRACT])
+	_clock(4)
+	var reading: Dictionary[String, int] = {}
+	for id: String in Atmosphere.SUBSTANCES:
+		reading[id] = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+	await _load_with_air(reading)
+	await await_idle_frame()
+
+	assert_int(_row_texts().size()).is_greater(Atmosphere.SUBSTANCES.size())
+	var viewport_rect := Rect2(Vector2.ZERO, game.get_viewport().get_visible_rect().size)
+	var panel_rect: Rect2 = panel._panel.get_global_rect()
+	assert_bool(viewport_rect.encloses(panel_rect)) \
+		.override_failure_message("Objective panel runs off the viewport: %s vs %s" % [panel_rect, viewport_rect]) \
+		.is_true()
+	assert_bool(panel_rect.intersects(panel._version_label.get_global_rect())) \
+		.override_failure_message("the panel grew into the version strip: %s" % panel_rect) \
+		.is_false()

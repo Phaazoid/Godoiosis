@@ -22,6 +22,11 @@ class_name MissionStatusPanel
 # A THIRD reader since #46: the headless Play API's board view prints the rows' text, so a driver
 # reads a mission's progress in the words the player does.
 #
+# THE AIR'S READING rides below the briefing (#1324): whatever the board's air holds off Normal, under
+# Atmosphere's group headings, so a board with no pre-mission screen still shows it, and a board with
+# one keeps showing it after Begin. Kept out of `briefing`, whose pre-mission reader has its own
+# Conditions region. A Normal board draws none of it.
+#
 # A ROW ABOUT A PLACE ANSWERS THE POINTER since #955 part 3, here and not in the briefing: Capture,
 # Extract and Defend wear their zone's emblem, hovering one lights its zones on the board and a click
 # glides the camera to the next of them. The panel and its containers still let clicks through; only
@@ -171,6 +176,34 @@ static func briefing_rows(mission: MissionState, board: BoardContext) -> Array[L
 		labels.append(row.label)
 	return labels
 
+# The air's off-Normal substances (see the header), each group that has one under its own heading:
+# "Vital air — 30%, +2". A row stops the mouse so its glossary tooltip can show; a plain Label is
+# never picked.
+static func air_rows(reading: Dictionary) -> Array[Label]:
+	var labels: Array[Label] = []
+	var off := Atmosphere.off_normal(reading)
+	var tip := UiText.wrap(Glossary.short(Glossary.Term.ATMOSPHERE))
+	for group: String in Atmosphere.GROUPS:
+		var ids: Array[String] = []
+		for id: String in Atmosphere.GROUPS[group]:
+			if off.has(id):
+				ids.append(id)
+		if ids.is_empty():
+			continue
+		labels.append(_build_header(group.to_upper()))
+		for id in ids:
+			var label := Label.new()
+			label.add_theme_font_size_override("font_size", 13)
+			label.text = "%s — %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, reading)]
+			var steps := Atmosphere.steps_text(id, reading)
+			if steps != "":
+				label.text += ", " + steps
+			label.modulate = PENDING_COLOR
+			label.tooltip_text = tip
+			label.mouse_filter = Control.MOUSE_FILTER_STOP
+			labels.append(label)
+	return labels
+
 func show_status(mission: MissionState, board: BoardContext, instruction := "") -> void:
 	# Immediate free, not queue_free: the panel re-lays out from minimum size below, and a dying
 	# child still counts toward it until end of frame.
@@ -182,6 +215,8 @@ func show_status(mission: MissionState, board: BoardContext, instruction := "") 
 			_rows.add_child(row.label)
 		else:
 			_rows.add_child(_zone_row(row))
+	for label in air_rows(board.atmosphere):
+		_rows.add_child(label)
 	_paint_hover()
 	# The tutorial's instruction row (#182): what to do NOW. Drawn last, below the win conditions,
 	# and only handed to us -- ScenarioDirector owns the text, game.refresh_mission_status() the read.

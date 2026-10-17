@@ -1592,8 +1592,9 @@ func refresh_action_queue(squad: Squad):
 # hiding its countdown is exactly the unplayable case the clock's own fork ruled against.
 func refresh_mission_status() -> void:
 	var instruction := scenario_director.active_instruction()   # tutorial row (#182) rides the same panel
+	# Asks about everything the panel can draw (#101's trap), the air's reading included (#1324).
 	if mission_controller.objectives.is_empty() and mission_controller.lose_conditions.is_empty() \
-			and instruction == "":
+			and instruction == "" and Atmosphere.is_normal(scenario_manager.current_atmosphere):
 		mission_status_panel.clear()
 		return
 	mission_status_panel.show_status(mission_controller.mission, _board(), instruction)

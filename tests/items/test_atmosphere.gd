@@ -73,6 +73,38 @@ func test_a_step_counts_whole_steps_toward_zero_on_both_sides() -> void:
 					"%s one step down" % id).is_equal(-1)
 
 
+# off_normal is what the corner HUD lists, and is_normal is derived from it: off Normal is any
+# percent but Normal's own, a step or not, in SUBSTANCES order.
+func test_off_normal_names_every_substance_off_its_normal_percent_in_order() -> void:
+	var reading: Dictionary[String, int] = {}
+	var expected: Array[String] = []
+	for i in range(Atmosphere.SUBSTANCES.size() - 1, -1, -1):   # authored back to front
+		var id: String = Atmosphere.SUBSTANCES[i]
+		if i % 2 == 0:
+			reading[id] = int(Atmosphere.NORMAL[id]) + 1
+			expected.push_front(id)
+	assert_array(Atmosphere.off_normal(reading)).contains_exactly(expected)
+	assert_bool(Atmosphere.is_normal(reading)).is_false()
+
+	var at_normal: Dictionary[String, int] = {}
+	for id: String in Atmosphere.SUBSTANCES:
+		at_normal[id] = int(Atmosphere.NORMAL[id])   # stored, but at Normal
+	assert_array(Atmosphere.off_normal(at_normal)).is_empty()
+	assert_bool(Atmosphere.is_normal(at_normal)).is_true()
+
+
+func test_a_reading_words_its_percent_and_signs_its_steps_and_drops_a_zero() -> void:
+	for id: String in Atmosphere.SUBSTANCES:
+		var normal := int(Atmosphere.NORMAL[id])
+		var step := int(Atmosphere.STEP[id])
+		assert_str(Atmosphere.percent_text(id, {id: normal + 2 * step})).is_equal("%d%%" % (normal + 2 * step))
+		assert_str(Atmosphere.steps_text(id, {id: normal + 2 * step})).is_equal("+2")
+		assert_str(Atmosphere.steps_text(id, {})).override_failure_message(
+				"%s at Normal still printed a step" % id).is_empty()
+		if normal >= step:
+			assert_str(Atmosphere.steps_text(id, {id: normal - step})).is_equal("-1")
+
+
 # Every ambient substance names a real file and has a Normal and a step.
 func test_every_ambient_substance_is_real_and_tuned() -> void:
 	var real := SubstanceCatalog.get_all()
