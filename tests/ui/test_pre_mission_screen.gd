@@ -68,13 +68,18 @@ func _roster_size(name: String) -> int:
 	return 0 if roster == null else roster.entries.size()
 
 
-func _author(roster: String, cap: int) -> String:
+# `air` and `weather` are authored into the saved board, so a case reads them back through the real
+# load (#1324). Their defaults are a Normal, clear board.
+func _author(roster: String, cap: int, air: Dictionary[String, int] = {},
+		weather := Weather.Kind.CLEAR) -> String:
 	for x in range(ROW_WIDTH):
 		game.grid.paint(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
 	for x in range(ZONE_CELLS):
 		game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(x, 0))
 	sm.current_roster = roster
 	sm.current_deployment_cap = cap
+	sm.current_atmosphere = air.duplicate()
+	sm.current_weather = weather
 	var objectives: Array[MissionRules.Objective] = [MissionRules.Objective.ROUT]
 	mc.set_objectives(objectives)
 	var scenario := sm.capture_scenario("pre_mission_740", true)
@@ -82,12 +87,12 @@ func _author(roster: String, cap: int) -> String:
 	return SCRATCH
 
 
-func _enter_phase(cap := 2) -> bool:
+func _enter_phase(cap := 2, air: Dictionary[String, int] = {}, weather := Weather.Kind.CLEAR) -> bool:
 	var roster := _a_roster()
 	if roster == "" or _roster_size(roster) <= cap:
 		push_warning("the shipped roster is not larger than the cap, so the screen has no reserve")
 		return false
-	mc.begin_mission(_author(roster, cap))
+	mc.begin_mission(_author(roster, cap, air, weather))
 	await await_idle_frame()
 	return true
 
@@ -533,6 +538,93 @@ func test_the_force_count_sits_on_the_deployed_strip_and_says_what_it_counts() -
 		"a bare '2 / 4' beside the force names nothing").contains("members")
 	assert_str(screen._force_strip_count.text).contains("2")
 	assert_str(screen._force_count.text).contains("deployed")
+
+
+# --- the board's conditions (#1324) ---
+#
+# The weather and the air's reading, authored into the saved board and read back through the real
+# load. Every expectation comes off Atmosphere and the catalog rather than a typed number, so a retune
+# of a Normal or a step never reds these (tests/README.md #8).
+
+# Two steps rich in one substance, a step thin in another, the rest Normal.
+func _a_reading() -> Dictionary[String, int]:
+	var reading: Dictionary[String, int] = {}
+	var rich: String = Atmosphere.SUBSTANCES[0]
+	reading[rich] = int(Atmosphere.NORMAL[rich]) + 2 * int(Atmosphere.STEP[rich])
+	for id: String in Atmosphere.SUBSTANCES:
+		if id != rich and int(Atmosphere.NORMAL[id]) >= int(Atmosphere.STEP[id]):
+			reading[id] = int(Atmosphere.NORMAL[id]) - int(Atmosphere.STEP[id])
+			break
+	assert_int(reading.size()).override_failure_message(
+		"no other substance's Normal is a whole step above zero, so the reading has nothing thin in it"
+		).is_equal(2)
+	return reading
+
+
+func test_the_conditions_show_the_boards_weather_and_its_air() -> void:
+	var reading := _a_reading()
+	if not await _enter_phase(2, reading, Weather.Kind.FOG):
+		return
+	var screen := _screen()
+	await await_idle_frame()
+	assert_str(screen._weather_value.text).override_failure_message(
+		"the conditions name a different weather from the board's").is_equal(
+		Weather.display_name(Weather.Kind.FOG))
+
+	var off_normal := 0
+	for id: String in Atmosphere.SUBSTANCES:
+		assert_bool(screen._air_rows.has(id)).override_failure_message(
+			"the reading has no row for %s" % id).is_true()
+		if not screen._air_rows.has(id):
+			continue
+		var labels: Array = screen._air_rows[id]
+		var steps := Atmosphere.steps_of(id, reading)
+		assert_str((labels[0] as Label).text).is_equal(SubstanceCatalog.name_of(id))
+		assert_str((labels[1] as Label).text).override_failure_message(
+			"%s shows the wrong percentage" % id).is_equal("%d%%" % Atmosphere.percent_of(id, reading))
+		assert_str((labels[2] as Label).text).override_failure_message(
+			"%s shows the wrong steps from Normal" % id).is_equal("%+d" % steps if steps != 0 else "")
+		if steps != 0:
+			off_normal += 1
+		for label: Label in labels:
+			assert_bool(_draws_in_full(label)).override_failure_message(
+				"'%s' in the %s row is drawn narrower than its text" % [label.text, id]).is_true()
+	assert_int(off_normal).override_failure_message(
+		"the authored reading did not survive the save and load, so every row read Normal").is_equal(2)
+
+
+# The two headings are a ruling (Atmosphere.GROUPS), so every row sits under its own, in order.
+func test_the_reading_is_shown_under_its_two_headings_and_explains_itself() -> void:
+	if not await _enter_phase():
+		return
+	var screen := _screen()
+	var drawn: Array[String] = []
+	for child in screen._air_box.get_children():
+		var heading := child as Label
+		if heading != null:
+			drawn.append(heading.text)
+			continue
+		for id: String in screen._air_rows:
+			if (screen._air_rows[id] as Array)[0] in child.get_children():
+				drawn.append(id)
+	var expected: Array[String] = []
+	for group: String in Atmosphere.GROUPS:
+		expected.append(group)
+		for id: String in Atmosphere.GROUPS[group]:
+			expected.append(id)
+	assert_array(drawn).is_equal(expected)
+
+	# The tooltip lives on the rows' box, and a hover over any row walks up to it unless something in
+	# between stops it.
+	assert_str(screen._air_box.tooltip_text).is_equal(
+		UiText.wrap(Glossary.short(Glossary.Term.ATMOSPHERE)))
+	for id: String in screen._air_rows:
+		var walk: Node = (screen._air_rows[id] as Array)[0]
+		while walk != screen._air_box:
+			assert_int((walk as Control).mouse_filter).override_failure_message(
+				"%s on the %s row stops the hover before it reaches the reading's tooltip"
+				% [walk.name, id]).is_not_equal(Control.MOUSE_FILTER_STOP)
+			walk = walk.get_parent()
 
 
 # --- the two structural laws ---

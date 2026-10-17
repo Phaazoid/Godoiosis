@@ -1592,8 +1592,7 @@ static func _limb_name(slot: int) -> String:
 
 # A substance by its catalog name, lower-cased for a line ("vital air").
 static func _substance_name(id: String) -> String:
-	var substance := SubstanceCatalog.by_id(id)
-	return substance.display_name.to_lower() if substance != null and substance.display_name != "" else id
+	return SubstanceCatalog.name_of(id).to_lower()
 
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 	return " (%s)" % RUNG_WORDS[lethality] if RUNG_WORDS.has(lethality) else ""

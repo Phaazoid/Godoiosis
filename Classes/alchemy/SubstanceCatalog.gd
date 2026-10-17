@@ -26,5 +26,14 @@ static func by_id(id: String) -> Substance:
 	return get_all().get(id) as Substance
 
 
+# What a player calls a substance ("Vital air"), or its id when no file names it. The one spelling
+# every readout uses; mid-sentence callers lower-case it.
+static func name_of(id: String) -> String:
+	var substance := by_id(id)
+	if substance == null or substance.display_name == "":
+		return id
+	return substance.display_name
+
+
 static func refresh() -> void:
 	_scanned = false

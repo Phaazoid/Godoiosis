@@ -5,7 +5,8 @@ class_name Glossary
 # is the one-line hover tooltip, `long_text` the glossary-page body. One entry carries both, so
 # the tooltips and the Glossary screen can never drift apart. Read by GlossaryScreen (the page),
 # MainActionMenu (menu-row hover text via ACTION_DATA "term" keys), info_panel (stat rows) and
-# StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode).
+# StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode),
+# and PreMissionScreen (the air's reading under Conditions).
 #
 # Two content rules, both Law #4:
 #   - Numbers are INTERPOLATED from the constants that rule them (DOWNED_TURNS, COVER_DEF, ...),
@@ -36,7 +37,7 @@ enum Term {
 	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
 	# Elemental -- affinity then aura, in the order a reader needs them: which elements you can touch
 	# at all, then how hard you hit with one (#930 put both on screen for the first time).
-	ELEMENTS, AFFINITY, AURA, WET, CHILLED, REACTIONS,
+	ELEMENTS, AFFINITY, AURA, WET, CHILLED, REACTIONS, ATMOSPHERE,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Lifecycle
@@ -213,6 +214,14 @@ static func _element_roster() -> String:
 		if element != Elemental.Element.NONE:
 			names.append(Elemental.display_name(element))
 	return ", ".join(names)
+
+# Each ambient substance's Normal and step, read off Atmosphere so a retune re-words the page (#1324).
+static func _atmosphere_normals() -> String:
+	var parts: Array[String] = []
+	for id: String in Atmosphere.SUBSTANCES:
+		parts.append("%s %d%%, a step every %d" % [SubstanceCatalog.name_of(id).to_lower(),
+				int(Atmosphere.NORMAL[id]), int(Atmosphere.STEP[id])])
+	return "; ".join(parts)
 
 # --- The entries ------------------------------------------------------------------------------
 
@@ -467,6 +476,17 @@ static func _build_entries() -> Dictionary:
 			+ "damage and states by fixed, deterministic rules, with no dice anywhere. The current "
 			+ "authored reactions are listed below, straight from the data the resolver itself "
 			+ "reads."}
+	# #1324. Names no carving's recipe: which carving draws what is #75's discovery layer.
+	e[Term.ATMOSPHERE] = {"category": Category.ELEMENTAL, "title": "Atmosphere",
+		"short": "What the air over this map holds, the same everywhere for the whole battle. A "
+			+ "carving that draws a substance from the air hits 1 harder for each step above Normal "
+			+ "and 1 softer for each step below. Thin air never makes it fizzle.",
+		"long": "Every map has its own air, and the pre-mission screen shows it under Conditions. A "
+			+ "carving draws from the air whatever its recipe needs and did not make itself. For "
+			+ "each step a substance sits above Normal, a carving that draws it hits 1 harder, or "
+			+ "heals 1 more. For each step below, it hits 1 softer, down to nothing. A carving fed "
+			+ "by a real source nearby takes nothing from the air. Normal, and the size of one "
+			+ "step: %s." % _atmosphere_normals()}
 
 	# Terrain
 	e[Term.TERRAIN_KINDS] = {"category": Category.TERRAIN, "title": "Terrain",

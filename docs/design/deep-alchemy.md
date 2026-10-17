@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-16. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slice 2 the same day.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -667,7 +667,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 
 **Built 2026-10-16: the atmosphere reading, slice 1 ([#1324](https://github.com/Phaazoid/Godoiosis/issues/1324)).** Rulings by Phaazoid@ in #claude-sessions (2026-10-13 and 10-14, after c3potheds@'s hover-breakdown idea) and in a Claude session (2026-10-16):
 
-- **Trace material is one fixed standard level, authored per map.** Each board authors what its air holds, and the pre-mission screen will show it. The player can trust it. Only specific geology, weather or alchemy changes it, visibly. Nothing random, and no heatmap to check tile by tile.
+- **Trace material is one fixed standard level, authored per map.** Each board authors what its air holds, and the pre-mission screen shows it (slice 2, below). The player can trust it. Only specific geology, weather or alchemy changes it, visibly. Nothing random, and no heatmap to check tile by tile.
 - **A reading is a percentage per ambient substance, in two groups:**
   - *Atmosphere*: inert air, vital air, vapor
   - *Ambient*: heat, aether
@@ -699,8 +699,14 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - Boardless readouts (the rune card, menu hover, item tooltips) leave it out, as they leave out empowerment.
 - **Authored** on Scenario › Properties, under the weather: one percentage box per substance and a "Normal air" button. A substance set back to Normal is erased rather than stored, so a board follows a retuned Normal.
 
+**Built 2026-10-16: slice 2, the reading shown to the player.** Readability only; the rule did not change.
+- **The pre-mission screen's CONDITIONS region**, above the stash: the board's weather, then the reading under `Atmosphere.GROUPS`' two headings. Each substance shows its percent, plus its steps from Normal when it is off Normal ("30% +2"). `PreMissionScreen._refresh_conditions` reads `ScenarioManager.current_weather` and `current_atmosphere`, the stores `game._board()` hands the resolver, so the reading shown is the one every carving resolves against. Hovering the reading shows the glossary's short text.
+- **Glossary → Atmosphere** (Elemental). Its Normal and step per substance are composed from `Atmosphere.NORMAL` and `STEP`. It names no carving's recipe, because which carving draws what is #75's discovery layer.
+- **The queue row's number** names the air's share, one line per `ResolvedOutcome.air_steps` entry ("Rich vital air: +2", "Thin vapor: -1"). A heal shows its air lines too: a heal has no damage kind, and `damage_tip` used to return nothing for one.
+- **`SubstanceCatalog.name_of(id)`** is the one substance-name spelling these readouts, the Play API and the Scenario tab share.
+
 **Next:**
-- **Slice 2:** a CONDITIONS box on the pre-mission screen, a glossary entry, and the queue row's damage tooltip naming the air's share.
+- **A board with no pre-mission phase** (no roster) shows its reading nowhere but the queue tooltip.
 - **After that:** weather nudging the reading (rain adds vapor), and atmosphere gases that raise or lower an area (the first gas that subtracts).
 - **Still open:** source amounts (`Push(3W2)`, "needs a real source", proposed 2026-10-14) and whether such a number counts toward aura demand (asked of c3potheds@, unanswered).
 

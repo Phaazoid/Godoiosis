@@ -278,20 +278,31 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	var role: QueueStyle.Role = QueueStyle.Role.READOUT_ALLY if friendly else QueueStyle.Role.READOUT_ENEMY
 	_show_readout(QueueStyle.ink(role))
 
-# The damage number's hover text (#424): the delivered kind, then the mitigation and why. A heal or a
-# utility hit has no kind and says nothing. Static and string-only so tests/ui can read it without a
-# scene, the def_tooltip shape.
+# The damage number's hover text (#424): the delivered kind, then the mitigation and why, then what the
+# board's air added (#1324). A heal or a utility hit has no kind, so it names only the air, which a
+# heal draws on too. Static and string-only so tests/ui can read it without a scene, the def_tooltip
+# shape.
 static func damage_tip(outcome: ResolvedOutcome, subject: Unit) -> String:
-	if outcome.kind == AttackData.Kind.NONE:
-		return ""
-	var kind := AttackData.kind_name(outcome.kind)
-	var lines: Array[String] = ["%s damage" % kind.capitalize()]
-	if subject != null and is_instance_valid(subject) and subject.worn_armor != null \
-			and not subject.worn_armor.covers(outcome.kind):
-		lines.append("%s does not cover %s" % [subject.worn_armor.display_name, kind])
-	if outcome.mitigation > 0:
-		lines.append("DEF %d subtracted" % outcome.mitigation)
-	return UiText.wrap("\n".join(lines))
+	var lines: Array[String] = []
+	if outcome.kind != AttackData.Kind.NONE:
+		var kind := AttackData.kind_name(outcome.kind)
+		lines.append("%s damage" % kind.capitalize())
+		if subject != null and is_instance_valid(subject) and subject.worn_armor != null \
+				and not subject.worn_armor.covers(outcome.kind):
+			lines.append("%s does not cover %s" % [subject.worn_armor.display_name, kind])
+		if outcome.mitigation > 0:
+			lines.append("DEF %d subtracted" % outcome.mitigation)
+	lines.append_array(_air_lines(outcome.air_steps))
+	return "" if lines.is_empty() else UiText.wrap("\n".join(lines))
+
+
+# One line per substance the air moved this hit by: "Rich vital air: +2", "Thin vapor: -1".
+static func _air_lines(steps: Dictionary[String, int]) -> Array[String]:
+	var lines: Array[String] = []
+	for id: String in steps:
+		var word := "Rich" if steps[id] > 0 else "Thin"
+		lines.append("%s %s: %+d" % [word, SubstanceCatalog.name_of(id).to_lower(), steps[id]])
+	return lines
 
 # The number wears the same tinted card the elemental chips do (dev, 2026-09-03: the digits "are a
 # bit odd on their own... the damage numbers should have that feel too"). One card language across

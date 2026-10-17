@@ -2,9 +2,9 @@ extends ModalCard
 class_name PreMissionScreen
 
 # The pre-mission screen (#740 + #743) -- the menu the player stands in while the phase #739 opened
-# is running. Four regions, from his sketch: the roster's cards top-left, the stash down the whole
-# right side, and along the bottom the force they have placed with the mission's contract cut into
-# it.
+# is running. Five regions: from his sketch, the roster's cards top-left, the stash down the right
+# side, and along the bottom the force they have placed with the mission's contract cut into it; and
+# above the stash the board's conditions, its weather and the air's reading (#1324).
 #
 # A ModalCard that is NOT a card, the way MissionSelectScreen is not: unframed, opaque, and it does
 # NOT claim ModalLock -- the board underneath has to keep running, because Tab swaps to it.
@@ -83,6 +83,11 @@ var _last_refusal := ""
 # What a hover is currently saying, kept apart from _last_refusal so a preview cannot erase the
 # reason the last move failed -- and written straight to the label, never through a redraw.
 var _hover_note := ""
+var _weather_value: Label
+# The air's reading (#1324): its rows' box, which carries the glossary tooltip, and per substance id
+# its [name, percent, steps] labels. Built once, since Atmosphere.SUBSTANCES is a const.
+var _air_box: VBoxContainer
+var _air_rows: Dictionary[String, Array] = {}
 var _squads_row: HFlowContainer
 var _objectives_box: VBoxContainer
 var _begin_button: Button
@@ -140,7 +145,14 @@ func _build(game_node: Node) -> void:
 	left.add_child(_build_roster())
 	left.add_child(_build_band())
 
-	columns.add_child(_build_stash())
+	# The right column: the conditions take what they need and the stash scrolls in the rest, so the
+	# left column's band and roster budget never see them.
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", REGION_GAP)
+	right.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columns.add_child(right)
+	right.add_child(_build_conditions())
+	right.add_child(_build_stash())
 	refresh()
 
 
@@ -225,6 +237,60 @@ func _build_roster() -> Control:
 	_grid.add_theme_constant_override("v_separation", 10)
 	_scroller(parts[1], _grid)
 	return panel
+
+
+# What the board is fought under (#1324): its weather, and the air's reading in Atmosphere's two
+# groups, so the player can see before the battle what a carving will draw from. Fixed rows, since
+# the substances are a const, so this region does not scroll and never grows.
+func _build_conditions() -> Control:
+	var parts := _region("CONDITIONS", STASH_WIDTH)
+	var column: VBoxContainer = parts[1]
+
+	var weather := _condition_row("Weather")
+	_weather_value = weather[1]
+	column.add_child(weather[0])
+
+	_air_box = VBoxContainer.new()
+	_air_box.add_theme_constant_override("separation", 2)
+	_air_box.tooltip_text = UiText.wrap(Glossary.short(Glossary.Term.ATMOSPHERE))
+	column.add_child(_air_box)
+	for group: String in Atmosphere.GROUPS:
+		var heading := Label.new()
+		heading.text = group
+		heading.add_theme_font_size_override("font_size", 10)
+		heading.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+		_air_box.add_child(heading)
+		for id: String in Atmosphere.GROUPS[group]:
+			var row := _condition_row(SubstanceCatalog.name_of(id))
+			var steps := _value_label()
+			(row[0] as HBoxContainer).add_child(steps)
+			_air_rows[id] = [row[2], row[1], steps]
+			_air_box.add_child(row[0])
+	return parts[0]
+
+
+# A name on the left and its value beside it, the stash rows' shape: the name clips and expands, so a
+# long one can never widen the region. [line, value, name].
+func _condition_row(title: String) -> Array:
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 6)
+	var name_label := Label.new()
+	name_label.text = title
+	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+	line.add_child(name_label)
+	var value := _value_label()
+	line.add_child(value)
+	return [line, value, name_label]
+
+
+func _value_label() -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
+	return label
 
 
 func _build_stash() -> Control:
@@ -326,6 +392,7 @@ func set_shown(shown: bool) -> void:
 # board are never on screen together, so there is no window in which a stale card is visible.
 func refresh() -> void:
 	_refresh_cards()
+	_refresh_conditions()
 	_refresh_stash()
 	_refresh_squads()
 	_refresh_contract()
@@ -437,6 +504,18 @@ func _slide_in() -> void:
 	if _slide != null:
 		# A re-sort mid-slide leaves a card on a stale target; one more sort at the end puts it right.
 		_slide.finished.connect(_grid.queue_sort)
+
+
+# Read off the live stores rather than a BoardContext: they are what game._board() hands the resolver,
+# so the reading shown is the reading every carving will be resolved against.
+func _refresh_conditions() -> void:
+	var sm: ScenarioManager = _controller.game.scenario_manager
+	_weather_value.text = Weather.display_name(sm.current_weather)
+	for id: String in _air_rows:
+		var labels: Array = _air_rows[id]
+		(labels[1] as Label).text = "%d%%" % Atmosphere.percent_of(id, sm.current_atmosphere)
+		var steps := Atmosphere.steps_of(id, sm.current_atmosphere)
+		(labels[2] as Label).text = "%+d" % steps if steps != 0 else ""
 
 
 func _refresh_stash() -> void:
