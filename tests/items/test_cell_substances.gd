@@ -49,6 +49,7 @@ func _catalog() -> Dictionary:
 		"lightning": _sub("QF", "Lightning"),
 		"dirt": _sub("E2 + AE", "Dirt"),
 		"mud": _sub("dirt + W2", "Mud"),
+		"smoke": _sub("AE + A2", "Smoke"),
 		"green_plant": _sub("AE + 2FA + W2", "Green plant"),
 		"dry_plant": _sub("AE + 2FA", "Dry plant"),
 	}
@@ -70,8 +71,14 @@ func _board(kinds: Dictionary, cell_states: Dictionary = {}, lit: Dictionary = {
 	return _SubstanceBoard.new(_store(cell_states), gas, kinds, lit, standing)
 
 
-func _present(board: BoardContext, caster: Unit = null) -> Array[String]:
+func _supply(board: BoardContext, caster: Unit = null) -> Dictionary[String, int]:
 	return CellSubstances.available_near(HERE, board, caster, _catalog())
+
+
+func _present(board: BoardContext, caster: Unit = null) -> Array[String]:
+	var ids: Array[String] = []
+	ids.assign(_supply(board, caster).keys())
+	return ids
 
 
 func _fizzle(recipe: String, board: BoardContext, caster: Unit = null) -> String:
@@ -90,8 +97,7 @@ func test_the_ambient_air_is_present_everywhere() -> void:
 
 
 func test_a_null_board_still_has_the_ambient_air() -> void:
-	assert_array(CellSubstances.available_near(HERE, null, null, _catalog())) \
-		.contains_exactly(Atmosphere.SUBSTANCES)
+	assert_array(_present(null)).contains_exactly(Atmosphere.SUBSTANCES)
 
 
 # The ids this file names are real substances -- a renamed file would otherwise leave a silent hole.
@@ -213,3 +219,55 @@ func test_reach_is_materias_two_away_is_not_present() -> void:
 	assert_bool(present.has("water")).is_false()
 	assert_bool(present.has("flame")).is_false()
 	assert_bool(_present(_board({ NEXT_DOOR: Terrain.Kind.WATER })).has("water")).is_true()
+
+
+# --- how much (#1328) ------------------------------------------------------------------------
+
+# The air supplies one of what it holds, whatever the board's reading says.
+func test_the_air_supplies_one_of_what_it_holds() -> void:
+	var supply := _supply(_board({}))
+	for id: String in Atmosphere.SUBSTANCES:
+		assert_int(supply.get(id, 0)).override_failure_message(
+				"ambient '%s' is not the air's one" % id).is_equal(CellSubstances.AIR)
+
+
+# Every real source supplies any amount: a ground and its parts, a tile state, a gas, a lit prop, a
+# neighbour's states and the caster's own.
+func test_every_real_source_supplies_plenty() -> void:
+	var gas := GasField.new()
+	gas.set_level(NEXT_DOOR, Gas.Kind.STEAM, 1)
+	var wet := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(4, 5))
+	wet.add_element_state(Elemental.State.WET)
+	var board := _board({ HERE: Terrain.Kind.DIRT, NEXT_DOOR: Terrain.Kind.ROCK },
+			{ Vector2i(3, 4): [Terrain.TileState.BURNING] }, {}, gas, { Vector2i(4, 5): wet })
+	var supply := _supply(board)
+	for id: String in ["dirt", "salt", "flame", "steam", "water"]:
+		assert_int(supply.get(id, 0)).override_failure_message(
+				"'%s' is not plenty" % id).is_equal(CellSubstances.PLENTY)
+	var caster := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(20, 20))
+	caster.add_element_state(Elemental.State.WET)
+	assert_int(_supply(_board({}), caster).get("water", 0)).override_failure_message(
+			"the caster's own water is not plenty").is_equal(CellSubstances.PLENTY)
+
+
+# A source that lends an ambient substance raises it past the air's one: smoke is ash and inert air,
+# so a gale's worth of air holds in smoke and fizzles on a bare board.
+func test_a_source_raises_an_ambient_substance_to_plenty() -> void:
+	var gas := GasField.new()
+	gas.set_level(NEXT_DOOR, Gas.Kind.SMOKE, 1)
+	var smoky := _board({}, {}, {}, gas)
+	assert_int(_supply(smoky).get("inert_air", 0)).is_equal(CellSubstances.PLENTY)
+	assert_str(_fizzle("Push(3A2)", _board({}))).contains("source of")
+	assert_str(_fizzle("Push(3A2)", smoky)).is_empty()
+
+
+# The proposal's jet: a number means a real source in reach, and making the water from the air is not
+# one -- the air's one vapor makes one water.
+func test_a_jet_needs_real_water_and_cannot_be_made_from_air() -> void:
+	var bare := _board({})
+	var by_water := _board({ NEXT_DOOR: Terrain.Kind.WATER })
+	assert_str(_fizzle("Focus(3W2) + Push(3W2)", bare)).contains("source of water")
+	assert_str(_fizzle("Focus(3W2) + Push(3W2)", by_water)).is_empty()
+	assert_str(_fizzle("Break(A, W) + Push(3W2)", bare)).contains("source of water")
+	assert_str(_fizzle("Break(A, W) + Push(3W2)", by_water)).is_empty()
+	assert_str(_fizzle("Break(A, W) + Push(W2)", bare)).is_empty()

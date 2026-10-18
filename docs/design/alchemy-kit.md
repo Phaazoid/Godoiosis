@@ -156,7 +156,7 @@ Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burne
 
 ### Conduits — the yellow diamond **[BUILT 2026-10-12, [#1312](https://github.com/Phaazoid/Godoiosis/issues/1312)]**
 
-The amendment above, built. A **conduit** is carried materia that is **never used up**: it holds a substance, and the unit carrying it may cast any carving that needs that substance. **It supplies an argument, never a verb.** The first one is the **Yellow Diamond**, which holds lightning (`QF`), so Zap (`Extract(QF) + Push(QF)`) fires for whoever carries one and fizzles for everyone else.
+The amendment above, built. A **conduit** is carried materia that is **never used up**: it holds a substance, and the unit carrying it may cast any carving that needs that substance. **It supplies an argument, never a verb.** The first one is the **Yellow Diamond**, which holds lightning (`QF`), so Zap (`Extract(2QF) + Push(2QF)`, an amount only a real source supplies since [#1328](https://github.com/Phaazoid/Godoiosis/issues/1328)) fires for whoever carries one and fizzles for everyone else.
 
 - **Carrier only.** The diamond counts for the unit holding it, never for an ally standing beside them. A vial is its carrier's too, and "stand by your source" is about the ground.
 - **One rule, every door.** The fizzle check (`CellSubstances.available_near`) counts what the caster carries in a conduit beside its own element states, and every caller already passes the caster: the ring, the queue gate, a stored aim's revalidation, the resolver, the AI, the threat field and the Play API. A diamond in the pack changes what all of them answer, at once.

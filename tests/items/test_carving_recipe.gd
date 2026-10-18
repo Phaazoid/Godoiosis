@@ -133,7 +133,7 @@ func _fizzle_catalog() -> Dictionary:
 	return catalog
 
 
-func _walk(recipe: String, available: Array[String]) -> String:
+func _walk(recipe: String, available: Dictionary[String, int]) -> String:
 	var catalog := _fizzle_catalog()
 	var parsed := CarvingRecipe.parse(recipe, catalog)
 	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
@@ -141,10 +141,21 @@ func _walk(recipe: String, available: Array[String]) -> String:
 	return parsed.fizzle_reason(available, catalog)
 
 
-func _ambient() -> Array[String]:
-	var ids: Array[String] = []
-	ids.assign(Atmosphere.SUBSTANCES)
-	return ids
+# The ambient air alone, at the air's one of each (#1328).
+func _ambient() -> Dictionary[String, int]:
+	var supply: Dictionary[String, int] = {}
+	for id: String in Atmosphere.SUBSTANCES:
+		supply[id] = CellSubstances.AIR
+	return supply
+
+
+# `ids` as real sources, on top of `supply`.
+func _with(supply: Dictionary[String, int], ids: Array[String]) -> Dictionary[String, int]:
+	var out: Dictionary[String, int] = {}
+	out.assign(supply)
+	for id: String in ids:
+		out[id] = CellSubstances.PLENTY
+	return out
 
 
 # Break frees the air and water out of vapor, the water pairs into W2, and the Push finds it: Splash
@@ -157,15 +168,13 @@ func test_a_break_makes_what_the_next_verb_needs() -> void:
 # the case that bites is a Break of something absent.
 func test_a_break_needs_its_molecule() -> void:
 	assert_str(_walk("Break(F, A)", _ambient())).is_empty()
-	var no_air: Array[String] = ["atom_aether"]
+	var no_air: Dictionary[String, int] = { "atom_aether": CellSubstances.AIR }
 	assert_str(_walk("Break(F, A)", no_air)).contains("vital")
 
 
 func test_a_tied_carving_fizzles_without_its_material_and_works_with_it() -> void:
 	assert_str(_walk("Focus(W2) + Push(W2)", _ambient())).is_not_empty()
-	var by_water := _ambient()
-	by_water.append("water")
-	assert_str(_walk("Focus(W2) + Push(W2)", by_water)).is_empty()
+	assert_str(_walk("Focus(W2) + Push(W2)", _with(_ambient(), ["water"]))).is_empty()
 
 
 func test_lightning_from_nowhere_fizzles() -> void:
@@ -175,16 +184,14 @@ func test_lightning_from_nowhere_fizzles() -> void:
 func test_a_bind_needs_both_halves() -> void:
 	assert_str(_walk("Bind(Q, Q)", _ambient())).is_empty()
 	assert_str(_walk("Break(A, W) + Bind(Q, W)", _ambient())).is_empty()
-	var no_aether: Array[String] = ["vapor"]
+	var no_aether: Dictionary[String, int] = { "vapor": CellSubstances.AIR }
 	assert_str(_walk("Break(A, W) + Bind(Q, W)", no_aether)).contains("aether")
 
 
 # Rock Throw: salt is no ambient substance, so it needs dirt's (or stone's) parts beside it.
 func test_a_push_of_salt_works_where_salt_is_present() -> void:
 	assert_str(_walk("Push(E2)", _ambient())).is_not_empty()
-	var by_dirt := _ambient()
-	by_dirt.append_array(["dirt", "salt", "ash"])
-	assert_str(_walk("Push(E2)", by_dirt)).is_empty()
+	assert_str(_walk("Push(E2)", _with(_ambient(), ["dirt", "salt", "ash"]))).is_empty()
 
 
 # The reason NAMES the first missing substance, by its display name lower-cased.
@@ -193,3 +200,72 @@ func test_the_reason_names_the_missing_substance() -> void:
 	assert_str(reason).contains("water")
 	assert_str(reason).contains("Fizzles")
 	assert_str(_walk("Extract(QF) + Push(QF)", _ambient())).contains("lightning")
+
+
+# --- amounts (#1328) -------------------------------------------------------------------------
+
+# The amount is the equations' coefficient in front of the argument; no number is one.
+func test_an_amount_is_a_coefficient_on_the_argument() -> void:
+	var r := _parse("Focus(3W2) + Push(W2)")
+	assert_str(r.error).is_empty()
+	assert_array(r.steps[0].args).is_equal(["water"])
+	assert_int(r.steps[0].amount).is_equal(3)
+	assert_int(r.steps[1].amount).is_equal(1)
+	var spaced := _parse("Push(3 W2)")
+	assert_str(spaced.error).is_empty()
+	assert_int(spaced.steps[0].amount).is_equal(3)
+
+
+# A Break or Bind works on one amount, written on both arguments.
+func test_a_two_argument_verb_takes_one_amount() -> void:
+	var r := _parse("Break(3A, 3W)")
+	assert_str(r.error).is_empty()
+	assert_int(r.steps[0].amount).is_equal(3)
+	assert_str(_parse("Break(3A, W)").error).contains("same amount")
+	assert_str(_parse("Bind(Q, 2Q)").error).contains("same amount")
+
+
+func test_an_amount_of_zero_is_illegal() -> void:
+	assert_str(_parse("Push(0W2)").error).is_not_empty()
+
+
+# Phaazoid@, 2026-10-18: the amount is not aura. The source supplies the bulk, so tying a carving to a
+# river must not make it cost more. Cost stays the verb count.
+func test_the_amount_counts_toward_neither_demand_nor_cost() -> void:
+	var plain := _parse("Focus(W2) + Push(W2)")
+	var jet := _parse("Focus(3W2) + Push(3W2)")
+	assert_dict(jet.demand()).is_equal(plain.demand())
+	assert_int(jet.verb_count()).is_equal(plain.verb_count())
+	assert_array(jet.damage_elements()).is_equal(plain.damage_elements())
+
+
+# The air supplies one: a number past it needs a real source, and the reason says so.
+func test_more_than_the_air_holds_needs_a_source() -> void:
+	assert_str(_walk("Push(A2)", _ambient())).is_empty()
+	var reason := _walk("Push(3A2)", _ambient())
+	assert_str(reason).contains("Fizzles")
+	assert_str(reason).contains("needs a source of inert")
+	assert_str(_walk("Push(3A2)", _with(_ambient(), ["inert_air"]))).is_empty()
+	# An amount of one keeps the plain wording.
+	assert_str(_walk("Push(W2)", _ambient())).not_contains("source of")
+
+
+# A step makes its products at its OWN amount, so nothing multiplies: the air's one vapor makes one
+# water, which is a splash and not a jet.
+func test_a_made_substance_counts_up_to_its_own_amount() -> void:
+	assert_str(_walk("Break(A, W) + Push(W2)", _ambient())).is_empty()
+	assert_str(_walk("Break(A, W) + Push(3W2)", _ambient())).contains("source of water")
+	# Three vapor makes three water -- but only beside a vapor source, since the air holds one.
+	assert_str(_walk("Break(3A, 3W) + Push(3W2)", _ambient())).contains("source of vapor")
+	assert_str(_walk("Break(3A, 3W) + Push(3W2)", _with(_ambient(), ["vapor"]))).is_empty()
+	# What a step makes never LOWERS a source already present.
+	assert_str(_walk("Break(A, W) + Push(3W2)", _with(_ambient(), ["water"]))).is_empty()
+
+
+# Nothing is used up: two steps of three need three, not six.
+func test_nothing_is_consumed_between_steps() -> void:
+	var three: Dictionary[String, int] = _ambient()
+	three["water"] = 3
+	assert_str(_walk("Focus(3W2) + Push(3W2)", three)).is_empty()
+	three["water"] = 2
+	assert_str(_walk("Focus(3W2) + Push(3W2)", three)).contains("source of water")

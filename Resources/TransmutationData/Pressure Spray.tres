@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("3_t8oom")
-recipe = "Focus(W2) + Push(W2)"
+recipe = "Focus(3W2) + Push(3W2)"
 display_name = "Pressure Spray"
 power = 5
 max_range = 0

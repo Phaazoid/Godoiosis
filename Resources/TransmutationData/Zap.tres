@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("1_wly3u")
-recipe = "Extract(QF) + Push(QF)"
+recipe = "Extract(2QF) + Push(2QF)"
 display_name = "Zap"
 power = 5
 min_range = 2

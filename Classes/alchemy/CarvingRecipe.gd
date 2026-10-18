@@ -12,10 +12,17 @@ class_name CarvingRecipe
 #   fizzle    -- the first argument a cast is missing, given what is present (fizzle_reason)
 #   drawn     -- which ambient substances it takes from the air (drawn_from), what Atmosphere scales
 # Pure on its catalog (id -> Substance), passed in like AlchemyFormula's, so a test can hand it one.
+#
+# An argument may carry an AMOUNT, the equations' coefficient (#1328): `Push(3W2)` is a jet's worth of
+# water. The air supplies one of what it holds, so a number means a real source in reach. The amount
+# is read by the fizzle walk alone: demand ignores it (Phaazoid@, 2026-10-18), as do cost and damage.
 
 class Step:
 	var verb: Flourish.Type
 	var args: Array[String] = []   # substance ids, resolved
+	# How much of each argument the step works on: one for the step, written on both arguments of a
+	# Break or Bind. What it makes, it makes at this amount.
+	var amount := 1
 	# What must be PRESENT for the step to work, resolved at parse: a Break's molecule (the bond it
 	# splits), a Bind's two halves, every other verb's one argument.
 	var needs: Array[String] = []
@@ -62,8 +69,18 @@ static func parse(text: String, catalog: Dictionary = {}) -> CarvingRecipe:
 			out.error = "%s takes %d argument%s" % [
 					Flourish.NAMES[step.verb], Flourish.arity(step.verb), "" if Flourish.arity(step.verb) == 1 else "s"]
 			return out
-		for word: String in words:
-			var found := AlchemyFormula.resolve(word.strip_edges(), catalog)
+		for i in words.size():
+			var parsed := AlchemyFormula.parse_terms(words[i].strip_edges())
+			if parsed["error"] != "":
+				out.error = parsed["error"]
+				return out
+			var terms: Array[Dictionary] = parsed["terms"]
+			var amount: int = terms[0]["coef"]
+			if i > 0 and amount != step.amount:
+				out.error = "%s takes the same amount of each argument" % Flourish.NAMES[step.verb]
+				return out
+			step.amount = amount
+			var found := AlchemyFormula.resolve(terms[0]["token"], catalog)
 			if found.error != "":
 				out.error = found.error
 				return out
@@ -183,31 +200,36 @@ func hit_elements() -> Array[Elemental.Element]:
 	return _hit_elements
 
 
-# Why a cast FIZZLES given the substances present (CellSubstances.available_near), or "" when every
-# step finds what it needs. Walked in order over a working copy: a step that passes adds what it
-# makes, so `Break(A, W) + Push(W2)` works anywhere -- the Break frees the water the Push needs. The
-# FIRST missing substance is named. Asked of a legal parse; an illegal one has no steps to miss.
-func fizzle_reason(available: Array[String], catalog: Dictionary = {}) -> String:
-	var present: Array[String] = available.duplicate()
+# Why a cast FIZZLES given how much of each substance is present (CellSubstances.available_near), or
+# "" when every step finds what it needs. Walked in order over a working copy: a step that passes adds
+# what it makes AT ITS OWN AMOUNT, so `Break(A, W) + Push(W2)` works anywhere -- the Break frees the
+# water the Push needs -- while `Break(A, W) + Push(3W2)` does not: the air's one vapor makes one water.
+# Nothing is used up, so `Focus(3W2) + Push(3W2)` needs three at each step, not six. The FIRST
+# shortfall is named. Asked of a legal parse; an illegal one has no steps to miss.
+func fizzle_reason(available: Dictionary[String, int], catalog: Dictionary = {}) -> String:
+	var have: Dictionary[String, int] = {}
+	have.assign(available)
 	for step: Step in steps:
 		for id: String in step.needs:
-			if not present.has(id):
+			if have.get(id, 0) < step.amount:
+				if step.amount > 1:
+					return "Fizzles: needs a source of %s nearby" % _named(id, catalog)
 				return "Fizzles: needs %s nearby" % _named(id, catalog)
 		for id: String in step.makes:
-			if not present.has(id):
-				present.append(id)
+			have[id] = maxi(have.get(id, 0), step.amount)
 	return ""
 
 
 # Which of `ambient` the recipe takes from the AIR: every need that is ambient and that no earlier
 # step made, once each. `Break(F, A) + Bind(Q, F)` draws vital air and aether; its heat comes from
 # its own Break. Fizzle_reason's walk, asking where a need came from rather than whether it is there.
+# A need of more than one is never the air's: the air holds one, so a real source supplied it.
 func drawn_from(ambient: Array[String]) -> Array[String]:
 	var made: Array[String] = []
 	var drawn: Array[String] = []
 	for step: Step in steps:
 		for id: String in step.needs:
-			if ambient.has(id) and not made.has(id) and not drawn.has(id):
+			if step.amount == 1 and ambient.has(id) and not made.has(id) and not drawn.has(id):
 				drawn.append(id)
 		for id: String in step.makes:
 			if not made.has(id):

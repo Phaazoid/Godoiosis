@@ -45,12 +45,13 @@ func _conduit(holds: Substance) -> ConduitData:
 
 
 # Draws the held substance and pushes it: needs it present and makes nothing that could stand in.
-func _draws(holds: Substance) -> TransmutationData:
+# `amount` is written on both arguments (#1328).
+func _draws(holds: Substance, amount: int = 1) -> TransmutationData:
 	var t := TransmutationData.new()
 	t.display_name = "Draw"
 	t.power = 5
 	t.targets = EquippableData.TargetMode.BOTH
-	t.recipe = "Extract(%s) + Push(%s)" % [holds.formula, holds.formula]
+	t.recipe = "Extract(%d%s) + Push(%d%s)" % [amount, holds.formula, amount, holds.formula]
 	return t
 
 
@@ -88,6 +89,20 @@ func test_a_carving_needing_what_a_conduit_holds_fizzles_without_it_and_holds_wi
 	assert_bool(caster.add_item(_conduit(holds))).is_true()
 	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).override_failure_message(
 			"a carried conduit did not make its substance present for its carrier").is_empty()
+
+
+# A conduit is a real source (#1328): it supplies more than the air's one, so a recipe that writes an
+# amount holds with it.
+func test_a_conduit_supplies_more_than_one() -> void:
+	var holds := _held()
+	if holds == null:
+		return
+	var carving := _draws(holds, 3)
+	var caster := _alchemist(HERE, carving)
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).contains("source of")
+	assert_bool(caster.add_item(_conduit(holds))).is_true()
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).override_failure_message(
+			"a conduit supplied too little for an amount of three").is_empty()
 
 
 # Carrier only: a vial is the carrier's too, and "stand by your source" is about the ground.

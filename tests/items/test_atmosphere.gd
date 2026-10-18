@@ -42,6 +42,14 @@ func test_a_need_a_source_supplies_is_not_drawn_from_the_air() -> void:
 	assert_array(_drawn("Focus(W2) + Push(W2)")).is_empty()
 
 
+# The air holds one of anything (#1328), so a need of more is a real source's and the reading does not
+# scale it -- even of a substance the air holds.
+func test_a_need_of_more_than_one_is_not_drawn_from_the_air() -> void:
+	assert_array(_drawn("Push(A2)")).contains_exactly(["inert_air"])
+	assert_array(_drawn("Push(3A2)")).is_empty()
+	assert_array(_drawn("Break(3F, 3A) + Push(F2)")).is_empty()
+
+
 func test_a_substance_drawn_twice_counts_once() -> void:
 	assert_array(_drawn("Bind(Q, Q)")).contains_exactly(["atom_aether"])
 
