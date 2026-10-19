@@ -1594,7 +1594,7 @@ func refresh_mission_status() -> void:
 	var instruction := scenario_director.active_instruction()   # tutorial row (#182) rides the same panel
 	# Asks about everything the panel can draw (#101's trap), the air's reading included (#1324).
 	if mission_controller.objectives.is_empty() and mission_controller.lose_conditions.is_empty() \
-			and instruction == "" and Atmosphere.is_normal(scenario_manager.current_atmosphere):
+			and instruction == "" and Atmosphere.is_normal(scenario_manager.air_reading()):
 		mission_status_panel.clear()
 		return
 	mission_status_panel.show_status(mission_controller.mission, _board(), instruction)
@@ -2406,7 +2406,7 @@ func _board() -> BoardContext:
 	var board := BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission_controller.mission if mission_controller != null else null)
 	board.weather = scenario_manager.current_weather   # #1260
-	board.atmosphere = scenario_manager.current_atmosphere   # #1324
+	board.atmosphere = scenario_manager.air_reading()   # #1324: the authored air, moved by the weather
 	return board
 
 func _all_units() -> Array[Unit]:

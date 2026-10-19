@@ -13,6 +13,11 @@ const FOLDER := "res://Resources/WeatherRules/"
 # rain, units get the wet status") -- steam's soak, from the sky instead of a cell. NONE soaks nobody.
 @export var state: Elemental.State = Elemental.State.NONE
 
+# How this weather moves the air's reading while it falls (#1324): substance id -> percentage points
+# added to what the board authors, composed by Atmosphere.effective. A missing key moves nothing. Only
+# a weather the board DRAWS carries one, which is what keeps the change visible (Phaazoid@, 2026-10-14).
+@export var air: Dictionary[String, int] = {}
+
 
 static var _rules_by_kind: Dictionary = {}
 
@@ -24,3 +29,10 @@ static func for_kind(kind: Weather.Kind) -> WeatherRules:
 		var path := FOLDER + Weather.name_of(kind) + ".tres"
 		_rules_by_kind[kind] = load(path) as WeatherRules if ResourceLoader.exists(path) else null
 	return _rules_by_kind[kind]
+
+
+# How this kind moves the air, or nothing when it has no rules.
+static func air_of(kind: Weather.Kind) -> Dictionary[String, int]:
+	var rules := for_kind(kind)
+	var none: Dictionary[String, int] = {}
+	return rules.air if rules != null else none

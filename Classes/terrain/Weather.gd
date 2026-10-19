@@ -3,9 +3,9 @@ class_name Weather
 
 # The weather's vocabulary (#1260): which weathers exist. A board names one (ScenarioData.weather),
 # what it DOES is its WeatherRules file and how it LOOKS is its WeatherLook file, one of each per
-# kind and named for it -- Gas's split, for Gas's reason. A kind with no rules file does nothing to a
-# unit: the snows (#1269), the fogs (#1285), the auroras (#1298) and the sands and ashes (#1302) are
-# looks only for now.
+# kind and named for it -- Gas's split, for Gas's reason. A kind with no rules file does nothing: the
+# sands and ashes (#1302) are looks only. The rains soak and move the air; the snows (#1269), the fogs
+# (#1285) and the auroras (#1298) only move the air (#1324, WeatherRules.air).
 #
 # A kind's int is what a save holds, so Kind is APPEND-ONLY: rename a member freely, never reorder
 # or delete one. CLEAR is the default and does nothing.

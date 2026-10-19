@@ -561,17 +561,35 @@ func _a_reading() -> Dictionary[String, int]:
 	return reading
 
 
+# The weather whose rules move the air and whose name is longest (#1324): which weathers move it is
+# authored, and the longest name is the one that tests whether a row can carry it.
+func _longest_moving_weather() -> Weather.Kind:
+	var longest := Weather.Kind.CLEAR
+	for kind: Weather.Kind in Weather.Kind.values():
+		if WeatherRules.air_of(kind).is_empty():
+			continue
+		if longest == Weather.Kind.CLEAR or Weather.display_name(kind).length() > Weather.display_name(longest).length():
+			longest = kind
+	assert_int(longest).override_failure_message("fixture: no weather's rules move the air").is_not_equal(
+			Weather.Kind.CLEAR)
+	return longest
+
+
+# The reading shown is the one carvings resolve against: the authored air moved by the weather, which
+# names itself on each row it moved and leads the box's tooltip with what it does (#1324).
 func test_the_conditions_show_the_boards_weather_and_its_air() -> void:
-	var reading := _a_reading()
-	if not await _enter_phase(2, reading, Weather.Kind.FOG):
+	var authored := _a_reading()
+	var sky := _longest_moving_weather()
+	if not await _enter_phase(2, authored, sky):
 		return
 	var screen := _screen()
 	await await_idle_frame()
 	assert_str(screen._weather_value.text).override_failure_message(
-		"the conditions name a different weather from the board's").is_equal(
-		Weather.display_name(Weather.Kind.FOG))
+		"the conditions name a different weather from the board's").is_equal(Weather.display_name(sky))
+	var reading := Atmosphere.effective(authored, sky)
 
 	var off_normal := 0
+	var named := 0
 	for id: String in Atmosphere.SUBSTANCES:
 		assert_bool(screen._air_rows.has(id)).override_failure_message(
 			"the reading has no row for %s" % id).is_true()
@@ -584,13 +602,22 @@ func test_the_conditions_show_the_boards_weather_and_its_air() -> void:
 			"%s shows the wrong percentage" % id).is_equal("%d%%" % Atmosphere.percent_of(id, reading))
 		assert_str((labels[2] as Label).text).override_failure_message(
 			"%s shows the wrong steps from Normal" % id).is_equal("%+d" % steps if steps != 0 else "")
+		var moved := Atmosphere.weather_moves(id, sky)
+		assert_str((labels[3] as Label).text).override_failure_message(
+			"%s names the wrong weather" % id).is_equal(Weather.display_name(sky) if moved else "")
 		if steps != 0:
 			off_normal += 1
+		if moved:
+			named += 1
 		for label: Label in labels:
 			assert_bool(_draws_in_full(label)).override_failure_message(
 				"'%s' in the %s row is drawn narrower than its text" % [label.text, id]).is_true()
 	assert_int(off_normal).override_failure_message(
-		"the authored reading did not survive the save and load, so every row read Normal").is_equal(2)
+		"the authored reading did not survive the save and load, so rows read Normal").is_equal(
+		Atmosphere.off_normal(reading).size())
+	assert_int(named).override_failure_message("%s named no row" % Weather.name_of(sky)).is_greater(0)
+	assert_str(screen._air_box.tooltip_text).is_equal(UiText.wrap("\n".join(Atmosphere.weather_lines(sky))
+			+ "\n\n" + Glossary.short(Glossary.Term.ATMOSPHERE)))
 
 
 # The two headings are a ruling (Atmosphere.GROUPS), so every row sits under its own, in order.

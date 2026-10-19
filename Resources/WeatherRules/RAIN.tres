@@ -5,3 +5,6 @@
 [resource]
 script = ExtResource("1_wthrl")
 state = 1
+air = Dictionary[String, int]({
+"vapor": 10
+})

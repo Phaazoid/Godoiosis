@@ -7,8 +7,9 @@ extends Object
 # and a carving moves one damage per STEP away from Normal for each substance its recipe draws from
 # the air (CarvingRecipe.drawn_from). Damage, never a fizzle (Phaazoid@, 2026-10-14).
 #
-# A reading is a Dictionary of substance id -> percent, authored on ScenarioData and carried on
-# BoardContext. A missing key reads Normal, so an empty reading is a Normal board.
+# A reading is a Dictionary of substance id -> percent, authored on ScenarioData. A missing key reads
+# Normal, so an empty reading is a Normal board. What the rules play on is the EFFECTIVE reading, the
+# authored one with its weather's nudge applied (effective, below); BoardContext carries that one.
 #
 # Static on the reading passed in, Materia's shape: a carving has no board and must not grow one.
 
@@ -33,6 +34,23 @@ const STEP: Dictionary[String, int] = {
 
 static func percent_of(id: String, reading: Dictionary) -> int:
 	return int(reading.get(id, NORMAL.get(id, 0)))
+
+
+# The reading a board plays under: what it authors, moved by its weather (WeatherRules.air). THE one
+# composition -- the resolver, every readout and the Play API take this, never the authored reading
+# alone. ScenarioManager.air_reading is the game's door onto it.
+static func effective(authored: Dictionary, weather: Weather.Kind) -> Dictionary[String, int]:
+	return nudged(authored, WeatherRules.air_of(weather))
+
+
+# A reading moved by a nudge (substance id -> percentage points), each substance held to 0..100. The
+# arithmetic of every source that moves the air; the weather is the first.
+static func nudged(reading: Dictionary, nudge: Dictionary) -> Dictionary[String, int]:
+	var out: Dictionary[String, int] = {}
+	out.assign(reading)
+	for id: String in nudge:
+		out[id] = clampi(percent_of(id, reading) + int(nudge[id]), 0, 100)
+	return out
 
 
 # Whole steps away from Normal, truncated toward zero: heat at Normal 20 with a step of 10 reads
@@ -87,3 +105,30 @@ static func percent_text(id: String, reading: Dictionary) -> String:
 static func steps_text(id: String, reading: Dictionary) -> String:
 	var steps := steps_of(id, reading)
 	return "%+d" % steps if steps != 0 else ""
+
+
+# Whether this weather moves this substance, so a readout can name the weather beside it.
+static func weather_moves(id: String, weather: Weather.Kind) -> bool:
+	return int(WeatherRules.air_of(weather).get(id, 0)) != 0
+
+
+# What this weather does to this substance, as a readout says it: "Rain adds 10% vapor", "Snow lowers
+# heat by 20%", or nothing when it does not move it.
+static func weather_text(id: String, weather: Weather.Kind) -> String:
+	var points := int(WeatherRules.air_of(weather).get(id, 0))
+	if points == 0:
+		return ""
+	var substance := SubstanceCatalog.name_of(id).to_lower()
+	if points > 0:
+		return "%s adds %d%% %s" % [Weather.display_name(weather), points, substance]
+	return "%s lowers %s by %d%%" % [Weather.display_name(weather), substance, -points]
+
+
+# Every substance this weather moves, worded, in SUBSTANCES order: one line each for a tooltip.
+static func weather_lines(weather: Weather.Kind) -> Array[String]:
+	var lines: Array[String] = []
+	for id: String in SUBSTANCES:
+		var line := weather_text(id, weather)
+		if line != "":
+			lines.append(line + ".")
+	return lines

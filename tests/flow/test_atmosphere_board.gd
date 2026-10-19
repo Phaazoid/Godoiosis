@@ -74,3 +74,63 @@ func test_a_board_with_deposits_keeps_the_air() -> void:
 	var board: BoardContext = game._board()
 	var none: Array[ResolvedCellEffect] = []
 	assert_int(board.with_deposits(none).atmosphere.size()).is_equal(Atmosphere.SUBSTANCES.size())
+
+
+# --- the weather's nudge (#1324) ----------------------------------------------------------
+# Which weather moves the air is authored, so the sky under test is whichever one the files say moves
+# something, and every expectation is Atmosphere.effective's.
+
+func _moving_weather() -> Weather.Kind:
+	for kind: Weather.Kind in Weather.Kind.values():
+		if not WeatherRules.air_of(kind).is_empty():
+			return kind
+	fail("fixture: no weather's rules move the air")
+	return Weather.Kind.CLEAR
+
+
+func test_the_board_every_resolve_reads_carries_the_weathers_nudge() -> void:
+	var sky := _moving_weather()
+	var reading := _reading()
+	game.scenario_manager.current_atmosphere = reading.duplicate()
+	game.scenario_manager.current_weather = sky
+	var expected := Atmosphere.effective(reading, sky)
+	assert_dict(expected).override_failure_message("fixture: %s moves nothing in this reading"
+			% Weather.name_of(sky)).is_not_equal(reading)
+	var board: BoardContext = game.squad_manager.board_source.call()
+	for id: String in Atmosphere.SUBSTANCES:
+		assert_int(Atmosphere.percent_of(id, board.atmosphere)).override_failure_message(
+				"the board every resolve reads has %s at %d, not the weather's %d"
+				% [id, Atmosphere.percent_of(id, board.atmosphere), Atmosphere.percent_of(id, expected)]) \
+			.is_equal(Atmosphere.percent_of(id, expected))
+	assert_dict(game.scenario_manager.air_reading()).is_equal(expected)
+
+
+# A save writes what the board AUTHORS: baking the weather in would add the nudge again on every load.
+func test_a_save_keeps_the_authored_air_and_not_the_weathers() -> void:
+	var sky := _moving_weather()
+	var reading := _reading()
+	game.scenario_manager.current_atmosphere = reading.duplicate()
+	game.scenario_manager.current_weather = sky
+	var saved: ScenarioData = game.scenario_manager.capture_scenario("air")
+	assert_dict(saved.atmosphere).override_failure_message(
+			"the save wrote the air as played, so a reload nudges it twice").is_equal(reading)
+	game.scenario_manager.apply_scenario(saved)
+	await await_idle_frame()
+	assert_dict(game.scenario_manager.air_reading()).is_equal(Atmosphere.effective(reading, sky))
+
+
+# The bug report's sky line reads the air as played, naming the weather beside what it moved.
+func test_the_bug_report_reads_the_air_as_played() -> void:
+	var sky := _moving_weather()
+	game.scenario_manager.current_weather = sky
+	var air: Dictionary[String, int] = game.scenario_manager.air_reading()
+	var note: String = game.bug_reporter._weather_note()
+	var named := 0
+	for id: String in Atmosphere.off_normal(air):
+		if not Atmosphere.weather_moves(id, sky):
+			continue
+		named += 1
+		assert_str(note).contains("%s %s (%s)" % [SubstanceCatalog.name_of(id),
+				Atmosphere.percent_text(id, air), Weather.display_name(sky)])
+	assert_int(named).override_failure_message(
+			"fixture: %s moves nothing off Normal on a Normal board" % Weather.name_of(sky)).is_greater(0)

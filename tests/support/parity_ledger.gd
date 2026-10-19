@@ -428,7 +428,9 @@ static func weathers() -> Dictionary:
 		if kind != Weather.Kind.CLEAR:
 			members.append(kind)
 	var K := Weather.Kind
-	var blind := gap("#117", "the AI is blind to rain's soak, as it is to steam's (terrain.md)")
+	var blind := gap("#117", "the AI is blind to rain's soak, as it is to steam's (terrain.md); the vapor it adds is priced through the damage it moves")
+	# A weather whose only rule is the air it moves (#1324): the AI reads that through the resolve.
+	var air := never("its only rule moves the air, which the AI prices through the damage it moves (Atmosphere.effective)")
 	return {
 		"name": "weathers (Weather.Kind)",
 		"members": members,
@@ -439,15 +441,15 @@ static func weathers() -> Dictionary:
 			K.RAIN: {"ai": blind},
 			K.HEAVY_RAIN: {"ai": blind},
 			K.THUNDERSTORM: {"ai": blind},
-			K.LIGHT_SNOW: {"ai": inert()},
-			K.SNOW: {"ai": inert()},
-			K.BLIZZARD: {"ai": inert()},
-			K.MIST: {"ai": inert()},
-			K.FOG: {"ai": inert()},
-			K.THICK_FOG: {"ai": inert()},
-			K.FAINT_AURORA: {"ai": inert()},
-			K.AURORA: {"ai": inert()},
-			K.AETHERIC_STORM: {"ai": inert()},
+			K.LIGHT_SNOW: {"ai": air},
+			K.SNOW: {"ai": air},
+			K.BLIZZARD: {"ai": air},
+			K.MIST: {"ai": air},
+			K.FOG: {"ai": air},
+			K.THICK_FOG: {"ai": air},
+			K.FAINT_AURORA: {"ai": air},
+			K.AURORA: {"ai": air},
+			K.AETHERIC_STORM: {"ai": air},
 			K.DUST: {"ai": inert()},
 			K.SANDSTORM: {"ai": inert()},
 			K.DUST_WALL: {"ai": inert()},

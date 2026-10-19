@@ -83,8 +83,9 @@ var current_weather: Weather.Kind = Weather.Kind.CLEAR
 var current_wind: Wind.Kind = Wind.Kind.CALM
 var current_wind_direction: Wind.Direction = Wind.Direction.EAST
 
-# The air over the CURRENT board (#1324): the weather's shape, a rule input read through game._board().
-# A copy on both doors, so editing it never writes into the cached ScenarioData it came from.
+# The air the CURRENT board AUTHORS (#1324): the weather's shape. A copy on both doors, so editing it
+# never writes into the cached ScenarioData it came from. What the board plays under is air_reading(),
+# which the weather moves; this is what the Scenario tab edits and a save writes.
 var current_atmosphere: Dictionary[String, int] = {}
 
 # Where the CURRENT board opens the camera (#234); null = derive from the player's units. Same
@@ -150,6 +151,13 @@ static func relink_guards(scenario: ScenarioData, unit_of_entry: Dictionary) -> 
 
 func note_play() -> void:
 	play_version += 1
+
+
+# The air the CURRENT board plays under (#1324): its authored reading moved by its weather. The game's
+# one door onto Atmosphere.effective -- game._board() hands it to the resolver, and every readout that
+# has no board reads it here, so what is shown is what a carving resolves against.
+func air_reading() -> Dictionary[String, int]:
+	return Atmosphere.effective(current_atmosphere, current_weather)
 
 
 # The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and

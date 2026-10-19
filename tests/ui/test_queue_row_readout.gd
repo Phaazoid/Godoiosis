@@ -760,17 +760,17 @@ func test_the_damage_number_names_the_def_it_subtracted() -> void:
 # string, never an authored carving (tests/README.md #9), and the substance it draws is asked of the
 # recipe rather than typed, so a change to what a Break needs never reds this.
 
-func test_the_damage_number_names_what_the_air_added() -> void:
+func _air_carving(recipe: String) -> TransmutationData:
 	var carving := TransmutationData.new()
 	carving.display_name = "Air Test"
 	carving.power = 5
 	carving.targets = EquippableData.TargetMode.BOTH
-	carving.recipe = "Break(F, A) + Push(F2)"
-	var drawn: Array[String] = carving.parsed().drawn_from(Atmosphere.SUBSTANCES)
-	assert_array(drawn).override_failure_message(
-		"the fixture recipe draws nothing from the air, so the air cannot move it").is_not_empty()
-	var id: String = drawn[0]
+	carving.recipe = recipe
+	return carving
 
+
+# Queue `carving` at a foe and redraw the panel; the attack's row.
+func _queue_carving(carving: TransmutationData) -> ActionQueueRow:
 	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
 	var aura: Dictionary[Elemental.Element, int] = {}
@@ -784,17 +784,59 @@ func test_the_damage_number_names_what_the_air_added() -> void:
 	rune.size = RuneData.Size.LARGE
 	assert_bool(rune.inscribe(carving)).override_failure_message("fixture carving failed to inscribe").is_true()
 	attacker.equipped_weapon = rune
-
-	var reading: Dictionary[String, int] = {}
-	reading[id] = int(Atmosphere.NORMAL[id]) + 2 * int(Atmosphere.STEP[id])
-	game.scenario_manager.current_atmosphere = reading
 	game.squad_manager.active_squad = attacker.squad
 	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))
 	game.refresh_action_queue(attacker.squad)
 	await await_idle_frame()
-
 	var row := _attack_row()
 	assert_object(row).override_failure_message("the carving was not queued").is_not_null()
+	return row
+
+
+# The weather moves the air too (#1324), through the same wire and nothing of its own: a Normal board
+# under a weather whose rules move a substance the carving draws. Which weather moves what is authored,
+# so the pairing is found off the files among literal recipes, never typed.
+func test_the_damage_number_names_what_the_weather_added_to_the_air() -> void:
+	var recipes: Array[String] = ["Break(F, A) + Push(F2)", "Break(A, W) + Bind(Q, W)", "Push(F)", "Bind(Q, Q)"]
+	var sky := Weather.Kind.CLEAR
+	var recipe := ""
+	var id := ""
+	for kind: Weather.Kind in Weather.Kind.values():
+		for candidate: String in recipes:
+			for drawn: String in _air_carving(candidate).parsed().drawn_from(Atmosphere.SUBSTANCES):
+				if recipe == "" and Atmosphere.weather_moves(drawn, kind):
+					sky = kind
+					recipe = candidate
+					id = drawn
+	assert_str(recipe).override_failure_message(
+		"fixture: no weather moves anything these recipes draw from the air").is_not_empty()
+	if recipe == "":
+		return
+	game.scenario_manager.current_weather = sky
+	var steps := Atmosphere.steps_of(id, game.scenario_manager.air_reading())
+	assert_int(steps).override_failure_message("fixture: %s moves %s by less than a step"
+			% [Weather.name_of(sky), id]).is_not_equal(0)
+
+	var row: ActionQueueRow = await _queue_carving(_air_carving(recipe))
+	if row == null:
+		return
+	assert_str(row.readout.tooltip_text).contains("%s %s: %+d" % ["Rich" if steps > 0 else "Thin",
+			SubstanceCatalog.name_of(id).to_lower(), steps])
+
+
+func test_the_damage_number_names_what_the_air_added() -> void:
+	var carving := _air_carving("Break(F, A) + Push(F2)")
+	var drawn: Array[String] = carving.parsed().drawn_from(Atmosphere.SUBSTANCES)
+	assert_array(drawn).override_failure_message(
+		"the fixture recipe draws nothing from the air, so the air cannot move it").is_not_empty()
+	var id: String = drawn[0]
+
+	var reading: Dictionary[String, int] = {}
+	reading[id] = int(Atmosphere.NORMAL[id]) + 2 * int(Atmosphere.STEP[id])
+	game.scenario_manager.current_atmosphere = reading
+	var row: ActionQueueRow = await _queue_carving(carving)
+	if row == null:
+		return
 	assert_str(row.readout.tooltip_text).contains(
 		"Rich %s: +2" % SubstanceCatalog.name_of(id).to_lower())
 
