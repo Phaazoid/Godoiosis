@@ -4,7 +4,7 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
-**Canon checked through #892 (2026-09-11); Deep Alchemy phase 1 (reaction equations) folded in 2026-10-07; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #508's steam soak folded in 2026-10-04; #1260's weather folded in 2026-10-08; Deep Alchemy Phase 2 folded in 2026-10-11; Heat folded in 2026-10-12.**
+**Canon checked through #892 (2026-09-11); Deep Alchemy phase 1 (reaction equations) folded in 2026-10-07; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #508's steam soak folded in 2026-10-04; #1260's weather folded in 2026-10-08; Deep Alchemy Phase 2 folded in 2026-10-11; Heat folded in 2026-10-12; #1329's Dried Off steam folded in 2026-10-19.**
 
 ## What it is
 
@@ -107,7 +107,7 @@ Success looks like: alchemist hits WATER (sets WET, shown in queue), mechanist h
 De-randomized from the wiki, plus a stacking example. Traced one first:
 
 1. **SHOCK × WET → Electrocuted** *(the first slice).* Pass: attack A (WATER) writes `add WET`. Attack B (SHOCK) sees WET, applies `damage_mult`, writes `remove WET`. Both numbers land in the queue pre-execution. Replay: WATER lands, WET icon appears; SHOCK lands boosted, "Electrocuted!" pops, WET clears. *(The slice as built; since 2026-10-11 the shipped electrocution no longer clears WET.)*
-2. **FIRE × WET → QuickDry.** Fire on a wet target does *reduced* damage and removes WET (water buys one hit of protection, then it's spent). Punishes mis-ordered combos. **BUILT 2026-08-12** (`fire_wet_quickdry.tres`, ×0.5), alongside the ICE→CHILLED line and the terrain douse set — the shipped roster is [elemental-interactions.md](elemental-interactions.md)'s [BUILT] tags.
+2. **FIRE × WET → QuickDry.** Fire on a wet target does *reduced* damage and removes WET (water buys one hit of protection, then it's spent). Punishes mis-ordered combos. **BUILT 2026-08-12** (`fire_wet_quickdry.tres`, ×0.5), alongside the ICE→CHILLED line and the terrain douse set — the shipped roster is [elemental-interactions.md](elemental-interactions.md)'s [BUILT] tags. **Since #1329 (2026-10-19) the dried water rises as thin steam** on the cell the unit was hit on: `ElementalReaction.gas`/`gas_level`, TerrainReaction's pair, played through the one cell-effect channel.
 3. **Stacked: SHOCK on a WET + OILED target.** Both `SHOCK×WET→Electrocuted` and (say) `SHOCK×OILED→Overload` match the pre-hit snapshot (E8); multipliers multiply, both states resolve their removes — one hit, two reactions, a deterministic crescendo. This is combomaxing in one line.
 
 ## Deferred layers (captured, not cut)
