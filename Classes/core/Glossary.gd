@@ -351,7 +351,9 @@ static func _build_entries() -> Dictionary:
 			+ ("A carving also needs what it works on within %d tile%s of the caster, or it fizzles "
 				% [Materia.REACH, "" if Materia.REACH == 1 else "s"])
 			+ "and does nothing. The air is everywhere, so carvings that work on the air never "
-			+ "fizzle. One that would fizzle is listed greyed too, naming what it needs."}
+			+ "fizzle, but it holds only a little of anything: a carving that needs more than that "
+			+ "needs a real source within reach, such as open water, a fire or the ground. One that "
+			+ "would fizzle is listed greyed too, naming what it needs."}
 	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
 	# terms of the same name; these two name a grouping the game had no word for before the ring.
 	# A third, "Turn", died in round 2 along with the category — the turn's verbs are the HUD's.

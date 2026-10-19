@@ -5,7 +5,7 @@
 
 [resource]
 script = ExtResource("2_5456j")
-recipe = "Push(E2)"
+recipe = "Push(2E2)"
 display_name = "Rock Throw"
 power = 7
 min_range = 2

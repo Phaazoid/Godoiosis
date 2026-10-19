@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-16. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-18. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -639,14 +639,14 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 | Carving | Recipe | Verbs | Demand | Delivers |
 |---|---|---|---|---|
 | Gust | `Push(A2)` | 1 | Air 2 | inert air (AIR) |
-| Rock Throw | `Push(E2)` | 1 | Earth 2 | salt (EARTH); needs salt nearby: dirt, mud or stone, or grass and trees on their #1315 dirt |
+| Rock Throw | `Push(2E2)` | 1 | Earth 2 | salt (EARTH); needs salt nearby: dirt, mud or stone, or grass and trees on their #1315 dirt |
 | Heal | `Bind(Q, Q)` | 1 | Aether 2 | essence (AETHER) |
 | Blow Dry | `Break(F, A) + Push(F)` | 2 | Fire 2, Air 1 | heat (HEAT) since 2026-10-12: dries, melts and boils, and lights no grass |
 | Splash | `Break(A, W) + Push(W2)` | 2 | Water 3, Air 1 | water (WATER) |
 | Fireball | `Break(F, A) + Push(F2)` | 2 | Fire 3, Air 1 | flame (FIRE) |
 | Freeze | `Break(A, W) + Bind(Q, W)` | 2 | Water 2, Air 1, Aether 1 | ice (ICE): frost from the air |
-| Pressure Spray | `Focus(W2) + Push(W2)` | 2 | Water 4 | water (WATER); tied to water: open water, or a wet unit, within reach |
-| Zap | `Extract(QF) + Push(QF)` | 2 | Aether 2, Fire 2 | lightning (SHOCK); needs a carried yellow diamond, a conduit (#1312), so it fizzles for anyone without one |
+| Pressure Spray | `Focus(3W2) + Push(3W2)` | 2 | Water 4 | water (WATER); tied to water: open water, or a wet unit, within reach |
+| Zap | `Extract(2QF) + Push(2QF)` | 2 | Aether 2, Fire 2 | lightning (SHOCK); needs a carried yellow diamond, a conduit (#1312), so it fizzles for anyone without one |
 | Zap Cannon | `Break(F, A) + Bind(Q, F) + Push(QF)` | 3 | Fire 3, Aether 2, Air 1 | lightning (SHOCK); was FIRE + AIR |
 
 **Aura raised inside affinity** so every carrier keeps what it could channel before: Celest Fire 2→3; Isaac Water 1→2 (cast file, missions/2) and Fire 1→2 (Prolog, verticality's BFire, whose rune moved small→medium); Marco Water 1→3; Castle Assault's soldiers, Ashwright and Kilnmaster Fire 2→3; AI Dry Alchemist's armed Isaac Fire 1→3.
@@ -656,7 +656,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **What counts as present** is `CellSubstances.available_near(cell, board, caster)`. Every cell holds the ambient air, `Atmosphere.SUBSTANCES`: inert air, vital air, vapor, heat (`atom_fire`, since #1324) and free aether (`atom_aether`). Within `Materia.REACH` of the casting cell (the cell and its four neighbours, Materia's "stand by your source" footprint) it adds the ground's substance through `SubstanceMap` (a FROZEN water tile counts as ice, not water: ice is a floor, not a well; a hole adds nothing), each tile state on the cell, each gas lying there, flame for a lit prop, and the states of whoever stands there (WET is water, CHILLED is ice). The caster's own states count wherever it casts from, since that is often a cell it has only queued a move to.
 - **Compounds lend their parts, recursively.** Dirt `E2 + AE` gives salt and ash, mud gives dirt (and so salt and ash) and water, stone gives salt and silica. **Plant matter lends nothing** (c3potheds@: organic matter is too complex to Break or Bind), so green and dry plant are present as themselves and a grass field holds no water. A molecule never lends its atoms; freeing them is a Break's job.
 - **Grass, tall grass and trees also stand on dirt**, a declared default until the mineralogy pass says what each ground sits on (#1315). It is what keeps Rock Throw working wherever it worked before.
-- **The walk** is `CarvingRecipe.fizzle_reason(available)`, in recipe order over a working copy. A Break needs the molecule its two arguments join into, a Bind both arguments, every other verb its one argument; a step that passes adds what it makes (a Break's freed atoms and their pairs, a Bind's product). So `Break(A, W) + Push(W2)` works anywhere, the Break making the water the Push needs, while `Focus(W2) + Push(W2)` needs water beside the caster and a lone `Push(F2)` fizzles anywhere no fire is within reach. (A lone `Push(F)` fizzled the same way until heat joined the ambient air, #1324.) The first missing substance is named: "Fizzles: needs water nearby".
+- **The walk** is `CarvingRecipe.fizzle_reason(available)`, in recipe order over a working copy. A Break needs the molecule its two arguments join into, a Bind both arguments, every other verb its one argument; a step that passes adds what it makes (a Break's freed atoms and their pairs, a Bind's product). So `Break(A, W) + Push(W2)` works anywhere, the Break making the water the Push needs, while `Focus(W2) + Push(W2)` needs water beside the caster and a lone `Push(F2)` fizzles anywhere no fire is within reach. (A lone `Push(F)` fizzled the same way until heat joined the ambient air, #1324.) The first missing substance is named: "Fizzles: needs water nearby". *(Since #1328 the walk also counts HOW MUCH: see source amounts below.)*
 - **Every caller asks the same function with a position** (one predicate, many cells): the menu's carving row and its WATCH row grey with the reason, judged from where the unit will stand after its queued moves (Pressure Spray is watch-only, so the watch row is where a tied carving shows); the queue gate refuses a candidate aim or watch with it (`SquadManager._candidate_carving_holds`, the whiff clause's sibling); a stored aim whose caster a re-plan has walked away goes red, "Fizzles where they'll be standing", when the resolve marks it, and a stored watch does the same when the carving would fizzle from the cell the resolve arms it at (`OverwatchAction.resolved_anchor`; `SquadPlanValidator`, one-way validity); the F / Shift+F aim cycle offers no carving that would fizzle (`Unit.aim_options` handed the board); the resolver turns a fizzling aim, counter or watch shot into a no-op at the caster's position in the pass (`ResolvedOutcome.fizzled` beside R7's `skipped`, the popup "Fizzled!", no damage, reaction, deposit or payload; expanded then marked, so the whiff clause and the AI's concede branch read it as they read a felled actor); the AI drops a fizzling candidate per origin and arms no watch that would fizzle, and `ThreatField` counts no threat from such an origin; the Play API refuses `legal_targets` (fire and watch) and `overwatch` with the reason and `focus` prints it. The queue row wears a "Fizzle" badge.
 - **The board as it stands.** Tile states, gas and unit positions are live, never a pass's own deposits: a fire this plan lights is not present for a later cast in the same plan. Empowerment declares the same limit.
 - **Not asked:** a payload (it is already in flight). A null board judges nothing, so nothing fizzles there. A watch armed beside its material and left standing is judged again when its shot fires, on the board as it stands then.
@@ -712,9 +712,34 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Weather stays out of the HUD**: the board draws it, and the pre-mission screen lists it only because that screen covers the board.
 - `Atmosphere.off_normal(reading)` is the one answer to which substances are off Normal (`is_normal` derives from it, and the bug report's air line uses it), and `percent_text`/`steps_text` the one wording both surfaces print. `MissionStatusPanel.air_rows` is kept out of `briefing()`, whose pre-mission reader has its own Conditions region. `game.refresh_mission_status`'s hide gate asks about the air, or a board with air but no objectives hides its own reading (#101's trap). The Scenario tab's air spins refresh the HUD as they move.
 
+**Built 2026-10-18: source amounts ([#1328](https://github.com/Phaazoid/Godoiosis/issues/1328)).** Proposed 2026-10-14 in #claude-sessions; plan approved by Phaazoid@ in a Claude session on 2026-10-18.
+- **An argument may carry an amount**, written as a coefficient the way the equations write `2FW`. `Push(W2)` is a splash's worth and `Focus(3W2) + Push(3W2)` a jet's worth. No number means one. A Break or Bind takes one amount, written on both arguments (`Break(3A, 3W)`); unequal amounts do not parse.
+- **The air supplies one** of each ambient substance (`CellSubstances.AIR`), whatever the board's reading. Every real source within reach supplies any amount (`CellSubstances.PLENTY`):
+  - the ground, and its compound's parts
+  - a tile state
+  - a gas
+  - a lit prop
+  - a unit's states, the caster's own included
+  - a carried conduit
+
+  A compound lends its parts at its own amount, so smoke lifts its cell's inert air past the air's one. A player reads it as: no number works anywhere; a number means bring the real thing.
+- **A step makes its products at its own amount**, so nothing multiplies:
+  - `Break(A, W) + Push(3W2)` fizzles. The air's one vapor makes one water, so no jet can be made out of air.
+  - `Break(3A, 3W) + Push(3W2)` holds only beside a vapor source.
+
+  Nothing is used up: `Focus(3W2) + Push(3W2)` needs three at each step, not six.
+- **The amount is not aura** (Phaazoid@, 2026-10-18). Demand, cost and damage all ignore it, so `Push(3W2)` asks Water 2. The source supplies the bulk; otherwise tying a carving to a river would make it cost more aura, not less.
+- **The air reading still moves damage only.** "A humid map's air holds 2 water" is unruled. A need of more than one is never drawn from the air (`CarvingRecipe.drawn_from`), so the reading does not scale it.
+- **The reason names the fix.** An amount above one fizzles with "needs a source of water nearby". An amount of one keeps "needs water nearby".
+- **Shipped carvings:** Pressure Spray `Focus(3W2) + Push(3W2)`, Rock Throw `Push(2E2)` and Zap `Extract(2QF) + Push(2QF)`. Every shipped carving that needs a real source now writes a number. None of them changed behaviour, since none of their materials is in the air. The 2s are placeholders.
+- `CellSubstances.available_near` now answers how much of each substance is present. `CellSubstances.fizzle_reason` is still the one predicate every caller asks. The Glossary's Transmutation page says the air holds only a little of anything.
+- **Not built:**
+  - A vial as a source. A vial is not present for casts at all, and something consumed never gates a cast.
+  - A fire supplying heat. Flame has lent no heat since #1324, so `Push(3F)` fizzles even beside a fire.
+  - A lint refusing an unnumbered carving that needs a source.
+
 **Next:**
 - **Weather nudging the reading** (rain adds vapor), and atmosphere gases that raise or lower an area (the first gas that subtracts).
-- **Still open:** source amounts (`Push(3W2)`, "needs a real source", proposed 2026-10-14) and whether such a number counts toward aura demand (asked of c3potheds@, unanswered).
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
