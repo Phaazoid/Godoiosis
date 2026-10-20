@@ -2,7 +2,7 @@
 
 Moved verbatim out of [`CLAUDE.md`](../../CLAUDE.md) on 2026-10-20, when that file had grown to 461 KB (about 115k tokens) and loaded into every session before any code was read. It is the same move [`build-log.md`](../build-log.md) made on 2026-07-24. `CLAUDE.md` keeps the rule and a pointer here; this file keeps the history and reasons behind sound effects and music.
 
-**How to read it.** Each section is the whole of one `CLAUDE.md` entry as it stood on 2026-10-20, so it restates its rule as well as telling its story. Treat a claim here as true as of the date it gives: `CLAUDE.md` and the code are authoritative for current state. A correction made during the move is marked *(Corrected 2026-10-20: …)* rather than rewritten silently. The only other edits were paragraph breaks added inside the longest entries.
+**How to read it.** Each section is the whole of one `CLAUDE.md` entry as it stood on 2026-10-20, so it restates its rule as well as telling its story. Treat a claim here as true as of the date it gives: `CLAUDE.md` and the code are authoritative for current state. A correction made during the move is marked *(Corrected 2026-10-20: …)* rather than rewritten silently. The only other edits were paragraph breaks inside the longest entries, and relative links re-pointed to work from this folder.
 
 **Adding to it.** A new story, measurement or ruling history about this area goes here. Its rule goes into `CLAUDE.md`, in three lines or fewer, with a pointer to the section.
 
