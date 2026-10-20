@@ -110,7 +110,7 @@ One walk, one ledger: `SquadManager.calculate_reactions_for_squad` (ex-`calculat
 
 ## Display model
 
-The queue UI renders `ActionQueueDisplayEntry` lists built by `ActionQueueDisplayEntry.build_for(squad, plan)` (requested via `SquadManager.get_display_entries_for_squad`, which supplies the resolved plan) — never raw queues. Sections per action type, with derived reactions last under their own REACTION header (renamed from COUNTER by #148 when the section held heals too; it holds counters only since that kind's repeal, and keeps the name because it is player-facing). Display rebuild happens on every plan change; the UI must tolerate freed units (actions cache display name/texture at init).
+The queue UI renders `ActionQueueDisplayEntry` lists built by `ActionQueueDisplayEntry.build_for(squad, plan)` (handed the plan `SquadManager.resolve_plan` resolved; `get_display_entries_for_squad`, which used to supply it, went in the 2026-07-26 split) — never raw queues. Sections per action type, with derived reactions last under their own REACTION header (renamed from COUNTER by #148 when the section held heals too; it holds counters only since that kind's repeal, and keeps the name because it is player-facing). Display rebuild happens on every plan change; the UI must tolerate freed units (actions cache display name/texture at init).
 
 ## Known gaps / future work
 
