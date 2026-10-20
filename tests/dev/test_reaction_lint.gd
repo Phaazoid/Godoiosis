@@ -11,13 +11,14 @@
 #
 # NOT_YET_FOLLOWED is codev's list (#claude-sessions, 2026-10-08) of what an equation says that the game
 # does not do yet, to work through one by one or all together later. Each line names a reaction that
-# exists and has an equation, and no reaction is both pending and listed.
+# exists and has an equation, and no reaction is both pending and listed. Its GAS half is checked
+# (#1329): a gas an equation makes that its reaction does not release reds until it is released or
+# listed here.
 extends GdUnitTestSuite
 
 const PENDING := {}
 
 const NOT_YET_FOLLOWED := {
-	"res://Resources/Reactions/fire_wet_quickdry.tres": "the steam is not released",
 	"res://Resources/TerrainReactions/Melt.tres": "the essence (ice-pack healing) and the heat are not released",
 	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the essence and heat are not released and the meltwater does not wet the unit; the +5 is the temperature change, not chemistry (Phaazoid)",
 	"res://Resources/TerrainReactions/Burning.tres": "the steam and smoke are not released",
@@ -100,6 +101,38 @@ func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 	assert_str(found[0]["text"]).contains("steam")
 
 
+func test_a_unit_reaction_whose_released_gas_is_missing_from_the_outputs_degrades() -> void:
+	var r := _elemental("F2 + W2 -> F2 + W2", Elemental.Element.FIRE)
+	r.gas_level = Gas.Level.THIN
+	var found := ReactionLint.check(r, _catalog())
+	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
+	assert_str(found[0]["text"]).contains("steam")
+
+
+# Made = named in the outputs and not the inputs; released = that kind at a level above NONE. A
+# reaction releasing the WRONG gas still owes the one its equation makes.
+func test_a_gas_the_equation_makes_is_unreleased_until_the_reaction_releases_it() -> void:
+	var made: Array[Gas.Kind] = [Gas.Kind.STEAM]
+	var r := _elemental("F2 + W2 -> 2FW", Elemental.Element.FIRE)
+	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_equal(made)
+	r.gas = Gas.Kind.SMOKE
+	r.gas_level = Gas.Level.THIN
+	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_equal(made)
+	r.gas = Gas.Kind.STEAM
+	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_empty()
+
+	var t := TerrainReaction.new()
+	t.equation = "F2 + W2 -> 2FW"
+	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_equal(made)
+	t.gas_level = Gas.Level.MEDIUM
+	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_empty()
+
+
+func test_a_gas_on_both_sides_is_not_made() -> void:
+	var r := _elemental("FW + W2 -> FW + W2", Elemental.Element.WATER)
+	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_empty()
+
+
 func test_a_map_entry_with_no_substance_is_skipped_rather_than_faulted() -> void:
 	# COVER is a shape dug in the ground (a NONE line), so a reaction on it cannot be held to naming one.
 	var r := TerrainReaction.new()
@@ -161,3 +194,17 @@ func test_every_not_yet_followed_line_names_a_reaction_with_an_equation() -> voi
 		if PENDING.has(path):
 			stale.append("%s is both pending and listed" % path)
 	assert_array(stale).is_empty()
+
+
+# The ledger's gas half, checked rather than trusted: a line cannot come off while its gas still stays
+# in the equation alone.
+func test_every_gas_an_equation_makes_is_released_or_on_the_ledger() -> void:
+	var unlisted: Array[String] = []
+	for reaction: Resource in _shipped():
+		var path := reaction.resource_path
+		if NOT_YET_FOLLOWED.has(path) or PENDING.has(path):
+			continue
+		for kind: Gas.Kind in ReactionLint.unreleased_gases(reaction):
+			unlisted.append("%s makes %s and does not release it: release it, or say so on NOT_YET_FOLLOWED" % [
+					path, Gas.display_name(kind)])
+	assert_array(unlisted).is_empty()

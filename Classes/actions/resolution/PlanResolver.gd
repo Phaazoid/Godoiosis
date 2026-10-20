@@ -712,6 +712,9 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		if reaction.popup != "":
 			outcome.popups.append(reaction.popup)
 		outcome.fired_reactions.append(reaction)   # whole, art or not (#685)
+	# Asked HERE, before the displacement stage threads a shove into the hypo: the gas rises where the
+	# target was hit, not where the hit throws it.
+	_release_reaction_gas(action, outcome.fired_reactions, target_hypo.position, plan, board)
 
 	# remove-wins on conflict -> net-disjoint delta sets
 	var net_added: Array[Elemental.State] = []
@@ -844,6 +847,25 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		target_hypo.position = landing.cell
 
 	action.resolved = outcome
+
+# The gas a hit's fired reactions release (#1329): fire drying a wet unit boils its water off as steam,
+# on the cell the target was hit on. Once per VICTIM, secondary hits included, since each victim's
+# water is its own -- where an attack's own gas lands once per volley. Into the one cell-effect channel,
+# so the board ghosts it and both executors play it, and gated like every deposit on
+# GasSpread.holds_gas, so the preview never promises gas the board would not hold (Law #2).
+static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalReaction], cell: Vector2i,
+		plan: ResolvedPlan, board: BoardContext) -> void:
+	if board == null or not GasSpread.holds_gas(cell, board):
+		return
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	for reaction in fired:
+		if reaction.gas_level != Gas.Level.NONE:
+			effect.add_gas(reaction.gas, reaction.gas_level)
+	if effect.gas_added.is_empty():
+		return
+	effect.cause = action
+	plan.cell_effects.append(effect)
 
 # The states a unit holds once a hit's removes and then its adds have landed: the thread (R4) and
 # #1092's judge both read it.
@@ -1464,6 +1486,7 @@ class _Hypo extends LethalityRules.Situation:
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
 # hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->
 # BURNING), and may release gas; an attack that authors gas leaves it on every struck cell too (#508).
+# A reaction on a UNIT releases its gas from _resolve_one instead (_release_reaction_gas, #1329).
 # Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
 # that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> Array[ResolvedCellEffect]:
