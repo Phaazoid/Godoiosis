@@ -1,5 +1,6 @@
 # Where gas comes from (#508): an attack that AUTHORS a gas leaves it on every tile it strikes, and a
-# terrain reaction may release one -- water dousing fire, fire boiling water. Both
+# terrain reaction may release one -- water dousing fire, fire boiling water -- and since #1329 so may a
+# reaction on a UNIT, fire drying a wet body. All of them
 # arrive on the one cell-effect channel the resolver already fills, so the queue previews them and
 # both executors play them.
 #
@@ -29,6 +30,17 @@ class _WallBoard extends _KindBoard:
 		return true
 	func is_walkable(_cell: Vector2i) -> bool:
 		return false
+
+
+# Open, unburnable ground everywhere and every cell standable, so a shove has somewhere to land. A
+# headless BoardContext with no grid otherwise reads every cell as a wall (test_soaking.gd's reason).
+class _OpenBoard extends BoardContext:
+	func _init(unit_list: Array[Unit]) -> void:
+		super(null, unit_list, null, null)
+	func terrain_kind_at(_cell: Vector2i) -> Terrain.Kind:
+		return Terrain.Kind.DIRT
+	func is_walkable(_cell: Vector2i) -> bool:
+		return true
 
 
 func _attacker(element: Elemental.Element, targets: EquippableData.TargetMode) -> Unit:
@@ -202,3 +214,101 @@ func test_a_reaction_that_only_releases_gas_still_names_itself_on_the_tile_card(
 		if line.contains(Gas.display_name(STEAM)):
 			named = true
 	assert_bool(named).override_failure_message("water's interactions never mention steam: %s" % [lines]).is_true()
+
+
+# --- a reaction on a UNIT releases it (#1329) ------------------------------------------------------
+
+# The authored reaction that dries a wet unit with fire and releases gas, failing loudly when the
+# catalog has none (the _authored rule above, for the unit catalog).
+func _unit_release() -> ElementalReaction:
+	var fire: Array[Elemental.Element] = [Elemental.Element.FIRE]
+	for reaction in ReactionCatalog.get_all():
+		if reaction.fires_for(fire) and reaction.required_state == Elemental.State.WET \
+				and reaction.remove_states.has(Elemental.State.WET) and reaction.gas_level != Gas.Level.NONE:
+			return reaction
+	assert_bool(false).override_failure_message("no authored reaction dries a wet unit and releases gas -- point this case at one the catalog has").is_true()
+	return null
+
+
+func _fire_at(target_cell: Vector2i, wet: bool) -> Array[Unit]:
+	var attacker := _attacker(Elemental.Element.FIRE, EquippableData.TargetMode.UNIT)
+	var target: Unit = H.spawn_unit(self, Team.Faction.ENEMY, target_cell, {Stats.Stat.MHP: 50})
+	if wet:
+		target.add_element_state(Elemental.State.WET)
+	var pair: Array[Unit] = [attacker, target]
+	return pair
+
+
+func _resolve_on_units(attacks: Array[AttackAction], units: Array[Unit]) -> ResolvedPlan:
+	var plan := ResolvedPlan.new()
+	plan.attacks = attacks
+	PlanResolver.resolve(plan, ReactionCatalog.get_all(), _OpenBoard.new(units), TerrainReactionCatalog.get_all())
+	return plan
+
+
+func _gas_on(plan: ResolvedPlan, cell: Vector2i, kind: Gas.Kind) -> int:
+	var total := 0
+	for effect in plan.cell_effects:
+		if effect.cell == cell:
+			var level: int = effect.gas_added.get(kind, 0)
+			total += level
+	return total
+
+
+# The dry twin is what gives it teeth: a release on every fire hit would pass the wet half alone.
+func test_fire_drying_a_wet_unit_releases_its_water_on_that_units_cell() -> void:
+	var release := _unit_release()
+	var wet := _fire_at(TARGET_CELL, true)
+	var plan := _resolve_on_units(_one(H.stamped_attack(wet[0], wet[1])), wet)
+	assert_bool(plan.attacks[0].resolved.states_removed.has(Elemental.State.WET)).is_true()
+	assert_int(_gas_on(plan, TARGET_CELL, release.gas)).is_equal(release.gas_level)
+
+	var dry := _fire_at(TARGET_CELL, false)
+	var dry_plan := _resolve_on_units(_one(H.stamped_attack(dry[0], dry[1])), dry)
+	assert_int(dry_plan.cell_effects.size()).override_failure_message(
+			"a fire hit on a DRY unit released gas").is_equal(0)
+
+
+# Where the fire met the water, not where the hit throws the body (dev, 2026-10-19). Ordering: the
+# release must be read before the shove is threaded into the hypo.
+func test_the_steam_rises_where_the_unit_was_hit_not_where_a_shove_lands_it() -> void:
+	var release := _unit_release()
+	var units := _fire_at(TARGET_CELL, true)
+	var shove := H.stamped_attack(units[0], units[1])
+	shove.fired_attack.knockback = 2
+	var plan := _resolve_on_units(_one(shove), units)
+	var landed: Vector2i = shove.resolved.knockback_to
+	assert_bool(shove.resolved.knockback_applied and landed != TARGET_CELL).override_failure_message(
+			"the shove never moved the target, so this case cannot tell the two cells apart").is_true()
+	assert_int(_gas_on(plan, TARGET_CELL, release.gas)).is_equal(release.gas_level)
+	assert_int(_gas_on(plan, landed, release.gas)).is_equal(0)
+
+
+# Each victim's water is its own, so a volley releases once per wet victim -- where an attack's own gas
+# lands once per volley (test_a_volley_leaves_its_gas_once_not_once_per_victim).
+func test_each_wet_victim_of_one_volley_releases_its_own_steam() -> void:
+	var release := _unit_release()
+	var units := _fire_at(TARGET_CELL, true)
+	var second_cell := TARGET_CELL + Vector2i(0, 1)
+	var second_target: Unit = H.spawn_unit(self, Team.Faction.ENEMY, second_cell, {Stats.Stat.MHP: 50})
+	second_target.add_element_state(Elemental.State.WET)
+	units.append(second_target)
+	var lead := H.stamped_attack(units[0], units[1])
+	var second := H.stamped_attack(units[0], second_target)
+	second.is_secondary_hit = true
+	var volley: Array[AttackAction] = [lead, second]
+	lead.volley = volley
+	second.volley = volley
+	var plan := _resolve_on_units(volley, units)
+	assert_int(_gas_on(plan, TARGET_CELL, release.gas)).is_equal(release.gas_level)
+	assert_int(_gas_on(plan, second_cell, release.gas)).is_equal(release.gas_level)
+
+
+func test_a_unit_reaction_that_releases_gas_says_so_in_its_line() -> void:
+	var reaction := ElementalReaction.new()
+	reaction.incoming_element = Elemental.Element.FIRE
+	reaction.required_state = Elemental.State.WET
+	reaction.gas_level = Gas.Level.THIN
+	assert_str(Glossary.reaction_line(reaction)).contains(Gas.display_name(reaction.gas))
+	reaction.gas_level = Gas.Level.NONE
+	assert_str(Glossary.reaction_line(reaction)).not_contains(Gas.display_name(reaction.gas))

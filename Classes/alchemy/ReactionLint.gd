@@ -85,6 +85,8 @@ static func _expected_outputs(reaction: Resource) -> Array[Dictionary]:
 		var r := reaction as ElementalReaction
 		for state: Elemental.State in r.add_states:
 			_expect(out, SubstanceMap.of_state(state), "the added %s" % Elemental.state_display_name(state))
+		if r.gas_level != Gas.Level.NONE:
+			_expect(out, SubstanceMap.of_gas(r.gas), "the released %s" % Gas.display_name(r.gas))
 	elif reaction is TerrainReaction:
 		var r := reaction as TerrainReaction
 		for state: Terrain.TileState in r.add_tile_states:
@@ -92,6 +94,39 @@ static func _expected_outputs(reaction: Resource) -> Array[Dictionary]:
 		if r.gas_level != Gas.Level.NONE:
 			_expect(out, SubstanceMap.of_gas(r.gas), "the released %s" % Gas.display_name(r.gas))
 	return out
+
+
+# The gases this reaction's equation MAKES (named in its outputs, not its inputs) that it does not
+# release (#1329) -- what the lint suite's NOT_YET_FOLLOWED ledger has to list. An equation that will
+# not parse makes nothing here; check() reports it.
+static func unreleased_gases(reaction: Resource, catalog: Dictionary = {}) -> Array[Gas.Kind]:
+	var missing: Array[Gas.Kind] = []
+	if reaction == null or reaction.get("equation") == null:
+		return missing
+	var halves := String(reaction.get("equation")).split(AlchemyFormula.ARROW)
+	if halves.size() != 2:
+		return missing
+	if catalog.is_empty():
+		catalog = SubstanceCatalog.get_all()
+	var inputs := AlchemyFormula.side(halves[0], catalog)
+	var outputs := AlchemyFormula.side(halves[1], catalog)
+	if inputs.error != "" or outputs.error != "":
+		return missing
+	for kind: Gas.Kind in Gas.Kind.values():
+		var id := SubstanceMap.of_gas(kind)
+		if id != "" and outputs.ids.has(id) and not inputs.ids.has(id) and not _releases(reaction, kind):
+			missing.append(kind)
+	return missing
+
+
+static func _releases(reaction: Resource, kind: Gas.Kind) -> bool:
+	if reaction is ElementalReaction:
+		var r := reaction as ElementalReaction
+		return r.gas == kind and r.gas_level != Gas.Level.NONE
+	if reaction is TerrainReaction:
+		var r := reaction as TerrainReaction
+		return r.gas == kind and r.gas_level != Gas.Level.NONE
+	return false
 
 
 static func _expect(out: Array[Dictionary], id: String, what: String) -> void:

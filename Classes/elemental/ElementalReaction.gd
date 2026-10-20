@@ -36,6 +36,12 @@ class_name ElementalReaction
 # order-independence holds.
 @export var add_state_turns: Dictionary[Elemental.State, int] = {}
 
+# Gas the reaction RELEASES on the cell the target was hit on (#1329): fire drying a wet unit boils
+# its water off as steam. TerrainReaction's pair, one spelling for all three holders: NONE is the off
+# switch, since STEAM is the kind enum's zero.
+@export var gas: Gas.Kind = Gas.Kind.STEAM
+@export var gas_level: Gas.Level = Gas.Level.NONE
+
 # The reaction as Deep Alchemy writes it, e.g. `F2 + W2 -> 2FW` (deep-alchemy.md). Read by
 # ReactionLint only; nothing in play reads it yet. Empty = not written yet, a gap the lint's
 # pending ledger declares.
