@@ -106,7 +106,7 @@ The gambit as it stands — still **no death-save but a gambit for power**, acce
 
 ## Generation & recovery *(the record — there is no Will to generate since 2026-10-01)*
 
-What survives of this section is rescue (below) and the between-battle layer, which now recovers **limbs and wounds** rather than a pool: a wound lasts the battle, a limb lasts until something regrows or replaces it.
+What survives of this section is rescue (below) and the between-battle layer, which now recovers **limbs** rather than a pool: a wound lasts only the battle (Wounded does not carry over between battles — dev, 2026-10-02, on [#501](https://github.com/Phaazoid/Godoiosis/issues/501)), a limb lasts until something regrows or replaces it.
 
 **In-fight: depletion-only.** Within a fight Will mostly moves one direction — *down*. That is the dread the system runs on ("watch Will drain toward the cliff"). The grill's key catch: **every in-battle generator fights that cliff** — a passive tick is a boring timer that trivializes downs; kills/combos snowball and feel gamey ("why does a kill restore your nerve to *not die*?"). So Will is not freely generated in combat. Two sanctioned exceptions:
 
@@ -188,7 +188,7 @@ Brute-force channeling ([transmutation-model-proposal.md](transmutation-model-pr
 
 ## Abilities & threats (deferred layer, principles locked)
 
-**Re-homed 2026-07-06:** the unit-side abilities below are now **seed content for job ability pools** ([jobs.md](jobs.md) — the ability chassis: reactions are standing policies, no mid-pass prompts, Crisis stays the game's only one); weapon-side ones stay with the parts system ([weapons.md](weapons.md)). Locked principle stands: **thresholds and caps, never chance.** Captured ideas: **Iron Will** (deterministic damage cap — **BUILT 2026-07-20, #61**), **Intimidation** (a *plannable* Will-drain aura — the deterministic answer to "the player shouldn't freely trust going-down" — **RETIRED 2026-10-01, #1174**; was **BUILT 2026-07-20, #61**), **Revved Chainsword** (weapon-side Will-drain, proficiency-gated — ratified 2026-07-05, [weapons.md](weapons.md); moot with Will, #1174), **exact-lethal boss** (forces reliance on Crisis), ~~**Will as leadership currency**~~ (moot, #1174), **Fortitude** (a regenerating pre-HP shield — named follow-up, not built).
+**Re-homed 2026-07-06:** the unit-side abilities below are now **seed content for job ability pools** ([jobs.md](jobs.md) — the ability chassis: reactions are standing policies, no mid-pass prompts, Crisis stays the game's only one — *that carve-out fell 2026-08-09 with the BREAK doctrine; since #158 there are no mid-pass prompts at all*); weapon-side ones stay with the parts system ([weapons.md](weapons.md)). Locked principle stands: **thresholds and caps, never chance.** Captured ideas: **Iron Will** (deterministic damage cap — **BUILT 2026-07-20, #61**), **Intimidation** (a *plannable* Will-drain aura — the deterministic answer to "the player shouldn't freely trust going-down" — **RETIRED 2026-10-01, #1174**; was **BUILT 2026-07-20, #61**), **Revved Chainsword** (weapon-side Will-drain, proficiency-gated — ratified 2026-07-05, [weapons.md](weapons.md); moot with Will, #1174), **exact-lethal boss** (forces reliance on Crisis), ~~**Will as leadership currency**~~ (moot, #1174), **Fortitude** (a regenerating pre-HP shield — named follow-up, not built).
 
 ## Forks — status after the 2026-06-24 grill *(all provisional; 1, 2 and 5 are moot since Will retired, 2026-10-01)*
 
