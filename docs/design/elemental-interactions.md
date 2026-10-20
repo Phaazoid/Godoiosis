@@ -6,9 +6,9 @@
 
 **Ground rules:** everything deterministic (Law #1 — no "chance to"; "20%" becomes a flat/scaled number). Everything should reward **ordering** and **alchemist + mechanist squad synergy** (combos replace crits). Lean hard into the **old-alchemy + steampunk** identity: *in this world the discredited science is the true physics.* **Vocabulary (dev ruling 2026-07-07): the element/sigil is AIR, never WIND** — matches `Elemental.Element` and the primary quartet Earth/Air/Fire/Water (+Aether/Alkahest); "wind" is free for *attack/flavor names* (e.g. the Wind Blast reaction below).
 
-**Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
+**Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first *(both exist now: tile states since 2026-06-28, the end-of-turn pass in `TurnBoundary`; only a unit damage-over-time still needs its own tick, [elemental-system.md](elemental-system.md) → *Deferred layers*)*.
 
-**Canon checked through #199 (2026-08-12); #1135's map-only shock ruling folded in 2026-09-28; #1092's Chilled-beats-Wet ruling folded in 2026-09-29; #1260's weather folded in 2026-10-08; #1286's wind folded in 2026-10-10; #1269's snows folded in 2026-10-09; #1285's fogs the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10; Deep Alchemy Phase 2 (Blow Dry's recipe) folded in 2026-10-11; Heat (Blow Dry delivers heat) folded in 2026-10-12; #1329's Dried Off steam folded in 2026-10-19.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #1339 (2026-10-20).** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -30,7 +30,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 - The **old-alchemy lean** as the spine of flavor: **Tria Prima**, **the four humours**, **the seven planetary metals**, the seven operations — deep cuts welcome.
 - **Vitriol** as the single corrosion+toxin element (absorbs the old POISON/ACID — see Rework). **PARTLY BUILT 2026-09-06 (#97): `Elemental.Element.CORROSION` exists and a Vial of Vitriol is authored, but both are INERT — no reaction, no paired State, no terrain source. It arrived because the Chemical Spitter needed an element to be tagged with, not because the toxin design landed; the absorb-POISON/ACID half is still this bank entry.**
 - **Motion & repositioning**: magnetism hauling armor-wearers, gusts blasting units back, **Telesma** (renamed force) for kinetic shoves. Positioning payoff.
-- **Vision / command-range denial**: smokescreen that cuts a leader's LDR range and shreds squad cohesion.
+- **Vision / command-range denial**: smokescreen that cuts a leader's cohesion (COH) range and shreds squad cohesion.
 - **Counter-denial (gated)**: STAGGERED (big SOUND), FROZEN, or shocking conductive-armor → can't counter.
 - **AIRBORNE** — and it's applied by *weapons* too (the kinetic mace), not just elements. Combos with AIR/EARTH.
 - **Aether** as a versatile medium: a *status-cleaner* (a prestidigitation cantrip) **and** action-at-a-distance combo carrier.
@@ -85,6 +85,8 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 | SALT (🜔, body) | tria prima — fixity | desiccates (anti-WET); the fixative behind **Coagula** |
 | ⚗ CALORIC | the self-repelling heat-fluid | heat *flows* hot→cold: warms/chills neighbors; heat-sink |
 
+*(Sulfur, mercury and salt exist in code as Deep Alchemy **substances**, not elements — `Resources/Substances/`, [deep-alchemy.md](deep-alchemy.md).)*
+
 ### Steampunk (🤔 mechanist machine-line)
 | Force | Identity / sets |
 |---|---|
@@ -105,7 +107,7 @@ Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT �
 
 | State | Role | Does (deterministic) |
 |---|---|---|
-| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike). **Never beside CHILLED, which wins in both orders ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092))** — see the CHILLED row. ⚗ −1 move unbuilt |
+| ★ WET | S,i | **[BUILT — sources 2026-09-10, #884]** +SHOCK / −FIRE damage, and it CONDUCTS. Sourced by a WATER hit *and* by water itself: wading through it or being thrown into it (`RulesService.wets_in`; shallow and deep alike); and, at the end of the unit's own turn, by medium or thick steam ([#508](https://github.com/Phaazoid/Godoiosis/issues/508)) and by rain ([#1260](https://github.com/Phaazoid/Godoiosis/issues/1260)), through `TileHitAction.soaks`. **Never beside CHILLED, which wins in both orders ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092))** — see the CHILLED row. ⚗ −1 move unbuilt |
 | ~~★ CONDUCTIVE~~ | — | **FOLDED INTO WET, NOT BUILT ([#884](https://github.com/Phaazoid/Godoiosis/issues/884), 2026-09-10).** The conductor set is *a water tile (unless FROZEN) or a WET unit*, so a second state with its own source to author would be a duplicate seam for a fact WET already carries (Law #4). It comes back only if something must conduct while dry — FERROUS armour is the candidate, and it would join `Conduction.conducts` as a clause rather than as a state |
 | ★ OILED | S,e | FIRE → big bonus + BURNING; ⚗ knockback travels +1 |
 | ★ BURNING | P,e🔗 | loses fixed HP each activation; spreads to flammable; doused by WATER/ICE |
@@ -118,8 +120,8 @@ Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT �
 | BLEEDING | P,e🔗 | loses HP, extra if it moved (punishes repositioning) |
 | STAGGERED | P,i | **can't counter this chain** — the gated combo-enabler. Set by big SOUND / heavy impact |
 | ROOTED | P,i | can't move next activation (EARTH/PLANT/mud) |
-| BLINDED / SMOKED | P,i/e | −attack range **and −leader command (LDR) range** — wrecks squad cohesion, not a dodge stat |
-| GROUNDED | P,i | **immune to SHOCK reactions** — the designed shock counter |
+| BLINDED / SMOKED | P,i/e | −attack range **and −leader cohesion (COH) range** — wrecks squad cohesion, not a dodge stat. *(For smoke the dev ruled one payload only, [#508](https://github.com/Phaazoid/Godoiosis/issues/508) ruling 6, 2026-09-29: a leader in thick smoke loses COH range — not a line-of-sight block, not counter denial.)* |
+| GROUNDED | P,i | **immune to SHOCK reactions** — the designed shock counter. **[BUILT as an ability, not a state — #89 2026-07-25, #90 2026-07-29]:** Shock Insulation (`Abilities.Id.INSULATED_SHOCK`, worn via the Insulated Weave) erases SHOCK from any hit on its holder, so no shock reaction fires; the damage still lands and DEF answers it (#424) |
 | MAGNETIZED / FERROUS | S,i | metal — attracts shock/magnet; haulable; splashes adjacent metal |
 | EMPOWERED | P,i | **friendly** — next attack +X (friendly-combo payoff) |
 | MARKED | S,i | next hit on it (by anyone) +X — focus-fire setup |
@@ -138,7 +140,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 ### FIRE
 | × state | reaction | effect |
 |---|---|---|
-| ◆ WET | QuickDry | **[BUILT 2026-08-12]** ×0.5 dmg, remove WET (`fire_wet_quickdry.tres`) — and the **Blow Dry** carving (damageless, `hits_allies`; `Break(F, A) + Push(F)` since 2026-10-12, so it delivers free HEAT, which this reaction answers to as well and which lights no grass) exists purely to deliver it to friends. The tile→STEAM half is **[BUILT 2026-10-19, #1329]**: the dried water rises as THIN steam on the cell the unit was hit on, a wisp that never soaks, so Blow Dry still dries 🔗 |
+| ◆ WET | QuickDry | **[BUILT 2026-08-12]** ×0.5 dmg, remove WET (`fire_wet_quickdry.tres`) — and the **Blow Dry** carving (damageless, `hits_allies`; `Break(F, A) + Push(F)` since 2026-10-12, so it delivers free HEAT, which this reaction answers to as well and which lights no grass) exists purely to deliver it to friends. The tile→STEAM half is **[BUILT 2026-10-19, #1329]**: the dried water rises as THIN steam on the cell the unit was hit on, a wisp that never soaks, so Blow Dry still dries |
 | ★ OILED | Conflagration | ++dmg, apply BURNING, *keep* OILED (non-consume) |
 | ◆ FROZEN | Thermal Shock | +dmg, FROZEN → WET |
 | CHILLED | ~~Thaw~~ **Temperature Shock** | **[BUILT 2026-08-12]** +5 dmg AND remove CHILLED (`fire_chilled_temp_shock.tres`) — the dev upgraded the bench's plain thaw: going from extreme cold to heat is painful. NB it fires on Blow Dry too (a damageless hit still carries its element — #126 ruling; Blow Dry carries HEAT, which this reaction lists since 2026-10-12), so blow-drying a chilled ally hurts them. Designed, not a bug |
@@ -152,7 +154,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | BURNING | Douse | −dmg, BURNING → WET |
 | ⚗ OILED | Slick Spread | spread OILED to adjacent (water carries oil) 🔗 |
 | SHOCKED | Conduct | +dmg, arc to adjacent (live water) |
-| *(applies WET / CONDUCTIVE)* | | never to a CHILLED unit ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092)) |
+| *(applies WET)* | | **[BUILT 2026-06-19, #28]** `water_sets_wet.tres`; never to a CHILLED unit ([#1092](https://github.com/Phaazoid/Godoiosis/issues/1092)). *(CONDUCTIVE folded into WET, #884.)* |
 
 ### SHOCK
 | × state | reaction | effect |
@@ -162,7 +164,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | FERROUS / **conductive armor** | Overload | ++dmg, **STAGGERED** (can't counter — the gated counter-denial) |
 | ⚗ OILED | Spark | small dmg, apply BURNING (sparks light it) |
 | MAGNETIZED | Arc Magnet | +dmg, pull 1 tile |
-| GROUNDED | *(nullified)* | no reaction — counterplay |
+| GROUNDED | *(nullified)* | no reaction — counterplay. **[BUILT as Shock Insulation — see the GROUNDED state row]** |
 
 ### ICE
 | × state | reaction | effect |
@@ -171,15 +173,15 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | ★ WET | ~~Flash Freeze~~ **Deep Chill** | **[BUILT 2026-08-12]** +5 dmg, consume WET, CHILLED lasts twice as long (`ice_wet_deep_chill.tres`, the longest authored clock wins across fired reactions). Flash-Freeze-to-FROZEN stays on the bench with unit-FROZEN |
 | ◆ CHILLED | Frozen | CHILLED → FROZEN |
 | BURNING | Quench | −dmg, BURNING → WET |
-| CONDUCTIVE | Insulate | remove CONDUCTIVE |
+| ~~CONDUCTIVE~~ | ~~Insulate~~ | ~~remove CONDUCTIVE~~ *(CONDUCTIVE folded into WET, #884; ICE on a WET unit is Deep Chill, which consumes the WET, and CHILLED keeps WET off, #1092)* |
 
 ### AIR
 | × state | reaction | effect |
 |---|---|---|
-| *(any unit)* | Wind Blast | **shove the unit back** — repositioning (Axiom 4). *("Wind" survives here as an attack name — the sanctioned use.)* |
+| *(any unit)* | Wind Blast | **shove the unit back** — repositioning (Axiom 4). *("Wind" survives here as an attack name — the sanctioned use.)* *(The shove shipped as the **Gust** carving, `Push(A2)`, knockback 2, damageless — an authored shove on the attack, not a reaction.)* |
 | AIRBORNE | Gale | launch further / fling into a hazard 🔗 |
 | BURNING | Backdraft | spread BURNING to adjacent, +dmg 🔗 |
-| SMOKED/STEAM/vapor | Disperse | clear the atmosphere |
+| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(Ruled, unbuilt — [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335) item 5, 2026-10-19: an AIR hit removes every gas on the cells it strikes, previewed; pushing gas along the cast is [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332).)* |
 | SUBLIMED | Scatter | ++dmg (tear the vapor apart) |
 
 ### EARTH
@@ -215,10 +217,10 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 
 Concise riffs on the ✅ items; they lean on states/reactions above.
 
-- **Motion & repositioning.** Wind Blast (the AIR shove), MAGNETO Haul (drag armor — the heavier/more-metal, the better it grabs), TELESMA Concussion (scatter *or* gather a squad), EARTH Slam, AIRBORNE launches. Pull a scattered enemy line into one tile, then one AoE combo; or fling their leader out of LDR range to fracture the squad. Positioning *is* the damage.
-- **Vision & command denial.** Smoke/fog on the enemy **leader** collapses their LDR range — their squad can't stay tethered and scatters into solo units (cohesion attack, straight at [squad-system.md](squad-system.md)). The non-lethal way to break a squad.
+- **Motion & repositioning.** Wind Blast (the AIR shove), MAGNETO Haul (drag armor — the heavier/more-metal, the better it grabs), TELESMA Concussion (scatter *or* gather a squad), EARTH Slam, AIRBORNE launches. Pull a scattered enemy line into one tile, then one AoE combo; or fling their leader out of cohesion range to fracture the squad *(built in effect: a shove that leaves a member out of contact splits the squad, #151, previewed since #367)*. Positioning *is* the damage.
+- **Vision & command denial.** Smoke/fog on the enemy **leader** collapses their cohesion (COH) range — their squad can't stay tethered and scatters into solo units (cohesion attack, straight at [squad-system.md](squad-system.md)). The non-lethal way to break a squad.
 - **Counter-denial (gated).** STAGGERED (a big enough SOUND hit), FROZEN, or Overload (SHOCK into conductive armor) → the target can't counter. Then the squad alpha-strikes freely. Strong → always behind a setup beat, never one cheap hit (Axiom 3).
-- **Transmutation (core alchemist verb).** Alchemists convert tile/unit states as a *baseline* ability: WET→ICE (instant bridge / freeze a swimmer), FIRE→STEAM, STONE→SAND, mud↔dust. Battlefield reshaping, not a wild swing.
+- **Transmutation (core alchemist verb).** Alchemists convert tile/unit states as a *baseline* ability: WET→ICE (instant bridge / freeze a swimmer), FIRE→STEAM, STONE→SAND, mud↔dust. Battlefield reshaping, not a wild swing. *(FIRE→STEAM is BUILT as gas, #508: fire or heat on open water boils it to medium steam (`Boils.tres`), a douse leaves thick steam, and Dried Off thin, #1329.)*
 - **Revive (heavy Will).** Downed ally pickup: **Azoth** (alchemic — "shock them back to life" with aura) or **Galvanic** (mechanist — a jolt). Costs a big chunk of Will; *(Will retired by #1174 — the cost needs a new currency)* ties straight into the stakes ladder. *Reanimating the actually-dead is ⚗⚗ far-future.*
 - **Sympathetic link.** Bind two units (correspondence — "as above, so below"); a state or a share of damage mirrors between them. Combo delivery at range; or a sacrifice/share-the-pain tool.
 
@@ -237,11 +239,13 @@ Concise riffs on the ✅ items; they lean on states/reactions above.
 
 ## Solo (non-combinatrix) effects ◆
 
-Always-on modifiers, no second state needed: SMOKE/STEAM → −command & −attack range · FIRE → +vs unarmored · SHOCK → +vs metal/prosthesis (mechanist tax) · ICE/WATER → −move · AIR → 1-tile shove on hit.
+Always-on modifiers, no second state needed: SMOKE/STEAM → −command & −attack range · FIRE → +vs unarmored · SHOCK → +vs metal/prosthesis (mechanist tax) · ICE/WATER → −move · AIR → 1-tile shove on hit. *(Ruled since: smoke's one payload is a leader's COH range (#508 ruling 6) and steam's one effect is WET (#508 ruling 9); the AIR shove shipped as the Gust carving.)*
 
-## Terrain & terrain-as-target ("attack the map") 🔗
+## Terrain & terrain-as-target ("attack the map")
 
-Actions targeting *tiles*: Drill/EARTH break boulders (open paths, leave rubble Cover) · FIRE burn brambles (remove Cover, BURNING field + SMOKE) · EARTH raise a destructible wall · WATER flood low ground (WET web; **freeze → walkable ICE bridge** ◆) · Powder Barrel ◆ (chain-explode; WET → inert) · Landmine ◆ · ⚗ conductive rails · ⚗ fixed-path lava/rivers (de-randomized "moving terrain").
+*(Attacking the map is BUILT: an attack's `targets` is UNIT, MAP or BOTH, and deposits go through the cell-effect channel — [terrain.md](terrain.md) → *"Attack the map"*.)*
+
+Actions targeting *tiles*: Drill/EARTH break boulders (open paths, leave rubble Cover) · FIRE burn brambles (remove Cover, BURNING field + SMOKE) · EARTH raise a destructible wall · WATER flood low ground (WET web; **freeze → walkable ICE bridge** ◆ — *the freeze is BUILT: `Frozen.tres`, walkable, permanent since 2026-08-12, entry cost 1 (#1223); fire or heat melts it back to water (`Melt.tres`), drowning whoever stands on it (#922); flooding is unbuilt*) · Powder Barrel ◆ (chain-explode; WET → inert) · Landmine ◆ · ⚗ conductive rails · ⚗ fixed-path lava/rivers (de-randomized "moving terrain").
 
 ---
 
@@ -287,7 +291,7 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 |---|---|---|---|
 | ★ Rain / Downpour | tiles trend WET; FIRE suppressed | BURNING extinguishes over time | **shock meta** — the springspear's dream |
 | ★ Thunderstorm | rain + charged sky | telegraphed **lightning strike** every N turns on the most-exposed / most-metal unit in the open | punishes lone metal units; rewards cover & huddling |
-| ★ Fog / Mist | global **−vision & −LDR** | — | map-wide smokescreen; squads must huddle; ranged weak; ambush map |
+| ★ Fog / Mist | global **−vision & −COH** | — | map-wide smokescreen; squads must huddle; ranged weak; ambush map |
 | Drought / Harsh Sun | tiles trend DRY; FIRE spreads & lingers | WET evaporates fast | **fire meta**; overheats boilers (steampunk) |
 | Blizzard / Cold Snap | global CHILL accrual | exposed units slow → freeze | water freezes to ice bridges; FIRE weak; shelter matters |
 | Sandstorm / Ashfall | −vision + movement bog | abrasion chip (VITRIOL-lite) to the unsheltered | desert / volcanic locations |
@@ -296,15 +300,15 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 | Doldrums / Dead Air | no wind | atmospheres never disperse — gas/smoke **lingers & spreads** | gas-combo map |
 | Tempest / High Winds | constant AIR | shoves units, disperses all atmospheres | anti-gas; positioning chaos |
 
-> **BUILT, in part ([#1260](https://github.com/Phaazoid/Godoiosis/issues/1260), 2026-10-08):** Light Rain, Rain, Heavy Rain and Thunderstorm exist as a board's weather, authored per board and never rolled. Their one RULE is the soak -- WET at the end of a unit's own turn ([elemental-system.md](elemental-system.md)) -- so the *shock meta* is real; the rest of the Rain and Thunderstorm rows (fire suppressed, burning extinguished, the telegraphed strike on the most-exposed unit) is not built, and the storm's lightning is a LOOK that never lands on a cell. The table stays the menu; [#277](https://github.com/Phaazoid/Godoiosis/issues/277) owns the rest.
+> **BUILT, in part ([#1260](https://github.com/Phaazoid/Godoiosis/issues/1260), 2026-10-08):** Light Rain, Rain, Heavy Rain and Thunderstorm exist as a board's weather, authored per board and never rolled. Their one RULE is the soak -- WET at the end of a unit's own turn ([elemental-system.md](elemental-system.md)) -- so the *shock meta* is real; the rest of the Rain and Thunderstorm rows (fire suppressed, burning extinguished, the telegraphed strike on the most-exposed unit) is not built, and the storm's lightning is a LOOK that never lands on a cell. The table stays the menu; [#277](https://github.com/Phaazoid/Godoiosis/issues/277) owns the rest, and the strike itself is [#1271](https://github.com/Phaazoid/Godoiosis/issues/1271) (open: marked tiles struck at the end of the turn).
 >
-> **[#1285](https://github.com/Phaazoid/Godoiosis/issues/1285) (2026-10-09):** Mist, Fog and Thick Fog exist as LOOKS with no rule at all -- the Fog / Mist row above (less vision and LDR) is unbuilt, and thick fog may swallow a unit visually before any sight rule backs it (dev: *"Full look, rules later"*).
+> **[#1285](https://github.com/Phaazoid/Godoiosis/issues/1285) (2026-10-09):** Mist, Fog and Thick Fog exist as LOOKS with no rule at all -- the Fog / Mist row above (less vision and cohesion range) is unbuilt, and thick fog may swallow a unit visually before any sight rule backs it (dev: *"Full look, rules later"*).
 >
-> **[#1298](https://github.com/Phaazoid/Godoiosis/issues/1298) (2026-10-10):** The ★ Aetheric Storm / Aurora row is built as three LOOKS with no rule at all -- Faint Aurora, Aurora and Aetheric Storm: glowing curtains on the ground, an aurora light, rising motes, and for the storm the thunderstorm's off-board strike with an AETHER corona. The row's rule (a boosted aura, free AETHER Conduction) is unbuilt and waits on the alchemy layer (dev: *"Looks only"*). How it looks is [presentation-effects.md](presentation-effects.md) → *Weather: aurora*.
+> **[#1298](https://github.com/Phaazoid/Godoiosis/issues/1298) (2026-10-10):** The ★ Aetheric Storm / Aurora row is built as three LOOKS with no rule at all -- Faint Aurora, Aurora and Aetheric Storm: glowing curtains on the ground, an aurora light, rising motes, and for the storm the thunderstorm's off-board strike with an AETHER corona. The row's rule (a boosted aura, free AETHER Conduction) is unbuilt and waits on the alchemy layer (dev: *"Looks only"*). *(The per-board air reading such a rule could ride exists since 2026-10-16, [#1324](https://github.com/Phaazoid/Godoiosis/issues/1324); ball lightning is [#1308](https://github.com/Phaazoid/Godoiosis/issues/1308).)* How it looks is [presentation-effects.md](presentation-effects.md) → *Weather: aurora*.
 >
 > **[#1302](https://github.com/Phaazoid/Godoiosis/issues/1302) (2026-10-10):** The Sandstorm / Ashfall row is built as six LOOKS with no rule at all -- Dust, Sandstorm and Dust Wall, and Light Ashfall, Ashfall and Ash Storm: blowing grit and dust clouds that follow the board's wind, sand and soot on the ground, falling ash and rising embers. The row's rules (less sight, slow going, abrasion on the unsheltered) are unbuilt (dev: *"Looks only"*). How they look is [presentation-effects.md](presentation-effects.md) → *Weather: sand and ash*.
 >
-> **[#1286](https://github.com/Phaazoid/Godoiosis/issues/1286) (2026-10-10):** The wind exists as a LOOK with no rule at all, and as a second board axis rather than a row of this table: a board names a strength (Calm, Breeze, Strong Wind, Gale) and a direction beside its weather, and every weather, gas cloud and plant drifts with it. The Tempest / High Winds row above (shoving units, dispersing atmospheres) and the Doldrums row are unbuilt; a Gale is the Tempest's look before its rule (dev: *"Looks only, rules later"*).
+> **[#1286](https://github.com/Phaazoid/Godoiosis/issues/1286) (2026-10-10):** The wind exists as a LOOK with no rule at all, and as a second board axis rather than a row of this table: a board names a strength (Calm, Breeze, Strong Wind, Gale) and a direction beside its weather, and every weather, gas cloud and plant drifts with it. The Tempest / High Winds row above (shoving units, dispersing atmospheres) and the Doldrums row are unbuilt (an AIR hit clearing gas is ruled in #1335, pushing it is #1332); a Gale is the Tempest's look before its rule (dev: *"Looks only, rules later"*).
 >
 > **[#1269](https://github.com/Phaazoid/Godoiosis/issues/1269) (2026-10-09):** Light Snow, Snow and Blizzard exist as LOOKS with no rule at all -- the Blizzard row above (Chill accrual, freezing, ice bridges, weak fire) is unbuilt. Snow settling on units and their frost breath are drawn before any Chilled rule backs them (dev: *"Full look, rules later"*).
 
@@ -315,7 +319,7 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 - **⚗ Induced weather:** a powerful alchemist (or the Council) *summons* localized weather — an aetheric storm as a boss phase; or a player ultimate that calls rain to arm a shock plan.
 - **Dramaturgy:** weather escalates with the story beat — the final clash under a breaking aetheric storm.
 
-*Open thread for the dev:* you mentioned planned Iosis locations — naming a few would let us tailor weather identities to them (e.g. which is the rain-soaked foundry, which is the aetheric high-temple, which is the smog-choked undercity) instead of designing weather in the abstract.
+*Open thread for the dev:* you mentioned planned Iosis locations — naming a few would let us tailor weather identities to them (e.g. which is the rain-soaked foundry, which is the aetheric high-temple, which is the smog-choked undercity) instead of designing weather in the abstract. *(Answered in draft: [level-concepts.md](level-concepts.md) → Cross-cutting notes, "Weather = location identity".)*
 
 ---
 
@@ -323,12 +327,12 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 
 ### ★ The Council of Paracelsus
 Peak alchemists — named for the father of the Tria Prima. The dread mechanic, built from the player's own toys:
-- **They squad at extreme range.** Their LDR tether is enormous, so they never need to cluster — defeating the normal "shatter their formation" answer. They feel omnipresent.
+- **They squad at extreme range.** Their cohesion (COH) range is enormous, so they never need to cluster — defeating the normal "shatter their formation" answer. They feel omnipresent.
 - **They assemble the Magnum Opus across the battlefield** via AETHER Conduction: Nigredo → Albedo → Citrinitas → Rubedo on a chosen player unit, threatening **Transmutation** (removal). 
 - **But it's telegraphed (Law #2 / Axiom 2):** the ritual visibly builds, stage by stage, over several turns. The player disrupts it — break line-of-sight, kill or displace a council member, **Aether-cleanse a stage off the victim**, or interrupt before Rubedo. The scariest thing in the game is something done *to* you that you can see coming and must race to stop.
 - ⚗ Flavor: each councillor embodies a principle (Sulfur / Mercury / Salt) or an Opus color — kill order and which stage they own becomes the puzzle.
 
-(Other boss seeds: an **Exact-Lethal** machine that forces Crisis Mode — see [will-and-death.md](will-and-death.md); an **Intimidator** that drains Will at range, moot since #1174 retired Will.)
+(Other boss seeds: an **Exact-Lethal** machine that forces Crisis Mode — see [will-and-death.md](will-and-death.md); *Crisis is an equipped ability since #158, firing only for a unit armed with it and not Wounded (#1174), so it is forced only on units that carry it*; an **Intimidator** that drains Will at range, moot since #1174 retired Will.)
 
 ---
 
@@ -349,6 +353,6 @@ Connects to [elemental-system.md](elemental-system.md) §First build target:
 2. ~~**CONDUCTIVE chain**~~ (stacking + AoE arc → the signature squad combo) — **BUILT 2026-09-10 ([#884](https://github.com/Phaazoid/Godoiosis/issues/884))**, and *without* a CONDUCTIVE state: the conductor is water or a wet body, which is the same chain with one fewer thing to author. Both spine validators are now real, so the next unbuilt one on this list is (3).
 3. **OILED → FIRE → Conflagration** (non-consume + state-applies-state).
 4. **CHILLED → FROZEN → Shatter** (multi-beat control + the EARTH line).
-5. **GROUNDED nullifier** (counterplay reads through the resolver/preview).
+5. ~~**GROUNDED nullifier**~~ (counterplay reads through the resolver/preview) — **BUILT as an ability, not a state** (#89 2026-07-25, #90 2026-07-29): Shock Insulation erases SHOCK from any hit on its holder, so no shock reaction fires and the queue shows none; the damage still lands and DEF answers it (#424).
 
-Cross-refs: [elemental-system.md](elemental-system.md) (the architecture this feeds), [progression.md](progression.md) (mechanist/alchemist, prosthesis & metals), [squad-system.md](squad-system.md) (counters + ordering the combos ride on), [will-and-death.md](will-and-death.md) (Will-cost revive, boss seeds).
+Cross-refs: [elemental-system.md](elemental-system.md) (the architecture this feeds), [progression.md](progression.md) (mechanist/alchemist, prosthesis & metals), [squad-system.md](squad-system.md) (counters + ordering the combos ride on), [will-and-death.md](will-and-death.md) (rescue, Wounded and Crisis; boss seeds — the Will-cost revive went with Will, #1174).

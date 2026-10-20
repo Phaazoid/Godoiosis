@@ -29,7 +29,7 @@ All three: a consequence **derived from the ordered plan at queue time → surfa
 The counter implementation is the working prototype of the whole idea:
 
 - `SquadManager.calculate_reactions_for_squad()` walks `action_queue`, derives `CounterAttackAction`s, and **returns** them — never stores them in the queue.
-- `SquadManager.get_display_entries_for_squad()` calls it so the **preview** shows the derived counters.
+- ~~`SquadManager.get_display_entries_for_squad()` calls it so the **preview** shows the derived counters.~~ *(Gone since the 2026-07-26 split: the resolve derives the counters itself, in `SquadManager._resolve_actions` under `resolve_plan`, and the queue renders that resolved plan through `ActionQueueDisplayEntry.build_for`.)*
 - Execution instantiates counters fresh from the plan.
 
 That's *derive → show → replay*. The pipeline generalizes this one proven move so elemental and Will reuse it instead of reinventing it.
@@ -117,7 +117,7 @@ R1–R8 **subsume the elemental E-invariants** (E1–E8 are this contract scoped
 
 ## Where it lives
 
-A dedicated resolver invoked by `SquadManager` (already the derived-action home and overweight, so a separate class is the clean seam). The base-damage math from `AttackAction.create()` becomes a value the resolver writes (E1). **Class layout is a build-time call**; what's locked here is the contract and the stage order. Naming is open — `PlanResolver` with pluggable stages, or a thin `ElementResolver` that Phase 3 extends — decide when building Phase 2.
+A dedicated resolver invoked by `SquadManager` (already the derived-action home and overweight, so a separate class is the clean seam). The base-damage math from `AttackAction.create()` becomes a value the resolver writes (E1). **Class layout is a build-time call**; what's locked here is the contract and the stage order. Naming is open — `PlanResolver` with pluggable stages, or a thin `ElementResolver` that Phase 3 extends — decide when building Phase 2. *(Decided at build: it shipped as the static `PlanResolver`, `Classes/actions/resolution/`, called through `SquadManager.resolve_plan` / `resolve_hypothetical`. No `ElementResolver` exists.)*
 
 ## Migration is incremental — you do *not* build all stages at once
 
