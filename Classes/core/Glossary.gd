@@ -229,6 +229,17 @@ static func _atmosphere_normals() -> String:
 				int(Atmosphere.NORMAL[id]), int(Atmosphere.STEP[id])])
 	return "; ".join(parts)
 
+# What each weather does to the air, read off its rules file (Atmosphere.weather_text) so a retune
+# re-words the page (#1324).
+static func _atmosphere_weathers() -> String:
+	var parts: Array[String] = []
+	for kind: Weather.Kind in Weather.Kind.values():
+		for id: String in Atmosphere.SUBSTANCES:
+			var line := Atmosphere.weather_text(id, kind)
+			if line != "":
+				parts.append(line)
+	return "; ".join(parts)
+
 # --- The entries ------------------------------------------------------------------------------
 
 static func _build_entries() -> Dictionary:
@@ -495,7 +506,9 @@ static func _build_entries() -> Dictionary:
 			+ "each step a substance sits above Normal, a carving that draws it hits 1 harder, or "
 			+ "heals 1 more. For each step below, it hits 1 softer, down to nothing. A carving fed "
 			+ "by a real source nearby takes nothing from the air. Normal, and the size of one "
-			+ "step: %s." % _atmosphere_normals()}
+			+ "step: %s." % _atmosphere_normals()
+			+ " Some weather moves it while it falls, and is named beside whatever it moved: "
+			+ "%s." % _atmosphere_weathers()}
 
 	# Terrain
 	e[Term.TERRAIN_KINDS] = {"category": Category.TERRAIN, "title": "Terrain",

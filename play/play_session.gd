@@ -171,10 +171,11 @@ func _board() -> BoardContext:
 func _weather() -> Weather.Kind:
 	return scenario_data.weather if scenario_data != null else Weather.Kind.CLEAR
 
-# And its air (#1324), the same way: Normal before a scenario is loaded.
+# And its air (#1324) as played: the scenario's reading moved by its weather (Atmosphere.effective,
+# the composition game._board() reads), Normal before a scenario is loaded.
 func _atmosphere() -> Dictionary[String, int]:
 	var none: Dictionary[String, int] = {}
-	return scenario_data.atmosphere if scenario_data != null else none
+	return Atmosphere.effective(scenario_data.atmosphere, scenario_data.weather) if scenario_data != null else none
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()

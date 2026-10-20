@@ -109,6 +109,15 @@ func _fill() -> void:
 			func(picked: Variant) -> void: _write(rules, "state", int(picked)),
 			DevWidgets.wrap_tooltip("The state a unit gains at the end of its own turn while this "
 				+ "weather falls. None soaks nobody."))
+		for id: String in Atmosphere.SUBSTANCES:
+			DevWidgets.add_knob_row(_rows,
+				{"label": "Air: " + SubstanceCatalog.name_of(id), "min": -100, "max": 100, "step": 1},
+				int(rules.air.get(id, 0)),
+				func(points: Variant) -> void: _write_air(rules, id, int(points)),
+				DevWidgets.wrap_tooltip("Percentage points this weather adds to the board's %s while "
+					% SubstanceCatalog.name_of(id).to_lower()
+					+ "it falls, on top of what the board authors (negative lowers it). The board names "
+					+ "this weather beside the substance. One step is %d points." % int(Atmosphere.STEP[id])))
 	var look := WeatherLook.for_kind(kind)
 	if look == null:
 		DevWidgets.add_label(_rows, NO_LOOK)
@@ -143,6 +152,21 @@ func _write(resource: Resource, prop: String, value: Variant) -> void:
 	_set_dirty(true)
 	if prop == "fall":
 		_fill.call_deferred()   # deferred: the picker that fired this is one of the rows freed
+
+
+# Into the live rules' air (#1324), erasing a substance at 0 so the file names only what the weather
+# moves. game._board() composes from the cached rules, so the open plan and the corner HUD are redrawn
+# to show the new reading at once.
+func _write_air(rules: WeatherRules, id: String, points: int) -> void:
+	if points == 0:
+		rules.air.erase(id)
+	else:
+		rules.air[id] = points
+	rules.emit_changed()
+	_set_dirty(true)
+	if _game != null:
+		_game.refresh_action_queue(_game.squad_manager.active_squad)
+		_game.refresh_mission_status()
 
 
 func _set_dirty(dirty: bool) -> void:

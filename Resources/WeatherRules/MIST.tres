@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WeatherRules" format=3 uid="uid://c3c7c3atlk3sd"]
+
+[ext_resource type="Script" uid="uid://c5rf7ml4wi1l8" path="res://Classes/terrain/WeatherRules.gd" id="1_qt2d3"]
+
+[resource]
+script = ExtResource("1_qt2d3")
+air = Dictionary[String, int]({
+"vapor": 5
+})

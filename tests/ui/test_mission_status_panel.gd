@@ -371,12 +371,24 @@ func _group_of(id: String) -> String:
 	return ""
 
 
-# This board, saved and loaded back with `reading` authored as its air.
-func _load_with_air(reading: Dictionary[String, int]) -> void:
+# This board, saved and loaded back with `reading` authored as its air, under `weather`.
+func _load_with_air(reading: Dictionary[String, int], weather := Weather.Kind.CLEAR) -> void:
 	var snapshot: ScenarioData = game.scenario_manager.capture_scenario("air")
 	snapshot.atmosphere = reading
+	snapshot.weather = weather
 	game.scenario_manager.apply_scenario(snapshot)
 	await await_idle_frame()
+
+
+# The weathers whose rules move the air (#1324), off the files: which ones do is authored.
+func _moving_weathers() -> Array[Weather.Kind]:
+	var kinds: Array[Weather.Kind] = []
+	for kind: Weather.Kind in Weather.Kind.values():
+		if not WeatherRules.air_of(kind).is_empty():
+			kinds.append(kind)
+	if kinds.is_empty():
+		fail("fixture: no weather's rules move the air")
+	return kinds
 
 
 func _air_row(id: String) -> Label:
@@ -455,8 +467,50 @@ func test_editing_the_air_on_the_scenario_tab_redraws_the_corner() -> void:
 	assert_bool(panel._panel.visible).override_failure_message("air set back to Normal still showed").is_false()
 
 
+# A weather that moves the air shows on a Normal board, objectives or none -- the hide gate reads the
+# air as played -- and names itself on every row it moved, its tooltip leading with what it does.
+func test_a_weather_that_moves_the_air_is_named_on_the_row_it_moved() -> void:
+	var sky: Weather.Kind = _moving_weathers()[0]
+	var none: Dictionary[String, int] = {}
+	await _load_with_air(none, sky)
+	var air := Atmosphere.effective(none, sky)
+	assert_bool(panel._panel.visible) \
+		.override_failure_message("a Normal board under %s hid the air its weather moved" % Weather.name_of(sky)) \
+		.is_true()
+	var named := 0
+	for id: String in Atmosphere.off_normal(air):
+		var row := _air_row(id)
+		if row == null:
+			continue
+		var text := "%s — %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, air)]
+		if Atmosphere.steps_text(id, air) != "":
+			text += ", " + Atmosphere.steps_text(id, air)
+		if Atmosphere.weather_moves(id, sky):
+			named += 1
+			text += " (%s)" % Weather.display_name(sky)
+			assert_str(row.tooltip_text).is_equal(UiText.wrap(Atmosphere.weather_text(id, sky) + ".\n\n"
+					+ Glossary.short(Glossary.Term.ATMOSPHERE)))
+		assert_str(row.text).is_equal(text)
+	assert_int(named).override_failure_message(
+			"fixture: %s moved nothing off Normal" % Weather.name_of(sky)).is_greater(0)
+
+
+# The weather picker on Scenario > Properties redraws the corner too: the air it moves is news.
+func test_picking_a_weather_on_the_scenario_tab_redraws_the_corner() -> void:
+	var sky: Weather.Kind = _moving_weathers()[0]
+	game.dev_overlay.scenario_tool._on_weather_picked(sky)
+	assert_bool(panel._panel.visible).override_failure_message(
+			"picking %s did not reach the HUD" % Weather.name_of(sky)).is_true()
+	for id: String in Atmosphere.off_normal(game.scenario_manager.air_reading()):
+		assert_str(_air_row(id).text).ends_with("(%s)" % Weather.display_name(sky))
+	game.dev_overlay.scenario_tool._on_weather_picked(Weather.Kind.CLEAR)
+	assert_bool(panel._panel.visible).override_failure_message(
+			"back under a clear sky the air still showed").is_false()
+
+
 # The riskiest assumption in the plan: the worst case, every substance off Normal on top of a full
-# briefing, still fits the viewport and clears the corner strip.
+# briefing, still fits the viewport and clears the corner strip -- under the weather with the longest
+# name that moves the air, since that name rides on its rows (#1324).
 func test_every_substance_off_normal_still_fits_beside_the_corner_strip() -> void:
 	_paint("North", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
 	_paint("Exit", ZoneManager.Kind.EXTRACTION, [Vector2i(1, 1)])
@@ -467,7 +521,11 @@ func test_every_substance_off_normal_still_fits_beside_the_corner_strip() -> voi
 	var reading: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
 		reading[id] = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
-	await _load_with_air(reading)
+	var longest: Weather.Kind = _moving_weathers()[0]
+	for kind: Weather.Kind in _moving_weathers():
+		if Weather.display_name(kind).length() > Weather.display_name(longest).length():
+			longest = kind
+	await _load_with_air(reading, longest)
 	await await_idle_frame()
 
 	assert_int(_row_texts().size()).is_greater(Atmosphere.SUBSTANCES.size())
