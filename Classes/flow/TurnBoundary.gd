@@ -46,6 +46,6 @@ static func turn_start_ticks(units: Array[Unit], faction: Team.Faction) -> void:
 		unit.tick_downed_countdown()
 		unit.tick_stat_effects()      # BEFORE the surge below: an effect applied this turn must not tick this turn
 		unit.advance_crisis_surge()
-		unit.tick_weapon_rev()
+		unit.tick_carried_revs()      # every carried weapon, not just the one in hand (#1357)
 		unit.lapse_guard()            # #414: last turn's Guard is gone BEFORE this turn's move phase
 		unit.lapse_watch()            # #413: and so is last turn's untriggered watch

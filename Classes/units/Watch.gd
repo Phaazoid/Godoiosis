@@ -119,7 +119,7 @@ func is_intact() -> bool:
 # change a weapon's fireability while a watch stands -- true today (readiness moves only on firing
 # or a Reload-class main, and a watcher can do neither), but enforced nowhere. A family that gates
 # firing on anything TIMER-DECAYED or externally changed would have re-opened it silently.
-# `tick_weapon_rev` is the standing precedent for such a decay. This asks instead of arguing.
+# `tick_carried_revs` is the standing precedent for such a decay. This asks instead of arguing.
 #
 # Says nothing about the ANCHOR, deliberately: that predicate takes a positional fact the caller
 # owns, and the resolver feeds it a threaded cell while a redraw feeds the live one.
