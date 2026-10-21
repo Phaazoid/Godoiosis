@@ -230,8 +230,11 @@ func test_beside_its_material_the_same_order_lands_deposits_and_draws_a_counter(
 	_break_volleys(plan)
 
 
-# A COUNTER fizzles the same way, from where the counter-er stands in the pass.
-func test_a_counter_whose_carving_fizzles_lands_nothing() -> void:
+# A COUNTER fizzles the same way, from where the counter-er stands in the pass -- and since #1354 one
+# that can only fizzle is no answer at all: can_counter refuses it, so none is derived. The AI's
+# exchange scoring asks that same can_counter, and ThreatField already draws it no reach.
+# resolve_counters' own fizzle check stays for a counter-er an earlier counter moves off its material.
+func test_a_counterer_whose_carving_fizzles_draws_no_counter() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, DRY, { Stats.Stat.MHP: 60 })
 	var carving := _tied()
 	var counterer := _alchemist(ENEMY, DRY_FOE, carving)
@@ -239,10 +242,9 @@ func test_a_counter_whose_carving_fizzles_lands_nothing() -> void:
 	_sm.active_squad = attacker.squad
 	var plan := _sm.resolve_plan(attacker.squad, _board())
 
-	assert_int(plan.counters.size()).override_failure_message("no counter was derived at all").is_equal(1)
-	assert_object(plan.counters[0].fired_attack).is_same(carving)
-	assert_bool(plan.counters[0].resolved.fizzled).is_true()
-	assert_int(plan.counters[0].resolved.damage).is_equal(0)
+	assert_bool(_sm.can_counter(counterer, attacker, _board(), plan.hypo)).override_failure_message(
+			"can_counter answered for a counter that can only fizzle").is_false()
+	assert_array(plan.counters).override_failure_message("a counter that can only fizzle was derived").is_empty()
 	assert_int(PlanResolver.projected_hp(attacker, plan.hypo)).is_equal(attacker.get_current_hp())
 
 	# ...and a counter-er carrying its own water counters for real.
