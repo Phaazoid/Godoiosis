@@ -642,6 +642,50 @@ func test_an_untouched_run_is_not_flagged() -> void:
 		"a flag that is always true says nothing").is_false()
 
 
+# #1364: EVERY DEV EDIT FLAGS THE RUN, through the header every edit already marks. The first edit lands
+# BEFORE the run, so the header's (modified) latch is already set when the mid-run one arrives -- a note
+# placed behind that latch would reach the log once per file, not once per run.
+func test_a_scenario_edit_mid_run_marks_the_run_dev_touched() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var spin: SpinBox = game.dev_overlay.scenario_tool._round_limit_spin
+	spin.value = 7
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	spin.value = 8
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"a round limit changed mid-run on the Scenario tab, and the run sealed as untouched").is_true()
+
+
+# Undo puts a whole board back, so it is a dev edit too (#1364). The step is made BEFORE the run, so only
+# the undo can have flagged it.
+func test_an_undo_mid_run_marks_the_run_dev_touched() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	game.dev_controller.resize_map(9, 3, GRASS_SOURCE, GRASS_ATLAS)
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	assert_bool(game.dev_controller.undo_board()).override_failure_message(
+		"fixture: there was no step to undo").is_true()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"an undo mid-run put a board back, and the run sealed as untouched").is_true()
+
+
+# LOOKING IS NOT EDITING. Showing the Scenario page rebuilds and re-reads every field from the board, and
+# a widget that announced its own refreshed value would flag every run the dev so much as looked at.
+func test_showing_the_scenario_page_mid_run_does_not_flag_the_run() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	game.dev_overlay.show_leaf(game.dev_overlay.scenario_tool)
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"showing the Scenario page flagged the run -- a refresh marked, not an edit").is_false()
+
+
 func test_with_persistence_off_nothing_is_written() -> void:
 	TelemetryStore.persistence_enabled = false
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))

@@ -85,7 +85,12 @@ func _on_board_loaded() -> void:
 
 # Anything that authors the board and is not the terrain counter's business calls this: a zone
 # paint (wired above), an objective toggle, a look pick, a camera capture, a squad field.
+#
+# Every dev edit funnels here, so it is also where a recording run learns a dev tool touched it
+# (#1364). BEFORE the latch: _marked outlives MissionLog.begin(), so an edit after the first would
+# never reach the log.
 func mark_modified() -> void:
+	game.mission_log.note_dev_intervention()
 	if _marked:
 		return
 	_marked = true
