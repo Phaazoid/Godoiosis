@@ -452,6 +452,9 @@ func _on_delete_timeline() -> void:
 		_status.text = "Pick a saved timeline to delete."
 		return
 	var victim := _loaded_name
+	# Asked before the confirm, so the refusal is the whole answer; delete() asks again for itself.
+	if DevWidgets.refuse_delete_in_use(String(DialogicSource.directory("dtl").get(victim, "")), _status):
+		return
 	DevWidgets.confirm_delete(self, victim, func() -> void:
 		var verdict := DialogicSource.delete("dtl", victim)
 		if not bool(verdict["ok"]):
