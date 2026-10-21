@@ -28,6 +28,7 @@ enum Stance { COVERED, NEVER, GAP, ACTION_TYPE }
 const BRIDGE := "res://play/play_bridge.gd"
 const SESSION := "res://play/play_session.gd"
 const VIEW := "res://play/board_view.gd"
+const BUILDER := "res://play/board_builder.gd"
 const TACTICS := "res://Classes/ai/AITactics.gd"
 const CONTROLLER := "res://Classes/ai/AIController.gd"
 const ARCHETYPE := "res://Classes/ai/AIArchetype.gd"
@@ -89,7 +90,7 @@ static func axes() -> Array[Dictionary]:
 		ring_verbs(), action_types(), gear_verbs(), hud_doors(), board_keys(),
 		outcome_fields(), plan_lists(),
 		tile_states(), gases(), weathers(), winds(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
-		ground_kinds(), element_states(), turn_starts(),
+		ground_kinds(), element_states(), turn_starts(), board_stores(),
 	]
 
 static func _enum_label(keys: Array) -> Callable:
@@ -585,6 +586,19 @@ static func turn_starts() -> Dictionary:
 			S.SKIP: {"play": covered(SESSION, "Start.SKIP")},
 			S.OVER: {"play": covered(SESSION, 'while mission_tag() == "" and _is_ai_faction')},
 		},
+	}
+
+
+# The board's stores, BoardSnapshot's fields (#1365): the headless loader restores them through the
+# game's own door, so a new store is restored there for free -- and a hand copy beside it would show.
+static func board_stores() -> Dictionary:
+	return {
+		"name": "board stores (BoardSnapshot fields)",
+		"members": script_vars(BoardSnapshot.new()),
+		"label": _string_label(),
+		"play_all": covered(BUILDER, "BoardSnapshot.from_scenario(scenario).restore_into"),
+		"ai_all": never("the AI reads the board the host restored, never a store of its own"),
+		"rows": {},
 	}
 
 

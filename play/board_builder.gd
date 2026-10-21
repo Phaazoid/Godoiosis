@@ -102,7 +102,10 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		for child in units_root.get_children():
 			if child is Unit:
 				units.append(child)
-		var context := BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field)
+		# The session's mission once one is built (#1365), as game._board hands over the game's: the
+		# AI's stakes read it off this board.
+		var context := BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field,
+				board.get("mission"))
 		context.weather = weather_of(board)
 		context.atmosphere = atmosphere_of(board)
 		return context
@@ -163,7 +166,7 @@ static func arm(unit: Unit, power: int) -> void:
 
 # Load a saved scenario (.tres) onto an already-built board. COROUTINE — await it.
 static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
-	var scenario: ScenarioData = load(path)
+	var scenario: ScenarioData = ContentRepair.load_tolerant(path)   # the game's loader's door (#608, #1365)
 	if scenario == null:
 		push_error("Play: could not load scenario at %s" % path)
 		return []
@@ -174,15 +177,10 @@ static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
 # spawning so each unit's _ready runs (unit_instance + inventory) before weapons and
 # squad rebuilds read them.
 static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[Unit]:
-	board.grid.restore(scenario.tile_data)   # the bulk door (#391); a Play board has no mirror to hear it, but the law has no exceptions
-	if board.get("terrain_states") != null:
-		board.terrain_states.load_state_dict(scenario.terrain_states, scenario.terrain_state_turns)   # mirrors ScenarioManager
-	if board.get("board_heights") != null:
-		board.board_heights.load_corner_dict(scenario.corner_heights)   # mirrors ScenarioManager
-	if board.get("gas_field") != null:
-		board.gas_field.load_dict(scenario.gas)   # mirrors ScenarioManager
-	if board.get("zone_manager") != null:
-		board.zone_manager.load_dict(scenario.zones)   # every zone: the phase's deployment, a Sentry's patrol, the mission's own (#46)
+	# The board through the game's own door (#1365): BoardSnapshot.from_scenario, with its pre-#427
+	# guard, and the one store list ScenarioManager.restore_board writes through. It was a hand copy.
+	BoardSnapshot.from_scenario(scenario).restore_into(board.grid, board.terrain_states, board.board_heights,
+			board.gas_field, board.zone_manager)
 
 	var spawned: Array[Unit] = []
 	var unit_of_entry := {}            # ScenarioUnitEntry -> the Unit it spawned, ScenarioManager's map

@@ -238,13 +238,11 @@ func capture_board() -> BoardSnapshot:
 #     load and is the last writer either way; the plain redraw here is what an undo needs, since
 #     nothing else follows it.
 func restore_board(snapshot: BoardSnapshot) -> void:
-	grid.restore(snapshot.tile_data)
-	game.terrain_states.load_state_dict(snapshot.terrain_states, snapshot.terrain_state_turns)
-	game.board_heights.load_corner_dict(snapshot.corner_heights)
-	game.gas_field.load_dict(snapshot.gas)
+	# The store list both loaders share (#1365); the redraws are this host's own.
+	snapshot.restore_into(grid as BoardGrid, game.terrain_states, game.board_heights, game.gas_field,
+			game.zone_manager)
 	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
 	overlay_manager.redraw_terrain_live(game.terrain_states)
-	game.zone_manager.load_dict(snapshot.zones)
 	overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
 
 # The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.

@@ -56,6 +56,7 @@ func _init(board: Dictionary) -> void:
 	mission = MissionState.new(zone_manager)
 	if scenario_data != null:
 		mission.apply_scenario(scenario_data)
+	board["mission"] = mission   # the builder's board_source hands it to every board it builds (#1365)
 	for unit in live_units():
 		_register(unit)
 	# The turn boundary's signal-driven halves (#898), heard in the order game.gd hears them.
