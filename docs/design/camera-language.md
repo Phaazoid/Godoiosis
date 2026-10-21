@@ -2,10 +2,10 @@
 
 **Status: canon reference, [#671](https://github.com/Phaazoid/Godoiosis/issues/671).** This page
 NAMES things and POINTS at the code that owns them. It deliberately does not re-tell how any of it
-came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in eleven
-camera sections, and a second telling here would drift from the first.
+came to be — [`visual-clarity.md`](visual-clarity.md) holds the round-by-round history in its
+camera sections (#520 through #705), and a second telling here would drift from the first.
 
-**Canon checked through #699 (2026-09-02); #1132 (the clearance words, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1280 (the pivot on the ground, the hand rates per screen) folded in 2026-10-09; Deep Alchemy Phase 2 folded in 2026-10-11.**
+**Canon checked through #1346 (2026-10-21).**
 
 ## Why this page exists
 
@@ -40,12 +40,14 @@ position = _aim + _lift + Vector3(0.0, -_drop, 0.0) + flourish()
 |---|---|---|---|
 | **aim** | the point on the board the rig sits over: the PIVOT the camera turns around and zooms toward | `CameraRig3D._aim` / `_target_aim` | `hold_at` (snap) · `glide_to` (pan) · `_reseat_pivot` (the hand's; camera unmoved) |
 | **lift** | how far the torn-out diorama has risen under it | `_lift` / `_target_lift` | `lift_to` (eased) · `cut_lift` (lands now) |
-| **drop** | how far below the board the shot has ridden a falling body | `_drop` / `_target_drop` | `drop_to` |
-| **distance** | how far the camera sits back from the aim; after any hand gesture, the distance to the ground at the centre of the screen | `_camera.position.z` / `_target_distance` | `set_zoom` — the ONE distance door (`_reseat_pivot` relabels it, moving nothing) |
+| **drop** | how far below the board the shot has ridden a falling body | `_drop` / `_target_drop` | `drop_to` · zeroed directly by `stash_view` (live and target), `restore_view` (target: the climb) and `drop_stashed_view` (live and target: a board swap's cut) |
+| **distance** | how far the camera sits back from the aim; after any hand gesture, the distance to the ground at the centre of the screen | `_camera.position.z` / `_target_distance` | `set_zoom` — the door every framing, the wheel and `restore_view` use. R writes the home distance directly, and `return_to_snapshot` (#705) puts a held one back; `_reseat_pivot` relabels it, moving nothing |
 | **dolly** | the director's push-in for the beat now playing, an ADDEND on distance | `_dolly` | `dolly_to` |
-| **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` (carrying the clearance **turn**) · `align_to_detent` · orbit |
-| **pitch** | the tilt | `_pitch_degrees` / `_target_pitch_degrees` | drag · `board_pitch_degrees` |
+| **yaw** | which way the rig faces | `rotation_degrees.y` / `_target_yaw_degrees` | `aim_along` (carrying the clearance **turn**) · `align_to_detent` · `pose` (snap) · `restore_view` · the hand (orbit, Q/E, R) |
+| **pitch** | the tilt | `_pitch_degrees` / `_target_pitch_degrees` | the hand (drag, R) · `aim_along` (the stoop) · `restore_view` · `board_pitch_degrees` (its setter snaps) |
 | **flourish** | the impact shake plus resting sway, a DISPLACEMENT over where the camera looks | `_shake_amplitude`, `_sway_elapsed` | `shake` |
+
+`return_to_snapshot` (#705) writes every channel at once.
 
 **The live enumeration is `CameraRig3D._trace_channels()`**, not this table. It exists for
 [#669](https://github.com/Phaazoid/Godoiosis/issues/669)'s camera trace, which has to name every
@@ -53,8 +55,9 @@ channel at once, so a channel added without updating this page still shows up in
 report — the staleness is visible rather than silent.
 
 **One declared exception: the flourish is not in that snapshot, and that is correct.** The trace
-carries every channel that HAS A TARGET; the flourish is the one addend without one, because a shake
-is a displacement laid over where the camera looks rather than a place it is going. It is also
+carries every channel but the flourish, because a shake is a displacement laid over where the camera
+looks rather than a place it is going. (The dolly has no target either, and is carried because
+`_process` eases the distance toward it.) It is also
 summed AFTER `pan_limit`'s clamp and is zero unless the view is borrowed.
 
 > **`flourish` means two unrelated things in this codebase.** `CameraRig3D.flourish()` is the camera
@@ -92,9 +95,12 @@ camera. What follows is the table plus the words for how a channel gets where th
 ### How a channel moves
 
 - **ease** — the channel closes on its target over time, in `_process`. The default for aim, lift,
-  drop, distance, yaw and pitch.
-- **cut** — the channel lands on its target NOW. Only one exists: `cut_lift()`, used while a
+  drop, distance, yaw and pitch (the drop's DESCENT lands at once; only its climb eases,
+  `CameraRig3D.recovered`).
+- **cut** — the channel lands on its target NOW. The one per-channel cut is `cut_lift()`, used while a
   transition declares its drive a cut, because the flash is at full white for exactly that frame.
+  `return_to_snapshot` (#705) cuts every channel back to a held frame, and `drop_stashed_view` cuts
+  the drop on a board swap.
 - **snap** — set live and target together at once, without easing: `hold_at()`. Distinct from a cut
   in that nothing was mid-ease to interrupt.
 - **hold** — a framing that writes nothing, keeping the camera where the last shot left it while
@@ -109,7 +115,7 @@ moving a row changes the answer.
 | Rank | Shot | Live when | Framing |
 |---|---|---|---|
 | 5 | `DEATH_SHOW` | a show is playing and nobody is followed | **hold** — writes no distance |
-| 4 | `TRAINED` | `cam.follow_unit` is valid | `Pacing.TRAINED_DISTANCE` |
+| 4 | `TRAINED` | `battle3d._shot_subject` names a unit: `cam.follow_unit`, or on a battle-zoom approach `cam.pan_subject` | `Pacing.TRAINED_DISTANCE` |
 | 3 | `STAGE` | `cam.shot_cells` is non-empty | `playback_distance`, widened to hold the staged volume |
 | 2 | `SPAN` | `cam.framed_span` has two cells | `playback_distance`, widened to hold the walk |
 | 1 | `WIDE` | playback owns the camera | `playback_distance` |
@@ -128,7 +134,8 @@ an authored `CameraPose` or a solved fit — a board loading, not a shot inside 
 polled above the gate because how far the ground has been torn out is a fact about the BOARD).
 
 Note the two distances live in **different homes on purpose**: `playback_distance` is a rig `@export`
-the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neither is a magic number.
+the dev tunes, `TRAINED_DISTANCE` is a `Pacing` knob (a `static var` with a Game-tab row). Both are
+content, neither is a magic number.
 
 ### Frame words
 
@@ -161,8 +168,9 @@ the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neit
   position"*).
 - **held angle** — the turn is chosen on the approach and NOWHERE else. Once a pan has landed,
   nothing turns the camera until the next pan; whatever then comes into the way (a lunge's peak, a
-  tumble) is HIDDEN. `battle3d._clear_the_shot` passes `can_turn = cam.is_panning()`, and the
-  per-frame step in `ShotClearance.step` can only hide.
+  tumble) is HIDDEN. `battle3d._clear_the_shot` passes `can_turn` only while `cam.is_panning()` and
+  the beat has an aim line, and the per-frame step in `ShotClearance.step` can only hide. (A tumble
+  that bends behind a wall is still an open bug, [#972](https://github.com/Phaazoid/Godoiosis/issues/972).)
 - **blocker** — a terrain column, a prop or a unit a sight line passes through. A column is a box
   from the board's underside to its drawn top, never "everything below the top". A unit is its art
   AND its health readout, as two boxes (`ShotClearance.Body.blocks`), because from the battle zoom's
@@ -197,8 +205,9 @@ zoom sees past what stands in the way*.
   and the wheel act around what is on screen and every hand rate scales by a distance that means
   something. It fires on a gesture's START (orbit or pan press, a notch, Q/E, a WASD hold), never
   per frame, needs a host `ground_probe` (battle3d's, off `BoardPicker`), and never moves the camera:
-  it is skipped past the zoom ceiling or off the pan limit. Every hand rate is per SCREEN —
-  `pan_speed_screens` — #879's screens-not-cells law.
+  it is skipped past the zoom ceiling or off the pan limit. WASD is per SCREEN
+  (`pan_speed_screens`, #879's screens-not-cells law), a wheel notch is a SHARE of the distance
+  (`zoom_step_share`), and the grab pan is 1:1 under the hand.
 - **"looks at"** — when the dev says the camera must never look at where the death bar forms, that is
   about the frame's bottom EDGE descending onto it, not about the aim travelling toward it. The aim
   can be nowhere near a thing that is nonetheless in shot.
@@ -213,14 +222,15 @@ camera, and on what occasion — because an ungated mover is the bug class the w
 
 | Door | Occasion | Writes |
 |---|---|---|
-| `battle3d._mirror_camera()` | every frame under playback, polling `cam.*` causes | `hold_at`, `drop_to`, `lift_to`, `set_zoom`, `aim_along`, `dolly_to` |
+| `battle3d._mirror_camera()` | every frame under playback, polling `cam.*` causes | `hold_at`, `drop_to`, `lift_to` / `cut_lift`, `aim_along`, `dolly_to`; through `_apply_shot`: `stash_view` + `align_to_detent` (the claim), `set_zoom` / `widen_to_fit`, `restore_view` (the release); through `_sync_dev_pause`: `return_to_snapshot` |
 | `battle3d._on_impact()` | a blow lands — an EVENT | `shake` |
 | `battle3d._center_rig_on()` | recentre / the return pan / an objective row's click — an EVENT | `glide_to` |
-| `battle3d.fit_camera()` | a board loads | `frame` / `pose` |
-| `CameraRig3D._unhandled_input` / `_process` | the player's own hand | orbit, tilt, wheel, WASD, the middle-drag pan (`hold_at`, #1037) |
+| `battle3d.fit_camera()` | a board loads, a look is applied, or the Moods tab's Re-fit | `frame` / `pose` |
+| `CameraRig3D._unhandled_input` / `_process`, and `battle3d._handle_brush_zoom` | the player's own hand | orbit, tilt, wheel, Q/E, R, WASD, the middle-drag pan (`hold_at`, #1037), and Ctrl+wheel while brushing (`zoom_by`) |
 
-The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`, `directed_line`,
-`beat_emphasis`, `beat_profile`, `pan_subject` and `pan_destination`, plus its own position. **Two
+The **causes** the 2D `CameraController` publishes: `playback_locked` (the gate), `shot_cells`,
+`framed_span`, `follow_unit`, `directed_line`, `beat_emphasis`, `beat_profile`, `playback_cinematic`,
+`pan_subject`, `pan_destination` and `is_panning()`, plus its own position. **Two
 facts travel the other way** — `CameraController.fall_depth`, the rig telling playback how far under
 the board it has got, so the teardown can wait for the climb; and `view_arriving`, the rig telling
 playback it is still easing onto the shot, so every playback pan's settle waits for it (#1132 follow-up,
@@ -255,8 +265,8 @@ which of two is open.**
   come only when there are key poses.
 
 **The Camera page (#705 slice 3)** — Session → Camera in the dev window, the words above made live.
-- **The shot table** lights each row by `ShotDirector.liveness`, the per-row clauses `solve()` ranks
-  over, and marks the active shot. One set of clauses, so the page cannot disagree with the camera.
+- **The shot table** lights each row by `ShotDirector.live_rows` (the answer `liveness()` gave at the
+  last `update()`, the per-row clauses `solve()` ranks over), and marks the active shot. One set of clauses, so the page cannot disagree with the camera.
 - **The View line and the trace** are read through the sources BugReporter reads, so the page says
   what a report filed that moment would say.
 - **The recording** lists the key poses. **Jump to** is not a sixth door: it works only while paused,
@@ -273,7 +283,8 @@ before it glides. A caller that can fire while the board is locked asks first.
 **#672 narrowed the FIRST door rather than adding one.** `_mirror_camera` still polls every frame,
 but every distance and framing it writes now goes through `battle3d._apply_shot`, one `match` with
 one arm per row of the priority table above — so a new framing rule has nowhere to go except that
-table, because there is no second line to add code to. That is the same guarantee `_apply_position`
+table, because there is no second line to add code to. (One exception since #705: the dev pause's
+resume cut, `return_to_snapshot`, see *The dev pause* above.) That is the same guarantee `_apply_position`
 gives `position`, and it is what the ungated-mover bug class of the #602 arc was missing. The other
 four doors are unchanged, and the flourish is still declared outside the shot entirely.
 
@@ -288,9 +299,10 @@ Both found by measuring during #670, and both are things a camera feature is tem
   CANNOT answer is the SETTLED question, since it only sees where the camera is, not where its
   channels are heading. So only the settled half was ever missing, and that is the half round 8
   needed.
-- **`widen_to_fit` / `_fit_distance` is a DIFFERENT question, not a frame-edge read.** It calls
-  `_aim_at(box)` and **re-aims**, answering *how far back must I sit to contain this box if I look at
-  it*, in camera space, across all four edges. `frame_drop` answers *how far below the aim does the
+- **`widen_to_fit` / `_fit_distance` is a DIFFERENT question, not a frame-edge read.** `_fit_distance`
+  solves as if **re-aimed** at the box (`_aim_at(box)`), answering *how far back must I sit to contain
+  this box if I look at it*, in camera space, across all four edges; `widen_to_fit` then writes only
+  the distance. `frame_drop` answers *how far below the aim does the
   bottom edge fall*, in world-vertical. Shared trigonometry, different questions — folding them would
   force two questions into one seam.
 
@@ -298,8 +310,10 @@ Both found by measuring during #670, and both are things a camera feature is tem
 
 ## Related
 
-- [`visual-clarity.md`](visual-clarity.md) — the camera's build history, eleven sections from #520
-  through #670. Every "why is it like that" lives there.
+- [`visual-clarity.md`](visual-clarity.md) — the camera's build history, its sections from #520
+  through #705. Every "why is it like that" lives there.
+- [`../architecture/camera.md`](../architecture/camera.md) — CLAUDE.md's camera entries as they
+  stood on 2026-10-20, moved out verbatim.
 - [`presentation-effects.md`](presentation-effects.md) — the HD-2D idea wall, and *Where a
   presentation value is authored* (which table a camera knob belongs in).
 - [`verticality.md`](verticality.md) — heights, the sight line, and what a fall costs.
