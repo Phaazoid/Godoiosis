@@ -267,6 +267,8 @@ static func board_keys() -> Dictionary:
 			# #929: which attack the aim shows; headless names the attack, and equips through its gear verb.
 			"F | Aiming": {"play": never("cycles the attack being aimed; headless names the attack directly")},
 			"Shift+F | Aiming": {"play": never("cycles the attack being aimed; headless names the attack directly")},
+			# #1324: a page of the tile card; headless prints a tile's facts through its views, all at once.
+			"T | Tile card up": {"play": never("turns the tile card's page; headless views print every section at once")},
 			"Tab | Deploying": {"play": never("swaps the loadout screen and the board; headless reads both")},
 			"Enter | Deploying": {"play": cmd("begin")},
 			"Left-click | Deploying": {"play": cmd("deploy")},
