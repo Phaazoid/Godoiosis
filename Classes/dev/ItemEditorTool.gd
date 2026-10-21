@@ -214,6 +214,10 @@ func _on_delete_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
 		return
+	# A kit, roster or weapon names its gear, mods and template by reference, so deleting one in use
+	# breaks them.
+	if _variants.has(target) and DevWidgets.refuse_delete_in_use(_variants[target].resource_path, status_label):
+		return
 	DevWidgets.confirm_delete(self, "item '%s'" % target, func(): _delete_confirmed(target))
 
 func _delete_confirmed(target: String) -> void:

@@ -172,6 +172,37 @@ func test_a_timeline_this_page_cannot_write_back_opens_read_only() -> void:
 	_restore_registries()
 
 
+# A board names its timeline by reference (#1366), so Delete refuses BEFORE the confirm. Nothing
+# here presses Yes, so the case cannot delete a shipped timeline even if the refusal is gone.
+func test_delete_refuses_a_timeline_a_board_names() -> void:
+	tool_page.refresh()
+	var directory := DialogicSource.directory("dtl")
+	var index := -1
+	var users: Array[String] = []
+	for i in tool_page._timeline_picker.item_count:
+		users = ResourceCatalog.users_of(String(directory.get(tool_page._timeline_picker.get_item_text(i), "")))
+		if not users.is_empty():
+			index = i
+			break
+	if index == -1:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no board names a timeline, so there is nothing to refuse")
+		return
+	var victim := tool_page._timeline_picker.get_item_text(index)
+	var path := String(directory[victim])
+	tool_page._on_timeline_picked(index)
+
+	tool_page._on_delete_timeline()
+
+	var offered := false
+	for child in tool_page.get_children():
+		if child is ConfirmationDialog:
+			offered = true
+	assert_bool(offered).override_failure_message(
+		"Delete offered to remove '%s' while %s still use it" % [victim, ", ".join(users)]).is_false()
+	assert_str(tool_page._status.text).contains(users[0])
+	assert_bool(FileAccess.file_exists(path)).is_true()
+
+
 # --- names and the picker (the bugs the dev found in play) ---
 
 # The prefill used display_name(), which keeps the folder: "missions/Terraces" became a

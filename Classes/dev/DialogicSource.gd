@@ -20,7 +20,6 @@ class_name DialogicSource
 const SETTINGS_PATH := "res://project.godot"
 const TIMELINE_DIR := "res://Scenarios/dialog"
 const CHARACTER_DIR := "res://Scenarios/dialog/characters"
-const SCENARIO_DIR := "res://Scenarios/missions"
 const NARRATION := ""   # the speaker an unnamed line carries, which the law suite permits
 
 # One registry line, as Godot emits it. A path cannot hold a quote, so this is total.
@@ -292,44 +291,26 @@ static func _disown(extension: String, name: String) -> void:
 
 # --- deleting ---
 
-# Every committed file that names this resource BY PATH. A mission holds its timeline as an
-# ext_resource path, so deleting a referenced one turns that mission into a dangling ext_resource
-# -- a hard parse error that kills the WHOLE .tres, not a degraded load. Text scan rather than
-# load(): a mission that already fails to parse still has to be reported, not skipped.
-#
-# `scan_dir` overrides WHERE to look, and exists so a case exercising the refusal can stand up
-# its own referrer instead of aiming a delete at shipped content -- which is not hypothetical:
-# the mutant proving this guard has teeth removed causeway_intro.dtl the first time it ran.
-static func referencing_files(extension: String, name: String, scan_dir := "") -> PackedStringArray:
-	var path := String(directory(extension).get(name, ""))
-	var found := PackedStringArray()
-	if path == "":
-		return found
-	var dir := SCENARIO_DIR if extension != "dch" else TIMELINE_DIR
-	var suffix := ".tres" if extension != "dch" else ".dtl"
-	if scan_dir != "":
-		dir = scan_dir
-	for file: String in ResourceDir.files_with_extension(dir, suffix):
-		var full := "%s/%s" % [dir, file]
-		if path in FileAccess.get_file_as_string(full):
-			found.append(full)
-	return found
-
-
 # {ok, reason}. Removes file, sidecar and registry entry, or refuses and names what stands in
 # the way -- the caller shows the reason rather than guessing at one.
+#
+# REFUSED WHILE ANYTHING NAMES THE FILE, asked of ResourceCatalog.users_of (#1366). A beat holds
+# its timeline as an ext_resource path, so deleting a referenced one turns that board into a
+# dangling ext_resource -- a hard parse error that kills the WHOLE .tres, not a degraded load.
+# A timeline names its speakers by identifier, never by path, so a .dch has no file referrer.
+#
+# `roots` overrides WHERE to look, so a case exercising the refusal can stand up its own referrer
+# instead of aiming a delete at shipped content -- which is not hypothetical: the mutant proving
+# this guard has teeth removed causeway_intro.dtl the first time it ran.
 static func delete(extension: String, name: String, settings_path := SETTINGS_PATH,
-		scan_dir := "") -> Dictionary:
+		roots: Array[String] = ResourceCatalog.SCANNED_ROOTS) -> Dictionary:
 	var path := String(directory(extension).get(name, ""))
 	if path == "":
 		return {"ok": false, "reason": "'%s' is not in the registry." % name}
-	var blockers := referencing_files(extension, name, scan_dir)
-	if not blockers.is_empty():
-		var shown := PackedStringArray()
-		for blocker: String in blockers:
-			shown.append(blocker.get_file())
+	var users := ResourceCatalog.users_of(path, roots)
+	if not users.is_empty():
 		return {"ok": false,
-			"reason": "'%s' is still used by %s -- deleting it would break them." % [name, ", ".join(shown)]}
+			"reason": "'%s' is still used by %s -- deleting it would break them." % [name, ", ".join(users)]}
 	if not unregister(extension, name, settings_path):
 		return {"ok": false, "reason": "Could not take '%s' out of the registry." % name}
 	DirAccess.remove_absolute(path)

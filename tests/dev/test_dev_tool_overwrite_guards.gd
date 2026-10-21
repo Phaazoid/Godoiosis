@@ -296,3 +296,41 @@ func test_attack_delete_refuses_a_carving_something_uses() -> void:
 		"Delete offered to remove '%s' while %s still use it" % [target, ", ".join(users)]).is_null()
 	assert_str(tool.status_label.text).contains(users[0])
 	assert_bool(FileAccess.file_exists(path)).is_true()
+
+
+# The same refusal on the two pool pages that skipped it until #1366: a mission, fixture or roster
+# names its cast by reference, and a kit, roster or weapon names its gear. Same shape as the attack
+# case -- nothing presses Yes, so the case cannot delete content even if the refusal is gone.
+func test_character_delete_refuses_a_character_something_uses() -> void:
+	var tool: CharacterEditorTool = overlay.get_node("%Character")
+	_assert_delete_refuses_an_entry_in_use(tool, tool._items, "character")
+
+
+func test_item_delete_refuses_an_item_something_uses() -> void:
+	var tool: ItemEditorTool = overlay.get_node("%Item Editor")
+	_assert_delete_refuses_an_entry_in_use(tool, tool._variants, "item")
+
+
+# `tool` untyped: the two pages share the pool chrome's member NAMES, not a base class.
+func _assert_delete_refuses_an_entry_in_use(tool, entries: Dictionary, noun: String) -> void:
+	var dropdown: OptionButton = tool.load_dropdown
+	var target := ""
+	var users: Array[String] = []
+	for i in dropdown.item_count:
+		var entry := dropdown.get_item_text(i)
+		users = ResourceCatalog.users_of((entries[entry] as Resource).resource_path)
+		if not users.is_empty():
+			target = entry
+			dropdown.select(i)
+			break
+	if target == "":   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no %s is referenced by anything, so there is nothing to refuse" % noun)
+		return
+	var path := (entries[target] as Resource).resource_path
+
+	(tool.delete_button as Button).pressed.emit()
+
+	assert_object(_find_dialog(tool)).override_failure_message(
+		"Delete offered to remove %s '%s' while %s still use it" % [noun, target, ", ".join(users)]).is_null()
+	assert_str((tool.status_label as Label).text).contains(users[0])
+	assert_bool(FileAccess.file_exists(path)).is_true()
