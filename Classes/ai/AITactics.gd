@@ -993,10 +993,14 @@ static func watch_attack_for(unit: Unit) -> AttackData:
 
 # The cells each facing's watch would cover from `origin` (dir -> cells), truncation included
 # (#756). A facing that covers nothing is absent. _watch_aim ranks these; ThreatField unions them.
+# Asked of a probe of the order itself (#1355), so a lane is the resolver's footprint rule
+# (OverwatchAction.watched_paths_from), each cell once.
 static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext) -> Dictionary:
 	var lanes := {}
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
+		var probe := OverwatchAction.new()
+		probe.init(unit, origin + dir, attack)
+		var cells := Conduction._tiles_of(probe.watched_paths_from(origin, board))
 		if not cells.is_empty():
 			lanes[dir] = cells
 	return lanes
