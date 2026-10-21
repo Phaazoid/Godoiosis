@@ -59,6 +59,9 @@ var effect_pass_subjects: Dictionary[int, bool] = {}
 # What a pass's own end releases, released for a pass that will never reach it. ScenarioManager's
 # clear_board calls it: a pass suspended on a unit the teardown frees never resumes, so without this
 # executing_plan stays set and refresh_action_queue refuses every board after it.
+#
+# The walk's handover hold is the one release NOT made here: release_handovers judges reach, which
+# would eject on the dying board. SquadManager.clear_all_squads drops it with the squads (#1358).
 func abandon_pass() -> void:
 	executing_plan = null
 	effect_pass_subjects.clear()

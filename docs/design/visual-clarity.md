@@ -441,6 +441,9 @@ Two halves, because a suspended pass ends one of two ways:
 1. **It never resumes** (it waits on a freed unit's tween). `ScenarioManager.clear_board` calls
    `OrderExecutor.abandon_pass()`, which releases what the pass's own end releases: `executing_plan`,
    `effect_pass_subjects`, `_downed_pending`. The rule is #602's: enumerate the paths that END a pass.
+   The walk's leader-handover hold is the one exception ([#1358](https://github.com/Phaazoid/Godoiosis/issues/1358)):
+   `SquadManager.clear_all_squads` DROPS it with the squads, because releasing it judges reach and would
+   eject members on the board being torn down.
 2. **It resumes on the new board** (a beat's timer, a pan). `ScenarioManager.board_generation` is the one
    answer to *is the board I started on still standing*, bumped first in `clear_board`; every coroutine
    that awaits across a pass or a turn (`OrderExecutor`'s phases, `apply_end_of_turn_tiles`,
