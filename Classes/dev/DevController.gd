@@ -316,6 +316,11 @@ func resolve_pending(cell: Vector2i) -> void:
 			unit.movement.set_cell(cell)             # set_cell snaps world position too
 		PendingAction.DUPLICATE:
 			duplicate_unit(unit, cell)
+	# Both arms (#1360): a Move changes where an attacker stands, and a Duplicate copies its gear
+	# AFTER spawn_unit's own drop. Then the squad's plan, whose orders were authored from the old cell.
+	game.drop_threat_field()
+	if action == PendingAction.MOVE:
+		game._repaint_squad_plan(unit.squad)
 	# A dev-armed placement marks the header directly (#259 rework round 2 -- the edit sweep); play
 	# marks it through ScenarioManager.play_version since #1182. Reached through the overlay ref the
 	# F1 toggle already holds; null in a demo build, where there is no scenario header to tell.
