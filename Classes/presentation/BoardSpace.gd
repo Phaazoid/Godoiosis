@@ -569,8 +569,12 @@ static func staged_cells() -> Array[Vector2i]:
 #
 # Here rather than on either emitter, because the second one would otherwise copy it, and a stale
 # copy of this is invisible by construction.
+#
+# LIFTED BY WHERE A TEAR-OUT WOULD GO, never by the live stage (#1362): the box is swept on a board
+# load and a resize, when nothing is staged, and nothing re-sweeps it when stage() runs -- so the live
+# offset made the "lifted copy" the board itself. battle3d re-sweeps when the lift knob moves.
 static func effect_volume(board: AABB, margin: float) -> AABB:
-	var lifted := AABB(board.position + _stage_offset, board.size)
+	var lifted := AABB(board.position + lift_offset(), board.size)
 	return board.merge(lifted).grow(margin)
 
 

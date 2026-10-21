@@ -103,6 +103,8 @@ var _floor_row := 0
 # picker needs it grown by the apron on every motion event, and deriving it per pick
 # would walk every column of the board each time the mouse moves.
 var _board_rect := Rect2i()
+# The tear-out lift the effects' cull boxes were last swept with (#1362), so a moved knob re-sweeps.
+var _covered_lift := Vector3.ZERO
 var _pointer_cell: Vector3i = BoardSpace.NO_CELL
 # The staging this poll last drew (#521) -- its own last-drawn key.
 var _staged_version := 0
@@ -727,6 +729,12 @@ func _poll_basin() -> void:
 		BoardSpace.touch_basin()
 
 
+# The lift knob moved (#1362): every cull box holds the stage it would lift to, so it has to follow.
+func _poll_stage_lift() -> void:
+	if not BoardSpace.lift_offset().is_equal_approx(_covered_lift):
+		_cover_effects(_board_volume())
+
+
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
@@ -855,6 +863,7 @@ func _board_extent_changed() -> void:
 # all being asked is the same one and a new emitter that forgets to subscribe draws NOTHING, which
 # is the failure mode with no symptom.
 func _cover_effects(board: AABB) -> void:
+	_covered_lift = BoardSpace.lift_offset()
 	if _staging_dust != null:
 		_staging_dust.cover(board)
 	if _arc != null:
@@ -1054,6 +1063,7 @@ func _process(_delta: float) -> void:
 	_tick_pass_clock(_delta)
 	_sync_terrain_while_authoring()
 	_poll_basin()
+	_poll_stage_lift()
 	_drive_transition(_delta)
 	_sync_staging()
 	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the
@@ -2215,16 +2225,29 @@ func _paint_plane() -> Rect2i:
 # How far along a ray the ground is, INF where it meets none: the rig's ground probe (#1280). The
 # board's own pick, with the pan limit as its floor plane, so the probe answers anywhere the aim may
 # legally be -- past the stage edge it lands on the ground level a missing column already stands for.
+#
+# WHILE A FIGHT IS ON STAGE THE GROUND IS THE STAGE (#1375): only the staged columns, a lift up, with
+# the floor plane at the stage's own level beside them. Asked of the board, a dev-paused wheel notch
+# looked straight through the diorama and seated the pivot on the board forty cells under it.
 func _ground_depth(origin: Vector3, direction: Vector3) -> float:
 	if direction.y >= 0.0:
 		return INF
 	var bound := _rig.pan_limit
 	var plane := Rect2i(Vector2i(bound.position.floor()), Vector2i(bound.size.ceil())) \
 			if bound.has_area() else _paint_plane()
-	var cell := BoardPicker.pick_cell(origin, direction, _tops, plane)
+	var tops := _tops
+	var lift := Vector3.ZERO
+	if BoardSpace.staging_active():
+		lift = BoardSpace.stage_offset()
+		var staged: Dictionary[Vector2i, int] = {}
+		for column in BoardSpace.staged_cells():
+			if _tops.has(column):
+				staged[column] = _tops[column]
+		tops = staged
+	var cell := BoardPicker.pick_cell(origin - lift, direction, tops, plane)
 	if cell == BoardSpace.NO_CELL:
 		return INF
-	return (BoardSpace.surface_y(cell.y) - origin.y) / direction.y
+	return (BoardSpace.surface_y(cell.y) + lift.y - origin.y) / direction.y
 
 
 # What a landed blow is worth (#520 diff 2b jolt, 2c freeze). The mirror observes the instant and
