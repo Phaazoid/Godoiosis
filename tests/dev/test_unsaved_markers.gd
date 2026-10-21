@@ -17,6 +17,10 @@
 # Resources/TestTiles.tres is served from the resource cache to every suite in the run and a case
 # that wrote into it would leak into whatever ran next (test_object_fields.gd documents the same
 # rule). The funnel is still the one every widget calls; what is skipped is the widget.
+#
+# RESET-TO-SAVED rides the same flag (#1376): DevWidgets.offer_reset greys a live page's Reset while
+# its marker is clear, so every case that sets or clears a marker asserts the Reset beside it too.
+# Weather and Weights pin theirs in their own suites, where a real edit can be put back on disk.
 extends GdUnitTestSuite
 
 # preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
@@ -93,6 +97,15 @@ func _dialog_under(host: Node) -> ConfirmationDialog:
 
 # --- Set on edit, once per panel -----------------------------------------------------------
 
+func test_every_live_pages_reset_starts_greyed() -> void:
+	var resets := {"Moods": _moods._reset_button, "Game": _game._reset_button,
+		"Reset tile fields": _objects._fields_reset, "Reset ground rules": _objects._rules_reset,
+		"Reset defaults": _objects._globals_reset}
+	for page: String in resets:
+		assert_bool((resets[page] as Button).disabled).override_failure_message(
+			"%s offers Reset on a page with nothing to put back" % page).is_true()
+
+
 func test_a_tuned_mood_knob_marks_both_of_its_save_buttons() -> void:
 	assert_bool(_moods.has_unsaved_changes()).is_false()
 	assert_str(_moods._update_button.text).is_equal("Update")
@@ -105,6 +118,8 @@ func test_a_tuned_mood_knob_marks_both_of_its_save_buttons() -> void:
 	assert_str(_moods._save_as_button.text).override_failure_message(
 		"Save As is the only way to keep a tuned look when nothing is loaded, so it wears the mark too"
 	).is_equal("Save As *")
+	assert_bool(_moods._reset_button.disabled).override_failure_message(
+		"a moved knob left Reset greyed").is_false()
 	await await_idle_frame()
 
 
@@ -115,6 +130,8 @@ func test_a_tuned_game_knob_marks_its_save_button() -> void:
 
 	assert_bool(_game.has_unsaved_changes()).is_true()
 	assert_str(_game._save_button.text).is_equal("Save to source *")
+	assert_bool(_game._reset_button.disabled).override_failure_message(
+		"a moved knob left Reset greyed").is_false()
 	await await_idle_frame()
 
 
@@ -127,6 +144,10 @@ func test_an_edited_object_field_marks_its_save_button() -> void:
 
 	assert_bool(_objects.has_unsaved_changes()).is_true()
 	assert_str(_objects._save_button.text).is_equal("Save tile fields *")
+	assert_bool(_objects._fields_reset.disabled).override_failure_message(
+		"an edited field left its Reset greyed").is_false()
+	assert_bool(_objects._rules_reset.disabled).override_failure_message(
+		"a TILE edit lit the ground rules' Reset -- each Reset answers for its own file").is_true()
 	await await_idle_frame()
 
 
@@ -141,6 +162,7 @@ func test_reset_clears_the_mood_marker() -> void:
 	assert_bool(_moods.has_unsaved_changes()).is_false()
 	assert_str(_moods._update_button.text).is_equal("Update")
 	assert_str(_moods._save_as_button.text).is_equal("Save As")
+	assert_bool(_moods._reset_button.disabled).is_true()
 	await await_idle_frame()
 
 
@@ -155,6 +177,7 @@ func test_reset_clears_the_game_marker() -> void:
 	assert_bool(_game.has_unsaved_changes()).override_failure_message(
 		"Reset put every knob back on disk's value, so nothing is unsaved any more").is_false()
 	assert_str(_game._save_button.text).is_equal("Save to source")
+	assert_bool(_game._reset_button.disabled).is_true()
 	await await_idle_frame()
 
 

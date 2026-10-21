@@ -11,6 +11,8 @@
 # load(path) is the blind version: it returns the edited copy either way, so it passes against the
 # bug. The identity assertion is what says the two are the same object rather than two that agree.
 #
+# DevWidgets.revert_to_saved (#1376) is the same rule fed from the other end, pinned at the bottom.
+#
 # Writes to a user:// temp file and cleans up, matching test_dev_tool_save_uid.gd's discipline --
 # a shipped .tres is served from the resource cache to every suite in the run.
 extends GdUnitTestSuite
@@ -25,7 +27,7 @@ const EDITED_POWER := 42
 
 
 func after_test() -> void:
-	for path in [TEMP_PATH, OTHER_PATH]:
+	for path in [TEMP_PATH, OTHER_PATH, SHAPE_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 
@@ -203,3 +205,60 @@ func test_saving_a_staged_shape_reaches_every_attack_that_names_it() -> void:
 	assert_int(one.attack_shape.stamp.size()).is_equal(2)
 	assert_int(two.attack_shape.stamp.size()).is_equal(2)
 	DirAccess.remove_absolute(SHAPE_PATH)
+
+
+# --- Reset-to-saved (#1376): the same one object, fed from the other end -------------------------
+#
+# Each case moves the CACHED object, the way a live page does, and asserts on a holder. A revert that
+# read load(path) would adopt the edited object onto itself and leave the edit standing.
+
+func test_a_revert_puts_the_file_back_on_the_object_every_holder_shares() -> void:
+	var live := _staged_live_attack()
+	var mod := WeaponModData.new()
+	var granted: Array[WeaponAttackData] = [live]
+	mod.granted_attacks = granted
+	live.power = EDITED_POWER
+	assert_object(DevWidgets.saved_copy(TEMP_PATH)).override_failure_message(
+		"saved_copy served the cached object, which is the edit, not the file").is_not_same(live)
+
+	assert_bool(DevWidgets.revert_to_saved(live, TEMP_PATH)).is_true()
+
+	assert_int(live.power).is_equal(SEEDED_POWER)
+	assert_int(mod.granted_attacks[0].power).is_equal(SEEDED_POWER)
+	assert_object(load(TEMP_PATH)).is_same(live)
+	assert_str(live.resource_path).is_equal(TEMP_PATH)
+
+
+# IGNORE, never IGNORE_DEEP: a file the reverted one names by path must come back as the cached
+# object, or every attack sharing the shape forks on the first Reset.
+func test_a_revert_keeps_a_named_dependency_the_one_shared_object() -> void:
+	var named := P.shape([Vector2i.ZERO] as Array[Vector2i], "Shared")
+	assert_int(ResourceSaver.save(named, SHAPE_PATH)).is_equal(OK)
+	var library := ResourceLoader.load(SHAPE_PATH) as AttackShape
+	var seed_attack := WeaponAttackData.new()
+	seed_attack.power = SEEDED_POWER
+	seed_attack.attack_shape = library
+	assert_int(ResourceSaver.save(seed_attack, TEMP_PATH)).is_equal(OK)
+	var live := load(TEMP_PATH) as WeaponAttackData
+	assert_object(live.attack_shape).override_failure_message(
+		"precondition: the attack did not load the cached shape").is_same(library)
+	live.power = EDITED_POWER
+
+	assert_bool(DevWidgets.revert_to_saved(live, TEMP_PATH)).is_true()
+
+	assert_int(live.power).is_equal(SEEDED_POWER)
+	assert_object(live.attack_shape).override_failure_message(
+		"the revert handed the attack a fresh copy of a shape other attacks share").is_same(library)
+	DirAccess.remove_absolute(SHAPE_PATH)
+
+
+func test_a_revert_refuses_a_missing_file_and_a_different_script() -> void:
+	var live := _staged_live_attack()
+	live.power = EDITED_POWER
+	var status := Label.new()
+	auto_free(status)
+	assert_bool(DevWidgets.revert_to_saved(live, OTHER_PATH, status)).is_false()
+	assert_str(status.text).is_not_empty()
+	assert_int(ResourceSaver.save(WeaponModData.new(), OTHER_PATH)).is_equal(OK)
+	assert_bool(DevWidgets.revert_to_saved(live, OTHER_PATH)).is_false()
+	assert_int(live.power).override_failure_message("a refused revert still moved the object").is_equal(EDITED_POWER)

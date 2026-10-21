@@ -1319,6 +1319,11 @@ static func refresh_update_button(button: Button, target: String, noun: String, 
 static func mark_unsaved(button: Button, base_text: String, dirty: bool) -> void:
 	button.text = base_text + (" *" if dirty else "")
 
+# Reset-to-saved's half of the marker (#1376), called beside every live page's mark_unsaved so the two
+# cannot disagree. Unlike the Save it sits by, it DOES grey out: a clean page has nothing to put back.
+static func offer_reset(button: Button, dirty: bool) -> void:
+	button.disabled = not dirty
+
 # Delete asks first -- every dev Delete rides confirm_delete (dev call 2026-08-11); the tooltip
 # still names the victim.
 static func refresh_delete_button(button: Button, target: String, noun: String) -> void:
@@ -1520,6 +1525,29 @@ static func _adopt(live: Resource, edited: Resource) -> void:
 			continue
 		live.set(prop.name, snapshot.get(prop.name))
 	live.emit_changed()   # the hook a panel can redraw off; nothing listens yet
+
+
+# The file at `path` as it stands ON DISK (#1376), never the cached object a live edit has already
+# moved. IGNORE rather than IGNORE_DEEP: dependencies still come from the cache, so a shared shape or
+# texture stays the one object everything holds. Null when there is no file.
+static func saved_copy(path: String) -> Resource:
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+
+
+# Reset-to-saved (#1376), save_over's twin from the other end: put `live` back to what its file says,
+# IN PLACE, so every holder sees the reset (#589: a path has one object).
+static func revert_to_saved(live: Resource, path: String, status_label: Label = null) -> bool:
+	var saved := saved_copy(path)
+	if saved == null or saved.get_script() != live.get_script():
+		var msg := "Could not read %s back from disk" % path
+		push_warning(msg)
+		if status_label != null:
+			status_label.text = msg
+		return false
+	_adopt(live, saved)
+	return true
 
 
 # The uid= attributes a .tres carries, keyed by what OWNS each one -- its own header under "_header",

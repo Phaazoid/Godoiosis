@@ -6,15 +6,16 @@ class_name MoodsTool
 # What the look IS -- the knob table, reading and writing it, capturing and applying a preset --
 # moved to Classes/presentation/LookKnobs.gd in #253 part 2, because a MISSION carries a look now
 # and the shipping path cannot route through a dev tab. This file owns the PANEL: the rows, the
-# sub-tabs, the mood buttons, and the baseline that Reset returns to.
+# sub-tabs, the mood buttons, and which mood FILE Reset re-reads.
 #
 # The host is PUSHED in by battle3d._ready (attach_host), never looked up: no part of the game
 # subtree gains an upward path to the 3D scene, and launching Main.tscn flat -- a real shipping
 # target -- simply never attaches one, which this reports instead of crashing.
 #
-# Loading a mood makes it the BASELINE, so Reset returns there; Default returns to the fallback
-# look every board wears when its mission names none -- and Update default WRITES that file, so
-# the panel is the door to it (#386). It replaced Copy Values, which spelled a tuned look as
+# Reset means the FILE ON DISK (dev ruling, #1376): the mood last loaded or saved here, else the one
+# the board wears. Default returns to the fallback look every board wears when its mission names
+# none -- and Update default WRITES that file, so the panel is the door to it (#386). It replaced
+# Copy Values, which spelled a tuned look as
 # paste-ready GDScript to hand-type into Battle3D.tscn: a second way to say "make this the
 # baseline", and the worse one.
 #
@@ -45,7 +46,9 @@ const GROUP_TABS: Dictionary[String, String] = {
 }
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
-var _baseline: Array = []        # what Reset returns to: the scene, or whatever was last applied
+# The mood file Reset re-reads (#1376): the one last applied or saved here. "" = the mood the BOARD
+# wears, which battle3d applied at the board load without this panel seeing it.
+var _saved_path := ""
 var _loaded_preset := ""         # dropdown-relative name; "" = nothing loaded (default or scene)
 var _tabs: TabContainer
 var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
@@ -55,6 +58,7 @@ var _preset_dropdown: OptionButton
 var _update_button: Button
 var _delete_button: Button
 var _save_as_button: Button
+var _reset_button: Button
 # Touched since the last save/load/reset (#389). A FLAG, not a live compare: read() resolves its
 # node per knob, so a derived answer would be 43 get_node calls per drag tick. The precise answer
 # is never lost -- pressing a save still runs the real comparison and still reports what moved.
@@ -64,10 +68,11 @@ var _dirty := false
 func _ready() -> void:
 	_build_preset_row()
 	var buttons := HBoxContainer.new()
-	buttons.add_child(_button("Reset",
-		"Put every knob back to whatever was last applied -- the loaded mood, the default, or the\nscene's own values if neither", _on_reset_pressed))
+	_reset_button = _button("Reset",
+		"Put every knob back to what the mood's FILE says -- the mood last loaded or saved here, or\nthe one this board wears if neither. Greyed while nothing has moved.", _on_reset_pressed)
+	buttons.add_child(_reset_button)
 	buttons.add_child(_button("Default",
-		"Load the default mood -- what every board wears when its mission names none. This is the\nway back; Reset returns to whatever you last loaded.",
+		"Load the default mood -- what every board wears when its mission names none. This is the\nway back; Reset returns to the file of whatever you last loaded or saved.",
 		_on_default_pressed))
 	buttons.add_child(_button("Update default",
 		"Overwrite the default mood with what is on screen, so every board naming no mood wears\nthis. Asks first. Named moods are untouched -- this writes the one file Default loads.",
@@ -88,6 +93,7 @@ func _ready() -> void:
 	for tab_title: String in _tab_titles():
 		_tab_rows[tab_title] = DevWidgets.add_knob_scroll(_tabs, tab_title)
 	refresh_preset_dropdown()   # after _status exists: a refusal has somewhere to print
+	_refresh_save_marks()   # Reset starts greyed, host or no host
 	_rebuild()
 
 
@@ -95,7 +101,7 @@ func _ready() -> void:
 # the tab always builds its no-host state and then rebuilds here.
 func attach_host(host: Node3D) -> void:
 	_host = host
-	_baseline = _live_values()   # no mood loaded yet, so Reset means "back to the scene"
+	_saved_path = ""   # nothing applied here yet, so Reset means the mood the board wears
 	_clear_dirty()
 	_rebuild()
 
@@ -129,6 +135,8 @@ func _refresh_save_marks() -> void:
 		DevWidgets.mark_unsaved(_update_button, "Update", _dirty)
 	if is_instance_valid(_save_as_button):
 		DevWidgets.mark_unsaved(_save_as_button, "Save As", _dirty)
+	if is_instance_valid(_reset_button):
+		DevWidgets.offer_reset(_reset_button, _dirty)
 
 
 # --- Reading and writing a knob ---------------------------------------------------------
@@ -144,11 +152,14 @@ func write(knob: Dictionary, value: Variant) -> void:
 	LookKnobs.write(_host, knob, value)
 
 
-# What Reset returns to -- the loaded mood if there is one, else the authored scene.
-func baseline_of(index: int) -> Variant:
-	if index < 0 or index >= _baseline.size():
-		return null
-	return _baseline[index]
+# The file Reset re-reads. With nothing applied here since the board loaded, that is the mood the
+# board WEARS -- LookKnobs.resolve's answer, the one battle3d applied (a missing name falls back to
+# the default, loudly, there too).
+func saved_path() -> String:
+	if _saved_path != "" or _host == null:
+		return _saved_path
+	var worn := LookKnobs.resolve(_host.game.scenario_manager.current_look_preset)
+	return worn.resource_path if worn != null else ""
 
 
 # --- Building the rows ------------------------------------------------------------------
@@ -235,12 +246,13 @@ func capture_preset(preset_name: String) -> LookPreset:
 
 
 # The PANEL's half of applying. LookKnobs does the writing and the reporting (including falling a
-# knob the preset predates back to the default, and re-fitting the camera); this keeps the baseline
-# in step so Reset returns to whatever was just loaded, and redraws every row off it.
+# knob the preset predates back to the default, and re-fitting the camera); this aims Reset at the
+# file just applied, and redraws every row off it. A preset with no file has nothing saved to return
+# to, so Reset falls back to the board's.
 func apply_preset(preset: LookPreset) -> Dictionary:
 	var report := LookKnobs.apply(_host, preset)
 	if _host != null and preset != null:
-		_baseline = _live_values()   # what the properties ACCEPTED, never what was asked for
+		_saved_path = preset.resource_path
 		_clear_dirty()   # covers Load, Default and the Scenario tab's look-row pick -- all route here
 		_rebuild()
 	return report
@@ -362,7 +374,7 @@ func _update_default_confirmed() -> void:
 		return
 	# The file now holds what is on screen, so leave the panel exactly where pressing Default would:
 	# the live look IS the default, and no named mood is loaded any more.
-	_baseline = _live_values()
+	_saved_path = LookKnobs.DEFAULT_PATH
 	_clear_dirty()
 	_loaded_preset = ""
 	_preset_dropdown.select(-1)
@@ -402,7 +414,7 @@ func _on_save_as_pressed() -> void:
 	if not DevWidgets.save_over(capture_preset(entered), LookKnobs.preset_path(entered), _status):
 		return
 	# Saving is also loading: the look on screen IS this mood now, so Reset should return to it.
-	_baseline = _live_values()
+	_saved_path = LookKnobs.preset_path(entered)
 	_clear_dirty()
 	_loaded_preset = entered
 	_preset_name_input.text = ""
@@ -428,7 +440,7 @@ func _on_update_pressed() -> void:
 func _update_confirmed(target: String) -> void:
 	if not DevWidgets.save_over(capture_preset(target), LookKnobs.preset_path(target), _status):
 		return
-	_baseline = _live_values()   # the file now says what is on screen, so Reset must too
+	_saved_path = LookKnobs.preset_path(target)   # the file now says what is on screen
 	_clear_dirty()
 	_status.text = "Updated mood '%s' (%d knobs)." % [target, LookKnobs.preset_knobs().size()]
 
@@ -444,38 +456,27 @@ func _delete_confirmed(target: String) -> void:
 	if not DevWidgets.delete_saved_file(LookKnobs.preset_path(target), "mood", _status):
 		return
 	if _loaded_preset == target:
-		# The look on screen is untouched -- only its file is gone. Reset holds it rather than
-		# snapping anywhere, so deleting a file never also changes what you are looking at.
-		_baseline = _live_values()
+		# The look on screen is untouched -- only its file is gone, so Reset has nothing of it to
+		# re-read and falls back to the mood the board wears.
+		_saved_path = ""
 		_loaded_preset = ""
 		_status.text = "Deleted mood '%s'. The look on screen is unchanged; press Default to leave it." % target
 	refresh_preset_dropdown()
 
 
-# The live value of every knob, per LookKnobs.KNOBS index -- the baseline a just-saved mood
-# establishes. It used to skip the excluded rows, which is now every row of a table that is mood
-# entire (#373).
-func _live_values() -> Array:
-	var values: Array = []
-	values.resize(LookKnobs.KNOBS.size())
-	for i in LookKnobs.KNOBS.size():
-		values[i] = read(LookKnobs.KNOBS[i])
-	return values
-
-
+# Re-read from DISK (DevWidgets.saved_copy), never the cached preset: the file is what "saved" means.
+# apply_preset redraws every row and clears the marker on the way.
 func _on_reset_pressed() -> void:
 	if _host == null:
 		return
-	for i in LookKnobs.KNOBS.size():
-		var authored: Variant = baseline_of(i)
-		if typeof(authored) != TYPE_NIL:
-			write(LookKnobs.KNOBS[i], authored)
-	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
-	_clear_dirty()
-	if _loaded_preset == "":
-		_status.text = "Every knob is back at its authored value."
-	else:
-		_status.text = "Every knob is back at mood '%s'." % _loaded_preset
+	var path := saved_path()
+	var saved := DevWidgets.saved_copy(path) as LookPreset
+	if saved == null:
+		_status.text = "Could not read the mood file %s back from disk." % path
+		return
+	apply_preset(saved)
+	_saved_path = path
+	_status.text = "Every knob is back at what %s says on disk." % path.get_file()
 
 
 func _on_refit_pressed() -> void:

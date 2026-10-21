@@ -7,11 +7,12 @@
 #
 # The catalog resources are process-global (the resource cache), so every case that moves one puts
 # it back in after_test through the page's own Reset -- a leaked weight would reach every later suite.
-# The one case that SAVES writes a user:// probe, never a shipped file.
+# A case that needs a file on disk writes a user:// probe, never a shipped file.
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROBE_PATH := "user://__test_weights_tool.tres"
+const BODY_PROBE_PATH := "user://__test_weights_tool_body.tres"
 
 var _tool: WeightsTool
 var _scene: Node3D
@@ -30,8 +31,9 @@ func after_test() -> void:
 		(_scene.get_node("Main/DevOverlay") as DevOverlay).weights_tool._on_reset_pressed()
 		get_tree().root.remove_child(_scene)
 		_scene.free()
-	if FileAccess.file_exists(PROBE_PATH):
-		DirAccess.remove_absolute(PROBE_PATH)
+	for path: String in [PROBE_PATH, BODY_PROBE_PATH]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
 	await await_idle_frame()   # #93/#101 orphan workaround
 
 
@@ -104,17 +106,33 @@ func test_a_body_spinbox_moves_bld_and_the_band_it_lands_in() -> void:
 
 
 # Reset puts a sparse stat back as ABSENT rather than as its default written out, so a character
-# that never authored BLD keeps not authoring it. An in-memory body: every shipped character may
-# author BLD, and this branch must stay measurable whatever the cast does.
+# that never authored BLD keeps not authoring it. A user:// body: every shipped character may author
+# BLD, and this branch must stay measurable whatever the cast does.
 func test_reset_restores_what_was_saved_including_an_unauthored_body() -> void:
-	var unauthored := UnitData.new()
+	assert_int(ResourceSaver.save(UnitData.new(), BODY_PROBE_PATH)).is_equal(OK)
+	var unauthored := load(BODY_PROBE_PATH) as UnitData
 	assert_bool(unauthored.base_stats.has(Stats.Stat.BLD)).is_false()
+	assert_bool(_tool._reset_button.disabled).override_failure_message(
+		"Reset is offered on a page with nothing to put back").is_true()
 	_tool.edit(unauthored, 3)
 	assert_bool(unauthored.base_stats.has(Stats.Stat.BLD)).is_true()
+	assert_bool(_tool._reset_button.disabled).override_failure_message("an edit left Reset greyed").is_false()
 	_tool._on_reset_pressed()
 	assert_bool(unauthored.base_stats.has(Stats.Stat.BLD)).override_failure_message(
 		"Reset wrote the default out instead of putting the unauthored stat back").is_false()
 	assert_str(_tool._save_button.text).is_equal("Save")
+	assert_bool(_tool._reset_button.disabled).is_true()
+
+
+# RESET MEANS THE FILE (#1376), not what the object held when this page first touched it: another page
+# may have moved the live object in between, and Reset must not adopt that as "saved".
+func test_reset_reads_the_file_not_what_the_object_held_at_first_touch() -> void:
+	var probe := _staged_probe(3)
+	probe.weight = 5   # moved in memory by someone else, never saved
+	_tool.edit(probe, 7)
+	_tool._on_reset_pressed()
+	assert_int(probe.weight).override_failure_message(
+		"Reset went back to the in-memory 5, which no file holds").is_equal(3)
 
 
 func test_save_writes_the_touched_file_and_clears_the_marker() -> void:

@@ -15,6 +15,7 @@ class_name WeatherTool
 #
 # The unsaved marker is per FILE (#1370), WeightsTool's _touched: an edit lives on the cached resource,
 # so it outlives picking another weather, and Save writes every file touched since the last save.
+# Reset is Save's mirror (#1376): every touched file re-read from DISK onto the cached object.
 
 const CONFIRM_LIST_MAX := 12   # WeightsTool's: a confirm listing every file is one nobody reads
 const NO_LOOK := "No look file for this weather -- add one under Resources/WeatherLooks/."
@@ -25,6 +26,7 @@ const WIND_ID := 100
 var _game   # untyped back-ref: game.gd has no class_name
 var _picker: OptionButton
 var _save: Button
+var _reset: Button
 var _status: Label
 var _rows: VBoxContainer
 var _kind := Weather.Kind.RAIN
@@ -62,6 +64,13 @@ func init(game) -> void:
 	DevWidgets.apply_tooltip(_save, DevWidgets.wrap_tooltip(
 		"Write every weather and wind file changed on this page since the last save, whichever is on show. "
 		+ "Asks first: the saved versions are lost."))
+	_reset = Button.new()
+	_reset.text = "Reset"
+	_reset.pressed.connect(_on_reset_pressed)
+	head.add_child(_reset)
+	DevWidgets.apply_tooltip(_reset, DevWidgets.wrap_tooltip(
+		"Put every weather and wind file changed on this page back to what is saved on disk, whichever "
+		+ "is on show. Greyed while nothing has moved."))
 	_status = Label.new()
 	add_child(_status)
 	_rows = DevWidgets.add_knob_scroll(self)
@@ -191,6 +200,7 @@ func _touch(resource: Resource) -> void:
 
 func _refresh_dirty() -> void:
 	DevWidgets.mark_unsaved(_save, "Save", has_unsaved_changes())
+	DevWidgets.offer_reset(_reset, has_unsaved_changes())
 
 
 func has_unsaved_changes() -> bool:
@@ -238,3 +248,29 @@ func _save_now() -> void:
 		parts.append("FAILED: %s" % ", ".join(failed))
 	_status.text = " | ".join(parts)
 	_refresh_dirty()
+
+
+# Save's mirror: every touched file re-read from DISK onto the cached object the mirror and the soak
+# already hold, so the board follows at once. A file that will not read stays touched, as on Save.
+func _on_reset_pressed() -> void:
+	var reset := PackedStringArray()
+	var failed := PackedStringArray()
+	var rules_moved := false
+	for resource: Resource in _touched.keys():
+		var path: String = _touched[resource]
+		if DevWidgets.revert_to_saved(resource, path, _status):
+			reset.append(path.get_file())
+			_touched.erase(resource)
+			rules_moved = rules_moved or resource is WeatherRules
+		else:
+			failed.append(path.get_file())
+	_fill()
+	_refresh_dirty()
+	if rules_moved:
+		_redraw_plan()
+	var parts := PackedStringArray()
+	if not reset.is_empty():
+		parts.append("Back to disk: %s" % ", ".join(reset))
+	if not failed.is_empty():
+		parts.append("FAILED: %s" % ", ".join(failed))
+	_status.text = " | ".join(parts)

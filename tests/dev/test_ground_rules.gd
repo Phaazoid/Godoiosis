@@ -108,6 +108,41 @@ func test_a_new_ground_starts_with_a_clock() -> void:
 		).is_greater_equal(ObjectKnobs.MIN_BURN_TURNS)
 
 
+# --- Reset ground rules (#1376) -----------------------------------------------------------------
+
+const SCRATCH_RULE := "user://__test_ground_rules_reset.tres"
+
+
+func after_test() -> void:
+	if FileAccess.file_exists(SCRATCH_RULE):
+		DirAccess.remove_absolute(SCRATCH_RULE)
+
+
+# The dial edits the CACHED reaction the running fire holds, so Reset re-reads the FILE onto that
+# same instance. A scratch reaction under user:// stands in for a shipped one, loaded the same way.
+# The clock is an enum-keyed typed Dictionary, the shape a revert most plausibly drops.
+func test_reset_ground_rules_puts_a_moved_clock_back_to_its_file() -> void:
+	assert_int(ResourceSaver.save(ObjectKnobs.make_ignition(Terrain.Kind.MUD), SCRATCH_RULE)).is_equal(OK)
+	var fuel := load(SCRATCH_RULE) as TerrainReaction
+	var on_file := ObjectKnobs.burn_turns_of(fuel)
+	var page := ObjectTool.new()
+	add_child(page)
+	auto_free(page)
+	assert_bool(page._rules_reset.disabled).override_failure_message(
+		"Reset ground rules is offered with nothing staged").is_true()
+
+	page._set_turns(fuel, on_file + 2)
+	assert_bool(page._rules_reset.disabled).override_failure_message(
+		"a moved clock left Reset ground rules greyed").is_false()
+	page._on_reset_rules_pressed()
+
+	assert_int(ObjectKnobs.burn_turns_of(fuel)).override_failure_message(
+		"the clock did not come back to the file's value").is_equal(on_file)
+	assert_bool(page.has_unsaved_changes()).is_false()
+	assert_bool(page._rules_reset.disabled).is_true()
+	await await_idle_frame()   # Reset rebuilt the page; let the freed rows go
+
+
 # --- Which grounds are asked at all -------------------------------------------------------------
 
 # NONE is "this tile declares no terrain_type" (the `crate` tile is one) and VOID is a hole. Neither
