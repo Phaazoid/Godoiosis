@@ -68,7 +68,7 @@ static func _best_exchange(leader: Unit, engageable: Dictionary, board: BoardCon
 		# Asked at the cell we would attack FROM, so this layer and the approach cannot disagree
 		# about where the fight happens.
 		var standing := enemy.is_active()
-		var safe := weighs_answers and not squad_manager.can_counter(enemy, leader, board, plan.from)
+		var safe := weighs_answers and not squad_manager.can_counter(enemy, leader, board, {}, plan.from)
 		if best == null or _engagement_beats(standing, safe, plan.hops, best_standing, best_safe, best_hops):
 			best = enemy
 			best_standing = standing
@@ -290,7 +290,7 @@ static func choose_balanced_target(leader: Unit, board: BoardContext, squad_mana
 			continue
 		var hops: int = firing[unit][0]
 		var from: Vector2i = firing[unit][1]
-		if hops >= RulesService.UNREACHABLE or squad_manager.can_counter(unit, leader, board, from):
+		if hops >= RulesService.UNREACHABLE or squad_manager.can_counter(unit, leader, board, {}, from):
 			continue
 		var standing := unit.is_active()
 		var d := GridUtils.manhattan_distance(leader.movement.cell, unit.movement.cell)

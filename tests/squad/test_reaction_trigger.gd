@@ -66,7 +66,7 @@ func test_a_healer_takes_no_reaction_and_never_tops_up_the_attacker() -> void:
 
 	var plan := _resolve_attack_on(attacker, defender, [attacker, defender, healer] as Array[Unit])
 
-	assert_bool(_sm.can_counter(healer, attacker, null)) \
+	assert_bool(_sm.can_counter(healer, attacker, null, {})) \
 		.override_failure_message("a healing main answers no hit").is_false()
 	assert_array(_reactions_by_actor(plan, healer)).is_empty()
 	var answered := _reactions_by_actor(plan, defender)

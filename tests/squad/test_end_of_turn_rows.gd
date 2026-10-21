@@ -103,6 +103,44 @@ func test_an_enemy_standing_in_the_same_fire_is_not_forecast_here() -> void:
 			"an enemy's own end-of-turn burn was forecast onto the player's queue").is_equal(0)
 
 
+# ...but the burn takes the WHOLE acting faction, not the squad (TurnBoundary.tile_hits). A unit of
+# another squad standing where THIS plan lights a fire burns for this plan and has no other row
+# anywhere (#1353), so it is this squad's row (dev, 2026-10-21). Driven through a real queued aim: a
+# map-only fire lights the cell and hits nobody, so the deposit alone is what brings it in scope.
+func test_a_bystander_where_this_plan_lights_a_fire_gets_this_squads_row() -> void:
+	var caster := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), STOUT)
+	var torch := (caster.get_equipped_weapon() as WeaponInstance).template.main_attack
+	torch.elemental_damage_type = Elemental.Element.FIRE
+	torch.targets = EquippableData.TargetMode.MAP
+	var bystander := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), STOUT, false)
+	caster.squad._queue_action(AttackAction.declare(caster, caster.movement.cell, bystander.movement.cell))
+	var lights := TerrainReaction.new()
+	lights.incoming_element = Elemental.Element.FIRE
+	lights.add_tile_states.assign([Terrain.TileState.BURNING])
+	var no_reactions: Array[ElementalReaction] = []
+	var terrain_reactions: Array[TerrainReaction] = [lights]
+
+	var plan := _sm.resolve_plan(caster.squad, _board([caster, bystander]), no_reactions, terrain_reactions)
+
+	assert_bool(_states.projected_states_at(bystander.movement.cell, plan.cell_effects).has(Terrain.TileState.BURNING)) \
+			.override_failure_message("fixture: the aim lit nothing under the bystander").is_true()
+	assert_object(_hit_for(plan, bystander)).override_failure_message(
+			"a same-faction unit outside the squad burns for this plan with no row").is_not_null()
+
+
+# ...and the other half of the ruling: a bystander already standing in OLD fire, which this plan
+# neither touches nor deposits on, is not this plan's doing and gets no row from it.
+func test_a_bystander_in_old_fire_this_plan_never_touches_gets_no_row() -> void:
+	_ignite(FIRE)
+	var player := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), STOUT, false)
+	var bystander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+
+	var plan := _sm.resolve_plan(player.squad, _board([player, bystander]))
+
+	assert_object(_hit_for(plan, bystander)).override_failure_message(
+			"another squad's burn in fire this plan never touched was forecast onto this queue").is_null()
+
+
 # ==============================================================================
 #  What it reads
 # ==============================================================================

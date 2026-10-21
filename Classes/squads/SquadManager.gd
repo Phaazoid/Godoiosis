@@ -659,7 +659,12 @@ func refused_orders(squad: Squad) -> Array[BaseAction]:
 # re-derived in AITactics, per Law #4's own words -- if you cannot reach the existing answer from
 # where you are standing, pass it in; a private counter-reach predicate would be a second spelling
 # of a rule the resolver owns, which is the drift #78 exists to stop.
-func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, target_cell = null) -> bool:
+#
+# `hypo` is the pass the counter is derived inside (#1349): both units are judged where THIS pass has
+# put them, a shove the projection never published included. Required, like `board`: the AI, asking
+# outside any pass, says so with an empty one, which reads the projection.
+func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, hypo: Dictionary,
+		target_cell = null) -> bool:
 	if countering_unit == null or target_unit == null:
 		return false
 	if not is_instance_valid(countering_unit) or not is_instance_valid(target_unit):
@@ -677,8 +682,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	if countering_unit.is_standing_watch():
 		return false
 
-	var counter_cell := countering_unit.get_projected_destination()
-	var aimed_from: Vector2i = target_cell if target_cell != null else target_unit.get_projected_destination()
+	var counter_cell := PlanResolver.projected_position(countering_unit, hypo)
+	var aimed_from: Vector2i = target_cell if target_cell != null else PlanResolver.projected_position(target_unit, hypo)
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
 	# not by whatever this unit last aimed with. Reading the live pick here let a melee unit
@@ -687,17 +692,18 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# denial). Required, may be null = flat -- an optional would silently read flat forever.
 	return Reach.can_hit_cell_from(countering_unit, counter_cell, aimed_from, countering_unit.get_counter_attack(), board)
 
-func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext) -> Unit:
+func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext,
+		hypo: Dictionary) -> Unit:
 	# Taunt (Reaction, docs/design/jobs.md "The ability chassis"): a standing policy, never a
 	# prompt — counters against the taunter's party must target the taunter WHERE LEGAL.
 	# First legal taunter in member order wins (deterministic, Law #1); an unreachable taunter
 	# falls through to the default policy below rather than suppressing the counter.
 	for member in attacking_party:
-		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member, board):
+		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member, board, hypo):
 			return member
 	# Default policy (C3 placeholder): first legal member.
 	for member in attacking_party:
-		if can_counter(countering_unit, member, board):
+		if can_counter(countering_unit, member, board, hypo):
 			return member
 	return null
 
@@ -715,7 +721,10 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], 
 # reactive heal, which turned inward and never asked who it was answering; with that gone, every
 # reactor is refused by choose_counter_target's own hostility check anyway, so no case can see this
 # gate any more. It stays because it IS the rule, and because it keeps a friendly hit off the ledger.
-func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], board: BoardContext) -> Array[CounterAttackAction]:
+#
+# `hypo` is the pass the attacks resolved into, handed on to can_counter (#1349).
+func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], board: BoardContext,
+		hypo: Dictionary) -> Array[CounterAttackAction]:
 	var counters: Array[CounterAttackAction] = []
 	var defender_groups_that_countered := {} # {Squad : bool}
 	var attacking_units = attacking_squad.get_members()
@@ -753,12 +762,12 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 			continue
 
 		for reacting_unit in defender.squad.get_members():
-			var reaction_target := choose_counter_target(reacting_unit, attacking_units, board)
+			var reaction_target := choose_counter_target(reacting_unit, attacking_units, board, hypo)
 			if reaction_target == null:
 				continue
 
 			var reaction := CounterAttackAction.new()
-			reaction.init_counter(reacting_unit, reaction_target, reacting_unit.get_projected_destination(), attack)
+			reaction.init_counter(reacting_unit, reaction_target, PlanResolver.projected_position(reacting_unit, hypo), attack)
 			counters.append(reaction)
 
 		defender_groups_that_countered[defender_squad] = true
@@ -898,10 +907,18 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	for action in actions:
 		if action.action_type == BaseAction.ActionType.MOVE:
 			PlanResolver.resolve_move(action as MoveAction, plan, hypo, reactions, board, terrain_reactions)
+	# ...and whoever the walk's watch shots threw (#1349): part of the prefix every later order lands
+	# after, so published like an aim's shove. Everything in the list so far fired during the walk.
+	_publish_shoves(plan.watch_shots)
 
 	# Expand each stored AIM order into a fresh volley from CURRENT projected positions (#15):
 	# AoE victims are derived data, never stored. RulesService.gather_attack_victims is already
 	# projection-aware, so a re-planned move re-targets the blast — like counters.
+	#
+	# EVERY position read from here to the end of the pass is the THREADED one (#1349):
+	# PlanResolver.projected_position(unit, hypo), never get_projected_destination. The projection
+	# holds only what has been published, and lets a walk beat a shove the pass landed after it; the
+	# hypo has every walk, shove and haul at the moment it is asked.
 	#
 	# Each aim is expanded AND RESOLVED before the next is expanded (#105). A shove only becomes a
 	# projected position once its attack has resolved, so expanding every volley up front put all
@@ -928,8 +945,9 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 				guard_orders[ward] = order
 			continue
 		# A watch ARMS AT ITS QUEUE SLOT too (#413), for the same reason and by the same append.
-		# Its footprint is derived HERE rather than stored, from the actor's projected cell — a
-		# re-planned walk must move the preview, exactly as it re-targets a stored attack aim (#15).
+		# Its footprint is derived HERE rather than stored, from where the pass has the actor at this
+		# slot — a re-planned walk must move the preview, exactly as it re-targets a stored attack aim
+		# (#15), and so must a squadmate's shove queued ahead of it (#1349).
 		# The geometry only becomes frozen when the order executes and the watcher has arrived.
 		if action.action_type == BaseAction.ActionType.OVERWATCH:
 			var watch_order := action as OverwatchAction
@@ -944,7 +962,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 				watch_order.resolved_footprint = []
 				watch_order.resolved_path_lengths = []
 				continue
-			var watch_origin := watch_order.actor.get_projected_destination()
+			var watch_origin := PlanResolver.projected_position(watch_order.actor, hypo)
 			var watched := watch_order.watched_paths_from(watch_origin, board)
 			watch_order.resolved_anchor = watch_origin
 			watch_order.resolved_footprint = AttackShape.joined_cells(watched)
@@ -960,7 +978,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		if action.action_type != BaseAction.ActionType.ATTACK:
 			continue
 		var aim := action as AttackAction
-		var origin := aim.actor.get_projected_destination()
+		var origin := PlanResolver.projected_position(aim.actor, hypo)
 		# The current travels once the blast lands, judged against THIS pass's own wetness (E4): a
 		# target an earlier order in the same plan soaked conducts for this one, which is the whole
 		# of the water-then-shock combo previewing correctly.
@@ -992,9 +1010,9 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			atk.source_aim = aim
 		plan.attacks.append_array(group)
 
-		# Resolve THIS aim, then publish its shoves as projected positions — so the next aim's
-		# victim gather, the counter derivation below, and the board preview all read where the
-		# target LANDS (#84 approach B, extended to same-plan attacks by #105).
+		# Resolve THIS aim, then publish its shoves as projected positions — so the board preview and
+		# every order queued after this one read where the target LANDS (#84 approach B, extended to
+		# same-plan attacks by #105). The rest of THIS pass reads the hypo, which already has it.
 		PlanResolver.resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
 		_settle_shoves(group, plan, hypo, reactions, board, terrain_reactions)
 
@@ -1007,17 +1025,26 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			plan.attacks.append_array(dropped)
 			_settle_shoves(dropped, plan, hypo, reactions, board, terrain_reactions)
 
+	# Every walk this prefix moved its walker off again (#1349), stamped once the last aim has
+	# settled: the shove it published landed AFTER the walk, so Unit.projected_cell lets it win. Read off
+	# the hypo, which has the walker wherever the last shove left it. Assigned unconditionally, so a
+	# re-resolve cannot inherit last pass's verdict.
+	for action in actions:
+		if action.action_type == BaseAction.ActionType.MOVE and action.actor != null and is_instance_valid(action.actor):
+			var walk := action as MoveAction
+			walk.resolved_displaced = PlanResolver.projected_position(walk.actor, hypo) != walk.get_destination()
+
 	# The deposits land after the volley (#922): whoever the melt took the floor from goes under NOW,
 	# before any reaction is derived -- a sunk unit is down, and a body does not counter.
 	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.DEPOSITS_LAND)
 
 	# Counters are derived as single-target "aims" (who answers whom). Expand each into its own
-	# volley from the reactor's projected cell — the same AoE + friendly-fire gather the attack loop
+	# volley from the reactor's threaded cell — the same AoE + friendly-fire gather the attack loop
 	# above uses — so an AoE counter splashes everyone in the blast, not just its chosen target.
 	# (Parallels the #15 "derive victims, don't store" rule for attacks.)
-	for aim in calculate_reactions_for_squad(squad, plan.attacks, board):
-		var c_origin := aim.actor.get_projected_destination()
-		var c_aim_cell := aim.target.get_projected_destination()
+	for aim in calculate_reactions_for_squad(squad, plan.attacks, board, hypo):
+		var c_origin := PlanResolver.projected_position(aim.actor, hypo)
+		var c_aim_cell := PlanResolver.projected_position(aim.target, hypo)
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
 		# create_counter_volley stamps below (#102).
 		var c_attack := aim.actor.get_counter_attack()
@@ -1044,6 +1071,19 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		if BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
 			action.resolved_actor_felled = not PlanResolver.actor_is_live(action.actor, hypo)
 
+	# ...and a rescue's own question at the same moment (#1349): is the rescuer still beside the body,
+	# where the pass has the two of them? A counter can shove either away after the plan was authored,
+	# and RescueAction.execute asks exactly this of the board it meets. A felled rescuer or a missing
+	# body is not a reach question, so it is not judged here.
+	for action in actions:
+		if action.action_type != BaseAction.ActionType.RESCUE:
+			continue
+		var pickup := action as RescueAction
+		pickup.resolved_within_reach = pickup.resolved_actor_felled or pickup.target == null \
+				or not is_instance_valid(pickup.target) \
+				or RescueAction.within_reach(PlanResolver.projected_position(pickup.actor, hypo),
+					PlanResolver.projected_position(pickup.target, hypo))
+
 	# Rescue hauls (#116): a body that cannot stand where it lies -- in deep water -- is dragged onto
 	# a cell beside its rescuer, and the board must DRAW it there rather than jump it on Execute
 	# (Law #2). Published here and not a line earlier: a reaction is derived from where the pass
@@ -1063,20 +1103,25 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			var rescue := action as RescueAction
 			if rescue.target == null or not is_instance_valid(rescue.target):
 				continue
-			if rescue.resolved_actor_felled:
-				continue   # nobody is left to do the hauling (#1005) -- the body stays where it lies
-			if rescue.haul_to == rescue.target.get_projected_destination():
+			if rescue.resolved_actor_felled or not rescue.resolved_within_reach:
+				continue   # nobody is left to do the hauling (#1005), or nobody beside the body to do it
+			if rescue.haul_to == PlanResolver.projected_position(rescue.target, hypo):
 				continue   # an ordinary rescue: the stamp is where the body already is
 			# Only a LEGAL stamp is drawn, and that is load-bearing rather than defensive. The board
 			# must not promise a bank a re-planned move has put out of reach -- and because
 			# rescue_landings short-circuits once a haul is published (the body then reads as
 			# standing on the bank), publishing a stale one would make it validate itself. Left
 			# undrawn, the validator recomputes from the water and reds the row, which is the answer.
-			if RulesService.rescue_landings(action.actor, rescue.target, board).has(rescue.haul_to):
+			#
+			# Judged on the pass's own cells, and THREADED as well as published (#1349): everything
+			# after this in the pass -- an arm-fired shot's path, the END OF TURN forecast -- meets
+			# the body on the bank, as execution does (RESCUE plays before OVERWATCH).
+			if RulesService.rescue_landings(action.actor, rescue.target, board, hypo).has(rescue.haul_to):
 				rescue.target.set_projected_rescue(rescue.haul_to)
+				PlanResolver.thread_haul(rescue.target, rescue.haul_to, hypo)
 
-	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile on the burrower's
-	# projected cell. Routed through cell_effects so preview + execution consume the same object
+	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile where the pass leaves the
+	# burrower. Routed through cell_effects so preview + execution consume the same object
 	# (R3) — it serializes and draws for free, exactly like an elemental terrain deposit.
 	if board != null:
 		for action in actions:
@@ -1085,7 +1130,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			if action.resolved_actor_felled:
 				continue   # a body digs no cover (#1005)
 			var cover := ResolvedCellEffect.new()
-			cover.cell = action.actor.get_projected_destination()
+			cover.cell = PlanResolver.projected_position(action.actor, hypo)
 			cover.states_added.append(Terrain.TileState.COVER)
 			plan.cell_effects.append(cover)
 
@@ -1142,21 +1187,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 
 
 # What a resolved run of attack actions leaves for everything after it: each shove PUBLISHED as a
-# projected position -- the next aim's victim gather, the counter derivation and the board preview all
-# read where the target LANDS (#84 approach B, extended to same-plan attacks by #105) -- and each shove
-# offered to the standing watches as an ENTRY. Factored out of the aim walk when a payload became the
-# second thing it settles (#1058), so the two cannot publish differently.
+# projected position -- the board preview and every order queued after it read where the target LANDS
+# (#84 approach B, extended to same-plan attacks by #105) -- and each shove offered to the standing
+# watches as an ENTRY, whose shots' shoves are published in turn. Factored out of the aim walk when a
+# payload became the second thing it settles (#1058), so the two cannot publish differently.
 func _settle_shoves(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary,
 		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
-	var shoved: Array[Unit] = []
-	for atk in group:
-		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
-			shoved.append(atk.target)
-			# A REMOVED target (#259) publishes nothing: a doomed unit must not become
-			# pickable or aimable on the chasm cell -- its sprite never moves, the trail
-			# alone says where it goes, and the hypo's DEAD lifecycle covers the resolve.
-			if not atk.resolved.removed:
-				atk.target.set_projected_knockback(atk.resolved.knockback_to)
+	var shoved := _publish_shoves(group)
 	# A shove is an ENTRY (#413): mace them into your squadmate's watched line and it fires.
 	# The intended combo, and the reason arming happens at a queue slot — sequence the shove
 	# after the watch and it connects, before it and it does not.
@@ -1166,8 +1203,28 @@ func _settle_shoves(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictio
 	# shot answers it. Before #567 every triggered shot played in one batch ahead of the attacks,
 	# so this one fired before the blow that threw them into it.
 	if not shoved.is_empty():
+		var fired_from := plan.watch_shots.size()
 		PlanResolver.fire_watch_entries(shoved, plan, hypo, reactions, board, terrain_reactions,
 				group[-1], -1)
+		# ...and whoever those shots threw (#1349), still inside the prefix a later order lands after.
+		_publish_shoves(plan.watch_shots.slice(fired_from))
+
+
+# Publish each shove in a resolved run, in the order it plays, so a later shove of the same unit wins;
+# returns who was shoved. The ONE writer of a published knockback. A REMOVED target (#259) publishes
+# nothing: a doomed unit must not become pickable or aimable on the chasm cell -- its sprite never moves,
+# the trail alone says where it goes, and the hypo's DEAD lifecycle covers the resolve.
+#
+# Counter and tail shoves are deliberately NOT published (#1349). The projection is the ATTACK
+# PREFIX -- where a newly queued aim, Guard or watch would find everyone -- and those land after it.
+func _publish_shoves(run: Array[AttackAction]) -> Array[Unit]:
+	var shoved: Array[Unit] = []
+	for atk in run:
+		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
+			shoved.append(atk.target)
+			if not atk.resolved.removed:
+				atk.target.set_projected_knockback(atk.resolved.knockback_to)
+	return shoved
 
 # The most recent resolve for THIS squad, or null. The gate's rescue clause and the menu's
 # candidate list read it the way the whiff clause reads published knockback (#124): a candidate

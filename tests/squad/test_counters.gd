@@ -23,7 +23,7 @@ func _counters_for(attacker: Unit, target: Unit) -> Array[CounterAttackAction]:
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 	attacker.squad._queue_action(attack)
 	var attacks: Array[AttackAction] = [attack]
-	return _sm.calculate_reactions_for_squad(attacker.squad, attacks, null)
+	return _sm.calculate_reactions_for_squad(attacker.squad, attacks, null, {})
 
 # C1 — every unit in the defending party gets the opportunity to counter (once per
 # plan). Two adjacent defenders => two counters off a single attack.
@@ -83,7 +83,7 @@ func test_c4_defending_party_responds_once_per_plan() -> void:
 	a1.squad._queue_action(atk2)
 
 	var attacks: Array[AttackAction] = [atk1, atk2]
-	var counters := _sm.calculate_reactions_for_squad(a1.squad, attacks, null)
+	var counters := _sm.calculate_reactions_for_squad(a1.squad, attacks, null, {})
 
 	assert_int(counters.size()).is_equal(2)          # one per defender member, not four
 	for c in counters:
@@ -155,7 +155,7 @@ func _ledge_counters(defender_up_tolerance: int) -> int:
 	var attack := AttackAction.create(a, a.movement.cell, d, d.movement.cell)
 	a.squad._queue_action(attack)
 	var attacks: Array[AttackAction] = [attack]
-	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call()).size()
+	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call(), {}).size()
 
 func test_a_ledge_above_the_counter_tolerance_draws_no_counter() -> void:
 	assert_int(_ledge_counters(2)).is_equal(0)   # reaches one level; the ledge is two
@@ -179,7 +179,7 @@ func _sheer_step_counters(with_ramp: bool) -> int:
 	var attack := AttackAction.create(a, a.movement.cell, d, d.movement.cell)
 	a.squad._queue_action(attack)
 	var attacks: Array[AttackAction] = [attack]
-	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call()).size()
+	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call(), {}).size()
 
 func test_a_sheer_step_denies_a_melee_counter() -> void:
 	assert_int(_sheer_step_counters(false)).is_equal(0)
@@ -192,6 +192,10 @@ func test_the_same_edge_ramp_connected_still_counters() -> void:
 # R7 liveness: a defender shoved into a VOID is DEAD and must not counter, even though the void
 # deals no HP (the `hp > 0` half of the liveness check would pass it). The lifecycle term catches
 # it -- the row is still derived, then marked skipped, exactly as a downed reactor is.
+#
+# Counter reach is judged where the PASS leaves the defender (#1349): on the hole, a tile further
+# off. Its reach is 2 so it still reaches from there -- what stops it must be the lifecycle term, not
+# the distance, or this case would stop asking that term anything.
 func test_a_defender_shoved_into_a_void_does_not_counter() -> void:
 	const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
 	var heights := BoardHeights.new()
@@ -199,6 +203,7 @@ func test_a_defender_shoved_into_a_void_does_not_counter() -> void:
 	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
 	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0), {}, true)
 	(a.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	(d.get_equipped_weapon() as WeaponInstance).template.main_attack.max_range = 2
 	(sm.get_node("../Grid") as TileMapLayer).set_cell(Vector2i(3, 0), 0, HOLE_TILE)
 
 	var attack := H.stamped_attack(a, d)

@@ -36,7 +36,7 @@ func _counters_for(attacker: Unit, target: Unit) -> Array[CounterAttackAction]:
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 	attacker.squad._queue_action(attack)
 	var attacks: Array[AttackAction] = [attack]
-	return _sm.calculate_reactions_for_squad(attacker.squad, attacks, null)
+	return _sm.calculate_reactions_for_squad(attacker.squad, attacks, null, {})
 
 
 # --- The counter --------------------------------------------------------------------------------

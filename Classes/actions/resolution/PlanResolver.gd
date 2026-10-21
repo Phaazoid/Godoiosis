@@ -117,24 +117,23 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 
 # --- The END OF TURN forecast (#419) --------------------------------------------------------
 #
-# What the tile each of this squad's units ENDS the pass on will do to it when the faction's turn
-# ends. Runs LAST, after attacks, counters, cell effects and the side-channel tail, because that is
-# when the burn happens — so it reads what the whole pass leaves behind.
+# What the tile each unit ENDS the pass on will do to it when the faction's turn ends. Runs LAST,
+# after attacks, counters, cell effects and the side-channel tail, because that is when the burn
+# happens — so it reads what the whole pass leaves behind.
 #
-# The squad's OWN members, which is also the faction filter: the end-of-turn pass burns the acting
-# faction alone, so an enemy shoved into fire correctly grows no row here — that happens at the end
-# of THEIR turn. The cell comes from get_projected_destination (the halt, the shove and the rescue
-# haul all land in it), the states from the store WITH this pass's own deposits folded in — your own
-# fireball igniting a squadmate's cell is a burn the queue has to show. The gas the same way (#508):
-# dousing a squadmate's fire steams them, and the soak reads the states the pass leaves them holding.
+# Who it speaks for is _end_of_turn_subjects, below: the acting faction alone, since the end-of-turn
+# pass burns nobody else — an enemy shoved into fire correctly grows no row here, that happens at the
+# end of THEIR turn. The cell is the THREADED one (#1349): the halt, every shove (a counter's and a
+# watch shot's included, which the projection never publishes) and the rescue haul all land in it. The
+# states come from the store WITH this pass's own deposits folded in — your own fireball igniting a
+# squadmate's cell is a burn the queue has to show. The gas the same way (#508): dousing a squadmate's
+# fire steams them, and the soak reads the states the pass leaves them holding.
 # A unit's soak is listed before its burn, matching TurnBoundary.tile_hits.
 static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
 	if board == null or squad == null:
 		return
 	var revived := _rescued_this_pass(actions, hypo)
-	for unit in squad.get_members():
-		if unit == null or not is_instance_valid(unit):
-			continue
+	for unit in _end_of_turn_subjects(plan, squad, hypo, board):
 		var situation := projected_situation(unit, hypo)
 		if revived.has(unit):
 			# A queued Rescue stands its target ACTIVE, and the tail runs after everything the hypo
@@ -144,7 +143,7 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 			situation.lifecycle = Unit.LifecycleState.ACTIVE
 		if situation.lifecycle == Unit.LifecycleState.DEAD:
 			continue
-		var destination := unit.get_projected_destination()
+		var destination := projected_position(unit, hypo)
 		var packed := board.gas.projected_packed_at(destination, plan.cell_effects) if board.gas != null else 0
 		plan.tile_hits.append_array(TileHitAction.soaks(unit, projected_states(unit, hypo), packed,
 				board.weather))
@@ -157,6 +156,32 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 		plan.tile_hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage, situation))
 
 
+# Who the END OF TURN forecast speaks for (#1353, dev 2026-10-21): the squad's members, then every other
+# unit of its faction THIS plan reaches -- one the pass touches (hits, shoves, soaks or hauls: anyone it
+# threads) or one standing where it deposits. The burn takes the whole faction (TurnBoundary.tile_hits),
+# so another squad's unit, acted or not, or a downed ally lying in its own solo squad would otherwise
+# burn for this plan with no row anywhere. One already standing in old fire is not this plan's doing
+# and gets no row from it. Members first, in member order; the rest in board order.
+static func _end_of_turn_subjects(plan: ResolvedPlan, squad: Squad, hypo: Dictionary,
+		board: BoardContext) -> Array[Unit]:
+	var subjects: Array[Unit] = []
+	for member in squad.get_members():
+		if member != null and is_instance_valid(member):
+			subjects.append(member)
+	if subjects.is_empty():
+		return subjects
+	var faction := subjects[0].get_faction()   # a squad is one faction (formation_block_reason)
+	var deposited: Dictionary[Vector2i, bool] = {}
+	for effect in plan.cell_effects:
+		deposited[effect.cell] = true
+	for unit: Unit in board.units:
+		if not is_instance_valid(unit) or unit.get_faction() != faction or subjects.has(unit):
+			continue
+		if hypo.has(unit) or deposited.has(projected_position(unit, hypo)):
+			subjects.append(unit)
+	return subjects
+
+
 # Who this squad's queued rescues put back on their feet. Asked of the PROJECTED lifecycle, matching
 # RescueAction.execute's own is_downed() read, which runs after the attack phase (#124). Takes the
 # ACTION LIST rather than the squad, so a hypothetical resolve reads its own queue (#117) -- the
@@ -166,8 +191,8 @@ static func _rescued_this_pass(actions: Array[BaseAction], hypo: Dictionary) -> 
 	for action in actions:
 		if action.action_type != BaseAction.ActionType.RESCUE or not action.is_valid:
 			continue
-		if action.resolved_actor_felled:
-			continue   # no rescuer left standing, so nobody stands back up either (#1005)
+		if action.resolved_actor_felled or not (action as RescueAction).resolved_within_reach:
+			continue   # no rescuer left standing (#1005), or none beside the body (#1349): nobody stands up
 		var target: Unit = (action as RescueAction).target
 		if target != null and is_instance_valid(target) \
 				and projected_lifecycle(target, hypo) == Unit.LifecycleState.DOWNED:
@@ -250,6 +275,14 @@ static func seed_at_origin(mover: Unit, hypo: Dictionary) -> void:
 	_hypo_for(mover, hypo).position = mover.movement.cell
 
 
+# A rescue's haul (#116), threaded (#1349): the side channel drags the body onto the bank, so whatever
+# the pass resolves after it -- an arm-fired shot's path, the END OF TURN forecast -- meets the body
+# there, as execution does (RESCUE plays before OVERWATCH). SquadManager publishes the same cell for the
+# board, and only for a haul it has judged legal.
+static func thread_haul(body: Unit, cell: Vector2i, hypo: Dictionary) -> void:
+	_hypo_for(body, hypo).position = cell
+
+
 # One queued MOVE, walked in the order it sits in the queue (#412). The walk is this pass's clock
 # for anything that happens DURING movement; a watch trigger is its first customer.
 #
@@ -265,6 +298,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 	action.resolved_stop_index = -1   # a re-resolve must not inherit last pass's halt
 	action.resolved = null            # ...nor last pass's soaking, if the walk has left the water
 	action.resolved_soak_step = -1    # ...nor where it happened
+	action.resolved_displaced = false # ...nor that a shove followed it (stamped again after the attacks, #1349)
 	var walk := action.path
 	# A hold crosses nothing and a one-cell path never leaves its origin: no entry either way.
 	if action.is_hold_position or walk.size() < 2:
@@ -1109,7 +1143,7 @@ static func _source_hits_map(action: AttackAction) -> bool:
 
 static func _source_knockback(action: AttackAction) -> int:
 	if action.fired_attack == null:
-		return 0   # counters fire main (no stamped attack) -- no shove
+		return 0   # no attack stamped: bare fists, which shove nobody (a counter is stamped, #102)
 	# Asked of the ACTOR, not of the attack: a fitted mod may add tiles to the shove (#529), so
 	# the authored number on the shared AttackData base is only the starting point.
 	return action.actor.get_attack_knockback(action.fired_attack)
@@ -1376,6 +1410,10 @@ static func projected_lifecycle(unit: Unit, hypo: Dictionary) -> Unit.LifecycleS
 # landing here (#414's range check reads it, so a mid-pass displacement really does move who is
 # still covered). Same read-only contract as the two above: a unit the pass has not touched has no
 # entry, and its live projection IS its answer.
+#
+# THE position for anything that runs inside a pass (#1349). get_projected_destination is the
+# PUBLISHED projection -- the attack prefix the board draws and a newly queued order lands after -- and
+# never sees a counter's shove or a tail shot's, nor any shove at the moment it lands mid-pass.
 static func projected_position(unit: Unit, hypo: Dictionary) -> Vector2i:
 	if unit == null or not is_instance_valid(unit):
 		return Vector2i.ZERO

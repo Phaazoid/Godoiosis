@@ -533,18 +533,23 @@ static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 #
 # IDEMPOTENT once SquadManager has published a haul: `from` then reads the bank, which the body CAN
 # stand on, so it short-circuits to that same one-entry list. Which is why the publisher clears last
-# pass's projections first — inside the resolve, `from` is the body's real post-shove cell.
-static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext) -> Array[Vector2i]:
-	var from := body.get_projected_destination()
+# pass's projections first.
+#
+# `hypo` is the resolve's own (#1349): inside the pass both cells, and who stands on a landing, are
+# the pass's threaded answer -- a counter may have shoved either of them after the projection was
+# published. Empty is the projection itself (PlanResolver.projected_position's untouched-unit answer),
+# which is what every caller outside a pass means.
+static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext, hypo: Dictionary = {}) -> Array[Vector2i]:
+	var from := PlanResolver.projected_position(body, hypo)
 	if can_traverse(from, body, board):
 		return [from] as Array[Vector2i]
-	var origin := rescuer.get_projected_destination()
+	var origin := PlanResolver.projected_position(rescuer, hypo)
 	var landings: Array[Vector2i] = []
 	for dir in NEIGHBOURS:
 		var cell: Vector2i = origin + dir
 		if not can_traverse(cell, body, board) or not height_step_ok(origin, cell, board):
 			continue
-		var occupant := board.projected_unit_at_cell(cell)
+		var occupant := PlanResolver._unit_threaded_at(cell, board, hypo)
 		if occupant == null or occupant == body:
 			landings.append(cell)
 	return landings

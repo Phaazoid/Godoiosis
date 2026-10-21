@@ -251,6 +251,12 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 		if not RulesService.is_rescueable(rescue.target, plan):
 			rescue.add_validation_error("Rescue target won't be down")
 			continue
+		# The rescuer must still be BESIDE the body when the side channel reaches it (#1349): the
+		# resolve's verdict on its own cells, since a counter can shove either of them away after the
+		# plan was authored. Skipped when the loop's adjacency clause has already said so on the moves.
+		if rescue.is_valid and not rescue.resolved_within_reach:
+			rescue.add_validation_error("Won't be beside the downed ally when the rescue runs")
+			continue
 		# And the CHOSEN cell must still be one it can be put on (#116). The player picked a bank at
 		# queue time and the order carries that stamp, so a re-plan that walks the rescuer away from
 		# it strands the order -- it goes RED and stays queued (one-way validity) rather than being
@@ -259,10 +265,11 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 		# divergence a bug. CaptureAction's frozen-stamp ruling, one verb along.
 		#
 		# Out here with the lifecycle clause rather than beside adjacency inside the loop, and for the
-		# same reason: it reads PUBLISHED positions, which come out of the resolve that reads
-		# validity back.
+		# same reason: it reads the resolve's output, which reads validity back. Judged on the PASS's
+		# cells (#1349), the same ones the resolve published the haul off, so the two cannot disagree
+		# about a bank a counter's shove has put out of the rescuer's reach.
 		if rescue.target != null and is_instance_valid(rescue.target) \
-				and not RulesService.rescue_landings(rescue.actor, rescue.target, board).has(rescue.haul_to):
+				and not RulesService.rescue_landings(rescue.actor, rescue.target, board, plan.hypo).has(rescue.haul_to):
 			rescue.add_validation_error("Can't pull them out to there any more")
 
 # Source 2 -- a CANDIDATE only: would this aim connect if queued right now? There is no plan for an
@@ -317,6 +324,8 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 #
 # Not a fixed-point hazard: this reads another squad's settled validity plus a knockback published
 # before validate ran, both constant across the loop, so rescue validity stays the leaf it was.
+#
+# The loop's answer, on the moves. What the pass then does to either of them -- a counter's shove -- is
+# the resolve's to say (RescueAction.resolved_within_reach, read in _revalidate_rescue_targets).
 static func _actor_ends_adjacent_to(action: BaseAction, target: Unit, actions: Array[BaseAction]) -> bool:
-	var actor_cell := projected_cell_for(action.actor, actions)
-	return GridUtils.cells_within_manhattan_range(actor_cell, 1).has(target.get_projected_destination())
+	return RescueAction.within_reach(projected_cell_for(action.actor, actions), target.get_projected_destination())
