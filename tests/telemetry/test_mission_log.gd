@@ -253,6 +253,36 @@ func test_the_roster_names_what_each_unit_brought() -> void:
 	assert_int(int(row.get("hp_max", 0))).is_equal(hero.get_max_hp())
 
 
+# ONE DOOR FOR A NAME (#1364). A derived weapon carries no name of its own and reads through to its
+# template, so the raw field recorded it as ""; a pet-named one recorded its template's name as
+# `weapon.name` and its own in `items`. The template's name is kept, as `weapon.template`.
+func test_an_item_is_recorded_by_the_name_the_game_shows() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var derived := H.make_weapon(4)
+	derived.template.display_name = "Carbine"
+	var pet := H.make_weapon(4)
+	pet.template.display_name = "Carbine"
+	pet.display_name = "Gun"
+	assert_bool(hero.add_item(derived) and hero.add_item(pet)).override_failure_message(
+		"fixture: the weapons were not carried").is_true()
+	hero.set_equipped_weapon(pet)
+	var spare := H.make_weapon(4)
+	spare.template.display_name = "Spear"
+	mc.loadout().stash.append(spare)
+	mc._begin_turn()
+
+	var start := _of("mission_start")[0]
+	var row: Dictionary = start.get("roster", [])[0]
+	var items: Array = row.get("items", [])
+	assert_bool(items.has("Carbine") and items.has("Gun") and not items.has("")).override_failure_message(
+		"the inventory is not recorded by shown name: %s" % str(items)).is_true()
+	var weapon: Dictionary = row.get("weapon")
+	assert_str(str(weapon.get("name"))).is_equal("Gun")
+	assert_str(str(weapon.get("template"))).is_equal("Carbine")
+	assert_array(start.get("stash", [])).override_failure_message(
+		"a derived stash weapon recorded with no name").contains(["Spear"])
+
+
 # #1230: a run says which AI profile each unit played, so a band can be judged from recorded play.
 func test_the_roster_names_each_units_ai_profile() -> void:
 	var foe := _spawn(Team.Faction.ENEMY, Vector2i(0, 0))

@@ -502,7 +502,7 @@ func _mission_start_fields(resumed: bool) -> Dictionary:
 	var stash: Array[String] = []
 	for item: Item in loadout.stash:
 		if item != null:
-			stash.append(item.display_name)
+			stash.append(item.shown_name())   # a derived stash weapon has no name of its own (#1364)
 	var mods: Array[String] = []
 	for mod: WeaponModData in loadout.available_mods:
 		if mod != null:
@@ -555,7 +555,7 @@ func _roster_entry(unit: Unit, deployed: bool) -> Dictionary:
 	var items: Array[String] = []
 	for item: Item in unit.inventory:
 		if item != null:
-			items.append(item.display_name)
+			items.append(item.shown_name())
 	var entry := _ref(unit)
 	entry.merge({
 		"faction": _faction_name(unit),
@@ -584,12 +584,15 @@ func _weapon(weapon: EquippableData) -> Variant:
 				if mod != null:
 					mods.append(mod.display_name)
 		var has_template := inst.template != null
+		# `name` is what the game calls it, as `items` records it (#1364); `template` keeps what `name`
+		# used to hold, since a pet-named variant's template is not recoverable from its family.
 		return {
-			"name": inst.template.display_name if has_template else inst.display_name,
+			"name": inst.shown_name(),
+			"template": inst.template.display_name if has_template else "",
 			"family": WeaponData.WeaponType.keys()[inst.template.weapon_type] if has_template else "",
 			"mods": mods,
 		}
-	return {"name": weapon.display_name, "family": "", "mods": []}
+	return {"name": weapon.shown_name(), "family": "", "mods": []}
 
 
 func _turn_fields(faction: Team.Faction) -> Dictionary:
