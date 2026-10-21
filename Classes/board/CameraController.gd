@@ -281,6 +281,10 @@ func set_playback_locked(locked: bool) -> void:
 	pan_subject = null
 	if not locked:
 		follow_unit = null
+	# The inspect dock's gear verbs stand down for exactly as long as playback owns the board (#1351).
+	# This is the lock's one writer, so every pass's claim and release come through here.
+	if game != null:
+		game.refresh_dock_gate()
 
 # The HUD's edge (#722). Compared against the FIELD ITSELF rather than a remembered copy, so this
 # cannot go stale the way a diff key does -- and the no-op matters, because a claiming pass writes

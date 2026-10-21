@@ -752,8 +752,21 @@ func show_unit_card(unit: Unit) -> void:
 
 # The ring's Inspect: the unit in the dock, and the tile it stands on in the card beside it.
 func inspect_unit(unit: Unit) -> void:
-	unit_info_panel.set_unit(unit, can_control(unit), _board())
+	unit_info_panel.set_unit(unit, _dock_can_act(unit), _board())
 	hover_info_panel.show_tile_of(unit, _card_left_x())
+
+# May the dock CHANGE what `unit` carries (#1351)? A unit you command, and never while playback owns the
+# board (the half the queue doors refuse on) or the pre-mission phase is open, whose gear is Loadout's
+# to judge on the pre-mission screen. The dock only reads there.
+func _dock_can_act(unit: Unit) -> bool:
+	return can_control(unit) and not playback_owns_board() and not mission_controller.is_deploying()
+
+# Re-ask that for the unit the dock holds, at the edges of the facts it reads: the playback lock's one
+# writer (CameraController.set_playback_locked) and the phase flag's setter. AI_TURN needs no edge: it
+# is only entered beside a playback claim, and end_turn clears the dock before an AI turn can end.
+func refresh_dock_gate() -> void:
+	if unit_info_panel.is_showing():
+		unit_info_panel.set_can_act(_dock_can_act(unit_info_panel.current_unit))
 
 # The card parks right of an open dock rather than under it (#68).
 func _card_left_x() -> int:
