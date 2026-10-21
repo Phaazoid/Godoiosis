@@ -528,7 +528,7 @@ func _on_load_game_chosen() -> void:
 # A board arriving from the menu has nobody's turn actually STARTED -- load_scenario only
 # restores whose turn it was. Without this a mission saved on an AI faction's turn would sit
 # there doing nothing, because turn_started only ever fires from TurnManager.end_turn.
-func _begin_turn(record_to_disk := true) -> void:
+func _begin_turn(record_to_disk := true, resumed := false) -> void:
 	# The deployment window closes here (#736), and the zones that showed it stop being drawn. Set
 	# BEFORE the redraw for the obvious reason, and the redraw is needed at all because every
 	# arrival painted the zones on the way in (the load's apply_scenario) while this was
@@ -536,7 +536,8 @@ func _begin_turn(record_to_disk := true) -> void:
 	_battle_begun = true
 	# Defaulted, so all five arrival doors are unchanged. The replay driver is the one caller that
 	# passes false: it takes this same door so the board is armed identically, and records in memory.
-	game.mission_log.begin(record_to_disk)   # the run starts here, whichever door brought us (#53)
+	# `resumed` is the save-slot door saying what it is (#1364); only resume_from_slot passes it.
+	game.mission_log.begin(record_to_disk, resumed)   # the run starts here, whichever door brought us (#53)
 	# Membership changes play from here on (#367). This and _open_deployment are where every load
 	# lands, so the load's own joins are the baseline rather than a moment.
 	game.squad_tether_presenter.arm()
@@ -584,7 +585,7 @@ func resume_from_slot(slot: int) -> void:
 	if save == null:
 		return
 	game.scenario_manager.apply_scenario(save.scenario, save.mission_path)
-	_begin_turn()
+	_begin_turn(true, true)
 	game.scenario_director.disarm()   # a resume is not a fresh start; dialog beats are fresh-start content (#182)
 
 # Leaving a mission the player has not finished. Deliberately the SAME handoff _end_mission makes

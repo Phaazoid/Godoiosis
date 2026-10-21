@@ -447,6 +447,7 @@ func redo_board() -> bool:
 func _restore_step(snapshot: BoardSnapshot) -> bool:
 	if snapshot == null:
 		return false
+	game.mission_log.note_dev_intervention()   # #1364: an undo is a board edit a replay cannot know about
 	game.scenario_manager.restore_board(snapshot)
 	game.camera_controller.refresh_bounds(game.grid)
 	_refresh_height_readout()

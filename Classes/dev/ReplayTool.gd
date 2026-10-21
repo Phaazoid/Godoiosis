@@ -320,8 +320,11 @@ func _render() -> void:
 	if not bool(r.get("seeded", false)):
 		out.append("[b]Not loaded.[/b]")
 	elif bool(r.get("finished", false)):
-		out.append("[b]Clean -- the replay matched the run.[/b]" if divs.is_empty()
-			else "[b]%d divergences.[/b]" % divs.size())
+		# The COUNT, never the list's length: the list stops at LIST_CAP (#1364).
+		var count := int(r.get("divergence_count", divs.size()))
+		out.append("[b]Clean -- the replay matched the run.[/b]" if count == 0
+			else "[b]%d divergences%s.[/b]" % [count,
+				(" (%d listed)" % divs.size()) if count > divs.size() else ""])
 	else:
 		var next: Dictionary = r.get("next", {})
 		out.append("At event %d of %d -- next: %s (round %d)." % [int(r.get("at", 0)), int(r.get("of", 0)),
