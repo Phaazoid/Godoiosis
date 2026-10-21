@@ -301,7 +301,9 @@ driver's *own* attacks during resolution, never an enemy taking a turn.
 is standing in fire (your own units first in the log, each AI faction's after its turn); when the
 round completes the tile clocks tick, so fires spread, burn out and scorch; then the incoming
 faction's turn-start ticks run (downed clocks, stat effects, Crisis surge, weapon rev, Guard and
-watch lapse) and the cohesion sweep ejects anyone out of contact. Until #898 none of it ran
+watch lapse) and the cohesion sweep ejects anyone out of contact. Since #1365 that whole turn start is
+the game's own `TurnBoundary.start_turn`: a faction with nobody to command is passed over with no turn
+and no burn, and a hand-off that ends the mission starts no AI turn. Until #898 none of it ran
 headlessly: a fire never went out or hurt anybody, a downed body never bled out, a Guard never
 lapsed. A body whose clock runs out is logged `x bleeds out` in the hand-off that ran it (#46). A burn that ends the mission stops the turn there, and the result then carries a `mission`
 key and a `MISSION` line, as `execute` does. A burn is the only thing at the boundary that can end a

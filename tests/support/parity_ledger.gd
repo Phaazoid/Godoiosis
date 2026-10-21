@@ -89,7 +89,7 @@ static func axes() -> Array[Dictionary]:
 		ring_verbs(), action_types(), gear_verbs(), hud_doors(), board_keys(),
 		outcome_fields(), plan_lists(),
 		tile_states(), gases(), weathers(), winds(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
-		ground_kinds(), element_states(),
+		ground_kinds(), element_states(), turn_starts(),
 	]
 
 static func _enum_label(keys: Array) -> Callable:
@@ -568,6 +568,23 @@ static func element_states() -> Dictionary:
 		"play_all": covered(VIEW, "unit.element_states"),
 		"ai_all": covered(TACTICS, ".states_added"),
 		"rows": {},
+	}
+
+
+# What a hand-off decides (#1365): both hosts ask TurnBoundary.start_turn, and each verdict is one the
+# headless handler acts on. A new verdict has to say what the Play API does with it.
+static func turn_starts() -> Dictionary:
+	var S := TurnBoundary.Start
+	return {
+		"name": "turn-start verdicts (TurnBoundary.Start)",
+		"members": S.values(),
+		"label": _enum_label(S.keys()),
+		"ai_all": never("the host asks the verdict before any AI turn starts; the AI plays only a PLAY"),
+		"rows": {
+			S.PLAY: {"play": covered(SESSION, "TurnBoundary.start_turn")},
+			S.SKIP: {"play": covered(SESSION, "Start.SKIP")},
+			S.OVER: {"play": covered(SESSION, 'while mission_tag() == "" and _is_ai_faction')},
+		},
 	}
 
 

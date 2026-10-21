@@ -1629,18 +1629,9 @@ func end_turn() -> Dictionary:
 	if mission_tag() != "":
 		return _turn_result(log)
 
-	# The hand-off runs the round tick and the turn-start ticks through the handlers wired in _init.
+	# The hand-off runs the round tick and the whole turn-start rule through the handlers wired in
+	# _init: the ticks, the mission check, the empty-faction skip and the reset (#1365).
 	log.append_array(_hand_off())
-	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
-	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
-	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
-	# skips -- the round that just completed may have run the mission clock out (#46).
-	while mission_tag() == "":
-		var board := _board()
-		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
-			break
-		log.append_array(_hand_off())
-	squad_manager.reset_faction_actions(turn_manager.active_faction())
 
 	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
 	# stationary board: end_turn advanced the faction and nothing else, so every enemy sat still
@@ -1652,8 +1643,9 @@ func end_turn() -> Dictionary:
 	# test fixtures) declares nobody and is unaffected.
 	#
 	# Loops, because several AI factions can follow one another, and re-reads the faction each pass
-	# rather than assuming one hand-off.
-	while _is_ai_faction(turn_manager.active_faction()):
+	# rather than assuming one hand-off. Asks the mission first, as the game's handler does before
+	# start_faction_turn: a hand-off that ended it starts no AI turn, so nothing regroups (#1365).
+	while mission_tag() == "" and _is_ai_faction(turn_manager.active_faction()):
 		var acting := turn_manager.active_faction()
 		log.append_array(_take_ai_turn(acting))
 		if mission_tag() != "":
@@ -1663,10 +1655,8 @@ func end_turn() -> Dictionary:
 		if mission_tag() != "":
 			break
 		log.append_array(_hand_off())
-		var next := turn_manager.active_faction()
-		if next == acting:
+		if turn_manager.active_faction() == acting:
 			break   # nobody else to hand to; do not spin
-		squad_manager.reset_faction_actions(next)
 	return _turn_result(log)
 
 
@@ -1728,11 +1718,14 @@ func _on_turn_started(faction: Team.Faction) -> void:
 	for unit in live_units():
 		if unit.is_downed() and unit.get_faction() == faction:
 			bodies[unit] = handle_for(unit)
-	TurnBoundary.turn_start_ticks(live_units(), faction)
+	# The game's own hand-off rule (#1365), so a downed faction is passed over here exactly as there.
+	var start := TurnBoundary.start_turn(faction, live_units(), squad_manager, func() -> bool:
+		return mission_tag() != "")
 	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
 		if not is_instance_valid(unit) or (unit as Unit).is_dead():
 			_boundary_events.append("%s bleeds out" % bodies[unit])
-	squad_manager.enforce_contact()   # AFTER the ticks, as game._on_turn_started orders them
+	if start == TurnBoundary.Start.SKIP:
+		turn_manager.end_turn(_board().present_factions())   # re-enters here for the next faction
 
 
 func _is_ai_faction(faction: Team.Faction) -> bool:
