@@ -195,19 +195,84 @@ static func _add(found: Array[Dictionary], severity: Severity, text: String) -> 
 	found.append({"severity": severity, "text": text})
 
 
-# Which weapon families carry this attack, by display name -- as a main or as an extra. Matched on
-# resource_path rather than identity: a family's extras are ext_resource references, so the two
-# loads are the same cached object today, but a path compare cannot be broken by a cache miss.
-# An unsaved attack (no path) has no carriers by construction.
-static func carriers_of(attack: AttackData) -> Array[String]:
-	var carriers: Array[String] = []
-	if attack == null or attack.resource_path == "":
-		return carriers
-	var templates := WeaponCatalog.get_templates()   # a disk scan per call -- hoisted, not re-asked
-	for key in templates:
-		var family: WeaponData = templates[key]
-		for carried: WeaponAttackData in family.attacks():
-			if carried != null and carried.resource_path == attack.resource_path:
-				carriers.append(key)
-				break
-	return carriers
+# What holds an attack, for the carriers readout. carrier_text words it.
+enum Carrier { FAMILY, PROTOTYPE, MOD, RUNE }
+
+
+# Who can fire this attack: one row per way it is reached, {"carrier": catalog key, "kind": Carrier,
+# "role": String}. Empty means a TRUE orphan -- nothing on disk fires it, so no unit can.
+static func carriers_of(attack: AttackData) -> Array[Dictionary]:
+	# Each catalog is a disk scan per call -- asked once here, then passed.
+	return carriers_among(attack, WeaponCatalog.get_templates(), WeaponModCatalog.get_mods(),
+		RuneCatalog.get_variants())
+
+
+# The walk, over sources PASSED in. The roots are what carries an attack into a fight: a template's
+# stock list, a mod's replacement main and grants, a rune's carvings. From each it follows the two
+# things that fire something else:
+#   - the EMPOWERED FORM of a MAIN only. WeaponInstance.effective_main empowers the base main and
+#     never an extra or a grant, so a form hung on one of those reads as the orphan it is. Restated
+#     here as WeaponTemplateLint._check_main_is_fireable does: effective_main needs an instance and a
+#     wielder, and a lint has neither.
+#   - the PAYLOAD CHAIN, every level, as PlanResolver.drop_payloads walks it for whatever fired.
+# Not ResourceCatalog.users_of, which asks which FILES name a path: an orphan's payload is named
+# without ever being fired.
+#
+# Matched by identity or a shared resource_path: an ext_resource reference is the same cached object
+# today, but a path compare cannot be broken by a cache miss. An unsaved attack matches by identity
+# alone, so no catalog can be found carrying it.
+static func carriers_among(attack: AttackData, templates: Dictionary, mods: Dictionary,
+		runes: Dictionary) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	if attack == null:
+		return rows
+	for key: String in templates:
+		var template: WeaponData = templates[key]
+		var kind: Carrier = Carrier.PROTOTYPE if template.is_prototype else Carrier.FAMILY
+		for carried: WeaponAttackData in template.attacks():
+			_reach(attack, carried, "main" if carried == template.main_attack else "extra", key, kind, rows)
+		if template.main_attack != null:
+			_reach(attack, template.main_attack.empowered_form, "the main's empowered form", key, kind, rows)
+	for key: String in mods:
+		var mod: WeaponModData = mods[key]
+		_reach(attack, mod.replaces_main, "replaces the main", key, Carrier.MOD, rows)
+		if mod.replaces_main != null:
+			_reach(attack, mod.replaces_main.empowered_form, "the replacement main's empowered form",
+				key, Carrier.MOD, rows)
+		for granted: WeaponAttackData in mod.granted_attacks:
+			_reach(attack, granted, "grants it", key, Carrier.MOD, rows)
+	for key: String in runes:
+		var rune: RuneData = runes[key]
+		for carving: TransmutationData in rune.inscriptions:
+			_reach(attack, carving, "carving", key, Carrier.RUNE, rows)
+	return rows
+
+
+# One fired attack: a row if it IS the attack, and one if any level of its payload chain is.
+static func _reach(attack: AttackData, fired: AttackData, role: String, carrier: String,
+		kind: Carrier, rows: Array[Dictionary]) -> void:
+	if fired == null:
+		return
+	if _same(fired, attack):
+		_add_carrier(rows, carrier, kind, role)
+	for dropped in fired.payload_chain():
+		if _same(dropped, attack):
+			var name := fired.display_name if fired.display_name != "" else "an unnamed attack"
+			_add_carrier(rows, carrier, kind, "dropped by %s" % name)
+
+
+static func _same(a: AttackData, b: AttackData) -> bool:
+	return a == b or (b.resource_path != "" and a.resource_path == b.resource_path)
+
+
+static func _add_carrier(rows: Array[Dictionary], carrier: String, kind: Carrier, role: String) -> void:
+	var row := {"carrier": carrier, "kind": kind, "role": role}
+	if not rows.has(row):
+		rows.append(row)
+
+
+# One row as a panel prints it: "Super Scope (mod: grants it)". Here for severity_word's reason -- a
+# projection of this file's own enum, which a second speller would let drift.
+static func carrier_text(row: Dictionary) -> String:
+	var kind: String = Carrier.keys()[row["kind"]]
+	return "%s (%s: %s)" % [row["carrier"], kind.to_lower(), row["role"]]
