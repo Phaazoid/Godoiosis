@@ -85,6 +85,7 @@ var snow_on_props: Callable           # (caps: bool, cap_color: Color, buries_tu
 
 var _kind := Weather.Kind.CLEAR
 var _look: WeatherLook = null
+var _fall := -1   # the fall _switch last drew the look as: the Weather page's Draws as moves it live (#1369)
 var _rain: GPUParticles3D
 var _rain_process: ShaderMaterial
 var _rain_draw: ShaderMaterial
@@ -245,7 +246,7 @@ func breathes() -> bool:
 
 # The storm's screen flash, 0..1, for battle3d's white-out -- a DRIVER, never a writer (#887's rule).
 func flash_level() -> float:
-	return _level * _look.flash_peak if _look != null and _look.lightning else 0.0
+	return _level * _look.flash_peak if _storming() else 0.0
 
 
 func _process(delta: float) -> void:
@@ -253,7 +254,8 @@ func _process(delta: float) -> void:
 	var kind: Weather.Kind = weather_source.call() if weather_source.is_valid() else Weather.Kind.CLEAR
 	var down: bool = stands_down.is_valid() and stands_down.call()
 	var look := WeatherLook.for_kind(kind) if kind != Weather.Kind.CLEAR and not down else null
-	if look != _look or kind != _kind:
+	# A fall moved on the drawn look is a different weather: only a switch turns its parts on and off.
+	if look != _look or kind != _kind or (look != null and look.fall != _fall):
 		_switch(kind, look)
 	# Every frame, the clear ones too: a grade and an aurora ease OUT as well as in.
 	_grade.drive(_look, _wind(), delta)
@@ -279,6 +281,10 @@ func _process(delta: float) -> void:
 		_place_grit()
 		_style_grit()
 	if _embering():
+		# Every frame, as the drift and the grit: a rate raised from 0 starts them.
+		var embers := _look.mote_rate > 0.0
+		_embers.system.emitting = embers
+		_embers.system.visible = embers
 		_embers.style(_look, _look.mote_color)
 		_embers.place(_look, self)
 	_storm()
@@ -311,9 +317,16 @@ func _embering() -> bool:
 	return _draws(WeatherLook.MOTES) and not _auroring()
 
 
+# The strikes: a look that draws the STORM part with its lightning on. A look whose fall moved off it
+# keeps its lightning flag but has no row left to turn it off, so the part list gates it (#1373).
+func _storming() -> bool:
+	return _draws(WeatherLook.STORM) and _look.lightning
+
+
 func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 	_kind = kind
 	_look = look
+	_fall = look.fall if look != null else -1
 	var rain := _raining()
 	_rain.emitting = rain
 	_rain.visible = rain
@@ -825,7 +838,7 @@ func _aim() -> Vector3:
 
 
 func _storm() -> void:
-	if not _look.lightning:
+	if not _storming():
 		if _level > 0.0 or _side.visible:
 			_level = 0.0
 			_side.visible = false
