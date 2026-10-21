@@ -2225,16 +2225,29 @@ func _paint_plane() -> Rect2i:
 # How far along a ray the ground is, INF where it meets none: the rig's ground probe (#1280). The
 # board's own pick, with the pan limit as its floor plane, so the probe answers anywhere the aim may
 # legally be -- past the stage edge it lands on the ground level a missing column already stands for.
+#
+# WHILE A FIGHT IS ON STAGE THE GROUND IS THE STAGE (#1375): only the staged columns, a lift up, with
+# the floor plane at the stage's own level beside them. Asked of the board, a dev-paused wheel notch
+# looked straight through the diorama and seated the pivot on the board forty cells under it.
 func _ground_depth(origin: Vector3, direction: Vector3) -> float:
 	if direction.y >= 0.0:
 		return INF
 	var bound := _rig.pan_limit
 	var plane := Rect2i(Vector2i(bound.position.floor()), Vector2i(bound.size.ceil())) \
 			if bound.has_area() else _paint_plane()
-	var cell := BoardPicker.pick_cell(origin, direction, _tops, plane)
+	var tops := _tops
+	var lift := Vector3.ZERO
+	if BoardSpace.staging_active():
+		lift = BoardSpace.stage_offset()
+		var staged: Dictionary[Vector2i, int] = {}
+		for column in BoardSpace.staged_cells():
+			if _tops.has(column):
+				staged[column] = _tops[column]
+		tops = staged
+	var cell := BoardPicker.pick_cell(origin - lift, direction, tops, plane)
 	if cell == BoardSpace.NO_CELL:
 		return INF
-	return (BoardSpace.surface_y(cell.y) - origin.y) / direction.y
+	return (BoardSpace.surface_y(cell.y) + lift.y - origin.y) / direction.y
 
 
 # What a landed blow is worth (#520 diff 2b jolt, 2c freeze). The mirror observes the instant and
