@@ -177,6 +177,10 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Shift+F", "context": Context.BOARD, "when": "Aiming",
 		"does": "Previous attack",
 		"action": "select_previous_squadmate"},
+	# #1324: the tile card shows one section at a time, and its tab row names this key.
+	{"key": "T", "context": Context.BOARD, "when": "Tile card up",
+		"does": "Next section",
+		"action": "cycle_tile_card"},
 	{"key": "Tab", "context": Context.BOARD, "when": "Deploying",
 		"does": "Menu swap",
 		"action": "toggle_deployment_view"},

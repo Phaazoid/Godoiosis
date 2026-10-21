@@ -150,6 +150,7 @@ static func _air_section(game, cell: Vector2i) -> Section:
 	var section := Section.new()
 	section.layer = Layer.AIR
 	section.heading = HEADING_AIR
+	section.marking = GasPuffArt.icon(Gas.kinds_in(packed)[0])   # the first gas's puff, its tab's mark too
 	for kind: Gas.Kind in Gas.kinds_in(packed):
 		var level: int = Gas.level_in(packed, kind)
 		var line: String = "%s, %s" % [Gas.display_name(kind), Gas.Level.keys()[level].to_lower()]

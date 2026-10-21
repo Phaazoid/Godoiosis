@@ -439,6 +439,11 @@ func _input(event: InputEvent) -> void:
 			cycle_aimed_attack(step)
 		elif step != 0:
 			cycle_squad_member(step)
+		# T turns the tile card to its next section (#1324): it shows one at a time. Here for F's
+		# both-views reason; only while a tile card is up, so the key means nothing otherwise.
+		if event.is_action_pressed("cycle_tile_card", false, true) and hover_info_panel.is_showing_tile():
+			hover_info_panel.cycle_tile_section()
+			get_viewport().set_input_as_handled()
 
 	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
 	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it

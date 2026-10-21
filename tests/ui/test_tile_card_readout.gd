@@ -272,6 +272,15 @@ func test_a_gas_that_moves_the_air_shows_the_cells_own_reading() -> void:
 	var moved := Atmosphere.differs(here, board.atmosphere)
 	assert_array(moved).override_failure_message("fixture: a thick %s moves nothing here" % Gas.name_of(kind)).is_not_empty()
 	await _click(cell)
+	# One section at a time (#1324): turn to the Air page.
+	var air_page := -1
+	var sections := TileReadout.compose(game, cell)
+	for i in sections.size():
+		if sections[i].layer == TileReadout.Layer.AIR:
+			air_page = i
+	assert_int(air_page).override_failure_message("the readout has no Air section").is_not_equal(-1)
+	game.hover_info_panel._sections.turn_to(air_page)
+	await await_idle_frame()
 
 	var text := _tile_block_text()
 	assert_str(text).override_failure_message("the card never names the gas: '%s'" % text) \
