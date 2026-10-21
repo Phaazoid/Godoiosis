@@ -30,7 +30,9 @@ var _fired: Dictionary = {}   # DialogBeat -> true; battle-scoped, cleared with 
 var _pending: Array[DialogicTimeline] = []   # triggered while another timeline was playing
 var _dialog_active := false   # OUR in-flight latch: Dialogic.current_timeline is set a frame late
                               # (start() defers to the layout's ready), so same-frame beats need this
-var _player_turn := 0   # counts turn_started(PLAYER); no other system owns this count
+# The player's turns this armed battle, the opening one included (#1361). No other system owns this
+# count; the round clock is not it -- a board can open on another faction's turn or restore rounds.
+var _player_turn := 0
 var _step_idx := 0      # index of the ACTIVE step; past the end = lesson done
 
 # Content loads INERT and mission_started() arms it: apply_scenario's own spawn loop fires
@@ -77,6 +79,10 @@ func mission_started() -> void:
 	for beat: DialogBeat in _beats():
 		if beat.trigger == DialogBeat.Trigger.MISSION_START:
 			_fire(beat)
+	# The opening turn is counted HERE: turn_started fires only from TurnManager.end_turn, never for
+	# the turn a mission opens on (MissionLog.begin's shape). Every caller begins that turn next.
+	if game.turn_manager.active_faction() == Team.Faction.PLAYER:
+		_player_turn_began()
 
 
 # The pre-mission phase opened (#882). Fires the briefing beats and answers whether anything will
@@ -144,6 +150,10 @@ func reset() -> void:
 func _on_turn_started(faction: Team.Faction) -> void:
 	if not _armed or faction != Team.Faction.PLAYER:
 		return
+	_player_turn_began()
+
+
+func _player_turn_began() -> void:
 	_player_turn += 1
 	var step := _active_step()
 	if step != null and step.done_when == DialogBeat.Trigger.TURN_START \
