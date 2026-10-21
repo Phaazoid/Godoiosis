@@ -137,13 +137,15 @@ func events() -> Array[Dictionary]:
 # The cost is stated rather than hidden: a sandbox run has NO scenario, so it cannot be grouped by
 # mission and every per-level query has to exclude it explicitly.
 #
-# A resume is flagged the same way -- it arrives mid-battle with no draw.
+# A resume is flagged the same way -- it arrives mid-battle with no draw. `resumed` is TOLD, by the
+# one door that is a resume (MissionController.resume_from_slot), never guessed from the round count:
+# a save taken in round 1 has none (#1364).
 # `record_to_disk` false records the run IN MEMORY only -- no file, no board snapshot. That is the
 # REPLAY driver's mode (#53 slice 4): a replay must be measured by this same recorder, so that its
 # events and the recorded run's are like-for-like, while writing nothing that would look like a new
 # playtest run. _record already appends to _events regardless of whether a file is open, which is
 # what makes the mode cost one parameter rather than a second recorder.
-func begin(record_to_disk := true) -> void:
+func begin(record_to_disk := true, resumed := false) -> void:
 	if _open:
 		seal(Ending.INTERRUPTED)
 	_events.clear()
@@ -163,7 +165,7 @@ func begin(record_to_disk := true) -> void:
 	# then discarded. Pacing.beat's headless escape, one layer up.
 	if record_to_disk and TelemetryStore.persistence_enabled:
 		TelemetryStore.save_board(_run_id, game.scenario_manager.capture_scenario("telemetry-" + _run_id))
-	_record("mission_start", _mission_start_fields())
+	_record("mission_start", _mission_start_fields(resumed))
 	_record("turn_start", _turn_fields(game.turn_manager.active_faction()))
 
 
@@ -485,7 +487,7 @@ func _record(kind: String, fields: Dictionary) -> void:
 #  Readers -- facts off the live board, each written once
 # ==============================================================================
 
-func _mission_start_fields() -> Dictionary:
+func _mission_start_fields(resumed: bool) -> Dictionary:
 	var sm: ScenarioManager = game.scenario_manager
 	var mc: MissionController = game.mission_controller
 	var path: String = sm.last_loaded_path
@@ -535,7 +537,7 @@ func _mission_start_fields() -> Dictionary:
 		"objectives": _names(MissionRules.Objective, mc.objectives),
 		"lose_conditions": _names(MissionRules.LoseCondition, mc.lose_conditions),
 		"round_limit": mc.round_limit,
-		"resumed": mc.rounds_elapsed() > 0,
+		"resumed": resumed,
 		"roster": roster,
 		"stash": stash,
 		"available_mods": mods,

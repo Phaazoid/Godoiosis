@@ -19,6 +19,7 @@ const GRASS_ATLAS := Vector2i(5, 0)
 const MISSION := "res://tests/telemetry/not_a_real_file.tres"   # a name, never loaded
 const SCRATCH_ROOT := "user://__telemetry_test/"
 const SCRATCH_MISSION := "user://__telemetry_53.tres"   # the one case that RELOADS needs a real file
+const SCRATCH_SAVES := "user://__telemetry_saves_1364/"   # the resume cases' slots, never the real ones
 
 var _main: Node
 var game: Node2D
@@ -52,6 +53,8 @@ func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
 	_wipe(SCRATCH_ROOT)
+	_wipe(SCRATCH_SAVES)
+	ScenarioManager.save_dir = ScenarioManager.DEFAULT_SAVE_DIR
 	if FileAccess.file_exists(SCRATCH_MISSION):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH_MISSION))
 	TelemetryStore.reset_for_test()
@@ -194,14 +197,45 @@ func test_the_summary_carries_the_separation_flags() -> void:
 	assert_bool(summary.has("dev_mode")).is_true()
 
 
+# A RESUME IS THE DOOR'S ANSWER, never the round count's (#1364), so these go through the real slot:
+# save_to_slot, then resume_from_slot, against a redirected save folder.
 func test_a_resume_is_flagged_with_its_starting_round() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	var no_zones: Array[String] = []
 	mc.mission.restore(no_zones, false, 3)   # a save taken three rounds in
-	mc._begin_turn()
+	_resume_through_a_slot()
 	var start := _of("mission_start")[0]
 	assert_bool(bool(start.get("resumed", false))).is_true()
 	assert_int(int(start.get("round", 0))).is_equal(4)
+
+
+# The case the round-count guess got wrong: a save taken in round 1 has no rounds elapsed.
+func test_a_save_resumed_in_its_first_round_is_still_a_resume() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_resume_through_a_slot()
+	var start := _of("mission_start")[0]
+	assert_int(int(start.get("round", 0))).override_failure_message(
+		"fixture: the save was not taken in round 1").is_equal(1)
+	assert_bool(bool(start.get("resumed", false))).override_failure_message(
+		"a round-1 save came back through Load Game and recorded as a fresh start").is_true()
+
+
+# ...and the converse: a board that merely CARRIES elapsed rounds, arriving through a fresh-start door,
+# is not a resume. This is what `resumed` means since #1364.
+func test_a_fresh_start_is_not_a_resume_whatever_its_round() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var no_zones: Array[String] = []
+	mc.mission.restore(no_zones, false, 3)
+	mc._begin_turn()
+	assert_bool(bool(_of("mission_start")[0].get("resumed", true))).is_false()
+
+
+func _resume_through_a_slot() -> void:
+	ScenarioManager.save_dir = SCRATCH_SAVES
+	assert_bool(game.scenario_manager.save_to_slot(1)).override_failure_message(
+		"fixture: the slot was not written").is_true()
+	mc.resume_from_slot(1)
+	assert_bool(mission_log.is_open()).override_failure_message("fixture: the resume opened no run").is_true()
 
 
 func test_the_roster_names_what_each_unit_brought() -> void:
