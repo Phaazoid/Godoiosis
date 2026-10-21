@@ -83,6 +83,8 @@ static func signature(sections: Array[Section]) -> String:
 	var parts: Array[String] = []
 	for section in sections:
 		parts.append(section.heading)
+		if section.marking != null:
+			parts.append(section.marking_color.to_html())   # a colour knob changes nothing else (#1374)
 		for row in section.rows:
 			parts.append(row.text)
 	return "\n".join(parts)

@@ -43,6 +43,9 @@ var _game: GameTool
 # and shields would have been the third time. Keyed by NAME through read_static/write_static, the
 # same pair the panel uses, so there is one answer to how a class knob is read and written.
 var _static_snapshot: Dictionary = {}
+# ...and the LAYER rows, for the same reason since #1374: a zone kind's colour is class-level, so a case
+# that nudges it would leave every later suite drawing zones in it. Every layer row, the simple superset.
+var _layer_snapshot: Dictionary = {}
 
 
 func before_test() -> void:
@@ -61,6 +64,10 @@ func before_test() -> void:
 	await await_idle_frame()
 	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
 	_game = dev_overlay.game_tool
+	_layer_snapshot = {}
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if knob.has("layer"):
+			_layer_snapshot[knob["layer"]] = GameKnobs.read_class(_scene, knob)
 
 
 func after_test() -> void:
@@ -68,6 +75,9 @@ func after_test() -> void:
 	# overlay manager through the host.
 	for name: String in _static_snapshot:
 		GameKnobs.write_static(_scene, name, _static_snapshot[name])
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if knob.has("layer") and _layer_snapshot.has(knob["layer"]):
+			GameKnobs.write_class(_scene, knob, _layer_snapshot[knob["layer"]])
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 	# Same reason as the static snapshot above: PlayerSettings._state is process-global, so a case

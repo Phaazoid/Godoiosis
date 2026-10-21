@@ -28,7 +28,8 @@ const TEXELS := int(BoardOverlays.ART_PIXELS_PER_CELL)
 # separation, not a look -- it keeps the wall out of the plane a border block's face stands in.
 const WALL_INSET := 0.5 / TEXELS
 
-# Which layer's colour a kind wears -- the colour both views' marks, the knob and the card all read.
+# Which layer's colour a kind wears: the knob writes it, and both views' marks, the tile card and the
+# objectives panel read it (colour_of, the LIVE colour).
 const LAYER_OF_KIND: Dictionary[ZoneManager.Kind, BoardOverlays.Layer] = {
 	ZoneManager.Kind.CAPTURE: BoardOverlays.Layer.ZONE_CAPTURE,
 	ZoneManager.Kind.EXTRACTION: BoardOverlays.Layer.ZONE_EXTRACTION,
@@ -69,9 +70,9 @@ static var art_version := 0
 static var _art_cache: Dictionary = {}
 
 
-# A kind's colour at full strength, read off its layer's authored entry.
+# A kind's colour at full strength: its layer's LIVE colour, the one the Game tab's knob writes (#1374).
 static func colour_of(kind: ZoneManager.Kind) -> Color:
-	var colour: Color = BoardOverlays.LAYERS[LAYER_OF_KIND[kind]]["color"]
+	var colour := BoardOverlays.kind_color(LAYER_OF_KIND[kind])
 	colour.a = 1.0
 	return colour
 
