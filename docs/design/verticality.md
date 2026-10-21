@@ -1181,8 +1181,10 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > X and Z span a cell, **Y spans however many ROWS the selector is set to**, and the box's **top face
 > sits on the cell's surface** with its depth reaching down from there.
 >
-> A **Selector depth** picker (Level / Half) on the Game tab plus **V** say how far down. It is a
-> `GameKnobs` row rather than a Tile Brush one because the selector is up in **ordinary play**, and V
+> A **Selector depth** picker (Level / Half) on the Game tab plus **H** say how far down (the key was
+> V until [#1368](https://github.com/Phaazoid/Godoiosis/issues/1368), which gave V back to the enemy
+> ranges it was also toggling). It is a
+> `GameKnobs` row rather than a Tile Brush one because the selector is up in **ordinary play**, and H
 > is a top-level dev key for the same reason — needing an armed brush would leave the thing visible
 > and the key that moves it dead. Turning the knob **rebuilds what is already standing**: the hover
 > layer only repaints when the pointer *cell* changes, so a still mouse would otherwise see nothing.

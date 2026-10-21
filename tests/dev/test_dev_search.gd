@@ -343,24 +343,24 @@ func test_a_click_outside_closes_the_list() -> void:
 	assert_bool(_box.list_showing()).is_false()
 
 
-# Typing a query must not fire a dev key -- V cycles the 3D selector depth from either window.
-# The second half presses V with the box let go, so the first half is not passing vacuously.
+# Typing a query must not fire a dev key -- H cycles the 3D selector depth from either window.
+# The second half presses H with the box let go, so the first half is not passing vacuously.
 func test_typing_in_the_box_fires_no_dev_key() -> void:
 	var overlays := LookKnobs.target_of(_overlay.host_3d, GameKnobs.SELECTOR_DEPTH) as BoardOverlays
 	assert_object(overlays).override_failure_message("no 3D selector to watch").is_not_null()
 	var before := overlays.selector_depth
 	_box.grab_focus()
 	var typed := InputEventKey.new()
-	typed.keycode = KEY_V
-	typed.physical_keycode = KEY_V
-	typed.unicode = "v".unicode_at(0)
+	typed.keycode = KEY_H
+	typed.physical_keycode = KEY_H
+	typed.unicode = "h".unicode_at(0)
 	typed.pressed = true
 	_overlay.push_input(typed)
 	await await_idle_frame()
-	assert_int(overlays.selector_depth).override_failure_message("typing 'v' fired the dev key") \
+	assert_int(overlays.selector_depth).override_failure_message("typing 'h' fired the dev key") \
 		.is_equal(before)
 	_box.release_focus()
 	_overlay.push_input(typed)
 	await await_idle_frame()
 	assert_int(overlays.selector_depth).override_failure_message(
-		"V with the box let go did nothing either; the first half proves nothing").is_not_equal(before)
+		"H with the box let go did nothing either; the first half proves nothing").is_not_equal(before)
