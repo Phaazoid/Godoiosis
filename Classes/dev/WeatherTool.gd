@@ -3,8 +3,8 @@ class_name WeatherTool
 
 # The Weather page (#1260): how each weather looks and what it does, tuned LIVE. Pick a weather and
 # its WeatherLook and WeatherRules are the very objects WeatherMirror draws from and the soak reads
-# (each is cached per kind), so a slider shows on the board the next frame. Save writes both files
-# through DevWidgets.save_over, asking first, since a save overwrites.
+# (each is cached per kind), so a slider shows on the board the next frame. Save writes the touched
+# files through DevWidgets.save_over, asking first, since a save overwrites.
 #
 # Which weather a BOARD wears is the Scenario page's (its Weather picker beside Look). This page opens
 # on that one, so tuning the rain you are looking at is one click. A look draws only the rows of what
@@ -12,7 +12,11 @@ class_name WeatherTool
 #
 # The wind's strengths are on this page too (#1286), below the weathers in the one picker: a wind is
 # a weather the board wears beside the other, and each strength's WindLook is tuned the same way.
+#
+# The unsaved marker is per FILE (#1370), WeightsTool's _touched: an edit lives on the cached resource,
+# so it outlives picking another weather, and Save writes every file touched since the last save.
 
+const CONFIRM_LIST_MAX := 12   # WeightsTool's: a confirm listing every file is one nobody reads
 const NO_LOOK := "No look file for this weather -- add one under Resources/WeatherLooks/."
 const NO_WIND_LOOK := "No look file for this wind -- add one under Resources/WindLooks/."
 # A wind strength's id in the picker, past every weather's.
@@ -25,7 +29,8 @@ var _status: Label
 var _rows: VBoxContainer
 var _kind := Weather.Kind.RAIN
 var _wind := -1   # the Wind.Kind on show, or -1 while a weather is
-var _dirty := false
+# Touched since the last save: each edited look or rules resource -> the file it saves to.
+var _touched: Dictionary[Resource, String] = {}
 
 
 func init(game) -> void:
@@ -55,7 +60,8 @@ func init(game) -> void:
 	_save.pressed.connect(_on_save_pressed)
 	head.add_child(_save)
 	DevWidgets.apply_tooltip(_save, DevWidgets.wrap_tooltip(
-		"Write this weather's look and rules, or this wind's look, to their files. Asks first: the saved version is lost."))
+		"Write every weather and wind file changed on this page since the last save, whichever is on show. "
+		+ "Asks first: the saved versions are lost."))
 	_status = Label.new()
 	add_child(_status)
 	_rows = DevWidgets.add_knob_scroll(self)
@@ -81,7 +87,7 @@ func _show(kind: Weather.Kind) -> void:
 	_picker.select(_picker.get_item_index(kind))
 	_status.text = ""
 	_fill()
-	_set_dirty(false)
+	_refresh_dirty()
 
 
 func _show_wind(kind: Wind.Kind) -> void:
@@ -89,7 +95,7 @@ func _show_wind(kind: Wind.Kind) -> void:
 	_picker.select(_picker.get_item_index(WIND_ID + kind))
 	_status.text = ""
 	_fill()
-	_set_dirty(false)
+	_refresh_dirty()
 
 
 func _fill() -> void:
@@ -149,9 +155,11 @@ func _write(resource: Resource, prop: String, value: Variant) -> void:
 		value = int(value)
 	resource.set(prop, value)
 	resource.emit_changed()
-	_set_dirty(true)
+	_touch(resource)
 	if prop == "fall":
 		_fill.call_deferred()   # deferred: the picker that fired this is one of the rows freed
+	if resource is WeatherRules:
+		_redraw_plan()
 
 
 # Into the live rules' air (#1324), erasing a substance at 0 so the file names only what the weather
@@ -163,41 +171,70 @@ func _write_air(rules: WeatherRules, id: String, points: int) -> void:
 	else:
 		rules.air[id] = points
 	rules.emit_changed()
-	_set_dirty(true)
+	_touch(rules)
+	_redraw_plan()
+
+
+# The open plan's END OF TURN rows and the corner HUD's air read the cached rules: re-resolve them now,
+# as the Scenario page's weather picker does, rather than show what the rules said before the edit.
+func _redraw_plan() -> void:
 	if _game != null:
 		_game.refresh_action_queue(_game.squad_manager.active_squad)
 		_game.refresh_mission_status()
 
 
-func _set_dirty(dirty: bool) -> void:
-	_dirty = dirty
-	DevWidgets.mark_unsaved(_save, "Save", dirty)
+func _touch(resource: Resource) -> void:
+	if not _touched.has(resource):
+		_touched[resource] = resource.resource_path
+	_refresh_dirty()
+
+
+func _refresh_dirty() -> void:
+	DevWidgets.mark_unsaved(_save, "Save", has_unsaved_changes())
 
 
 func has_unsaved_changes() -> bool:
-	return _dirty
+	return not _touched.is_empty()
+
+
+func touched_files() -> PackedStringArray:
+	var files := PackedStringArray(_touched.values())
+	files.sort()
+	return files
 
 
 func _on_save_pressed() -> void:
-	var name := Weather.display_name(_kind) if _wind < 0 else Wind.display_name(_wind as Wind.Kind) + " wind"
-	DevWidgets.confirm_overwrite(self, "the saved %s" % name, "what is on this page", _save_now)
-
-
-func _save_now() -> void:
-	if _wind >= 0:
-		var wind := _wind as Wind.Kind
-		var wind_look := WindLook.for_kind(wind)
-		if wind_look != null and DevWidgets.save_over(wind_look, WindLook.path_of(wind), _status):
-			_status.text = "Saved %s wind." % Wind.display_name(wind)
-			_set_dirty(false)
+	var files := touched_files()
+	if files.is_empty():
+		_status.text = "Nothing has moved off what is saved."
 		return
-	var ok := true
-	var look := WeatherLook.for_kind(_kind)
-	if look != null:
-		ok = DevWidgets.save_over(look, WeatherLook.path_of(_kind), _status) and ok
-	var rules := WeatherRules.for_kind(_kind)
-	if rules != null:
-		ok = DevWidgets.save_over(rules, WeatherRules.FOLDER + Weather.name_of(_kind) + ".tres", _status) and ok
-	if ok:
-		_status.text = "Saved %s." % Weather.display_name(_kind)
-		_set_dirty(false)
+	var shown := PackedStringArray()
+	for path: String in files:
+		shown.append(path.trim_prefix("res://"))
+	if shown.size() > CONFIRM_LIST_MAX:
+		var more := shown.size() - CONFIRM_LIST_MAX
+		shown = shown.slice(0, CONFIRM_LIST_MAX)
+		shown.append("...and %d more" % more)
+	DevWidgets.confirm(self,
+		"Write %d changed file(s)? The saved versions are lost.\n\n%s" % [files.size(), "\n".join(shown)],
+		_save_now)
+
+
+# A file whose write FAILED stays touched, so the marker keeps saying so and the next Save retries it.
+func _save_now() -> void:
+	var saved := PackedStringArray()
+	var failed := PackedStringArray()
+	for resource: Resource in _touched.keys():
+		var path: String = _touched[resource]
+		if DevWidgets.save_over(resource, path, _status):
+			saved.append(path.get_file())
+			_touched.erase(resource)
+		else:
+			failed.append(path.get_file())
+	var parts := PackedStringArray()
+	if not saved.is_empty():
+		parts.append("Saved: %s" % ", ".join(saved))
+	if not failed.is_empty():
+		parts.append("FAILED: %s" % ", ".join(failed))
+	_status.text = " | ".join(parts)
+	_refresh_dirty()
