@@ -1424,6 +1424,7 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 		return false
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var target := _live_target(resource, path)
+	carry_sub_ids(target, path)   # ...and so must its [sub_resource] ids (#1343)
 	var prior_uids := uid_map_in_file(path)   # a committed file's uids must survive an overwrite (#481)
 	_ensure_header_uid(path, prior_uids)   # ...and a file that never had one gets it minted (#598)
 	target.take_over_path(path)
@@ -1677,6 +1678,95 @@ static func restore_uids(path: String, prior: Dictionary) -> bool:
 		else:
 			ResourceUID.add_id(id, path)
 	return true
+
+
+# Give `target`'s id-less sub-resources the ids the file at `path` already uses for them, so the save
+# keeps them. The text saver seeds its id generator from the save PATH and draws one id per
+# sub-resource that has none, in save order, after drawing for every new ext_resource. Everything
+# save_over writes arrives id-less (capture builds fresh objects, and _adopt's duplicate(true) copies
+# no scene_unique_id), so every id was a draw: a file the writer had not just drawn at this path
+# renumbered on its first save, and one new reference renumbered every id after it (#1343).
+#
+# Matched by POSITION -- the same property, array index or dictionary key, of the same script -- so an
+# edited value keeps its id; removing an element mid-array relabels the ones after it. Fills only an
+# EMPTY id and never one already in use, so a sub-resource another file owns keeps its own.
+static func carry_sub_ids(target: Resource, path: String) -> void:
+	var used := {}
+	if _sub_id_census(target, used, {}) == 0 or not FileAccess.file_exists(path):
+		return
+	if not ContentRepair.missing_references(path).is_empty():
+		return   # the prior file will not load cleanly; this save draws, as every save used to
+	var prior := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	if prior == null or prior.get_script() != target.get_script():
+		return
+	_carry_stored(prior, target, used, {})
+
+
+# How many built-in sub-resources under `res` have no id, collecting the ids the rest hold into `used`.
+static func _sub_id_census(res: Resource, used: Dictionary, seen: Dictionary) -> int:
+	var missing := 0
+	for value: Variant in _stored_values(res):
+		for sub: Resource in _resources_in(value):
+			if seen.has(sub) or not sub.is_built_in():
+				continue
+			seen[sub] = true
+			if sub.get_scene_unique_id() == "":
+				missing += 1
+			else:
+				used[sub.get_scene_unique_id()] = true
+			missing += _sub_id_census(sub, used, seen)
+	return missing
+
+
+static func _carry_stored(prior: Resource, fresh: Resource, used: Dictionary, seen: Dictionary) -> void:
+	for prop in fresh.get_property_list():
+		if (prop.usage & PROPERTY_USAGE_STORAGE) != 0 and prop.name != "script":
+			_carry_value(prior.get(prop.name), fresh.get(prop.name), used, seen)
+
+
+static func _carry_value(prior: Variant, fresh: Variant, used: Dictionary, seen: Dictionary) -> void:
+	if prior is Resource and fresh is Resource:
+		var from := prior as Resource
+		var to := fresh as Resource
+		if seen.has(to) or not from.is_built_in() or not to.is_built_in():
+			return
+		if from.get_script() != to.get_script() or from.get_class() != to.get_class():
+			return
+		seen[to] = true
+		var id := from.get_scene_unique_id()
+		if to.get_scene_unique_id() == "" and id != "" and not used.has(id):
+			to.set_scene_unique_id(id)
+			used[id] = true
+		_carry_stored(from, to, used, seen)
+	elif prior is Array and fresh is Array:
+		for i in mini((prior as Array).size(), (fresh as Array).size()):
+			_carry_value(prior[i], fresh[i], used, seen)
+	elif prior is Dictionary and fresh is Dictionary:
+		for key: Variant in fresh:
+			if (prior as Dictionary).has(key):
+				_carry_value(prior[key], fresh[key], used, seen)
+
+
+static func _stored_values(res: Resource) -> Array:
+	var out := []
+	for prop in res.get_property_list():
+		if (prop.usage & PROPERTY_USAGE_STORAGE) != 0 and prop.name != "script":
+			out.append(res.get(prop.name))
+	return out
+
+
+# The resources a stored value holds directly: itself, or an Array's / Dictionary's elements, nested.
+static func _resources_in(value: Variant) -> Array[Resource]:
+	var out: Array[Resource] = []
+	if value is Resource:
+		out.append(value)
+	elif value is Array:
+		for e: Variant in value:
+			out.append_array(_resources_in(e))
+	elif value is Dictionary:
+		for key: Variant in value:
+			out.append_array(_resources_in(value[key]))
+	return out
 
 
 # Removes a saved entry from disk. The catalogs that list these entries (WeaponCatalog,
