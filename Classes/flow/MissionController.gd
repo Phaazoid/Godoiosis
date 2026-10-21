@@ -100,12 +100,14 @@ var _battle_begun := false
 #   * The HUD stand-down rides the SETTER, never commit. abandon_mission and resume_from_slot both
 #     leave the phase without passing through commit, so a hide written at commit would strand the
 #     next mission with no End Turn button (CameraController._set_playback_cinematic's shape).
+#     The inspect dock's gear gate rides it for the same reason (#1351): read-only in the phase.
 var _deploying := false:
 	set(value):
 		if _deploying == value:
 			return
 		_deploying = value
 		game.set_battle_hud_hidden(value)
+		game.refresh_dock_gate()
 
 
 func is_over() -> bool:
