@@ -40,8 +40,8 @@ func after_test() -> void:
 	_main.free()
 
 
-func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
-	var unit: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10, Stats.Stat.MHP: 40}, faction), cell)
+func _spawn(faction: Team.Faction, cell: Vector2i, ldr := 10) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: ldr, Stats.Stat.MHP: 40}, faction), cell)
 	assert_object(unit).is_not_null()
 	return unit
 
@@ -150,3 +150,31 @@ func test_an_ai_turn_whose_board_changes_under_it_ends_nothing() -> void:
 
 	assert_int(game.turn_manager.active_faction()).override_failure_message(
 			"the interrupted AI turn went on to end the turn").is_equal(Team.Faction.ENEMY)
+
+
+# ...and the walk's handover hold goes with it (#1358): on the reloaded board a leader leaving judges
+# its successor's reach AT ONCE, rather than waiting for the end of a walk that is never coming.
+func test_a_board_reloaded_mid_walk_judges_its_handovers_at_once() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 1))
+	_spawn(Team.Faction.ENEMY, Vector2i(11, 2))
+	await await_idle_frame()
+	var snapshot: ScenarioData = game.scenario_manager.capture_scenario("swap")
+	_queue_walk(hero, 5)
+
+	game.order_executor.execute_orders(hero.squad.get_leader())   # not awaited: it is interrupted
+	await _until_walking(hero)
+	assert_bool(game.squad_manager._handovers_held).override_failure_message(
+			"fixture: the walk never took the handover hold, so there was nothing to strand").is_true()
+	game.scenario_manager.apply_scenario(snapshot)
+	await _frames(10)
+
+	var leader := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var heir := _spawn(Team.Faction.PLAYER, Vector2i(1, 0), 4)
+	var stray := _spawn(Team.Faction.PLAYER, Vector2i(11, 0), 1)
+	game.squad_manager.join_squad(heir, leader.squad)
+	game.squad_manager.join_squad(stray, leader.squad)
+	game.squad_manager.leave_squad(leader)
+	assert_object(heir.squad.leader).override_failure_message(
+			"fixture: the heir did not take over the squad").is_same(heir)
+	assert_bool(stray.squad == heir.squad).override_failure_message(
+			"a member out of the new leader's reach stayed -- the reloaded board still holds handovers").is_false()
