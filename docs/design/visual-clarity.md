@@ -1699,7 +1699,7 @@ said it was. Filed as [#676](https://github.com/Phaazoid/Godoiosis/issues/676) a
 [#675](https://github.com/Phaazoid/Godoiosis/issues/675) respectively; #676 carries the
 ColorPicker-ban finding so it is not rediscovered.
 
-> **The camera sections start here** and run to the end of this file — eleven of them, chronological,
+> **The camera sections start here** and run through *Camera dev tools* (#705) — thirteen of them, chronological,
 > each answering *why is it like that*. **For what a WORD means and which symbol owns it, read
 > [`camera-language.md`](camera-language.md) instead** ([#671](https://github.com/Phaazoid/Godoiosis/issues/671)):
 > the channels and their doors, LIVE vs SETTLED, the shot words, the five movers, and the two things
@@ -1712,7 +1712,7 @@ Diff 1 made the camera *go to* the action and made the action wait for it. This 
 across the frame instead of one behind the other — and the turn between beats reads as a spin.
 
 **Yaw is the only axis of this camera that was already authorable, which is why it went first.**
-`battle3d._mirror_camera` writes `_rig.position` from the 2D camera every frame, so the rig's
+`battle3d._mirror_camera` writes `_rig.position` *(until slice 1, next section: it writes the aim through `hold_at` now)* from the 2D camera every frame, so the rig's
 position is a mirror and moving the node stages nothing — the `UnitMirror` reconcile trap one layer
 up. Yaw and distance are the rig's own and already eased in `_process`, and free orbit and Q/E
 already write `_target_yaw_degrees` directly with no bounds re-solve, so a director doing the same
@@ -1720,7 +1720,7 @@ is doing exactly what the player does.
 
 **`pose()` is not the door.** It snaps the yaw, adopts the result as the OPENING SHOT, and calls
 `drop_stashed_view()` — which is what the camera return is holding. `CameraRig3D.aim_along()` is
-the director's own entry point and writes one thing: a yaw target.
+the director's own entry point and writes one thing: a yaw target. *(Since diff 2b it also writes the pitch target, the stoop, and since #1132 it carries the clearance's turn.)*
 
 **Three yaws now live on the rig, named apart** (Law #4). `_home_*` is where the BOARD starts and
 is what R restores; `_borrowed_*` is where the PLAYER was standing, restored when playback gives
@@ -1773,11 +1773,11 @@ same movement the tear-out needs, which is why the two are one slice.
 **The rule has a SCOPE, and it is his** (2026-08-27): *"that only applies while we're on the map.
 One exception we can make is the transition from the map view to the battle view — what we're
 creating now. We can start with a pan, but I reserve the right to change the call on that."* So it
-is not a global invariant: three writers still cut on purpose, and the transition is a declared
+is not a global invariant: three writers still cut on purpose (four since #1037's grab pan), and the transition is a declared
 exception rather than an instance of the rule.
 
 **`position` became DERIVED from two channels** in this slice, `_aim + _lift`, written in exactly one
-place. (Diff 2b adds a third, the flourish -- see *The camera JOLTS, SWAYS and STOOPS* below.)
+place. (Diff 2b adds a third, the flourish -- see *The camera JOLTS, SWAYS and STOOPS* below -- and #602 a fourth, the drop; the sum as it stands is [camera-language.md](camera-language.md) → *The channels*.)
 - `_aim` is the point on the board. `hold_at()` snaps it, `glide_to()` pans it. A raw
   `rig.position = …` is *overwritten* on the next frame rather than half-honoured — which is a
   loud failure, and it invalidated five test fixtures that had been shoving the rig that way.
@@ -1804,7 +1804,7 @@ stretch, so a poll below the gate would never see a frame with the tiles home an
 stay in the sky for ever.
 
 **`_center_rig_on` must never be reached while the board is staged** — `BoardSpace.surface_point`
-carries the staged offset and `_aim_over` does not, so a call there would lift twice. Unreachable
+carries the staged offset and `_aim_over` does not, so a call there would lift twice. *(Correction, 2026-10-21 sweep: it is `BoardMirror.surface_point` that adds the staged offset; `BoardSpace.surface_point`, which `_center_rig_on` calls, is the unstaged frame. So the double lift does not happen as written; a call while staged would aim at the unstaged ground instead.)* Unreachable
 rather than guarded there: every caller is refused while playback owns the board, and playback is
 the only thing that stages anything. The objectives panel's zone rows (#955 part 3) are the one
 caller that asks for itself, since that panel stays up through the pass.
@@ -1817,7 +1817,7 @@ delegates to — and the rig **widens its distance** through `widen_to_fit`.
 
 - **The follow is gone, and that is the point.** `pan_to` ended with `follow(unit)`; framing both
   ends only means anything if the camera *holds* while the walk crosses it, because following would
-  drag the far end straight back out of frame. `test_the_move_phase_takes_the_camera_to_whoever_is_walking`
+  drag the far end straight back out of frame. `test_the_move_phase_takes_the_camera_to_whoever_is_walking` (now `test_the_move_phase_frames_the_walk_across_both_its_ends`)
   was rewritten rather than patched — its name pinned the rule that changed.
 - **`widen_to_fit` widens only, never narrows.** A short hop already has both ends in frame at the
   playback distance; pulling *in* to fit one answers a question nobody asked. `set_zoom` is the
@@ -1828,7 +1828,7 @@ delegates to — and the rig **widens its distance** through `widen_to_fit`.
   (the wheel is dead under playback) because the zoom is a meeting point of edges: the walk's widen,
   the stage's fit, the trained pull-in and the dolly all write the same target, and any of them
   asserting per-frame would stomp the rest. Gated on `framed_span` itself — the store the answer is
-  drawn from — not on a copy of what it resolves to.
+  drawn from — not on a copy of what it resolves to. *(Since #672 the edge is `ShotDirector.update`, which reports a change when a cause changes, and each framing is an arm of `battle3d._apply_shot`. The dolly is an ADDEND on the distance, not a writer of its target.)*
 - **`framed_span` is a THIRD published field beside `directed_line`,** and folding them together
   would be wrong: that one is an ANGLE and this is a FIT, so one field answering both would spin the
   camera side-on to every walk.
@@ -1853,7 +1853,7 @@ so, and it was right when it was written. Then health readouts gained debris. `A
 does await its lunge, its block, the knockback slide and the plummet — but the cube burst is thrown
 by `UnitMirror`'s own per-frame HP poll (and by `unit_died` for a death, because `die()` emits and
 `queue_free`s in one frame), flies on `HealthBlockDebris`'s own clock, and **nothing anywhere holds a
-reference to it.** So the last counter killed someone and the pass cut away mid-explosion — the dev's
+reference to it.** *(Still true of the linger. Since #602 round 4 a void death's show does wait on the cubes, through `UnitMirror.death_show_live()`.)* So the last counter killed someone and the pass cut away mid-explosion — the dev's
 report, widened by his own ruling to *"every action action kind... even basic attacks knock away
 health cubes and we want that focused too."*
 
@@ -1868,7 +1868,7 @@ health cubes and we want that focused too."*
   is how much debris it threw, and only a death empties the grid. A shove's slide and a plummet are
   already awaited inside `execute`, so they are not waiting this needs to invent.
 
-**`_beat_lingers` keys on the beat's LAST surviving member** where its three sibling schedules key on
+**`_beat_lingers` keys on the beat's LAST surviving member** where its three sibling schedules (five since: holds, subjects, lines, emphases and profiles) key on
 the first. That is the whole of *one blast is one moment however many it hits*: a volley pans and
 holds at its opening action, plays every member, and lingers once after the final one. Keying both
 ends on `[0]` puts the pause between the first hit and the second.
@@ -1903,7 +1903,7 @@ the page."*
 **The sections cost no machinery.** `GROUP_TABS` already maps several groups onto one tab (Water does
 it) and `_add_heading` already fires per group, so a section is a group name — The profile / Actions
 / Outcomes / Camera travel / The tear-out / Motion — and the only requirement is that a group's rows
-stay contiguous in the table, since that order *is* the section order.
+stay contiguous in the table, since that order *is* the section order. *(Since #1074 the panel is built group by group in `GROUP_TABS` order through `DevWidgets.add_heading`, so row contiguity no longer matters; `_add_heading` is gone, and "Camera flourish" split into five `Flourish:` groups — jolt, sway, shots, emphasis and freeze.)*
 
 **A battle-zoom picker sits at the top and writes the real `PlayerSettings` value.** The first dev
 tool to write one. It is not a knob row and cannot be: a `PlayerSettings` value has none of
@@ -1969,7 +1969,7 @@ places rather than everywhere makes them have more effect."*
   walks the beats, dropping one takes its actor's cell off the **stage** as well: with the battle
   zoom at its shipped `ALWAYS`, every beat is CINEMATIC, so that one cell was the difference between
   a silent pass and the full diorama — brace, flight, settle, and the same again going home. The
-  `_shows_a_fight` flag it clears is also what overrides the player's health-bar setting for a pass,
+  `_shows_a_fight` flag (a function, `OrderExecutor._shows_a_fight`, published as `CameraController.playback_cinematic`) it clears is also what overrides the player's health-bar setting for a pass,
   so the bars stop flashing around it too. One skip, three symptoms.
 - **Per ORDER, never per pass.** An AI squad that swings *and* revs still gets its diorama; the
   rev just stops adding its own cell. Pinned, because gating the stage on the pass is the obvious
@@ -1994,7 +1994,7 @@ The camera had learned where to go, which way to face, and how long to stay. Thi
 down toward eye level for a directed blast so the fight looms instead of being read from overhead.
 
 **The FLOURISH is a third position addend, and its separateness is the design.** `position` was
-`_aim + _lift`; it is now `_aim + _lift + flourish()`. The first two are *where the camera looks*.
+`_aim + _lift`; it is now `_aim + _lift + flourish()` *(and since #602 the drop too; [camera-language.md](camera-language.md) → *The channels*)*. The first two are *where the camera looks*.
 The third is not — it is a displacement laid over that, and two consequences fall straight out of
 saying so. It is summed **after** `pan_limit`'s clamp, so a blow at the board's edge jolts exactly as
 hard as one in the middle; and it is **never stashed**, so the view handed back at the end of a pass
@@ -2008,7 +2008,7 @@ hand is motion sickness rather than mood; no second flag was needed to say so.
 
 **The impact is read ABOVE the health bar's visibility gate, and that placement is the whole point.**
 The instant a blow lands is `take_damage` inside `AttackAction.execute`, which `OrderExecutor` cannot
-see — it awaits the whole action. The only thing that observes it is `UnitMirror`'s HP poll, which
+see — it awaits the whole action. *(Since #887 the executor does hear the landing, as `AttackAction.impact` → `volley_struck`, for the shock; the jolt still rides the mirror's HP diff.)* The only thing that observes it is `UnitMirror`'s HP poll, which
 computes its diff and then returns early on `previous == current or not bar.visible`. The cubes are a
 *readout* and rightly go when the readout is hidden; a camera jolt is not a readout, and
 `HEALTH_BARS` ships **HOVERED** — so reporting below that line would leave the default settings
@@ -2072,14 +2072,14 @@ the rig suites assert coordinates, and #520 slice 1 already paid once for making
 under tests whose names claim it lands. Headless refuses to *spend* time, exactly as `Pacing.beat`
 does; a case that wants to watch a curve supplies the elapsed time itself.
 
-Nine knob rows under a new **Camera flourish** section on the Playback page — its own group rather
+Nine knob rows under a new **Camera flourish** section *(split into five `Flourish:` groups since #1074)* on the Playback page — its own group rather
 than more rows under Camera travel, because that section is how long the camera takes to *get*
 somewhere and this is what it does once it is there.
 
 Spun out of #520 here: the **cliff follow**, [#602](https://github.com/Phaazoid/Godoiosis/issues/602),
 because it is the one piece that is a build rather than a composition — both fall animations are
 mirror-side Y offsets, so a unit's board position never descends and following one down needs a
-vertical authority of its own. **BUILT 2026-08-29**; its own section at the end of this doc. Then
+vertical authority of its own. **BUILT 2026-08-29**; its own section below. Then
 lethality-aware direction, which is the next section.
 
 ## The director knows the ENDING ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2c, BUILT 2026-08-27)
@@ -2195,10 +2195,10 @@ collapse from (mode, beat) to a profile, `duration_for`'s shape one question ove
 **The gate lives in the SCHEDULE BUILDERS, not the executor.** `OrderExecutor` already built per-beat
 dictionaries keyed on each beat's opening action, so the profile is computed there and published as
 **`CameraController.beat_profile`** — the fourth field of the trio #520 established (an angle, a fit,
-a weight… and now the cause). `_execute_action_sequence` needed no change at all.
+a weight… and now the cause). `_execute_action_sequence` needed no change at all. *(These ordinals collide across sections; the published fields as they stand are listed in [camera-language.md](camera-language.md) → *The grain: five doors*.)*
 
 **The rig has no beat in hand, which is what the published field is for.** `CameraRig3D` mirrors it
-and every flourish channel scales through it. **The sway is why the field exists**: the angle and the
+and every flourish channel scales through it *(all but the jolt, which is flat across profiles by design — `Pacing.SHAKE_*`)*. **The sway is why the field exists**: the angle and the
 weight are published per beat and could in principle have been filtered at source, but a sway is a
 *resting* behaviour polled every frame while the view is borrowed — nothing else about a quiet beat
 would ever tell the camera to stop drifting.
@@ -2277,10 +2277,10 @@ leave their y at zero and let the root carry everything.
 
 **A MAIN ACTION is what tears the board open — movement never does** (dev, on playing it:
 *"there have to be main actions at play. Movement by itself doesn't do it."*). `BeatSheet.cells` is
-therefore what main actions touch: an attack's origin, its aim, the blast's **whole footprint** (occupied or not â
+therefore what main actions touch: an attack's origin, its aim, the blast's **whole footprint** (occupied or not —
 [#754](https://github.com/Phaazoid/Godoiosis/issues/754): a volley's members all share one aim cell, so
 reading the aim alone left a line's far victims and the ground under the beam on the board), its
-knockback flight and terrain deposits, plus the actor and target of every side-channel verb. Asked of `BaseAction.is_main_action()` rather
+knockback flight and terrain deposits, plus the actor and target of every side-channel verb *(and since #367 part 2B both ends of every tether a blow ends or begins)*. Asked of `BaseAction.is_main_action()` rather
 than of `SIDE_CHANNEL_ORDER` membership — the two lists agree today and nothing pins that they must.
 
 **The GATE falls out of the SET rather than sitting beside it**: no main actions means no cells
@@ -2307,7 +2307,7 @@ pass of nothing but walking stays on the board.
 
 **The feels-test fork is one bool**, `Experiments.Flag.DIORAMA_BYSTANDERS`: off stages the cells the
 fight touches, on adds the ground every other unit stands on so the diorama keeps its spatial
-context. A session-scoped dev toggle — one of the two gets deleted once it has been played.
+context. A session-scoped dev toggle — one of the two gets deleted once it has been played. *(It is not session-scoped: Experiments flags persist to `user://experiments.cfg`. Both arms are still live and no ticket tracks deleting one.)*
 
 **The camera goes up with it** — built in #520 diff 2b slice 1 above, not here. Slice A shipped
 without it, and the section above says why that gap was invisible from inside this one.
@@ -2343,7 +2343,7 @@ cannot share the landed lattice the way the settled ones do. `_other_map` became
 the same breath — a name that quietly stopped being true the moment a column could be in three
 places, where the failure would have been a tile drawn twice.
 
-**The version bumps on LANDINGS only.** `OverlayMirror` rebuilds every standing prop when
+**The version bumps on LANDINGS only** *(and on `begin_flight`; since #602 round 6 on `_end_flight` too)*. `OverlayMirror` rebuilds every standing prop when
 `staging_version` moves, so bumping per frame would rebuild the board on every frame of the
 transition. Landings are discrete and travel is not. Units ride, because they are per-frame
 reconciles and read the offset already, and fighters arriving standing on their own ground is the
@@ -2379,7 +2379,7 @@ shot.
 **The camera's height became its own published fact.** `camera_lift()` equals the diorama at rest and
 differs during exactly one window — the one that needs them apart, since the cut treatment puts the
 camera over empty sky *before a single tile is there*. A third field beside the angle, the fit and
-the weight; one field answering two questions is what spins a camera side-on to a walk.
+the weight; one field answering two questions is what spins a camera side-on to a walk. *(`camera_lift()` is a `BoardSpace` function, not a `CameraController` field; and since #602 round 7 it also differs on the exit, where the camera drops under full white before the stage clears.)*
 
 **The white-out reads [#217](https://github.com/Phaazoid/Godoiosis/issues/217).** The timing is
 identical either way — deliberately, since the schedule is shared with the executor — and what
@@ -2387,7 +2387,7 @@ changes is the **curve and the peak**: eased and muted instead of linear and whi
 `const` and not a knob, alone among this slice's feel values: a slider that could return it to full
 would repeal the accessibility promise it exists to keep.
 
-**One Experiments flag, and it gates the SHOT alone.** The travel is identical in both arms — a tile
+**One Experiments flag, and it gates the SHOT alone** *(since #602 round 7 it also chooses where the entry flash starts, `StagingFlight.flash_anchor`)*. The travel is identical in both arms — a tile
 always runs between its socket and the diorama — so `DIORAMA_CAMERA_CUTS_AHEAD` decides only where
 you watch from: cut ahead to the empty sky and watch the fight assemble, or travel up with the
 tear-out and watch the board come apart. Everything else is knobs, which reach both arms and every
@@ -2399,7 +2399,7 @@ about the map, and the dev carved this transition out of it by name (2026-08-27)
 there too"*, and *"we love drama"*). The board **braces** intact before it comes apart; the camera
 holds on **empty sky** before the first tile rises into frame; the assembled diorama **settles**
 before the first blow; and it holds once more on the **aftermath** before the tiles go home. Each
-dials to 0 for the hard cut back.
+dials to 0 for the hard cut back. *(Since #1132 round 3 the brace and the aftermath run through `OrderExecutor._settle_then`, so they wait at least `Pacing.CAMERA_SETTLE` whatever their own knob says; only empty sky and settle still reach 0.)*
 
 The empty-sky beat is a **lead on the schedule, not a wait before it** — the white-out is drawn off
 that same clock, so stopping the clock would stop the flash with it. The exit asks for no lead,
@@ -2421,7 +2421,7 @@ confirmed he had never changed. The beat he was reaching for did not exist, so i
 own row (empty sky) rather than by making one knob answer two questions. **When a dev moves a
 slider and reports no change, check the gate before checking the wire.**
 
-Still open on #521: strata on the cut edges, which is art-pass work. The **dust shockwave** — which
+~~Still open on #521: strata on the cut edges, which is art-pass work.~~ *(#521 closed 2026-08-29 with strata a declared cut, deferred to the art pass; the art pass, #140, closed 2026-10-08, and nothing tracks strata now.)* The **dust shockwave** — which
 was indeed the project's first particle system — shipped as
 [#656](https://github.com/Phaazoid/Godoiosis/issues/656) on 2026-09-04, with one correction to the
 ask: the EXIT thud is the half that cannot be seen, since the camera holds at the diorama through
@@ -2458,7 +2458,7 @@ subtraction rather than a fourth branch, so the two answers cannot drift.
 There are **three** vertical animations, not two: beside the void plummet and the cliff drop, an
 airborne shove holds a body *above* the ground it sails over. So the depth goes negative, and the
 camera floors it at zero — **a declared cut**, not a guard. Riding that upward is a different effect
-nobody asked for; it is one `maxf` away if anybody does.
+nobody asked for; it is one `maxf` away if anybody does. *(Repealed in round 4 below: the drop channel now runs negative, so an airborne or higher-standing subject aims the shot up, and below zero `recovered` eases both ways.)*
 
 ### The channel is asymmetric, and that is the design
 
@@ -2475,7 +2475,7 @@ faller being freed — simply stops publishing and there is nothing to remember 
 clearing it first and then waiting would have the rig climbing out during the very pause the pause is
 for. Void falls only; a cliff drop lands on ground and the shove carries on.
 
-Four knobs under a new **The cliff follow** section on the Playback page. **Flat across profiles**,
+Four knobs under a new **The cliff follow** section on the Playback page *(six since #1104 and #1171 added the hang and the snap hold)*. **Flat across profiles**,
 on the linger's reasoning rather than the sway's: a fall is an animation running in real time
 whichever profile is up, and the body leaves the frame just as thoroughly with the battle zoom off.
 The dial-out is the strength row, not the profile.
@@ -2516,7 +2516,7 @@ sits at the pillar's surface plus the lift while the camera sat at the plain's s
 the question.** It is also the second-order jerk the dev reported: a pan crossing the pillar's edge
 stepped the camera by the pillar's whole height. The staged branch of `_aim_over` became the one
 answer (round 3 called it `_staged_surface()`; round 4 folded the latch into `_mirror_camera`'s
-publish edge and re-keyed it on `shot_cells` — see Round 4 below).
+publish edge and re-keyed it on `shot_cells` — see Round 4 below). *(Since #672 the key is ShotDirector's edge: `_apply_shot`'s STAGE arm calls `_solve_stage_height` once per changed stage, and the `_stage_cells_solved` latch is gone.)*
 
 **Round 3 corrected what that one answer reads.** The first version averaged the surface of every
 **staged cell** — and `BeatSheet._gather_cells` puts the whole **knockback path** on stage. That is
@@ -2627,7 +2627,7 @@ one answer, both halves).
 **Two shots, and the states are facts already published — no new enum.** `follow_unit` valid is
 the TRAINED close-up (`Pacing.TRAINED_DISTANCE`); a non-empty `shot_cells` is the WIDE
 establishing shot (the playback distance widened until the staged volume fits); neither is the
-plain mirror. `Beat.subject()` was already the victim and `pan_to` already ends in `follow()`, so
+plain mirror. *(#672 below made these named rows of `ShotDirector.Shot`: a non-empty `shot_cells` is STAGE, and WIDE now names the plain `playback_distance` base. "WIDE" in this round means today's STAGE.)* `Beat.subject()` was already the victim and `pan_to` already ends in `follow()`, so
 the tumble follow the dev asked for (*"a close up of that unit's tumble, all the way through"*)
 was three-quarters built — what round 4 added is the VERTICAL half: the trained shot rides its
 subject through **every** fall. A landing fall is ridden to the ground (the round-2 clamp that
@@ -2801,7 +2801,7 @@ channel anyway: `stash_view`, `restore_view` and `drop_stashed_view` write `_tar
 
 Discrete doors still `note_event` themselves, and that is what NAMES a cause: the zoom door (the
 one distance door — `widen_to_fit`, `frame`, `pose`, `restore_view` and the wheel all arrive
-there), the lift cut, a landed shake, the borrow/restore/drop trio, and `battle3d`'s own edges —
+there; *R writes the home distance directly, since #1280 `_reseat_pivot` relabels it past this door, and #705's `return_to_snapshot` cuts every channel directly — the heartbeat catches all three*), the lift cut, a landed shake, the borrow/restore/drop trio, and `battle3d`'s own edges —
 the lock, the stage, the follow change, and **the round-8 deferral**, which needed its own rising
 edge because `_trained_seen_id` deliberately does not advance while the show holds. A note that
 fires on a no-op is guarded at each door for one reason: a row reading `11.0 -> 11.0` stands where
@@ -2874,7 +2874,7 @@ Four things are worth carrying out of the build.
   as a cascade the enum's order is a convention nothing enforces, and a mutant that swaps two rows
   PASSES. Found by asking what that mutant would do before writing it.
 - **What the death show outranks is the FALLBACK, not the close-up.** Its condition is *the show is
-  live AND nobody is followed*, and TRAINED's is *somebody is followed* — mutually exclusive, never
+  live AND nobody is followed*, and TRAINED's is *somebody is followed* (or, since #1132, the battle-zoom approach's `pan_subject`, withheld while a show is live) — mutually exclusive, never
   in competition. `DEATH_SHOW` stands in TRAINED's place once the body is gone, and the rank that
   matters is the one over STAGE/SPAN/WIDE, the shots a release would otherwise fall to. **That is
   what makes the release a deferral, and reading round 8 as "the show beats the follow" is why it
@@ -2925,6 +2925,10 @@ The commit sequence is the argument: the harness landed FIRST, over the unchange
 characterization baseline; the refactor then had to leave its distance column identical; and the
 ruled change is its own commit, moving two readings and nothing else.
 
+## #44 board-side items (cross-referenced, not in this doc's running order)
+
+*(Heading restored 2026-10-21: the #602 commit, 8da6aea5, replaced it with its own, which left this block reading as part of the section above. Its items are re-checked with the rest of this file's non-camera sections.)*
+
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
 landed as #229 above; the PANEL half is still open, and Will is moot since #1174 retired it --
@@ -2959,7 +2963,7 @@ avoid that, or when it can't, selectively make things invisible."* Nothing in th
 asked what stands between the lens and its subject, and the beat's yaw was solved ONCE -- the
 shorter of `side_on_yaw`'s two answers -- and never re-asked while the subject moved. That second
 half is [#972](https://github.com/Phaazoid/Godoiosis/issues/972) exactly: a tumble bending 90
-degrees, held side-on to the BLOW, on a cliff face for the whole death show.
+degrees, held side-on to the BLOW, on a cliff face for the whole death show. *(#972 is still open on the tracker; whether round 3's hide closes it is not recorded.)*
 
 **His four rulings (2026-10-07, on the issue):** both halves, angle first then hide; units, props
 and terrain may all be hidden; hide OUTRIGHT, no fade; the battle zoom only.
@@ -3040,7 +3044,7 @@ a moment before the hit even starts."* Three causes, stacked, and the first was 
   after the pan and before its hold, capped by `Pacing.CAMERA_ARRIVAL_CAP`. The sway is an addend
   with no target, so it keeps breathing through the hold.
 
-Zoom off and Combat-Only walks are untouched -- every part is gated on the battle-zoom beat. **The
+Zoom off and Combat-Only walks are untouched -- every part is gated on the battle-zoom beat. *(Round 3 below widened the wait to every playback pan, in both profiles; only the approach-as-shot half stays battle-zoom-only.)* **The
 wait itself is invisible headless** (a pan lands at once there, and the wait asks
 `Pacing.unwatched()` like every playback escape since #545, so a skip collapses it too), so "the
 blow starts once the camera has stopped" is a play-check; `is_arriving` and the approach's shot are
@@ -3202,7 +3206,7 @@ Three slices, in this order:
 - **The camera would freeze with it.** Its eases run on scaled delta, so under the pause
   `CameraRig3D._camera_delta` hands them a capped wall clock. The shake and sway clocks stay on game
   time, so nothing breathes while the dev frames.
-- **Who holds the camera:** see `camera-language.md` → the doors.
+- **Who holds the camera:** see `camera-language.md` → *The grain: five doors*.
   - Manual and zoom input open, and the director's per-frame writes stand down.
   - Resume CUTS back to the director's frame as it was at the pause, so the pass continues untouched.
 - **Nothing can strand the game at time scale 0.**
