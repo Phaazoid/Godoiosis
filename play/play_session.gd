@@ -324,10 +324,10 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	unit.active_attack = aiming
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
-	# can_hit_cell_from is what narrows it to the aim actually available. Both of queue_attack's
-	# gates are applied here in its own order, so a cell offered can never be refused.
+	# can_aim_at, the click's own gate (#1365), is what narrows it to the aim actually available. Both
+	# of queue_attack's gates are applied here in its own order, so a cell offered can never be refused.
 	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, aiming):
-		if not Reach.can_hit_cell_from(unit, origin, aim, aiming, board):
+		if not Reach.can_aim_at(unit, origin, aim, aiming, board):
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
 		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice. Whether
@@ -914,9 +914,11 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	var origin := unit.get_projected_destination()
 	# Aiming: the live pick IS the question, and it is exactly what declare() stamps below (#102).
 	var aiming := unit.get_fired_attack()
-	# The board carries the elevations for the vertical-tolerance half of the gate (#258),
-	# mirroring the player's click exactly.
-	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
+	# The player's click gate (#1365), the one overwatch and the hover ask: a directional aim needs a
+	# facing whose spread survives, a point aim needs the cell and a footprint with ground in it
+	# (#1228), so a shot into a hole is refused here as the click can never make it. The board carries
+	# the elevations for the vertical-tolerance half (#258).
+	if not Reach.can_aim_at(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
 	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
 	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
