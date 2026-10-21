@@ -2,11 +2,11 @@
 
 **Status: RULED and BUILT (dev, 2026-10-01) on [#120](https://github.com/Phaazoid/Godoiosis/issues/120), in three PRs: the body and the falls, the shove, then the Weights page and the numbers. Weight slows movement too since [#1176](https://github.com/Phaazoid/Godoiosis/issues/1176), the same day.** This is the owner doc for weight. [stats.md](stats.md) keeps the roster entry and points here.
 
-**Canon checked through #1190 (2026-10-02).**
+**Canon checked through #1377 (2026-10-21).**
 
 ## The model
 
-- **Weight = the body + everything carried.** The body is the **BLD** stat (*Build*), authored per character the way STR or CON is. What is carried is the mass of every item in the inventory, equipped or not (`Item.weight`, assembled per weapon from its family template plus every fitted mod). `Unit.get_weight()` is the one answer; `get_carried_weight()` is its gear half, for a readout that shows the two apart.
+- **Weight = the body + everything carried.** The body is the **BLD** stat (*Build*), authored per character the way STR or CON is. What is carried is the mass of every item in the inventory, equipped or not (`Item.weight`; a weapon's is `WeaponInstance.get_effective_weight()`, its own plus its family template's plus every fitted mod's). `Unit.get_weight()` is the one answer; `get_carried_weight()` is its gear half, for a readout that shows the two apart.
 - **BLD is read EFFECTIVE**, through the ordinary chain (base → limbs → jobs → temporary effects → gear), so a job or a tonic that lightens or burdens a body reaches its weight with no extra wiring.
 - **Gear's mass has ONE home: `Item.weight`.** BLD being a stat, the chain's gear stage could reach it too, and an armour piece or mod listing BLD in its `stat_modifiers` would be a second way for gear to add mass. `Stats.GEAR_EXCLUDED` declares it off-limits; `tests/law/test_gear_has_one_mass.gd` refuses it on authored gear, and the mod editor's stat grid does not offer it.
 - **Weight is read through BANDS, never the raw number.** `Stats.weight_band(weight)` is 0, 1 or 2, off two playtest-tunable thresholds (`WEIGHT_BAND_1` = 20, `WEIGHT_BAND_2` = 28). The band doctrine's rider applies: coarse and jagged is the goal, so don't smooth it into per-point scaling. A rule that cares how heavy a unit is asks the band.
@@ -24,7 +24,7 @@
 
 **Whose weight answers.** Always the unit being shoved:
 - **A Guard** resolves the whole hit as the victim, so the BLOCKER's weight answers. A heavy Vanguard holds a shove that would have thrown its ward.
-- **Each victim of a volley** reads its own weight. Under today's near-first, one-after-another order, a heavy victim holding never changes where another victim in the same line lands, because a light unit in front was always stopped by the heavy one's body anyway. Weight would gain that second effect only if shoves within one payload level slid together, which is the dev's pending ruling from the #802 arc.
+- **Each victim of a volley** reads its own weight. Under today's near-first, one-after-another order, a heavy victim holding never changes where another victim in the same line lands, because a light unit in front was always stopped by the heavy one's body anyway. Weight would gain that second effect only if shoves within one payload level slid together *(untracked now: #802 and #1058 closed without it, and no issue or doc holds the question)*, which is the dev's pending ruling from the #802 arc.
 - **A payload stuck to its victim** shoves nobody, so it reports no hold either.
 
 Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)) a fall's damage counts toward the BLOW that takes a limb (10, or 8 once Wounded), so the band also decides how readily a fall maims. Tune the two together.
@@ -35,7 +35,7 @@ Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/
 
 - **Characters** get a BLD spinbox and a readout of what their starting kit weighs, their total, and the band it lands in. The readout sums the kit through `Item.total_weight`, the same sum `Unit.get_carried_weight` uses, so the band shown is the band a spawned unit will have.
 - **Items** get a weight spinbox each, in `ItemCatalog.SOURCES`' own order, plus the weapon mods. A **saved weapon variant** is read-only, shown as family + mods (+ its own, if any): its weight is composed, so the family row is where it moves.
-- **It edits the live catalog resource.** A character's kit references its gear files, so dialling an item moves the readout of everyone carrying it. What reaches the board follows the grant rule (`Item.copy_for_grant`): armour, runes and vials are copied when a unit receives them and a body's stats are copied at spawn, so those reach the next unit spawned. Weapon families and mods are shared, so a weapon already on the board follows at once.
+- **It edits the live catalog resource.** A character's kit references its gear files, so dialling an item moves the readout of everyone carrying it. What reaches the board follows the grant rule (`Item.copy_for_grant`): armour, runes, vials and conduits are copied when a unit receives them and a body's stats are copied at spawn, so those reach the next unit spawned. Weapon families and mods are shared, so a weapon already on the board follows at once.
 - **Save** writes only the files touched since the last save or Reset, and asks first, listing them (#380). **Reset** puts every unsaved edit back, including a character whose BLD was unauthored, which goes back to unauthored rather than to a written-out 10.
 - **The page re-reads on every show**, because the Character and Item pages write the same live resources.
 
@@ -46,7 +46,7 @@ Under the Will retirement ([#1174](https://github.com/Phaazoid/Godoiosis/issues/
 - **Armour:** Insulated Weave 1, Asbestos Shroud 2, Riveted Mail 5, Bulwark Plate 8, Ballast Harness 10 (low DEF, heaviest: the anti-shove choice).
 - **Runes** 1 (Lightning Tome 2), **mods** 1, **vials** 1 (the dev's, unchanged).
 
-**What that gives, measured over every board under `Scenarios/`:** every one of the 78 placed enemies is band 0 (the heaviest is 16), so today's Gust-into-a-hole play is unchanged until an enemy is made heavy on purpose. Torv's starting kit puts him at 25, band 1. Band 2 is reachable by loadout: Torv in Bulwark Plate is 33, Ross in Ballast Harness 29.
+**What that gives, measured over every board under `Scenarios/`:** every one of the 78 placed enemies is band 0 (the heaviest is 16), so today's Gust-into-a-hole play is unchanged until an enemy is made heavy on purpose. *(Since The Gorge, #1339 via PR #1346 on 2026-10-21, its Bulwark weighs 25, band 1: the first heavy enemy. Every other placed enemy is still band 0.)* Torv's starting kit puts him at 25, band 1. Band 2 is reachable by loadout: Torv in Bulwark Plate is 33, Ross in Ballast Harness 29.
 
 **Bandit is an ENEMY file** (`Resources/Units/Bandit.tres`, placed six times in mission 2), so it was left at the default rather than given the 14 the first draft of this table listed. Giving it 14 would have made those six band 1 and changed mission 2's shoves without anyone asking for it.
 
@@ -71,9 +71,9 @@ His WEIGHT glossary sentence promised it (*"Heavier units are harder to push, bu
 2. **No hard carry limit.** Any unit can carry anything that fits its 6 slots; weight only costs movement. Together with ruling 1 this leaves **STR with no carry role**, which closes `stats.md`'s parked STR → carry slot.
 3. **The pre-mission card shows MOV beside WT** and previews it while gear is picked (`MOV 5 → 4`), and the job picker's delta line names it too. The battle inspect panel's MOV tooltip names the weight band whenever it costs a tile.
 
-**Effect on today's content:** only Torv (25, band 1) loses a tile; every placed enemy is band 0 and unchanged.
+**Effect on today's content:** only Torv (25, band 1) loses a tile; every placed enemy is band 0 and unchanged. *(Since #1339, the Gorge's Bulwark (25) loses one too.)*
 
-**Nothing in play can make a queued move illegal.** The only mid-battle weight changes LOWER weight (a Toss, a vial the Chemical Spitter consumes), so MOV can only rise mid-turn.
+**Nothing in play can make a queued move illegal.** The only mid-battle weight changes LOWER weight (a Toss, a vial the Chemical Spitter consumes, a vial an alchemist Uses), so MOV can only rise mid-turn *through weight*. *(Chilled's −1 DEX and a lost leg do lower MOV mid-battle; that is outside this doc.)*
 
 ## Measured, before building
 
