@@ -518,6 +518,53 @@ func test_a_one_faction_run_still_ends_its_turns() -> void:
 		"the replay diverged from a one-faction run: %s" % str(driver.divergences)).is_equal(0)
 
 
+# THE COUNT IS EVERY DIVERGENCE, THE LIST IS NOT (#1364). One record the replay cannot reproduce fifty
+# ways: the list stops at LIST_CAP, and report() has to carry the fifty.
+func test_the_report_counts_the_divergences_the_list_left_off() -> void:
+	var run_id := await _record_an_auto_skip()
+	var run := ReplayRun.load_run(run_id)
+	_doctor_the_ending(run.first("mission_end"), OVER_CAP)
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	var r := driver.report()
+	assert_int((r["divergences"] as Array).size()).override_failure_message(
+		"fixture: the list never filled").is_equal(ReplayDriver.LIST_CAP)
+	assert_int(int(r.get("divergence_count", -1))).override_failure_message(
+		"the report counts only what it listed").is_equal(OVER_CAP)
+
+
+# ...and the PAGE prints that count, through its own Load and Play, off a run doctored on disk.
+func test_the_replay_page_prints_the_whole_count() -> void:
+	var run_id := await _record_an_auto_skip()
+	var run := ReplayRun.load_events(run_id)
+	var lines := run.raw_lines.duplicate()
+	for i in lines.size():
+		var row: Variant = JSON.parse_string(lines[i])
+		if row is Dictionary and str((row as Dictionary).get("event", "")) == "mission_end":
+			_doctor_the_ending(row as Dictionary, OVER_CAP)
+			lines[i] = JSON.stringify(row)
+	assert_bool(TelemetryStore.rewrite_run_events(run_id, lines)).is_true()
+
+	var page: ReplayTool = game.dev_overlay.replay_tool
+	page.refresh_on_show()
+	assert_str(page._run.run_id if page._run != null else "").override_failure_message(
+		"fixture: the page did not pick the doctored run").is_equal(run_id)
+	page._on_load()
+	await page._on_play()
+	assert_str(page._report.text).override_failure_message(
+		"the verdict is not the whole count: %s" % page._report.text).contains(
+		"%d divergences (%d listed)" % [OVER_CAP, ReplayDriver.LIST_CAP])
+
+
+const OVER_CAP := ReplayDriver.LIST_CAP + 10
+
+
+# Keys the replay's own seal never writes, so each one is a "missing from the replay" record diff.
+static func _doctor_the_ending(end: Dictionary, how_many: int) -> void:
+	for i in how_many:
+		end["doctored_%d" % i] = i
+
+
 static func _has_back_to_back_turns(events: Array[Dictionary]) -> bool:
 	var last := ""
 	for e: Dictionary in events:

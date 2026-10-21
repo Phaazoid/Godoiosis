@@ -612,6 +612,8 @@ func report() -> Dictionary:
 		"of": run.events.size() if run != null else 0,
 		"next": next,
 		"degraded": degraded,
+		# EVERY divergence, where the list stops at LIST_CAP (#1364): the count a person reads.
+		"divergence_count": _disagreements,
 		"divergences": divergences.duplicate(),
 		"unbindable": unbindable.duplicate(),
 		"notes": notes.duplicate(),
