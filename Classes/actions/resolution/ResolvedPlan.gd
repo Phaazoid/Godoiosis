@@ -213,3 +213,14 @@ func pending_deposits() -> Array[Dictionary]:
 # is a question the resolver already answered, and re-deriving it from outcomes would be a second
 # ladder. Read through PlanResolver.projected_hp / projected_lifecycle, never written after the pass.
 var hypo: Dictionary = {}
+
+
+# A volley is a RefCounted cycle (each member holds the shared array that holds it), so every
+# derived volley would outlive its plan (#1359). Every one lands in these three lists, and the plan's
+# own death is the one point every drop and replacement passes through. Anything that keeps a derived
+# row past that and reads its volley must hold the plan too (ActionQueueDisplayEntry.plan).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for list: Array in [attacks, counters, watch_shots]:
+			for member: AttackAction in list:
+				member.volley.clear()
