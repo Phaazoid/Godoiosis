@@ -34,13 +34,13 @@ class_name GameKnobs
 # authored and READ. Anything the game writes back per frame gives a slider that moves and silently
 # reverts. tests/dev/test_game_knobs.gd pins that by writing, waiting two frames and reading back.
 
-# Named because it has a SECOND reader: the V key (DevController._handle_selector_key) toggles the
+# Named because it has a SECOND reader: the H key (DevController._handle_selector_key) toggles the
 # same property, and resolving it through this one entry is what stops the key and the panel row
 # holding two spellings of where the selector's depth lives. Everything else in the table below is
 # addressed only by the panel, so only this one needs a name.
 const SELECTOR_DEPTH := {"group": "Lift, brackets & icons", "node": "BoardOverlays", "prop": "selector_depth",
 	"label": "Selector depth", "options": ["Level (whole block)", "Half (one unit)"],
-	"tip": "How much of a column the hover selector encloses. Level is one whole block, which is what it marked before a GridMap row became a half-level height unit; Half is one unit, for reading a half step apart from the level it sits in. Its top face sits on the cell's surface either way, so this only changes how far DOWN it reaches. V cycles it in play."}
+	"tip": "How much of a column the hover selector encloses. Level is one whole block, which is what it marked before a GridMap row became a half-level height unit; Half is one unit, for reading a half step apart from the level it sits in. Its top face sits on the cell's surface either way, so this only changes how far DOWN it reaches. H cycles it in play."}
 
 # node = path relative to the host ("." = the host); prop = colon-joined property path.
 # A float knob carries min/max/step; bool and Color infer their widget from the live value.

@@ -113,7 +113,7 @@ func _handle_pause_key(event: InputEvent) -> void:
 
 
 # N drops a key pose while paused, Shift+N clears them (#705 slice 2). The recording is the 3D host's
-# -- it owns the rig, the shot table and the pass clock -- so the key reaches it the way V reaches
+# -- it owns the rig, the shot table and the pass clock -- so the key reaches it the way H reaches
 # the selector: through the host the dev window was handed, never a path up out of the game subtree.
 func _handle_keyframe_key(event: InputEvent) -> void:
 	var key := event as InputEventKey
@@ -131,11 +131,14 @@ func _handle_keyframe_key(event: InputEvent) -> void:
 		host.call(&"add_keyframe")
 
 
-# V cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather
+# H cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather
 # than one of the brush keys below, and the distinction is load-bearing: the selector is up in
 # ORDINARY PLAY, so requiring an armed terrain brush -- or dev mode at all -- would leave the thing
 # it moves visible and the key that moves it dead. Only DevTools.enabled() gates it, which is what
 # makes it a tuning door rather than a player control.
+#
+# It was V until #1368. V is the player's enemy ranges, and neither handler consumes the press, so
+# every V did both: the key must be one nothing else live answers to (test_controls_coverage.gd).
 #
 # Here rather than in battle3d for the two-windows rule: this entry is forwarded from BOTH OS
 # windows (DevOverlay._input), and a key handled in the 3D scene alone is dead whenever the dev-tools
@@ -144,7 +147,7 @@ func _handle_selector_key(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo or key.ctrl_pressed:
 		return
-	if key.physical_keycode != KEY_V:
+	if key.physical_keycode != KEY_H:
 		return
 	# Resolved through the KNOB rather than a node path of its own: the Game tab's row edits this
 	# same property, and two spellings of where it lives is how a key and a panel come to disagree.
@@ -222,7 +225,7 @@ func _handle_zoom_animation_key(event: InputEvent) -> void:
 # how far that rise climbs (#427 slice 2) -- so it was named _handle_rise_keys until X made that
 # plainly wrong. The Q/E detent idiom applied to authoring, with the rarely-touched steepness off the
 # compass keys rather than on them. Every key here needs an ARMED brush, which is what separates them
-# from the top-level dev keys above: V is not one of them, because the thing it moves is up in
+# from the top-level dev keys above: H is not one of them, because the thing it moves is up in
 # ordinary play.
 # Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent in
 # CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
