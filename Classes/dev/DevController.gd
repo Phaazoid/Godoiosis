@@ -323,24 +323,20 @@ func resolve_pending(cell: Vector2i) -> void:
 		game.dev_overlay.scenario_header.mark_modified()
 	game.mission_log.note_dev_intervention()   # #53: a spawn is a board move a replay cannot know about
 
-# Independent deep copy of `source` at `cell`. UnitData is duplicated so the copy owns its
-# identity; runtime state (stats, HP) lives on the instance, copied post-spawn; inventory items
-# are duplicate(true)'d (shallow would share the nested attack data - CLAUDE.md "Sharp edges"; a NAMED attack_shape is shared by design since #808, being an ext_resource that duplicate leaves alone).
+# Independent copy of `source` at `cell` (#1367): the loader's spawn + apply_unit_state, fed a
+# capture of the source -- the one way unit state is copied, which clears the spawn's seeded kit and
+# re-links prosthetics by carried instance. UnitData is duplicated so the copy has no character-file
+# provenance. Not copied: the cell, the squad (spawn makes a solo one), the placement fields, and
+# an armed watch, which is anchored to the source's cell.
 func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 	var data: UnitData = source.unit_data.duplicate(true)
-	var copy = game.spawn_unit(data, cell)
+	var copy: Unit = game.spawn_unit(data, cell)
 	if copy == null:
 		return null
-	copy.unit_instance.stats = source.unit_instance.stats.duplicate(true)
-	for i in range(source.inventory.size()):
-		var item: Item = source.inventory[i]
-		copy.inventory[i] = item.copy_for_grant() if item is EquippableData else (item.duplicate(true) if item != null else null)
-	copy.set_current_hp(source.get_current_hp())   # after gear: the clamp reads a gear-aware max (#106)
-	var equipped := source.get_equipped_weapon()
-	if equipped != null:
-		var idx := source.inventory.find(equipped)
-		if idx != -1 and copy.inventory[idx] is EquippableData:
-			copy.set_equipped_weapon(copy.inventory[idx])
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(source)
+	entry.apply_unit_state(copy)
+	copy.lapse_watch()
 	return copy
 
 # --- tile brush / map resize ---
