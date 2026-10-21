@@ -617,6 +617,10 @@ var _cone_hulls: Dictionary[Layer, MeshInstance3D] = {}
 var _cone_batches: Dictionary[Layer, Array] = {}
 var _cone_colors: Dictionary[Layer, Color] = {}
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
+# ...except a zone KIND's (#1374), held at class level: the flat view's marks, the tile card and the
+# objectives panel read it through ZoneMarks.colour_of, a static with no node to ask. Still one store
+# per layer -- a kind layer's runtime colour lives here and never in _layer_colors.
+static var _kind_colors: Dictionary[Layer, Color] = {}
 # Per-CELL colours on a FILL layer, over the layer's own (set_cell_colors) -- the aim's flash (#1057).
 var _cell_colors: Dictionary[Layer, Dictionary] = {}
 var _bracket_mesh: ArrayMesh
@@ -764,9 +768,9 @@ func set_layer_modulate(layer: Layer, color: Color) -> void:
 	if spec["kind"] != Kind.FILL and spec["kind"] != Kind.BRACKET:
 		push_error("set_layer_modulate is for FILL and BRACKET layers")
 		return
-	if _layer_colors.get(layer, spec["color"]) == color:
+	if layer_modulate(layer) == color:
 		return
-	_layer_colors[layer] = color
+	_runtime_colors(layer)[layer] = color
 	_paint(layer)
 
 
@@ -1317,7 +1321,17 @@ func markers_of(layer: Layer) -> Array[Dictionary]:
 
 
 func layer_modulate(layer: Layer) -> Color:
-	return _layer_colors.get(layer, LAYERS[layer]["color"])
+	return _runtime_colors(layer).get(layer, LAYERS[layer]["color"])
+
+
+# A zone kind's layer colour as the board wears it now (#1374), for a reader with no BoardOverlays.
+static func kind_color(layer: Layer) -> Color:
+	return _kind_colors.get(layer, LAYERS[layer]["color"])
+
+
+# Which store holds a layer's runtime colour: a zone kind's is class-level, every other layer's is this node's.
+func _runtime_colors(layer: Layer) -> Dictionary[Layer, Color]:
+	return _kind_colors if ZoneMarks.LAYER_OF_KIND.values().has(layer) else _layer_colors
 
 
 # What a LINE layer's beam is actually carrying right now -- `layer_modulate`'s twin for the
@@ -1707,7 +1721,7 @@ func _make_marker(layer: Layer) -> Node3D:
 		Kind.BRACKET:
 			# The runtime colour, not the authored one: a bracket built AFTER a set_layer_modulate
 			# (the pool grows on demand) would otherwise come back gold on a red layer.
-			return _make_bracket(_layer_colors.get(layer, spec["color"]))
+			return _make_bracket(layer_modulate(layer))
 		Kind.BILLBOARD:
 			return _make_billboard(spec)
 		Kind.LINE:
@@ -1715,7 +1729,7 @@ func _make_marker(layer: Layer) -> Node3D:
 		Kind.SPRITE:
 			return _make_quad(spec, null, Color.WHITE)
 		_:
-			return _make_quad(spec, _texture_for(spec), _layer_colors.get(layer, spec["color"]))
+			return _make_quad(spec, _texture_for(spec), layer_modulate(layer))
 
 
 # The one fill/sprite recipe: an unshaded alpha quad lying on the cell's top face —

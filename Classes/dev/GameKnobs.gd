@@ -1970,6 +1970,11 @@ static func write_class(host: Node3D, knob: Dictionary, value: Variant) -> void:
 	var overlays := overlays_of(host)
 	if overlays != null:
 		overlays.set_layer_modulate(knob["layer"], value)
+	# A zone kind's colour is also worn by the flat marks and the objectives panel, which hold what they
+	# were built with (#1374). The tile card re-reads it every frame.
+	if ZoneMarks.LAYER_OF_KIND.values().has(knob["layer"]):
+		_restyle_zone_marks(host)
+		_refresh_mission_status(host)
 
 
 # Object.get/set are INSTANCE methods -- there is no reflecting on a class for a static var, so the
