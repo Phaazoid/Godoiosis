@@ -74,7 +74,8 @@ func _inspected_unit() -> Unit:
 	return unit
 
 
-# Three watches, two zones and a fire -- the busiest tile card, every section and ink it draws.
+# Three watches, two zones, a fire and every gas with rules -- the busiest tile card, every section and
+# ink it draws.
 func _build_busy_tile() -> void:
 	var effect := ResolvedCellEffect.new()
 	effect.cell = BUSY
@@ -90,6 +91,9 @@ func _build_busy_tile() -> void:
 	game.refresh_watch_markers()
 	game.zone_manager.paint_cell("The Far Ground", ZoneManager.Kind.CAPTURE, BUSY)
 	game.zone_manager.paint_cell("The Landing Field", ZoneManager.Kind.DEPLOYMENT, BUSY)
+	for kind: Gas.Kind in Gas.Kind.values():
+		if GasRules.for_kind(kind) != null:
+			game.gas_field.set_level(BUSY, kind, Gas.Level.THICK)
 
 
 func _equipped_slot_label() -> Label:
@@ -120,10 +124,17 @@ func test_the_dock_and_both_cards_can_be_read_in_both_palettes() -> void:
 
 		game.hover_info_panel.show_tile(BUSY, GridUtils.cell_world(game.grid, BUSY))
 		await _frames(3)
-		assert_int(game.hover_info_panel.tile_texts().size()).override_failure_message(
-				"precondition: the tile card drew nothing to read").is_greater(8)
-		found.append_array(PC.findings(game.hover_info_panel._tile_panel, SCREEN_BASE,
-				"palette %d / tile card" % palette))
+		# One section at a time since #1324: every page is read, tab row and all.
+		var pages: int = game.hover_info_panel._sections.page_count()
+		assert_int(pages).override_failure_message(
+				"precondition: the busy tile card has one section, so no tab row is read").is_greater(1)
+		for page in pages:
+			game.hover_info_panel._sections.turn_to(page)
+			await _frames(2)
+			assert_int(game.hover_info_panel.tile_texts().size()).override_failure_message(
+					"precondition: page %d of the tile card drew nothing to read" % page).is_greater(2)
+			found.append_array(PC.findings(game.hover_info_panel._tile_panel, SCREEN_BASE,
+					"palette %d / tile card page %d" % [palette, page]))
 		game.unit_info_panel.clear()
 		game.hover_info_panel.clear()
 

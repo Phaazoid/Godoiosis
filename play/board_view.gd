@@ -144,7 +144,8 @@ static func _attack_line(unit: Unit, attack: AttackData, prefix: String, board: 
 
 # The ground's shape (#46), which the 3-char overview has no room for: each cell's height in the
 # rules' half-level units (Terrain.UNITS_PER_LEVEL to a level), then n/e/s/w for the side a ramp
-# rises toward or * for a corner form, blank for a hole or off the map. Then any gas lying on a cell.
+# rises toward or * for a corner form, blank for a hole or off the map. Then any gas lying on a cell,
+# and the air there where the gas moved it.
 static func render_terrain(session) -> String:
 	var bounds := _content_bounds(session)
 	var lines: Array[String] = ["Terrain: height in half-levels (%d to a level); n/e/s/w = the side a ramp rises to, * = a corner slope"
@@ -168,7 +169,11 @@ static func render_terrain(session) -> String:
 		for x in range(bounds.position.x, bounds.end.x):
 			var here: Array[String] = session.gas_at(Vector2i(x, y))
 			if not here.is_empty():
-				gas.append("%s %s" % [str(Vector2i(x, y)), ", ".join(here)])
+				var line := "%s %s" % [str(Vector2i(x, y)), ", ".join(here)]
+				var air: Array[String] = session.air_at(Vector2i(x, y))   # #1324: what the gas did to the air
+				if not air.is_empty():
+					line += "  (air: %s)" % ", ".join(air)
+				gas.append(line)
 	lines.append("")
 	lines.append("Gas: none" if gas.is_empty() else "Gas:")
 	for line in gas:

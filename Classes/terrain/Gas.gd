@@ -5,7 +5,9 @@ class_name Gas
 # packing that keeps every kind's state for one cell in a single int (four bits a kind).
 #
 # A kind's int is what a save holds, so Kind is APPEND-ONLY: rename a member freely, never reorder
-# or delete one. Steam is the only gas with rules (GasRules); the rest are looks only.
+# or delete one. A kind with a GasRules file has rules (steam soaks; frost and essence move the air's
+# reading, #1324); the rest are looks only. The renderer packs a cell's kinds into one byte
+# (GasMirror's cells texture), so EIGHT kinds is the cap until that packing changes.
 #
 # THREE LEVELS, NOT AN AMOUNT (dev, 2026-10-03): thin, medium, thick -- more steps than that read
 # alike on the board. A kind's nibble is its LEVEL (bits 0-1) and how many rounds it has held that
@@ -15,7 +17,7 @@ class_name Gas
 # store's own object (BoardHeights' #447 reason), two snapshots compare with ==, and the nibble IS
 # the cap. tests/terrain/test_gas_field.gd pins the limits the packing leans on.
 
-enum Kind { STEAM, SMOKE, POISON, FROST, THUNDER, SULFUR }
+enum Kind { STEAM, SMOKE, POISON, FROST, THUNDER, SULFUR, ESSENCE }
 enum Level { NONE, THIN, MEDIUM, THICK }
 
 const MAX_LEVEL := 3

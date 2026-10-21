@@ -40,6 +40,7 @@ const NOT_COMMANDS := {
 	"terrain_at": "read by the view, not ordered",
 	"height_at": "read by the view (`terrain`), not ordered",
 	"gas_at": "read by the view (`terrain`), not ordered",
+	"air_at": "read by the view (`terrain`), not ordered",
 	"live_units": "read by the view, not ordered",
 	"handle_for": "read by the view, not ordered",
 	"unit_by_handle": "read by the view, not ordered",

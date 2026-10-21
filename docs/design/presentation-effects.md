@@ -1284,7 +1284,17 @@ What headless tests can see is the CPU half: the uniform block against the shade
 the dispatch rectangles, the region boxes, the board textures against the store, the floor's
 vertices on a corner cell, the puff counts per mix, one bolt per strike under its glow, the haze's
 lower boxes, and the real key showing the floor and fading the cloud. Nothing rendered. Not built
-here: a hovered unit shining through the gas, a tile-card line for gas, a live per-gas tuning page.
+here: a hovered unit shining through the gas, a live per-gas tuning page.
+
+**A tile-card line for gas, and room for eight kinds** (#1324 slice 5, 2026-10-21). The tile card's
+**Air** section names each gas on the cell with its level and what it does to the air, then the cell's
+own reading where it differs from the board's (`TileReadout._air_section`; the rule is deep-alchemy.md
+-> *What is built*). Essence, the 7th kind, needed the per-kind uniform arrays widened:
+`gas_puff.gdshader`'s `boil_seconds`/`bob`/`sway` and `gas_floor.gdshader`'s `patterns` were sized to
+exactly six and `palettes` to 24, which only a render can catch. They are sized to EIGHT now, the cap
+the cells texture's one-byte kind mask sets, and `tests/law/test_gas_look_coverage.gd` reads the shader
+source and reds an array shorter than `Gas.Kind.size()`. Essence's look is a first pass in aether's
+pink, for the dev to tune.
 
 ### Weather: rain and the storm ([#1260](https://github.com/Phaazoid/Godoiosis/issues/1260), BUILT 2026-10-08)
 

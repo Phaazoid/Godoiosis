@@ -6,8 +6,8 @@ class_name GasRules
 # (dev, 2026-10-03). GasLook is the same shape for how it is DRAWN; the two never share a file,
 # because a rule and a look have different owners.
 #
-# A kind with no file has no rules: it lies where it was put and never moves. Steam is the only one
-# with a file (ruling 10).
+# A kind with no file has no rules: it lies where it was put and never moves (ruling 10). Steam, frost
+# and essence have files.
 
 const FOLDER := "res://Resources/GasRules/"
 
@@ -22,6 +22,12 @@ const FOLDER := "res://Resources/GasRules/"
 @export var state: Elemental.State = Elemental.State.NONE
 @export var state_from: Gas.Level = Gas.Level.MEDIUM
 
+# How this gas moves the air's reading on the cell it lies on (#1324): substance id -> percentage
+# points PER LEVEL, negative to lower. WeatherRules.air's shape; BoardContext.air_at adds it over the
+# board's reading. The one answer to what a gas does to the air -- SubstanceMap.GASES says what the gas
+# IS, for presence, and a formula cannot say what a gas has taken away. A missing key moves nothing.
+@export var air: Dictionary[String, int] = {}
+
 
 static var _rules_by_kind: Dictionary = {}
 
@@ -32,3 +38,31 @@ static func for_kind(kind: Gas.Kind) -> GasRules:
 		var path := FOLDER + Gas.name_of(kind) + ".tres"
 		_rules_by_kind[kind] = load(path) as GasRules if ResourceLoader.exists(path) else null
 	return _rules_by_kind[kind]
+
+
+# How one cell's gases move the air (`packed`, Gas.with_level's form): each kind's air times its level,
+# summed. The nudge Atmosphere.nudged takes, WeatherRules.air_of's twin for a cell.
+static func air_of(packed: int) -> Dictionary[String, int]:
+	var out: Dictionary[String, int] = {}
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		var rules := for_kind(kind)
+		if rules == null:
+			continue
+		var level := Gas.level_in(packed, kind)
+		for id: String in rules.air:
+			out[id] = int(out.get(id, 0)) + rules.air[id] * level
+	return out
+
+
+# What this kind does to the air at this level, as a readout says it ("elemental aether +10%, vapor
+# -10%"), in Atmosphere.SUBSTANCES order. Empty when it moves nothing.
+static func air_text(kind: Gas.Kind, level: int) -> String:
+	var rules := for_kind(kind)
+	if rules == null:
+		return ""
+	var parts: Array[String] = []
+	for id: String in Atmosphere.SUBSTANCES:
+		var points := int(rules.air.get(id, 0)) * level
+		if points != 0:
+			parts.append("%s %+d%%" % [SubstanceCatalog.name_of(id).to_lower(), points])
+	return ", ".join(parts)

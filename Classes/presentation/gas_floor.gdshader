@@ -14,9 +14,10 @@ uniform sampler2DArray amount_tex : filter_nearest; // one layer per kind
 uniform vec4 board_rect;                            // x, z, w, h in cells
 uniform float art_pixels = 32.0;                    // per cell
 uniform float corner_radius = 10.0;                 // art pixels
-uniform vec4 palettes[24];                          // kind * 4: light, mid, dark, ink
-uniform int patterns[6];                            // GasLook.FloorPattern per kind
-uniform int kind_count = 6;
+// Sized to the kind cap (eight: the R channel above is one byte), not to today's count.
+uniform vec4 palettes[32];                          // kind * 4: light, mid, dark, ink
+uniform int patterns[8];                            // GasLook.FloorPattern per kind
+uniform int kind_count = 7;
 uniform vec4 alphas = vec4(0.95, 0.9, 0.55, 0.8);   // ink, rim, fill, pattern mark
 // The NEXT-ROUND forecast (#508) draws with this same shader, as its region's ink edge only: a band
 // outline_step art pixels wide per level, so thicker steam next round reads as a bolder border.

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="GasLook" format=3 uid="uid://bresi5wo8gfgw"]
+
+[ext_resource type="Script" uid="uid://dwj8o3stxm5sr" path="res://Classes/presentation/GasLook.gd" id="1_gdndl"]
+
+[resource]
+script = ExtResource("1_gdndl")
+albedo = Color(0.98, 0.86, 0.95, 1)
+extinction = 3.5
+base_height = 0.3
+column_height = 1.4
+rise_speed = 0.25
+emission = Color(0.22, 0.1, 0.18, 1)
+palette_light = Color(1, 0.94, 0.98, 1)
+palette_mid = Color(0.95, 0.79, 0.9, 1)
+palette_dark = Color(0.86, 0.6, 0.8, 1)
+palette_ink = Color(0.68, 0.4, 0.62, 1)
+puff_shape = 5
+floor_pattern = 5
+extra = 5
+boil_seconds = 1.2
+bob = Vector2(1, 1)
+sway = 0.8
