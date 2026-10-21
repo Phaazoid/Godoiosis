@@ -192,3 +192,97 @@ func test_a_wind_slider_moves_the_look_the_board_blows_with() -> void:
 	look.speed = was
 	assert_float(landed).override_failure_message("the slider moved and the wind did not").is_equal_approx(target, 0.01)
 	assert_bool(page.has_unsaved_changes()).override_failure_message("an edit left Save unmarked").is_true()
+
+
+# The unsaved marker is per FILE (#1370): an edit lives on the cached look, so picking another weather
+# or a wind must not clear it, and Save must name every file touched, not only the one on show. Nothing
+# here writes to disk: the confirmation is read and never answered (test_unsaved_markers' discipline).
+func test_an_edit_stays_marked_across_weathers_and_save_names_every_file() -> void:
+	var snow := WeatherLook.for_kind(Weather.Kind.SNOW)
+	var rain := WeatherLook.for_kind(Weather.Kind.RAIN)
+	assert_bool(snow != null and rain != null).override_failure_message("fixture: rain or snow has no look file") \
+			.is_true()
+	var snow_was := snow.fall_speed
+	var rain_was := rain.fall_speed
+	var page := WeatherTool.new()
+	add_child(page)
+	auto_free(page)
+	page.init(null)
+	page._show(Weather.Kind.SNOW)
+	_slider_after(page, "Fall speed").value = snow_was + 1.0
+	page._show(Weather.Kind.RAIN)
+	var kept := page.has_unsaved_changes() and page._save.text.ends_with("*")
+	page._show_wind(Wind.Kind.GALE)
+	var kept_on_wind := page.has_unsaved_changes()
+	page._show(Weather.Kind.RAIN)
+	_slider_after(page, "Fall speed").value = rain_was + 1.0
+	var files := page.touched_files()
+	page._on_save_pressed()
+	var asked := ""
+	for child in page.get_children():
+		if child is ConfirmationDialog:
+			asked = (child as ConfirmationDialog).dialog_text
+			child.free()
+	snow.fall_speed = snow_was
+	rain.fall_speed = rain_was
+	assert_bool(kept).override_failure_message("picking another weather cleared an unsaved snow edit").is_true()
+	assert_bool(kept_on_wind).override_failure_message("picking a wind cleared an unsaved snow edit").is_true()
+	assert_array(Array(files)).override_failure_message("touched: %s" % files).contains_exactly_in_any_order(
+			[WeatherLook.path_of(Weather.Kind.SNOW), WeatherLook.path_of(Weather.Kind.RAIN)])
+	for kind: Weather.Kind in [Weather.Kind.SNOW, Weather.Kind.RAIN]:
+		assert_str(asked).override_failure_message("Save's confirmation leaves out %s:\n%s"
+				% [Weather.name_of(kind), asked]).contains(WeatherLook.path_of(kind).trim_prefix("res://"))
+
+
+# A rules edit re-resolves the open plan (#1370): its END OF TURN rows read the rules this page edits,
+# as the Scenario page's weather picker already redraws them. Driven through the real Soaks with picker.
+func test_a_soak_edit_redraws_the_open_plan() -> void:
+	var sky := Weather.Kind.CLEAR
+	for kind: Weather.Kind in Weather.Kind.values():
+		if WeatherRules.for_kind(kind) != null:
+			sky = kind
+			break
+	assert_int(sky).override_failure_message("fixture: no weather has a rules file").is_not_equal(Weather.Kind.CLEAR)
+	var rules := WeatherRules.for_kind(sky)
+	var was := rules.state
+	var game := FakeGame.new()
+	var page := WeatherTool.new()
+	add_child(page)
+	auto_free(page)
+	page.init(game)
+	page._show(sky)
+	var picker := _option_after(page, "Soaks with")
+	assert_object(picker).override_failure_message("the page drew no Soaks with picker").is_not_null()
+	if picker == null:
+		return
+	var other := (int(was) + 1) % picker.item_count
+	picker.select(other)
+	picker.item_selected.emit(other)
+	var landed := int(rules.state)
+	rules.state = was
+	assert_int(landed).override_failure_message("fixture: the picker did not write the rules").is_equal(other)
+	assert_int(game.refreshed).override_failure_message("a soak edit left the open plan unresolved").is_greater(0)
+	assert_bool(page.has_unsaved_changes()).override_failure_message("a soak edit left Save unmarked").is_true()
+
+
+func _option_after(root: Node, label: String) -> OptionButton:
+	for node in root.find_children("*", "Label", true, false):
+		if (node as Label).text != label:
+			continue
+		for sibling in node.get_parent().get_children():
+			if sibling is OptionButton:
+				return sibling
+	return null
+
+
+# The two calls the page makes on game.gd after a rules write, counted.
+class FakeGame:
+	extends RefCounted
+	var squad_manager := {"active_squad": null}
+	var refreshed := 0
+
+	func refresh_action_queue(_squad: Variant) -> void:
+		refreshed += 1
+
+	func refresh_mission_status() -> void:
+		pass

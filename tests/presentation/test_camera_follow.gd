@@ -1354,6 +1354,36 @@ func test_a_board_swap_mid_fall_puts_the_camera_back_on_the_new_board() -> void:
 #
 # The board is RAISED here rather than found that way -- authored content may not be asserted on, and
 # a flat fixture cannot tell the two answers apart. The fixture's reset restores it.
+# #1375: a dev pause hands the camera over mid-pass, and the hand re-seats the pivot onto the ground the
+# rig's probe reports. While a fight is on stage that ground is the STAGE -- the staged column, and the
+# stage's own level beside it -- never the board a lift beneath, which put the pivot forty cells under
+# the diorama. Heights are read back against the lift rather than written down (the content razor).
+func test_the_ground_probe_finds_the_stage_and_not_the_board_under_it() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	var cell: Vector2i = unit.movement.cell
+	BoardSpace.stage([cell] as Array[Vector2i], BoardSpace.lift_offset())
+	await _settle()
+	var lift := BoardSpace.stage_offset().y
+	assert_bool(lift > 4.0).override_failure_message(
+			"the stage lift is too small to tell the stage from the board").is_true()
+	var surface := BoardSpace.surface_point(cell, _game.board_heights)
+
+	var above := surface + Vector3(0.0, lift + 10.0, 0.0)
+	var depth: float = _scene.call("_ground_depth", above, Vector3.DOWN)
+	assert_float(above.y - depth).override_failure_message(
+			"looking down at the staged column, the probe met ground at %.2f -- the stage top is %.2f"
+			% [above.y - depth, surface.y + lift]).is_equal_approx(surface.y + lift, BoardSpace.ROW_HEIGHT)
+
+	var beside := above + Vector3(BoardSpace.CELL_SIZE, 0.0, 0.0)
+	var open: float = _scene.call("_ground_depth", beside, Vector3.DOWN)
+	assert_bool(is_finite(open)).override_failure_message(
+			"beside the stage the probe met nothing at all").is_true()
+	assert_float(beside.y - open).override_failure_message(
+			"beside the stage the probe fell through to %.2f, the board under the diorama"
+			% (beside.y - open)).is_greater(lift - BoardSpace.ROW_HEIGHT)
+
+
 func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() -> void:
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()

@@ -72,9 +72,14 @@ func test_the_cull_box_reaches_every_emitter() -> void:
 	var systems := mirror.find_children("*", "GPUParticles3D", true, false)
 	systems.append_array((_scene._wind as WindMirror).find_children("*", "GPUParticles3D", true, false))
 	assert_int(systems.size()).override_failure_message("fixture: the mirror built no emitters").is_greater(2)
+	# The stage asked of the lift itself, never of effect_volume: comparing against the function under
+	# test passed while its "lifted" half was the board again (#1362).
+	var stage := AABB(board.position + BoardSpace.lift_offset(), board.size)
+	assert_bool(BoardSpace.lift_offset().length() > 1.0).override_failure_message(
+			"the stage lift is zero; the case cannot tell the two levels apart").is_true()
 	for node in systems:
 		var box := (node as GPUParticles3D).visibility_aabb
-		assert_bool(box.encloses(BoardSpace.effect_volume(board, 0.0))).override_failure_message(
+		assert_bool(box.encloses(board) and box.encloses(stage)).override_failure_message(
 				"%s's cull box does not hold the board and its stage: %s" % [node.name, box]).is_true()
 
 
@@ -1109,3 +1114,78 @@ func test_the_fade_rows_reach_the_flakes() -> void:
 	look.flake_fade_out = was_out
 	assert_float(got_in).override_failure_message("the fade-in row never reached the flakes").is_equal(0.25)
 	assert_float(got_out).override_failure_message("the fade-out row never reached the flakes").is_equal(0.375)
+
+
+# Draws as moved on the look being drawn (#1369) is a different weather: the parts only a switch turns on
+# and off follow it, rather than the old fall's drops frozen in the last camera box. Moved on the very
+# object the mirror draws, as the Weather page writes it, with the kind left alone.
+func test_a_fall_moved_on_the_drawn_look_switches_its_parts() -> void:
+	var mirror := _mirror()
+	var look := WeatherLook.for_kind(Weather.Kind.RAIN)
+	var was := look.fall
+	_scene.game.scenario_manager.current_weather = Weather.Kind.RAIN
+	mirror._process(0.016)
+	look.fall = WeatherLook.Fall.SNOW
+	mirror._process(0.016)
+	var rain_left := mirror._rain.emitting or mirror._rain.visible or mirror._wet.visible or mirror._puddles.visible
+	var snowing := mirror._snow.emitting and mirror._snow.visible and mirror._snow_cover.visible
+	look.fall = WeatherLook.Fall.FOG
+	mirror._process(0.016)
+	var fogging := mirror._fog_pass.visible and mirror._fog_cards.emitting and not mirror._snow.visible
+	look.fall = was
+	mirror._process(0.016)
+	var raining := mirror._rain.emitting and mirror._rain.visible and not mirror._fog_pass.visible
+	assert_bool(rain_left).override_failure_message("rain drawn as snow still draws rain").is_false()
+	assert_bool(snowing).override_failure_message("rain drawn as snow draws no flakes or cover").is_true()
+	assert_bool(fogging).override_failure_message("rain drawn as fog draws no fog").is_true()
+	assert_bool(raining).override_failure_message("drawn as rain again, it does not rain").is_true()
+
+
+# An ashfall's embers follow their rate every frame, as the drift and the grit do (#1369): a rate raised
+# from 0 starts them, and back at 0 stops them.
+func test_the_embers_follow_their_rate_from_zero() -> void:
+	var mirror := _mirror()
+	var kind := _kind_drawing(WeatherLook.Fall.ASH)
+	var look := WeatherLook.for_kind(kind)
+	var was := look.mote_rate
+	look.mote_rate = 0.0
+	_scene.game.scenario_manager.current_weather = kind
+	mirror._process(0.016)
+	var idle := not mirror._embers.system.emitting and not mirror._embers.system.visible
+	look.mote_rate = 0.5
+	mirror._process(0.016)
+	var rising := mirror._embers.system.emitting and mirror._embers.system.visible
+	look.mote_rate = 0.0
+	mirror._process(0.016)
+	var stopped := not mirror._embers.system.emitting and not mirror._embers.system.visible
+	look.mote_rate = was
+	assert_bool(idle).override_failure_message("embers rise at a rate of 0").is_true()
+	assert_bool(rising).override_failure_message("a mote rate raised from 0 started no embers").is_true()
+	assert_bool(stopped).override_failure_message("a mote rate back at 0 left the embers rising").is_true()
+
+
+# The strikes are the STORM part's (#1373): a look whose fall moved off it keeps its lightning flag, and
+# the page has no row left to turn it off, so it must not strike. Against a control on the storm's fall.
+func test_a_look_off_the_storm_falls_never_strikes() -> void:
+	var mirror := _mirror()
+	var look := WeatherLook.for_kind(Weather.Kind.THUNDERSTORM)
+	assert_bool(look.lightning and WeatherLook.STORM.has(look.fall)).override_failure_message(
+			"fixture: the thunderstorm's look strikes no lightning").is_true()
+	var was := look.fall
+	_scene.game.scenario_manager.current_weather = Weather.Kind.THUNDERSTORM
+	mirror._process(0.016)
+	mirror._next_strike = mirror._clock
+	mirror._process(0.016)
+	var struck := mirror.flash_level() > 0.0
+	look.fall = WeatherLook.Fall.SNOW
+	mirror._process(0.016)
+	mirror._next_strike = mirror._clock
+	mirror._process(0.016)
+	var off_flash := mirror.flash_level()
+	var off_light := mirror._side.visible
+	look.fall = was
+	mirror._process(0.016)
+	assert_bool(struck).override_failure_message("fixture: a forced strike on the storm's own fall drew no flash") \
+			.is_true()
+	assert_float(off_flash).override_failure_message("a storm drawn as snow still flashes").is_equal(0.0)
+	assert_bool(off_light).override_failure_message("a storm drawn as snow still lights the board").is_false()

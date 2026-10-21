@@ -110,8 +110,8 @@ func shed_orders(squad: Squad) -> void:
 	if active_squad == squad:
 		active_squad = null   # a stale activation blocks the next hotseat faction's action menu
 
-# THE HAND-OFF, and the one step both walks share: game.gd's `turn_started` handler and both of
-# play_session's end-turn paths call this, with nothing between the faction switch and the new
+# THE HAND-OFF's last step, reached only through TurnBoundary.start_turn, the rule both hosts'
+# `turn_started` handlers call (#1365), with nothing between the faction switch and the new
 # faction's first order.
 #
 # The INCOMING faction resets. EVERYONE ELSE SHEDS (#709, dev ruling 2026-09-03). An order a faction

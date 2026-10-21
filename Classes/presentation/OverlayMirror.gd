@@ -54,6 +54,9 @@ var _last_staging_version := -1
 var _staging_moved := false
 var _last_basin_version := -1
 var _basin_moved := false
+# ...and blind to BoardOverlays' own numbers this poll bakes in: a lift, a billboard's size, a cone's
+# width (#1373). Moving one drops every cache below, so the frame re-hands everything.
+var _last_geometry_version := -1
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by way of #1069
@@ -93,6 +96,7 @@ func _process(_delta: float) -> void:
 	_heights_moved = _poll_heights()   # once per frame, ahead of every diff that reads it
 	_staging_moved = _poll_staging()
 	_basin_moved = _poll_basin()
+	_poll_geometry()
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
@@ -185,6 +189,23 @@ func _poll_basin() -> bool:
 		return false
 	_last_basin_version = BoardSpace.basin_version
 	return true
+
+
+# Has a BoardOverlays number this poll composes into what it hands over moved (#1373)? A Game-tab
+# lift or width turned on a still board would otherwise reach nothing until the next hover changed a
+# key. Dropping the caches rather than threading a flag into each gate: every channel below already
+# re-hands on a cold cache, so there is one place to get this right instead of eight.
+func _poll_geometry() -> void:
+	if overlays.geometry_version == _last_geometry_version:
+		return
+	_last_geometry_version = overlays.geometry_version
+	_last_cells.clear()
+	_last_markers.clear()
+	_last_wall_key = []
+	_last_reach_line_version = -1
+	_last_strike_version = -1
+	_last_outline_version = -1
+	_last_squad_lines_version = -1
 
 
 # Which cells are alight and which are dug in, each straight off its ONE enumeration form. Polled

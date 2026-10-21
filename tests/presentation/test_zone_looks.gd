@@ -23,6 +23,7 @@ func _zones() -> Dictionary:
 
 
 const ZONE_CELLS: Array[Vector2i] = [Vector2i(1, 1), Vector2i(2, 1), Vector2i(6, 6)]
+const CAPTURE_CELLS: Array[Vector2i] = [Vector2i(1, 1), Vector2i(2, 1)]
 
 
 func before() -> void:
@@ -86,6 +87,38 @@ func _flat_rims() -> Array[Sprite2D]:
 		if is_instance_valid(sprite) and not ZoneMarks.EMBLEMS.values().has(sprite.texture):
 			rims.append(sprite)
 	return rims
+
+
+func _layer_knob(layer: BoardOverlays.Layer) -> Dictionary:
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if knob.has("layer") and knob["layer"] == layer:
+			return knob
+	return {}
+
+
+# The tint every surface outside the diorama wears for the capture zone, as each DRAWS it: the flat
+# view's rims and emblem on the capture cells, and the emblem the tile card and the objectives panel head
+# their capture line with.
+func _capture_tints() -> Dictionary:
+	var grid := _om().board_tilemap as TileMapLayer
+	var flat: Array[Color] = []
+	for sprite in _om()._zone_sprites:
+		if is_instance_valid(sprite) and CAPTURE_CELLS.has(grid.local_to_map(sprite.position)):
+			flat.append(sprite.modulate)
+	return {
+		"the flat view's marks": flat,
+		"the tile card's emblem": _emblem_tints(game.hover_info_panel._tile_panel),
+		"the objectives panel's emblem": _emblem_tints(game.mission_status_panel),
+	}
+
+
+func _emblem_tints(root: Node) -> Array[Color]:
+	var tints: Array[Color] = []
+	for node in root.find_children("*", "TextureRect", true, false):
+		var rect := node as TextureRect
+		if rect.texture == ZoneMarks.emblem_of(ZoneManager.Kind.CAPTURE):
+			tints.append(rect.modulate)
+	return tints
 
 
 func _texture_counts(textures: Array) -> Dictionary:
@@ -318,3 +351,40 @@ func test_a_zone_knob_moves_the_flat_view_too() -> void:
 	assert_int(after.size()).is_equal(3)
 	assert_int(stale).override_failure_message(
 			"%d flat rims kept their art through a knob move" % stale).is_equal(0)
+
+
+# A kind's COLOUR knob (#1374) reaches every surface wearing that colour, not the diorama alone: the
+# flat view's marks, the open tile card and the objectives panel each hold the colour they were built
+# with, so each is asked what it draws after the Game tab's own write. Restored before asserting: the
+# colour is class-level, so a red case must not leave it moved for every suite after it.
+func test_a_zone_colour_knob_recolours_every_surface_that_wears_it() -> void:
+	var knob := _layer_knob(BoardOverlays.Layer.ZONE_CAPTURE)
+	assert_dict(knob).override_failure_message("fixture: no Game-tab row tunes the capture colour").is_not_empty()
+	var old: Color = GameKnobs.read_class(_scene, knob)
+	var moved := Color(1.0 - old.r, 1.0 - old.g, 1.0 - old.b, old.a)
+	var want := Color(moved, 1.0)
+	var objectives: Array[MissionRules.Objective] = [MissionRules.Objective.CAPTURE]
+	game.mission_controller.set_objectives(objectives)
+	game.refresh_mission_status()
+	game.show_tile_card(CAPTURE_CELLS[0])
+	await _settle()
+	var before := _capture_tints()
+	GameKnobs.write_class(_scene, knob, moved)
+	await _settle()
+	var after := _capture_tints()
+	var stored := ZoneMarks.colour_of(ZoneManager.Kind.CAPTURE)
+	GameKnobs.write_class(_scene, knob, old)
+	game.hover_info_panel.clear()
+
+	assert_that(stored).override_failure_message(
+			"ZoneMarks.colour_of answers %s, not the colour the knob wrote" % stored).is_equal(want)
+	for surface: String in before:
+		var was: Array[Color] = before[surface]
+		var now: Array[Color] = after[surface]
+		assert_bool(was.is_empty()).override_failure_message("fixture: %s shows nothing" % surface).is_false()
+		assert_bool(was.has(want)).override_failure_message(
+				"fixture: %s already wore the moved colour" % surface).is_false()
+		assert_int(now.size()).override_failure_message("%s lost a mark to the knob" % surface).is_equal(was.size())
+		for tint in now:
+			assert_that(tint).override_failure_message("%s still wears %s after the capture colour moved to %s" % [
+					surface, tint, want]).is_equal(want)

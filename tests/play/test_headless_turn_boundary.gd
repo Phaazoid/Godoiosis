@@ -250,3 +250,79 @@ func test_a_squadmate_out_of_contact_is_ejected_at_the_hand_off() -> void:
 	assert_bool(member.squad == leader.squad).override_failure_message(
 			"a member out of its leader's reach survived the hand-off in the squad") \
 			.is_false()
+
+
+# THE HAND-OFF RULE IS THE GAME'S (#1365). The AI loop's own hand-off had no skip, so an AI faction
+# with nobody to command took its turn headlessly and burned its downed bodies at the end of it, where
+# game._on_turn_started passes it straight over. Both now ask TurnBoundary.start_turn.
+func test_a_faction_with_nobody_to_command_is_passed_over_without_its_burn() -> void:
+	var b := BoardBuilder.build(self, "SkipRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 16, 16))
+	BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(10, 0))
+	foe.squad.archetype = AIArchetype.Type.HOLD
+	var body: Unit = BoardBuilder.spawn(b, _data("Body", Team.Faction.ALLY), Vector2i(5, 5))
+	body.take_damage(body.get_current_hp())   # damage == HP: downed at 1 hp, not killed
+	var sess = PlaySession.new(b)
+	var data := ScenarioData.new()
+	var ai: Array[Team.Faction] = [ENEMY, Team.Faction.ALLY]
+	data.ai_factions = ai
+	sess.scenario_data = data
+	var states: TerrainStateManager = b.terrain_states
+	_light(states, body.movement.cell)
+	assert_bool(body.is_downed()).override_failure_message("fixture: the body is not down").is_true()
+	assert_int(RulesService.occupant_damage_for(body, states.states_at(body.movement.cell))) \
+			.override_failure_message("fixture: fire charges the body nothing, so a burn would not show") \
+			.is_greater(0)
+	var hp := body.get_current_hp()
+
+	sess.end_turn()   # the player's end, the enemy's AI turn, then ALLY: nobody to command
+
+	var faction: String = str(sess.status().faction)
+	assert_str(faction).override_failure_message("the hand-off did not come back to the player") \
+			.is_equal("PLAYER")
+	assert_bool(is_instance_valid(body) and not body.is_dead()).override_failure_message(
+			"the downed faction took a turn headlessly and its body burned to death") \
+			.is_true()
+	assert_int(body.get_current_hp()).override_failure_message(
+			"the downed faction took a turn headlessly and burned at its end") \
+			.is_equal(hp)
+
+
+# A hand-off that ends the mission starts no AI turn (#1365): the game's handler returns before
+# start_faction_turn, and the headless AI loop regrouped first and asked the mission after.
+func test_a_hand_off_that_ends_the_mission_starts_no_ai_turn() -> void:
+	AIProfiles.use_fixtures({"": AIProfile.new()})   # a profile that regroups, owned by this case
+	var b := BoardBuilder.build(self, "OverRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(0, 0, 16, 4))
+	var stats := Stats.STAT_DEFAULTS.duplicate()
+	stats[Stats.Stat.LDR] = 8   # room for a squadmate
+	var lead: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(stats, "Lead", PLAYER), Vector2i(0, 0))
+	var stray: Unit = BoardBuilder.spawn(b, _data("Stray", PLAYER), Vector2i(1, 0))
+	BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(15, 3))
+	var sess = PlaySession.new(b)
+	var data := ScenarioData.new()
+	var ai: Array[Team.Faction] = [PLAYER]   # the side whose turn the ending hand-off starts
+	data.ai_factions = ai
+	sess.scenario_data = data
+	var lose: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.ROUND_LIMIT]
+	sess.mission.lose_conditions = lose
+	sess.mission.round_limit = sess.mission.rounds_elapsed + 1   # the wrap into PLAYER runs it out
+	b.turn_manager.set_active_faction(ENEMY)
+
+	var res: Dictionary = sess.end_turn()
+
+	assert_str(str(res.get("mission", ""))).override_failure_message(
+			"fixture: the hand-off into PLAYER did not end the mission") \
+			.is_equal("DEFEAT")
+	assert_bool(stray.squad == lead.squad).override_failure_message(
+			"the AI regrouped on a board whose mission had already ended") \
+			.is_false()
+	# Non-vacuity: the regroup the ending withheld is real.
+	var sm: SquadManager = b.squad_manager
+	assert_int(AIController.regroup(PLAYER, sm, sm.board_source.call())).override_failure_message(
+			"fixture: nothing here would have regrouped, so the case shows nothing") \
+			.is_greater(0)
+	AIProfiles.clear_fixtures()

@@ -192,11 +192,13 @@ func _take_slot() -> int:
 
 
 func _surface_under(position: Vector3) -> float:
-	if heights == null:
-		return 0.0
 	var cell := BoardSpace.flat(BoardSpace.cell_of(position))
+	# Plus the tear-out's lift (#1362), so a cube knocked off a fighter on stage bounces on the stage.
+	var lift := BoardSpace.staged_offset(cell).y
+	if heights == null:
+		return lift
 	# Less the water basin's drop (#654), so a cube bounces on the water rather than above it.
-	return BoardSpace.surface_height_at(cell, position.x, position.z, heights) - BoardSpace.basin_drop(cell)
+	return BoardSpace.surface_height_at(cell, position.x, position.z, heights) - BoardSpace.basin_drop(cell) + lift
 
 
 func _half_cube() -> float:

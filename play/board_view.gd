@@ -84,10 +84,17 @@ static func render_focus(session, handle: String) -> String:
 		return "%s is in reserve -- see `kit %s` for its gear" % [handle, handle]
 	var overlay := {}
 	var range_info: Dictionary = RulesService.compute_move_range(unit, session._board())
-	for cell in range_info.reachable.keys():
-		overlay[cell] = "+"
+	# A leader's cells a squadmate could not follow to are refused by queue_move (#1069), so they draw
+	# as refused here: the same sweep legal_moves splits them off with (#1365). Only a leader has any,
+	# and only a member has squad_unreachable, so "-" never means both at once.
+	var reachable: Array[Vector2i] = []
+	reachable.assign(range_info.reachable.keys())
+	var stranded: Dictionary = session._stranding(unit, reachable)
+	for cell: Vector2i in reachable:
+		overlay[cell] = "+" if (stranded.get(cell, []) as Array).is_empty() else "-"
 	for cell in range_info.squad_unreachable.keys():
 		overlay[cell] = "-"
+	var refused := "- strands a squadmate" if unit.is_leader() and unit.has_squad() else "- breaks leader range"
 	if unit.has_equipped_weapon():
 		for cell in Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), unit.get_fired_attack()):
 			overlay[cell] = "*" if overlay.has(cell) else "x"
@@ -96,7 +103,7 @@ static func render_focus(session, handle: String) -> String:
 			overlay[other.movement.cell] = "v"
 	overlay[unit.movement.cell] = "@"
 	var lines: Array[String] = []
-	lines.append("focus %s (%s)   + move   - breaks leader range   x attack   v downed   @ here" % [handle, unit.get_unit_name()])
+	lines.append("focus %s (%s)   + move   %s   x attack   v downed   @ here" % [handle, unit.get_unit_name(), refused])
 	lines.append(_grid_block(session, _content_bounds(session), overlay))
 	lines.append("")
 	lines.append("  " + _unit_line(session, unit))
@@ -732,17 +739,24 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	if inst == null or inst.template == null:
 		return "(equip)"
 	var w := inst.template
-	var main: WeaponAttackData = w.main_attack
+	# The main this weapon FIRES (#1365): a mod's replacement or the tank's empowered form, read where
+	# the menu, Reach and the resolver read it. Named when it is not the family's own, so the name the
+	# `attack` verb takes is on the line.
+	var main: WeaponAttackData = inst.effective_main(wielder)
 	var main_power: int = main.power if main != null else 0
 	# Show the GEOMETRY, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly different
 	# shape (an omnidirectional point attack at range vs a one-cell-deep cleave), which decides reach
 	# AND who can counter. Hiding it once made a correct no-counter look like a bug.
-	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], main_power, _pattern_str(main)]
-	if main != null and main.elemental_damage_type != Elemental.Element.NONE:
-		s += "/" + Elemental.Element.keys()[main.elemental_damage_type]
+	var s: String = WeaponData.WeaponType.keys()[w.weapon_type]
+	if main != null and main != w.main_attack:
+		s += " " + main.display_name
+	s += " pow%d %s" % [main_power, _pattern_str(main)]
+	# The composed answers, mods included, as the resolver reads them (#1365).
+	for element in inst.get_elements(wielder, main):
+		s += "/" + Elemental.Element.keys()[element]
 	if main != null and main.can_ever_counter():
 		s += "/ctr"
-	if main != null and main.hits_allies:
+	if main != null and inst.effective_hits_allies(wielder, main):
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
 	# Its live state in the family's own words (#663) -- a dry magazine or a sprung spear gates the next
 	# order, and the ring shows the same count off the same answer (#1045).
@@ -783,9 +797,12 @@ static func _attack_str(source: EquippableData, wielder: Unit, attack: AttackDat
 	if carving != null:
 		for element: Elemental.Element in carving.get_elements():
 			s += "/" + Elemental.Element.keys()[element]
+	# A swing's are its weapon's answer, the authored one plus what fitted mods add (#1365).
 	var swing := attack as WeaponAttackData
-	if swing != null and swing.elemental_damage_type != Elemental.Element.NONE:
-		s += "/" + Elemental.Element.keys()[swing.elemental_damage_type]
+	var weapon := source as WeaponInstance
+	if swing != null and weapon != null:
+		for element in weapon.get_elements(wielder, swing):
+			s += "/" + Elemental.Element.keys()[element]
 	# heals/deals_no_damage reinterpret the power printed above, so a line without them misreads.
 	if attack.heals:
 		s += "/heal"
@@ -793,7 +810,7 @@ static func _attack_str(source: EquippableData, wielder: Unit, attack: AttackDat
 		s += "/nodmg"
 	if counters:
 		s += "/ctr"
-	if attack.hits_allies:
+	if source.effective_hits_allies(wielder, attack):
 		s += "/ff"
 	var reason := source.attack_block_reason(wielder, attack)
 	if reason != "":

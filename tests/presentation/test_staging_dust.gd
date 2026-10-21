@@ -247,10 +247,32 @@ func test_the_cull_box_contains_the_puffs_at_both_the_board_and_the_diorama() ->
 	var on_the_board := BoardSpace.surface_point(cell, heights)
 	assert_bool(box.has_point(on_the_board - dust.global_position)).override_failure_message(
 			"an EXIT puff at %s falls outside the cull box %s" % [on_the_board, box]).is_true()
-	var in_the_diorama := on_the_board + BoardSpace.stage_offset()
-	assert_bool(box.has_point(in_the_diorama - dust.global_position)).override_failure_message(
-			"an ENTRY puff at %s falls outside the cull box %s -- this is the bug that shipped, "
-			+ "and no knob can beat it" % [in_the_diorama, box]).is_true()
+	# STAGED FOR REAL, after the box was swept (#1362): the sweep runs on a board load, when nothing is
+	# staged, and nothing re-sweeps it when a pass stages. A diorama point read off an unstaged board
+	# is the board point again, which is how this case passed while the box held no stage at all.
+	BoardSpace.stage([cell] as Array[Vector2i], BoardSpace.lift_offset())
+	await _settle()
+	var in_the_diorama := on_the_board + BoardSpace.staged_offset(cell)
+	assert_bool(BoardSpace.staged_offset(cell).length() > 1.0).override_failure_message(
+			"the stage lift is zero; the case cannot tell the two levels apart").is_true()
+	assert_bool(dust.visibility_aabb.has_point(in_the_diorama - dust.global_position)).override_failure_message(
+			("an ENTRY puff at %s falls outside the cull box %s -- this is the bug that shipped, "
+			+ "and no knob can beat it") % [in_the_diorama, dust.visibility_aabb]).is_true()
+
+
+# ...and the lift is a knob, so the box has to follow it when it moves, with no board reload between.
+func test_the_cull_box_follows_the_lift_knob() -> void:
+	var dust := _dust()
+	var cell := _cells(1)[0]
+	var was := BoardSpace.STAGE_LIFT
+	BoardSpace.STAGE_LIFT = was + 20.0
+	await _settle()
+	var in_the_diorama := BoardSpace.surface_point(cell, _game.board_heights) + BoardSpace.lift_offset()
+	var held := dust.visibility_aabb.has_point(in_the_diorama - dust.global_position)
+	BoardSpace.STAGE_LIFT = was
+	await _settle()
+	assert_bool(held).override_failure_message(
+			"the lift knob moved and the cull box stayed where the old diorama was").is_true()
 
 
 # ...and it has to FOLLOW the board, or painting past the old edge culls the dust there while every

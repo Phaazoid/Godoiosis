@@ -343,6 +343,39 @@ func test_a_watch_facing_off_the_board_is_neither_offered_nor_accepted() -> void
 	assert_bool(on.ok).override_failure_message(str(on.get("error", ""))).is_true()
 
 
+# A SHOT INTO A HOLE is neither offered nor accepted (#1365): attack and legal_targets gate on
+# Reach.can_aim_at, the click's own gate, whose footprint clause (#1228) the weaker can_hit_cell_from
+# lacks. A map attack aimed there was queued headlessly and spent the main action on nothing.
+func test_a_shot_into_a_hole_is_neither_offered_nor_accepted() -> void:
+	var b := BoardBuilder.build(self, "HoleAimRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(0, 0, 5, 5))
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(2, 2))
+	BoardBuilder.spawn(b, _data("Far", ENEMY), Vector2i(4, 4))
+	var zap := _attack("Zap", 3, 2, 1)
+	zap.targets = EquippableData.TargetMode.MAP   # never a whiff, so only the aim gate can refuse it
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	t.main_attack = zap
+	hero.add_item(WeaponInstance.make(t))
+	var hole := Vector2i(3, 2)
+	(b.grid as BoardGrid).erase(hole)
+	var sess = PlaySession.new(b)
+	var board: BoardContext = sess._board()
+	var origin := hero.get_projected_destination()
+	assert_bool(board.is_void_at(hole)).override_failure_message("fixture: the erased cell is no hole").is_true()
+	assert_bool(Reach.can_hit_cell_from(hero, origin, hole, zap, board)).override_failure_message(
+		"fixture: the weaker gate refuses the hole too, so this case shows nothing").is_true()
+	var h: String = sess.handle_for(hero)
+
+	var offered := _cells(sess.legal_targets(h))
+	assert_bool(offered.is_empty()).override_failure_message("fixture: no aim was offered at all").is_false()
+	assert_bool(offered.has(hole)).override_failure_message("legal_targets offered the hole").is_false()
+	var r: Dictionary = sess.queue_attack(h, hole)
+	assert_bool(r.ok).override_failure_message("queue_attack took a shot into a hole").is_false()
+	assert_int(hero.squad.action_queue.size()).override_failure_message("an order was queued anyway").is_equal(0)
+
+
 # ==============================================================================
 #  The view: the names the verbs take are on the board a driver reads
 # ==============================================================================

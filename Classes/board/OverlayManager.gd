@@ -529,7 +529,7 @@ func _ready() -> void:
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
 	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab), so it is still a wash.
 	# The kinds a player sees are not washed at all since #955: _rebuild_zone_marks draws their rim and
-	# emblem, in the colour BoardOverlays.LAYERS authors, and hidden_zone_names() says which are drawn.
+	# emblem, in the kind's live colour (ZoneMarks.colour_of), and hidden_zone_names() says which are drawn.
 	zone_layer_map = {
 		ZoneManager.Kind.PATROL: zone_overlay,
 	}

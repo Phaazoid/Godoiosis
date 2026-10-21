@@ -1970,6 +1970,11 @@ static func write_class(host: Node3D, knob: Dictionary, value: Variant) -> void:
 	var overlays := overlays_of(host)
 	if overlays != null:
 		overlays.set_layer_modulate(knob["layer"], value)
+	# A zone kind's colour is also worn by the flat marks and the objectives panel, which hold what they
+	# were built with (#1374). The tile card re-reads it every frame.
+	if ZoneMarks.LAYER_OF_KIND.values().has(knob["layer"]):
+		_restyle_zone_marks(host)
+		_refresh_mission_status(host)
 
 
 # Object.get/set are INSTANCE methods -- there is no reflecting on a class for a static var, so the
@@ -3073,12 +3078,15 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"CROSSFADE_SECONDS":
 			MusicDirector.CROSSFADE_SECONDS = value
 			return
-		# Read at every resolve and every take_damage; nothing caches them, so no re-apply.
+		# Read at every resolve and every take_damage, but the Glossary's Maim entry QUOTES them and
+		# caches its text, so it is dropped to be rebuilt (#1373).
 		"LIMB_LOSS_DAMAGE":
 			LethalityRules.LIMB_LOSS_DAMAGE = int(value)
+			Glossary.refresh()
 			return
 		"LIMB_LOSS_DAMAGE_WOUNDED":
 			LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED = int(value)
+			Glossary.refresh()
 			return
 		# The mission clock (#101). These DO need a re-apply: the status panel is push-refreshed from
 		# MissionController's write points, so with nothing happening on the board -- which is exactly

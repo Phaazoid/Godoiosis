@@ -299,3 +299,48 @@ func test_a_loaded_sentry_engages_whoever_walks_into_its_zone() -> void:
 	assert_bool(sess.end_turn().ok).is_true()
 	assert_vector(sentry.movement.cell).override_failure_message(
 		"a loaded Sentry stood still with the player inside its zone -- it could not see the zone").is_not_equal(post)
+
+
+# ==============================================================================
+#  The board the rules read carries the mission, as the game's does (#1365)
+# ==============================================================================
+
+# SquadManager.board_source is the board every validator, the AI's preview and ThreatField build on.
+# game._board hands it the mission; the builder's lambda built it without one, so the AI's stakes
+# (AITactics._stakes_for: does a protected unit count?) read "no mission" headlessly.
+func test_the_board_source_carries_the_sessions_mission() -> void:
+	var scenario := _scenario()
+	_place(scenario, "Hero", PLAYER, Vector2i(0, 0))
+	_place(scenario, "Foe", ENEMY, Vector2i(10, 4))
+	var loaded: Array = await _load(scenario)
+	var sess = loaded[0]
+	var squad_manager: SquadManager = sess.squad_manager
+	var board: BoardContext = squad_manager.board_source.call()
+	assert_object(board.mission).override_failure_message(
+		"the board the rules build on carries no mission headlessly").is_same(sess.mission)
+
+
+const DEGRADED := "user://__headless_degraded_scenario.tres"
+
+# A saved board that lost a reference loads DEGRADED through the game's loader (#608); the headless
+# loader used a strict load() and refused the whole file (#1365).
+func test_a_scenario_that_lost_a_reference_still_loads_headlessly() -> void:
+	var f := FileAccess.open(DEGRADED, FileAccess.WRITE)
+	f.store_string('[gd_resource type="Resource" script_class="ScenarioData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_sd"]\n'
+		+ '[ext_resource type="Resource" path="res://Resources/__test_no_such_pose.tres" id="2_gone"]\n\n'
+		+ '[resource]\nscript = ExtResource("1_sd")\nscenario_name = "Degraded Board"\n'
+		+ 'camera_start = ExtResource("2_gone")\n')
+	f.close()
+	var board: Dictionary = BoardBuilder.build(self, "DegradedDst")
+	auto_free(board.root)
+
+	await BoardBuilder.load_scenario(board, DEGRADED)
+
+	var scenario: ScenarioData = board.get("scenario")
+	assert_object(scenario).override_failure_message(
+		"the headless loader refused a board the game loads degraded").is_not_null()
+	if scenario != null:
+		assert_str(scenario.scenario_name).is_equal("Degraded Board")
+	ContentRepair.forget(DEGRADED)
+	DirAccess.remove_absolute(DEGRADED)

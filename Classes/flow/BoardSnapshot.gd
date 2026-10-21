@@ -8,7 +8,8 @@ class_name BoardSnapshot
 # what an authoring undo means when it says "put it back": restoring one never moves a unit, never
 # rewinds a turn and never touches mission progress.
 #
-# Dumb data, with ScenarioManager.capture_board/restore_board as its writer and reader -- the same
+# Dumb data, with ScenarioManager.capture_board/restore_board as its writer and reader (the headless
+# BoardBuilder restores through the same restore_into, #1365) -- the same
 # split ScenarioData declares in its own header. RefCounted rather than Resource because a snapshot
 # is never saved, never loaded and never referenced by a file; it lives as long as the undo stack.
 #
@@ -59,6 +60,18 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 	snapshot.gas = scenario.gas
 	snapshot.zones = scenario.zones
 	return snapshot
+
+
+# Put this board back into the stores that hold one: the ONE store list both loaders write through
+# (#1365). ScenarioManager.restore_board adds its overlay redraws on top; the headless BoardBuilder has
+# none to add, and used to hand-copy this list -- the second copy a new store would be missed by.
+func restore_into(grid: BoardGrid, states: TerrainStateManager, heights: BoardHeights, gas_store: GasField,
+		zone_store: ZoneManager) -> void:
+	grid.restore(tile_data)
+	states.load_state_dict(terrain_states, terrain_state_turns)
+	heights.load_corner_dict(corner_heights)
+	gas_store.load_dict(gas)
+	zone_store.load_dict(zones)
 
 
 func write_into(scenario: ScenarioData) -> void:
