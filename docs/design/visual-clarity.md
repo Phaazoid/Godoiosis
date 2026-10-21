@@ -3932,6 +3932,8 @@ The palette was ruled a whole-UI skin above, and the two panels it had never rea
 
 The contrast walker moved to `tests/support/palette_contrast.gd` so `tests/ui/test_info_card_contrast.gd` asks the same law of these surfaces; it learned `RichTextLabel` (the squad box) on the way.
 
+The action-queue panel's section headers joined it in [#1356](https://github.com/Phaazoid/Godoiosis/issues/1356) (`tests/ui/test_queue_contrast.gd`). They had read the slate const `QueueStyle.HEADER_TEXT` rather than `ink(Role.HEADER_TEXT)`, so they stayed slate grey on parchment's tan, a gap no pair test could see. That suite walks only the header strips: every row carries a hidden `DescriptionLabel`, and the walker cannot tell a hidden label from a drawn one.
+
 ## A ring frames the CHARACTER, not the canvas ([#930](https://github.com/Phaazoid/Godoiosis/issues/930), BUILT 2026-09-12)
 
 The aura readout is a ring of ticks around a portrait, on the pre-mission card and in the inspect panel both. Three things it settled are about looking at things generally rather than about aura.
