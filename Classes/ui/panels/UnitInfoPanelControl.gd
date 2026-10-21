@@ -57,7 +57,10 @@ func restyle() -> void:
 	squad_panel.restyle()
 
 func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
+	# The same unit again re-asks only its gear gate (#1351): a can_act that moved since the last
+	# Inspect would otherwise stick for as long as the dock stays open.
 	if current_unit == unit:
+		set_can_act(can_act)
 		return
 	if unit == null:
 		clear()
@@ -85,6 +88,13 @@ func _refresh_derived_rows():
 	if current_unit == null:
 		return
 	stats_section.set_unit(current_unit, current_board)
+
+# Whether the open unit's gear verbs are offered (#1351). game re-asks at each edge of a fact its gate
+# reads; only a CHANGE reaches the section, since re-gating closes whatever popup is open.
+func set_can_act(can_act: bool) -> void:
+	if current_unit == null or inventory_panel.can_act == can_act:
+		return
+	inventory_panel.set_unit(current_unit, can_act)
 
 # Re-read the loadout after an act made somewhere other than this panel (#929: an aim that commits to
 # another carried weapon). set_unit early-returns on the same unit, so nothing else would.

@@ -39,7 +39,7 @@ var _by_recorded_id: Dictionary = {}   # int (recorded instance id) -> Unit
 # casualty as a divergence, which is the tool's one job broken quietly.
 var _live_id_of: Dictionary = {}       # int (recorded instance id) -> int (live instance id)
 var _cursor := 0
-var _seen_first_turn := false
+var _turns_reached := 0                # recorded turn_starts applied so far, the first included
 var _seeded := false
 var _compared := 0                     # outcome records already diffed, the same index on both sides
 var _logged := 0                       # the replay log's length at the last diff
@@ -74,7 +74,7 @@ func seed(replay_run: ReplayRun) -> bool:
 	_by_recorded_id.clear()
 	_live_id_of.clear()
 	_cursor = 0
-	_seen_first_turn = false
+	_turns_reached = 0
 	_seeded = false
 	_compared = 0
 	_logged = 0
@@ -206,10 +206,14 @@ func _run_until(stop: Callable) -> void:
 func _apply(event: Dictionary) -> void:
 	match str(event.get("event", "")):
 		"turn_start":
-			# The FIRST one was written by our own begin() during seeding -- turn_started never
-			# fires for turn 1, which is why begin() writes it. Every later one is a hand-over.
-			if not _seen_first_turn:
-				_seen_first_turn = true
+			# A HAND-OVER THE REPLAY HAS ALREADY MADE IS NOT MADE TWICE (#1364). Two turn_starts are
+			# recorded with no end_turn behind them: the first, which begin() writes during seeding, and
+			# every one game._on_turn_started's skip of a faction with no active unit hands on to by
+			# itself. So the turn ends only while the replay's own log holds fewer turn_starts than the
+			# run had by this one. Counted, never read off the active faction: a one-faction board hands
+			# the turn to itself, so "already that faction's turn" would never end one.
+			_turns_reached += 1
+			if _replayed_turn_starts() >= _turns_reached:
 				return
 			await game.end_turn()
 		"pass":
@@ -224,6 +228,14 @@ func _apply(event: Dictionary) -> void:
 			# zone_captured, mission_end, summary. Replaying a consequence would be the side-channel
 			# write Law #3 forbids for orders.
 			pass
+
+
+func _replayed_turn_starts() -> int:
+	var count := 0
+	for e: Dictionary in game.mission_log.events():
+		if str(e.get("event", "")) == "turn_start":
+			count += 1
+	return count
 
 
 func _replay_pass(event: Dictionary) -> void:
@@ -600,6 +612,8 @@ func report() -> Dictionary:
 		"of": run.events.size() if run != null else 0,
 		"next": next,
 		"degraded": degraded,
+		# EVERY divergence, where the list stops at LIST_CAP (#1364): the count a person reads.
+		"divergence_count": _disagreements,
 		"divergences": divergences.duplicate(),
 		"unbindable": unbindable.duplicate(),
 		"notes": notes.duplicate(),

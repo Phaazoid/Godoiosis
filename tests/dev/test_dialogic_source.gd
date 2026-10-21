@@ -12,6 +12,7 @@ const SETTINGS_COPY := "user://test_dialogic_source_project.godot"
 const SCRATCH_DIR := "user://test_dialogic_source"
 const SCRATCH_DTL := "user://test_dialogic_source/scratch.dtl"
 const SCRATCH_REFERRER := "user://test_dialogic_source/referrer.tres"
+const SCRATCH_ROOTS: Array[String] = [SCRATCH_DIR]
 
 var _settings_before := {}
 var _meta_before := {}
@@ -175,7 +176,7 @@ func test_a_written_file_gets_a_uid_sidecar_ci_would_otherwise_fail_on() -> void
 # ENTIRELY SCRATCH, and that is the point rather than tidiness: the first version aimed a real
 # delete at causeway_intro, which passed against the real code and DELETED THE SHIPPED TIMELINE
 # the moment the guard was mutated out. A case whose failure mode is destroying authored content
-# is not a test, so the referrer is stood up under user:// and `scan_dir` points the scan at it.
+# is not a test, so the referrer is stood up under user:// and `roots` points the scan at it.
 func test_delete_refuses_a_timeline_something_still_names() -> void:
 	_settings_copy()
 	DialogicSource.write(SCRATCH_DTL, "torv: A line.")
@@ -185,7 +186,7 @@ func test_delete_refuses_a_timeline_something_still_names() -> void:
 	file.store_string('[ext_resource type="Resource" path="%s" id="1"]' % SCRATCH_DTL)
 	file.close()
 
-	var verdict := DialogicSource.delete("dtl", "probe", SETTINGS_COPY, SCRATCH_DIR)
+	var verdict := DialogicSource.delete("dtl", "probe", SETTINGS_COPY, SCRATCH_ROOTS)
 
 	assert_bool(verdict["ok"]).is_false()
 	assert_str(String(verdict["reason"])).contains(referrer.get_file())
@@ -197,7 +198,7 @@ func test_delete_removes_an_unreferenced_timeline_with_its_sidecar_and_entry() -
 	DialogicSource.write(SCRATCH_DTL, "torv: A line.")
 	DialogicSource.register("dtl", "probe", SCRATCH_DTL, SETTINGS_COPY)
 
-	var verdict := DialogicSource.delete("dtl", "probe", SETTINGS_COPY, SCRATCH_DIR)
+	var verdict := DialogicSource.delete("dtl", "probe", SETTINGS_COPY, SCRATCH_ROOTS)
 
 	assert_bool(verdict["ok"]).is_true()
 	assert_bool(FileAccess.file_exists(SCRATCH_DTL)).is_false()
@@ -205,18 +206,37 @@ func test_delete_removes_an_unreferenced_timeline_with_its_sidecar_and_entry() -
 	assert_bool(DialogicSource.directory("dtl").has("probe")).is_false()
 
 
-# The real scan, READ-ONLY -- nothing here can write or remove. This is what pins that the
-# default `scan_dir` actually reaches the missions folder, which the scratch cases cannot say.
-func test_referencing_files_finds_the_mission_that_names_a_timeline() -> void:
-	var found := DialogicSource.referencing_files("dtl", "causeway_intro")
-	assert_int(found.size()).is_greater(0)
-	assert_str(", ".join(found)).contains("TheCauseway.tres")
+# The real scan, READ-ONLY -- nothing here can write or remove. delete() refuses on what
+# ResourceCatalog.users_of finds, so users_of has to see EVERY board that names a timeline: the
+# loaded beats are the truth it is held to, derived from whatever boards ship rather than pinned to
+# one. An embedded timeline has no file of its own for a delete to remove, so it is not asked about.
+func test_users_of_finds_every_board_that_names_a_timeline() -> void:
+	var boards: Array[String] = []
+	_collect_boards("res://Scenarios", boards)
+	var named := 0
+	for board: String in boards:
+		var scenario := ContentRepair.load_tolerant(board) as ScenarioData
+		if scenario == null:
+			continue
+		for beat: DialogBeat in scenario.dialog_beats:
+			if beat == null or beat.timeline == null:
+				continue
+			var timeline := beat.timeline.resource_path
+			if timeline.is_empty() or timeline.contains("::"):
+				continue
+			named += 1
+			assert_array(ResourceCatalog.users_of(timeline)).override_failure_message(
+				"%s names %s, and a delete of that timeline would not see it" % [board, timeline]) \
+				.contains([board.get_file()])
+	if named == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no board names a timeline, so there is nothing for users_of to find")
 
 
-func test_an_unreferenced_timeline_has_no_blockers() -> void:
-	_settings_copy()
-	DialogicSource.register("dtl", "aaa_probe", "res://Scenarios/dialog/aaa_probe.dtl", SETTINGS_COPY)
-	assert_int(DialogicSource.referencing_files("dtl", "aaa_probe").size()).is_equal(0)
+func _collect_boards(dir_path: String, found: Array[String]) -> void:
+	for sub: String in DirAccess.get_directories_at(dir_path):
+		_collect_boards(dir_path.path_join(sub), found)
+	for file: String in ResourceDir.files_with_extension(dir_path, ".tres"):
+		found.append(dir_path.path_join(file))
 
 
 # --- names ---

@@ -189,6 +189,8 @@ func try_spawn_at(cell: Vector2i) -> void:
 # A spawn changes what the scenario CONTAINS — the header's (modified) rule (#259 rework closing
 # the marker gap: only field edits and terrain marked before; the unit-shaped edits never did).
 func _mark_authoring_edit(spawned: bool) -> void:
+	if spawned:
+		game.drop_threat_field()   # the faction and weapon land AFTER spawn_unit's own drop (#1360)
 	if spawned and _header != null:
 		_header.mark_modified()
 

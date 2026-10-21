@@ -6,8 +6,8 @@ extends WeaponInstance
 # chainswords in one inventory rev independently, and it never serializes — make()/copy_for_grant()
 # always hand back a fresh 0, so it resets every mission. While revved, every attack from this
 # weapon ignores the target's DEF (armor + terrain Cover), resolved by PlanResolver's mitigation
-# stage. Ticks down one step at the wielder's faction turn start (game._tick_weapon_rev); re-Rev
-# refreshes the full duration.
+# stage. Ticks down one step at the carrier's faction turn start whether it is in hand or not
+# (Unit.tick_carried_revs, #1357); re-Rev refreshes the full duration.
 const REV_DURATION_TURNS := 3
 
 var revved_turns_remaining := 0

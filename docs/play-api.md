@@ -146,8 +146,10 @@ play/send.sh --batch '[{"cmd":"kit","args":{"unit":"stash"}},{"cmd":"give","args
 
 **The inspect dock (#46 slice 2b).** The dock's six buttons, named as a run records them:
 `equip`, `wear`, `use` (a vial) and `toss` take `{unit, slot}`; `unequip` and `remove_armor` take
-`{unit}`, being about the unit rather than a slot. They work in **either phase**, as the dock does.
-Each goes through `GearVerbs`, the one rule the dock's buttons and the replay viewer ask, and refuses
+`{unit}`, being about the unit rather than a slot. They work in **either phase**. **The game's dock no
+longer does (#1351):** it is read-only in the pre-mission phase, where gear goes through `Loadout` on
+the pre-mission screen (`give` here), so a phase-time `equip` or `toss` is a known parity gap, not the
+game's rule. Each goes through `GearVerbs`, the one rule the dock's buttons and the replay viewer ask, and refuses
 in the gate's own words (`can_equip_reason`, `use_block_reason`, `remove_block_reason`).
 
 Who may use it is `game.can_control`'s rule, `RulesService.command_block_reason`: a standing unit on

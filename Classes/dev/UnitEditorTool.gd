@@ -132,11 +132,15 @@ func _apply(unit: Unit) -> void:
 
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		unit.inventory[i] = _inventory[i]
-	# Dev tools stay omnipotent: this assigns directly, BYPASSING the equip/wear gates on purpose
-	# so out-of-spec combos can be tested. The armor requirement is shown in the row label instead.
+	# Dev tools stay omnipotent: both slots are assigned directly, BYPASSING the equip/wear gates on
+	# purpose so out-of-spec combos can be tested -- never set_equipped_weapon, whose refusal left the
+	# unit unarmed (#1372). The armor requirement is shown in the row label instead. The next stat
+	# settle still strips whatever fails its gate (#112).
 	unit.unequip_weapon()
-	if _equipped_index >= 0 and _inventory[_equipped_index] is EquippableData:
-		unit.set_equipped_weapon(_inventory[_equipped_index])
+	if _equipped_index >= 0:
+		var chosen := _inventory[_equipped_index] as EquippableData
+		if chosen != null and not chosen is ArmorData:
+			unit.equipped_weapon = chosen
 	if _armor_index >= 0:
 		unit.worn_armor = _inventory[_armor_index] as ArmorData
 	else:
@@ -162,6 +166,7 @@ func _on_save_pressed() -> void:
 	if not is_instance_valid(editing_unit):
 		return
 	_apply(editing_unit)
+	game.drop_threat_field()   # stats, gear, faction and profile all move what an enemy reaches (#1360)
 	# The unit is board-local now (#259 rework): an authored save snapshots it instead of
 	# re-referencing its character file, and the scenario header owes the dev a (modified).
 	editing_unit.dev_edited = true
@@ -770,6 +775,7 @@ func _add_element_state_section(into: VBoxContainer, unit: Unit) -> void:
 # sweep): the header lights, and the unit diverges (dev_edited) when the write is unit state a
 # snapshot carries -- an authored Update must not re-reference it away.
 func _mark_live_edit(unit: Unit, diverges: bool) -> void:
+	game.drop_threat_field()   # a soak arcs a current, a re-seed re-arms, a Down's ejection splits a squad (#1360)
 	if diverges and is_instance_valid(unit):
 		unit.dev_edited = true
 	if _header != null:
@@ -836,6 +842,7 @@ func _reseed_board() -> void:
 		if unit.can_reseed_kit() and unit.reseed_kit():
 			unit.dev_edited = true
 			done += 1
+	game.drop_threat_field()   # every re-armed enemy reaches differently (#1360)
 	if _header != null:
 		_header.mark_modified()
 	print("Re-seeded %d of %d units from their character files" % [done, units.size()])
