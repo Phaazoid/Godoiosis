@@ -6,6 +6,9 @@ class_name PauseMenu
 
 enum Choice { RESUME, RESTART, TITLE, GLOSSARY, REPORT, QUIT, SAVE_GAME, LOAD_GAME, SETTINGS }
 
+const SAVE_REFUSED_OVER := "The mission is over -- there is no battle left to save. " \
+		+ "Restart Mission to play it again."
+
 signal chosen(choice: Choice)
 
 func _init() -> void:
@@ -74,6 +77,9 @@ func _build(can_restart: bool, can_load: bool, game_node: Node, mid_pass: bool) 
 			save_button.tooltip_text = UiText.wrap(
 				"Not while you are deploying -- a save would keep only the units already placed. "
 				+ "Begin the mission first.")
+		# ...and once the mission is over (#1352): Stay leaves the board open to this menu, and a
+		# slot taken then would resume a finished mission as one still being fought.
+		_refuse_while(save_button, game_node.mission_controller.is_over(), SAVE_REFUSED_OVER)
 		_refuse_while(save_button, mid_pass,
 			"Not while the enemy is moving -- the pass would be saved half-played.")
 
