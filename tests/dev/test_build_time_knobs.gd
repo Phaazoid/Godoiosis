@@ -244,7 +244,8 @@ func test_the_ground_gap_reaches_a_fire_already_burning() -> void:
 
 func test_the_camera_limit_knobs_refit_the_limits_already_set() -> void:
 	var rig := _scene.get_node("CameraRig") as CameraRig3D
-	await _assert_all_reach("CameraRig", ["pan_stray_screens", "zoom_out_slack"],
+	# fit_margin_cells is the Moods tab's row, read by the same rebound().
+	await _assert_all_reach("CameraRig", ["pan_stray_screens", "zoom_out_slack", "fit_margin_cells"],
 			func() -> Array: return [rig.max_distance, rig.pan_limit])
 
 
@@ -300,7 +301,7 @@ func _declaration_tables() -> Array[Dictionary]:
 
 
 func _knob(node: String, prop: String) -> Dictionary:
-	for knob: Dictionary in _declaration_tables():
+	for knob: Dictionary in _declaration_tables() + LookKnobs.KNOBS:
 		if knob["node"] == node and knob["prop"] == prop:
 			return knob
 	assert_bool(false).override_failure_message("no row names %s:%s" % [node, prop]).is_true()

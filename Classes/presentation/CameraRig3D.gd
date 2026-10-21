@@ -197,11 +197,11 @@ static func scale_of(setting: PlayerSettings.Setting) -> float:
 # aim every frame, so a stray that tracked the LIVE zoom would shrink as you zoomed in and YANK the
 # aim out from under you.
 #
-# It and zoom_out_slack are read only by rebound(), so each re-runs it on the bounds it last fitted:
-# without that, a Game-tab drag moved no limit until the board next changed size (#1373).
+# It, fit_margin_cells and zoom_out_slack are read only by rebound(), so each re-runs it on the bounds
+# it last fitted: without that, a drag moved no limit until the board next changed size (#1373).
 @export var pan_stray_screens := 1.0: set = _set_pan_stray_screens
 
-@export var fit_margin_cells := 1.0          # breathing room around a framed board
+@export var fit_margin_cells := 1.0: set = _set_fit_margin_cells          # breathing room around a framed board
 @export var zoom_out_slack := 1.0: set = _set_zoom_out_slack            # 1.0 = may not zoom out past the whole board
 
 # Focus band offsets: in-focus from (distance - near) to (distance + far).
@@ -1012,6 +1012,12 @@ func _set_pan_stray_screens(value: float) -> void:
 
 func _set_zoom_out_slack(value: float) -> void:
 	zoom_out_slack = value
+	if _has_fitted_bounds:
+		rebound(_fitted_bounds)
+
+
+func _set_fit_margin_cells(value: float) -> void:
+	fit_margin_cells = value
 	if _has_fitted_bounds:
 		rebound(_fitted_bounds)
 
