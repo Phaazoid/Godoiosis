@@ -1008,33 +1008,22 @@ func _click_picking_target(cell: Vector2i) -> void:
 # ==============================================================================
 
 func _on_turn_started(faction: Team.Faction):
-	TurnBoundary.turn_start_ticks(_all_units(), faction)
+	# The whole hand-off rule, shared with the Play API (#1365): ticks, contact, mission check, skip,
+	# reset. The redraws below read wards, watches and membership, which nothing after the ticks and
+	# the contact sweep touches, so drawing them after the verdict draws the same board.
+	var start := TurnBoundary.start_turn(faction, _all_units(), squad_manager, func() -> bool:
+		mission_controller.check()
+		return mission_controller.is_over())
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
-	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
-	# (#151) -- the other way a squad splits without any move having authored it.
-	squad_manager.enforce_contact()
-	# An ejection here changed membership without any signal a redraw path listens to.
-	refresh_squad_rings()
+	refresh_squad_rings()     # a contact ejection changed membership without any signal a redraw hears
 	# The other side moved (#710) -- and AFTER the ticks and the ejection (#1360), which melt ice,
 	# lapse effects and split squads, every one of them something the field reads.
 	drop_threat_field()
-	# AFTER the ticks: an expiring downed countdown kills, and that is the one death that
-	# happens outside a resolution pass (#96).
-	mission_controller.check()
-	if mission_controller.is_over():
+	if start == TurnBoundary.Start.SKIP:
+		turn_manager.end_turn(_board().present_factions())
+	if start != TurnBoundary.Start.PLAY:
 		return
-	# A faction with no commandable (active) units has nothing to do — its downed clocks already
-	# ticked above, so pass straight to the next. The guard against an all-downed board stays:
-	# the mission check above catches the case that should be a LOSS, but an uncontested dev
-	# sandbox board can still reach all-downed, and this is what keeps that inert not hung.
-	var board := _board()
-	if not board.faction_has_active_units(faction) and board.has_active_units():
-		turn_manager.end_turn(board.present_factions())
-		return
-	# A turn HANDOFF resets actions; a menu arrival trusts the file (#144). Keep this out of
-	# start_faction_turn -- the menu paths call it, and a resumed save's has_acted must survive.
-	squad_manager.reset_faction_actions(faction)
 	refresh_end_turn_button()
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)

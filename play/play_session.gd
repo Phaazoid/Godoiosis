@@ -56,6 +56,7 @@ func _init(board: Dictionary) -> void:
 	mission = MissionState.new(zone_manager)
 	if scenario_data != null:
 		mission.apply_scenario(scenario_data)
+	board["mission"] = mission   # the builder's board_source hands it to every board it builds (#1365)
 	for unit in live_units():
 		_register(unit)
 	# The turn boundary's signal-driven halves (#898), heard in the order game.gd hears them.
@@ -324,10 +325,10 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	unit.active_attack = aiming
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
-	# can_hit_cell_from is what narrows it to the aim actually available. Both of queue_attack's
-	# gates are applied here in its own order, so a cell offered can never be refused.
+	# can_aim_at, the click's own gate (#1365), is what narrows it to the aim actually available. Both
+	# of queue_attack's gates are applied here in its own order, so a cell offered can never be refused.
 	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, aiming):
-		if not Reach.can_hit_cell_from(unit, origin, aim, aiming, board):
+		if not Reach.can_aim_at(unit, origin, aim, aiming, board):
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
 		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice. Whether
@@ -914,9 +915,11 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	var origin := unit.get_projected_destination()
 	# Aiming: the live pick IS the question, and it is exactly what declare() stamps below (#102).
 	var aiming := unit.get_fired_attack()
-	# The board carries the elevations for the vertical-tolerance half of the gate (#258),
-	# mirroring the player's click exactly.
-	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
+	# The player's click gate (#1365), the one overwatch and the hover ask: a directional aim needs a
+	# facing whose spread survives, a point aim needs the cell and a footprint with ground in it
+	# (#1228), so a shot into a hole is refused here as the click can never make it. The board carries
+	# the elevations for the vertical-tolerance half (#258).
+	if not Reach.can_aim_at(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
 	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
 	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
@@ -1629,18 +1632,9 @@ func end_turn() -> Dictionary:
 	if mission_tag() != "":
 		return _turn_result(log)
 
-	# The hand-off runs the round tick and the turn-start ticks through the handlers wired in _init.
+	# The hand-off runs the round tick and the whole turn-start rule through the handlers wired in
+	# _init: the ticks, the mission check, the empty-faction skip and the reset (#1365).
 	log.append_array(_hand_off())
-	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
-	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
-	# The board is re-read per pass, and the mission check mirrors game._on_turn_started's before it
-	# skips -- the round that just completed may have run the mission clock out (#46).
-	while mission_tag() == "":
-		var board := _board()
-		if board.faction_has_active_units(turn_manager.active_faction()) or not board.has_active_units():
-			break
-		log.append_array(_hand_off())
-	squad_manager.reset_faction_actions(turn_manager.active_faction())
 
 	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
 	# stationary board: end_turn advanced the faction and nothing else, so every enemy sat still
@@ -1652,8 +1646,9 @@ func end_turn() -> Dictionary:
 	# test fixtures) declares nobody and is unaffected.
 	#
 	# Loops, because several AI factions can follow one another, and re-reads the faction each pass
-	# rather than assuming one hand-off.
-	while _is_ai_faction(turn_manager.active_faction()):
+	# rather than assuming one hand-off. Asks the mission first, as the game's handler does before
+	# start_faction_turn: a hand-off that ended it starts no AI turn, so nothing regroups (#1365).
+	while mission_tag() == "" and _is_ai_faction(turn_manager.active_faction()):
 		var acting := turn_manager.active_faction()
 		log.append_array(_take_ai_turn(acting))
 		if mission_tag() != "":
@@ -1663,10 +1658,8 @@ func end_turn() -> Dictionary:
 		if mission_tag() != "":
 			break
 		log.append_array(_hand_off())
-		var next := turn_manager.active_faction()
-		if next == acting:
+		if turn_manager.active_faction() == acting:
 			break   # nobody else to hand to; do not spin
-		squad_manager.reset_faction_actions(next)
 	return _turn_result(log)
 
 
@@ -1728,11 +1721,14 @@ func _on_turn_started(faction: Team.Faction) -> void:
 	for unit in live_units():
 		if unit.is_downed() and unit.get_faction() == faction:
 			bodies[unit] = handle_for(unit)
-	TurnBoundary.turn_start_ticks(live_units(), faction)
+	# The game's own hand-off rule (#1365), so a downed faction is passed over here exactly as there.
+	var start := TurnBoundary.start_turn(faction, live_units(), squad_manager, func() -> bool:
+		return mission_tag() != "")
 	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
 		if not is_instance_valid(unit) or (unit as Unit).is_dead():
 			_boundary_events.append("%s bleeds out" % bodies[unit])
-	squad_manager.enforce_contact()   # AFTER the ticks, as game._on_turn_started orders them
+	if start == TurnBoundary.Start.SKIP:
+		turn_manager.end_turn(_board().present_factions())   # re-enters here for the next faction
 
 
 func _is_ai_faction(faction: Team.Faction) -> bool:

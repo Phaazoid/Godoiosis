@@ -88,3 +88,104 @@ func test_focus_reads_the_units_derived_numbers_and_its_attacks() -> void:
 		assert_str(text).override_failure_message(
 				"focus did not list %s in the game's words ('%s'):\n%s" % [attack.display_name, detail, text]) \
 			.contains("%s: %s" % [attack.display_name, detail])
+
+
+# THE LINE NAMES WHAT THE WEAPON FIRES (#1365). It printed the template's main, so a mod that replaces
+# the main left the attack verb firing something the view never showed, and the friendly-fire and
+# element marks were the authored ones, not what the fitted mods make of them.
+func test_the_unit_line_prints_the_main_a_mod_put_there_and_its_composed_marks() -> void:
+	var b := BoardBuilder.build(self, "ReplacedMainRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var unit: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(),
+			"Gunner", Team.Faction.PLAYER), Vector2i(0, 0))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.display_name = "Stock Swing"
+	var replacement := WeaponAttackData.new()
+	replacement.display_name = "Lobbed Swing"
+	var mod := WeaponModData.new()
+	mod.display_name = "Lob Fitting"
+	mod.replaces_main = replacement
+	mod.applies_to = WeaponModData.AppliesTo.MAIN_ATTACK
+	mod.added_element = Elemental.Element.FIRE
+	mod.hits_allies_override = WeaponModData.Override.ON
+	var inst := WeaponInstance.make(template)
+	assert_bool(inst.fit(0, mod)).override_failure_message("fixture: the mod did not fit").is_true()
+	unit.add_item(inst)
+	var sess = PlaySession.new(b)
+	var main := inst.effective_main(unit)
+	if main == template.main_attack:
+		fail("fixture: the fitted mod did not replace the main, so the line cannot show it")
+		return
+	assert_bool(inst.effective_hits_allies(unit, main)).override_failure_message(
+			"fixture: the mod does not make the main hit allies").is_true()
+
+	var line: String = BoardView._unit_line(sess, unit)
+
+	assert_str(line).override_failure_message("the line does not name the main it fires: %s" % line) \
+			.contains(main.display_name)
+	for element in inst.get_elements(unit, main):
+		assert_str(line).override_failure_message("the line drops the %s the mod adds: %s"
+				% [Elemental.Element.keys()[element], line]).contains("/" + Elemental.Element.keys()[element])
+	assert_str(line).override_failure_message("the line drops the friendly fire the mod turns on: %s" % line) \
+			.contains("/ff")
+
+
+# A LEADER'S STRANDING CELLS ARE NOT "+ move" (#1365): queue_move refuses them (#1069), so focus marks
+# them refused, cell for cell where legal_moves splits them off.
+func test_focus_marks_a_leaders_stranding_cells_as_refused() -> void:
+	var b := BoardBuilder.build(self, "StrandFocusRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-4, -4, 18, 18))
+	# test_group_move_headless's stranding squad: a quick leader on a short leash, a slow follower.
+	var quick := Stats.STAT_DEFAULTS.duplicate()
+	quick[Stats.Stat.DEX] = 10
+	quick[Stats.Stat.COH] = 1
+	var slow := Stats.STAT_DEFAULTS.duplicate()
+	slow[Stats.Stat.DEX] = 0
+	var leader: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(quick, "Lead", Team.Faction.PLAYER),
+			Vector2i(0, 0))
+	var member: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(slow, "Slow", Team.Faction.PLAYER),
+			Vector2i(0, 1))
+	BoardBuilder.spawn(b, UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), "Foe",
+			Team.Faction.ENEMY), Vector2i(12, 12))
+	var sess = PlaySession.new(b)
+	var joined: Dictionary = sess.join(sess.handle_for(member), sess.handle_for(leader))
+	assert_bool(joined.ok).override_failure_message("fixture: the member did not join").is_true()
+	var legal: Dictionary = sess.legal_moves(sess.handle_for(leader))
+	var stranding: Array[Vector2i] = []
+	stranding.assign(legal.get("stranding", []))
+	if stranding.is_empty():
+		fail("fixture: the leader can reach nowhere its squad cannot follow, so focus shows nothing")
+		return
+
+	var text := str(BoardView.render_focus(sess, sess.handle_for(leader)))
+
+	assert_str(text).override_failure_message("the legend does not name the stranding mark:\n%s" % text) \
+			.contains("- strands a squadmate")
+	var overlay := _focus_overlay(sess, text)
+	for cell: Vector2i in stranding:
+		assert_str(str(overlay.get(cell, ""))).override_failure_message(
+				"focus offers %s as a move, which queue_move refuses:\n%s" % [str(cell), text]).is_equal("-")
+	for cell: Vector2i in legal.cells:
+		assert_bool(["+", "*"].has(str(overlay.get(cell, "")))).override_failure_message(
+				"focus withholds %s, which queue_move takes:\n%s" % [str(cell), text]).is_true()
+
+
+# Each cell's overlay character, read back off the rendered grid through the view's own rulers.
+static func _focus_overlay(sess, text: String) -> Dictionary:
+	var bounds: Rect2i = BoardView._content_bounds(sess)
+	var out := {}
+	for line: String in text.split("\n"):
+		var m := RegEx.create_from_string("^ *y= *(-?\\d+) ").search(line)
+		if m == null:
+			continue
+		var y := int(m.get_string(1))
+		var body := line.substr(m.get_end())
+		for i in bounds.size.x:
+			var cell_text := body.substr(i * 3, 3)
+			if cell_text.length() == 3:
+				out[Vector2i(bounds.position.x + i, y)] = cell_text[2]
+	return out
