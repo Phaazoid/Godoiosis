@@ -1,0 +1,117 @@
+[gd_resource type="Resource" script_class="Roster" format=3 uid="uid://dyb0i8meyofi0"]
+
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="1_0fyjw"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_4f1ee"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_mkq2r"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="4_sb5al"]
+[ext_resource type="Resource" uid="uid://cvvsnph8bcjc8" path="res://Resources/Units/Torv.tres" id="5_ejc0o"]
+[ext_resource type="Resource" uid="uid://cilw8ay33gk61" path="res://Resources/Units/Marco.tres" id="6_b5n5x"]
+[ext_resource type="Resource" uid="uid://cuns07k40xaxv" path="res://Resources/Units/Sara.tres" id="7_lguiq"]
+[ext_resource type="Resource" uid="uid://dmbjfwxb8u62b" path="res://Resources/Units/Bram.tres" id="8_mtskq"]
+[ext_resource type="Resource" uid="uid://dxhlknpfvr3sy" path="res://Resources/Units/Isaac.tres" id="9_6hvhk"]
+[ext_resource type="Resource" uid="uid://82drex4vkegf" path="res://Resources/Units/Celest.tres" id="10_pbcbp"]
+[ext_resource type="Resource" path="res://Resources/Units/Rebecca.tres" id="11_of63e"]
+[ext_resource type="Resource" uid="uid://cy85lg7igt3g7" path="res://Resources/Units/Aldin.tres" id="12_gab1u"]
+[ext_resource type="Resource" uid="uid://b56p2d58ri1hr" path="res://Resources/Units/Noemie.tres" id="13_jkpnf"]
+[ext_resource type="Resource" uid="uid://bwhofbi5q5su" path="res://Resources/Units/Aster.tres" id="14_3gwq1"]
+[ext_resource type="Resource" uid="uid://d1218casms8qb" path="res://Resources/Units/Dorian.tres" id="15_0omen"]
+[ext_resource type="Resource" path="res://Resources/Units/Ross.tres" id="16_opw1w"]
+[ext_resource type="Resource" uid="uid://cfja2rrrneo3b" path="res://Resources/Units/Sophia.tres" id="17_swsge"]
+[ext_resource type="Script" uid="uid://cwhromthxtouo" path="res://Classes/flow/Roster.gd" id="18_5w7p4"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="19_inbok"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="20_wmr43"]
+[ext_resource type="Resource" uid="uid://d0sf3gb33rpfy" path="res://Resources/Weapons/MainVarieties/Chemical_Spitter.tres" id="21_xx5ck"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="22_n88xx"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="23_76q04"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="24_7tgew"]
+[ext_resource type="Resource" uid="uid://migwb2q24cv7" path="res://Resources/RuneVariants/Fire Rune.tres" id="25_8dxlg"]
+[ext_resource type="Resource" uid="uid://b17pmec74vt1l" path="res://Resources/RuneVariants/Electric Rune.tres" id="26_56gkx"]
+[ext_resource type="Resource" uid="uid://bin62phny7rvg" path="res://Resources/Conduits/YellowDiamond.tres" id="27_sav6j"]
+[ext_resource type="Resource" uid="uid://bxva1ht20h7en" path="res://Resources/RuneVariants/Wind Rune.tres" id="28_66k1j"]
+[ext_resource type="Resource" uid="uid://j6ier50surn8" path="res://Resources/RuneVariants/Water Rune.tres" id="29_y1610"]
+[ext_resource type="Resource" uid="uid://dk136huv8a4cx" path="res://Resources/RuneVariants/FreezeRune.tres" id="30_4ur3m"]
+[ext_resource type="Resource" uid="uid://dq8xjurnrp551" path="res://Resources/RuneVariants/Heal2.tres" id="31_p6okl"]
+[ext_resource type="Resource" uid="uid://g207p44clmyf" path="res://Resources/RuneVariants/Earth Rune.tres" id="32_m5jyv"]
+[ext_resource type="Resource" uid="uid://d34p7eo3eg3pa" path="res://Resources/Armor/BulwarkPlate.tres" id="33_cfq6d"]
+[ext_resource type="Resource" path="res://Resources/Armor/RivetedMail.tres" id="34_t5w1n"]
+[ext_resource type="Resource" path="res://Resources/Armor/BallastHarness.tres" id="35_2netf"]
+[ext_resource type="Resource" uid="uid://dnaegm286jmsk" path="res://Resources/RuneVariants/woosh.tres" id="36_3jrsh"]
+[ext_resource type="Resource" path="res://Resources/Vials/FireVial.tres" id="37_08yif"]
+[ext_resource type="Resource" path="res://Resources/Vials/WaterVial.tres" id="38_tyau0"]
+[ext_resource type="Resource" path="res://Resources/Vials/EarthVial.tres" id="39_a5w56"]
+[ext_resource type="Resource" path="res://Resources/Vials/AlkahestVial.tres" id="40_wuk83"]
+[ext_resource type="Resource" path="res://Resources/Vials/IchorVial.tres" id="41_q4lu7"]
+[ext_resource type="Resource" path="res://Resources/Vials/NitreVial.tres" id="42_6a2x0"]
+[ext_resource type="Resource" path="res://Resources/Vials/VitriolVial.tres" id="43_yy65y"]
+[ext_resource type="Resource" uid="uid://oysqp74gyp72" path="res://Resources/Armor/AsbestosShroud.tres" id="44_lktu8"]
+
+[sub_resource type="Resource" id="Resource_0fyjw"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("5_ejc0o")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_4f1ee"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("6_b5n5x")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_mkq2r"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("7_lguiq")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_sb5al"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("8_mtskq")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_ejc0o"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("9_6hvhk")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_b5n5x"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("10_pbcbp")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_lguiq"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("11_of63e")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_mtskq"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("12_gab1u")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_6hvhk"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("13_jkpnf")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_pbcbp"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("14_3gwq1")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_of63e"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("15_0omen")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_gab1u"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("16_opw1w")
+state_saved = false
+
+[sub_resource type="Resource" id="Resource_jkpnf"]
+script = ExtResource("2_4f1ee")
+unit_data = ExtResource("17_swsge")
+state_saved = false
+
+[resource]
+script = ExtResource("18_5w7p4")
+entries = Array[ExtResource("2_4f1ee")]([SubResource("Resource_0fyjw"), SubResource("Resource_4f1ee"), SubResource("Resource_mkq2r"), SubResource("Resource_sb5al"), SubResource("Resource_ejc0o"), SubResource("Resource_b5n5x"), SubResource("Resource_lguiq"), SubResource("Resource_mtskq"), SubResource("Resource_6hvhk"), SubResource("Resource_pbcbp"), SubResource("Resource_of63e"), SubResource("Resource_gab1u"), SubResource("Resource_jkpnf")])
+stash = Array[ExtResource("3_mkq2r")]([ExtResource("19_inbok"), ExtResource("20_wmr43"), ExtResource("21_xx5ck"), ExtResource("22_n88xx"), ExtResource("23_76q04"), ExtResource("24_7tgew"), ExtResource("25_8dxlg"), ExtResource("26_56gkx"), ExtResource("27_sav6j"), ExtResource("28_66k1j"), ExtResource("29_y1610"), ExtResource("30_4ur3m"), ExtResource("31_p6okl"), ExtResource("32_m5jyv"), ExtResource("33_cfq6d"), ExtResource("34_t5w1n"), ExtResource("35_2netf"), ExtResource("25_8dxlg"), ExtResource("26_56gkx"), ExtResource("27_sav6j"), ExtResource("36_3jrsh"), ExtResource("37_08yif"), ExtResource("38_tyau0"), ExtResource("39_a5w56"), ExtResource("40_wuk83"), ExtResource("41_q4lu7"), ExtResource("42_6a2x0"), ExtResource("43_yy65y"), ExtResource("44_lktu8")])
+offers_every_job = false
