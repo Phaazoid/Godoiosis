@@ -54,7 +54,7 @@ const EXTRA_ROLES := {GasLook.Extra.WISP: 1, GasLook.Extra.SOOT: 2, GasLook.Extr
 @export var light_steps := 4
 @export var light_step := 0.15
 @export var min_step := 0.03
-@export var thin_floor := 0.45
+@export var thin_floor := 0.45: set = _set_thin_floor   # the puffs rise with it, so it rebuilds them
 @export var contain_softness := 0.1
 @export var pool_softness := 0.03
 @export var detail_scale := 1.3
@@ -172,7 +172,8 @@ func _process(delta: float) -> void:
 		return
 	var key := [field.dirty.version, heights.dirty.version if heights != null else 0,
 		grid.dirty.version if grid != null else 0, BoardSpace.staging_version,
-		BoardSpace.flight_active(), mix(), _sun_light()]
+		BoardSpace.flight_active(), mix(), _sun_light(),
+		overlays.geometry_version if overlays != null else 0]   # the floor lies at the markup's lift
 	if key != _seen:
 		_seen = key
 		_rebuild()
@@ -832,4 +833,9 @@ func _set_puff_lean(value: float) -> void:
 
 func _set_puff_tuck(value: float) -> void:
 	puff_tuck = value
+	_seen = []
+
+
+func _set_thin_floor(value: float) -> void:
+	thin_floor = value
 	_seen = []

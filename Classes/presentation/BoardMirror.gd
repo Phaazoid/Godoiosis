@@ -154,7 +154,7 @@ const FLAME_FRAMES := 8
 # Minimum clearance between the flame's bottom edge and the tile's top face. This is the
 # z-fight gap, the flame's twin of BoardOverlays.fill_lift, and it is a CLAMP rather than
 # an offset so no authored flame_lift can put the quad back into the ground plane.
-@export var flame_ground_gap := 0.03
+@export var flame_ground_gap := 0.03: set = _set_flame_ground_gap
 # FALSE restores the rendering the flame had before #236, which is the known-good look.
 # #236 turned this on to stop a downed body swallowing the flame and bought constant
 # z-fighting for a rare, self-correcting artefact — a bad trade, reverted by default
@@ -297,8 +297,9 @@ const FLAME_FRAMES := 8
 # How far from land the darkening above takes to reach full, in cells.
 @export var water_shore_fade_range := 1.0: set = _set_water_shore_fade_range
 
-# How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
-@export var brush_ghost_alpha := 0.45
+# How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231). Written
+# into the ghost's material when it is built, so the setter writes it there too (#1373).
+@export var brush_ghost_alpha := 0.45: set = _set_brush_ghost_alpha
 
 # The corner tool's marker (#427 slice 4), as a fraction of a cell. Big enough to grab by eye at a
 # playing camera distance, small enough to still read as a POINT rather than as a tile.
@@ -1310,11 +1311,21 @@ func _ensure_brush_ghost() -> void:
 	_brush_ghost.name = "BrushGhost"
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(1.0, 1.0, 1.0, brush_ghost_alpha)
 	_brush_ghost.material_override = mat
+	_tint_brush_ghost()
 	_brush_ghost.visible = false
 	_brush_ghost.layers = BoardOverlays.WORLD_RENDER_LAYER
 	board.add_child(_brush_ghost)
+
+
+func _tint_brush_ghost() -> void:
+	if _brush_ghost != null:
+		(_brush_ghost.material_override as StandardMaterial3D).albedo_color = Color(1.0, 1.0, 1.0, brush_ghost_alpha)
+
+
+func _set_brush_ghost_alpha(value: float) -> void:
+	brush_ghost_alpha = value
+	_tint_brush_ghost()
 
 
 func fire_marker_count() -> int:
@@ -1992,6 +2003,12 @@ func _set_flame_spread(value: float) -> void:
 # both ways without relighting the board.
 func _set_flame_writes_depth(value: bool) -> void:
 	flame_writes_depth = value
+	_rebuild_fires()
+
+
+# The lift clamp's other half, so a sweep for the same reason (#1373).
+func _set_flame_ground_gap(value: float) -> void:
+	flame_ground_gap = value
 	_rebuild_fires()
 
 

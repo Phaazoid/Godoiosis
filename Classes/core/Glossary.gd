@@ -68,6 +68,12 @@ static func _table() -> Dictionary:
 		_entries = _build_entries()
 	return _entries
 
+
+# Drops the built text, so the next read interpolates the live values. A runtime writer of a value
+# an entry quotes calls this (the limb-loss knobs, #1373), the catalogs' refresh() shape.
+static func refresh() -> void:
+	_entries = {}
+
 static func title(term: Term) -> String:
 	return _table()[term]["title"]
 
