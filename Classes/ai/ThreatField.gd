@@ -3,9 +3,9 @@ class_name ThreatField
 
 # Which cells a faction's units could attack NEXT turn, and who could reach each -- the hover
 # tier of the enemy-intent preview (#710). An upper bound per archetype: Hold stands where it is,
-# Sentry opens only on an intruder inside its leash but ANSWERS from anywhere it can stand
-# (_add_counter_reach), Rushdown takes its whole move range. Cohesion is genuinely ignored as of
-# slice 4 -- it used to be applied, which under-stated every follower.
+# Sentry stands only inside its leash and hits anyone it can reach from there (#1377: its zone limits
+# where it walks, not what it hits), Rushdown takes its whole move range. Cohesion is genuinely
+# ignored as of slice 4 -- it used to be applied, which under-stated every follower.
 #
 # TWO MORE WAYS TO BE HIT since #1197, both of which this field used to paint safe: the lanes a
 # watcher could arm, since a watch armed over somebody fires on the spot (#1003) and a watch attack
@@ -53,7 +53,7 @@ static func build(board: BoardContext, viewer: Team.Faction, pending: Dictionary
 		for cell in origins:
 			moves[cell] = true
 		field.move_by_unit[unit] = moves
-		var reach := _threat_of(unit, board, origins, zone, pending)
+		var reach := _threat_of(unit, board, origins, pending)
 		field.by_unit[unit] = reach
 		for cell in reach:
 			if not field.cells.has(cell):
@@ -130,13 +130,12 @@ func _union(store: Dictionary, units: Array[Unit]) -> Array[Vector2i]:
 # with `squad_unreachable` on purpose (slice 4: cohesion clamps a follower to where its leader stands
 # NOW, while the enemy turn moves the leader first), which is right for a PREDICTION about an enemy
 # and wrong for a PERMISSION about your own unit -- your red must grow from the cells you may
-# actually be ordered to and no others. No zone either: a leash is a fact about an AI archetype's
-# aggression and says nothing about a unit you command.
+# actually be ordered to and no others.
 static func reach_from(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if unit == null or not is_instance_valid(unit) or board == null or origins.is_empty():
 		return out
-	out.assign(_reach_of(unit, board, origins, {}).keys())
+	out.assign(_reach_of(unit, board, origins).keys())
 	return out
 
 
@@ -187,26 +186,26 @@ static func _origins_of(unit: Unit, board: BoardContext, zone: Dictionary) -> Ar
 
 # Every cell any fireable attack reaches from any origin, under the same two filters the AI's own
 # candidate builder applies (AITactics._attack_candidates): fireable, and vertically aimable.
-# Origins and zone arrive as parameters because build() already holds both -- looking them up
-# again here would be a second derivation of the envelope the move tone draws.
+# Origins arrive as a parameter because build() already holds them -- looking them up again here
+# would be a second derivation of the envelope the move tone draws. Nothing is clipped to a zone:
+# a Sentry's leash is its origins (#1377).
 #
-# TWO PASSES since slice 4: what this unit would OPEN with (zone-clipped, below) and what it would
-# ANSWER with (the counter, unclipped -- see _add_counter_reach).
+# TWO PASSES since slice 4: what this unit would OPEN with (below) and what it would ANSWER with
+# (the counter -- see _add_counter_reach).
 #
 # This is reach_from's walk too, and deliberately ONLY these two passes: the watch lanes and the
 # current are predictions about an enemy turn (_threat_of), and your own red is a permission.
-static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], zone: Dictionary) -> Dictionary:
+static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Dictionary:
 	var out := {}
-	for cells: Dictionary in _reach_by_attack(unit, board, origins, zone).values():
+	for cells: Dictionary in _reach_by_attack(unit, board, origins).values():
 		out.merge(cells)
 	return out
 
 
 # What this unit could hit on its next turn -- _reach_of plus the two mechanisms #1197 found it
 # painting safe. The lanes come first so the current is traced from them as well.
-static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], zone: Dictionary,
-		pending: Dictionary) -> Dictionary:
-	var by_attack := _reach_by_attack(unit, board, origins, zone)
+static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], pending: Dictionary) -> Dictionary:
+	var by_attack := _reach_by_attack(unit, board, origins)
 	_add_watch_reach(unit, board, origins, by_attack)
 	_add_splash(by_attack)
 	var out := {}
@@ -220,7 +219,7 @@ static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 # KEYED BY ATTACK, because the current depends on the element of the attack that made the hit -- a
 # non-shock swing that reaches the lake must not light it (#1197). Nothing selectable (unarmed, an
 # aura-dry rune) reaches nothing, as it can fire nothing (#1215).
-static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i], zone: Dictionary) -> Dictionary:
+static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Dictionary:
 	var by_attack := {}
 	var attacks: Array[AttackData] = unit.get_selectable_attacks()
 	for origin in origins:
@@ -234,8 +233,6 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 				continue
 			var out: Dictionary = by_attack.get_or_add(attack, {})
 			for cell in Reach.get_all_attack_cells_from(unit, origin, attack):
-				if not zone.is_empty() and not zone.has(cell):
-					continue   # a Sentry only answers an intruder inside its zone
 				if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, cell, board):
 					continue
 				out[cell] = true
@@ -243,17 +240,15 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 	return by_attack
 
 
-# A COUNTER DOES NOT ASK ABOUT THE LEASH (#710 slice 4, dev: "technically they can attack one tile
-# outside of their range if already there in counter situations"). The zone clip above is a fact
-# about a Sentry's AGGRESSION -- it will not OPEN from outside its zone -- and because the clipped
-# reach is a subset of the zone while the origins cover the zone, nearly the whole red layer ended
-# up underneath the blue: a melee patrol showed 2 of 30 reach cells, a bow 5 of 36, so the outer
-# silhouette of the threat was the MOVEMENT tone.
+# THE COUNTER, walked on its own (#710 slice 4). It was born to answer the zone clip the pass above
+# used to apply to a Sentry -- a patrol painted almost pure blue, 2 of 30 reach cells -- and #1377
+# deleted that clip, so for a unit whose counter is among its selectable attacks this now adds
+# nothing (measured in tests/ai/test_threat_field.gd rather than assumed). It stays for the counter
+# that view leaves out: a watch-only main is never fireable, yet can_ever_counter does not ask
+# can_overwatch, so it still answers a blow.
 #
-# This is the same walk unclipped, over the counter attack alone. It borrows SquadManager.can_counter's
-# own gates rather than restating them, so a dry weapon and an unauthored AttackData.can_counter both
-# fall out for free. It adds NOTHING for a non-sentry -- their counter is already inside
-# get_selectable_attacks() -- which is measured rather than assumed.
+# It borrows SquadManager.can_counter's own gates rather than restating them, so a dry weapon and an
+# unauthored AttackData.can_counter both fall out for free.
 #
 # It deliberately does NOT ask is_standing_watch(), which can_counter does: a watch standing NOW
 # fires during your own move, on the cells you walk through, which is the watch overlay's to draw
@@ -279,9 +274,9 @@ static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[V
 # Carbine: Shot fires at exactly 2, the watch lane runs 1 to 4, so the watch is its point-blank shot.
 #
 # Asked of the ARCHETYPE'S declared list, so Rushdown (OVERWATCH is NEVER) marks none, and of
-# AITactics' own two doors, so these are the lanes the builder could arm. From EVERY origin and NOT
-# zone-clipped: the shot takes anyone in the lane, and a Sentry at its post aims at the nearest enemy
-# wherever that enemy stands.
+# AITactics' own two doors, so these are the lanes the builder could arm. From EVERY origin: the shot
+# takes anyone in the lane, and a Sentry at its post aims at the nearest enemy wherever that enemy
+# stands.
 static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vector2i], by_attack: Dictionary) -> void:
 	if not AIArchetype.main_action_priority(_archetype_of(unit.squad)).has(BaseAction.ActionType.OVERWATCH):
 		return
@@ -343,8 +338,8 @@ static func _any_facing(payload: AttackData) -> Array[Vector2i]:
 
 # WHERE THE CURRENT RUNS (#1197): Conduction's own flood, seeded with every cell this attack reaches.
 # One flood over the union is the union of one flood per aim -- it is a bounded multi-source search --
-# and the flood gates on SHOCK itself, so any other attack adds nothing. Not zone-clipped: a current
-# does not respect a leash. `pending` is the viewer's pending hypo, so a unit their own plan soaks
+# and the flood gates on SHOCK itself, so any other attack adds nothing. `pending` is the viewer's
+# pending hypo, so a unit their own plan soaks
 # conducts as if it already were wet.
 static func _add_arc(unit: Unit, attack: AttackData, cells: Dictionary, board: BoardContext,
 		pending: Dictionary, out: Dictionary) -> void:

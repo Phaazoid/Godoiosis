@@ -259,22 +259,36 @@ func test_a_sentry_does_not_leave_its_allowed_cells_to_seek() -> void:
 		for y in 8:
 			allowed[Vector2i(x, y)] = true
 	allowed.erase(N)
-	var within := { T: true }
 
-	AITactics.engage(attacker.squad, board.target, _context(board), board.squad_manager, allowed, within)
+	AITactics.engage(attacker.squad, board.target, _context(board), board.squad_manager, allowed)
 
 	assert_that(attacker.get_projected_destination()).is_equal(W)
 
 
-# ...and never for someone outside its zone, which would be a sentry lured by bait.
-func test_a_sentry_does_not_seek_a_target_outside_its_zone() -> void:
+# ...but it seeks a removal on someone standing OUTSIDE its zone from a cell inside it (#1377, dev
+# 2026-10-21: the zone limits where it walks, not what it can hit). Through the real archetype: the
+# zone holds N and W but not T. It idled at its post until #1377, the target being "bait".
+func test_a_sentry_seeks_a_removal_outside_its_zone_from_a_cell_inside_it() -> void:
 	var board := _hole_board()
 	var attacker: Unit = board.attacker
-	var within := { Vector2i(0, 0): true }
+	var target: Unit = board.target
+	var zones: ZoneManager = board.zone_manager
+	for cell in [A_START, W, N, Vector2i(2, 3), Vector2i(3, 3)]:
+		zones.paint_cell("post", ZoneManager.Kind.PATROL, cell)
+	attacker.squad.archetype = AIArchetype.Type.SENTRY
+	attacker.squad.zone_name = "post"
+	attacker.squad.home_cell = A_START
+	assert_bool(zones.contains("post", T)).override_failure_message("fixture: the target stands in the zone").is_false()
 
-	AITactics.engage(attacker.squad, board.target, _context(board), board.squad_manager, null, within)
+	_plan(attacker, board)
 
-	assert_that(attacker.get_projected_destination()).is_equal(W)
+	assert_that(attacker.get_projected_destination()) \
+		.override_failure_message("the sentry did not go to the cell that drops its target in the hole").is_equal(N)
+	var aim := _aim_of(attacker)
+	assert_object(aim).override_failure_message("the sentry queued no attack from the shove cell").is_not_null()
+	assert_that(aim.target_cell).is_equal(T)
+	assert_bool(_plan_removes(board, attacker.squad, target)) \
+		.override_failure_message("the plan does not remove the target").is_true()
 
 
 # A leader never seeks a cell its squad cannot follow it to. The member has no legs (MOV 1), so it

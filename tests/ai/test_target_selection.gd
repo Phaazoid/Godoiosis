@@ -115,7 +115,11 @@ func test_a_tie_among_reachable_targets_falls_to_route_distance() -> void:
 			"identical candidates did not fall to the nearer one").is_same(near)
 
 
-# --- The Sentry's two leashes -------------------------------------------------------------------
+# --- The Sentry's footing and its pursuit ------------------------------------------------------
+#
+# #1377 (dev, 2026-10-21): "The sentry's zone should only limit where it can walk, not where its
+# attack can reach." `allowed` (zone + post) is the only leash engagement reads; the zone itself
+# (`within`) is asked by pursuit alone.
 
 # `allowed` (zone + post) says which cells this sentry may fight FROM, so a target it could only
 # attack by stepping outside is not ENGAGEABLE -- it drops out of the exchange ranking rather than
@@ -144,20 +148,36 @@ func test_a_sentry_ranks_only_the_targets_its_leash_lets_it_fight() -> void:
 	assert_object(_choose(board, leader, null, leash)).is_not_same(tempting)
 
 
-# ...and `within` is the OTHER leash, testing the enemy's OWN cell -- the same question
-# _nearest_enemy_matching asks. Without it a sentry engages an enemy standing outside its zone
-# because a cell inside the zone can reach it: a lured sentry, which is what the archetype exists
-# to refuse. Mutant: apply `within` to the pursuit fallback only.
-func test_a_sentry_never_engages_an_enemy_standing_outside_its_zone() -> void:
+# ...and the enemy's OWN cell no longer matters to engagement: one standing outside the zone that a
+# cell inside it can reach is fought. This case asserted the opposite (a "lured" sentry) until #1377.
+# Mutant: test `within` in the engageable set again and the answer is null.
+func test_a_sentry_engages_an_enemy_outside_its_zone_it_can_hit_from_inside() -> void:
 	var board: Dictionary = _build_board()
 	var leader: Unit = _spawn(board, PLAYER, Vector2i(2, 2))
-	var _lure: Unit = _spawn(board, ENEMY, Vector2i(4, 2), false)   # reachable, but not in the zone
+	var outsider: Unit = _spawn(board, ENEMY, Vector2i(4, 2), false)   # fought from (3,2), which is in the zone
 	var zone := {}
-	for y in range(1, 4):
-		zone[Vector2i(2, y)] = true   # the enemy's cell (4,2) is deliberately NOT in it
+	for x in range(2, 4):
+		for y in range(1, 4):
+			zone[Vector2i(x, y)] = true   # the enemy's cell (4,2) is deliberately NOT in it
 
-	assert_object(_choose(board, leader, zone, null)).override_failure_message(
-			"the sentry was lured out by an enemy standing outside its own zone").is_null()
+	assert_object(_choose(board, leader, zone, zone)).override_failure_message(
+			"the sentry ignored an enemy it can hit from inside its zone").is_same(outsider)
+
+
+# With nobody it can hit THIS TURN, a sentry walks at an intruder INSIDE its zone and never at anyone
+# outside (dev, 2026-10-21, on #1377's open question). Neither enemy here is in reach; the outsider
+# is nearer. Mutant: drop `within` from the pursuit half and the outsider wins on route.
+func test_with_nobody_in_reach_a_sentry_pursues_only_an_intruder() -> void:
+	var board: Dictionary = _build_board()
+	var leader: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	var _outsider: Unit = _spawn(board, ENEMY, Vector2i(0, 6))   # five steps to its firing cell, out of the zone
+	var intruder: Unit = _spawn(board, ENEMY, Vector2i(9, 0))    # eight steps to its firing cell, in the zone
+	var zone := {}
+	for x in range(0, 10):
+		zone[Vector2i(x, 0)] = true
+
+	assert_object(_choose(board, leader, zone, zone)).override_failure_message(
+			"the sentry pursued an enemy outside its zone instead of the intruder").is_same(intruder)
 
 
 # --- A body is a target here too (#720, dev 2026-09-03) -----------------------------------------

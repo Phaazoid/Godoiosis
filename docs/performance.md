@@ -498,6 +498,8 @@ them. Re-measure before believing any of this if the hover tier ever feels slow.
   than every selectable one — so at most a fraction of the first pass, and it is skipped entirely
   for an unarmed or dry enemy. Measured on a representative board it adds cells only for a SENTRY
   (rushdown +0, hold +0), because every other archetype's counter is already inside the first pass.
+  *(Since #1377, 2026-10-21, it adds nothing for a Sentry either: the zone clip it compensated for
+  is gone, so the first pass walks a patrol's counter unclipped like everyone else's.)*
 
 **The deferred repaint slice 4 briefly added is GONE**, so there is no change to how often the
 field rebuilds: `drop_threat_field` repaints synchronously exactly as it did in slice 3. It was

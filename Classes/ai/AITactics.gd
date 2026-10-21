@@ -45,9 +45,13 @@ class_name AITactics
 # would be throwing information away. Scoring a cell IS possible by standing the unit on it, which
 # is what seek_positions does (#760) -- but only for a removal or a squad break, by ruling, so who
 # to fight stays this boolean. Declared in ai-tactics.md rather than left to be discovered.
+#
+# A SENTRY passes two sets and each half reads one (#1377, dev 2026-10-21): `allowed` (zone + post)
+# is where it may fight FROM, the only leash engagement asks; `within` (the zone) is asked by pursuit
+# alone, so with nobody in reach it walks at an intruder and never at anyone outside its zone.
 static func choose_engagement_target(leader: Unit, board: BoardContext, squad_manager: SquadManager,
 		within = null, allowed = null) -> Unit:
-	var engageable := _engageable_enemies(leader, board, within, allowed)
+	var engageable := _engageable_enemies(leader, board, allowed)
 	if engageable.is_empty():
 		return nearest_enemy(leader, board, within)   # pursuit: nobody in reach, distance is the answer
 	return _best_exchange(leader, engageable, board, squad_manager)
@@ -90,9 +94,9 @@ static func _engagement_beats(standing: bool, safe: bool, hops: int,
 
 # Enemy -> the cell this leader would attack it from, for every enemy it could reach and attack
 # THIS TURN -- a body among them since #720, since a body is an ordinary target that loses head to
-# head. `within` tests the enemy's OWN cell exactly as pursuit does -- without it a Sentry engages
-# an enemy standing OUTSIDE its zone because a cell inside the zone can reach it, i.e. a lured
-# sentry, which is the one thing that archetype exists to refuse.
+# head. Where the ENEMY stands is never asked (#1377, dev 2026-10-21: "The sentry's zone should only
+# limit where it can walk, not where its attack can reach"): a Sentry's leash is `allowed`, the cells
+# it may fight from, and anyone it can hit from one of them counts.
 #
 # A leader with squadmates engages only from a cell its squad can FOLLOW it to (#1220) -- the same
 # refusal the player's Move overlay paints grey (#1069). It was optimistic until then: the leader's
@@ -102,7 +106,7 @@ class _Engagement:
 	var hops: int        # route to it, the tie-break
 
 
-static func _engageable_enemies(leader: Unit, board: BoardContext, within, allowed) -> Dictionary:
+static func _engageable_enemies(leader: Unit, board: BoardContext, allowed) -> Dictionary:
 	allowed = _leader_allowed(leader, board, allowed)
 	var aiming := leader.get_fired_attack()
 	var reach_set: Dictionary = RulesService.compute_move_range(leader, board).reachable.duplicate()
@@ -119,8 +123,6 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 		if not is_instance_valid(enemy) or not (enemy.is_active() or enemy.is_downed()):
 			continue
 		if not Team.is_enemy(leader.get_faction(), enemy.get_faction()):
-			continue
-		if within != null and not within.has(enemy.movement.cell):
 			continue
 		var legal := {}
 		for cell in _standable_attack_cells(leader, enemy.movement.cell, aiming, board):
@@ -152,7 +154,8 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, within, allow
 	return out
 
 
-# `within`: optional Dictionary set of cells -- only enemies standing in it count.
+# `within`: optional Dictionary set of cells -- only enemies standing in it count. A Sentry's zone,
+# from its pursuit (#1377 kept it there and nowhere else).
 # NEAREST IS BY ROUTE, not raw distance: an enemy two cells away through a wall is further off than
 # one eight cells down an open corridor, and picking the walled one commits the whole squad to
 # walking at a wall. Distance survives only as the tie-break, which is what everything degrades to
@@ -191,8 +194,8 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, a
 			continue
 		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
 			continue
-		# `within` still tests the enemy's OWN cell -- "is this enemy inside my zone" is a different
-		# question from "how far is a firing position on it", and Sentry's leash means the first.
+		# `within` tests the enemy's OWN cell -- "is this enemy inside my zone" is a different question
+		# from "how far is a firing position on it", and a Sentry pursues only the first.
 		if within != null and not within.has(unit.movement.cell):
 			continue
 		var hops: int = route.get(unit, RulesService.UNREACHABLE)
@@ -277,7 +280,7 @@ static func _approach_firing(from_unit: Unit, board: BoardContext) -> Dictionary
 # pick Rushdown makes. With nobody, the nearest enemy that could NOT answer it from the cell it would
 # fight from; only when every enemy could, the nearest at all. Asked fresh every turn.
 static func choose_balanced_target(leader: Unit, board: BoardContext, squad_manager: SquadManager) -> Unit:
-	var engageable := _engageable_enemies(leader, board, null, null)
+	var engageable := _engageable_enemies(leader, board, null)
 	if not engageable.is_empty():
 		return _best_exchange(leader, engageable, board, squad_manager)
 	var firing := _approach_firing(leader, board)
@@ -1230,15 +1233,15 @@ static func _followable(squad: Squad, board: BoardContext):
 
 
 # Fights `target`: destination pick -> the seek -> conditional group move -> every member tries a
-# main action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
+# main action. The shared shape behind Rushdown's whole turn and Sentry's engage branch -- was
 # hand-duplicated in both files with no third caller (AI generalization sweep, finding #2).
-# `within` is a Sentry's zone: the seek only goes looking for an intruder. `weigh_safety` is Balanced's
-# tie-break on the approach (#1220 ruling 11).
+# `allowed` is a Sentry's footing, and the only leash the seek reads (#1377). `weigh_safety` is
+# Balanced's tie-break on the approach (#1220 ruling 11).
 static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null,
-		within = null, weigh_safety := false) -> void:
+		weigh_safety := false) -> void:
 	var leader := squad.get_leader()
 	var seek := seek_positions(squad, best_attack_destination(leader, target, board, allowed, weigh_safety), board,
-			squad_manager, allowed, within)
+			squad_manager, allowed)
 	if seek.destination != leader.movement.cell or not seek.pins.is_empty():
 		group_move(squad, seek.destination, board, squad_manager, allowed, seek.pins, seek.hazards)
 	queue_main_actions_for_squad(squad, board, squad_manager)
@@ -1320,7 +1323,7 @@ static func regroup_walk(squad: Squad, board: BoardContext, squad_manager: Squad
 	var profile := AIProfiles.of(stray)
 	if not profile.regroups and not profile.squads_up:
 		return false
-	if not _engageable_enemies(stray, board, null, null).is_empty():
+	if not _engageable_enemies(stray, board, null).is_empty():
 		return false
 	var target := regroup_target(stray, squad_manager, board, false)
 	if target == null:
@@ -1390,7 +1393,7 @@ class _Opportunity:
 
 
 static func seek_positions(squad: Squad, default_destination: Vector2i, board: BoardContext,
-		squad_manager: SquadManager, allowed = null, within = null) -> SeekResult:
+		squad_manager: SquadManager, allowed = null) -> SeekResult:
 	var out := SeekResult.new()
 	out.destination = default_destination
 	var leader := squad.get_leader()
@@ -1418,8 +1421,8 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		if fallback != GridUtils.NO_CELL:
 			out.destination = fallback
 	elif _can_seek(leader):
-		var lead := _first_opportunity(leader, lead_cells, squad, board, squad_manager, wins, within, reactions,
-				terrain, stakes)
+		var lead := _first_opportunity(leader, lead_cells, squad, board, squad_manager, wins, reactions, terrain,
+				stakes)
 		if lead != null:
 			out.destination = lead.cell
 			wins.append(lead.action)
@@ -1438,8 +1441,8 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		_stand(squad, leader, out.destination, placed)
 		var best: _Opportunity = null
 		for member in waiting:
-			var found := _first_opportunity(member, options[member], squad, board, squad_manager, wins, within,
-					reactions, terrain, stakes)
+			var found := _first_opportunity(member, options[member], squad, board, squad_manager, wins, reactions,
+					terrain, stakes)
 			if found != null and (best == null or _opportunity_beats(found, best)):
 				best = found
 		if best == null:
@@ -1456,11 +1459,11 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 		var cells := _member_cells(squad, member, out.destination, board, allowed, placed, out.hazards[member])
 		var at: Vector2i = placed.get(member, member.movement.cell)
 		if not _is_dry(member):
-			if _hits_from(member, at, board, within):
+			if _hits_from(member, at, board):
 				continue
 			var step := GridUtils.NO_CELL
 			for entry: Array in cells:
-				if _hits_from(member, entry[0], board, within):
+				if _hits_from(member, entry[0], board):
 					step = entry[0]
 					break
 			if step != GridUtils.NO_CELL:
@@ -1490,13 +1493,12 @@ static func _squad_armed(squad: Squad) -> bool:
 
 
 # Would `unit` have a hostile to hit from `cell`? Geometry only: the candidate builder's own answer,
-# with no resolve. A Sentry asks only about intruders.
-static func _hits_from(unit: Unit, cell: Vector2i, board: BoardContext, within) -> bool:
+# with no resolve. Wherever that hostile stands -- a Sentry's leash is on `cell` (#1377).
+static func _hits_from(unit: Unit, cell: Vector2i, board: BoardContext) -> bool:
 	var paying := {}
 	for candidate in _attack_candidates(unit, board, cell, {}, null, paying):
 		for victim: Unit in paying.get(candidate, []):
-			if Team.is_enemy(unit.get_faction(), victim.get_faction()) \
-					and (within == null or within.has(victim.movement.cell)):
+			if Team.is_enemy(unit.get_faction(), victim.get_faction()):
 				return true
 	return false
 
@@ -1682,7 +1684,7 @@ static func _stand(squad: Squad, leader: Unit, leader_destination: Vector2i, pla
 # victim the same fate. A good fate that still nets a loss -- a counter fells us -- tries the next
 # cell, because counters are the one thing that differs inside a group.
 static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: BoardContext,
-		squad_manager: SquadManager, wins: Array[BaseAction], within,
+		squad_manager: SquadManager, wins: Array[BaseAction],
 		reactions: Array[ElementalReaction], terrain: Array[TerrainReaction], stakes: _Stakes) -> _Opportunity:
 	var profile := AIProfiles.of(unit)
 	if profile.seeks == AIProfile.Seek.NONE:
@@ -1704,14 +1706,11 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 		if stale or not wins.is_empty():
 			base_plan = squad_manager.resolve_hypothetical(squad, wins, board, reactions, terrain)
 			stale = false
-		var paying := {}
-		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo, stakes, paying)
+		var candidates := _attack_candidates(unit, board, cell, base_plan.hypo, stakes)
 		if candidates.is_empty():
 			continue
 		var base := _score_plan(faction, base_plan, stakes, profile)
 		for candidate in candidates:
-			if within != null and not _reaches_into(paying.get(candidate, []), within, base_plan.hypo):
-				continue
 			var key := _group_key(candidate, board)
 			if dead.has(key):
 				continue
@@ -1736,14 +1735,6 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 			break
 	unit.movement.set_cell(start)
 	return found
-
-
-# A Sentry seeks only an intruder: does this candidate pay on somebody standing inside its zone?
-static func _reaches_into(victims: Array, within, hypo: Dictionary) -> bool:
-	for victim: Unit in victims:
-		if within.has(PlanResolver.projected_position(victim, hypo)):
-			return true
-	return false
 
 
 # Which seek tier a marginal reaches, or -1 when it reaches none. A removal or a mission win that a
@@ -1818,9 +1809,8 @@ static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squa
 	queue_fallback_actions_for_squad(squad, board, squad_manager)
 
 
-# The second pass alone: every member walks the archetype's list with ATTACK removed. Also the
-# whole of a Sentry's turn AT ITS POST with nobody in the zone (#726, dev 2026-09-03) -- a drill
-# digs in, a chainsword revs, a carbine tops off, and nobody swings at bait outside the zone.
+# The second pass alone: every member walks the archetype's list with ATTACK removed -- a drill digs
+# in, a chainsword revs, a carbine tops off.
 static func queue_fallback_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	var fallback: Array = AIArchetype.main_action_priority(squad.archetype).duplicate()
 	fallback.erase(BaseAction.ActionType.ATTACK)

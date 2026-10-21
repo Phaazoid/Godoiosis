@@ -1,5 +1,5 @@
 # ThreatField (#710, the hover tier): every cell an enemy could attack NEXT turn, as an upper bound
-# per archetype -- Hold from where it stands, Sentry only inside its zone, Rushdown across its whole
+# per archetype -- Hold from where it stands, Sentry from inside its zone, Rushdown across its whole
 # move range -- under the same fireable + vertical filters the AI's own candidate builder applies.
 # Each case discriminates one rule; the last is the WIRE: every attack the real AI queues lands
 # inside the field it was built against. Real managers + TestTiles via board_builder.
@@ -115,23 +115,81 @@ func test_a_rushdown_marks_a_cell_it_must_walk_to_first() -> void:
 			"a cell two past the move range is out of reach next turn").is_false()
 
 
-# SLICE 4 REVERSED THIS CASE'S VERDICT, and the rule it used to pin is still true one layer up:
-# a sentry will not OPEN outside its leash (SentryArchetype's own lure-proofing, pinned there and by
-# the wire case at the bottom of this file), but it ANSWERS a blow from anywhere it can stand. The
-# field is what a player must not walk into, so it carries both.
-func test_a_sentry_answers_one_counter_range_outside_its_leash() -> void:
+# A SENTRY'S ZONE LIMITS WHERE IT STANDS, NOT WHAT IT HITS (#1377, dev 2026-10-21). This case pinned a
+# counter rim from slice 4 until then -- the clip it answered is gone, so (4, 1) is now marked because
+# the patrol OPENS on it from its post. The second half is the leash that stays: the origins, so a
+# melee patrol reaches one cell past its zone and no further.
+func test_a_sentry_marks_one_melee_range_past_its_leash_and_no_further() -> void:
 	var board: Dictionary = _build_board()
 	var zones: ZoneManager = _make_zone_manager()
 	var sentry: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1))   # zone edge, at its post
 	_bind(sentry, AIArchetype.Type.SENTRY, ZONE)
 	var field := ThreatField.build(_context(board, zones), Team.Faction.PLAYER)
-	# (4, 1) is adjacent and OUTSIDE the zone: poke it from there and it swings back.
+	# (4, 1) is adjacent and OUTSIDE the zone.
 	assert_bool(field.cells.has(Vector2i(4, 1))).override_failure_message(
-			"a patrol's counter rim never reached past its leash").is_true()
+			"a patrol's reach never ran past its leash").is_true()
 	assert_bool(field.cells.has(Vector2i(2, 1))).is_true()
-	# ...and the rim is the COUNTER's reach, not the whole board: two cells out is still clear.
+	# ...and it stands only in its zone: two cells out is still clear.
 	assert_bool(field.cells.has(Vector2i(5, 1))).override_failure_message(
-			"the rim ran past the counter's own range").is_false()
+			"the field let the patrol stand outside its zone").is_false()
+
+
+# The case slice 4's rim could not cover, and the one #1377's audit found: a non-counter attack that
+# outranges the counter. Its reach past the zone was clipped while the AI fired it, so the field
+# promised safety the AI did not honour. From (3, 1) the range-3 extra reaches (6, 1); (7, 1) would
+# need a cell outside the zone.
+func test_a_sentry_marks_its_longest_attack_past_its_leash_not_just_its_counter() -> void:
+	var board: Dictionary = _build_board()
+	var zones: ZoneManager = _make_zone_manager()
+	var sentry: Unit = _spawn(board, ENEMY, Vector2i(3, 1))   # zone edge, at its post
+	sentry.equipped_weapon = _melee_with_a_long_extra()
+	_bind(sentry, AIArchetype.Type.SENTRY, ZONE)
+	var field := ThreatField.build(_context(board, zones), PLAYER)
+	assert_bool(field.cells.has(Vector2i(6, 1))).override_failure_message(
+			"the patrol's long attack was clipped at its leash").is_true()
+	assert_bool(field.cells.has(Vector2i(7, 1))).override_failure_message(
+			"the field let the patrol fire from outside its zone").is_false()
+
+
+# THE WIRE for the same shape, through a MEMBER: the leader has nothing in reach, so the squad holds
+# its post, and the member's long extra takes a player three cells outside the zone. Every aim the
+# real plan queues must sit inside the field built before it.
+func test_a_sentry_members_shot_past_the_zone_lands_inside_the_field() -> void:
+	var board: Dictionary = _build_board()
+	var zones: ZoneManager = _make_zone_manager()
+	var leader: Unit = _spawn(board, ENEMY, Vector2i(2, 1))
+	var member: Unit = _spawn(board, ENEMY, Vector2i(3, 1))
+	member.equipped_weapon = _melee_with_a_long_extra()
+	board.squad_manager.join_squad(member, leader.squad)
+	_bind(leader, AIArchetype.Type.SENTRY, ZONE)
+	var _outsider: Unit = _spawn(board, PLAYER, Vector2i(6, 1))
+	var ctx := _context(board, zones)
+	var field := ThreatField.build(ctx, PLAYER)
+	AIController.plan_squad(leader.squad, ctx, board.squad_manager)
+	var aimed := 0
+	for action in leader.squad.action_queue:
+		if not (action is AttackAction):
+			continue
+		var aim := action as AttackAction
+		aimed += 1
+		assert_bool(field.by_unit.get(aim.actor, {}).has(aim.target_cell)).override_failure_message(
+				"%s aimed at %s, which the field never marked" % [aim.actor.get_unit_name(), aim.target_cell]).is_true()
+	assert_int(aimed).override_failure_message("no attack was queued -- the wire was never exercised").is_greater(0)
+
+
+# A melee main (Manhattan 1, the counter) plus an extra that fires at range 1 to 3.
+func _melee_with_a_long_extra() -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	var lob := WeaponAttackData.new()
+	lob.display_name = "Lob"
+	lob.power = 3
+	P.point(lob, 3)
+	var extras: Array[WeaponAttackData] = [lob]
+	template.extra_attacks = extras
+	return WeaponInstance.make(template)
 
 
 func test_an_unarmed_patrol_gets_no_counter_rim() -> void:
@@ -181,9 +239,10 @@ func test_the_counter_rim_adds_nothing_to_a_rushdown() -> void:
 	var rusher: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 1))
 	_bind(rusher, AIArchetype.Type.RUSHDOWN)
 	var field := ThreatField.build(_context(board), Team.Faction.PLAYER)
-	# The rim is a PATROL fix and must not widen anybody else's red -- the reason being structural
-	# rather than incidental: a leashless archetype clips nothing, and its counter attack is already
-	# one of the attacks the first pass walks. Assert the reason, then the consequence.
+	# The rim must not widen the red of a unit whose counter the fire pass already walks -- which is
+	# every archetype's since #1377 deleted the zone clip it was born to answer. Structural rather than
+	# incidental: nothing is clipped, and the counter is one of the selectable attacks. Assert the
+	# reason, then the consequence.
 	assert_array(rusher.get_selectable_attacks()).contains([rusher.get_counter_attack()])
 	var opens := {}
 	for origin: Vector2i in field.move_of(rusher):
