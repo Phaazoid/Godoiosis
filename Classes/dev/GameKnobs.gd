@@ -3073,12 +3073,15 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"CROSSFADE_SECONDS":
 			MusicDirector.CROSSFADE_SECONDS = value
 			return
-		# Read at every resolve and every take_damage; nothing caches them, so no re-apply.
+		# Read at every resolve and every take_damage, but the Glossary's Maim entry QUOTES them and
+		# caches its text, so it is dropped to be rebuilt (#1373).
 		"LIMB_LOSS_DAMAGE":
 			LethalityRules.LIMB_LOSS_DAMAGE = int(value)
+			Glossary.refresh()
 			return
 		"LIMB_LOSS_DAMAGE_WOUNDED":
 			LethalityRules.LIMB_LOSS_DAMAGE_WOUNDED = int(value)
+			Glossary.refresh()
 			return
 		# The mission clock (#101). These DO need a re-apply: the status panel is push-refreshed from
 		# MissionController's write points, so with nothing happening on the board -- which is exactly

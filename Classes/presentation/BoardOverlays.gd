@@ -393,10 +393,11 @@ const ART_PIXELS_PER_CELL := 16.0
 # row to a HEIGHT UNIT. HALF is one unit, for reading a half-step apart from the level it sits in.
 enum SelectorDepth { LEVEL, HALF }
 
-# Eye-knobs (the tuning rule); read when markers build/place.
-@export var bracket_arm := 0.22
-@export var bracket_thickness := 0.04
-@export var bracket_scale := 1.02
+# Eye-knobs (the tuning rule); read when markers build/place. The bracket's three are baked into its
+# shared mesh, so each re-shapes the brackets already standing (#1373).
+@export var bracket_arm := 0.22: set = _set_bracket_arm
+@export var bracket_thickness := 0.04: set = _set_bracket_thickness
+@export var bracket_scale := 1.02: set = _set_bracket_scale
 # NOT a plain field: the HOVER layer only repaints when the pointer CELL changes (battle3d's
 # _update_pointer early-outs on an unchanged one), so turning this with the mouse still would move
 # nothing until you nudged it -- a knob that appears to do nothing is the one failure that makes a
@@ -406,13 +407,22 @@ enum SelectorDepth { LEVEL, HALF }
 # fill_lift + min_sort * lift_step and THAT is what must clear the tile's opaque top face.
 # Raised twice as the negative stack moved down for #710: 0.02 -> 0.03 at slice 3 (the floor landed
 # at exactly 0.0), 0.03 -> 0.04 at slice 4 (it landed at 0.002). The law demands a whole lift_step.
-@export var fill_lift := 0.04          # quad height above the top face — the z-fight gap
-@export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
+#
+# These four are baked in by whoever HANDS this node its markup (OverlayMirror, GasMirror's floor), so
+# each setter bumps geometry_version and the composers re-hand everything (#1373).
+@export var fill_lift := 0.04: set = _set_fill_lift          # quad height above the top face — the z-fight gap
+@export var lift_step := 0.004: set = _set_lift_step         # per-sort spacing so stacked layers never coincide
 # The crown's clearance above its unit's HEAD -- the art's top, or the health readout's top while one is
 # up (#1070). It was a height above the CELL, which let a readout grow up through the crown; at 0.225
 # a crown over the standard sprite with no readout up sits exactly where the old 0.85 put it.
-@export var billboard_lift := 0.225
-@export var billboard_pixel_size := 1.0 / 32.0
+@export var billboard_lift := 0.225: set = _set_billboard_lift
+@export var billboard_pixel_size := 1.0 / 32.0: set = _set_billboard_pixel_size
+
+# Bumped whenever a number something UPSTREAM composes into what it hands this node moves: a lift, a
+# billboard's size or clearance, a beam width a cone's radius is a multiple of. Monotonic and
+# non-consuming, BoardSpace.basin_version's shape, so a composer gates on it (#308) rather than on a
+# copy of the numbers.
+var geometry_version := 0
 # What the hover bracket turns when the pointer is over something the 2D calls INVALID (#245).
 # A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
 # and a bracket has no texture to swap, so the colour is a fresh aesthetic call.
@@ -508,6 +518,7 @@ func _set_pulse_glow_softness(value: float) -> void:
 func _set_squad_line_width(value: float) -> void:
 	squad_line_width = value
 	_apply_beam_params()
+	geometry_version += 1   # a tether's arrowhead radius is a multiple of this, composed upstream
 
 
 # A material uniform on the ribbons AND geometry on the arrowheads' hulls, so it has to do both.
@@ -530,6 +541,42 @@ func _set_squad_line_intensity(value: float) -> void:
 func _set_mark_width(value: float) -> void:
 	mark_width = value
 	_apply_beam_params()
+	geometry_version += 1   # the reach cone's and a badge pointer's radius are multiples of this
+
+
+func _set_fill_lift(value: float) -> void:
+	fill_lift = value
+	geometry_version += 1
+
+
+func _set_lift_step(value: float) -> void:
+	lift_step = value
+	geometry_version += 1
+
+
+func _set_billboard_lift(value: float) -> void:
+	billboard_lift = value
+	geometry_version += 1
+
+
+func _set_billboard_pixel_size(value: float) -> void:
+	billboard_pixel_size = value
+	geometry_version += 1
+
+
+func _set_bracket_arm(value: float) -> void:
+	bracket_arm = value
+	_reshape_brackets()
+
+
+func _set_bracket_thickness(value: float) -> void:
+	bracket_thickness = value
+	_reshape_brackets()
+
+
+func _set_bracket_scale(value: float) -> void:
+	bracket_scale = value
+	_reshape_brackets()
 
 
 func _set_mark_intensity(value: float) -> void:
@@ -1867,24 +1914,32 @@ func selector_half_height() -> float:
 # was forgotten.
 func _set_selector_depth(value: SelectorDepth) -> void:
 	selector_depth = value
-	if _markers.is_empty():
-		return   # nothing standing yet -- the mesh builds at the new height on demand
+	_reshape_brackets()
+	for layer: Layer in _markers:
+		if LAYERS[layer]["kind"] != Kind.BRACKET:
+			continue
+		var cells: Array = _cells.get(layer, [])
+		var pool: Array = _markers[layer]
+		for i in mini(pool.size(), cells.size()):
+			var bracket := pool[i] as MeshInstance3D
+			if bracket != null:
+				var cell: Vector3i = cells[i]
+				bracket.transform = _marker_transform(LAYERS[layer], cell, null)
+
+
+# A fresh bracket mesh handed to every bracket already standing: its shape is baked into the one
+# shared mesh, so a knob that changes it has to replace that mesh or nothing on screen moves. With
+# nothing standing it only drops the cache, and the next bracket builds at the new shape.
+func _reshape_brackets() -> void:
 	_bracket_mesh = null
 	for layer: Layer in _markers:
 		if LAYERS[layer]["kind"] != Kind.BRACKET:
 			continue
 		if _bracket_mesh == null:
 			_bracket_mesh = _build_bracket_mesh()
-		var cells: Array = _cells.get(layer, [])
-		var pool: Array = _markers[layer]
-		for i in pool.size():
-			var bracket := pool[i] as MeshInstance3D
-			if bracket == null:
-				continue
-			bracket.mesh = _bracket_mesh
-			if i < cells.size():
-				var cell: Vector3i = cells[i]
-				bracket.transform = _marker_transform(LAYERS[layer], cell, null)
+		for bracket in _markers[layer]:
+			if bracket is MeshInstance3D:
+				(bracket as MeshInstance3D).mesh = _bracket_mesh
 
 
 # Three short arms per corner, eight corners: the voxel's corners, nothing else. NOT a cube since

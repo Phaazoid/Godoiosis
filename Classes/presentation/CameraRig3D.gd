@@ -196,10 +196,13 @@ static func scale_of(setting: PlayerSettings.Setting) -> float:
 # screens the further in you go -- which is exactly his "at any close zoom"; and the limit clamps the
 # aim every frame, so a stray that tracked the LIVE zoom would shrink as you zoomed in and YANK the
 # aim out from under you.
-@export var pan_stray_screens := 1.0
+#
+# It and zoom_out_slack are read only by rebound(), so each re-runs it on the bounds it last fitted:
+# without that, a Game-tab drag moved no limit until the board next changed size (#1373).
+@export var pan_stray_screens := 1.0: set = _set_pan_stray_screens
 
 @export var fit_margin_cells := 1.0          # breathing room around a framed board
-@export var zoom_out_slack := 1.0            # 1.0 = may not zoom out past the whole board
+@export var zoom_out_slack := 1.0: set = _set_zoom_out_slack            # 1.0 = may not zoom out past the whole board
 
 # Focus band offsets: in-focus from (distance - near) to (distance + far).
 # Defaults reproduce the originally authored look at the default zoom of 14.
@@ -991,7 +994,26 @@ func rebound(bounds: AABB) -> bool:
 	set_zoom(_target_distance)   # re-clamp: a shrunken board can leave you outside the new ceiling
 	pan_limit = Rect2(limit_box.position.x, limit_box.position.z,
 		limit_box.size.x, limit_box.size.z).grow(pan_stray(max_distance))
+	_fitted_bounds = bounds
+	_has_fitted_bounds = true
 	return true
+
+
+# What rebound() last fitted, so a limit knob can fit it again without re-aiming.
+var _fitted_bounds := AABB()
+var _has_fitted_bounds := false
+
+
+func _set_pan_stray_screens(value: float) -> void:
+	pan_stray_screens = value
+	if _has_fitted_bounds:
+		rebound(_fitted_bounds)
+
+
+func _set_zoom_out_slack(value: float) -> void:
+	zoom_out_slack = value
+	if _has_fitted_bounds:
+		rebound(_fitted_bounds)
 
 
 # How far past the board's edge the aim may stray, in WORLD units, for a camera whose zoom-out
