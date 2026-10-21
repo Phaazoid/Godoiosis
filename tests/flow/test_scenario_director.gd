@@ -5,10 +5,20 @@
 # not that a handler was invoked. The managers stay OUT of the tree (their @onready paths
 # need a board scene; their signals do not). Timelines are built in-memory via from_text --
 # no .dtl files, no rendering asserted: display styling is Dialogic's job and is feel, not law.
+#
+# The TURN_START cases boot the real game instead (#1361): the opening turn emits no turn_started,
+# so only the real mission doors can show which turn a mission opens on.
 extends GdUnitTestSuite
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
+
+const MAIN_SCENE := "res://Scenes/Main.tscn"
+const H := preload("res://tests/support/squad_fixtures.gd")
+const SCRATCH := "user://__director_turns_1361.tres"
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true in the shipped tileset
+const ROW_WIDTH := 8
 
 
 class ManagerStub extends RefCounted:
@@ -32,6 +42,8 @@ var _stub: GameStub
 var _director: ScenarioDirector
 var _starts := 0
 var _quiets := 0
+var _main: Node = null    # the real game, booted only by the cases that need its mission doors
+var _game: Node2D = null
 
 
 func before_test() -> void:
@@ -52,6 +64,8 @@ func before_test() -> void:
 
 func after_test() -> void:
 	Dialogic.timeline_started.disconnect(_count_start)
+	if _main != null:
+		await _free_game()
 	var active := Dialogic.current_timeline != null
 	_director.reset()   # ends any running timeline; pending already cleared so nothing chains
 	if active:
@@ -116,16 +130,132 @@ func test_mission_start_beat_fires_once_per_battle() -> void:
 	assert_int(_starts).is_equal(1)
 
 
-# --- TURN_START ---
+# --- TURN_START (#1361: the opening turn is turn 1) ---
 
-func test_turn_start_beat_waits_for_its_player_turn() -> void:
-	_set_beats([_beat(DialogBeat.Trigger.TURN_START, "Turn two tip.", 2)])
-	_director.mission_started()   # content is inert until armed
-	_stub.turn_manager.turn_started.emit(ENEMY)    # enemy turns never advance the player count
-	_stub.turn_manager.turn_started.emit(PLAYER)   # player turn 1: not yet
-	await get_tree().process_frame
-	assert_int(_starts).is_equal(0)
-	_stub.turn_manager.turn_started.emit(PLAYER)   # player turn 2: now
+func _boot() -> void:
+	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
+	_main.name = "Main"
+	get_tree().root.add_child(_main)
+	await await_idle_frame()
+	_game = _main.get_node("GameContainer/GameView/Game")
+	_game.mission_controller._close_mission_select()
+	_game.scenario_manager.clear_board()
+	_game.game_state = _game.GameState.IDLE
+	await await_idle_frame()
+
+
+func _free_game() -> void:
+	_game.scenario_director.disarm()   # its queue must not chain a beat off the end below
+	await DialogFixtures.end_all_dialog(self)
+	_game.scenario_manager.clear_board()
+	await await_idle_frame()
+	get_tree().root.remove_child(_main)
+	_main.free()
+	_main = null
+	_game = null
+	if FileAccess.file_exists(SCRATCH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
+
+
+# A player and an enemy on one grass row, nobody AI-controlled, opening on the PLAYER's turn. With a
+# roster the player force is the draw instead, onto a deployment zone, so the phase opens.
+func _author(beats: Array[DialogBeat], steps: Array[TutorialStep] = [], roster := "") -> String:
+	var sm: ScenarioManager = _game.scenario_manager
+	for x in range(ROW_WIDTH):
+		_game.grid.paint(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
+	if roster == "":
+		assert_object(_game.spawn_unit(H.make_unit_data({}, PLAYER), Vector2i(0, 0))).is_not_null()
+	else:
+		for x in range(2):
+			_game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(x, 0))
+		sm.current_roster = roster
+		sm.current_deployment_cap = 1
+	assert_object(_game.spawn_unit(H.make_unit_data({}, ENEMY), Vector2i(ROW_WIDTH - 1, 0))).is_not_null()
+	var nobody: Array[Team.Faction] = []
+	_game.ai_controller.set_ai_factions(nobody)
+	_game.turn_manager.set_active_faction(PLAYER)
+	sm.current_dialog_beats = beats
+	sm.current_tutorial_steps = steps
+	var scenario := sm.capture_scenario("director_turns_1361", true)
+	assert_int(ResourceSaver.save(scenario, SCRATCH)).is_equal(OK)
+	return SCRATCH
+
+
+# THE defect: turn_started never fires for the turn a mission opens on, so a turn-1 beat played on
+# turn 2 and every count after it ran one late. Reached through begin_mission and two real end_turns,
+# never an emitted signal -- the old case emitted a "turn 1" the game never sends.
+func test_turn_beats_and_steps_count_the_turn_a_mission_opens_on() -> void:
+	await _boot()
+	var step := TutorialStep.new()
+	step.done_when = DialogBeat.Trigger.TURN_START
+	step.turn = 2
+	step.text = "End your turn."
+	var steps: Array[TutorialStep] = [step]
+	var path := _author([
+		_beat(DialogBeat.Trigger.TURN_START, "Turn one tip.", 1),
+		_beat(DialogBeat.Trigger.TURN_START, "Turn two tip.", 2),
+	], steps)
+	var director: ScenarioDirector = _game.scenario_director
+
+	_game.mission_controller.begin_mission(path)
+	await _await_starts(1)
+	# Drained before asking: a turn-two beat fired now would QUEUE behind turn one's, and the end
+	# pops it. is_talking() rather than a start count, which lags the pop by the layout's frames.
+	await DialogFixtures.end_all_dialog(self)
+	assert_bool(director.is_talking()).override_failure_message(
+		"the turn-two beat fired on the opening turn").is_false()
+	assert_str(director.active_instruction()).override_failure_message(
+		"the turn-two step completed on the opening turn").is_equal("End your turn.")
+	assert_bool(director.past_opening_turn()).is_false()
+
+	await _game.end_turn()   # PLAYER -> ENEMY, which nobody plays and nothing counts
+	assert_bool(director.is_talking()).override_failure_message(
+		"the enemy's turn was counted as the player's").is_false()
+	await _game.end_turn()   # ENEMY -> PLAYER: the player's SECOND turn
+	await _await_starts(2)
+	assert_str(director.active_instruction()).override_failure_message(
+		"the turn-two step did not complete on turn two").is_empty()
+	assert_bool(director.past_opening_turn()).is_true()
+
+
+func test_a_restart_counts_its_opening_turn_again() -> void:
+	await _boot()
+	var path := _author([_beat(DialogBeat.Trigger.TURN_START, "Turn one tip.", 1)])
+	_game.mission_controller.begin_mission(path)
+	await _await_starts(1)
+	await DialogFixtures.end_all_dialog(self)
+	_game.mission_controller.restart_mission()
+	await _await_starts(2)
+
+
+# The third arming door. The phase itself is no turn: the beat waits for the commit.
+func test_a_committed_deployment_counts_its_opening_turn() -> void:
+	await _boot()
+	var rosters: Array[String] = RosterCatalog.saved_rosters()
+	if rosters.is_empty():
+		push_warning("no rosters are shipped, so the commit door cannot be exercised")
+		return
+	var path := _author([_beat(DialogBeat.Trigger.TURN_START, "Turn one tip.", 1)], [], rosters[0])
+	_game.mission_controller.begin_mission(path)
+	await await_idle_frame()
+	assert_bool(_game.mission_controller.is_deploying()).override_failure_message(
+		"precondition: the pre-mission phase did not open, so the commit door was never reached").is_true()
+	assert_bool(_game.scenario_director.is_talking()).override_failure_message(
+		"a turn beat played inside the pre-mission phase").is_false()
+	assert_bool(_game.mission_controller.commit_deployment()).is_true()
+	await _await_starts(1)
+
+
+# The other half of the rule: a board opening on the enemy's turn gives the player turn 1 at the
+# hand-off. Driven through the real TurnManager.end_turn, the only emitter of turn_started.
+func test_a_mission_opening_on_the_enemy_turn_counts_the_player_from_the_hand_off() -> void:
+	_set_beats([_beat(DialogBeat.Trigger.TURN_START, "Turn one tip.", 1)])
+	_stub.turn_manager.set_active_faction(ENEMY)
+	_director.mission_started()
+	assert_bool(_director.is_talking()).override_failure_message(
+		"the enemy's opening turn was counted as the player's").is_false()
+	var present: Array[Team.Faction] = [PLAYER, ENEMY]
+	_stub.turn_manager.end_turn(present)   # ENEMY -> PLAYER
 	await _await_starts(1)
 
 
