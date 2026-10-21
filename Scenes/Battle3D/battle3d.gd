@@ -103,6 +103,8 @@ var _floor_row := 0
 # picker needs it grown by the apron on every motion event, and deriving it per pick
 # would walk every column of the board each time the mouse moves.
 var _board_rect := Rect2i()
+# The tear-out lift the effects' cull boxes were last swept with (#1362), so a moved knob re-sweeps.
+var _covered_lift := Vector3.ZERO
 var _pointer_cell: Vector3i = BoardSpace.NO_CELL
 # The staging this poll last drew (#521) -- its own last-drawn key.
 var _staged_version := 0
@@ -727,6 +729,12 @@ func _poll_basin() -> void:
 		BoardSpace.touch_basin()
 
 
+# The lift knob moved (#1362): every cull box holds the stage it would lift to, so it has to follow.
+func _poll_stage_lift() -> void:
+	if not BoardSpace.lift_offset().is_equal_approx(_covered_lift):
+		_cover_effects(_board_volume())
+
+
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
@@ -855,6 +863,7 @@ func _board_extent_changed() -> void:
 # all being asked is the same one and a new emitter that forgets to subscribe draws NOTHING, which
 # is the failure mode with no symptom.
 func _cover_effects(board: AABB) -> void:
+	_covered_lift = BoardSpace.lift_offset()
 	if _staging_dust != null:
 		_staging_dust.cover(board)
 	if _arc != null:
@@ -1054,6 +1063,7 @@ func _process(_delta: float) -> void:
 	_tick_pass_clock(_delta)
 	_sync_terrain_while_authoring()
 	_poll_basin()
+	_poll_stage_lift()
 	_drive_transition(_delta)
 	_sync_staging()
 	# Narrower than `live`, and deliberately so: while the AI acts or a menu is up the

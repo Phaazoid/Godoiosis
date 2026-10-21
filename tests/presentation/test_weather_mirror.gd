@@ -72,9 +72,14 @@ func test_the_cull_box_reaches_every_emitter() -> void:
 	var systems := mirror.find_children("*", "GPUParticles3D", true, false)
 	systems.append_array((_scene._wind as WindMirror).find_children("*", "GPUParticles3D", true, false))
 	assert_int(systems.size()).override_failure_message("fixture: the mirror built no emitters").is_greater(2)
+	# The stage asked of the lift itself, never of effect_volume: comparing against the function under
+	# test passed while its "lifted" half was the board again (#1362).
+	var stage := AABB(board.position + BoardSpace.lift_offset(), board.size)
+	assert_bool(BoardSpace.lift_offset().length() > 1.0).override_failure_message(
+			"the stage lift is zero; the case cannot tell the two levels apart").is_true()
 	for node in systems:
 		var box := (node as GPUParticles3D).visibility_aabb
-		assert_bool(box.encloses(BoardSpace.effect_volume(board, 0.0))).override_failure_message(
+		assert_bool(box.encloses(board) and box.encloses(stage)).override_failure_message(
 				"%s's cull box does not hold the board and its stage: %s" % [node.name, box]).is_true()
 
 

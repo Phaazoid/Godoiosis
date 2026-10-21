@@ -322,6 +322,48 @@ func test_a_thrown_cube_outlives_the_readout_it_fell_off() -> void:
 			"the cubes vanished with the readout they came from").is_equal(3)
 
 
+# #1362: on stage, the readout is lifted with its fighter, so the floor a cube bounces on must be too --
+# otherwise every battle-zoom hit throws cubes that fall through the stage tile while they fade.
+# The lifetime is stretched so a cube reaches its floor inside the case, and the stage is a block
+# around the fighter because a cube drifts sideways as it falls; one that missed the stage would fall
+# on toward the board a lift below. The height is read AT the bounce: after its one bounce a cube
+# rides through whatever is under it.
+func test_a_cube_knocked_off_a_fighter_on_stage_bounces_on_the_stage() -> void:
+	var cell := Vector2i(2, 2)
+	var unit := await _watched(cell)
+	var block: Array[Vector2i] = []
+	for dx in range(-2, 3):
+		for dy in range(-2, 3):
+			block.append(cell + Vector2i(dx, dy))
+	BoardSpace.stage(block, BoardSpace.lift_offset())
+	await _settle()
+	var stage_top := BoardSpace.surface_point(cell, game.board_heights).y + BoardSpace.staged_offset(cell).y
+	assert_bool(BoardSpace.staged_offset(cell).y > 1.0).override_failure_message(
+			"the stage lift is zero; the case cannot tell the two floors apart").is_true()
+	# Thrown from where the staged sprite stands, which is where the readout rides (UnitMirror places
+	# both with staged_offset); the claim here is the FLOOR, not the spawn.
+	var sprite := _unit_mirror.sprite_for(unit)
+	assert_float(sprite.global_position.y).override_failure_message(
+			"fixture: the sprite did not go up with its stage").is_greater(stage_top - 1.0)
+	var debris := _unit_mirror.debris()
+	debris.burst([sprite.global_position + Vector3.UP] as Array[Vector3], PackedColorArray([Color.RED]),
+			Basis.IDENTITY)
+	assert_int(debris.live_count()).override_failure_message("the burst threw no cube").is_equal(1)
+	debris.lifetime = 4.0
+	var bounced_at := -INF
+	for step in 150:
+		debris._advance(0, 0.02)
+		if debris.has_bounced(0):
+			bounced_at = (debris.get_child(0) as Node3D).global_position.y
+			break
+	BoardSpace.clear_staging()
+	assert_bool(debris.has_bounced(0)).override_failure_message(
+			"the cube never met a floor before falling out of the case").is_true()
+	assert_float(bounced_at).override_failure_message(
+			"the cube bounced at %.2f, below the stage top at %.2f" % [bounced_at, stage_top]) \
+		.is_greater_equal(stage_top)
+
+
 func test_the_cubes_that_leave_come_off_the_top_of_the_grid() -> void:
 	# The grid fills bottom-up, so losses show along the TOP row — which is where a cube has
 	# clearance to leave from, and what makes a partly-full grid read as a stack rather than a

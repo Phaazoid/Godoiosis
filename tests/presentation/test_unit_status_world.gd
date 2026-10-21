@@ -393,12 +393,17 @@ func test_a_queued_move_hands_the_drips_to_the_ghost() -> void:
 func test_the_boards_cull_sweep_reaches_every_emitter() -> void:
 	var box := AABB(Vector3(-3.0, -2.0, -5.0), Vector3(40.0, 9.0, 31.0))
 	_board.scene.call("_cover_effects", box)
-	var expected := BoardSpace.effect_volume(box, StatusParticles.CULL_MARGIN)
+	# Both levels, asked of the box itself rather than of effect_volume (#1362): comparing against the
+	# function under test passed while its "lifted" half was the board again.
+	var stage := AABB(box.position + BoardSpace.lift_offset(), box.size)
+	assert_bool(BoardSpace.lift_offset().length() > 1.0).override_failure_message(
+			"the stage lift is zero; the case cannot tell the two levels apart").is_true()
 	for emitter in _unit_mirror.status_world().emitters():
 		var covered := AABB(emitter.visibility_aabb.position + emitter.global_position,
 				emitter.visibility_aabb.size)
-		assert_bool(covered.is_equal_approx(expected)).override_failure_message(
-				"%s is culled to %s, not the board's %s" % [emitter.name, covered, expected]).is_true()
+		assert_bool(covered.encloses(box) and covered.encloses(stage)).override_failure_message(
+				"%s is culled to %s, which misses the board %s or its stage %s" % [emitter.name, covered,
+				box, stage]).is_true()
 	_board.scene.call("_cover_effects", _board.scene.call("_board_volume"))
 
 
