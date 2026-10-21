@@ -491,9 +491,120 @@ func test_a_finish_whose_seal_writes_nothing_is_still_compared() -> void:
 		"the recorded mission_end was never compared -- the finish was skipped").is_greater(0)
 
 
+# A HAND-OVER THE GAME MADE BY ITSELF IS NOT REPLAYED A SECOND TIME (#1364). A faction with no active
+# unit is skipped inside game._on_turn_started, which still records its turn_start and the next one,
+# with no end_turn behind either. Ending a turn per recorded turn_start ended the player's round-2 turn
+# before its pass, so that pass replayed a round late.
+func test_an_automatic_faction_skip_replays_without_an_extra_hand_over() -> void:
+	var run_id := await _record_an_auto_skip()
+	var run := ReplayRun.load_run(run_id)
+	assert_bool(_has_back_to_back_turns(run.events)).override_failure_message(
+		"fixture: no turn_start followed another directly, so nothing was skipped").is_true()
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"the replay diverged from a run with an automatic skip: %s" % str(driver.divergences)).is_equal(0)
+
+
+# THE COUNT, NOT THE ACTIVE FACTION. A one-faction board hands the turn to itself every round, so a
+# driver that skipped "a hand-over to the faction already up" would never end a turn on one.
+func test_a_one_faction_run_still_ends_its_turns() -> void:
+	var run_id := await _record_a_lone_faction()
+	var run := ReplayRun.load_run(run_id)
+	assert_int(run.rounds()).override_failure_message("fixture: the run never reached round 2").is_greater(1)
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	assert_int(driver.divergences.size()).override_failure_message(
+		"the replay diverged from a one-faction run: %s" % str(driver.divergences)).is_equal(0)
+
+
+# THE COUNT IS EVERY DIVERGENCE, THE LIST IS NOT (#1364). One record the replay cannot reproduce fifty
+# ways: the list stops at LIST_CAP, and report() has to carry the fifty.
+func test_the_report_counts_the_divergences_the_list_left_off() -> void:
+	var run_id := await _record_an_auto_skip()
+	var run := ReplayRun.load_run(run_id)
+	_doctor_the_ending(run.first("mission_end"), OVER_CAP)
+	assert_bool(driver.seed(run)).is_true()
+	await driver.play()
+	var r := driver.report()
+	assert_int((r["divergences"] as Array).size()).override_failure_message(
+		"fixture: the list never filled").is_equal(ReplayDriver.LIST_CAP)
+	assert_int(int(r.get("divergence_count", -1))).override_failure_message(
+		"the report counts only what it listed").is_equal(OVER_CAP)
+
+
+# ...and the PAGE prints that count, through its own Load and Play, off a run doctored on disk.
+func test_the_replay_page_prints_the_whole_count() -> void:
+	var run_id := await _record_an_auto_skip()
+	var run := ReplayRun.load_events(run_id)
+	var lines := run.raw_lines.duplicate()
+	for i in lines.size():
+		var row: Variant = JSON.parse_string(lines[i])
+		if row is Dictionary and str((row as Dictionary).get("event", "")) == "mission_end":
+			_doctor_the_ending(row as Dictionary, OVER_CAP)
+			lines[i] = JSON.stringify(row)
+	assert_bool(TelemetryStore.rewrite_run_events(run_id, lines)).is_true()
+
+	var page: ReplayTool = game.dev_overlay.replay_tool
+	page.refresh_on_show()
+	assert_str(page._run.run_id if page._run != null else "").override_failure_message(
+		"fixture: the page did not pick the doctored run").is_equal(run_id)
+	page._on_load()
+	await page._on_play()
+	assert_str(page._report.text).override_failure_message(
+		"the verdict is not the whole count: %s" % page._report.text).contains(
+		"%d divergences (%d listed)" % [OVER_CAP, ReplayDriver.LIST_CAP])
+
+
+const OVER_CAP := ReplayDriver.LIST_CAP + 10
+
+
+# Keys the replay's own seal never writes, so each one is a "missing from the replay" record diff.
+static func _doctor_the_ending(end: Dictionary, how_many: int) -> void:
+	for i in how_many:
+		end["doctored_%d" % i] = i
+
+
+static func _has_back_to_back_turns(events: Array[Dictionary]) -> bool:
+	var last := ""
+	for e: Dictionary in events:
+		var kind := str(e.get("event", ""))
+		if kind == "turn_start" and last == "turn_start":
+			return true
+		last = kind
+	return false
+
+
 # ==============================================================================
 #  Fixture
 # ==============================================================================
+
+# A mission with a downed enemy and nobody else on its side, so every hand-over skips it (#1364). Downed
+# BEFORE the run starts, so the board is never contested and nothing ends the mission. A move in each
+# of two player rounds, because the round-2 pass is the record an extra hand-over would move.
+func _record_an_auto_skip() -> String:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(6, 3))
+	foe.force_down()
+	game.order_executor._process_downed_pending()   # the Unit Editor's Down, settled the same way
+	return await _record_two_rounds_of(hero)
+
+
+func _record_a_lone_faction() -> String:
+	return await _record_two_rounds_of(_spawn(Team.Faction.PLAYER, Vector2i(0, 0)))
+
+
+func _record_two_rounds_of(hero: Unit) -> String:
+	mc._begin_turn()
+	var run_id: String = mission_log.run_id()
+	for dest: Vector2i in [Vector2i(1, 0), Vector2i(2, 0)]:
+		assert_bool(game.squad_manager.queue_action(hero.squad, _build_move(hero, dest))).override_failure_message(
+			"fixture: the move to %s never queued" % str(dest)).is_true()
+		await game.order_executor.execute_orders(hero)
+		await game.end_turn()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	return run_id
+
 
 # A real mission, played: two units, a move, an attack, a resolved pass, a turn hand-over, sealed.
 # Driven through the same doors a player uses, because a run assembled by hand would be a run this

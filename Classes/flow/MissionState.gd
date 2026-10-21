@@ -37,8 +37,10 @@ var failed_by: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
 # Unit.die() queue_frees the node, so by the time any evaluation runs the unit is simply gone --
 # which is indistinguishable from one that was never placed at all. Battle-scoped, cleared by reset().
 #
-# It never needs saving. The mission ends on the very next evaluation after the death, which runs at
-# the end of the pass the death resolved in, so no save can be taken while this is true.
+# It never needs saving, because no save is taken while it is true. The death ends the mission at the
+# next evaluation, at the end of the pass it resolved in (the Save row is greyed mid-pass), and
+# ScenarioManager.save_to_slot refuses a mission that is over (#1352) -- Stay on the end banner
+# leaves the finished board open to the pause menu, so the ending alone was never the gate.
 var protected_lost := false
 
 

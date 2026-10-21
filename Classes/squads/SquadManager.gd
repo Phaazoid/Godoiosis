@@ -391,6 +391,10 @@ func destroy_empty_squad(squad: Squad):
 func clear_all_squads():
 	active_squad = null
 	_ring_hue_counters.clear()
+	# A walk the swap interrupted never reaches its release (#1358). DROPPED, not released: the held
+	# squads are freed below, and judging their reach would eject into the board being torn down.
+	_handovers_held = false
+	_held_handovers = []
 	for squad in squads.duplicate():
 		squads.erase(squad)
 		squad_deleted.emit(squad)

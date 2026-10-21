@@ -267,6 +267,8 @@ static func board_keys() -> Dictionary:
 			# #929: which attack the aim shows; headless names the attack, and equips through its gear verb.
 			"F | Aiming": {"play": never("cycles the attack being aimed; headless names the attack directly")},
 			"Shift+F | Aiming": {"play": never("cycles the attack being aimed; headless names the attack directly")},
+			# #1324: a page of the tile card; headless prints a tile's facts through its views, all at once.
+			"T | Tile card up": {"play": never("turns the tile card's page; headless views print every section at once")},
 			"Tab | Deploying": {"play": never("swaps the loadout screen and the board; headless reads both")},
 			"Enter | Deploying": {"play": cmd("begin")},
 			"Left-click | Deploying": {"play": cmd("deploy")},
@@ -387,6 +389,9 @@ static func tile_states() -> Dictionary:
 
 static func gases() -> Dictionary:
 	var K := Gas.Kind
+	# A gas whose only rule moves the air where it lies (#1324): the AI prices it through the resolve,
+	# which reads BoardContext.air_at at the caster's cell, and its seek groups origins by that air.
+	var air := covered(TACTICS, "air_at")
 	return {
 		"name": "gases (Gas.Kind)",
 		"members": K.values(),
@@ -396,9 +401,10 @@ static func gases() -> Dictionary:
 			K.STEAM: {"ai": gap("#117", "the AI is blind to steam's soak (terrain.md)")},
 			K.SMOKE: {"ai": inert()},
 			K.POISON: {"ai": inert()},
-			K.FROST: {"ai": inert()},
+			K.FROST: {"ai": air},
 			K.THUNDER: {"ai": inert()},
 			K.SULFUR: {"ai": inert()},
+			K.ESSENCE: {"ai": air},
 		},
 	}
 

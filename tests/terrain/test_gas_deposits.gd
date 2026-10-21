@@ -189,21 +189,38 @@ func test_fire_on_open_water_boils_it() -> void:
 	assert_int(plan.cell_effects[0].gas_added.get(boils.gas, 0)).is_equal(boils.gas_level)
 
 
-# Frozen water MELTS and does not also boil: whatever steam the cell gets is the melt's own. Since
-# #508 ruling 22 that is none -- the ice leaves water, and only a second fire hit boils it.
-func test_fire_on_frozen_water_melts_it_and_does_not_boil_it() -> void:
-	var melt := _authored(func(r: TerrainReaction) -> bool:
+func _melt() -> TerrainReaction:
+	return _authored(func(r: TerrainReaction) -> bool:
 		return r.incoming_element == Elemental.Element.FIRE \
 			and r.required_tile_state == Terrain.TileState.FROZEN,
 		"melts ice")
+
+
+func _melt_frozen_water() -> ResolvedPlan:
 	var attacker := _attacker(Elemental.Element.FIRE, EquippableData.TargetMode.MAP)
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var board := _KindBoard.new(_store_with(Terrain.TileState.FROZEN), { TARGET_CELL: Terrain.Kind.WATER })
-	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	return _resolve(_one(_aim(attacker, struck)), board)
+
+
+# Frozen water MELTS and does not also boil: whatever steam the cell gets is the melt's own. Since
+# #508 ruling 22 that is none -- the ice leaves water, and only a second fire hit boils it.
+func test_fire_on_frozen_water_melts_it_and_does_not_boil_it() -> void:
+	var melt := _melt()
+	var plan := _melt_frozen_water()
 	assert_int(plan.cell_effects.size()).is_equal(1)
 	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.FROZEN)).is_true()
-	assert_int(plan.cell_effects[0].gas_added.get(melt.gas, 0)).override_failure_message(
-			"frozen water gave more steam than the melt alone -- it boiled as well").is_equal(melt.gas_level)
+	assert_int(_steam_on(plan, TARGET_CELL)).override_failure_message(
+			"frozen water gave more steam than the melt alone -- it boiled as well") \
+			.is_equal(melt.gas_level if melt.gas == STEAM else 0)
+
+
+# The melt releases what its equation makes (#1324): the essence the ice held, `F2 + 2QW -> Q2 + ...`.
+func test_melting_ice_releases_the_melts_own_gas_on_the_thawed_tile() -> void:
+	var melt := _melt()
+	assert_int(melt.gas_level).override_failure_message("fixture: the authored melt releases no gas").is_not_equal(Gas.Level.NONE)
+	var plan := _melt_frozen_water()
+	assert_int(plan.cell_effects[0].gas_added.get(melt.gas, 0)).is_equal(melt.gas_level)
 
 
 func test_a_reaction_that_only_releases_gas_still_names_itself_on_the_tile_card() -> void:

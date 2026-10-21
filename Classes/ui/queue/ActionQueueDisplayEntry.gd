@@ -19,6 +19,10 @@ var entry_type: EntryType
 var label := ""
 var action: BaseAction = null
 var indent_level = 0
+# The plan these rows were built from, HELD and never read (#1359): the panel re-renders from its
+# cached entries without re-resolving, and the plan breaks its volleys when it frees, so a hover's
+# resolve would otherwise split a shown volley's fold. Null on a hand-built entry.
+var plan: ResolvedPlan = null
 
 static func header(text: String) -> ActionQueueDisplayEntry:
 	var entry := ActionQueueDisplayEntry.new()
@@ -76,6 +80,8 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 	# including for a unit that never moved at all.
 	_add_section(entries, "END OF TURN", plan.tile_hits)
 
+	for entry in entries:
+		entry.plan = plan
 	return entries
 
 # Appends a header plus its rows, preceded by a divider unless this is the first section on the

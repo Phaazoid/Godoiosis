@@ -33,6 +33,7 @@ func refresh_on_show() -> void:
 
 
 func _mark() -> void:
+	game.drop_threat_field()   # an archetype or a Sentry's zone is where its squad may strike from (#1360)
 	if _header != null:
 		_header.mark_modified()
 

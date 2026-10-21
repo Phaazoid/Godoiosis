@@ -140,18 +140,56 @@ func test_every_shipped_attack_can_be_aimed_somewhere() -> void:
 	assert_array(broken).is_empty()
 
 
-func test_carriers_round_trips_against_every_family() -> void:
+# --- who carries an attack (#473, #1371) ------------------------------------------------------
+
+func _carrier_names(rows: Array[Dictionary]) -> Array[String]:
+	var names: Array[String] = []
+	for row in rows:
+		names.append(row["carrier"])
+	return names
+
+
+func _texts(rows: Array[Dictionary]) -> Array[String]:
+	var texts: Array[String] = []
+	for row in rows:
+		texts.append(AttackLint.carrier_text(row))
+	return texts
+
+
+func _named(name: String) -> WeaponAttackData:
+	var attack := WeaponAttackData.new()
+	attack.display_name = name
+	return attack
+
+
+# Every saved attack a family or a mod on disk names reports that carrier. A property of the walk
+# over whatever ships, never a list of who carries what; the catalogs are scanned once and passed.
+func test_carriers_round_trips_against_every_family_and_mod() -> void:
 	var templates := WeaponCatalog.get_templates()
+	var mods := WeaponModCatalog.get_mods()
+	var runes := RuneCatalog.get_variants()
 	assert_bool(templates.is_empty()).override_failure_message(
 		"no weapon families scanned -- the scan is broken, not the content").is_false()
-	var checked := 0
+	# [catalog key, the attacks it names directly] -- a list, so a mod sharing a family's name cannot
+	# overwrite it.
+	var named: Array[Array] = []
 	for key in templates:
-		var family: WeaponData = templates[key]
-		for carried: WeaponAttackData in family.attacks():
+		named.append([key, (templates[key] as WeaponData).attacks()])
+	for key in mods:
+		var mod: WeaponModData = mods[key]
+		var attacks: Array[WeaponAttackData] = mod.granted_attacks.duplicate()
+		attacks.append(mod.replaces_main)
+		named.append([key, attacks])
+	var checked := 0
+	for pair in named:
+		var key: String = pair[0]
+		for carried: WeaponAttackData in pair[1]:
 			if carried == null or carried.resource_path == "":
 				continue
 			checked += 1
-			assert_array(AttackLint.carriers_of(carried)).contains([key])
+			var carriers := _carrier_names(AttackLint.carriers_among(carried, templates, mods, runes))
+			assert_array(carriers).override_failure_message(
+				"%s names %s, which does not report it" % [key, carried.display_name]).contains([key])
 	assert_bool(checked == 0).override_failure_message(
 		"no family carries a saved attack, so nothing was actually checked").is_false()
 
@@ -159,6 +197,92 @@ func test_carriers_round_trips_against_every_family() -> void:
 func test_an_attack_with_no_file_has_no_carriers() -> void:
 	assert_array(AttackLint.carriers_of(WeaponAttackData.new())).is_empty()
 	assert_array(AttackLint.carriers_of(null)).is_empty()
+
+
+# The issue's own case: a family-less attack a mod hands over is carried, by the mod, and says so.
+func test_an_attack_only_a_mod_grants_is_carried_by_that_mod() -> void:
+	var lob := _named("Lob")
+	var mod := WeaponModData.new()
+	mod.granted_attacks = [lob] as Array[WeaponAttackData]
+	var rows := AttackLint.carriers_among(lob, {}, {"Scope": mod}, {})
+	assert_array(_texts(rows)).contains_exactly(["Scope (mod: grants it)"])
+	assert_int(rows[0]["kind"]).is_equal(AttackLint.Carrier.MOD)
+
+
+# A mod's replacement main is carried, and so is ITS empowered form -- effective_main applies the
+# supercharge after the replacement.
+func test_a_mods_replacement_main_and_its_empowered_form_are_carried() -> void:
+	var charged := _named("Charged")
+	var snipe := _named("Snipe")
+	snipe.empowered_form = charged
+	var mod := WeaponModData.new()
+	mod.replaces_main = snipe
+	var mods := {"Sniper": mod}
+	var for_main := _texts(AttackLint.carriers_among(snipe, {}, mods, {}))
+	assert_array(for_main).contains_exactly(["Sniper (mod: replaces the main)"])
+	var for_form := _texts(AttackLint.carriers_among(charged, {}, mods, {}))
+	assert_array(for_form).contains_exactly(["Sniper (mod: the replacement main's empowered form)"])
+
+
+# effective_main empowers the MAIN and nothing else, so the same form hung on an extra or a grant is
+# never fired -- and must still read as the orphan it is.
+func test_only_a_mains_empowered_form_is_carried() -> void:
+	var charged := _named("Charged")
+	var spray := _named("Spray")
+	spray.empowered_form = charged
+	var spitter := WeaponData.new()
+	spitter.main_attack = spray
+	var on_main := _texts(AttackLint.carriers_among(charged, {"Spitter": spitter}, {}, {}))
+	assert_array(on_main).contains_exactly(["Spitter (family: the main's empowered form)"])
+
+	var side := _named("Side")
+	side.empowered_form = charged
+	var other := WeaponData.new()
+	other.main_attack = _named("Plain")
+	other.extra_attacks = [side] as Array[WeaponAttackData]
+	var mod := WeaponModData.new()
+	mod.granted_attacks = [side] as Array[WeaponAttackData]
+	assert_array(AttackLint.carriers_among(charged, {"Other": other}, {"Grant": mod}, {})).override_failure_message(
+		"an extra's or a grant's empowered form is never fired, but was reported carried").is_empty()
+
+
+# A payload goes off whatever level it sits at, so the carrier of the attack at the top of the chain
+# carries every one below it.
+func test_a_payload_any_depth_below_a_carried_attack_is_carried() -> void:
+	var deep := _named("Deep")
+	var mid := _named("Mid")
+	mid.payload = deep
+	var thrown := _named("Thrown")
+	thrown.payload = mid
+	var mod := WeaponModData.new()
+	mod.granted_attacks = [thrown] as Array[WeaponAttackData]
+	var texts := _texts(AttackLint.carriers_among(deep, {}, {"Lobber": mod}, {}))
+	assert_array(texts).contains_exactly(["Lobber (mod: dropped by Thrown)"])
+
+
+# A carving may drop a weapon attack (the payload picker offers both), so a rune is a carrier too.
+func test_a_carvings_payload_is_carried_by_its_rune() -> void:
+	var shrapnel := _named("Shrapnel")
+	var burst := TransmutationData.new()
+	burst.display_name = "Burst"
+	burst.payload = shrapnel
+	var rune := RuneData.new()
+	rune.inscriptions = [burst] as Array[TransmutationData]
+	var rows := AttackLint.carriers_among(shrapnel, {}, {}, {"Ember": rune})
+	assert_array(_texts(rows)).contains_exactly(["Ember (rune: dropped by Burst)"])
+	assert_int(rows[0]["kind"]).is_equal(AttackLint.Carrier.RUNE)
+
+
+func test_a_template_says_family_or_prototype_and_main_or_extra() -> void:
+	var swing := _named("Swing")
+	var base := WeaponData.new()
+	base.main_attack = swing
+	var jaw := WeaponData.new()
+	jaw.is_prototype = true
+	jaw.main_attack = _named("Bite")
+	jaw.extra_attacks = [swing] as Array[WeaponAttackData]
+	var texts := _texts(AttackLint.carriers_among(swing, {"Sword": base, "The Jaw": jaw}, {}, {}))
+	assert_array(texts).contains_exactly_in_any_order(["Sword (family: main)", "The Jaw (prototype: extra)"])
 
 
 # --- damage kind (#424): NONE is a rule, never an authoring ---

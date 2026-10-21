@@ -11,7 +11,7 @@ class_name Controls
 # the real Input Map (tests/law/test_controls_coverage.gd), which a markdown table never could.
 #
 # `action` is the load-bearing field. Most bindings are NOT Input Map actions -- Q/E/R and the 3D
-# pan are hardcoded physical_keycode checks in CameraRig3D, as are Space, F5, F4, V, K, the brush's
+# pan are hardcoded physical_keycode checks in CameraRig3D, as are Space, F5, F4, H, K, the brush's
 # Z/X/C and Ctrl+Z/Y -- so naming the action or declaring HARDCODED is what makes that visible
 # instead of discovered. It is also what #691's player rebinding is gated on: only an entry with an
 # action can be rebound, and the rest are the list of what still needs promoting.
@@ -99,7 +99,8 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Space", "context": Context.DEV, "when": "Spawn tool armed",
 		"does": "Spawn a unit. Otherwise centres the camera",
 		"action": HARDCODED},
-	{"key": "V", "context": Context.DEV, "when": "3D view",
+	# #1368: was V, which the enemy ranges below also answer -- one press, two meanings.
+	{"key": "H", "context": Context.DEV, "when": "3D view",
 		"does": "Selector depth: Level or Half",
 		"action": HARDCODED},
 	{"key": "K", "context": Context.DEV, "when": "a unit selected",
@@ -177,6 +178,10 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Shift+F", "context": Context.BOARD, "when": "Aiming",
 		"does": "Previous attack",
 		"action": "select_previous_squadmate"},
+	# #1324: the tile card shows one section at a time, and its tab row names this key.
+	{"key": "T", "context": Context.BOARD, "when": "Tile card up",
+		"does": "Next section",
+		"action": "cycle_tile_card"},
 	{"key": "Tab", "context": Context.BOARD, "when": "Deploying",
 		"does": "Menu swap",
 		"action": "toggle_deployment_view"},

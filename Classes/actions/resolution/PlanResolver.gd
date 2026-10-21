@@ -994,11 +994,13 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# Materia empowerment (#694) is read at the caster's THREADED position, not the frozen
 		# origin_cell the geometry uses: a shove earlier in this pass moves the BODY, and a body
 		# knocked off the bank casts unempowered. The aim it declared is what stays frozen.
-		var terrain := Materia.empowered_at(projected_position(attacker, hypo), board)
-		# The board's air (#1324): one step per substance the recipe draws from it, the same on every
-		# cell, so no position enters. Stamped for the readouts, and passed to every base_damage below
-		# so the vial's differential compares like with like.
-		var air_steps := Atmosphere.steps_for(carving.parsed(), board.atmosphere if board != null else {})
+		var cast_from := projected_position(attacker, hypo)
+		var terrain := Materia.empowered_at(cast_from, board)
+		# The air (#1324): one step per substance the recipe draws from it, read where the caster
+		# stands -- the board's reading moved by any gas there (BoardContext.air_at). A payload reads
+		# the thrower's cell, as empowerment does. Stamped for the readouts, and passed to every
+		# base_damage below so the vial's differential compares like with like.
+		var air_steps := Atmosphere.steps_for(carving.parsed(), board.air_at(cast_from) if board != null else {})
 		var air := Atmosphere.bonus_of(air_steps)
 		if outcome != null and not carving.deals_no_damage:
 			outcome.air_steps = air_steps

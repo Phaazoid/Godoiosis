@@ -154,7 +154,9 @@ var ranges_shown := false     # the V toggle (slice 3): every enemy's move + rea
 # Which enemies stay drawn once the pointer leaves them, by instance id -- see toggle_enemy_pin.
 # They outlive the pointer and a queued order, but NOT the V key going off (2026-09-18).
 var pinned_enemies: Dictionary[int, bool] = {}
-var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped when the plan moves, or a unit goes down, dies or is revived
+var _threat_field: ThreatField = null   # built lazily by threat_field(); dropped by every door that moves the plan or a unit, and by its stamp for terrain
+var _threat_board_key: Array = []   # the board stores' versions _threat_field was built on (#1360)
+var _zone_edits := 0   # zones_changed, counted: ZoneManager keeps no version of its own (#1360)
 var mission_controller: MissionController
 var order_executor: OrderExecutor
 var bug_reporter: BugReporter
@@ -320,6 +322,9 @@ func _wire_signals() -> void:
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	scenario_manager.board_loaded.connect(drop_threat_field)   # a new board is a new field (#710)
+	# COUNTED, not dropped on (#1360): clear_board empties the zones before it takes the squads and
+	# units out, so a synchronous repaint here would build a field on a half-torn board.
+	zone_manager.zones_changed.connect(func() -> void: _zone_edits += 1)
 	scenario_manager.board_loaded.connect(camera_controller.refresh_bounds.bind(grid))   # ...and new pan bounds (#974)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
@@ -439,6 +444,11 @@ func _input(event: InputEvent) -> void:
 			cycle_aimed_attack(step)
 		elif step != 0:
 			cycle_squad_member(step)
+		# T turns the tile card to its next section (#1324): it shows one at a time. Here for F's
+		# both-views reason; only while a tile card is up, so the key means nothing otherwise.
+		if event.is_action_pressed("cycle_tile_card", false, true) and hover_info_panel.is_showing_tile():
+			hover_info_panel.cycle_tile_section()
+			get_viewport().set_input_as_handled()
 
 	# THE PLAYER'S REPORT KEY (#1050). Here rather than in _unhandled_input for the reason Esc and
 	# the two above are: a 3D host sets board_input_delegated and _unhandled_input returns on it
@@ -747,8 +757,21 @@ func show_unit_card(unit: Unit) -> void:
 
 # The ring's Inspect: the unit in the dock, and the tile it stands on in the card beside it.
 func inspect_unit(unit: Unit) -> void:
-	unit_info_panel.set_unit(unit, can_control(unit), _board())
+	unit_info_panel.set_unit(unit, _dock_can_act(unit), _board())
 	hover_info_panel.show_tile_of(unit, _card_left_x())
+
+# May the dock CHANGE what `unit` carries (#1351)? A unit you command, and never while playback owns the
+# board (the half the queue doors refuse on) or the pre-mission phase is open, whose gear is Loadout's
+# to judge on the pre-mission screen. The dock only reads there.
+func _dock_can_act(unit: Unit) -> bool:
+	return can_control(unit) and not playback_owns_board() and not mission_controller.is_deploying()
+
+# Re-ask that for the unit the dock holds, at the edges of the facts it reads: the playback lock's one
+# writer (CameraController.set_playback_locked) and the phase flag's setter. AI_TURN needs no edge: it
+# is only entered beside a playback claim, and end_turn clears the dock before an AI turn can end.
+func refresh_dock_gate() -> void:
+	if unit_info_panel.is_showing():
+		unit_info_panel.set_can_act(_dock_can_act(unit_info_panel.current_unit))
 
 # The card parks right of an open dock rather than under it (#68).
 func _card_left_x() -> int:
@@ -985,7 +1008,6 @@ func _click_picking_target(cell: Vector2i) -> void:
 # ==============================================================================
 
 func _on_turn_started(faction: Team.Faction):
-	drop_threat_field()   # the other side moved (#710)
 	TurnBoundary.turn_start_ticks(_all_units(), faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	refresh_watch_markers()   # ...and its untriggered watches (#413)
@@ -994,6 +1016,9 @@ func _on_turn_started(faction: Team.Faction):
 	squad_manager.enforce_contact()
 	# An ejection here changed membership without any signal a redraw path listens to.
 	refresh_squad_rings()
+	# The other side moved (#710) -- and AFTER the ticks and the ejection (#1360), which melt ice,
+	# lapse effects and split squads, every one of them something the field reads.
+	drop_threat_field()
 	# AFTER the ticks: an expiring downed countdown kills, and that is the one death that
 	# happens outside a resolution pass (#96).
 	mission_controller.check()
@@ -1958,6 +1983,7 @@ func deploy_unit(unit: Unit, cell: Vector2i) -> bool:
 	unit.movement.set_cell(cell)   # after set_grid: set_cell push_errors without one
 	unit.movement.set_heights(board_heights)
 	squad_manager.create_squad(unit)
+	drop_threat_field()   # spawn_unit's newcomer, or a blocker on an enemy's route (#1360)
 	_note_deployment_edit()
 	return true
 
@@ -1977,6 +2003,7 @@ func undeploy_unit(unit: Unit) -> void:
 	units_root.remove_child(unit)
 	reserve_root.add_child(unit)
 	unit.movement.set_grid(null)
+	drop_threat_field()   # off the board is out of the field, either side (#1360)
 	_note_deployment_edit()
 
 
@@ -2209,7 +2236,23 @@ func threat_field() -> ThreatField:
 	if _threat_field == null:
 		var with_pending: bool = order_executor == null or order_executor.executing_plan == null
 		_threat_field = ThreatField.for_viewer(squad_manager, Team.Faction.PLAYER, with_pending)
+		_threat_board_key = _threat_board_versions()   # AFTER the build, so nothing it touched reads as an edit
 	return _threat_field
+
+
+# WHAT BOARD THE FIELD WAS BUILT ON (#1360): the versions of every store it reads through. Terrain
+# needs no drop at its writers -- a brush stroke in any mode, an undo, a resize, a melt at turn start
+# -- because every one of them bumps one of these, and a field whose stamp has fallen behind is
+# dropped at the next frame. Gas is left out because the field never reads it.
+func _threat_board_versions() -> Array:
+	return [grid.dirty.version, board_heights.dirty.version, terrain_states.dirty.version, _zone_edits]
+
+
+# A frame boundary rather than at the write, because a brush drag or a resize writes cell by cell and
+# clear_board writes halfway through a teardown. The drop it makes is the ordinary synchronous one.
+func _process(_delta: float) -> void:
+	if _threat_field != null and _threat_board_key != _threat_board_versions():
+		drop_threat_field()
 
 
 # SYNCHRONOUS, and that was measured rather than assumed. Slice 4 briefly deferred this to idle on

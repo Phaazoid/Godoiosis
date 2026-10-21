@@ -113,7 +113,7 @@ func _handle_pause_key(event: InputEvent) -> void:
 
 
 # N drops a key pose while paused, Shift+N clears them (#705 slice 2). The recording is the 3D host's
-# -- it owns the rig, the shot table and the pass clock -- so the key reaches it the way V reaches
+# -- it owns the rig, the shot table and the pass clock -- so the key reaches it the way H reaches
 # the selector: through the host the dev window was handed, never a path up out of the game subtree.
 func _handle_keyframe_key(event: InputEvent) -> void:
 	var key := event as InputEventKey
@@ -131,11 +131,14 @@ func _handle_keyframe_key(event: InputEvent) -> void:
 		host.call(&"add_keyframe")
 
 
-# V cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather
+# H cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather
 # than one of the brush keys below, and the distinction is load-bearing: the selector is up in
 # ORDINARY PLAY, so requiring an armed terrain brush -- or dev mode at all -- would leave the thing
 # it moves visible and the key that moves it dead. Only DevTools.enabled() gates it, which is what
 # makes it a tuning door rather than a player control.
+#
+# It was V until #1368. V is the player's enemy ranges, and neither handler consumes the press, so
+# every V did both: the key must be one nothing else live answers to (test_controls_coverage.gd).
 #
 # Here rather than in battle3d for the two-windows rule: this entry is forwarded from BOTH OS
 # windows (DevOverlay._input), and a key handled in the 3D scene alone is dead whenever the dev-tools
@@ -144,7 +147,7 @@ func _handle_selector_key(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo or key.ctrl_pressed:
 		return
-	if key.physical_keycode != KEY_V:
+	if key.physical_keycode != KEY_H:
 		return
 	# Resolved through the KNOB rather than a node path of its own: the Game tab's row edits this
 	# same property, and two spellings of where it lives is how a key and a panel come to disagree.
@@ -222,7 +225,7 @@ func _handle_zoom_animation_key(event: InputEvent) -> void:
 # how far that rise climbs (#427 slice 2) -- so it was named _handle_rise_keys until X made that
 # plainly wrong. The Q/E detent idiom applied to authoring, with the rarely-touched steepness off the
 # compass keys rather than on them. Every key here needs an ARMED brush, which is what separates them
-# from the top-level dev keys above: V is not one of them, because the thing it moves is up in
+# from the top-level dev keys above: H is not one of them, because the thing it moves is up in
 # ordinary play.
 # Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent in
 # CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
@@ -313,6 +316,11 @@ func resolve_pending(cell: Vector2i) -> void:
 			unit.movement.set_cell(cell)             # set_cell snaps world position too
 		PendingAction.DUPLICATE:
 			duplicate_unit(unit, cell)
+	# Both arms (#1360): a Move changes where an attacker stands, and a Duplicate copies its gear
+	# AFTER spawn_unit's own drop. Then the squad's plan, whose orders were authored from the old cell.
+	game.drop_threat_field()
+	if action == PendingAction.MOVE:
+		game._repaint_squad_plan(unit.squad)
 	# A dev-armed placement marks the header directly (#259 rework round 2 -- the edit sweep); play
 	# marks it through ScenarioManager.play_version since #1182. Reached through the overlay ref the
 	# F1 toggle already holds; null in a demo build, where there is no scenario header to tell.
@@ -320,24 +328,20 @@ func resolve_pending(cell: Vector2i) -> void:
 		game.dev_overlay.scenario_header.mark_modified()
 	game.mission_log.note_dev_intervention()   # #53: a spawn is a board move a replay cannot know about
 
-# Independent deep copy of `source` at `cell`. UnitData is duplicated so the copy owns its
-# identity; runtime state (stats, HP) lives on the instance, copied post-spawn; inventory items
-# are duplicate(true)'d (shallow would share the nested attack data - CLAUDE.md "Sharp edges"; a NAMED attack_shape is shared by design since #808, being an ext_resource that duplicate leaves alone).
+# Independent copy of `source` at `cell` (#1367): the loader's spawn + apply_unit_state, fed a
+# capture of the source -- the one way unit state is copied, which clears the spawn's seeded kit and
+# re-links prosthetics by carried instance. UnitData is duplicated so the copy has no character-file
+# provenance. Not copied: the cell, the squad (spawn makes a solo one), the placement fields, and
+# an armed watch, which is anchored to the source's cell.
 func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 	var data: UnitData = source.unit_data.duplicate(true)
-	var copy = game.spawn_unit(data, cell)
+	var copy: Unit = game.spawn_unit(data, cell)
 	if copy == null:
 		return null
-	copy.unit_instance.stats = source.unit_instance.stats.duplicate(true)
-	for i in range(source.inventory.size()):
-		var item: Item = source.inventory[i]
-		copy.inventory[i] = item.copy_for_grant() if item is EquippableData else (item.duplicate(true) if item != null else null)
-	copy.set_current_hp(source.get_current_hp())   # after gear: the clamp reads a gear-aware max (#106)
-	var equipped := source.get_equipped_weapon()
-	if equipped != null:
-		var idx := source.inventory.find(equipped)
-		if idx != -1 and copy.inventory[idx] is EquippableData:
-			copy.set_equipped_weapon(copy.inventory[idx])
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(source)
+	entry.apply_unit_state(copy)
+	copy.lapse_watch()
 	return copy
 
 # --- tile brush / map resize ---
@@ -443,6 +447,7 @@ func redo_board() -> bool:
 func _restore_step(snapshot: BoardSnapshot) -> bool:
 	if snapshot == null:
 		return false
+	game.mission_log.note_dev_intervention()   # #1364: an undo is a board edit a replay cannot know about
 	game.scenario_manager.restore_board(snapshot)
 	game.camera_controller.refresh_bounds(game.grid)
 	_refresh_height_readout()

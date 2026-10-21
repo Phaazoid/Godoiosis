@@ -339,7 +339,7 @@ func _start_section(title: String) -> VBoxContainer:
 		var header := Label.new()
 		header.text = title
 		header.add_theme_font_size_override("font_size", QueueStyle.HEADER_FONT_SIZE)
-		header.add_theme_color_override("font_color", QueueStyle.HEADER_TEXT)
+		header.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
 		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		header_box.add_child(header)
 

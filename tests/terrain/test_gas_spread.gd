@@ -162,6 +162,35 @@ func test_the_answer_does_not_depend_on_the_order_cells_are_visited() -> void:
 		assert_int(two.get(cell, -1)).override_failure_message("%s differs by visiting order" % [cell]).is_equal(one[cell])
 
 
+# A gas that moves the air diffuses back (#1324): as the rounds thin it, its cell returns to the BOARD'S
+# reading -- the authored one, which is Normal only on a Normal board. Read off whichever gases move the
+# air, played through the real round (GasField.tick).
+func test_a_gas_that_moves_the_air_fades_its_cell_back_to_the_boards_reading() -> void:
+	var moving := 0
+	for kind: Gas.Kind in Gas.Kind.values():
+		var rules := GasRules.for_kind(kind)
+		if rules == null or rules.air.is_empty():
+			continue
+		moving += 1
+		var field := GasField.new()
+		field.set_level(C, kind, THICK)
+		var board := _board()
+		board.gas = field
+		var authored: Dictionary[String, int] = {"vapor": int(Atmosphere.NORMAL["vapor"]) + int(Atmosphere.STEP["vapor"])}
+		board.atmosphere = authored
+		assert_dict(board.air_at(C)).override_failure_message(
+				"fixture: a thick %s moves nothing" % Gas.name_of(kind)).is_not_equal(authored)
+		var rounds := 0
+		while not field.is_empty() and rounds < 50:
+			field.tick(board)
+			rounds += 1
+		assert_bool(field.is_empty()).override_failure_message(
+				"%s never faded in %d rounds" % [Gas.name_of(kind), rounds]).is_true()
+		assert_dict(board.air_at(C)).override_failure_message(
+				"%s faded and left its cell off the board's reading" % Gas.name_of(kind)).is_equal(authored)
+	assert_int(moving).override_failure_message("no gas's rules move the air, so nothing here is checked").is_greater(0)
+
+
 func test_the_rule_reads_the_field_and_writes_nothing_into_it() -> void:
 	var cells := _field({C: THICK})
 	var before := cells.duplicate()

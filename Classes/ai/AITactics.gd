@@ -993,10 +993,14 @@ static func watch_attack_for(unit: Unit) -> AttackData:
 
 # The cells each facing's watch would cover from `origin` (dir -> cells), truncation included
 # (#756). A facing that covers nothing is absent. _watch_aim ranks these; ThreatField unions them.
+# Asked of a probe of the order itself (#1355), so a lane is the resolver's footprint rule
+# (OverwatchAction.watched_paths_from), each cell once.
 static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext) -> Dictionary:
 	var lanes := {}
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		var cells := Reach.get_affected_cells_from(unit, origin, origin + dir, attack, board)
+		var probe := OverwatchAction.new()
+		probe.init(unit, origin + dir, attack)
+		var cells := Conduction._tiles_of(probe.watched_paths_from(origin, board))
 		if not cells.is_empty():
 			lanes[dir] = cells
 	return lanes
@@ -1767,20 +1771,23 @@ static func _opportunity(unit: Unit, cell: Vector2i, cost: int, action: AttackAc
 
 
 # Cells that hand a candidate's victim the same fate share a key. What the resolver reads off an
-# attacker's cell is exactly three things -- the shove direction, the height, and a carving's
-# empowerment -- so those, plus the attack and the aim, are the key. A DIRECTIONAL attack's footprint
-# moves with the origin, so its cell joins the key outright. A rule that ever reads more of the origin
-# (backstrike) has to join it here, or the seek skips a real opportunity without a word.
+# attacker's cell is exactly four things -- the shove direction, the height, a carving's empowerment
+# and the air it draws there (#1324) -- so those, plus the attack and the aim, are the key. A
+# DIRECTIONAL attack's footprint moves with the origin, so its cell joins the key outright. A rule that
+# ever reads more of the origin (backstrike) has to join it here, or the seek skips a real opportunity
+# without a word.
 static func _group_key(candidate: AttackAction, board: BoardContext) -> String:
 	var attack := candidate.fired_attack
 	var origin := candidate.origin_cell
 	var empowered := ""
+	var air := ""
 	if attack is TransmutationData:
 		empowered = str(Materia.empowered_at(origin, board))
+		air = str(Atmosphere.steps_for((attack as TransmutationData).parsed(), board.air_at(origin)))
 	var anchor := str(origin) if Reach.is_directional_attack(attack) else ""
-	return "%d|%s|%s|%d|%s|%s" % [attack.get_instance_id() if attack != null else 0, candidate.target_cell,
+	return "%d|%s|%s|%d|%s|%s|%s" % [attack.get_instance_id() if attack != null else 0, candidate.target_cell,
 			GridUtils.cardinal_direction_i_between(origin, candidate.target_cell), board.elevation_at(origin),
-			empowered, anchor]
+			empowered, air, anchor]
 
 
 # Could another cell of this candidate's group still pay? Only a single-victim volley is shareable --

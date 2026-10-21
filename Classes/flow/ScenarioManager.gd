@@ -191,6 +191,12 @@ func save_to_slot(slot: int) -> bool:
 	if game.mission_controller.is_deploying():
 		push_warning("Cannot save during deployment -- begin the mission first")
 		return false
+	# Refused once the mission is over (#1352). Stay leaves the finished board open to the pause
+	# menu, and a slot taken then resumes as ONGOING: the outcome is not saved, nor is the
+	# protected_lost latch, so a lost protect mission would come back playable and winnable.
+	if game.mission_controller.is_over():
+		push_warning("Cannot save once the mission is over -- restart it to play again")
+		return false
 	var save := SaveGame.new()
 	save.scenario = capture_scenario(display_name(last_loaded_path), false)
 	save.mission_path = last_loaded_path

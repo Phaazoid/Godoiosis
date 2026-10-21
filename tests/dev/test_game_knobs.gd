@@ -171,7 +171,7 @@ func test_battle3d_hands_the_game_tab_its_host() -> void:
 	assert_bool(_game.has_host()).is_true()
 
 
-# --- V cycles the hover selector's depth (#427 slice 2 follow-up) --------------------
+# --- H cycles the hover selector's depth (#427 slice 2 follow-up; V until #1368) -----
 #
 # Here rather than in test_height_brush.gd because the key needs the REAL 3D scene: it resolves the
 # overlays through GameKnobs.SELECTOR_DEPTH, the same entry the panel row edits, so a case driving a
@@ -188,7 +188,7 @@ func _overlays_3d() -> BoardOverlays:
 	return _scene.get_node("BoardOverlays") as BoardOverlays
 
 
-func test_v_cycles_the_selector_depth_with_dev_mode_OFF() -> void:
+func test_h_cycles_the_selector_depth_with_dev_mode_OFF() -> void:
 	# The gate that makes it a play key. The selector is up in ordinary play, so a key requiring an
 	# armed terrain brush -- or dev mode at all -- would leave the thing visible and the key dead.
 	var game: Node2D = _scene.get_node("Main/GameContainer/GameView/Game")
@@ -197,23 +197,43 @@ func test_v_cycles_the_selector_depth_with_dev_mode_OFF() -> void:
 			"the case is not testing what it claims: dev mode is already on").is_false()
 	var before: BoardOverlays.SelectorDepth = _overlays_3d().selector_depth
 
-	game.dev_controller.handle_dev_key(_key(KEY_V))
+	game.dev_controller.handle_dev_key(_key(KEY_H))
 
 	assert_int(_overlays_3d().selector_depth).override_failure_message(
-			"V did not reach the selector outside dev mode").is_not_equal(before)
+			"H did not reach the selector outside dev mode").is_not_equal(before)
 
 
-func test_v_reaches_the_selector_from_the_dev_tools_window_too() -> void:
+func test_h_reaches_the_selector_from_the_dev_tools_window_too() -> void:
 	# The two-windows rule, which has bitten five times: a key reaches only the FOCUSED OS window, so
 	# a binding handled in the game subtree alone is dead exactly where authoring leaves you. This
 	# drives the overlay's own arm, so the FORWARD is asserted rather than assumed.
 	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
 	var before: BoardOverlays.SelectorDepth = _overlays_3d().selector_depth
 
-	dev_overlay._input(_key(KEY_V))
+	dev_overlay._input(_key(KEY_H))
 
 	assert_int(_overlays_3d().selector_depth).override_failure_message(
-			"V pressed in the dev-tools window never reached the selector").is_not_equal(before)
+			"H pressed in the dev-tools window never reached the selector").is_not_equal(before)
+
+
+# #1368: the selector key used to be V, which is also the player's enemy-ranges key, so in a dev
+# build every V did both. The press is read from the Input Map rather than spelled, so it follows a
+# rebinding of the ranges.
+func test_the_enemy_ranges_key_leaves_the_selector_alone() -> void:
+	var game: Node2D = _scene.get_node("Main/GameContainer/GameView/Game")
+	var bindings := InputMap.action_get_events("toggle_enemy_ranges")
+	assert_bool(bindings.is_empty()).override_failure_message(
+			"toggle_enemy_ranges has no binding to press").is_false()
+	var before: BoardOverlays.SelectorDepth = _overlays_3d().selector_depth
+	for binding: InputEvent in bindings:
+		var press := binding.duplicate() as InputEventKey
+		if press == null:
+			continue
+		press.pressed = true
+		game.dev_controller.handle_dev_key(press)
+		assert_int(_overlays_3d().selector_depth).override_failure_message(
+				"the enemy-ranges key (%s) also moved the selector depth" % press.as_text()) \
+			.is_equal(before)
 
 
 func test_every_knob_resolves_against_the_real_scene() -> void:

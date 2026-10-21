@@ -1312,15 +1312,8 @@ class AimOption:
 # (CellSubstances, the queue gate's own fizzle question); with none, presence is not asked.
 func aim_options(watch: bool, board: BoardContext = null) -> Array[AimOption]:
 	var origin := get_projected_destination()
-	var sources: Array[EquippableData] = []
-	if equipped_weapon != null:
-		sources.append(equipped_weapon)
-	for item: Item in inventory:
-		var carried := item as EquippableData
-		if carried != null and carried != equipped_weapon:
-			sources.append(carried)
 	var options: Array[AimOption] = []
-	for source: EquippableData in sources:
+	for source: EquippableData in carried_equippables():
 		with_weapon_in_hand(source, func() -> void:
 			var attacks: Array[AttackData] = overwatch_attacks() if watch else get_selectable_attacks()
 			for attack: AttackData in attacks:
@@ -1328,6 +1321,19 @@ func aim_options(watch: bool, board: BoardContext = null) -> Array[AimOption]:
 						and CellSubstances.fizzle_reason(attack, origin, board, self) == "":
 					options.append(AimOption.new(source, attack)))
 	return options
+
+# Everything this unit carries that it could hold, each once: the one in hand first (even one equipped
+# without an inventory slot, as fixtures do), then every other carried equippable in inventory order.
+# Read by aim_options (#929) and the turn-start rev tick (#1357), so "what does it carry" has one answer.
+func carried_equippables() -> Array[EquippableData]:
+	var sources: Array[EquippableData] = []
+	if equipped_weapon != null:
+		sources.append(equipped_weapon)
+	for item: Item in inventory:
+		var carried := item as EquippableData
+		if carried != null and carried != equipped_weapon:
+			sources.append(carried)
+	return sources
 
 # Runs `work` with `source` in the weapon slot and puts the held one back after (#929): how a preview
 # asks what another carried weapon would do without the unit ever being seen holding it -- a save or a
@@ -1562,9 +1568,11 @@ func rev_weapon() -> void:
 	if equipped_weapon != null:
 		equipped_weapon.rev()
 
-func tick_weapon_rev() -> void:
-	if equipped_weapon != null:
-		equipped_weapon.tick_rev()
+# Every CARRIED weapon's rev counts down, in hand or not (dev, 2026-10-21, #1357: "Tick every carried
+# weapon unless otherwise specified"), so swapping a revved sword out cannot bank its timer.
+func tick_carried_revs() -> void:
+	for carried: EquippableData in carried_equippables():
+		carried.tick_rev()
 
 func can_burrow_weapon() -> bool:
 	return equipped_weapon != null and equipped_weapon.can_burrow()

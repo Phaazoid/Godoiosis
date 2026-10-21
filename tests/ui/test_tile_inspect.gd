@@ -65,6 +65,41 @@ func _card_texts() -> String:
 	return "\n".join(_card().tile_texts())
 
 
+func _sections() -> TileInfoSections:
+	return _card()._sections
+
+
+# The heading of the section on show.
+func _shown_heading() -> String:
+	return _sections()._sections[_sections().page()].heading
+
+
+# A key press built the way project.godot binds it -- on the physical keycode -- through the game's
+# own input door, so a bound-and-dead key reds (test_pre_mission_bar.gd's Tab case).
+func _press(physical: int) -> void:
+	var key := InputEventKey.new()
+	key.physical_keycode = physical
+	key.pressed = true
+	game._input(key)
+
+
+# Everything the card says across its pages, turning through each (#1324: one shows at a time).
+func _all_pages_text() -> String:
+	var said: Array[String] = []
+	for page in _sections().page_count():
+		_sections().turn_to(page)
+		await await_idle_frame()
+		said.append(_card_texts())
+	return "\n".join(said)
+
+
+func _tab_buttons() -> Array[Button]:
+	var out: Array[Button] = []
+	for node in _sections().find_children("*", "Button", true, false):
+		out.append(node as Button)
+	return out
+
+
 func _spawn(faction: Team.Faction, cell: Vector2i, unit_name: String) -> Unit:
 	var data := H.make_unit_data({Stats.Stat.MHP: 80}, faction)
 	data.display_name = unit_name
@@ -143,8 +178,9 @@ func _paint_quiet_tile(cell: Vector2i) -> bool:
 	return false
 
 
-# Three watches, two zones and a fire on one cell -- busier than any authored board makes a single
-# tile, and the measure the card was sized against (675 of 704 since #955 split its zones by kind).
+# Three watches, two zones, a fire and every gas with rules on one cell -- busier than any authored
+# board makes a single tile, and the measure the card was sized against (675 of 704 since #955 split
+# its zones by kind, before #1324's Air section).
 func _build_busy_tile(cell: Vector2i) -> void:
 	_set_burning(cell)
 	for i in range(3):
@@ -153,6 +189,10 @@ func _build_busy_tile(cell: Vector2i) -> void:
 	game.refresh_watch_markers()
 	game.zone_manager.paint_cell("The Far Ground", ZoneManager.Kind.CAPTURE, cell)
 	game.zone_manager.paint_cell("The Landing Field", ZoneManager.Kind.DEPLOYMENT, cell)
+	# The Air section (#1324): every gas with rules, thick -- each its own row, plus the air they leave.
+	for kind: Gas.Kind in Gas.Kind.values():
+		if GasRules.for_kind(kind) != null:
+			game.gas_field.set_level(cell, kind, Gas.Level.THICK)
 
 
 # ------------------------------------------------------------------------------
@@ -291,9 +331,12 @@ func test_the_tile_card_follows_its_unit() -> void:
 	unit.movement.set_cell(there)
 	await await_idle_frame()
 
-	assert_str(_card_texts()).override_failure_message(
-			"the tile card stayed on the cell the unit left").contains("Test Point")
-	assert_str(_card_texts()).not_contains(Glossary.short(Glossary.Term.BURNING))
+	# The card keeps the section on show as its unit walks (#1324), so the zone is on another page.
+	assert_bool(_card().is_showing_tile_at(there)).override_failure_message(
+			"the tile card stayed on the cell the unit left").is_true()
+	assert_str(await _all_pages_text()).override_failure_message(
+			"the tile card does not describe the cell the unit walked to").contains("Test Point")
+	assert_str(await _all_pages_text()).not_contains(Glossary.short(Glossary.Term.BURNING))
 
 
 # ------------------------------------------------------------------------------
@@ -560,18 +603,26 @@ func test_a_tile_with_nothing_to_say_drops_the_last_tiles_sections() -> void:
 #  The card cannot scroll, so it has to fit
 # ------------------------------------------------------------------------------
 
+# One section at a time since #1324 (dev, 2026-10-21): the busiest tile filled the screen before the
+# Air section, so every PAGE has to fit -- measured on each, since any one of them can be on show.
 func _assert_on_screen() -> void:
 	for i in range(3):
 		await await_idle_frame()
-	assert_int(_card().tile_texts().size()).override_failure_message(
-			"precondition: the card drew nothing, so this measures nothing").is_greater(8)
+	var pages := _sections().page_count()
+	assert_int(pages).override_failure_message(
+			"precondition: the busy card has one section, so nothing here pages").is_greater(1)
 	var screen: Rect2 = _card().get_viewport_rect()
-	var tile_card: Rect2 = _card()._tile_panel.get_global_rect()
-	assert_float(tile_card.position.y).override_failure_message(
-			"the tile card starts above the screen").is_greater_equal(0.0)
-	assert_float(tile_card.end.y).override_failure_message(
-			"the tile card runs off the bottom (%d of %d)" % [tile_card.end.y, screen.size.y]) \
-			.is_less_equal(screen.size.y)
+	for page in pages:
+		_sections().turn_to(page)
+		for i in range(3):
+			await await_idle_frame()
+		assert_int(_card().tile_texts().size()).override_failure_message(
+				"precondition: page %d drew nothing, so this measures nothing" % page).is_greater(2)
+		var tile_card: Rect2 = _card()._tile_panel.get_global_rect()
+		assert_float(tile_card.position.y).override_failure_message(
+				"page %d of the tile card starts above the screen" % page).is_greater_equal(0.0)
+		assert_float(tile_card.end.y).override_failure_message("page %d of the tile card runs off the bottom (%d of %d)"
+				% [page, tile_card.end.y, screen.size.y]).is_less_equal(screen.size.y)
 
 
 func test_the_busiest_tile_card_stays_on_screen() -> void:
@@ -594,3 +645,113 @@ func test_the_busiest_tile_card_beside_the_dock_stays_on_screen() -> void:
 	var dock: Rect2 = (_panel().get_node("UnitInfoPanel") as Control).get_global_rect()
 	assert_float(_card()._tile_panel.get_global_rect().position.x).override_failure_message(
 			"the tile card overlaps the dock").is_greater_equal(dock.end.x)
+
+
+# ------------------------------------------------------------------------------
+#  One section at a time (#1324): a tab row and the T key turn the page
+# ------------------------------------------------------------------------------
+
+# A watch and a fire on one cell: two sections, the threat first.
+func _two_section_tile() -> Vector2i:
+	var watcher := _spawn(ENEMY, Vector2i(2, 1), "Brigand Archer")
+	_arm(watcher, WATCHED)
+	_set_burning(WATCHED)
+	game.refresh_watch_markers()
+	return WATCHED
+
+
+func test_a_tile_with_one_section_has_no_tab_row() -> void:
+	var cell := Vector2i(3, 3)
+	_set_burning(cell)
+	await _click(cell)
+	assert_int(_sections().page_count()).is_equal(1)
+	assert_array(_tab_buttons()).override_failure_message("a one-section card wears a tab row").is_empty()
+
+
+func test_the_tab_row_has_a_tab_per_section_and_names_its_key() -> void:
+	var cell := Vector2i(4, 2)
+	_build_busy_tile(cell)
+	await _click(cell)
+	var sections := TileReadout.compose(game, cell)
+	var buttons := _tab_buttons()
+	assert_int(buttons.size()).override_failure_message(
+			"the row is not one tab per section plus the arrow").is_equal(sections.size() + 1)
+	var key := Controls.key_for_action("cycle_tile_card")
+	assert_str(key).override_failure_message("cycle_tile_card is documented nowhere").is_not_empty()
+	assert_str(buttons[-1].text).override_failure_message("the arrow does not name its key").contains(key)
+	assert_str(_shown_heading()).override_failure_message("a new card did not open on its first section") \
+			.is_equal(sections[0].heading)
+
+
+func test_the_key_turns_the_page_and_wraps() -> void:
+	var cell := _two_section_tile()
+	await _click(cell)
+	var sections := TileReadout.compose(game, cell)
+	assert_int(sections.size()).override_failure_message("fixture: not two sections").is_equal(2)
+	assert_str(_shown_heading()).is_equal(sections[0].heading)
+	_press(KEY_T)
+	await await_idle_frame()
+	assert_str(_shown_heading()).override_failure_message("T did not turn the card: the key is bound and dead") \
+			.is_equal(sections[1].heading)
+	assert_str(_card_texts()).override_failure_message("the first section is still drawn beside the second") \
+			.not_contains("Brigand Archer")
+	_press(KEY_T)
+	await await_idle_frame()
+	assert_str(_shown_heading()).override_failure_message("T did not wrap to the first section") \
+			.is_equal(sections[0].heading)
+
+
+func test_a_click_on_a_tab_jumps_to_it_and_the_arrow_turns_on() -> void:
+	var cell := Vector2i(4, 2)
+	_build_busy_tile(cell)
+	await _click(cell)
+	var sections := TileReadout.compose(game, cell)
+	var last := sections.size() - 1
+	_tab_buttons()[last].pressed.emit()
+	await _settle()
+	assert_str(_shown_heading()).override_failure_message("a click on the last tab did not open it") \
+			.is_equal(sections[last].heading)
+	_tab_buttons()[-1].pressed.emit()
+	await _settle()
+	assert_str(_shown_heading()).override_failure_message("the arrow did not turn the last page to the first") \
+			.is_equal(sections[0].heading)
+
+
+# A section added AHEAD of the one on show moves its index, so a card that kept the index would turn
+# to the newcomer: the page follows the SECTION.
+func test_a_live_redraw_keeps_the_section_on_show() -> void:
+	var cell := _two_section_tile()
+	await _click(cell)
+	_press(KEY_T)
+	await await_idle_frame()
+	var shown := _shown_heading()
+	game.zone_manager.paint_cell("Test Point", ZoneManager.Kind.CAPTURE, cell)
+	await _settle()
+	assert_int(_sections().page_count()).override_failure_message(
+			"precondition: the zone added no section, so nothing moved").is_equal(3)
+	assert_str(_shown_heading()).override_failure_message("a live redraw moved the card off its section") \
+			.is_equal(shown)
+
+
+# The card's sizing has bitten twice (the ratchet, the giant card): turning from the tallest section to
+# the shortest must hand the card back its height.
+func test_turning_to_a_shorter_section_shrinks_the_card() -> void:
+	var cell := Vector2i(4, 2)
+	_build_busy_tile(cell)
+	await _click(cell)
+	await _settle()
+	var minimums: Array[float] = []
+	for page in _sections().page_count():
+		_sections().turn_to(page)
+		await _settle()
+		minimums.append(_card()._tile_panel.get_combined_minimum_size().y)
+	var tallest: float = minimums.max()
+	var shortest: float = minimums.min()
+	assert_float(tallest - shortest).override_failure_message(
+			"fixture: every section is one height, so nothing shrinks").is_greater(20.0)
+	_sections().turn_to(minimums.find(tallest))
+	await _settle()
+	_sections().turn_to(minimums.find(shortest))
+	await _settle()
+	assert_float(_card()._tile_panel.size.y).override_failure_message("the card kept the tall section's height (%d, wants %d)"
+			% [_card()._tile_panel.size.y, shortest]).is_less_equal(shortest + 1.0)

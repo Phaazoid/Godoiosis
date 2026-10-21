@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open questions flagged).** Decided 2026-06-15 with the developer; a couple of forks pending a co-dev chat. Not settled like the squad spec, but the core stance (no leveling, fixed stats) is firm. Supersedes the wiki's `Stats Overview.docx` leveling section (random stat-on-level-up — dead under Law #1).
 
-**Canon checked through #808 (2026-09-06); #1174 (Will and WIL retired) folded in 2026-10-01.**
+**Canon checked through #1377 (2026-10-21).**
 
 ## Core stance
 
@@ -16,8 +16,8 @@ Why this fits Iosis: matches the top axiom *"setting up the battle should be hal
 
 1. **Gear** — weapons, stat-boosting armor, upgrades.
 2. **Prosthetics** — the mechanist↔alchemist axis (below).
-3. **Weapon proficiency** (mechanist-leaning) and **aura points / runes** (alchemist-leaning) — grown via *training goals* (below).
-4. **Squad connections** — relational bonuses: familiarity from fielding units together **lowers their LDR-budget cost** and grows **combat synergy** (the levers ride on familiarity, not on pumping LDR — see [stats.md](stats.md), [squad-system.md](squad-system.md)). Additive, **never decaying**, and **plot-seedable** (a story-introduced "old friend of X" arrives pre-connected — no grind, and it keeps connection bonuses from locking your roster).
+3. **Weapon proficiency** (mechanist-leaning) and **aura points / runes** (alchemist-leaning) — grown via *training goals* (below). *(Unbuilt: training goals are [#62](https://github.com/Phaazoid/Godoiosis/issues/62), open. Today proficiency is authored per family and only gates which mod spaces are active, and nothing grows aura.)*
+4. **Squad connections** — relational bonuses: familiarity from fielding units together **lowers their LDR-budget cost** and grows **combat synergy** (the levers ride on familiarity, not on pumping LDR — see [stats.md](stats.md), [squad-system.md](squad-system.md)). Additive, **never decaying**, and **plot-seedable** (a story-introduced "old friend of X" arrives pre-connected — no grind, and it keeps connection bonuses from locking your roster). *(Unbuilt: familiarity is a piece of the campaign umbrella [#501](https://github.com/Phaazoid/Godoiosis/issues/501).)*
 
 ## Proficiency training goals (anti-grind growth)
 
@@ -25,7 +25,7 @@ Why this fits Iosis: matches the top axiom *"setting up the battle should be hal
 - With a goal set, the unit gains proficiency **up to a per-mission cap** each time it "does the thing." Past the cap, extra reps do nothing → **grinding is mechanically pointless** (the strongest form of the wiki's "grind a chainsword army → just stupid" stance).
 - **Benched units with a goal** get slower automatic training during missions they sit out → no bench-rot, shrinks the late-unit gap. Fielding trains faster → an **"attention economy"**: focus is the soft resource you spend.
 - **Tier thresholds** (focused missions to reach the next tier) are a **dev-controlled difficulty dial**, independent of the economy.
-- Proficiency tiers **unlock new secondary attacks / attack patterns** (qualitative growth; drops onto the existing `AttackShape` library) — a primary "feels-good" beat. Aura points may grant **damage multipliers** — keep **modest**; large multipliers are vertical power that rebuilds a power curve and a late-unit gap.
+- Proficiency tiers **unlock new secondary attacks / attack patterns** (qualitative growth; drops onto the existing `AttackShape` library) — a primary "feels-good" beat. Aura points may grant **damage multipliers** — keep **modest**; large multipliers are vertical power that rebuilds a power curve and a late-unit gap. *(As built, aura ADDS to damage, once per delivered element, and gates channeling by covering a carving's atom demand — [alchemy-kit.md](alchemy-kit.md) → *Aura — the data model*.)*
 
 Open: what counts as "doing the thing"; the no-opportunity case (partial fill vs nothing); D&D-style sticky commitment → preferred form is "momentum" (same goal ramps the rate, switching resets the *rate* but never loses accrued proficiency; harsh switch penalties would rebuild the grind wall). The proficiency/abilities layer is its own system to design later.
 
@@ -34,14 +34,14 @@ Open: what counts as "doing the thing"; the no-opportunity case (partial fill vs
 Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two classes, two ends of **how augmented a unit's body is.**
 
 - **Prosthetics raise physical stats — via the limb-slot model** (canonical since the 2026-07-04/05 grills, [will-and-death.md](will-and-death.md)): limbs are equipment slots, the natural limb is the default gear; effective STR = mean of the two **arm** slots, effective DEX = mean of the two **leg** slots (rounded up). A prosthetic brings its **own built-in stat** and is **upgradable** — the *only* sanctioned way to exceed a unit's fixed natural statline. **Arms → STR; legs → DEX** (no SPD stat — DEX owns the speed role). Weapon-model prosthetics also equip as integrated weapons, scaling off their own STR ([weapons.md](weapons.md)).
-- **Limb loss costs aura — ratified 2026-07-05 (audit A3): −1 aura point per lost limb**, taken from the **highest pool (ties → primary affinity)**. Aura rides *living flesh* — a missing limb and a prosthetic both count, and elective amputation pays the same. Chroming up (mechanist) trades alchemic depth for physical power; full-flesh = full aura (alchemist end); heavily-augmented = strong physical, little aura (mechanist end). **Natural regrowth restores the point.** Every unit sits somewhere on this line and slides by choosing what to replace ([alchemy-kit.md](alchemy-kit.md) → *Aura data model*).
+- **Limb loss costs aura — ratified 2026-07-05 (audit A3): −1 aura point per lost limb**, taken from the **highest pool** (ties → element enum order today, a placeholder; the real tiebreak, possibly primary affinity, is open design work, [#77](https://github.com/Phaazoid/Godoiosis/issues/77)). Aura rides *living flesh* — a missing limb and a prosthetic both count, and elective amputation pays the same. Chroming up (mechanist) trades alchemic depth for physical power; full-flesh = full aura (alchemist end); heavily-augmented = strong physical, little aura (mechanist end). **Natural regrowth restores the point** *(not built; installing a prosthetic is authored or dev-tool only, and uninstall and regrowth are pieces of [#501](https://github.com/Phaazoid/Godoiosis/issues/501))*. Every unit sits somewhere on this line and slides by choosing what to replace ([alchemy-kit.md](alchemy-kit.md) → *Aura — the data model*).
 - **Natural-limb regrowth** (alchemical) is the alchemist's out: regrow a *natural* limb — **pricier, slower, more resource-intensive** than a prosthetic, but it **preserves aura / the alchemist build**. The escape hatch when a favorite alchemist is maimed and you don't want to respec them mechanist.
-- *How* a limb is lost (involuntary maiming vs elective amputation) lives in [will-and-death.md](will-and-death.md).
+- *How* a limb is lost (involuntary maiming vs elective amputation) lives in [will-and-death.md](will-and-death.md). *(In battle, a blow of 10, or 8 once the unit is Wounded, #1174. Elective amputation is neither built nor tracked; alchemy-kit's aura model is its only other mention.)*
 
 ## Economy = dev lever, not grind
 
-- **Scrap / materia are authored.** Each mission grants exactly what the designer placed, on a drawn curve. The **single-player, play-through-once campaign** makes a faucet-free economy trivial → **nothing to grind, by construction.**
-- The **roguelike side-mode** is where a faucet (random/farmable) economy belongs, and where customized campaign units can be imported. Because there's no leveling, a **stock unit's floor is fully playable** → the mode is never locked behind deep customization (customization is upside, not a tax). Watch: keep customized power from outclassing stock too hard (favor sidegrades; the mode may normalize/scale to incoming power).
+- **Scrap / materia are authored.** Each mission grants exactly what the designer placed, on a drawn curve. *(The economy is a piece of [#501](https://github.com/Phaazoid/Godoiosis/issues/501).)* The **single-player, play-through-once campaign** makes a faucet-free economy trivial → **nothing to grind, by construction.**
+- The **roguelike side-mode** ([#510](https://github.com/Phaazoid/Godoiosis/issues/510), open) is where a faucet (random/farmable) economy belongs, and where customized campaign units can be imported. Because there's no leveling, a **stock unit's floor is fully playable** → the mode is never locked behind deep customization (customization is upside, not a tax). Watch: keep customized power from outclassing stock too hard (favor sidegrades; the mode may normalize/scale to incoming power).
 
 ## Two non-grind difficulty dials
 
@@ -50,7 +50,7 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 
 ## Open questions
 
-- Proficiency "doing the thing" trigger + no-opportunity case. *(~~Momentum vs flat goals~~ — momentum RATIFIED at the 2026-07-06 jobs grill: pause-never-reset, the rate is the only thing switching costs — [jobs.md](jobs.md).)*
+- Proficiency "doing the thing" trigger + no-opportunity case. *(~~Momentum vs flat goals~~ — momentum RATIFIED at the 2026-07-06 jobs grill: pause-never-reset, the rate is the only thing switching costs — [jobs.md](jobs.md).)* *(jobs.md parked the training-goal economy with #61, 2026-07-20, so the ruling is now recorded only in [grill-queue.md](grill-queue.md)'s Done list; the build is [#62](https://github.com/Phaazoid/Godoiosis/issues/62), open.)*
 - ~~Body-part granularity and which stat each part feeds~~ — **RESOLVED 2026-07-04/05: the limb-slot model** (arms→STR, legs→DEX, four slots — [will-and-death.md](will-and-death.md)).
 - Roguelike power-normalization for imported units.
 - See [will-and-death.md](will-and-death.md) for limb loss (Will, its old currency, retired 2026-10-01 — #1174).
@@ -60,7 +60,7 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 Noted from `Scratchpad` during the #32 triage; not yet integrated decisions:
 
 - **Randomness in *upgrades* is allowed; randomness in *combat* is not.** Law #1 governs the battlefield — but offering a **random subset of choices** when a proficiency/weapon advances (à la *Mewgenics*) is fine, and even encourages experimentation. The meta-layer may roll dice; the turn never does.
-- **Optional job/class-lite layer.** ~~Captured idea~~ — **RATIFIED 2026-07-06 as the full jobs system, own doc: [jobs.md](jobs.md)** (certify-once — no re-qualify — stat nudges + ceilings, trainable pools). Kept here as the seed record. *"Even in a classless society, people have jobs."*
+- **Optional job/class-lite layer.** ~~Captured idea~~ — **RATIFIED 2026-07-06 as the full jobs system, own doc: [jobs.md](jobs.md)** (certify-once — no re-qualify — stat nudges + ceilings, trainable pools). Kept here as the seed record. *(#61 descoped certify-once, ceilings and trainable pools on 2026-07-20, [jobs.md](jobs.md) → Parked; a job today is stat nudges plus an ability pool.)* *"Even in a classless society, people have jobs."*
 - **Double-attacks as a weapon property, not a stat rule.** Rather than FE's speed-derived doubling, make multi-hit a property of specific weapons, **gated** by stats (better stats → more uses) — keeps growth horizontal.
 - **Fixed stats shouldn't force weapon pairings.** A consequence of the fixed-stat stance: since weapons scale off a stat, optimal play risks **locking each character to one weapon type**. Candidate outs (detailed in [weapons.md](weapons.md)): weapon **mods/variants that change the scaling stat**, or **sub-varieties** of each family with differing set scalings — so customization stays meaningful and no single weapon is always best for a statline.
 
@@ -75,6 +75,6 @@ Kept as the session's input record; the owner doc supersedes anything drifting b
 - **Confirmed consumers:** counter-target policy (taunt/bodyguard abilities — squad-system C3), squad-leader doctrine influence, temperament linkage, roguelike drafting, the four-slot ability taxonomy (Action / Reaction / Passive / Movement — ability *sources* split between jobs and gear), job-gated squad verbs ("our squad is stronger with an X in it"), **unique story jobs** (also cover for Isaac's alkahest without tipping the player), **legibility** (an enemy's job telegraphs its *kit*, complementing AI archetypes telegraphing *behavior*; PER may reveal enemy jobs).
 - **Economy jobs: maybe** — only ever as a dev-authored dial (the faucet-free economy stands).
 - **Boundary (2026-07-06):** weapon-side abilities (Revved, Burrow, weapon-tied guard, sniper overwatch) belong to the **weapon parts system** ([weapons.md](weapons.md) → *The parts system*), not jobs. *(Overwatch shipped as #413: an `AttackData` flag, so a carving can carry it as well as a weapon attack; still not a job ability.)*
-- **Naming:** the mission board is the **Bounty Board** (renamed from the wiki's "job board" — mercenary contracts, a narrative side-mission tool that may *influence* jobs but is a different thing).
+- **Naming:** the mission board is the **Bounty Board** (unbuilt; a piece of [#501](https://github.com/Phaazoid/Godoiosis/issues/501)) (renamed from the wiki's "job board" — mercenary contracts, a narrative side-mission tool that may *influence* jobs but is a different thing).
 
 Cross-refs: [stats.md](stats.md), [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), [weapons.md](weapons.md), `../../CLAUDE.md` (design laws).

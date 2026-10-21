@@ -129,6 +129,9 @@ func _on_delete_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
 		return
+	# A mission, fixture or roster names its cast by reference, so deleting one in use breaks them.
+	if _items.has(target) and DevWidgets.refuse_delete_in_use(_items[target].resource_path, status_label):
+		return
 	DevWidgets.confirm_delete(self, "character '%s'" % target, func(): _delete_confirmed(target))
 
 func _delete_confirmed(target: String) -> void:

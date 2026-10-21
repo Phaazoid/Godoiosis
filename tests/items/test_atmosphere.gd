@@ -15,6 +15,16 @@ const HERE := Vector2i(8, 8)
 const FOE_CELL := Vector2i(9, 8)
 const FIREBALL := "Break(F, A) + Push(F2)"
 
+# A recipe that draws each ambient substance from the air and nothing else (#1324's local air): literal
+# strings, checked by test_each_draws_recipe_draws_exactly_its_substance.
+const DRAWS: Dictionary[String, String] = {
+	"inert_air": "Push(A2)",
+	"vital_air": FIREBALL,
+	"vapor": "Break(A, W) + Push(W2)",
+	"atom_fire": "Push(F)",
+	"atom_aether": "Bind(Q, Q)",
+}
+
 var _sm: SquadManager
 
 
@@ -200,6 +210,137 @@ func test_a_weather_names_exactly_what_it_moves_and_says_which_way() -> void:
 		assert_int(Atmosphere.weather_lines(kind).size()).is_equal(moved)
 
 
+# --- a gas moves the air where it lies (#1324) ---------------------------------------------
+# What a gas does to the air is AUTHORED (Resources/GasRules/), so every expectation is read off
+# GasRules.for_kind and no gas's number is named here.
+
+# Every kind whose rules move the air; failing loudly when none does, since every case below would be
+# vacuous.
+func _air_gases() -> Array[Gas.Kind]:
+	var out: Array[Gas.Kind] = []
+	for kind: Gas.Kind in Gas.Kind.values():
+		var rules := GasRules.for_kind(kind)
+		if rules != null and not rules.air.is_empty():
+			out.append(kind)
+	assert_array(out).override_failure_message("no gas's rules move the air, so nothing here is checked").is_not_empty()
+	return out
+
+
+func _board_with(field: GasField) -> BoardContext:
+	var no_units: Array[Unit] = []
+	return BoardContext.new(null, no_units, null, null, null, null, field)
+
+
+func _expected(id: String, base: Dictionary, nudge: Dictionary) -> int:
+	return clampi(Atmosphere.percent_of(id, base) + int(nudge.get(id, 0)), 0, 100)
+
+
+func test_each_draws_recipe_draws_exactly_its_substance() -> void:
+	for id: String in Atmosphere.SUBSTANCES:
+		assert_bool(DRAWS.has(id)).override_failure_message("DRAWS has no recipe for %s" % id).is_true()
+		assert_array(_drawn(DRAWS[id])).contains_exactly([id])
+
+
+func test_every_gas_moves_its_own_cell_by_its_air_times_its_level_and_no_other() -> void:
+	var beside := HERE + Vector2i.RIGHT
+	for kind: Gas.Kind in _air_gases():
+		var air := GasRules.for_kind(kind).air
+		for id: String in air:
+			assert_bool(Atmosphere.SUBSTANCES.has(id)).override_failure_message(
+					"%s's rules move '%s', which is not in the air" % [Gas.name_of(kind), id]).is_true()
+		for level: int in [Gas.Level.THIN, Gas.Level.MEDIUM, Gas.Level.THICK]:
+			var field := GasField.new()
+			field.set_level(HERE, kind, level)
+			var board := _board_with(field)
+			var here := board.air_at(HERE)
+			for id: String in Atmosphere.SUBSTANCES:
+				assert_int(Atmosphere.percent_of(id, here)).override_failure_message("%s at level %d left %s at %d"
+						% [Gas.name_of(kind), level, id, Atmosphere.percent_of(id, here)]) \
+						.is_equal(clampi(int(Atmosphere.NORMAL[id]) + int(air.get(id, 0)) * level, 0, 100))
+			assert_dict(board.air_at(beside)).override_failure_message(
+					"%s moved the air of a cell it does not lie on" % Gas.name_of(kind)).is_equal(board.atmosphere)
+
+
+# The dev ruled the feature needs a gas that SUBTRACTS (#1324): both directions must be exercised.
+func test_some_gas_raises_the_air_and_some_lowers_it() -> void:
+	var raises := false
+	var lowers := false
+	for kind: Gas.Kind in _air_gases():
+		for id: String in GasRules.for_kind(kind).air:
+			raises = raises or GasRules.for_kind(kind).air[id] > 0
+			lowers = lowers or GasRules.for_kind(kind).air[id] < 0
+	assert_bool(raises).override_failure_message("no gas raises the air, so the raising half is unchecked").is_true()
+	assert_bool(lowers).override_failure_message("no gas lowers the air, so the subtracting half is unchecked").is_true()
+
+
+func test_two_gases_on_one_cell_add_up() -> void:
+	var kinds := _air_gases()
+	assert_int(kinds.size()).override_failure_message("fixture: fewer than two gases move the air").is_greater_equal(2)
+	var field := GasField.new()
+	field.set_level(HERE, kinds[0], Gas.Level.THIN)
+	field.set_level(HERE, kinds[1], Gas.Level.THIN)
+	var here := _board_with(field).air_at(HERE)
+	for id: String in Atmosphere.SUBSTANCES:
+		var sum := int(GasRules.for_kind(kinds[0]).air.get(id, 0)) + int(GasRules.for_kind(kinds[1]).air.get(id, 0))
+		assert_int(Atmosphere.percent_of(id, here)).is_equal(clampi(int(Atmosphere.NORMAL[id]) + sum, 0, 100))
+
+
+# A cell starts from what the board plays under (BoardContext.atmosphere: authored + weather), never
+# from Normal, and still holds 0..100 at both ends.
+func test_a_cell_starts_from_the_boards_own_reading_and_stays_within_0_100() -> void:
+	for kind: Gas.Kind in _air_gases():
+		var field := GasField.new()
+		field.set_level(HERE, kind, Gas.Level.THICK)
+		var nudge := GasRules.air_of(field.packed_at(HERE))
+		for base: Dictionary[String, int] in [_rich(Atmosphere.SUBSTANCES[0], 1), _all_at(0), _all_at(100)]:
+			var board := _board_with(field)
+			board.atmosphere = base
+			var here := board.air_at(HERE)
+			for id: String in Atmosphere.SUBSTANCES:
+				assert_int(Atmosphere.percent_of(id, here)).is_equal(_expected(id, base, nudge))
+
+
+func _all_at(percent: int) -> Dictionary[String, int]:
+	var reading: Dictionary[String, int] = {}
+	for id: String in Atmosphere.SUBSTANCES:
+		reading[id] = percent
+	return reading
+
+
+func test_no_gas_field_or_a_gas_that_moves_nothing_reads_the_board() -> void:
+	var board := _board_with(null)
+	board.atmosphere = _rich("vapor", 2)
+	assert_dict(board.air_at(HERE)).is_equal(board.atmosphere)
+	var still: Array[Gas.Kind] = []
+	for kind: Gas.Kind in Gas.Kind.values():
+		var rules := GasRules.for_kind(kind)
+		if rules == null or rules.air.is_empty():
+			still.append(kind)
+	assert_array(still).override_failure_message("fixture: every gas moves the air now").is_not_empty()
+	for kind: Gas.Kind in still:
+		var field := GasField.new()
+		field.set_level(HERE, kind, Gas.Level.THICK)
+		var gassy := _board_with(field)
+		gassy.atmosphere = board.atmosphere
+		assert_dict(gassy.air_at(HERE)).override_failure_message(
+				"%s has no air rule and moved the air" % Gas.name_of(kind)).is_equal(board.atmosphere)
+
+
+func test_the_board_names_what_a_cell_differs_in() -> void:
+	var kind: Gas.Kind = _air_gases()[0]
+	var field := GasField.new()
+	field.set_level(HERE, kind, Gas.Level.THICK)
+	var board := _board_with(field)
+	var moved: Array[String] = []
+	for id: String in Atmosphere.SUBSTANCES:
+		if Atmosphere.percent_of(id, board.air_at(HERE)) != Atmosphere.percent_of(id, board.atmosphere):
+			moved.append(id)
+	assert_array(moved).override_failure_message("fixture: a thick %s moves nothing on a Normal board"
+			% Gas.name_of(kind)).is_not_empty()
+	assert_array(Atmosphere.differs(board.air_at(HERE), board.atmosphere)).is_equal(moved)
+	assert_array(Atmosphere.differs(board.atmosphere, board.atmosphere)).is_empty()
+
+
 # --- through the resolver -----------------------------------------------------------------
 
 func _carving(recipe: String, no_damage := false) -> TransmutationData:
@@ -230,8 +371,10 @@ func _alchemist(carving: TransmutationData) -> Unit:
 	return u
 
 
-# One aim at a foe, resolved on a board whose air reads `reading`; the hit's outcome.
-func _resolve(caster: Unit, carving: TransmutationData, foe: Unit, reading: Dictionary[String, int]) -> ResolvedOutcome:
+# One aim at a foe, resolved on a board whose air reads `reading` (and whose gas is `gas`, #1324's local
+# air); the hit's outcome.
+func _resolve(caster: Unit, carving: TransmutationData, foe: Unit, reading: Dictionary[String, int],
+		gas: GasField = null) -> ResolvedOutcome:
 	caster.squad._clear_all_actions()
 	caster.active_attack = carving
 	var aim := AttackAction.declare(caster, caster.get_projected_destination(), foe.movement.cell)
@@ -240,6 +383,7 @@ func _resolve(caster: Unit, carving: TransmutationData, foe: Unit, reading: Dict
 	_sm.active_squad = caster.squad
 	var board: BoardContext = _sm.board_source.call()
 	board.atmosphere = reading
+	board.gas = gas
 	var plan := _sm.resolve_plan(caster.squad, board, ReactionCatalog.get_all())
 	assert_int(plan.attacks.size()).override_failure_message("the aim was not expanded").is_equal(1)
 	var outcome: ResolvedOutcome = plan.attacks[0].resolved
@@ -319,3 +463,160 @@ func _vial(element: Elemental.Element) -> VialData:
 	vial.display_name = "Test Vial"
 	vial.element = element
 	return vial
+
+
+# --- the air where the caster stands (#1324) ------------------------------------------------
+
+func _gas_on(cell: Vector2i, kind: Gas.Kind, level: int) -> GasField:
+	var field := GasField.new()
+	field.set_level(cell, kind, level)
+	return field
+
+
+# Every gas, every substance it moves, the carving that draws that substance: cast from the gas's own
+# cell against the same cast with the gas one cell over. Raising and lowering both run here.
+func test_a_carving_draws_the_air_of_the_cell_its_caster_stands_on() -> void:
+	var none: Dictionary[String, int] = {}
+	var row := 0
+	for kind: Gas.Kind in _air_gases():
+		for id: String in GasRules.for_kind(kind).air:
+			var origin := Vector2i(-12 + 4 * row, -10)
+			row += 1
+			var carving := _carving(DRAWS[id])
+			var caster := _alchemist(carving)
+			caster.movement.cell = origin
+			var foe := H.spawn_solo(self, _sm, ENEMY, origin + Vector2i.RIGHT, { Stats.Stat.MHP: 60 })
+			var here := _gas_on(origin, kind, Gas.Level.THICK)
+			var expected := Atmosphere.steps_for(carving.parsed(), _board_with(here).air_at(origin))
+			assert_dict(expected).override_failure_message("fixture: a thick %s does not move %s's draw"
+					% [Gas.name_of(kind), id]).is_not_empty()
+			var inside := _resolve(caster, carving, foe, none, here)
+			var beside := _resolve(caster, carving, foe, none, _gas_on(origin + Vector2i.LEFT, kind, Gas.Level.THICK))
+			assert_dict(inside.air_steps).override_failure_message("%s under the caster: air_steps %s, not %s"
+					% [Gas.name_of(kind), inside.air_steps, expected]).is_equal(expected)
+			assert_int(beside.air_steps.size()).override_failure_message(
+					"%s one cell over moved the cast" % Gas.name_of(kind)).is_equal(0)
+			assert_int(inside.base_damage - beside.base_damage).is_equal(Atmosphere.bonus_of(expected))
+
+
+func _move(unit: Unit, to: Vector2i) -> MoveAction:
+	var move := MoveAction.new()
+	var path: Array[Vector2i] = [unit.movement.cell, to]
+	move.init(unit, path, null)
+	return move
+
+
+# The cell a queued move ends on is the one cast from (the resolver's projected position), so walking
+# into the gas counts and the cell walked out of does not.
+func test_a_queued_move_into_the_gas_is_cast_from_there() -> void:
+	var kind: Gas.Kind = _air_gases()[0]
+	var id: String = GasRules.for_kind(kind).air.keys()[0]
+	var carving := _carving(DRAWS[id])
+	carving.max_range = 3
+	var caster := _alchemist(carving)
+	var foe := H.spawn_solo(self, _sm, ENEMY, FOE_CELL, { Stats.Stat.MHP: 60 })
+	var into := HERE + Vector2i.DOWN
+	var none: Dictionary[String, int] = {}
+	var expected := Atmosphere.steps_for(carving.parsed(), _board_with(_gas_on(into, kind, Gas.Level.THICK)).air_at(into))
+	assert_dict(expected).override_failure_message("fixture: a thick %s does not move this draw" % Gas.name_of(kind)).is_not_empty()
+	for gas_cell: Vector2i in [into, HERE]:
+		caster.squad._clear_all_actions()
+		caster.squad._queue_action(_move(caster, into))
+		caster.active_attack = carving
+		var aim := AttackAction.declare(caster, caster.get_projected_destination(), foe.movement.cell)
+		caster.active_attack = null
+		caster.squad._queue_action(aim)
+		_sm.active_squad = caster.squad
+		var board: BoardContext = _sm.board_source.call()
+		board.atmosphere = none
+		board.gas = _gas_on(gas_cell, kind, Gas.Level.THICK)
+		var plan := _sm.resolve_plan(caster.squad, board, ReactionCatalog.get_all())
+		var outcome := _outcome_of(plan, caster)
+		if gas_cell == into:
+			assert_dict(outcome.air_steps).override_failure_message(
+					"the gas on the cell the caster moves to did not reach the cast").is_equal(expected)
+		else:
+			assert_int(outcome.air_steps.size()).override_failure_message(
+					"the gas on the cell the caster walks out of still reached the cast").is_equal(0)
+		_break_volleys(plan)
+
+
+func _outcome_of(plan: ResolvedPlan, actor: Unit) -> ResolvedOutcome:
+	for atk in plan.attacks:
+		if atk.actor == actor and atk.resolved != null:
+			return atk.resolved
+	assert_bool(false).override_failure_message("%s landed no attack" % actor.name).is_true()
+	return null
+
+
+func _break_volleys(plan: ResolvedPlan) -> void:
+	var empty: Array[AttackAction] = []
+	for atk in plan.attacks:
+		atk.volley = empty
+	for ctr in plan.counters:
+		ctr.volley = empty
+
+
+# The board as it stands: a gas this pass deposits is not there for a later cast in the same pass, the
+# limit fizzle and empowerment declare. One squadmate's carving leaves the gas on the cell the other
+# casts from; the second cast reads the air without it.
+func test_gas_this_pass_leaves_does_not_move_a_later_cast_in_it() -> void:
+	var kind: Gas.Kind = _air_gases()[0]
+	var id: String = GasRules.for_kind(kind).air.keys()[0]
+	var thrower_carving := _carving(DRAWS["inert_air"])
+	thrower_carving.hits_allies = true
+	thrower_carving.gas = kind
+	thrower_carving.gas_level = Gas.Level.THICK
+	var thrower := _alchemist(thrower_carving)
+	var caster_carving := _carving(DRAWS[id])
+	var caster := _alchemist(caster_carving)
+	var cast_from := HERE + Vector2i.DOWN
+	caster.movement.cell = cast_from
+	var foe := H.spawn_solo(self, _sm, ENEMY, cast_from + Vector2i.RIGHT, { Stats.Stat.MHP: 60 })
+	_sm.join_squad(caster, thrower.squad)
+	thrower.active_attack = thrower_carving
+	var drop := AttackAction.declare(thrower, thrower.movement.cell, cast_from)
+	thrower.active_attack = null
+	caster.active_attack = caster_carving
+	var cast := AttackAction.declare(caster, cast_from, foe.movement.cell)
+	caster.active_attack = null
+	thrower.squad._queue_action(drop)
+	thrower.squad._queue_action(cast)
+	_sm.active_squad = thrower.squad
+	var board: BoardContext = _sm.board_source.call()
+	board.gas = GasField.new()
+	var plan := _sm.resolve_plan(thrower.squad, board, ReactionCatalog.get_all())
+	var deposited := 0
+	for effect in plan.cell_effects:
+		if effect.cell == cast_from:
+			deposited += int(effect.gas_added.get(kind, 0))
+	assert_int(deposited).override_failure_message(
+			"fixture: the first carving left no %s where the second is cast from" % Gas.name_of(kind)).is_greater(0)
+	assert_int(_outcome_of(plan, caster).air_steps.size()).override_failure_message(
+			"a gas this pass deposits moved a cast later in the same pass").is_equal(0)
+	_break_volleys(plan)
+
+
+# The AI's seek groups cells by everything the resolver reads off the origin (AITactics._group_key), the
+# air now among them: two origins that differ only in their gas must not share a key.
+func test_the_ai_seek_tells_two_cells_apart_by_their_air() -> void:
+	var kind: Gas.Kind = _air_gases()[0]
+	var id: String = GasRules.for_kind(kind).air.keys()[0]
+	var carving := _carving(DRAWS[id])
+	carving.max_range = 3
+	var caster := _alchemist(carving)
+	var target := HERE + Vector2i(3, 0)
+	var near := HERE + Vector2i(1, 0)
+	caster.active_attack = carving
+	var from_here := AttackAction.declare(caster, HERE, target)
+	var from_near := AttackAction.declare(caster, near, target)
+	caster.active_attack = null
+	# The fixture's real board: the key also asks empowerment, which reads the ground.
+	var clear: BoardContext = _sm.board_source.call()
+	clear.gas = GasField.new()
+	assert_str(AITactics._group_key(from_here, clear)).override_failure_message(
+			"fixture: the two origins differ in more than their air").is_equal(AITactics._group_key(from_near, clear))
+	var gassy: BoardContext = _sm.board_source.call()
+	gassy.gas = _gas_on(HERE, kind, Gas.Level.THICK)
+	assert_str(AITactics._group_key(from_here, gassy)).override_failure_message(
+			"two cells whose air differs share one seek key").is_not_equal(AITactics._group_key(from_near, gassy))

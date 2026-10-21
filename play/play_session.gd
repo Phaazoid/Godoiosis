@@ -232,6 +232,17 @@ func gas_at(cell: Vector2i) -> Array[String]:
 		out.append("%s %s" % [Gas.display_name(kind), Gas.Level.keys()[Gas.level_in(packed, kind)].to_lower()])
 	return out
 
+# The air at a cell where its gas has moved it off the board's reading (#1324), "elemental aether 20%
+# +2" -- the tile card's Air rows, and what a carving cast from here draws on (BoardContext.air_at).
+func air_at(cell: Vector2i) -> Array[String]:
+	var out: Array[String] = []
+	var board := _board()
+	var here := board.air_at(cell)
+	for id: String in Atmosphere.differs(here, board.atmosphere):
+		out.append(("%s %s %s" % [SubstanceCatalog.name_of(id).to_lower(), Atmosphere.percent_text(id, here),
+				Atmosphere.steps_text(id, here)]).strip_edges())
+	return out
+
 # ---- affordances: what may this unit do RIGHT NOW (#613) ----
 #
 # WHY THESE EXIST. Driving the bridge, a third to a half of every command came back refused --

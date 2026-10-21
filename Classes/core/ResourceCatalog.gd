@@ -65,11 +65,14 @@ const SCANNED_ROOTS: Array[String] = ["res://Resources/", "res://Scenarios/"]
 #
 # LIVED ON AttackShapeCatalog until #900. The question is about a path and a .tres rather than
 # about shapes, so the second library (EffectLook) wanted the identical answer, not a copy of it.
-static func users_of(resource_path: String) -> Array[String]:
+#
+# `roots` exists for a case that stands up its own referrer under user:// rather than writing a
+# test file into Scenarios/ (#1366). Every production caller takes the default.
+static func users_of(resource_path: String, roots: Array[String] = SCANNED_ROOTS) -> Array[String]:
 	var users: Array[String] = []
 	if resource_path == "":
 		return users
-	for root in SCANNED_ROOTS:
+	for root in roots:
 		_collect_users(root, resource_path, users)
 	users.sort()
 	return users

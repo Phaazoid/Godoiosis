@@ -8,6 +8,8 @@ class_name HoverInfoPanelControl
 #   - the TILE card, a tile's full readout in TileInfoSections: a clicked empty tile, or the tile
 #     an inspected unit stands on, parked beside the Inspect dock and FOLLOWING that unit, since the
 #     dock stays open through Execute and a card fixed on the old cell would describe where it was.
+#     One section at a time since #1324, turned by the cycle_tile_card key (cycle_tile_section) or
+#     a click on its tab row.
 # It parks on the screen half opposite what it describes; the caller pushes its left edge right of
 # the docked inspect column (#68). While a dialogue is up the BOTTOM strip is the dialogue's (#1033),
 # so a card that would park there parks at the top instead, and goes back down when it ends. Y comes from the live viewport and the card's own size, never a
@@ -78,6 +80,7 @@ func _ready() -> void:
 	_tile_header = Label.new()
 	header_row.add_child(_tile_header)
 	_sections = TileInfoSections.new()
+	_sections.key_label = Controls.key_for_action("cycle_tile_card")
 	box.add_child(_sections)
 	add_child(_tile_panel)
 	# Autowrapped rows report the wrong minimum height until layout hands them their width, and that
@@ -113,14 +116,16 @@ func show_unit(unit: Unit, world_pos: Vector2, left_x: int = MARGIN) -> void:
 	_apply_visibility()
 	_park(world_pos, left_x)
 
-# A clicked tile's card.
+# A clicked tile's card, on its first section.
 func show_tile(cell: Vector2i, world_pos: Vector2, left_x: int = MARGIN) -> void:
 	_follow = null
+	_sections.first_page()
 	_open_tile(cell, world_pos, left_x)
 
-# The card for the tile a unit stands on, kept on that unit as it moves.
+# The card for the tile a unit stands on, kept on that unit as it moves (and on its section).
 func show_tile_of(unit: Unit, left_x: int = MARGIN) -> void:
 	_follow = unit
+	_sections.first_page()
 	_open_tile(unit.movement.cell, unit.global_position, left_x)
 
 func clear() -> void:
@@ -138,6 +143,11 @@ func is_showing_tile_at(cell: Vector2i) -> bool:
 
 func is_showing_unit_card() -> bool:
 	return _content_shown and current_unit != null
+
+# The tile card's next section (#1324), wrapping -- the cycle_tile_card key's one door.
+func cycle_tile_section() -> void:
+	if is_showing_tile():
+		_sections.next_page()
 
 # What the tile card says, its name first -- empty unless a tile card is up.
 func tile_texts() -> Array[String]:
@@ -194,6 +204,7 @@ func _draw_tile(cell: Vector2i) -> void:
 	_tile_well.visible = readout.icon != null
 	_tile_header.text = readout.title
 	_tile_header.visible = readout.title != ""
+	_sections.fallback_mark = readout.icon   # the Ground tab wears the tile's own picture
 	_sections.forget()
 	_sections.show_if_changed(readout.sections)
 	# NO reset_size() here, and that is the giant-card fix (2026-09-27): the rows were just rebuilt, so

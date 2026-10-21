@@ -515,8 +515,7 @@ func test_the_name_check_stays_quiet_past_the_opening_turn() -> void:
 	var step := TutorialStep.new()
 	step.unit_name = "Torv"
 	game.scenario_manager.current_tutorial_steps.append(step)
-	game.scenario_director.mission_started()   # arms
-	game.turn_manager.turn_started.emit(Team.Faction.PLAYER)   # turn 1: still authored-time
+	game.scenario_director.mission_started()   # arms, and opens player turn 1 (#1361): still authored-time
 	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_true()
 	game.turn_manager.turn_started.emit(Team.Faction.PLAYER)   # turn 2: battle underway
 	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_false()

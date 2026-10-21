@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-19. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-21. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -694,7 +694,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   Steps truncate toward zero.
 - **Where it lands:**
   - `PlanResolver._source_base_damage` adds `Atmosphere.bonus_of` through `TransmutationData.base_damage(..., air)`, after the damageless guard and on both sides of the vial's differential, and stamps `ResolvedOutcome.air_steps`.
-  - The AI prices it through the resolve. Its per-origin cache needs no new key, since the air is the same on every cell.
+  - The AI prices it through the resolve. Its per-origin cache needs no new key, since the air is the same on every cell. *(Since slice 5 a gas moves one cell's air, and the seek's key reads it: below.)*
   - The Play API prints it as "air: vital air +2".
   - Boardless readouts (the rune card, menu hover, item tooltips) leave it out, as they leave out empowerment.
 - **Authored** on Scenario › Properties, under the weather: one percentage box per substance and a "Normal air" button. A substance set back to Normal is erased rather than stored, so a board follows a retuned Normal.
@@ -708,7 +708,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 **Built 2026-10-16: slice 3, the reading during the battle.** A board with no roster never opens the pre-mission screen, and on every board the CONDITIONS region goes once Begin is pressed. Rulings by Phaazoid@ in a Claude session (2026-10-16), approving a plan:
 - **The corner HUD (`MissionStatusPanel`) lists whatever is off Normal**, below the objectives and FAIL IF and above a tutorial's instruction row, under `Atmosphere.GROUPS`' headings: "Vital air — 30%, +2". A group all at Normal draws no heading, and a Normal board draws nothing. That is "changes it, visibly"; the full reading stays on the pre-mission screen. Hovering a row shows the glossary's short text.
 - **Every board, not only the roster-less ones**, so the HUD never forks per board.
-- **Not the tile card**, which would put a board-wide fact on a per-tile card (the "check tile by tile" ruled out above); it is the home for a *local* reading once a gas moves an area. **Not the Glossary**, which has no board when the title screen opens it; it now says the corner lists what is off Normal.
+- **Not the tile card**, which would put a board-wide fact on a per-tile card (the "check tile by tile" ruled out above); it is the home for a *local* reading once a gas moves an area *(since slice 5, it is)*. **Not the Glossary**, which has no board when the title screen opens it; it now says the corner lists what is off Normal.
 - **Weather stays out of the HUD**: the board draws it, and the pre-mission screen lists it only because that screen covers the board. *(Since slice 4, a substance the weather moved names it on its row; there is still no weather row.)*
 - `Atmosphere.off_normal(reading)` is the one answer to which substances are off Normal (`is_normal` derives from it, and the bug report's air line uses it), and `percent_text`/`steps_text` the one wording both surfaces print. `MissionStatusPanel.air_rows` is kept out of `briefing()`, whose pre-mission reader has its own Conditions region. `game.refresh_mission_status`'s hide gate asks about the air, or a board with air but no objectives hides its own reading (#101's trap). The Scenario tab's air spins refresh the HUD as they move.
 
@@ -777,8 +777,28 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - The Scenario tab says what the board's weather adds under the authored boxes.
   - The board drawing the weather is what makes the change visible, his rule.
 
+**Built 2026-10-21: gases move the air where they lie ([#1324](https://github.com/Phaazoid/Godoiosis/issues/1324), slice 5).** Plan approved by Phaazoid@ in a Claude session on 2026-10-18 ([the plan](https://github.com/Phaazoid/Godoiosis/issues/1324#issuecomment-6256429279)), on his rulings that these gases are visible, diffuse back toward Normal, are a deliberate buff or nerf, and need a first gas that subtracts:
+- **An air gas is an ordinary `Gas.Kind`.** `GasRules.air` holds substance id → percentage points **per level**, negative to lower: `WeatherRules.air`'s shape, one file per kind. So a gas that moves the air is drawn, spread, faded, saved, undone, brushed, ghosted before Execute and carried by the Play API like every other gas. `GasRules.air` is the one answer to what a gas does to the reading; `SubstanceMap.GASES` still says what the gas *is*, for presence, because a formula cannot say what a gas has taken away.
+- **One door: `BoardContext.air_at(cell)`** is the board's reading (`atmosphere`, authored + weather) nudged through `Atmosphere.nudged` by every gas on the cell, its air times its level (`GasRules.air_of`). Two gases on one cell add up; each substance stays within 0–100%. `atmosphere` stays the whole board's, for the readouts that speak for the board.
+- **Read where the caster stands**, at its position in the pass (the cell empowerment reads): a queued move into the gas counts and a shove out of it does not. A counter reads the defender's cell. A payload reads the thrower's, as empowerment does. Phaazoid@ confirmed it in his own words in the smoke/ozone design: the reading is taken at the caster's cell and a carving's power is locked in once it is made. *Declared difference:* fizzle asks whether a substance is within reach (the caster's cell and its four neighbours); the air asks what the caster breathes, its own cell.
+- **The board as it stands:** the live gas field, never this pass's own deposits, the limit fizzle and empowerment declare. A melt and a heal in the same plan give no bonus until the next turn.
+- **Diffusing back is `GasSpread`, unchanged.** Medium or thick gas spills a level thinner to each open side every round, and a cell thins a level after its gas's `hold_rounds`. As the gas fades, the cell returns to the board's own reading: Normal on a Normal board, the authored air elsewhere.
+- **Content (first guesses, tuned in the inspector):**
+
+  | Gas | Air per level | Where it comes from |
+  |---|---|---|
+  | Essence (new, the 7th kind; `essence`, Q2) | aether +5% | Melt and Temperature Shock release it **medium** on the thawed cell, as their equation `F2 + 2QW -> Q2 + W2 + 2F` says |
+  | Frost (look-only until now; `frost`, `QW + A2`) | aether −5%, vapor −5% | Freeze leaves it **thin** on every tile it strikes: its recipe `Break(A, W) + Bind(Q, W)` locks the air's vapor and aether into ice |
+
+  So a Heal cast from medium essence heals +2 (codev's "ice-pack healing"), and one cast from thin frost heals 1 less; a Freeze cast from its own frost hits 2 softer. Melting ice gives back the aether freezing took. Giving frost a rules file also made it spread and fade, which brushed frost never did. Melt's and Temperature Shock's `2F` heat stays unreleased on the ledger: no shipped carving draws heat, and folding it into essence would make one gas stand for two products.
+- **Read on the tile card**, its first gas line: an **Air** section, its own page since the card shows one section at a time (the T key or its tab row turns it, visual-clarity.md), with one row per gas and its level ("Essence, medium: elemental aether +10%"), then each substance where the cell differs from the board ("Elemental aether 20%, +2"). `Atmosphere.differs` is the one answer to which substances a cell has moved, which the Play API's board view prints too ("air: elemental aether 20% +2"). The corner HUD and the pre-mission Conditions stay board-wide. The Glossary's Atmosphere page says the air is read where the caster stands and lists every gas's nudge, composed from the files.
+- **The AI** prices it through the resolve, and `AITactics._group_key` gained the origin's air steps: two cells whose air differs no longer share a seek group. It never walks into a gas for its air (damage alone moves nobody, #760).
+- **The renderer holds eight kinds.** The cells texture packs a cell's kinds in one byte, so `gas_puff.gdshader` and `gas_floor.gdshader` size their per-kind arrays to eight, and `tests/law/test_gas_look_coverage.gd` reds an array shorter than the kind count. Essence is the 7th; the smoke/ozone design ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)) renames Thunder to Ozone rather than spending the 8th, and reuses `GasRules.air` for ozone's heat.
+- **Amended:** #508 ruling 22's "`Melt.tres` releases no gas" (2026-10-07, below). Melt still makes water, not steam, and a second fire hit still boils it; it now also releases essence.
+
 **Next:**
-- **Atmosphere gases that raise or lower an area** (the first gas that subtracts), composed through `Atmosphere.nudged`.
+- **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.
+- **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte.
 - **Burning plants release smoke and steam** (Burning, GrassIgnites, TallGrassIgnites), with the shape for two gases and the spread question above.
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
@@ -790,4 +810,4 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - whether gas spread must conserve matter (deferred)
 - light and shadow
 
-**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. **Still open:** Whether gas spread must conserve matter is deferred.
+**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. *(Since #1324 slice 5, 2026-10-21, it releases essence, which is not steam; the boiling rule is unchanged.)* **Still open:** Whether gas spread must conserve matter is deferred.

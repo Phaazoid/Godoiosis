@@ -240,6 +240,22 @@ static func _atmosphere_weathers() -> String:
 				parts.append(line)
 	return "; ".join(parts)
 
+# Every gas that moves the air, read off its GasRules (#1324): "Essence adds 5% aether a level".
+static func _atmosphere_gases() -> String:
+	var parts: Array[String] = []
+	for kind: Gas.Kind in Gas.Kind.values():
+		var rules := GasRules.for_kind(kind)
+		if rules == null:
+			continue
+		for id: String in Atmosphere.SUBSTANCES:
+			var points := int(rules.air.get(id, 0))
+			var substance := SubstanceCatalog.name_of(id).to_lower()
+			if points > 0:
+				parts.append("%s adds %d%% %s a level" % [Gas.display_name(kind), points, substance])
+			elif points < 0:
+				parts.append("%s lowers %s by %d%% a level" % [Gas.display_name(kind), substance, -points])
+	return "; ".join(parts)
+
 # --- The entries ------------------------------------------------------------------------------
 
 static func _build_entries() -> Dictionary:
@@ -497,9 +513,9 @@ static func _build_entries() -> Dictionary:
 			+ "reads."}
 	# #1324. Names no carving's recipe: which carving draws what is #75's discovery layer.
 	e[Term.ATMOSPHERE] = {"category": Category.ELEMENTAL, "title": "Atmosphere",
-		"short": "What the air over this map holds, the same everywhere for the whole battle. A "
-			+ "carving that draws a substance from the air hits 1 harder for each step above Normal "
-			+ "and 1 softer for each step below. Thin air never makes it fizzle.",
+		"short": "What the air over this map holds. A carving that draws a substance from the air "
+			+ "hits 1 harder for each step above Normal and 1 softer for each step below, in the air "
+			+ "where its caster stands. Thin air never makes it fizzle.",
 		"long": "Every map has its own air. The pre-mission screen shows it under Conditions, and "
 			+ "during the battle the corner panel lists whatever is off Normal. A "
 			+ "carving draws from the air whatever its recipe needs and did not make itself. For "
@@ -508,7 +524,9 @@ static func _build_entries() -> Dictionary:
 			+ "by a real source nearby takes nothing from the air. Normal, and the size of one "
 			+ "step: %s." % _atmosphere_normals()
 			+ " Some weather moves it while it falls, and is named beside whatever it moved: "
-			+ "%s." % _atmosphere_weathers()}
+			+ "%s." % _atmosphere_weathers()
+			+ " Some gases move it only on the tiles they lie on, and fade back as they thin: "
+			+ "%s. Click a tile to see the air there." % _atmosphere_gases()}
 
 	# Terrain
 	e[Term.TERRAIN_KINDS] = {"category": Category.TERRAIN, "title": "Terrain",

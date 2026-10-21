@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="TerrainReaction" format=3]
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://bryy41nlf7b7d"]
 
 [ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_dfo0j"]
 
@@ -8,6 +8,8 @@ incoming_element = 1
 also_triggered_by = Array[int]([9])
 required_tile_state = 2
 remove_tile_states = Array[int]([2])
+gas = 6
+gas_level = 2
 equation = "F2 + 2QW -> Q2 + W2 + 2F"
 popup = "Melts!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

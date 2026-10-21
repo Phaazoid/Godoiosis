@@ -164,6 +164,16 @@ func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 		return terrain_states.has_state(cell, state)
 	return terrain_states.projected_states_at(cell, deposits).has(state)
 
+# The air at this cell (#1324): the board's reading moved by the gas lying here (GasRules.air_of), the
+# one answer to "what is the air HERE". `atmosphere` stays the whole board's, for the readouts that
+# speak for the board. Deposits fold in the way they do for tile states; the game's boards carry none,
+# so the resolver reads the board as it stands.
+func air_at(cell: Vector2i) -> Dictionary[String, int]:
+	if gas == null:
+		return atmosphere
+	var packed := gas.packed_at(cell) if deposits.is_empty() else gas.projected_packed_at(cell, deposits)
+	return Atmosphere.nudged(atmosphere, GasRules.air_of(packed))
+
 # The board as it will stand once these deposits land (#367): the same world, with a pass's own
 # terrain deposits folded over the live store through the one fold the END OF TURN forecast already
 # reads (TerrainStateManager.projected_states_at). Every board the game and the Play API build has

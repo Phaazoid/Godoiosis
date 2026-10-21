@@ -249,6 +249,61 @@ func test_a_pause_load_lands_idle_without_reopening_the_menu() -> void:
 	assert_bool(game.can_process()).is_true()
 
 
+func test_a_finished_mission_cannot_be_saved_after_stay() -> void:
+	# #1352: DEFEAT -> Stay -> Esc reaches the Save row with the mission over. A slot taken then
+	# resumes as ONGOING with protected_lost reset and the VIP gone, so the lost mission is winnable.
+	# The defeat is DRIVEN (real damage -> the death wire -> check()), never a hand-set outcome.
+	var mc: MissionController = game.mission_controller
+	_spawn_unit(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn_unit(Team.Faction.ENEMY, Vector2i(5, 5))
+	var vip := _spawn_unit(Team.Faction.PLAYER, Vector2i(2, 1))
+	vip.must_survive = true
+	var protect: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.PROTECTED_UNIT_LOST]
+	mc.set_lose_conditions(protect, 0)
+	game.scenario_manager.last_loaded_path = FAKE_MISSION
+	mc.check()   # latch `contested`
+	assert_bool(game.scenario_manager.save_to_slot(2)).override_failure_message(
+		"fixture: the board refused a save before the mission ended").is_true()
+
+	vip.force_down()
+	vip.take_damage(999)
+	mc.check()
+	await _frames(4)
+	assert_int(mc.mission.failed_by).override_failure_message(
+		"fixture: the VIP's death did not lose the mission").is_equal(
+		MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
+
+	var banner: MissionEndBanner = null
+	for node: Node in get_tree().get_nodes_in_group(ModalLock.GROUP):
+		if node is MissionEndBanner:
+			banner = node
+	assert_object(banner).override_failure_message("fixture: the defeat raised no banner").is_not_null()
+	_button_with_prefix(banner, "Stay").pressed.emit()
+	await _frames(4)
+	assert_bool(game._board_locked_for_player()).override_failure_message(
+		"fixture: Stay did not hand the board back").is_false()
+
+	game._open_pause_menu()
+	await _frames(4)
+	var save_row: Button = _button_with_prefix(_menu(), "Save Game")
+	assert_object(save_row).is_not_null()
+	assert_bool(save_row.disabled).override_failure_message(
+		"the Save row is live on a finished mission").is_true()
+	assert_str(save_row.tooltip_text).is_equal(UiText.wrap(PauseMenu.SAVE_REFUSED_OVER))
+	_menu().chosen.emit(PauseMenu.Choice.RESUME)
+	await _frames(4)
+
+	# The handler is the real gate; the greyed row is only its surface.
+	assert_bool(game.scenario_manager.save_to_slot(1)).is_false()
+	assert_bool(ScenarioManager.slot_exists(1)).is_false()
+
+
+func _spawn_unit(faction: Team.Faction, cell: Vector2i) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data({}, faction), cell)
+	assert_object(unit).is_not_null()
+	return unit
+
+
 func test_a_cancelled_load_returns_to_the_pause_menu() -> void:
 	game.game_state = game.GameState.IDLE
 	game._open_pause_menu()

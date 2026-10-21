@@ -50,6 +50,42 @@ func test_no_two_entries_claim_the_same_binding() -> void:
 		seen.append(id)
 
 
+# #1368: V was the enemy ranges (BOARD, "") AND the selector depth (DEV, "3D view"), so in the view
+# the game boots into every press did both. The case above compares whole triples, which is why it
+# never saw it -- the duplicate hid behind a different context and a different `when`.
+#
+# An AMBIENT `when` holds through ordinary play and claims nothing: "" everywhere, a view throughout
+# that view. Two of them on one press both fire, unless they are two DIFFERENT views. Any other
+# `when` is a MODE ("Spawn tool armed", "Aiming"), and a mode's handler taking the press from the
+# ambient binding is code this registry cannot see -- a blind spot, declared rather than guessed at.
+const AMBIENT_WHENS: Array[String] = ["", "3D view", "flat 2D view"]
+
+
+func test_no_press_means_two_things_at_once() -> void:
+	var by_press: Dictionary[String, Array] = {}
+	for entry: Dictionary in Controls.ENTRIES:
+		if not AMBIENT_WHENS.has(entry["when"]):
+			continue
+		var key: String = entry["key"]
+		for press: String in key.split(" / "):
+			var spelled := press.strip_edges().to_lower()
+			if not by_press.has(spelled):
+				by_press[spelled] = []
+			by_press[spelled].append(entry)
+	for press: String in by_press:
+		var entries: Array = by_press[press]
+		for i in entries.size():
+			for j in range(i + 1, entries.size()):
+				var a: Dictionary = entries[i]
+				var b: Dictionary = entries[j]
+				var together: bool = a["when"] == "" or b["when"] == "" or a["when"] == b["when"]
+				assert_bool(together).override_failure_message(
+					"'%s' is bound twice at once: '%s' (%s, when '%s') and '%s' (%s, when '%s') -- move one"
+						% [press, a["does"], Controls.context_name(a["context"]), a["when"],
+							b["does"], Controls.context_name(b["context"]), b["when"]]) \
+					.is_false()
+
+
 # --- The two directions against the live Input Map -------------------------------------------
 
 func test_every_documented_action_exists() -> void:

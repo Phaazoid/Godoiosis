@@ -19,8 +19,8 @@ extends GdUnitTestSuite
 const PENDING := {}
 
 const NOT_YET_FOLLOWED := {
-	"res://Resources/TerrainReactions/Melt.tres": "the essence (ice-pack healing) and the heat are not released",
-	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the essence and heat are not released and the meltwater does not wet the unit; the +5 is the temperature change, not chemistry (Phaazoid)",
+	"res://Resources/TerrainReactions/Melt.tres": "the heat is not released (the essence is, #1324)",
+	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the heat is not released and the meltwater does not wet the unit (the essence is, #1324); the +5 is the temperature change, not chemistry (Phaazoid)",
 	"res://Resources/TerrainReactions/Burning.tres": "the steam and smoke are not released",
 	"res://Resources/TerrainReactions/GrassIgnites.tres": "the steam and smoke are not released",
 	"res://Resources/TerrainReactions/TallGrassIgnites.tres": "the smoke is not released",

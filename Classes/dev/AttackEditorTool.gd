@@ -1067,16 +1067,20 @@ func _add_extra(attack: WeaponAttackData) -> void:
 	current_template.extra_attacks.append(attack)
 	populate()
 
-# Which families can actually fire the loaded library attack (#473's part 1 made visible). Read off
-# the CATALOG entry rather than `current`, which is a duplicate with no resource_path of its own.
+# What can actually fire the loaded library attack (#473's part 1 made visible, every kind of carrier
+# since #1371). Read off the CATALOG entry rather than `current`, which is a duplicate with no
+# resource_path of its own. One line per carrier, so a widely carried attack cannot widen the window.
 func _populate_carriers() -> void:
 	if _loaded_name == "" or not _items.has(_loaded_name):
 		return   # a New attack has no file, so it has no carriers to report
 	var carriers := AttackLint.carriers_of(_items[_loaded_name])
 	if carriers.is_empty():
-		DevWidgets.add_label(editor_container, "Nothing carries this attack — no unit can fire it. Add it to a family in Weapon Families mode.")
-	else:
-		DevWidgets.add_label(editor_container, "Carried by: %s" % ", ".join(carriers))
+		DevWidgets.add_label(editor_container, "Nothing carries this attack — no unit can fire it. Add it to a family in Weapon Families mode, or grant it from a mod in the Item Editor.")
+		return
+	var lines: Array[String] = ["Carried by:"]
+	for row: Dictionary in carriers:
+		lines.append("  " + AttackLint.carrier_text(row))
+	DevWidgets.add_label(editor_container, "\n".join(lines))
 
 # The recipe as one line of codev's notation, with what it resolves to read back live: the verbs (its
 # rune cost), the aura it asks for, what it delivers, or why it does not parse. The readout is

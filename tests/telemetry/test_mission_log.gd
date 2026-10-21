@@ -19,6 +19,7 @@ const GRASS_ATLAS := Vector2i(5, 0)
 const MISSION := "res://tests/telemetry/not_a_real_file.tres"   # a name, never loaded
 const SCRATCH_ROOT := "user://__telemetry_test/"
 const SCRATCH_MISSION := "user://__telemetry_53.tres"   # the one case that RELOADS needs a real file
+const SCRATCH_SAVES := "user://__telemetry_saves_1364/"   # the resume cases' slots, never the real ones
 
 var _main: Node
 var game: Node2D
@@ -52,6 +53,8 @@ func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
 	_wipe(SCRATCH_ROOT)
+	_wipe(SCRATCH_SAVES)
+	ScenarioManager.save_dir = ScenarioManager.DEFAULT_SAVE_DIR
 	if FileAccess.file_exists(SCRATCH_MISSION):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH_MISSION))
 	TelemetryStore.reset_for_test()
@@ -194,14 +197,45 @@ func test_the_summary_carries_the_separation_flags() -> void:
 	assert_bool(summary.has("dev_mode")).is_true()
 
 
+# A RESUME IS THE DOOR'S ANSWER, never the round count's (#1364), so these go through the real slot:
+# save_to_slot, then resume_from_slot, against a redirected save folder.
 func test_a_resume_is_flagged_with_its_starting_round() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
 	var no_zones: Array[String] = []
 	mc.mission.restore(no_zones, false, 3)   # a save taken three rounds in
-	mc._begin_turn()
+	_resume_through_a_slot()
 	var start := _of("mission_start")[0]
 	assert_bool(bool(start.get("resumed", false))).is_true()
 	assert_int(int(start.get("round", 0))).is_equal(4)
+
+
+# The case the round-count guess got wrong: a save taken in round 1 has no rounds elapsed.
+func test_a_save_resumed_in_its_first_round_is_still_a_resume() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	_resume_through_a_slot()
+	var start := _of("mission_start")[0]
+	assert_int(int(start.get("round", 0))).override_failure_message(
+		"fixture: the save was not taken in round 1").is_equal(1)
+	assert_bool(bool(start.get("resumed", false))).override_failure_message(
+		"a round-1 save came back through Load Game and recorded as a fresh start").is_true()
+
+
+# ...and the converse: a board that merely CARRIES elapsed rounds, arriving through a fresh-start door,
+# is not a resume. This is what `resumed` means since #1364.
+func test_a_fresh_start_is_not_a_resume_whatever_its_round() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var no_zones: Array[String] = []
+	mc.mission.restore(no_zones, false, 3)
+	mc._begin_turn()
+	assert_bool(bool(_of("mission_start")[0].get("resumed", true))).is_false()
+
+
+func _resume_through_a_slot() -> void:
+	ScenarioManager.save_dir = SCRATCH_SAVES
+	assert_bool(game.scenario_manager.save_to_slot(1)).override_failure_message(
+		"fixture: the slot was not written").is_true()
+	mc.resume_from_slot(1)
+	assert_bool(mission_log.is_open()).override_failure_message("fixture: the resume opened no run").is_true()
 
 
 func test_the_roster_names_what_each_unit_brought() -> void:
@@ -217,6 +251,36 @@ func test_the_roster_names_what_each_unit_brought() -> void:
 	assert_bool((weapon as Dictionary).has("family")).is_true()
 	assert_bool((row.get("stats") as Dictionary).has("STR")).is_true()
 	assert_int(int(row.get("hp_max", 0))).is_equal(hero.get_max_hp())
+
+
+# ONE DOOR FOR A NAME (#1364). A derived weapon carries no name of its own and reads through to its
+# template, so the raw field recorded it as ""; a pet-named one recorded its template's name as
+# `weapon.name` and its own in `items`. The template's name is kept, as `weapon.template`.
+func test_an_item_is_recorded_by_the_name_the_game_shows() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var derived := H.make_weapon(4)
+	derived.template.display_name = "Carbine"
+	var pet := H.make_weapon(4)
+	pet.template.display_name = "Carbine"
+	pet.display_name = "Gun"
+	assert_bool(hero.add_item(derived) and hero.add_item(pet)).override_failure_message(
+		"fixture: the weapons were not carried").is_true()
+	hero.set_equipped_weapon(pet)
+	var spare := H.make_weapon(4)
+	spare.template.display_name = "Spear"
+	mc.loadout().stash.append(spare)
+	mc._begin_turn()
+
+	var start := _of("mission_start")[0]
+	var row: Dictionary = start.get("roster", [])[0]
+	var items: Array = row.get("items", [])
+	assert_bool(items.has("Carbine") and items.has("Gun") and not items.has("")).override_failure_message(
+		"the inventory is not recorded by shown name: %s" % str(items)).is_true()
+	var weapon: Dictionary = row.get("weapon")
+	assert_str(str(weapon.get("name"))).is_equal("Gun")
+	assert_str(str(weapon.get("template"))).is_equal("Carbine")
+	assert_array(start.get("stash", [])).override_failure_message(
+		"a derived stash weapon recorded with no name").contains(["Spear"])
 
 
 # #1230: a run says which AI profile each unit played, so a band can be judged from recorded play.
@@ -640,6 +704,50 @@ func test_an_untouched_run_is_not_flagged() -> void:
 	var lines := _lines_of(run)
 	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
 		"a flag that is always true says nothing").is_false()
+
+
+# #1364: EVERY DEV EDIT FLAGS THE RUN, through the header every edit already marks. The first edit lands
+# BEFORE the run, so the header's (modified) latch is already set when the mid-run one arrives -- a note
+# placed behind that latch would reach the log once per file, not once per run.
+func test_a_scenario_edit_mid_run_marks_the_run_dev_touched() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var spin: SpinBox = game.dev_overlay.scenario_tool._round_limit_spin
+	spin.value = 7
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	spin.value = 8
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"a round limit changed mid-run on the Scenario tab, and the run sealed as untouched").is_true()
+
+
+# Undo puts a whole board back, so it is a dev edit too (#1364). The step is made BEFORE the run, so only
+# the undo can have flagged it.
+func test_an_undo_mid_run_marks_the_run_dev_touched() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	game.dev_controller.resize_map(9, 3, GRASS_SOURCE, GRASS_ATLAS)
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	assert_bool(game.dev_controller.undo_board()).override_failure_message(
+		"fixture: there was no step to undo").is_true()
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"an undo mid-run put a board back, and the run sealed as untouched").is_true()
+
+
+# LOOKING IS NOT EDITING. Showing the Scenario page rebuilds and re-reads every field from the board, and
+# a widget that announced its own refreshed value would flag every run the dev so much as looked at.
+func test_showing_the_scenario_page_mid_run_does_not_flag_the_run() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	mc._begin_turn()
+	var run := mission_log.run_id()
+	game.dev_overlay.show_leaf(game.dev_overlay.scenario_tool)
+	mission_log.seal(MissionLog.Ending.ABANDONED)
+	var lines := _lines_of(run)
+	assert_bool(bool(lines[lines.size() - 2].get("dev_touched"))).override_failure_message(
+		"showing the Scenario page flagged the run -- a refresh marked, not an edit").is_false()
 
 
 func test_with_persistence_off_nothing_is_written() -> void:
