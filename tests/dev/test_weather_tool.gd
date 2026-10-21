@@ -47,6 +47,41 @@ func test_a_slider_moves_the_look_the_mirror_draws_from() -> void:
 	assert_bool(page.has_unsaved_changes()).override_failure_message("an edit left Save unmarked").is_true()
 
 
+# The air a weather moves (#1324) gets a row per ambient substance, and dragging one moves the reading
+# the board composes at once: the composition reads the very rules object this page edits.
+func test_an_air_slider_moves_the_reading_the_board_composes() -> void:
+	var sky := Weather.Kind.CLEAR
+	for kind: Weather.Kind in Weather.Kind.values():
+		if WeatherRules.for_kind(kind) != null:
+			sky = kind
+			break
+	assert_int(sky).override_failure_message("fixture: no weather has a rules file").is_not_equal(Weather.Kind.CLEAR)
+	var rules := WeatherRules.for_kind(sky)
+	var was := rules.air.duplicate()
+	var page := WeatherTool.new()
+	add_child(page)
+	auto_free(page)
+	page.init(null)
+	page._show(sky)
+	var sliders := {}
+	for id: String in Atmosphere.SUBSTANCES:
+		var slider := _slider_after(page, "Air: " + SubstanceCatalog.name_of(id))
+		assert_object(slider).override_failure_message("the page drew no air row for %s" % id).is_not_null()
+		sliders[id] = slider
+	var id: String = Atmosphere.SUBSTANCES[0]
+	if sliders[id] == null:
+		return
+	var points := int(rules.air.get(id, 0)) + int(Atmosphere.STEP[id])
+	(sliders[id] as Range).value = points
+	await await_idle_frame()
+	var none: Dictionary[String, int] = {}
+	var landed := Atmosphere.percent_of(id, Atmosphere.effective(none, sky))
+	rules.air = was
+	assert_int(landed).override_failure_message("the air slider moved and the reading did not").is_equal(
+			clampi(int(Atmosphere.NORMAL[id]) + points, 0, 100))
+	assert_bool(page.has_unsaved_changes()).override_failure_message("an air edit left Save unmarked").is_true()
+
+
 # The slider in the row whose label reads `label`.
 func _slider_after(root: Node, label: String) -> Range:
 	for node in root.find_children("*", "Label", true, false):

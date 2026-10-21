@@ -127,11 +127,12 @@ static func weather_of(board: Dictionary) -> Weather.Kind:
 	var scenario: ScenarioData = board.get("scenario")
 	return scenario.weather if scenario != null else Weather.Kind.CLEAR
 
-# And its air (#1324): the loaded scenario's reading, Normal before one is loaded.
+# And its air (#1324) as played: the loaded scenario's reading moved by its weather
+# (Atmosphere.effective), Normal before one is loaded.
 static func atmosphere_of(board: Dictionary) -> Dictionary[String, int]:
 	var scenario: ScenarioData = board.get("scenario")
 	var none: Dictionary[String, int] = {}
-	return scenario.atmosphere if scenario != null else none
+	return Atmosphere.effective(scenario.atmosphere, scenario.weather) if scenario != null else none
 
 static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 	for x in range(rect.position.x, rect.end.x):

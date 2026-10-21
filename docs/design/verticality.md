@@ -1496,7 +1496,7 @@ See [terrain.md](terrain.md) (the tile model and the state store), [weapons.md](
 as pure geometry, `arc_clearance`), [presentation-effects.md](presentation-effects.md) (the Triangle
 Strategy / FFT reference shelf), [philosophy.md](philosophy.md) (Axioms 3 and 4),
 [resolution-pipeline.md](resolution-pipeline.md) (where `elevation_delta` is stamped), and
-[`CLAUDE.md`](../../CLAUDE.md) (the three Laws, the tuning rule, the version-label rule).
+[`CLAUDE.md`](../../CLAUDE.md) (the design laws, the tuning rule, the version-label rule).
 Related issues: [#116](https://github.com/Phaazoid/Godoiosis/issues/116) (shove/fall),
 [#120](https://github.com/Phaazoid/Godoiosis/issues/120) (weight),
 [#176](https://github.com/Phaazoid/Godoiosis/issues/176) (the board that renders it),

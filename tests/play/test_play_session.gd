@@ -317,6 +317,36 @@ func test_both_headless_boards_see_the_loaded_air() -> void:
 	assert_int(Atmosphere.percent_of(id, source_board.atmosphere)).override_failure_message(
 			"the builder's board_source dropped the loaded air").is_equal(percent)
 
+# ...and both read it as played, moved by the loaded weather (#1324): the composition game._board()
+# reads, Atmosphere.effective. Which weather moves the air is authored, so it is found off the files.
+func test_both_headless_boards_see_the_weathers_nudge_on_the_air() -> void:
+	var sky := Weather.Kind.CLEAR
+	for kind: Weather.Kind in Weather.Kind.values():
+		if not WeatherRules.air_of(kind).is_empty():
+			sky = kind
+			break
+	assert_int(sky).override_failure_message("fixture: no weather's rules move the air").is_not_equal(
+			Weather.Kind.CLEAR)
+	var src: Dictionary = BoardBuilder.build(self, "SkySrc")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 4, 4))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	scenario.weather = sky
+	var dst: Dictionary = BoardBuilder.build(self, "SkyDst")
+	auto_free(dst.root)
+	await BoardBuilder.apply_scenario(dst, scenario)
+	var expected := Atmosphere.effective(scenario.atmosphere, sky)
+	var sess := PlaySession.new(dst)
+	var source_board: BoardContext = dst.squad_manager.board_source.call()
+	for id: String in WeatherRules.air_of(sky):
+		assert_int(Atmosphere.percent_of(id, sess._board().atmosphere)).override_failure_message(
+				"the session's board left %s where %s does not" % [id, Weather.name_of(sky)]).is_equal(
+				Atmosphere.percent_of(id, expected))
+		assert_int(Atmosphere.percent_of(id, source_board.atmosphere)).override_failure_message(
+				"the builder's board_source left %s where %s does not" % [id, Weather.name_of(sky)]).is_equal(
+				Atmosphere.percent_of(id, expected))
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:

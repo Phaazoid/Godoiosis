@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WeatherRules" format=3 uid="uid://08rm1l1866ud"]
+
+[ext_resource type="Script" uid="uid://c5rf7ml4wi1l8" path="res://Classes/terrain/WeatherRules.gd" id="1_j1g6v"]
+
+[resource]
+script = ExtResource("1_j1g6v")
+air = Dictionary[String, int]({
+"atom_fire": -30
+})

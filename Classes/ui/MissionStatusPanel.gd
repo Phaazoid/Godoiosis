@@ -25,7 +25,8 @@ class_name MissionStatusPanel
 # THE AIR'S READING rides below the briefing (#1324): whatever the board's air holds off Normal, under
 # Atmosphere's group headings, so a board with no pre-mission screen still shows it, and a board with
 # one keeps showing it after Begin. Kept out of `briefing`, whose pre-mission reader has its own
-# Conditions region. A Normal board draws none of it.
+# Conditions region. A Normal board draws none of it. The reading is the board's EFFECTIVE one, so a
+# substance the weather moved is listed, and names that weather.
 #
 # A ROW ABOUT A PLACE ANSWERS THE POINTER since #955 part 3, here and not in the briefing: Capture,
 # Extract and Defend wear their zone's emblem, hovering one lights its zones on the board and a click
@@ -177,12 +178,13 @@ static func briefing_rows(mission: MissionState, board: BoardContext) -> Array[L
 	return labels
 
 # The air's off-Normal substances (see the header), each group that has one under its own heading:
-# "Vital air — 30%, +2". A row stops the mouse so its glossary tooltip can show; a plain Label is
-# never picked.
-static func air_rows(reading: Dictionary) -> Array[Label]:
+# "Vital air — 30%, +2". A substance the weather moved names it, "Vapor — 15%, +2 (Rain)", and its
+# tooltip leads with what the weather does (#1324). A row stops the mouse so its glossary tooltip can
+# show; a plain Label is never picked.
+static func air_rows(reading: Dictionary, weather: Weather.Kind = Weather.Kind.CLEAR) -> Array[Label]:
 	var labels: Array[Label] = []
 	var off := Atmosphere.off_normal(reading)
-	var tip := UiText.wrap(Glossary.short(Glossary.Term.ATMOSPHERE))
+	var glossary := Glossary.short(Glossary.Term.ATMOSPHERE)
 	for group: String in Atmosphere.GROUPS:
 		var ids: Array[String] = []
 		for id: String in Atmosphere.GROUPS[group]:
@@ -198,8 +200,12 @@ static func air_rows(reading: Dictionary) -> Array[Label]:
 			var steps := Atmosphere.steps_text(id, reading)
 			if steps != "":
 				label.text += ", " + steps
+			var tip := glossary
+			if Atmosphere.weather_moves(id, weather):
+				label.text += " (%s)" % Weather.display_name(weather)
+				tip = Atmosphere.weather_text(id, weather) + ".\n\n" + glossary
 			label.modulate = PENDING_COLOR
-			label.tooltip_text = tip
+			label.tooltip_text = UiText.wrap(tip)
 			label.mouse_filter = Control.MOUSE_FILTER_STOP
 			labels.append(label)
 	return labels
@@ -215,7 +221,7 @@ func show_status(mission: MissionState, board: BoardContext, instruction := "") 
 			_rows.add_child(row.label)
 		else:
 			_rows.add_child(_zone_row(row))
-	for label in air_rows(board.atmosphere):
+	for label in air_rows(board.atmosphere, board.weather):
 		_rows.add_child(label)
 	_paint_hover()
 	# The tutorial's instruction row (#182): what to do NOW. Drawn last, below the win conditions,

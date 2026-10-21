@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-18. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-19. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -592,7 +592,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id. A compound is only ever named by id.
 - **Equations** are one line of text on each reaction, `ElementalReaction.equation` and `TerrainReaction.equation`, written as above (`F2 + W2 -> 2FW`).
 - **What each game thing is made of** is `SubstanceMap`: one row for every element, unit state, tile state, ground and gas. Every row names a substance except COVER and VOID, which hold none. A vial carries its own `substance` field; ichor's is still open.
-- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty since 2026-10-11, kept so a new reaction without an equation still reds), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later.
+- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty since 2026-10-11, kept so a new reaction without an equation still reds), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later. Its gas half is checked since #1329: a gas an equation makes that its reaction does not release reds until it is released or listed.
 
 **The rulings behind the equations** (c3potheds@ and Phaazoid@ in #claude-sessions, 2026-10-08 to 2026-10-11):
 
@@ -709,7 +709,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **The corner HUD (`MissionStatusPanel`) lists whatever is off Normal**, below the objectives and FAIL IF and above a tutorial's instruction row, under `Atmosphere.GROUPS`' headings: "Vital air — 30%, +2". A group all at Normal draws no heading, and a Normal board draws nothing. That is "changes it, visibly"; the full reading stays on the pre-mission screen. Hovering a row shows the glossary's short text.
 - **Every board, not only the roster-less ones**, so the HUD never forks per board.
 - **Not the tile card**, which would put a board-wide fact on a per-tile card (the "check tile by tile" ruled out above); it is the home for a *local* reading once a gas moves an area. **Not the Glossary**, which has no board when the title screen opens it; it now says the corner lists what is off Normal.
-- **Weather stays out of the HUD**: the board draws it, and the pre-mission screen lists it only because that screen covers the board.
+- **Weather stays out of the HUD**: the board draws it, and the pre-mission screen lists it only because that screen covers the board. *(Since slice 4, a substance the weather moved names it on its row; there is still no weather row.)*
 - `Atmosphere.off_normal(reading)` is the one answer to which substances are off Normal (`is_normal` derives from it, and the bug report's air line uses it), and `percent_text`/`steps_text` the one wording both surfaces print. `MissionStatusPanel.air_rows` is kept out of `briefing()`, whose pre-mission reader has its own Conditions region. `game.refresh_mission_status`'s hide gate asks about the air, or a board with air but no objectives hides its own reading (#101's trap). The Scenario tab's air spins refresh the HUD as they move.
 
 **Built 2026-10-18: source amounts ([#1328](https://github.com/Phaazoid/Godoiosis/issues/1328)).** Proposed 2026-10-14 in #claude-sessions; plan approved by Phaazoid@ in a Claude session on 2026-10-18.
@@ -738,8 +738,48 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - A fire supplying heat. Flame has lent no heat since #1324, so `Push(3F)` fizzles even beside a fire.
   - A lint refusing an unnumbered carving that needs a source.
 
+**Built 2026-10-19: Dried Off releases its steam ([#1329](https://github.com/Phaazoid/Godoiosis/issues/1329)).** First line off the NOT_YET_FOLLOWED ledger. Rulings by Phaazoid@ in a Claude session (2026-10-19), approving a plan:
+- **Fire drying a wet unit boils its water off as steam**, as its equation `F2 + W2 -> 2FW` says: Boils' equation, on a body.
+- **Thin.** Thin steam never soaks and never spreads, so drying stays drying. Medium would let Blow Dry dry an ally and then re-soak them at the end of your own turn.
+- **On the cell the unit was hit on**, before any shove from the same hit. A guard who takes the blow steams on its own cell.
+- **Plants wait for smoke.** A plant fire is mostly smoke; its steam is only the green plant's sap (`green_plant` is `AE + 2FA + W2`, and tall grass, a dry plant, gives smoke alone). So Burning and GrassIgnites keep their ledger line and release both gases in one later diff.
+- **How:** `ElementalReaction` has TerrainReaction's `gas`/`gas_level` pair, and `PlanResolver._release_reaction_gas` puts a fired reaction's gas into the one cell-effect channel every deposit uses. So the board ghosts it before Execute and both executors play it. It is released once per wet victim, where an attack's own gas lands once per volley, and the glossary line says "releases Steam".
+- **The ledger's gas half is checked:** `ReactionLint.unreleased_gases` names any gas an equation makes (in its outputs, not its inputs) that its reaction does not release, and the lint suite reds unless that reaction is on NOT_YET_FOLLOWED.
+- **Not built:**
+  - A reaction holds ONE gas, so a burning plant cannot yet release steam and smoke together. Smoke's diff decides the shape.
+  - Whether a fire that SPREADS releases gas, rather than only one a hit lights, is open. It is the same question for both gases.
+  - Steam scalding: [#1331](https://github.com/Phaazoid/Godoiosis/issues/1331).
+
+**Built 2026-10-19: the weather moves the reading ([#1324](https://github.com/Phaazoid/Godoiosis/issues/1324), slice 4).** Rulings by Phaazoid@ in a Claude session (2026-10-19), approving a plan:
+- **A weather the board draws may nudge the air.** Rain adding vapor was his example. Four families do:
+
+  | Weathers | Substance | Nudge |
+  |---|---|---|
+  | Light Rain, Rain, Heavy Rain, Thunderstorm | vapor | +1, +2, +3, +3 steps |
+  | Mist, Fog, Thick Fog | vapor | +1, +2, +3 steps |
+  | Light Snow, Snow, Blizzard | heat | −1, −2, −3 steps |
+  | Faint Aurora, Aurora, Aetheric Storm | aether | +1, +2, +3 steps |
+
+  One step per intensity; a thunderstorm matches heavy rain. The sands and ashes stay looks only.
+- **Authored on the weather.** `WeatherRules.air` holds substance id → percentage points, one file per kind under `Resources/WeatherRules/`, tuned on Project › Weather (one "Air:" row per substance). So the snows, fogs and auroras gained a rules file that soaks nobody, and their parity rows are no longer `inert()`. A weather with no file moves nothing.
+- **One composition.** `Atmosphere.effective(authored, weather)` is the reading a board plays under. `Atmosphere.nudged(reading, nudge)` is its arithmetic: points added per substance, each held to 0–100, so a blizzard on a Normal board takes heat to 0%, two steps down. A local gas is the next nudge to compose through it.
+  - `BoardContext.atmosphere` carries the effective reading.
+  - On the game side, `ScenarioManager.air_reading()` is the one door, read by `game._board()`, the HUD's hide gate, the pre-mission Conditions and the bug report.
+  - The Play API's two boards compose the same way.
+  - The queue tip and the Play API's "air:" line follow the resolver unchanged.
+  - `current_atmosphere` stays the AUTHORED reading, which the Scenario tab edits and a save writes, so a reload never nudges twice.
+- **The weather names itself on what it moved** (his pick over tooltip-only):
+  - The corner HUD: "Vapor — 15%, +2 (Rain)".
+  - The pre-mission Conditions: the weather's name at the row's end.
+  - Each tooltip leads with what the weather does ("Rain adds 10% vapor.", "Snow lowers heat by 20%.").
+  - The bug report's air line tags it the same way.
+  - The Glossary's Atmosphere page lists every weather's nudge, composed from the files.
+  - The Scenario tab says what the board's weather adds under the authored boxes.
+  - The board drawing the weather is what makes the change visible, his rule.
+
 **Next:**
-- **Weather nudging the reading** (rain adds vapor), and atmosphere gases that raise or lower an area (the first gas that subtracts).
+- **Atmosphere gases that raise or lower an area** (the first gas that subtracts), composed through `Atmosphere.nudged`.
+- **Burning plants release smoke and steam** (Burning, GrassIgnites, TallGrassIgnites), with the shape for two gases and the spread question above.
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 

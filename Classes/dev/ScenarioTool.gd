@@ -28,6 +28,7 @@ var _camera_row: HBoxContainer
 var _in_demo_box: CheckBox
 var _air_row: VBoxContainer
 var _air_spins := {}   # substance id -> SpinBox
+var _air_weather: Label   # what the board's weather adds to the air (#1324)
 var _report_box: VBoxContainer
 
 const NO_LOOK_LABEL := "(none - default)"
@@ -146,9 +147,11 @@ func _add_wind_pickers(row: HBoxContainer) -> void:
 func _on_weather_picked(kind: Weather.Kind) -> void:
 	scenario_manager.current_weather = kind
 	_mark()
-	# The open plan's END OF TURN rows read the weather, so re-resolve it now rather than leave the
-	# forecast saying what the last weather would have done.
+	# The open plan's END OF TURN rows read the weather, and since #1324 so do its carving rows and the
+	# corner HUD's air, so re-resolve and redraw now rather than show what the last weather would have.
 	game.refresh_action_queue(game.squad_manager.active_squad)
+	game.refresh_mission_status()
+	_refresh_air_row()
 
 
 # The air over this board (#1324): one percentage per ambient substance, under the weather it sits
@@ -178,6 +181,10 @@ func _build_air_row() -> void:
 	normal.text = "Normal air"
 	normal.pressed.connect(_on_air_normal_pressed)
 	(_air_row.get_child(_air_row.get_child_count() - 1) as HBoxContainer).add_child(normal)
+	# What the weather adds on top (#1324), so the HUD's reading never disagrees with these boxes
+	# without saying why. The boxes stay the AUTHORED reading, which is what a save writes.
+	_air_weather = Label.new()
+	_air_row.add_child(_air_weather)
 	DevWidgets.apply_tooltip(_air_row, DevWidgets.wrap_tooltip(
 		"What the air over this board holds, for the whole battle. A carving that draws a substance "
 		+ "from the air hits one harder for each step above Normal and one softer below: Fireball "
@@ -192,6 +199,8 @@ func _refresh_air_row() -> void:
 	for id: String in _air_spins:
 		(_air_spins[id] as SpinBox).set_value_no_signal(
 				Atmosphere.percent_of(id, scenario_manager.current_atmosphere))
+	var lines := Atmosphere.weather_lines(scenario_manager.current_weather)
+	_air_weather.text = " ".join(lines) if not lines.is_empty() else "The weather moves nothing in the air."
 
 
 # A substance at Normal is erased rather than stored, so the board follows a retuned Normal (#648).

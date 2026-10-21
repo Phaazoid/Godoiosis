@@ -128,6 +128,78 @@ func test_every_ambient_substance_is_real_and_tuned() -> void:
 	assert_array(grouped).contains_exactly_in_any_order(Atmosphere.SUBSTANCES)
 
 
+# --- the weather's nudge (#1324) ----------------------------------------------------------
+# Which weather moves what, and by how much, is AUTHORED (Resources/WeatherRules/), so these read every
+# expectation off WeatherRules.air_of and never name a weather's number.
+
+func test_a_nudge_adds_its_points_and_holds_each_substance_to_0_100() -> void:
+	for id: String in Atmosphere.SUBSTANCES:
+		var normal := int(Atmosphere.NORMAL[id])
+		var step := int(Atmosphere.STEP[id])
+		assert_int(Atmosphere.percent_of(id, Atmosphere.nudged({}, {id: step}))).override_failure_message(
+				"%s did not rise by its nudge" % id).is_equal(normal + step)
+		assert_int(Atmosphere.percent_of(id, Atmosphere.nudged({}, {id: -(normal + 1)}))).override_failure_message(
+				"%s fell below 0%%" % id).is_equal(0)
+		assert_int(Atmosphere.percent_of(id, Atmosphere.nudged({}, {id: 101}))).override_failure_message(
+				"%s rose above 100%%" % id).is_equal(100)
+	# A substance the nudge does not name keeps what was authored.
+	var first: String = Atmosphere.SUBSTANCES[0]
+	var last: String = Atmosphere.SUBSTANCES[-1]
+	var authored: Dictionary[String, int] = {first: int(Atmosphere.NORMAL[first]) + int(Atmosphere.STEP[first])}
+	assert_int(Atmosphere.percent_of(first, Atmosphere.nudged(authored, {last: 1}))).is_equal(authored[first])
+
+
+func test_a_weather_with_no_rules_leaves_the_authored_reading_alone() -> void:
+	var authored := _rich(Atmosphere.SUBSTANCES[0], 2)
+	assert_object(WeatherRules.for_kind(Weather.Kind.CLEAR)).override_failure_message(
+			"fixture: CLEAR has a rules file now").is_null()
+	assert_dict(Atmosphere.effective(authored, Weather.Kind.CLEAR)).is_equal(authored)
+
+
+# Every authored nudge, against an authored reading a step off Normal everywhere: the composition adds
+# exactly the weather's points, clamped, and leaves every other substance alone.
+func test_every_weather_moves_the_air_by_exactly_its_authored_nudge() -> void:
+	var authored: Dictionary[String, int] = {}
+	for id: String in Atmosphere.SUBSTANCES:
+		authored[id] = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+	var moving := 0
+	for kind: Weather.Kind in Weather.Kind.values():
+		var nudge := WeatherRules.air_of(kind)
+		if not nudge.is_empty():
+			moving += 1
+		for id: String in nudge:
+			assert_bool(Atmosphere.SUBSTANCES.has(id)).override_failure_message(
+					"%s's rules nudge '%s', which is not in the air" % [Weather.name_of(kind), id]).is_true()
+		var air := Atmosphere.effective(authored, kind)
+		for id: String in Atmosphere.SUBSTANCES:
+			var expected := clampi(authored[id] + int(nudge.get(id, 0)), 0, 100)
+			assert_int(Atmosphere.percent_of(id, air)).override_failure_message("%s left %s at %d, not %d"
+					% [Weather.name_of(kind), id, Atmosphere.percent_of(id, air), expected]).is_equal(expected)
+	assert_int(moving).override_failure_message(
+			"no weather's rules move the air, so nothing here is checked").is_greater(0)
+
+
+func test_a_weather_names_exactly_what_it_moves_and_says_which_way() -> void:
+	for kind: Weather.Kind in Weather.Kind.values():
+		var nudge := WeatherRules.air_of(kind)
+		var moved := 0
+		for id: String in Atmosphere.SUBSTANCES:
+			var points := int(nudge.get(id, 0))
+			if points != 0:
+				moved += 1
+			assert_bool(Atmosphere.weather_moves(id, kind)).override_failure_message(
+					"%s and %s" % [Weather.name_of(kind), id]).is_equal(points != 0)
+			var text := Atmosphere.weather_text(id, kind)
+			if points == 0:
+				assert_str(text).is_empty()
+				continue
+			assert_str(text).starts_with(Weather.display_name(kind))
+			assert_str(text).contains("%d%%" % absi(points))
+			assert_str(text).contains(SubstanceCatalog.name_of(id).to_lower())
+			assert_str(text).contains("adds" if points > 0 else "lowers")
+		assert_int(Atmosphere.weather_lines(kind).size()).is_equal(moved)
+
+
 # --- through the resolver -----------------------------------------------------------------
 
 func _carving(recipe: String, no_damage := false) -> TransmutationData:

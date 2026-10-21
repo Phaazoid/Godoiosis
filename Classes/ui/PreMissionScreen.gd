@@ -264,7 +264,11 @@ func _build_conditions() -> Control:
 			var row := _condition_row(SubstanceCatalog.name_of(id))
 			var steps := _value_label()
 			(row[0] as HBoxContainer).add_child(steps)
-			_air_rows[id] = [row[2], row[1], steps]
+			# The weather that moved this substance, blank when none did (#1324).
+			var cause := _value_label()
+			cause.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+			(row[0] as HBoxContainer).add_child(cause)
+			_air_rows[id] = [row[2], row[1], steps, cause]
 			_air_box.add_child(row[0])
 	return parts[0]
 
@@ -506,15 +510,24 @@ func _slide_in() -> void:
 		_slide.finished.connect(_grid.queue_sort)
 
 
-# Read off the live stores rather than a BoardContext: they are what game._board() hands the resolver,
-# so the reading shown is the reading every carving will be resolved against.
+# Read off ScenarioManager.air_reading() rather than a BoardContext: it is what game._board() hands the
+# resolver, so the reading shown is the reading every carving will be resolved against -- the weather's
+# nudge included, with the weather named on each row it moved and its lines atop the box's tooltip.
 func _refresh_conditions() -> void:
 	var sm: ScenarioManager = _controller.game.scenario_manager
-	_weather_value.text = Weather.display_name(sm.current_weather)
+	var weather: Weather.Kind = sm.current_weather
+	var reading := sm.air_reading()
+	_weather_value.text = Weather.display_name(weather)
 	for id: String in _air_rows:
 		var labels: Array = _air_rows[id]
-		(labels[1] as Label).text = Atmosphere.percent_text(id, sm.current_atmosphere)
-		(labels[2] as Label).text = Atmosphere.steps_text(id, sm.current_atmosphere)
+		(labels[1] as Label).text = Atmosphere.percent_text(id, reading)
+		(labels[2] as Label).text = Atmosphere.steps_text(id, reading)
+		(labels[3] as Label).text = Weather.display_name(weather) if Atmosphere.weather_moves(id, weather) else ""
+	var tip := Glossary.short(Glossary.Term.ATMOSPHERE)
+	var lines := Atmosphere.weather_lines(weather)
+	if not lines.is_empty():
+		tip = "\n".join(lines) + "\n\n" + tip
+	_air_box.tooltip_text = UiText.wrap(tip)
 
 
 func _refresh_stash() -> void:

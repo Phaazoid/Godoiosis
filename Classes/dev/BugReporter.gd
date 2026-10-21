@@ -267,7 +267,7 @@ func _devtools_note() -> String:
 	return panel.current_tab_title()
 
 # The sky over the board as one line: the weather (#1260), the wind when it blows (#1286), and the
-# air when it is off Normal (#1324).
+# air as played when it is off Normal (#1324), each substance the weather moved naming it.
 func _weather_note() -> String:
 	var weather: Weather.Kind = game.scenario_manager.current_weather
 	var wind: Wind.Kind = game.scenario_manager.current_wind
@@ -275,10 +275,13 @@ func _weather_note() -> String:
 	var note := Weather.display_name(weather)
 	if wind != Wind.Kind.CALM:
 		note += ", %s toward %s" % [Wind.display_name(wind), Wind.direction_name(direction)]
-	var air: Dictionary[String, int] = game.scenario_manager.current_atmosphere
+	var air: Dictionary[String, int] = game.scenario_manager.air_reading()
 	var off: Array[String] = []
 	for id: String in Atmosphere.off_normal(air):
-		off.append("%s %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, air)])
+		var part := "%s %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, air)]
+		if Atmosphere.weather_moves(id, weather):
+			part += " (%s)" % Weather.display_name(weather)
+		off.append(part)
 	if not off.is_empty():
 		note += "; air: " + ", ".join(off)
 	return note

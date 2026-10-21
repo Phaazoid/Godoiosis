@@ -17,8 +17,9 @@ var gas: GasField
 # The weather over the board (#1260). Set after construction by the builders that have one (game,
 # the Play API), so every other builder -- the test fixtures above all -- reads CLEAR.
 var weather: Weather.Kind = Weather.Kind.CLEAR
-# The air's reading (#1324, Atmosphere): substance id -> percent. Set beside the weather, so every
-# other builder reads a Normal board.
+# The air's reading (#1324, Atmosphere): substance id -> percent, the EFFECTIVE one -- the board's
+# authored air moved by its weather (Atmosphere.effective), composed by the builder that sets it. Set
+# beside the weather, so every other builder reads a Normal board.
 var atmosphere: Dictionary[String, int] = {}
 # Terrain deposits not yet in the store, read as if they had landed (with_deposits). Empty on every
 # board the game builds.
