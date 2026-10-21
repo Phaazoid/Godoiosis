@@ -387,6 +387,9 @@ static func tile_states() -> Dictionary:
 
 static func gases() -> Dictionary:
 	var K := Gas.Kind
+	# A gas whose only rule moves the air where it lies (#1324): the AI prices it through the resolve,
+	# which reads BoardContext.air_at at the caster's cell, and its seek groups origins by that air.
+	var air := covered(TACTICS, "air_at")
 	return {
 		"name": "gases (Gas.Kind)",
 		"members": K.values(),
@@ -396,9 +399,10 @@ static func gases() -> Dictionary:
 			K.STEAM: {"ai": gap("#117", "the AI is blind to steam's soak (terrain.md)")},
 			K.SMOKE: {"ai": inert()},
 			K.POISON: {"ai": inert()},
-			K.FROST: {"ai": inert()},
+			K.FROST: {"ai": air},
 			K.THUNDER: {"ai": inert()},
 			K.SULFUR: {"ai": inert()},
+			K.ESSENCE: {"ai": air},
 		},
 	}
 

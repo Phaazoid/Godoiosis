@@ -9,7 +9,8 @@ extends Object
 #
 # A reading is a Dictionary of substance id -> percent, authored on ScenarioData. A missing key reads
 # Normal, so an empty reading is a Normal board. What the rules play on is the EFFECTIVE reading, the
-# authored one with its weather's nudge applied (effective, below); BoardContext carries that one.
+# authored one with its weather's nudge applied (effective, below); BoardContext carries that one. A
+# gas moves it again on the cell it lies on (GasRules.air), and BoardContext.air_at is that cell's air.
 #
 # Static on the reading passed in, Materia's shape: a carving has no board and must not grow one.
 
@@ -44,7 +45,7 @@ static func effective(authored: Dictionary, weather: Weather.Kind) -> Dictionary
 
 
 # A reading moved by a nudge (substance id -> percentage points), each substance held to 0..100. The
-# arithmetic of every source that moves the air; the weather is the first.
+# arithmetic of every source that moves the air: the weather, then a cell's gas.
 static func nudged(reading: Dictionary, nudge: Dictionary) -> Dictionary[String, int]:
 	var out: Dictionary[String, int] = {}
 	out.assign(reading)
@@ -92,6 +93,16 @@ static func off_normal(reading: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for id: String in SUBSTANCES:
 		if percent_of(id, reading) != int(NORMAL[id]):
+			out.append(id)
+	return out
+
+
+# The substances whose percent differs between two readings, in SUBSTANCES order: a cell's air
+# against its board's, for the readouts that speak for one cell (the tile card, the Play API's board).
+static func differs(reading: Dictionary, base: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for id: String in SUBSTANCES:
+		if percent_of(id, reading) != percent_of(id, base):
 			out.append(id)
 	return out
 

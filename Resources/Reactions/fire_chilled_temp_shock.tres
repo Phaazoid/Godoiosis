@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="ElementalReaction" format=3]
+[gd_resource type="Resource" script_class="ElementalReaction" format=3 uid="uid://c10e1oggbt2cf"]
 
-[ext_resource type="Script" path="res://Classes/elemental/ElementalReaction.gd" id="1_tshck"]
-[ext_resource type="Texture2D" path="res://Art/Icons/ElementIcons/Fire.png" id="2_tshck"]
+[ext_resource type="Script" uid="uid://bfm0j6xji22k" path="res://Classes/elemental/ElementalReaction.gd" id="1_tshck"]
+[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="2_tshck"]
 
 [resource]
 script = ExtResource("1_tshck")
@@ -10,7 +10,9 @@ required_state = 2
 also_triggered_by = Array[int]([9])
 damage_bonus = 5
 remove_states = Array[int]([2])
-short_name = "Shatter"
+gas = 6
+gas_level = 2
 equation = "F2 + 2QW -> Q2 + W2 + 2F"
 popup = "Temperature Shock!"
 icon = ExtResource("2_tshck")
+short_name = "Shatter"

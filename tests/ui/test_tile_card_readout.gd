@@ -255,6 +255,39 @@ func test_a_burning_tile_works_the_state_into_the_card() -> void:
 		.contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 
 
+# The tile card is the home of a LOCAL reading (#1324): a gas that moves the air names itself and its
+# level, then every substance where this cell's air differs from the board's. What a gas does is
+# authored (GasRules), so the gas is whichever one moves the air and every row is derived.
+func test_a_gas_that_moves_the_air_shows_the_cells_own_reading() -> void:
+	var kind := -1
+	for k: Gas.Kind in Gas.Kind.values():
+		if GasRules.for_kind(k) != null and not GasRules.for_kind(k).air.is_empty():
+			kind = k
+			break
+	assert_int(kind).override_failure_message("fixture: no gas's rules move the air").is_not_equal(-1)
+	var cell := Vector2i(5, 0)
+	game.gas_field.set_level(cell, kind, Gas.Level.THICK)
+	var board: BoardContext = game._board()
+	var here: Dictionary[String, int] = board.air_at(cell)
+	var moved := Atmosphere.differs(here, board.atmosphere)
+	assert_array(moved).override_failure_message("fixture: a thick %s moves nothing here" % Gas.name_of(kind)).is_not_empty()
+	await _click(cell)
+
+	var text := _tile_block_text()
+	assert_str(text).override_failure_message("the card never names the gas: '%s'" % text) \
+		.contains("%s, thick" % Gas.display_name(kind))
+	for id: String in moved:
+		assert_str(text).override_failure_message("the card never gives the cell's %s: '%s'" % [id, text]) \
+			.contains("%s %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, here)])
+
+
+func test_a_cell_with_no_gas_has_no_air_section() -> void:
+	await _click(Vector2i(6, 0))
+	assert_array(game.hover_info_panel.tile_texts()).override_failure_message(
+		"precondition: the card drew nothing").is_not_empty()
+	assert_array(game.hover_info_panel.tile_texts()).not_contains([TileReadout.HEADING_AIR])
+
+
 func test_a_units_inspect_shows_its_burning_tile_beside_the_dock() -> void:
 	# A unit's tile is read in the card beside its Inspect dock (#1105), never inside the dock.
 	var cell := Vector2i(4, 0)

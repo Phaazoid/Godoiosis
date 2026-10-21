@@ -14,9 +14,10 @@ uniform float pixel_size = 0.03125;
 uniform float canvas_height = 32.0;   // art pixels, GasPuffArt.LAYER_SIZE.y
 uniform float stride = 16.0;
 uniform float extra_base = 9.0;
-uniform float boil_seconds[6];
-uniform vec2 bob[6];                   // art pixels of bob, rate
-uniform float sway[6];                 // art pixels of side-to-side drift
+// One entry per Gas.Kind, sized to the cap (eight: GasMirror's cells texture packs kinds in a byte).
+uniform float boil_seconds[8];
+uniform vec2 bob[8];                   // art pixels of bob, rate
+uniform float sway[8];                 // art pixels of side-to-side drift
 uniform float drift = 0.0;             // world units a puff wanders around its spot (the mix's)
 uniform float bolt_threshold = 0.35;   // how lit a strike must be before its bolt shows
 

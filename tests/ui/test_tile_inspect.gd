@@ -143,8 +143,9 @@ func _paint_quiet_tile(cell: Vector2i) -> bool:
 	return false
 
 
-# Three watches, two zones and a fire on one cell -- busier than any authored board makes a single
-# tile, and the measure the card was sized against (675 of 704 since #955 split its zones by kind).
+# Three watches, two zones, a fire and every gas with rules on one cell -- busier than any authored
+# board makes a single tile, and the measure the card was sized against (675 of 704 since #955 split
+# its zones by kind, before #1324's Air section).
 func _build_busy_tile(cell: Vector2i) -> void:
 	_set_burning(cell)
 	for i in range(3):
@@ -153,6 +154,10 @@ func _build_busy_tile(cell: Vector2i) -> void:
 	game.refresh_watch_markers()
 	game.zone_manager.paint_cell("The Far Ground", ZoneManager.Kind.CAPTURE, cell)
 	game.zone_manager.paint_cell("The Landing Field", ZoneManager.Kind.DEPLOYMENT, cell)
+	# The Air section (#1324): every gas with rules, thick -- each its own row, plus the air they leave.
+	for kind: Gas.Kind in Gas.Kind.values():
+		if GasRules.for_kind(kind) != null:
+			game.gas_field.set_level(cell, kind, Gas.Level.THICK)
 
 
 # ------------------------------------------------------------------------------

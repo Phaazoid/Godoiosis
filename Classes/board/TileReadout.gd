@@ -9,15 +9,16 @@ class_name TileReadout
 # OverlayManager's marked set (so a watch whose reticle is gone is never named), zones off
 # ZoneManager filtered by MissionController.hidden_zone_names (so a zone whose tint is gone is never
 # named), each kind heading its own section with the emblem the board wears (ZoneMarks, #955),
-# meanings off Glossary. The GROUND section is HoverPresenter._tile_readout_lines, moved
-# here unchanged.
+# meanings off Glossary, the air off GasRules and BoardContext.air_at (#1324). The GROUND section is
+# HoverPresenter._tile_readout_lines, moved here unchanged.
 #
 # Explicit types throughout: `game` is untyped (game.gd has no class_name).
 
-enum Layer { WATCH, ZONE, GROUND }
+enum Layer { WATCH, ZONE, GROUND, AIR }
 
 # PLACEHOLDER headings and side words, the dev's to rewrite.
 const HEADING_GROUND := "Ground"
+const HEADING_AIR := "Air"
 const SIDE_WORDS: Dictionary[Team.Faction, String] = {
 	Team.Faction.PLAYER: "yours",
 	Team.Faction.ENEMY: "enemy",
@@ -60,8 +61,8 @@ static func read(game, cell: Vector2i) -> Readout:
 	return readout
 
 
-# Every section this cell has, in the card's order: the threat, then objectives, then the ground.
-# A layer with nothing to say is absent.
+# Every section this cell has, in the card's order: the threat, then objectives, then the ground, then
+# the air over it. A layer with nothing to say is absent.
 static func compose(game, cell: Vector2i) -> Array[Section]:
 	var sections: Array[Section] = []
 	var watch := _watch_section(game, cell)
@@ -75,6 +76,9 @@ static func compose(game, cell: Vector2i) -> Array[Section]:
 		ground.rows.append(Row.make(line))
 	if not ground.rows.is_empty():
 		sections.append(ground)
+	var air := _air_section(game, cell)
+	if air != null:
+		sections.append(air)
 	return sections
 
 
@@ -129,6 +133,38 @@ static func _watch_line(watch: Watch) -> String:
 	if watch.attack != null and watch.attack.display_name != "":
 		line += ", " + watch.attack.display_name
 	return line
+
+
+# The gas lying on this cell, and the air it leaves here (#1324): one row per gas with its level and
+# what it does to the air (GasRules.air_text, "Essence, medium: elemental aether +10%"), then each
+# substance where this cell's reading (BoardContext.air_at, what a carving cast from here draws on)
+# differs from the whole board's, which the corner panel already speaks for. Absent when the cell
+# holds no gas.
+static func _air_section(game, cell: Vector2i) -> Section:
+	var board: BoardContext = game._board()
+	if board.gas == null:
+		return null
+	var packed: int = board.gas.packed_at(cell)
+	if packed == 0:
+		return null
+	var section := Section.new()
+	section.layer = Layer.AIR
+	section.heading = HEADING_AIR
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		var level: int = Gas.level_in(packed, kind)
+		var line: String = "%s, %s" % [Gas.display_name(kind), Gas.Level.keys()[level].to_lower()]
+		var moves: String = GasRules.air_text(kind, level)
+		if moves != "":
+			line += ": " + moves
+		section.rows.append(Row.make(line))
+	var here: Dictionary[String, int] = board.air_at(cell)
+	for id: String in Atmosphere.differs(here, board.atmosphere):
+		var reading: String = "%s %s" % [SubstanceCatalog.name_of(id), Atmosphere.percent_text(id, here)]
+		var steps: String = Atmosphere.steps_text(id, here)
+		if steps != "":
+			reading += ", " + steps
+		section.rows.append(Row.make(reading))
+	return section
 
 
 # One section per zone KIND on this cell, in the kind enum's order: headed by the kind's name and the
