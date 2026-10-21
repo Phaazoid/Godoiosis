@@ -132,11 +132,15 @@ func _apply(unit: Unit) -> void:
 
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		unit.inventory[i] = _inventory[i]
-	# Dev tools stay omnipotent: this assigns directly, BYPASSING the equip/wear gates on purpose
-	# so out-of-spec combos can be tested. The armor requirement is shown in the row label instead.
+	# Dev tools stay omnipotent: both slots are assigned directly, BYPASSING the equip/wear gates on
+	# purpose so out-of-spec combos can be tested -- never set_equipped_weapon, whose refusal left the
+	# unit unarmed (#1372). The armor requirement is shown in the row label instead. The next stat
+	# settle still strips whatever fails its gate (#112).
 	unit.unequip_weapon()
-	if _equipped_index >= 0 and _inventory[_equipped_index] is EquippableData:
-		unit.set_equipped_weapon(_inventory[_equipped_index])
+	if _equipped_index >= 0:
+		var chosen := _inventory[_equipped_index] as EquippableData
+		if chosen != null and not chosen is ArmorData:
+			unit.equipped_weapon = chosen
 	if _armor_index >= 0:
 		unit.worn_armor = _inventory[_armor_index] as ArmorData
 	else:
