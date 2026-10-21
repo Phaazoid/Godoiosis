@@ -460,6 +460,7 @@ func reposition(unit: Unit, cell: Vector2i) -> bool:
 	if not _phase.reposition(unit, cell):
 		return false
 	game.overlay_manager.redraw_projected_units()
+	game.drop_threat_field()   # a placed unit can block an enemy's route (#1360)
 	game.scenario_manager.note_play()   # a placing edit, which the dev header counts (#1182)
 	return true
 
