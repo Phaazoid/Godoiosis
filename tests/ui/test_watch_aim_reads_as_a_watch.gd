@@ -18,6 +18,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
@@ -248,3 +249,86 @@ func test_a_cell_an_armed_watch_already_marks_is_not_ghosted_underneath() -> voi
 	assert_int(_overlays().watch_preview_sprites.size()).override_failure_message(
 			"a promised mark is stacked under the armed one on the same cell"
 		).is_equal(0)
+
+# ==============================================================================
+#  The hover and the ghost are one answer (#1355)
+# ==============================================================================
+# The hover asked Conduction.sweep, which cuts a path swing at its first body -- a downed one
+# included -- while the queued ghost draws OverwatchAction.watched_paths_from, the whole lane, which
+# is what the watch really arms (a body does not trip it). So the aim showed two cells and pulsed the
+# body, and the click left four. Hovered through the real pointer seam and clicked through the real
+# click, on a board this case paints, with a watch it builds itself.
+
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)
+const LANE_WATCHER := Vector2i(2, 6)
+const LANE_AIM := Vector2i(2, 5)   # one cell north: the facing
+const LANE_BODY := Vector2i(2, 4)
+const LANE_LENGTH := 4
+
+
+# A Carbine-family weapon carrying a watch that walks LANE_LENGTH cells straight ahead as ONE path --
+# the single-target swing every shipped watch is, without reading any of them.
+func _lane_watch_weapon() -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Watch"
+	watch.power = 3
+	watch.can_overwatch = true
+	watch.max_range = 0
+	watch.swing = true
+	var lane: Array[Vector2i] = []
+	for f in range(1, LANE_LENGTH + 1):
+		lane.append(Vector2i(0, -f))
+	var paths: Array[Array] = [lane]
+	watch.attack_shape = P.pathed(paths)
+	var extras: Array[WeaponAttackData] = [watch]
+	template.extra_attacks = extras
+	return WeaponInstance.make(template)
+
+
+func _cells_of(sprites: Array[Sprite2D]) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for sprite in sprites:
+		cells.append(game.grid.local_to_map(sprite.position))
+	cells.sort()
+	return cells
+
+
+func test_a_watch_aim_hovers_exactly_the_cells_its_queued_ghost_marks() -> void:
+	game.grid.reset()
+	for x in range(0, 5):
+		for y in range(0, 8):
+			game.grid.paint(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	var watcher: Unit = game.spawn_unit(H.make_unit_data({}, PLAYER), LANE_WATCHER)
+	var body: Unit = game.spawn_unit(H.make_unit_data({}, ENEMY), LANE_BODY)
+	assert_object(watcher).is_not_null()
+	assert_object(body).is_not_null()
+	watcher.equipped_weapon = _lane_watch_weapon()
+	body.force_down()
+	assert_bool(body.is_downed()).override_failure_message("fixture: the body in the lane is not downed").is_true()
+
+	watcher.active_attack = watcher.overwatch_attacks()[0]
+	game.enter_overwatch_mode(watcher)
+	game.selected_unit = watcher
+	game.hover_presenter.pointer_source = func() -> Vector2i: return LANE_AIM
+	for i in 3:
+		await await_idle_frame()
+	assert_vector(game.hover_presenter.last_hovered_cell).override_failure_message(
+			"fixture: the pointer seam never moved the hover onto the aim").is_equal(LANE_AIM)
+
+	var hovered: Array[Vector2i] = _overlays().hover_overlay.get_used_cells()
+	hovered.sort()
+	assert_bool(body.visuals.pulse_tween != null).override_failure_message(
+			"the watch aim pulses the body in its lane, a victim the queued watch never names").is_false()
+
+	game._on_left_click(LANE_AIM)
+	var ghost := _cells_of(_overlays().watch_preview_sprites)
+	assert_bool(ghost.has(LANE_BODY + Vector2i.UP)).override_failure_message(
+			"fixture is vacuous: the queued watch does not reach past the body (%s)" % str(ghost)).is_true()
+	assert_array(hovered).override_failure_message(
+			"the watch aim hovered %s but its queued ghost marks %s" % [str(hovered), str(ghost)]
+		).is_equal(ghost)

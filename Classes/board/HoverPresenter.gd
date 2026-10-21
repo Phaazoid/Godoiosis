@@ -343,7 +343,18 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 		# Directional: a facing whose spread the terrain leaves standing (#756 -- it was any non-zero
 		# facing before truncation). Point: the hovered cell itself must be in range AND within
 		# vertical tolerance (#258). One predicate, the same one the click commits through.
-		if Reach.can_aim_at(attacker, origin, cell, aiming, board):
+		var aimable := Reach.can_aim_at(attacker, origin, cell, aiming, board)
+		if aimable and game.aim_intent == game.AimIntent.WATCH:
+			# A WATCH shows what the order it queues will arm (#1355): the resolver's footprint rule asked
+			# of a probe, as the Play API asks it, so the hover and the queued ghost are one answer. The
+			# whole surfaced lane -- a body in it does not cut a watch, and a current adds none -- flashing
+			# in the order its shot walks. Nobody pulses: the ghost names no victim either.
+			var probe := OverwatchAction.new()
+			probe.init(attacker, cell, aiming)
+			var paths := probe.watched_paths_from(origin, board)
+			preview_cells = Conduction._tiles_of(paths)
+			travel = Conduction._path_steps(paths)
+		elif aimable:
 			# The wash shows the CURRENT as well as the blast (Law #2 -- a shock that will arc has to
 			# say so before the click). Read against LIVE wetness, since that is what is true at the
 			# moment the player is aiming; a queued-but-unexecuted WATER order is threaded into the
@@ -360,15 +371,13 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# catches are hit for real, so hiding them here would be a second answer to "who is hit".
 			victims = reach.victims
 			# What it would DO (#929): the plan with this aim added, which the health bars read until the
-			# aim moves on -- and what it DROPS (#1058 D2b), off the same resolve. A watch declares nothing
-			# here: its shot fires later, from wherever the crosser is, so there is no outcome to show yet.
-			if game.aim_intent != game.AimIntent.WATCH:
-				var candidate := AttackAction.declare(attacker, origin, cell)
-				forecast = game.squad_manager.preview_aim(attacker.squad, candidate, board, source)
-				if aiming != null and aiming.payload != null:
-					var rows := SquadManager.payloads_in(forecast, candidate)
-					travel = travel.duplicate(true)
-					_add_payloads(rows, preview_cells, travel, insets, victims)
+			# aim moves on -- and what it DROPS (#1058 D2b), off the same resolve.
+			var candidate := AttackAction.declare(attacker, origin, cell)
+			forecast = game.squad_manager.preview_aim(attacker.squad, candidate, board, source)
+			if aiming != null and aiming.payload != null:
+				var rows := SquadManager.payloads_in(forecast, candidate)
+				travel = travel.duplicate(true)
+				_add_payloads(rows, preview_cells, travel, insets, victims)
 
 	game.aim_forecast = forecast
 	if not trace_shown:
