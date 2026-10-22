@@ -105,7 +105,7 @@ func test_the_unit_a_map_only_attack_passes_over_draws_no_counter() -> void:
 	_main_of(attacker).targets = MAP
 	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), TOUGH)
 	var board := _board([attacker, foe] as Array[Unit])
-	assert_bool(_sm.can_counter(foe, attacker, board)).override_failure_message(
+	assert_bool(_sm.can_counter(foe, attacker, board, {})).override_failure_message(
 			"fixture: the foe could not have countered anyway").is_true()
 
 	var plan := _resolve(attacker, Vector2i(1, 0), board)
@@ -162,11 +162,11 @@ func test_a_unit_whose_counter_is_map_only_cannot_counter() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), TOUGH)
 	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), TOUGH)
 	var board := _board([attacker, foe] as Array[Unit])
-	assert_bool(_sm.can_counter(foe, attacker, board)).override_failure_message(
+	assert_bool(_sm.can_counter(foe, attacker, board, {})).override_failure_message(
 			"fixture: the foe could not counter even with a unit attack").is_true()
 
 	_main_of(foe).targets = MAP
 
-	assert_bool(_sm.can_counter(foe, attacker, board)).is_false()
+	assert_bool(_sm.can_counter(foe, attacker, board, {})).is_false()
 	var plan := _resolve(attacker, Vector2i(1, 0), board)
 	assert_array(plan.counters).is_empty()

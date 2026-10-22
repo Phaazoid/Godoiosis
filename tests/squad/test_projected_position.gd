@@ -96,8 +96,12 @@ func test_a_hold_move_does_not_swallow_a_shove() -> void:
 
 	assert_that(unit.get_projected_destination()).is_equal(Vector2i(5, 3))
 
-# ...but a REAL move beats the shove: the unit walked out from under it.
-func test_a_real_move_beats_a_shove() -> void:
+# ...but a walk queued AFTER the shove was published beats it: the shove is STALE, gathered where the
+# unit used to stand, and only the next resolve can say where the new walk leaves it (#1349). This is
+# the one case the published shove is set by hand for -- there is no resolve between the two, by
+# definition. A shove the SAME pass lands after a walk is the opposite answer, and is asked of a real
+# resolve below (test_a_shove_the_pass_lands_after_a_walk_beats_the_walk).
+func test_a_walk_queued_after_a_published_shove_beats_the_stale_shove() -> void:
 	var unit := H.spawn_solo(self, manager, PLAYER, Vector2i(3, 3))
 	unit.set_projected_knockback(Vector2i(5, 3))
 	var move := MoveAction.new()
@@ -105,6 +109,8 @@ func test_a_real_move_beats_a_shove() -> void:
 	unit.squad._queue_action(move)
 	manager.validate_squad_plan(unit.squad)
 
+	assert_bool(move.resolved_displaced).override_failure_message(
+			"fixture: no resolve has walked this move, so nothing can have stamped it").is_false()
 	assert_that(unit.get_projected_destination()).is_equal(Vector2i(3, 4))
 
 # ==============================================================================
@@ -326,3 +332,35 @@ func test_each_shove_records_its_own_start_cell() -> void:
 	for hit in [first, second]:
 		var dir := GridUtils.cardinal_direction_i_between(hit.resolved.knockback_from, hit.resolved.knockback_to)
 		assert_bool(dir == Vector2i.UP or dir == Vector2i.DOWN or dir == Vector2i.LEFT or dir == Vector2i.RIGHT).is_true()
+
+# The opposite answer to test_a_walk_queued_after_a_published_shove_beats_the_stale_shove, from a real
+# resolve (#1349): inside one pass a squadmate's shove lands AFTER the walk, so the walker is projected
+# where it was thrown. The walk carries the stamp that says so; a real move used to win here anyway.
+func test_a_shove_the_pass_lands_after_a_walk_beats_the_walk() -> void:
+	var b := _board_with_room("ProjWalkThenShoveRoot")
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var ally: Unit = BoardBuilder.spawn(b, _data("Ally", PLAYER), Vector2i(1, 2))
+	_arm_mace(hero)
+	hero.active_attack.hits_allies = true   # this template only: the blowback reaches a squadmate
+	b.squad_manager.join_squad(ally, hero.squad)
+	var board := BoardContext.new(b.grid, _units_of(b), b.squad_manager, b.terrain_states)
+
+	var walk := MoveAction.new()
+	walk.init(ally, [Vector2i(1, 2), Vector2i(1, 1), Vector2i(1, 0)], null)
+	assert_bool(b.squad_manager.queue_action(ally.squad, walk)).override_failure_message(
+			"fixture: the walk was refused").is_true()
+	assert_bool(b.squad_manager.queue_action(hero.squad, AttackAction.declare(hero, Vector2i(0, 0), Vector2i(1, 0)))) \
+			.override_failure_message("fixture: the blowback was refused").is_true()
+	var plan: ResolvedPlan = b.squad_manager.resolve_plan(hero.squad, board)
+
+	var shove: AttackAction = null
+	for atk in plan.attacks:
+		if atk.target == ally and atk.resolved.knockback_applied:
+			shove = atk
+	assert_object(shove).override_failure_message("fixture: the blowback never threw the walker").is_not_null()
+	assert_that(shove.resolved.knockback_to).override_failure_message(
+			"fixture: the shove left the walker where it walked").is_not_equal(walk.get_destination())
+	assert_bool(walk.resolved_displaced).override_failure_message(
+			"the pass threw the walker after its walk and did not stamp the walk").is_true()
+	assert_that(ally.get_projected_destination()).override_failure_message(
+			"a walk beat a shove the same pass landed after it").is_equal(shove.resolved.knockback_to)
