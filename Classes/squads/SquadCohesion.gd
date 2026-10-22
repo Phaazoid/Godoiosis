@@ -24,10 +24,12 @@ class_name SquadCohesion
 # shape docs/performance.md measured as cheaper than the compute_move_range call beside it. Callers
 # in a loop over cells should hoist one field() and test membership.
 #
-# The range VALUE is the leader's COH stat (Squad.get_max_squad_range, #142); nothing here knows or
-# cares where the number comes from. The BOARD is a parameter on purpose: terrain state changes
-# mid-battle (FROZEN water melts), so a field is only ever as fresh as the BoardContext handed in --
-# build it at query time, never store one.
+# The range VALUE is the leader's COH stat (Squad.get_max_squad_range, #142), less what the cell it
+# stands on blinds it with (reach_at, #1335): a leader in smoke can't see, so it holds its squad
+# closer. This file is the leash's only production reader, which is why that half lives here and every
+# caller gets it for free. The BOARD is a parameter on purpose: terrain state changes mid-battle
+# (FROZEN water melts, smoke drifts), so a field is only ever as fresh as the BoardContext handed in
+# -- build it at query time, never store one.
 
 static func field(squad: Squad, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
 	return field_of(squad.leader, center, member, board)
@@ -38,7 +40,25 @@ static func in_range(squad: Squad, center: Vector2i, member: Unit, cell: Vector2
 # The same two, keyed on a LEADER rather than a squad (#367): SplitForecast asks about a successor
 # the plan has not appointed yet, and a leader is all the range ever read off the squad.
 static func field_of(leader: Unit, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
-	return RulesService.path_hops(center, board, member, Squad.range_of(leader))
+	return field_within(reach_at(leader, center, board), center, member, board)
+
+# The walk itself at a GIVEN reach, cell -> path distance. For a caller that walks from somewhere other
+# than the leader's cell (GroupMoveSolver.stranding walks from the member's, path distance being
+# symmetric) and so must compare each distance with reach_at at the leader's end itself.
+static func field_within(reach: int, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
+	return RulesService.path_hops(center, board, member, maxi(reach, 0))
+
+# How far this leader's leash reaches when it stands at `center`: its COH, plus the COH change of every
+# state the gas there gives while standing in it (GasRules.states_while_standing) that it does not
+# already HOLD -- a held state is already in its COH, so a smoked leader in smoke is docked once.
+static func reach_at(leader: Unit, center: Vector2i, board: BoardContext) -> int:
+	var reach := Squad.range_of(leader)
+	if board == null:
+		return reach
+	for state: Elemental.State in GasRules.states_while_standing(board.gas_at(center)):
+		if not leader.element_states.has(state):
+			reach += int(Elemental.paired_stat_mods(state).get(Stats.Stat.COH, 0))
+	return maxi(reach, 0)   # floored: a negative bound is path_hops' UNBOUNDED, a board-wide leash
 
 static func in_range_of(leader: Unit, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> bool:
 	return field_of(leader, center, member, board).has(cell)

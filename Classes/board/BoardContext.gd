@@ -171,8 +171,14 @@ func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 func air_at(cell: Vector2i) -> Dictionary[String, int]:
 	if gas == null:
 		return atmosphere
-	var packed := gas.packed_at(cell) if deposits.is_empty() else gas.projected_packed_at(cell, deposits)
-	return Atmosphere.nudged(atmosphere, GasRules.air_of(packed))
+	return Atmosphere.nudged(atmosphere, GasRules.air_of(gas_at(cell)))
+
+# The gas lying on this cell (Gas.with_level's packed form), deposits folded in the way they are for
+# tile states: what air_at and the leash (SquadCohesion.reach_at, #1335) both read.
+func gas_at(cell: Vector2i) -> int:
+	if gas == null:
+		return 0
+	return gas.packed_at(cell) if deposits.is_empty() else gas.projected_packed_at(cell, deposits)
 
 # The board as it will stand once these deposits land (#367): the same world, with a pass's own
 # terrain deposits folded over the live store through the one fold the END OF TURN forecast already

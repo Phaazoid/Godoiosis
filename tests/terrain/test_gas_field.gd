@@ -151,13 +151,15 @@ func test_the_projected_cell_folds_this_passes_deposits_and_writes_nothing() -> 
 
 
 func test_a_tick_that_moves_nothing_marks_nothing() -> void:
-	# SMOKE has no rules file, so the round leaves it exactly where it lies (#508 ruling 10).
+	# POISON has no rules file, so the round leaves it exactly where it lies (#508 ruling 10).
+	assert_object(GasRules.for_kind(Gas.Kind.POISON)).override_failure_message(
+		"poison has a rules file now -- point this case at a gas that does not").is_null()
 	var field := GasField.new()
-	field.set_level(A, Gas.Kind.SMOKE, THICK)
+	field.set_level(A, Gas.Kind.POISON, THICK)
 	var before := field.dirty.version
 	var no_units: Array[Unit] = []
 	field.tick(BoardContext.new(null, no_units, null))
-	assert_int(field.level_at(A, Gas.Kind.SMOKE)).is_equal(THICK)
+	assert_int(field.level_at(A, Gas.Kind.POISON)).is_equal(THICK)
 	assert_int(field.dirty.version).is_equal(before)
 
 

@@ -190,7 +190,7 @@ func turns_remaining(cell: Vector2i, state: Terrain.TileState) -> int:
 # every faction's end-of-turn burn. That is what keeps Law #2: no spread can land between the
 # queue's forecast of a tile hit and the pass that pays it.
 func tick_states() -> void:
-	var taken := _cells_fire_takes()
+	var taken := cells_fire_takes()
 	for cell in _state_turns.keys():
 		dirty.mark(cell)
 		for state in _state_turns[cell].keys():
@@ -209,7 +209,10 @@ func tick_states() -> void:
 # (AttackData.max_and_a_half), and a second answer to it here is the duplicate seam Law #4 is about.
 # It hands back the ORIGIN as well, which costs nothing and cannot go wrong by construction -- every
 # source comes from burning_cells(), and _catches_fire refuses a cell that is alight.
-func _cells_fire_takes() -> Array[Vector2i]:
+#
+# PUBLIC since #1335: the gas round (GasSpread.next) asks it BEFORE this tick lights anything, so the
+# smoke a spreading fire gives off lands on the cells this tick is about to take.
+func cells_fire_takes() -> Array[Vector2i]:
 	var taken: Array[Vector2i] = []
 	for source in burning_cells():
 		for cell in GridUtils.cells_within_blended_range(source, 1, _spreads_wide(source)):
@@ -225,7 +228,7 @@ func _cells_fire_takes() -> Array[Vector2i]:
 # Ground that is not fuel answers false -- a brazier on flagstone is consuming nothing, so there is
 # nothing to tell it to throw wide.
 func _spreads_wide(cell: Vector2i) -> bool:
-	var fuel := _fuel_at(cell)
+	var fuel := fuel_at(cell)
 	return fuel != null and fuel.spread_and_a_half
 
 
@@ -236,12 +239,12 @@ func _spreads_wide(cell: Vector2i) -> bool:
 # A cell ALREADY ALIGHT is never taken, and that exclusion carries TWO rules rather than being an
 # optimisation. Two burning neighbours would otherwise restoke each other every round through
 # apply()'s timer reset, and no field would ever go out however much of it had already burnt. Since
-# #891 it is also what drops the ORIGIN out of _cells_fire_takes' reach, every source there being a
+# #891 it is also what drops the ORIGIN out of cells_fire_takes' reach, every source there being a
 # burning cell by construction -- so a fire cannot re-light itself and lose its own clock.
 func _catches_fire(cell: Vector2i) -> bool:
 	if Terrain.is_burning(states_at(cell)) or not _has_ground(cell):
 		return false
-	var fuel := _fuel_at(cell)
+	var fuel := fuel_at(cell)
 	return fuel != null and fuel.admits(states_at(cell))
 
 
@@ -250,7 +253,7 @@ func _catches_fire(cell: Vector2i) -> bool:
 # never reaches here anyway, having no clock to run out.
 func _burn_out(cell: Vector2i, state: Terrain.TileState) -> void:
 	_remove_state(cell, state)
-	if state == Terrain.TileState.BURNING and _fuel_at(cell) != null:
+	if state == Terrain.TileState.BURNING and fuel_at(cell) != null:
 		_deposit(cell, Terrain.TileState.SCORCHED)
 
 
@@ -267,7 +270,7 @@ func _deposit(cell: Vector2i, state: Terrain.TileState) -> void:
 # answer. No entry for this state (or no fuel at all) means no timer, which is the permanence COVER
 # and FROZEN have always had and which BLAZE used to need a second enum member for.
 func _start_timer(cell: Vector2i, state: Terrain.TileState) -> void:
-	var fuel := _fuel_at(cell)
+	var fuel := fuel_at(cell)
 	if fuel == null or not fuel.add_state_turns.has(state):
 		return
 	if not _state_turns.has(cell):
@@ -292,7 +295,9 @@ func _restore_timer(cell: Vector2i, state: Terrain.TileState, turns: Dictionary)
 	_state_turns[cell][state] = turns[cell][state]
 
 
-func _fuel_at(cell: Vector2i) -> TerrainReaction:
+# What fire consumes on this cell: its ground's ignition reaction, or null. Public since #1335 for the
+# gas round, which reads the same reaction's `gases` a hit that lights the cell releases.
+func fuel_at(cell: Vector2i) -> TerrainReaction:
 	if not fuel_source.is_valid():
 		return null
 	var fuel: TerrainReaction = fuel_source.call(cell)   # typed local: .call() erases to Variant

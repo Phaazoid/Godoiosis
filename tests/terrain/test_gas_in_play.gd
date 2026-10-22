@@ -99,3 +99,33 @@ func test_ending_the_round_spreads_the_steam() -> void:
 	assert_int(field.cells().size()).override_failure_message("the round never ticked the gas").is_equal(expected.size())
 	for cell: Vector2i in expected:
 		assert_int(field.packed_at(cell)).is_equal(expected[cell])
+
+
+# #1335: a fire SPREADING at the round gives off its ground's gas on the cells it takes, and the Alt
+# outline (GasField.next_round) foretold exactly that. ORDERING: the round must run the gas before the
+# tiles, or the release lands on the frontier one ring further out than the outline drew.
+func test_a_spreading_fire_gives_off_the_smoke_the_outline_foretold() -> void:
+	_spawn(PLAYER, Vector2i(0, 0))
+	var fire := Vector2i(5, 2)
+	var lit := ResolvedCellEffect.new()
+	lit.cell = fire
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	game.terrain_states.apply(lit)
+	var fuel: TerrainReaction = game.terrain_states.fuel_at(fire)
+	assert_bool(fuel != null and not Gas.released(fuel.gases).is_empty()).override_failure_message(
+			"fixture: this grass gives off nothing when it catches -- the authored ignition lost its gases").is_true()
+	var field: GasField = game.gas_field
+	var expected := field.next_round(game._board())
+	var taken: Array[Vector2i] = game.terrain_states.cells_fire_takes()
+	assert_bool(taken.is_empty()).override_failure_message("fixture: the fire takes nothing").is_false()
+
+	await game.end_turn()
+	await await_idle_frame()
+	for cell: Vector2i in taken:
+		assert_bool(game.terrain_states.has_state(cell, Terrain.TileState.BURNING)).override_failure_message(
+				"fixture: the round never lit %s" % [cell]).is_true()
+		assert_int(field.packed_at(cell)).override_failure_message(
+				"%s caught without the gas the outline drew" % [cell]).is_equal(expected.get(cell, 0))
+		assert_int(field.packed_at(cell)).is_not_equal(0)
+	assert_int(field.cells().size()).override_failure_message(
+			"the round left gas the outline never drew").is_equal(expected.size())

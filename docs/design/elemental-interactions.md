@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first *(both exist now: tile states since 2026-06-28, the end-of-turn pass in `TurnBoundary`; only a unit damage-over-time still needs its own tick, [elemental-system.md](elemental-system.md) → *Deferred layers*)*.
 
-**Canon checked through #1339 (2026-10-20).** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -120,7 +120,7 @@ Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT �
 | BLEEDING | P,e🔗 | loses HP, extra if it moved (punishes repositioning) |
 | STAGGERED | P,i | **can't counter this chain** — the gated combo-enabler. Set by big SOUND / heavy impact |
 | ROOTED | P,i | can't move next activation (EARTH/PLANT/mud) |
-| BLINDED / SMOKED | P,i/e | −attack range **and −leader cohesion (COH) range** — wrecks squad cohesion, not a dodge stat. *(For smoke the dev ruled one payload only, [#508](https://github.com/Phaazoid/Godoiosis/issues/508) ruling 6, 2026-09-29: a leader in thick smoke loses COH range — not a line-of-sight block, not counter denial.)* |
+| BLINDED / SMOKED | P,i/e | −attack range **and −leader cohesion (COH) range** — wrecks squad cohesion, not a dodge stat. *(For smoke the dev ruled one payload only, [#508](https://github.com/Phaazoid/Godoiosis/issues/508) ruling 6, 2026-09-29: a leader in thick smoke loses COH range — not a line-of-sight block, not counter denial.)* *(BUILT [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), 2026-10-22, with the threshold moved to MEDIUM: a unit standing in medium or thick smoke holds Smoked, −2 COH, for as long as it stands there, so a leader in the cloud holds its squad closer. deep-alchemy.md → What is built.)* |
 | GROUNDED | P,i | **immune to SHOCK reactions** — the designed shock counter. **[BUILT as an ability, not a state — #89 2026-07-25, #90 2026-07-29]:** Shock Insulation (`Abilities.Id.INSULATED_SHOCK`, worn via the Insulated Weave) erases SHOCK from any hit on its holder, so no shock reaction fires; the damage still lands and DEF answers it (#424) |
 | MAGNETIZED / FERROUS | S,i | metal — attracts shock/magnet; haulable; splashes adjacent metal |
 | EMPOWERED | P,i | **friendly** — next attack +X (friendly-combo payoff) |
@@ -181,7 +181,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | *(any unit)* | Wind Blast | **shove the unit back** — repositioning (Axiom 4). *("Wind" survives here as an attack name — the sanctioned use.)* *(The shove shipped as the **Gust** carving, `Push(A2)`, knockback 2, damageless — an authored shove on the attack, not a reaction.)* |
 | AIRBORNE | Gale | launch further / fling into a hazard 🔗 |
 | BURNING | Backdraft | spread BURNING to adjacent, +dmg 🔗 |
-| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(Ruled, unbuilt — [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335) item 5, 2026-10-19: an AIR hit removes every gas on the cells it strikes, previewed; pushing gas along the cast is [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332).)* |
+| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(BUILT [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), 2026-10-22: an AIR hit removes every gas on the cells it strikes, previewed (`Disperse.tres`, the first reaction in the air); pushing gas along the cast is [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332).)* |
 | SUBLIMED | Scatter | ++dmg (tear the vapor apart) |
 
 ### EARTH

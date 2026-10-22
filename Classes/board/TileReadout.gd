@@ -159,6 +159,9 @@ static func _air_section(game, cell: Vector2i) -> Section:
 		var moves: String = GasRules.air_text(kind, level)
 		if moves != "":
 			line += ": " + moves
+		var standing: String = GasRules.standing_text(kind, level)   # "Smoked: -2 COH" (#1335)
+		if standing != "":
+			line += ": " + standing
 		section.rows.append(Row.make(line))
 	var here: Dictionary[String, int] = board.air_at(cell)
 	for id: String in Atmosphere.differs(here, board.atmosphere):

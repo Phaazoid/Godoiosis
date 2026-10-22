@@ -10,6 +10,19 @@ const ICONS := {
 	# exists. It lands here rather than at any one surface, so all three pick it up at once.
 	Elemental.State.CHILLED: preload("res://Art/Icons/TerrainIcons/Ice.png"),
 }
+# PLACEHOLDER (#1335): a state with no art of its own wears the puff of the gas that gives it, the plan
+# preview's own icon for that gas, until a 16px icon exists. Generated, so it cannot sit in ICONS.
+const GAS_STAND_INS: Dictionary[Elemental.State, Gas.Kind] = {
+	Elemental.State.SMOKED: Gas.Kind.SMOKE,
+}
+
+
+# The art for one state, or null when it has none: ICONS first, then the gas stand-in.
+static func texture_of(state: Elemental.State) -> Texture2D:
+	var tex: Texture2D = ICONS.get(state, null)
+	if tex == null and GAS_STAND_INS.has(state):
+		tex = GasPuffArt.icon(GAS_STAND_INS[state])
+	return tex
 # The DOWNED body's glyph (#322). Deliberately NOT an ICONS entry: that dictionary is keyed by
 # Elemental.State, and a lifecycle is not one. It lives in this file anyway because this file is
 # where a surface asks what a STATUS looks like — the hover card and the world-space row must not
@@ -37,7 +50,7 @@ static func textures_for(states: Array) -> Array[Texture2D]:
 	for state in states:
 		if state == Elemental.State.NONE:
 			continue
-		var tex: Texture2D = ICONS.get(state, null)
+		var tex := texture_of(state)
 		if tex != null:
 			textures.append(tex)
 	return textures
@@ -55,7 +68,7 @@ static func populate(container: Node, states: Array) -> void:
 			continue
 		var tip: String = UiText.wrap("%s — %s" % [Elemental.state_display_name(state),
 			Glossary.short(Glossary.term_for_element_state(state))])
-		var tex: Texture2D = ICONS.get(state, null)
+		var tex := texture_of(state)
 		if tex != null:
 			var rect := TextureRect.new()
 			rect.texture = tex

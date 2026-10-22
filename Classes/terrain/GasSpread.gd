@@ -11,6 +11,11 @@ class_name GasSpread
 # in cannot change the answer.
 #
 # WHERE gas may be is ruling 6: never across an edge a unit could not walk over, but over water.
+#
+# IGNITION (#1335): every cell fire takes this round gives off what its ground's ignition reaction
+# releases -- the same `gases` a hit that lights it releases -- added AFTER spill and fade, so fresh
+# smoke sits thick for a round before it spreads. Asked of the tile states BEFORE their own tick lights
+# anything, which is why both stacks run the gas round first (game._on_round_completed).
 
 const SIDES: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]
 
@@ -50,7 +55,25 @@ static func next(cells: Dictionary[Vector2i, int], board: BoardContext) -> Dicti
 				packed = Gas.with_level(packed, kind, level)
 		if packed != 0:
 			out[cell] = packed
+	_add_ignitions(out, board)
 	return out
+
+
+# What a spreading fire gives off where it lands, into `out`: GasField.add_level's add-and-cap with a
+# fresh hold, on a cell that can hold gas (a burning TREE cannot, ruling 6, so its smoke goes nowhere).
+static func _add_ignitions(out: Dictionary[Vector2i, int], board: BoardContext) -> void:
+	if board.terrain_states == null:
+		return
+	for cell: Vector2i in board.terrain_states.cells_fire_takes():
+		var fuel := board.terrain_states.fuel_at(cell)
+		if fuel == null or not holds_gas(cell, board):
+			continue
+		var packed: int = out.get(cell, 0)
+		for kind: Gas.Kind in Gas.released(fuel.gases):
+			var level := mini(Gas.level_in(packed, kind) + fuel.gases[kind], Gas.MAX_LEVEL)
+			packed = Gas.with_level(packed, kind, level)
+		if packed != 0:
+			out[cell] = packed
 
 
 # May gas lie on this cell at all: ground, not a hole, and somewhere a unit could stand -- or water,

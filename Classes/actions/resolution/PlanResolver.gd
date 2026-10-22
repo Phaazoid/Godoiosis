@@ -1533,11 +1533,13 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
 		return effects
-	# Two halves with different gates. The ELEMENT reacts with the ground only on a map-hitting attack;
-	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gases' note).
-	var elements: Array[Elemental.Element] = []
+	# Three halves with different gates. The ELEMENT reacts with the GROUND only on a map-hitting
+	# attack, and with the AIR over every struck cell whatever Targets says (TerrainReaction.in_the_air,
+	# #1335); the attack's own GAS (#508) lands whatever Targets says too (AttackData.gases' note).
+	var elements := _source_elements(action)
+	var ground: Array[Elemental.Element] = []
 	if _source_hits_map(action):
-		elements = _source_elements(action)
+		ground = elements
 	var fired := action.fired_attack
 	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
 	if elements.is_empty() and not leaves_gas:
@@ -1548,8 +1550,10 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	# watch shot's geometry was frozen when it armed. Once per tile, however often a path revisits it.
 	for cell in action.struck_cells:
 		var effect: ResolvedCellEffect = null
+		if not ground.is_empty():
+			effect = _resolve_cell_effect_at(cell, ground, board, terrain_reactions)
 		if not elements.is_empty():
-			effect = _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
+			effect = _resolve_air_at(cell, elements, board, terrain_reactions, effect)
 		if leaves_gas:
 			if effect == null:
 				effect = ResolvedCellEffect.new()
@@ -1559,7 +1563,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 		# preview never promises gas the board would not hold (Law #2).
 		if effect != null and not effect.gas_added.is_empty() and not GasSpread.holds_gas(cell, board):
 			effect.gas_added.clear()
-			if effect.states_added.is_empty() and effect.states_removed.is_empty():
+			if effect.states_added.is_empty() and effect.states_removed.is_empty() and not effect.gas_cleared:
 				effect = null
 		if effect != null:
 			effect.cause = action
@@ -1567,7 +1571,8 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	return effects
 
 # One cell's terrain reaction: match the incoming elements against the tile's kind and return the
-# resolved deposit, or null when no reaction fires there.
+# resolved deposit, or null when no reaction fires there. The GROUND half: a reaction in the air is
+# _resolve_air_at's.
 static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
 	var held: Array[Terrain.TileState] = []
@@ -1577,22 +1582,49 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 	effect.cell = cell
 	var fired := false
 	for reaction in terrain_reactions:
-		if not reaction.fires_for(elements):
+		if reaction.in_the_air or not reaction.fires_for(elements):
 			continue
 		# The kind/state gate is the reaction's own predicate — shared with the tile hover card's
 		# interaction list (#135), so the card can never promise a deposit this filter refuses.
 		if not reaction.applies_to_tile(kind, held):
 			continue
-		for s in reaction.add_tile_states:
-			if not effect.states_added.has(s):
-				effect.states_added.append(s)
-		for s in reaction.remove_tile_states:
-			if not effect.states_removed.has(s):
-				effect.states_removed.append(s)
-		effect.add_gases(reaction.gases)
-		if reaction.popup != "":
-			effect.popups.append(reaction.popup)
-		if reaction.icon != null:
-			effect.icons.append(reaction.icon)
+		_fire_into(effect, reaction)
 		fired = true
 	return effect if fired else null
+
+# The AIR half (#1335): the reactions that happen over the cell, folded into `effect` (created when a
+# reaction fires and there was none). Same gates as the ground's, plus a dispersal's own: only where
+# the cell holds gas as the board stands.
+static func _resolve_air_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext,
+		terrain_reactions: Array[TerrainReaction], effect: ResolvedCellEffect) -> ResolvedCellEffect:
+	var kind := board.terrain_kind_at(cell)
+	var held: Array[Terrain.TileState] = []
+	if board.terrain_states != null:
+		held = board.terrain_states.states_at(cell)
+	for reaction in terrain_reactions:
+		if not reaction.in_the_air or not reaction.fires_for(elements) \
+				or not reaction.applies_to_tile(kind, held):
+			continue
+		if reaction.disperses_gas and board.gas_at(cell) == 0:
+			continue
+		if effect == null:
+			effect = ResolvedCellEffect.new()
+			effect.cell = cell
+		_fire_into(effect, reaction)
+	return effect
+
+# What one fired terrain reaction leaves in a cell's effect, ground or air.
+static func _fire_into(effect: ResolvedCellEffect, reaction: TerrainReaction) -> void:
+	for s in reaction.add_tile_states:
+		if not effect.states_added.has(s):
+			effect.states_added.append(s)
+	for s in reaction.remove_tile_states:
+		if not effect.states_removed.has(s):
+			effect.states_removed.append(s)
+	if reaction.disperses_gas:
+		effect.gas_cleared = true
+	effect.add_gases(reaction.gases)
+	if reaction.popup != "":
+		effect.popups.append(reaction.popup)
+	if reaction.icon != null:
+		effect.icons.append(reaction.icon)

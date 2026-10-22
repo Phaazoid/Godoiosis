@@ -36,12 +36,13 @@ static func make(unit: Unit, tile_state: Terrain.TileState, damage: int,
 
 # The gas over this unit's cell (`packed`, Gas.with_level's form): one row per kind whose rules name a
 # state, from its authored level up -- unless `held` already has it or holds one that keeps it off.
-# Idempotent like a wade's soak: a row says what CHANGED, so an already-wet unit grows none.
+# Idempotent like a wade's soak: a row says what CHANGED, so an already-wet unit grows none. A gas
+# whose state is held only WHILE STANDING in it (smoke, #1335) gives nothing to keep, so no row.
 static func gas_hits(unit: Unit, held: Array[Elemental.State], packed: int) -> Array[TileHitAction]:
 	var hits: Array[TileHitAction] = []
 	for kind: Gas.Kind in Gas.kinds_in(packed):
 		var rules := GasRules.for_kind(kind)
-		if rules == null or rules.state == Elemental.State.NONE:
+		if rules == null or rules.state == Elemental.State.NONE or rules.while_standing:
 			continue
 		if Gas.level_in(packed, kind) < rules.state_from:
 			continue

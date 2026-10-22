@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="GasRules" format=3 uid="uid://bpneohrs6ni3j"]
+
+[ext_resource type="Script" uid="uid://c0cd3i8n60dry" path="res://Classes/terrain/GasRules.gd" id="1_s5ql6"]
+
+[resource]
+script = ExtResource("1_s5ql6")
+state = 3
+while_standing = true

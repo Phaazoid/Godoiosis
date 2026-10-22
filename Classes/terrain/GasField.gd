@@ -51,6 +51,8 @@ func add_level(cell: Vector2i, kind: Gas.Kind, levels: int) -> void:
 # Play one resolved cell effect's gas into the store -- terrain_states.apply's twin, called beside it
 # by both executors.
 func apply(effect: ResolvedCellEffect) -> void:
+	if effect.gas_cleared:
+		_write(effect.cell, 0)   # dispersed before this effect's own gas lands (#1335)
 	for kind: Gas.Kind in effect.gas_added:
 		add_level(effect.cell, kind, effect.gas_added[kind])
 
@@ -63,6 +65,8 @@ func projected_packed_at(cell: Vector2i, effects: Array[ResolvedCellEffect]) -> 
 	for effect in effects:
 		if effect.cell != cell:
 			continue
+		if effect.gas_cleared:
+			packed = 0
 		for kind: Gas.Kind in effect.gas_added:
 			if effect.gas_added[kind] <= 0:
 				continue

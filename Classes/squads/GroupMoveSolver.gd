@@ -144,6 +144,15 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 		stranded[cell] = nobody
 
 	var leader := squad.get_leader()
+	# The leash at each DESTINATION (#1335: smoke where the leader stops shortens it). The walk below
+	# starts at the member's end, so it goes as far as the longest of these and each destination is
+	# judged by its own -- the same answer a walk from the destination gives, at today's cost.
+	var leash_at := {}   # destination -> leash there
+	var bound := 0
+	for cell in leader_destinations:
+		var leash := SquadCohesion.reach_at(leader, cell, board)
+		leash_at[cell] = leash
+		bound = maxi(bound, leash)
 	var followers: Array[Unit] = []
 	var union_at := {}   # destination -> {cell: true}: every cell ANY member could take there
 	for member in squad.get_members():
@@ -166,9 +175,13 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 			# This member's path-bubble around `cell` (#151): the set of leader destinations this
 			# cell satisfies. Path distance over terrain is symmetric, so the field reads the same
 			# from either end -- one bounded walk per standable cell replaces the Manhattan dilation.
-			for destination in SquadCohesion.field(squad, cell, member, board):
+			# The leash is the DESTINATION's, never this cell's (#1335).
+			var field := SquadCohesion.field_within(bound, cell, member, board)
+			for destination in field:
 				if not stranded.has(destination) or cell == destination:
 					continue   # the leader stands on `destination`; no member may take it
+				if int(field[destination]) > int(leash_at[destination]):
+					continue
 				satisfied[destination] = true
 				if not union_at.has(destination):
 					union_at[destination] = {}

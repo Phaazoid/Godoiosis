@@ -53,6 +53,16 @@ class_name TerrainReaction
 # spelling for all three holders (ElementalReaction's since #1329). Read through Gas.released.
 @export var gases: Dictionary[Gas.Kind, Gas.Level] = {}
 
+# This reaction happens in the AIR over the cell rather than in its ground (#1335), so it answers every
+# cell a hit passes over WHATEVER the attack's Targets says -- Targets is whether an element reacts
+# with the GROUND. Gas dispersing on an Air hit is one. The gates below still apply.
+@export var in_the_air := false
+
+# Clears EVERY gas on the cell before anything this hit releases there (#1335, the wiki's Disperse).
+# Fires only where the cell holds gas as the board stands, the board-as-it-stands rule the tile gates
+# follow, so an Air hit on clear ground says nothing.
+@export var disperses_gas := false
+
 # The reaction as Deep Alchemy writes it, ElementalReaction.equation's twin. Read by ReactionLint only.
 @export_placeholder("F2 + W2 -> 2FW") var equation: String = ""
 

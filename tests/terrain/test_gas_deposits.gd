@@ -342,3 +342,63 @@ func _assert_releases(effect: ResolvedCellEffect, gases: Dictionary[Gas.Kind, Ga
 func _assert_gas_on(plan: ResolvedPlan, cell: Vector2i, gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
 	for kind: Gas.Kind in Gas.released(gases):
 		assert_int(_gas_on(plan, cell, kind)).is_equal(gases[kind])
+
+
+# --- an Air hit disperses it (#1335) ---------------------------------------------------------------
+
+func _disperse() -> TerrainReaction:
+	return _authored(func(r: TerrainReaction) -> bool:
+		return r.in_the_air and r.disperses_gas, "disperses gas in the air")
+
+
+func _gassy_board() -> _KindBoard:
+	var board := _KindBoard.new(null, {})
+	board.gas = GasField.new()
+	board.gas.set_level(TARGET_CELL, STEAM, Gas.Level.MEDIUM)
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.THICK)
+	return board
+
+
+# In the AIR, so a UNIT-only attack clears the cells it strikes too, and only where there is gas: the
+# clear second cell takes nothing, not an empty effect.
+func test_an_air_hit_disperses_every_gas_on_the_cells_it_strikes_whatever_its_targets() -> void:
+	var disperse := _disperse()
+	var attacker := _attacker(disperse.incoming_element, EquippableData.TargetMode.UNIT)
+	var clear_cell := TARGET_CELL + Vector2i(1, 0)
+	var struck: Array[Vector2i] = [TARGET_CELL, clear_cell]
+	var board := _gassy_board()
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	assert_int(plan.cell_effects.size()).is_equal(1)
+	assert_that(plan.cell_effects[0].cell).is_equal(TARGET_CELL)
+	assert_bool(plan.cell_effects[0].gas_cleared).is_true()
+	# The preview, the forecast's fold and the store all say the same thing (Law #2).
+	assert_bool(plan.pending_deposits().has({"cell": TARGET_CELL, "clears_gas": true})).override_failure_message(
+			"the board would not show the gas going before Execute").is_true()
+	assert_int(board.gas.projected_packed_at(TARGET_CELL, plan.cell_effects)).is_equal(0)
+	board.gas.apply(plan.cell_effects[0])
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+
+
+func test_an_element_the_air_reaction_does_not_answer_clears_nothing() -> void:
+	var attacker := _attacker(Elemental.Element.EARTH, EquippableData.TargetMode.UNIT)
+	assert_bool(_disperse().fires_for([Elemental.Element.EARTH] as Array[Elemental.Element])).override_failure_message(
+			"fixture: earth disperses gas now -- pick an element that does not").is_false()
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var plan := _resolve(_one(_aim(attacker, struck)), _gassy_board())
+	assert_int(plan.cell_effects.size()).is_equal(0)
+
+
+# Cleared FIRST: what the same effect releases lands after, so dispersal never eats its own hit's gas.
+func test_a_cleared_cell_keeps_the_gas_its_own_effect_releases() -> void:
+	var field := GasField.new()
+	field.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var effect := ResolvedCellEffect.new()
+	effect.cell = TARGET_CELL
+	effect.gas_cleared = true
+	effect.add_gas(STEAM, Gas.Level.THIN)
+	var effects: Array[ResolvedCellEffect] = [effect]
+	var want := Gas.with_level(0, STEAM, Gas.Level.THIN)
+	assert_int(field.projected_packed_at(TARGET_CELL, effects)).is_equal(want)
+	field.apply(effect)
+	assert_int(Gas.level_in(field.packed_at(TARGET_CELL), Gas.Kind.SMOKE)).is_equal(0)
+	assert_int(Gas.level_in(field.packed_at(TARGET_CELL), STEAM)).is_equal(Gas.Level.THIN)

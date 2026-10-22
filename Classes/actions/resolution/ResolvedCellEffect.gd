@@ -13,6 +13,9 @@ var icons: Array[Texture2D] = []
 # Gas LEVELS this cell gains, added to what it holds (#508): the reactions that fired here plus the
 # attack's own deposit. GasField.apply plays it; a cell effect may carry gas and no state at all.
 var gas_added: Dictionary[Gas.Kind, int] = {}
+# Every gas the cell held is cleared FIRST, before gas_added lands (#1335: an Air hit disperses it).
+# GasField.apply and projected_packed_at fold it in that order, so the forecast and both executors agree.
+var gas_cleared := false
 
 
 func add_gas(kind: Gas.Kind, levels: int) -> void:

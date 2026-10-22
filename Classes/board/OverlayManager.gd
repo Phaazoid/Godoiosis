@@ -48,6 +48,8 @@ const TERRAIN_STATE_ICONS: Dictionary = {
 	Terrain.TileState.SCORCHED: preload("res://Art/Icons/TerrainIcons/Scorched.png"),
 	# No BLAZE row since #890 retired it: permanence moved to the ground, so there is only one fire.
 }
+# A cell whose gas the pass disperses (#1335). PLACEHOLDER: the Air element's icon, the element doing it.
+const GAS_CLEARED_ICON: Texture2D = preload("res://Art/Icons/ElementIcons/Air.png")
 
 const TERRAIN_Z_INDEX := 1                                # above the board, below unit sprites — tweak by eye
 const TERRAIN_PREVIEW_MODULATE := Color(1, 1, 1, 0.5)     # ghost the pending-ignite marker (Part B)
@@ -1541,12 +1543,15 @@ func clear_hover_ghosts() -> void:
 # you execute). Takes {"cell": Vector2i, "state": Terrain.TileState} entries (mirrors
 # show_knockback_preview's shape) so each deposit draws its OWN icon — was BURNING-only until
 # Burrow (#84) made a second previewable state real. Ephemeral: redrawn on plan change.
-# A {"cell", "gas": Gas.Kind} entry is a gas the pass leaves (#508), drawn with the kind's own puff.
+# A {"cell", "gas": Gas.Kind} entry is a gas the pass leaves (#508), drawn with the kind's own puff;
+# a {"cell", "clears_gas"} entry is a cell an Air hit disperses (#1335).
 func show_terrain_preview(deposits: Array) -> void:
 	clear_terrain_preview()
 	for deposit in deposits:
 		var icon: Texture2D = null
-		if deposit.has("gas"):
+		if deposit.has("clears_gas"):
+			icon = GAS_CLEARED_ICON
+		elif deposit.has("gas"):
 			var kind: Gas.Kind = deposit["gas"]
 			icon = GasPuffArt.icon(kind)
 		else:

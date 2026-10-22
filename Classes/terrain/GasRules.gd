@@ -6,8 +6,8 @@ class_name GasRules
 # (dev, 2026-10-03). GasLook is the same shape for how it is DRAWN; the two never share a file,
 # because a rule and a look have different owners.
 #
-# A kind with no file has no rules: it lies where it was put and never moves (ruling 10). Steam, frost
-# and essence have files.
+# A kind with no file has no rules: it lies where it was put and never moves (ruling 10). Steam, smoke,
+# frost and essence have files.
 
 const FOLDER := "res://Resources/GasRules/"
 
@@ -21,6 +21,12 @@ const FOLDER := "res://Resources/GasRules/"
 # nobody.
 @export var state: Elemental.State = Elemental.State.NONE
 @export var state_from: Gas.Level = Gas.Level.MEDIUM
+
+# HOW the state is given (#1335). Off: gained at the end of its own side's turn, and kept (steam's
+# soak). On: HELD for exactly as long as the unit stands in the gas at state_from or thicker, and
+# stored nowhere, so the gas field stays the one answer -- smoke blinds whoever is in the cloud (dev,
+# 2026-10-22). Read where the board is asked: the leash (SquadCohesion.reach_at) and the status row.
+@export var while_standing := false
 
 # How this gas moves the air's reading on the cell it lies on (#1324): substance id -> percentage
 # points PER LEVEL, negative to lower. WeatherRules.air's shape; BoardContext.air_at adds it over the
@@ -38,6 +44,34 @@ static func for_kind(kind: Gas.Kind) -> GasRules:
 		var path := FOLDER + Gas.name_of(kind) + ".tres"
 		_rules_by_kind[kind] = load(path) as GasRules if ResourceLoader.exists(path) else null
 	return _rules_by_kind[kind]
+
+
+# The states a unit standing on this cell HOLDS while it stands there (`packed`, Gas.with_level's form):
+# every while_standing gas lying at its state_from or thicker, in kind order, each state once.
+static func states_while_standing(packed: int) -> Array[Elemental.State]:
+	var out: Array[Elemental.State] = []
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		var rules := for_kind(kind)
+		if rules == null or not rules.while_standing or rules.state == Elemental.State.NONE:
+			continue
+		if Gas.level_in(packed, kind) >= rules.state_from and not out.has(rules.state):
+			out.append(rules.state)
+	return out
+
+
+# What standing in this kind at this level does, as the tile card says it ("Smoked: -2 COH"); empty
+# when it does nothing there.
+static func standing_text(kind: Gas.Kind, level: int) -> String:
+	var rules := for_kind(kind)
+	if rules == null or not rules.while_standing or rules.state == Elemental.State.NONE \
+			or level < rules.state_from:
+		return ""
+	var parts: Array[String] = []
+	var mods := Elemental.paired_stat_mods(rules.state)
+	for stat: Stats.Stat in mods:
+		parts.append("%+d %s" % [mods[stat], Stats.Stat.keys()[stat]])
+	var said := Elemental.state_display_name(rules.state)
+	return said if parts.is_empty() else "%s: %s" % [said, ", ".join(parts)]
 
 
 # How one cell's gases move the air (`packed`, Gas.with_level's form): each kind's air times its level,

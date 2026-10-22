@@ -409,7 +409,8 @@ func test_the_interactions_list_matches_the_catalog() -> void:
 
 	var expected: Array[TerrainReaction] = []
 	for reaction: TerrainReaction in TerrainReactionCatalog.get_all():
-		if reaction.applies_to_tile(Terrain.Kind.WATER, [] as Array[Terrain.TileState]):
+		# A reaction in the AIR is true over every tile, so the card leaves it to the Reactions page (#1335).
+		if not reaction.in_the_air and reaction.applies_to_tile(Terrain.Kind.WATER, [] as Array[Terrain.TileState]):
 			expected.append(reaction)
 	assert_int(expected.size()) \
 		.override_failure_message("no authored reaction touches bare water — this case is vacuous; point it at a kind the catalog covers") \

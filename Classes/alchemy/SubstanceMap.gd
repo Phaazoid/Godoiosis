@@ -34,6 +34,7 @@ const CARRIED_AS_TOO: Dictionary[String, Elemental.Element] = {
 const STATES: Dictionary[Elemental.State, String] = {
 	Elemental.State.WET: "water",
 	Elemental.State.CHILLED: "ice",
+	Elemental.State.SMOKED: "smoke",
 }
 
 const TILE_STATES: Dictionary[Terrain.TileState, String] = {

@@ -36,6 +36,7 @@ enum State {
 	NONE,
 	WET,
 	CHILLED,  # cold-slowed: carries a paired StatEffect (see the pairing block below)
+	SMOKED,   # can't see: a shorter leash. HELD while standing in smoke (GasRules.while_standing), #1335
 }
 
 # The five base elements: the only Sigils, the only aura carriers. Exotics (ICE, SHOCK,
@@ -85,9 +86,14 @@ static func state_display_name(s: State) -> String:
 # unit acts — so 2 turns = debuffed for exactly its next activation, 3 covers two.
 
 const CHILL_STAT_MODS: Dictionary[Stats.Stat, int] = { Stats.Stat.DEX: -1 }
+# Smoke blinds, and a leader who can't see holds its squad closer (#1335, dev 2026-10-22). Only a
+# LEADER's COH is ever read (Squad.range_of), so on a member this says nothing.
+const SMOKE_STAT_MODS: Dictionary[Stats.Stat, int] = { Stats.Stat.COH: -2 }
 
 # Default clock per paired state; a reaction may author a longer one (ElementalReaction.add_state_turns).
-const STATE_DEFAULT_TURNS: Dictionary[State, int] = { State.CHILLED: 2 }
+# SMOKED's runs only when something ADDS it (a smoke carving, still to come); standing in smoke holds
+# it for exactly as long as the unit stands there, and stores nothing.
+const STATE_DEFAULT_TURNS: Dictionary[State, int] = { State.CHILLED: 2, State.SMOKED: 2 }
 
 # The pairing registry: one match arm per paired state (a nested typed const dictionary isn't
 # expressible in GDScript). Empty result = not a paired state.
@@ -95,6 +101,8 @@ static func paired_stat_mods(s: State) -> Dictionary[Stats.Stat, int]:
 	match s:
 		State.CHILLED:
 			return CHILL_STAT_MODS
+		State.SMOKED:
+			return SMOKE_STAT_MODS
 	var none: Dictionary[Stats.Stat, int] = {}
 	return none
 
