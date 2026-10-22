@@ -1,7 +1,12 @@
-[gd_resource type="Resource" script_class="GasRules" format=3]
+[gd_resource type="Resource" script_class="GasRules" format=3 uid="uid://dy8hg8net01es"]
 
 [ext_resource type="Script" uid="uid://c0cd3i8n60dry" path="res://Classes/terrain/GasRules.gd" id="1_gasrl"]
 
 [resource]
 script = ExtResource("1_gasrl")
 state = 1
+damage = Dictionary[int, int]({
+2: 2,
+3: 3
+})
+damage_element = 9

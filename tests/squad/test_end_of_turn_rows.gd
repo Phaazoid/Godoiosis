@@ -305,12 +305,14 @@ func test_the_forecast_sees_steam_this_pass_deposits() -> void:
 	assert_array(hit.resolved.states_added).contains_exactly([rules.state])
 
 
-# The soak is a ROW in the same END OF TURN section as the burn, carrying the state for the chip and
-# no HP for the arrow -- the two things ActionQueueRow reads off any outcome.
-func test_a_soak_lands_in_the_end_of_turn_section_as_a_state_with_no_hp() -> void:
+# The steam row is a ROW in the same END OF TURN section as the burn, carrying the state for the chip,
+# and the HP for the arrow exactly when that level also scalds (#1331) -- the two things ActionQueueRow
+# reads off any outcome. A soak with no damage at all is rain's, in test_rain_soaks.
+func test_a_steam_row_lands_in_the_end_of_turn_section_with_its_state_and_any_scald() -> void:
 	var rules := GasRules.for_kind(Gas.Kind.STEAM)
 	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
 	_gas.set_level(FIRE, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(stander, Gas.Kind.STEAM, Gas.MAX_LEVEL)
 	var plan := _sm.resolve_plan(stander.squad, _board([stander]))
 
 	var entries := ActionQueueDisplayEntry.build_for(stander.squad, plan)
@@ -325,7 +327,8 @@ func test_a_soak_lands_in_the_end_of_turn_section_as_a_state_with_no_hp() -> voi
 			assert_str(heading).is_equal("END OF TURN")
 			var outcome := entry.action.resolved_outcome()
 			assert_array(outcome.states_added).contains_exactly([rules.state])
-			assert_bool(outcome.reads_hp).is_false()
+			assert_bool(outcome.reads_hp).is_equal(scald > 0)
+			assert_int(outcome.damage).is_equal(scald)
 			assert_object(entry.action.get_action_icon()).override_failure_message(
 					"the soak row has no icon").is_not_null()
 	assert_int(soaks).override_failure_message("the soak never reached the panel").is_equal(1)

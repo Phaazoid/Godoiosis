@@ -2,13 +2,13 @@ extends BaseAction
 class_name TileHitAction
 
 # What the tile a unit stands on does to it at the END OF ITS TURN (#419): its ground's damage (a
-# burn), or since #508 the state the gas over it gives (a soak), or since #1260 the state the weather
-# gives. Derived, never queued: the queue forecasts these from projected positions, the end-of-turn
-# pass makes its own from live ones, and both build through make() / soaks() so what is previewed is
-# what lands.
+# burn), or since #508 what the gas over it does (a soak, and since #1331 steam's scald, on one row),
+# or since #1260 the state the weather gives. Derived, never queued: the queue forecasts these from
+# projected positions, the end-of-turn pass makes its own from live ones, and both build through
+# end_of_turn() so what is previewed is what lands.
 
 var state: Terrain.TileState = Terrain.TileState.NONE   # which tile state is charging
-var gas := -1   # the Gas.Kind soaking, or -1
+var gas := -1   # the Gas.Kind soaking or scalding, or -1
 var weather := -1   # the Weather.Kind soaking, or -1
 var resolved: ResolvedOutcome = null
 
@@ -34,37 +34,73 @@ static func make(unit: Unit, tile_state: Terrain.TileState, damage: int,
 	return hit
 
 
-# The gas over this unit's cell (`packed`, Gas.with_level's form): one row per kind whose rules name a
-# state, from its authored level up -- unless `held` already has it or holds one that keeps it off.
-# Idempotent like a wade's soak: a row says what CHANGED, so an already-wet unit grows none. A gas
-# whose state is held only WHILE STANDING in it (smoke, #1335) gives nothing to keep, so no row.
-static func gas_hits(unit: Unit, held: Array[Elemental.State], packed: int) -> Array[TileHitAction]:
+# The gas over this unit's cell (`packed`, Gas.with_level's form): one row per kind that hurts it or
+# gives it a state. The damage is RulesService.gas_damage_for (steam's scald, #1331); the state is the
+# rules' own from its authored level up, unless `held` already has it or holds one that keeps it off.
+# Idempotent like a wade's soak: a row says what CHANGED, so an already-wet unit grows a row only for
+# the damage. A gas whose state is held only WHILE STANDING in it (smoke, #1335) gives nothing to keep.
+# A row with damage is predicted against `situation`, which is advanced past it, so whatever comes
+# next is predicted against the HP this one leaves.
+static func gas_hits(unit: Unit, held: Array[Elemental.State], packed: int,
+		situation: LethalityRules.Situation) -> Array[TileHitAction]:
 	var hits: Array[TileHitAction] = []
 	for kind: Gas.Kind in Gas.kinds_in(packed):
 		var rules := GasRules.for_kind(kind)
-		if rules == null or rules.state == Elemental.State.NONE or rules.while_standing:
+		if rules == null:
 			continue
-		if Gas.level_in(packed, kind) < rules.state_from:
+		var level := Gas.level_in(packed, kind)
+		var damage := RulesService.gas_damage_for(unit, kind, level)
+		var gains := rules.state != Elemental.State.NONE and not rules.while_standing \
+				and level >= rules.state_from and not held.has(rules.state) \
+				and not Elemental.is_blocked(held, rules.state)
+		if damage <= 0 and not gains:
 			continue
-		if held.has(rules.state) or Elemental.is_blocked(held, rules.state):
-			continue
-		hits.append(make_gas(unit, kind, rules.state))
+		var hit := make_gas(unit, kind, rules.state if gains else Elemental.State.NONE, damage, situation)
+		hits.append(hit)
+		if damage > 0:
+			LethalityRules.land_rung(situation, hit.resolved.lethality, damage)
 	return hits
 
 
-static func make_gas(unit: Unit, kind: Gas.Kind, gained: Elemental.State) -> TileHitAction:
-	var hit := _soak(unit, gained)
+# A gas row: the scald through make() when there is one, so it reads HP and names its rung, and the
+# state it gives. A body the scald kills gains nothing.
+static func make_gas(unit: Unit, kind: Gas.Kind, gained: Elemental.State, damage: int,
+		situation: LethalityRules.Situation) -> TileHitAction:
+	var hit := make(unit, Terrain.TileState.NONE, damage, situation) if damage > 0 else _soak(unit, gained)
+	if damage > 0 and gained != Elemental.State.NONE \
+			and hit.resolved.lethality != ResolvedOutcome.Lethality.KILLED:
+		hit.resolved.states_added.append(gained)
 	hit.gas = kind
 	return hit
 
 
-# Everything that soaks this unit at its end of turn, in the order the pass plays it: the gas over
-# its cell, then the weather over the board (#1260). The ONE composition both the forecast and the
-# pass call, and the weather is asked with what the gas rows already add, so a unit in steam in the
-# rain gets one Wet row rather than two.
+# Everything the END OF THIS UNIT'S TURN does to it, in the order the pass plays it: the gas over its
+# cell, the weather over the board, then the burn of the ground under it. The ONE composition the
+# forecast (PlanResolver.resolve_tile_hits) and the pass (TurnBoundary.tile_hits) both call (#1331):
+# a scald and a burn are two damage rows on one unit, and the burn must be predicted against the HP
+# the scald leaves, so the threading lives here rather than in each caller. A body a row kills takes
+# nothing more. `situation` is not written.
+static func end_of_turn(unit: Unit, held: Array[Elemental.State], packed: int, sky: Weather.Kind,
+		ground: Array[Terrain.TileState], situation: LethalityRules.Situation) -> Array[TileHitAction]:
+	var now := situation.copy()
+	var hits := soaks(unit, held, packed, sky, now)
+	if now.lifecycle == Unit.LifecycleState.DEAD:
+		return hits
+	var damage := RulesService.occupant_damage_for(unit, ground)
+	if damage > 0:
+		hits.append(make(unit, Terrain.burning_state(ground), damage, now))
+	return hits
+
+
+# Everything that soaks or scalds this unit at its end of turn, in the order the pass plays it: the
+# gas over its cell, then the weather over the board (#1260). The weather is asked with what the gas
+# rows already add, so a unit in steam in the rain gets one Wet row rather than two. `situation` is
+# advanced past every scald.
 static func soaks(unit: Unit, held: Array[Elemental.State], packed: int,
-		sky: Weather.Kind) -> Array[TileHitAction]:
-	var hits := gas_hits(unit, held, packed)
+		sky: Weather.Kind, situation: LethalityRules.Situation) -> Array[TileHitAction]:
+	var hits := gas_hits(unit, held, packed, situation)
+	if situation.lifecycle == Unit.LifecycleState.DEAD:
+		return hits   # the scald killed it: the rain soaks no body
 	var after: Array[Elemental.State] = held.duplicate()
 	for hit in hits:
 		after.append_array(hit.resolved.states_added)
@@ -88,7 +124,7 @@ static func _soak(unit: Unit, gained: Elemental.State) -> TileHitAction:
 	return hit
 
 
-# What soaked this unit, as the player reads it ("Steam", "Heavy Rain"); "" for a burn.
+# What soaked or scalded this unit, as the player reads it ("Steam", "Heavy Rain"); "" for a burn.
 func soak_source_name() -> String:
 	if gas >= 0:
 		return Gas.display_name(gas as Gas.Kind)
@@ -115,14 +151,15 @@ func is_reorderable() -> bool:
 	return false   # derived, never queued — nobody ordered the fire
 
 
+# The rung first on every row, so a scald that kills wears the skull rather than its puff.
 func get_action_icon() -> Texture2D:
+	var lethal := AttackAction.lethality_icon(resolved)
+	if lethal != null:
+		return lethal
 	if gas >= 0:
 		return GasPuffArt.icon(gas as Gas.Kind)
 	if weather >= 0:
 		return WeatherArt.icon()
-	var lethal := AttackAction.lethality_icon(resolved)
-	if lethal != null:
-		return lethal
 	var tex: Texture2D = OverlayManager.TERRAIN_STATE_ICONS.get(state, null)
 	return tex
 
@@ -130,7 +167,9 @@ func get_action_icon() -> Texture2D:
 func get_description() -> String:
 	var who := actor.get_unit_name() if actor != null and is_instance_valid(actor) else "?"
 	var source := soak_source_name()
-	if source != "":
-		return "%s stands in %s" % [who, source]
 	var amount := resolved.damage if resolved != null else 0
-	return "%s takes %d from %s" % [who, amount, Terrain.tile_state_display_name(state)]
+	if source != "" and amount <= 0:
+		return "%s stands in %s" % [who, source]
+	if source == "":
+		source = Terrain.tile_state_display_name(state)
+	return "%s takes %d from %s" % [who, amount, source]

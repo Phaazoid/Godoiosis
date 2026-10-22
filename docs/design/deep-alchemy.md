@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-22. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; steam's scald (#1331) folded in 2026-10-22.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -748,7 +748,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Not built:**
   - A reaction holds ONE gas, so a burning plant cannot yet release steam and smoke together. Smoke's diff decides the shape. *(Built 2026-10-22, #1335: a list.)*
   - Whether a fire that SPREADS releases gas, rather than only one a hit lights, is open. It is the same question for both gases. *(It does since #1335.)*
-  - Steam scalding: [#1331](https://github.com/Phaazoid/Godoiosis/issues/1331).
+  - Steam scalding: [#1331](https://github.com/Phaazoid/Godoiosis/issues/1331). *(Built 2026-10-22: medium and thick steam scald, below.)*
 
 **Built 2026-10-19: the weather moves the reading ([#1324](https://github.com/Phaazoid/Godoiosis/issues/1324), slice 4).** Rulings by Phaazoid@ in a Claude session (2026-10-19), approving a plan:
 - **A weather the board draws may nudge the air.** Rain adding vapor was his example. Four families do:
@@ -815,6 +815,19 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - Its equation is codev's to write: it is on the lint's PENDING ledger.
 - **Ledger:** TallGrassIgnites, Burning and GrassIgnites come off NOT_YET_FOLLOWED.
 - **The AI is blind to smoke** (#117): it neither seeks nor avoids a cloud. Its existing split term reads a smoke split the forecast stamps.
+
+**Built 2026-10-22: steam scalds ([#1331](https://github.com/Phaazoid/Godoiosis/issues/1331)).** Ruled by Phaazoid@ in a Claude session (2026-10-22), approving a plan. This supersedes #508 ruling 9 (steam only wets).
+- **Medium and thick steam scald; thin does nothing**, the soak's own threshold. Of the steam sources, Boils (medium), DouseBurning (thick) and a thick cloud's spill (medium) scald. Dried Off's and a burning plant's thin steam never do.
+- **How much is content**: `GasRules.damage`, damage by level, where a level it does not name deals nothing. Steam is medium 2, thick 3, below fire's 5, so dousing a burning ally still helps them.
+- **A scald is a tile hit, like fire's burn.** No reaction answers it, DEF never sees it and no limb goes. So Wet does not halve it: Quick Dry answers a delivered hit, and fire's own burn on a wet unit is a full 5. **Heat Insulation stops it** (`GasRules.damage_element`, HEAT: steam burns by heat and lights nothing). Every piece that grants either insulation grants both, so today the choice is invisible.
+- **It still soaks, on the same row** ("Ann takes 3 from Steam", the HP arrow and a Wet chip), at the end of the unit's own side's turn. A unit already wet is only scalded. A heat-insulated one is only soaked. A Chilled one is scalded and stays dry.
+- **It fells on fire's ladder.** A downed body holds 1 HP, so a downed ally lying in medium or thick steam dies at the end of its side's turn. Dousing the fire under a downed ally no longer saves them: get the body out of the cloud.
+- **How:**
+  - `RulesService.gas_damage_for` is the per-unit layer, `occupant_damage_for`'s twin.
+  - `TileHitAction.end_of_turn` is the one composition of a unit's whole end of turn, in play order: gas, then sky, then burn. Both the forecast and the pass call it. It threads the lethality situation between damage rows (`LethalityRules.land_rung`), because steam over fire is two damage rows and the burn is predicted on the HP the scald leaves.
+  - The Play API reports the damage line, and the tile card's gas row says "3 damage at end of turn".
+- **The AI avoids ending in scalding steam** while a safe cell offers the same: `AITactics._is_hazard` asks `RulesService.gas_damage_at`, beside the burn. It still scores no end-of-turn row in the resolve (#117).
+- **Declared:** the board's health bar shows no end-of-turn damage, fire's or steam's. The rows never write the plan's hypo, so the END OF TURN row and the Play API are the forecast.
 
 **Next:**
 - **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.

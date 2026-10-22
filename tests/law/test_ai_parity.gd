@@ -101,6 +101,30 @@ func test_a_tile_states_hazard_row_agrees_with_the_rule() -> void:
 	assert_array(wrong).override_failure_message("\n".join(wrong)).is_empty()
 
 
+# The gas twin (#1331): a gas that deals end-of-turn damage at its thickest is one the AI avoids ending
+# in, through _is_hazard asking RulesService.gas_damage_at -- so a row that says it harms must deal
+# damage, and a gas that deals damage must say so (or declare the gap). Asked of a unit with no
+# insulation, so the authored number is what speaks.
+func test_a_gas_that_harms_is_declared_a_hazard() -> void:
+	var body: String = Ledger.function_body(Ledger.TACTICS, "static func _is_hazard(")
+	assert_bool(body.contains("gas_damage_at")).override_failure_message(
+		"AITactics._is_hazard no longer asks RulesService.gas_damage_at, so no gas hazard row means anything").is_true()
+	var sm: SquadManager = H.make_manager(self)
+	var unit: Unit = H.spawn_solo(self, sm, Team.Faction.ENEMY, Vector2i(0, 0))
+	var axis: Dictionary = Ledger.gases()
+	var label: Callable = axis["label"]
+	var wrong: Array[String] = []
+	for kind: Variant in axis["members"]:
+		var stance: Dictionary = (axis["rows"] as Dictionary).get(kind, {}).get("ai", {})
+		var harms: bool = RulesService.gas_damage_for(unit, kind, Gas.MAX_LEVEL) > 0
+		if stance.get("harms", false) and not harms:
+			wrong.append("%s is declared a hazard, and standing in it does no damage" % label.call(kind))
+		elif harms and not stance.get("harms", false) and stance.get("stance", -1) != Ledger.Stance.GAP:
+			wrong.append("%s deals damage at the end of a turn: say gas_hazard(), or gap() if the AI cannot see it"
+					% label.call(kind))
+	assert_array(wrong).override_failure_message("\n".join(wrong)).is_empty()
+
+
 # A gas or a weather declared inert has no rules at all. The day one gains some, this reds, because
 # the AI's row was written about a look.
 func test_a_gas_declared_inert_has_no_rules() -> void:

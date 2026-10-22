@@ -129,7 +129,8 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 # states come from the store WITH this pass's own deposits folded in — your own fireball igniting a
 # squadmate's cell is a burn the queue has to show. The gas the same way (#508): dousing a squadmate's
 # fire steams them, and the soak reads the states the pass leaves them holding.
-# A unit's soak is listed before its burn, matching TurnBoundary.tile_hits.
+# What one unit's rows are, and their order, is TileHitAction.end_of_turn, which TurnBoundary.tile_hits
+# calls too: a scald before the burn, and the burn predicted on the HP the scald leaves (#1331).
 static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
 	if board == null or squad == null:
 		return
@@ -146,15 +147,11 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 			continue
 		var destination := projected_position(unit, hypo)
 		var packed := board.gas.projected_packed_at(destination, plan.cell_effects) if board.gas != null else 0
-		plan.tile_hits.append_array(TileHitAction.soaks(unit, projected_states(unit, hypo), packed,
-				board.weather))
-		if board.terrain_states == null:
-			continue
-		var states := board.terrain_states.projected_states_at(destination, plan.cell_effects)
-		var damage := RulesService.occupant_damage_for(unit, states)
-		if damage <= 0:
-			continue
-		plan.tile_hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage, situation))
+		var ground: Array[Terrain.TileState] = []
+		if board.terrain_states != null:
+			ground = board.terrain_states.projected_states_at(destination, plan.cell_effects)
+		plan.tile_hits.append_array(TileHitAction.end_of_turn(unit, projected_states(unit, hypo), packed,
+				board.weather, ground, situation))
 
 
 # Who the END OF TURN forecast speaks for (#1353, dev 2026-10-21): the squad's members, then every other
@@ -882,7 +879,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# is not one. Popped off the threaded rotation so a second big hit this pass takes the NEXT limb.
 	if LethalityRules.severs(target_hypo, outcome.damage - outcome.non_blow(), outcome.lethality):
 		outcome.severed_limb = target_hypo.limb_order.pop_front()
-	_land_rung(target_hypo, outcome.lethality, outcome.damage)
+	LethalityRules.land_rung(target_hypo, outcome.lethality, outcome.damage)
 	outcome.target_hp_after = target_hypo.hp
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
@@ -928,19 +925,6 @@ static func _states_after(held: Array[Elemental.State], removed: Array[Elemental
 			after.append(s)
 	return after
 
-# Thread a named rung onto the hypo: the lifecycle it leaves, what it MARKS, the HP it leaves. The
-# lifecycle a rung leaves behind is ONE map (#313) -- a preview holding only an outcome reads the same
-# one, and since #1002 the HP it leaves behind is its sibling. A down WOUNDS (#1174), so a later
-# hit this pass is held to the lower limb threshold. Shared by the hit and the sinking (#922), the
-# two paths that name a rung here.
-static func _land_rung(h: _Hypo, rung: ResolvedOutcome.Lethality, damage: int) -> void:
-	h.lifecycle = LethalityRules.lifecycle_for(rung, h.lifecycle)
-	if rung == ResolvedOutcome.Lethality.DOWNED:
-		h.wounded = true
-	elif rung == ResolvedOutcome.Lethality.CRISIS:
-		h.in_crisis = true                          # the gambit: no safety net from here on
-	h.hp = LethalityRules.hp_after(rung, h.hp, damage)
-
 
 # --- The floor leaving (#922) ---------------------------------------------------------------
 #
@@ -972,7 +956,7 @@ static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardConte
 				and not Elemental.is_blocked(h.states, Elemental.State.WET)
 		var sink := SinkAction.make(unit, h, cell, _floor_taken_by(cell, unit, board, plan.cell_effects),
 				moment, wets)
-		_land_rung(h, sink.resolved.lethality, sink.resolved.damage)
+		LethalityRules.land_rung(h, sink.resolved.lethality, sink.resolved.damage)
 		for s in sink.resolved.states_added:
 			if not h.states.has(s):
 				h.states.append(s)

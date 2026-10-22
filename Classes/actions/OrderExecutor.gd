@@ -1049,8 +1049,9 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # ==============================================================================
 
 # End-of-turn tiles: a unit standing in fire when ITS faction's turn ends takes damage, and since
-# #508 one standing in steam, and since #1260 one out in the rain, is soaked first
-# (TileHitAction.soaks). The burn is routed through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses. No
+# #508 one standing in steam, and since #1260 one out in the rain, is soaked first, steam scalding it
+# on the same row since #1331 (TileHitAction.end_of_turn). Every hit is routed through take_damage so
+# downs/kills/Crisis apply, then the same ejection sweep the attack pass uses. No
 # is_active() filter (#191): burn is a damage source like any other, so the ladder names
 # its rung exactly as it names a blow's, and take_damage no-ops safely on an already-DEAD unit --
 # nothing upstream needs to ask the question again. #191's own wording said the ladder rules

@@ -11,16 +11,16 @@ class_name TurnBoundary
 # Who the end-of-turn pass is about, answered ONCE before any of it plays -- the same TileHitAction
 # the queue forecasts (#419), derived here from LIVE positions, tile state and gas instead of the
 # plan's projected ones. Two derivations of one rule: a plan is per-SQUAD and this phase is
-# per-FACTION, so neither can consume the other's list -- what they share is
-# RulesService.occupant_damage_for, TileHitAction.make and TileHitAction.soaks. The burn is TWO
-# layers since #892: what the ground charges (Terrain.occupant_damage) and whether this unit pays it
-# (fire insulation), and BOTH callers must ask the outer one or an immune unit gets a forecast that
-# lies about it.
+# per-FACTION, so neither can consume the other's list -- what they share is TileHitAction.end_of_turn,
+# one unit's whole set of rows (#1331). The burn is TWO layers since #892: what the ground charges
+# (Terrain.occupant_damage) and whether this unit pays it (fire insulation), and the scald the same
+# two (GasRules.damage, RulesService.gas_damage_for); end_of_turn asks the outer ones, so an immune
+# unit gets no forecast that lies about it.
 #
 # Walks UNITS rather than burning cells, which is what keeps it symmetric with the forecast: both
 # ask "what is under this unit", so a hazard family the forecast can see cannot be one this misses.
-# A unit's soak comes BEFORE its burn (#508), here and in the forecast, so the pass plays them in
-# the order the queue lists them.
+# A unit's gas row comes BEFORE its burn (#508), and the burn is predicted on the HP a scald leaves,
+# here and in the forecast, so the pass plays them in the order the queue lists them.
 static func tile_hits(units: Array[Unit], states: TerrainStateManager, gas: GasField,
 		weather: Weather.Kind, faction: Team.Faction) -> Array[TileHitAction]:
 	var hits: Array[TileHitAction] = []
@@ -28,12 +28,8 @@ static func tile_hits(units: Array[Unit], states: TerrainStateManager, gas: GasF
 		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
 			continue
 		var packed := gas.packed_at(unit.movement.cell) if gas != null else 0
-		hits.append_array(TileHitAction.soaks(unit, unit.element_states, packed, weather))
-		var cell_states := states.states_at(unit.movement.cell)
-		var damage := RulesService.occupant_damage_for(unit, cell_states)
-		if damage > 0:
-			hits.append(TileHitAction.make(unit, Terrain.burning_state(cell_states), damage,
-					LethalityRules.situation_for(unit)))
+		hits.append_array(TileHitAction.end_of_turn(unit, unit.element_states, packed, weather,
+				states.states_at(unit.movement.cell), LethalityRules.situation_for(unit)))
 	return hits
 
 
