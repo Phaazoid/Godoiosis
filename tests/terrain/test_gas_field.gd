@@ -63,11 +63,11 @@ func test_the_version_moves_only_on_a_real_change() -> void:
 func test_a_dict_round_trip_restores_every_cell() -> void:
 	var field := GasField.new()
 	field.set_level(A, Gas.Kind.FROST, THIN)
-	field.set_level(B, Gas.Kind.THUNDER, THICK)
+	field.set_level(B, Gas.Kind.OZONE, THICK)
 	var copy := GasField.new()
 	copy.load_dict(field.to_dict())
 	assert_int(copy.level_at(A, Gas.Kind.FROST)).is_equal(THIN)
-	assert_int(copy.level_at(B, Gas.Kind.THUNDER)).is_equal(THICK)
+	assert_int(copy.level_at(B, Gas.Kind.OZONE)).is_equal(THICK)
 	assert_int(copy.cells().size()).is_equal(2)
 
 

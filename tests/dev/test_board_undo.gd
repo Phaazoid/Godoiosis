@@ -402,17 +402,17 @@ func test_gas_is_refused_on_a_cell_with_no_ground() -> void:
 func test_erasing_the_ground_takes_its_gas_and_undo_brings_both_back() -> void:
 	var cell := Vector2i(5, 7)
 	_paint_stroke([cell] as Array[Vector2i])
-	_gas_mode(Gas.Kind.THUNDER, Gas.Level.MEDIUM)
+	_gas_mode(Gas.Kind.OZONE, Gas.Level.MEDIUM)
 	_paint_stroke([cell] as Array[Vector2i])
 	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
 
 	_erase_stroke([cell] as Array[Vector2i])
-	assert_int(game.gas_field.level_at(cell, Gas.Kind.THUNDER)).override_failure_message(
+	assert_int(game.gas_field.level_at(cell, Gas.Kind.OZONE)).override_failure_message(
 			"gas outlived its ground").is_equal(0)
 
 	_dc.undo_board()
 	assert_bool(_has_ground(cell)).is_true()
-	assert_int(game.gas_field.level_at(cell, Gas.Kind.THUNDER)).is_equal(Gas.Level.MEDIUM)
+	assert_int(game.gas_field.level_at(cell, Gas.Kind.OZONE)).is_equal(Gas.Level.MEDIUM)
 
 
 # The brush's Step Gas runs exactly the round's gas step -- checked against the store's own forecast,

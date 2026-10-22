@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-22. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; steam's scald (#1331) folded in 2026-10-22.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day; steam's scald (#1331) the same day.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -816,6 +816,22 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Ledger:** TallGrassIgnites, Burning and GrassIgnites come off NOT_YET_FOLLOWED.
 - **The AI is blind to smoke** (#117): it neither seeks nor avoids a cloud. Its existing split term reads a smoke split the forecast stamps.
 
+**Built 2026-10-22: ozone ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), its second half).** Rulings 6 to 10 of the issue (Phaazoid@, 2026-10-18/19), as approved in the build plan:
+- **Every shock hit makes ozone.** "Thunder is lightning in air" is now a natural reaction: `Resources/TerrainReactions/Ozone.tres`, keyed on SHOCK, with codev's `2QF + 2A2 -> 2QA + FA2 + F`.
+  - It is the second reaction **in the air** (`TerrainReaction.in_the_air`, after Disperse), so it fires whatever the attack's Targets says: unit-only Zap Cannon, a map-only shock and a both-ways Zap alike.
+  - It fires on every cell the hit struck and **every cell its current ran through**: both ends of each link the volley stamped (`AttackAction.arc_links`, `PlanResolver._current_cells`), never re-derived at playback.
+  - Only the air half rides the current. The ground's reactions and an attack's own gas stay on the cells it struck.
+- **Thin ozone on each.** Thin never spreads, so ozone stays where the shock landed and fades after its hold (`GasRules/OZONE.tres`, `hold_rounds` 2). Repeated shocks thicken a cell, and medium ozone spills like any gas.
+- **Ozone lowers the heat where the alchemist stands**: `GasRules.air` `{"atom_fire": -10}` per level, one heat step per level, read through `BoardContext.air_at` at the caster's cell like every air gas.
+  - It moves damage only, never presence: a tile still catches and a fire still spreads in ozone (the 2026-10-14 ruling).
+  - No shipped carving draws heat from the air yet (Blow Dry makes its own), so nothing's numbers move until Fireball's heat form ([#1333](https://github.com/Phaazoid/Godoiosis/issues/1333)).
+  - The tile card and the Glossary's Atmosphere page compose the line from the file.
+- **Ozone took THUNDER's gas slot by RENAME:** `Gas.Kind.THUNDER` is `OZONE` (the same int), `SubstanceMap.GASES` maps it to `ozone` (`FA2`), and `GasLooks/THUNDER.tres` is `OZONE.tres`. Its glow and pixel lightning are kept as the charge a strike leaves, a first-pass look. The renderer's 8th and last slot stays free; the `thunder` substance (`QA`) stays for the equations.
+- **Electrocute's ozone is the struck cell's Ozone reaction,** not a second release from the unit reaction.
+- **Ledger:** Electrocute now reads "the thunder (#1270) and the heat are not made", and Ozone.tres gets the same line. The reaction's `+ F` heat stays unreleased (dev, 2026-10-19), decided together with Melt's heat, since a heat gas would take the renderer's last slot.
+- **Thunder, the clap on every shock strike, is [#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)'s** (dev, 2026-10-22). Nothing in this build plays it.
+- **The AI needs nothing new:** it prices ozone through the resolve (`ResolvedOutcome.air_steps`), and its seek key already reads the origin's air.
+
 **Built 2026-10-22: steam scalds ([#1331](https://github.com/Phaazoid/Godoiosis/issues/1331)).** Ruled by Phaazoid@ in a Claude session (2026-10-22), approving a plan. This supersedes #508 ruling 9 (steam only wets).
 - **Medium and thick steam scald; thin does nothing**, the soak's own threshold. Of the steam sources, Boils (medium), DouseBurning (thick) and a thick cloud's spill (medium) scald. Dried Off's and a burning plant's thin steam never do.
 - **How much is content**: `GasRules.damage`, damage by level, where a level it does not name deals nothing. Steam is medium 2, thick 3, below fire's 5, so dousing a burning ally still helps them.
@@ -832,7 +848,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 **Next:**
 - **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte.
-- **Ozone and thunder** ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)'s second half; thunder's clap moved to [#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)).
+- **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)) and the smoke carving ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
