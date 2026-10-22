@@ -85,9 +85,9 @@ static var flash := true
 static var flash_peak := 0.28
 static var flash_life := 0.16
 
-# HOW HIGH THE SPARKS ARE THROWN FROM, in cells above the surface a caught body stands on -- the
-# torso rather than the feet, so a burst reads as coming off the unit and not off the ground it is
-# standing on. Everything else about a spark is ShockSparks' own knob.
+# HOW HIGH THE SPARKS ARE THROWN FROM, in cells above a caught body's feet as drawn (a wader's are
+# under the water, #1363) -- the torso rather than the feet, so a burst reads as coming off the unit
+# and not off the ground it is standing on. Everything else about a spark is ShockSparks' own knob.
 static var spark_lift := 0.45
 
 # THE CRAWL: the current seen IN the water, under the bolts drawn over it -- the dev's second-ranked
@@ -133,6 +133,9 @@ class _Burst extends RefCounted:
 # the mirror and the board's heights, and because the answer moves when the fight is torn out onto a
 # diorama. StagingDust takes its origins the same way and for the same reason.
 var point_of := Callable()
+# (Unit, Vector2i) -> where that body's feet are drawn standing on that cell, pushed for point_of's
+# reason. Unset, a body stands on point_of's surface: a host with no unit mirror knows of no wading.
+var feet_of := Callable()
 
 # What is in the air, and the clock they are measured against. The clock advances only while
 # something is alive, which is what makes a strike's own timestamps self-consistent.
@@ -260,8 +263,8 @@ func _schedule_sparks(attack: AttackAction, born: float) -> void:
 		# already been walked and a shoved body has already slid.
 		var cell: Vector2i = body.movement.cell
 		var at := born + spark_delay_for(cell, attack.arc_links, _look)
-		var point: Vector3 = point_of.call(cell)
-		_pending.append(_Burst.new(point + Vector3.UP * lift, at,
+		var feet: Vector3 = feet_of.call(body, cell) if feet_of.is_valid() else point_of.call(cell)
+		_pending.append(_Burst.new(feet + Vector3.UP * lift, at,
 				ShockSparks.burst_key(cell, _strikes)))
 
 
