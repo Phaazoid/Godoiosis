@@ -10,6 +10,9 @@ class_name ReactionLint
 # element or a required state missing from the inputs, an added state or gas missing from the
 # outputs. Read through SubstanceMap; a PENDING or NONE entry is skipped, not faulted.
 #
+# The other direction -- what an equation makes that its reaction does not do -- is the lint suite's
+# to judge: unreleased_gases and unapplied_states.
+#
 # An EMPTY equation is not a fault here. The test's pending ledger owns which reactions may still
 # lack one, so a missing equation is a declared gap rather than a quiet warning.
 
@@ -100,27 +103,60 @@ static func _expect_gases(out: Array[Dictionary], gases: Dictionary[Gas.Kind, Ga
 		_expect(out, SubstanceMap.of_gas(kind), "the released %s" % Gas.display_name(kind))
 
 
-# The gases this reaction's equation MAKES (named in its outputs, not its inputs) that it does not
-# release (#1329) -- what the lint suite's NOT_YET_FOLLOWED ledger has to list. An equation that will
-# not parse makes nothing here; check() reports it.
+# The gases this reaction's equation MAKES that it does not release (#1329) -- what the lint suite's
+# NOT_YET_FOLLOWED ledger has to list.
 static func unreleased_gases(reaction: Resource, catalog: Dictionary = {}) -> Array[Gas.Kind]:
 	var missing: Array[Gas.Kind] = []
-	if reaction == null or reaction.get("equation") == null:
+	var made := _made(reaction, catalog)
+	for kind: Gas.Kind in Gas.Kind.values():
+		var id := SubstanceMap.of_gas(kind)
+		if id != "" and made.has(id) and not _releases(reaction, kind):
+			missing.append(kind)
+	return missing
+
+
+# The unit states a UNIT reaction's equation MAKES that it does not apply (#1423): what it leaves on
+# the body, unreleased_gases' twin. A terrain reaction's products land on the ground, so it owes none.
+# A substance the reaction releases as a gas is accounted for there (smoke is a gas and Smoked both).
+static func unapplied_states(reaction: Resource, catalog: Dictionary = {}) -> Array[Elemental.State]:
+	var missing: Array[Elemental.State] = []
+	if not reaction is ElementalReaction:
 		return missing
+	var r := reaction as ElementalReaction
+	var made := _made(r, catalog)
+	for state: Elemental.State in Elemental.State.values():
+		var id := SubstanceMap.of_state(state)
+		if id != "" and made.has(id) and not r.add_states.has(state) and not _releases_substance(r, id):
+			missing.append(state)
+	return missing
+
+
+# The substance ids an equation MAKES: named in its outputs and not its inputs. An equation that will
+# not parse makes nothing here; check() reports it.
+static func _made(reaction: Resource, catalog: Dictionary) -> Array[String]:
+	var made: Array[String] = []
+	if reaction == null or reaction.get("equation") == null:
+		return made
 	var halves := String(reaction.get("equation")).split(AlchemyFormula.ARROW)
 	if halves.size() != 2:
-		return missing
+		return made
 	if catalog.is_empty():
 		catalog = SubstanceCatalog.get_all()
 	var inputs := AlchemyFormula.side(halves[0], catalog)
 	var outputs := AlchemyFormula.side(halves[1], catalog)
 	if inputs.error != "" or outputs.error != "":
-		return missing
-	for kind: Gas.Kind in Gas.Kind.values():
-		var id := SubstanceMap.of_gas(kind)
-		if id != "" and outputs.ids.has(id) and not inputs.ids.has(id) and not _releases(reaction, kind):
-			missing.append(kind)
-	return missing
+		return made
+	for id: String in outputs.ids:
+		if not inputs.ids.has(id) and not made.has(id):
+			made.append(id)
+	return made
+
+
+static func _releases_substance(reaction: ElementalReaction, id: String) -> bool:
+	for kind: Gas.Kind in Gas.released(reaction.gases):
+		if SubstanceMap.of_gas(kind) == id:
+			return true
+	return false
 
 
 static func _releases(reaction: Resource, kind: Gas.Kind) -> bool:

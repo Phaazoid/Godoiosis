@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-22. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day; Temperature Shock's meltwater (#1423) the same day.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -592,7 +592,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id. A compound is only ever named by id.
 - **Equations** are one line of text on each reaction, `ElementalReaction.equation` and `TerrainReaction.equation`, written as above (`F2 + W2 -> 2FW`).
 - **What each game thing is made of** is `SubstanceMap`: one row for every element, unit state, tile state, ground and gas. Every row names a substance except COVER and VOID, which hold none. A vial carries its own `substance` field; ichor's is still open.
-- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty from 2026-10-11 until Disperse joined it on 2026-10-22, #1335; a new reaction without an equation reds until it is listed), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later. Its gas half is checked since #1329: a gas an equation makes that its reaction does not release reds until it is released or listed.
+- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty from 2026-10-11 until Disperse joined it on 2026-10-22, #1335; a new reaction without an equation reds until it is listed), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later. Its gas half is checked since #1329: a gas an equation makes that its reaction does not release reds until it is released or listed. Its state half is checked since #1423, with no ledger to list it on: a unit state an equation leaves on the body must be applied.
 
 **The rulings behind the equations** (c3potheds@ and Phaazoid@ in #claude-sessions, 2026-10-08 to 2026-10-11):
 
@@ -601,7 +601,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **Every cell has an ambient baseline**: inert air, vital air, a trace of vapor and a trace of aether, and the ground's own substance. A real source (a river, a fire, a vial) empowers a cast.
 - **Aether is the heavens, not cold.** Ice is `QW`, water with heaven bound into it, and cold is not a substance. A Freeze hit carries free aether, which binds the first water it meets: a frozen tile and a wet unit freeze their own water, a dry unit takes frost out of the air's vapor. Chilled is frost on the body, which is also why Chilled beats Wet.
 - **Melting is heat.** Flame decays to heat (`F`), and the heat melts the ice.
-- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting.
+- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting. *(Its meltwater wets the unit since #1423, 2026-10-22.)*
 - **Electrocution's water conducts and is not used up**, so a shock no longer dries a wet unit (2026-10-11, c3potheds@ and Phaazoid@). How a unit dries off is a balance question for later.
 - **Plants store phlogiston as vital air.** Dry fuel doubles its flame, which is why tall grass spreads further; green plants burn off their water as steam. Burning gives off exactly one ash per inert air, which is where smoke's `AE + A2` comes from.
 - **Thunder is lightning in air**, its own natural reaction (`2QF + 2A2 -> 2QA + FA2 + F`, ozone `FA2` as the byproduct), which Electrocute's equation carries.
@@ -831,6 +831,19 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Ledger:** Electrocute now reads "the thunder (#1270) and the heat are not made", and Ozone.tres gets the same line. The reaction's `+ F` heat stays unreleased (dev, 2026-10-19), decided together with Melt's heat, since a heat gas would take the renderer's last slot.
 - **Thunder, the clap on every shock strike, is [#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)'s** (dev, 2026-10-22). Nothing in this build plays it.
 - **The AI needs nothing new:** it prices ozone through the resolve (`ResolvedOutcome.air_steps`), and its seek key already reads the origin's air.
+
+**Built 2026-10-22: Temperature Shock's meltwater wets the unit ([#1423](https://github.com/Phaazoid/Godoiosis/issues/1423)).** Phaazoid@'s ruling (2026-10-22), approving the plan with the checked state half:
+- **Fire or heat on a Chilled unit leaves it Wet**, the `W2` of `F2 + 2QW -> Q2 + W2 + 2F`. One line of content, `add_states = [WET]` on `fire_chilled_temp_shock.tres`, through the door every setter uses.
+- **The same hit does not dry it.** Every reaction is matched against the states held before the hit (E8), and a Chilled unit is never Wet (#1092), so Quick Dry cannot fire on the thawing hit. Chilled beating Wet is judged on what the hit leaves, and the hit removes Chilled, so the Wet lands. A second fire or heat hit is a Quick Dry.
+- **It is an ordinary Wet:** no clock. It lasts until fire or heat dries it, ice chills it, or the mission ends; Electrocute does not use it up.
+- **What it opens:**
+  - A shock later in the same pass electrocutes (+5), and its current runs through the thawed unit (E4).
+  - Ice after it is a Deep Chill (+5, three turns), so ice and fire alternate +5 combos.
+  - Blow Dry on a Chilled ally still hurts (+5) and now leaves them Wet; a second Blow Dry dries them.
+- **Preview:** a Wet chip beside the queue row's Shatter badge, whose glossary line says "applies Wet"; the health bars' forecast of a later shock; the Play API row's `gains` and `loses`. The icons over a unit show the states it holds, as for every state.
+- **The AI** prices it through the resolve. It does not plan a thaw as a set-up on purpose, since the thaw scores on its own (#117).
+- **The ledger's state half is checked:** `ReactionLint.unapplied_states` names a unit state whose substance a unit reaction's equation makes (in its outputs, not its inputs) that the reaction does not apply, and the lint suite reds on any. It has no ledger to list one on, since Temperature Shock stays listed for its heat. A gas the reaction releases accounts for its substance: smoke is the gas and Smoked both.
+- **Ledger:** Temperature Shock's line keeps only its heat and the +5.
 
 **Next:**
 - **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.
