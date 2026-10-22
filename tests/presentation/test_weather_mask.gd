@@ -84,7 +84,7 @@ func test_a_basin_cell_is_rained_on_at_its_drawn_surface() -> void:
 	var cell := Vector2i(0, 2)
 	BoardSpace.mark_basin(cell, true)
 	var drop := BoardSpace.basin_drop(cell)
-	var offset := WeatherMirror.drawn_offset(cell)
+	var offset := BoardSpace.drawn_offset(cell)
 	BoardSpace.mark_basin(cell, false)
 	assert_float(drop).override_failure_message("fixture: the basin drops nothing").is_greater(0.0)
 	assert_float(offset.y).is_equal_approx(-drop, 0.0001)

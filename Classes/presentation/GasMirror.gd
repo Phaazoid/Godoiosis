@@ -7,9 +7,11 @@ class_name GasMirror
 # edged pixel fog floor shows only while the floor key is held, and the cloud fades and the puffs
 # hide under it so the board reads.
 #
-# Polls rather than listens: the gas, heights and grid versions, the staging, the mix and the view.
-# Any change rebuilds the board textures and the region boxes; every frame only re-sends the camera,
-# the light, the clock and the key. Gas is 3D only -- the flat 2D view has no drawing of it (#292).
+# Polls rather than listens: the gas, heights and grid versions, the staging, the basin, the mix and
+# the view. Any change rebuilds the board textures and the region boxes; every frame only re-sends the
+# camera, the light, the clock and the key. Gas is 3D only -- the flat 2D view has no drawing of it (#292).
+#
+# Gas lies on the ground as DRAWN, not its rules height: over water it pools in the basin (#1363).
 
 # The volume's march resolution, by index: full, half, quarter (one ray per 1, 2x2 or 4x4 pixels).
 const RESOLUTION_DIVISORS: Array[int] = [1, 2, 4]
@@ -171,7 +173,7 @@ func _process(delta: float) -> void:
 	if field == null:
 		return
 	var key := [field.dirty.version, heights.dirty.version if heights != null else 0,
-		grid.dirty.version if grid != null else 0, BoardSpace.staging_version,
+		grid.dirty.version if grid != null else 0, BoardSpace.staging_version, BoardSpace.basin_version,
 		BoardSpace.flight_active(), mix(), _sun_light(),
 		overlays.geometry_version if overlays != null else 0]   # the floor lies at the markup's lift
 	if key != _seen:
@@ -278,10 +280,12 @@ func _board_textures_for(shown: Dictionary[Vector2i, int]) -> Array[Texture]:
 		for x in size.x:
 			var cell := _rect.position + Vector2i(x, y)
 			var corners := heights.corners_at(cell) if heights != null else Vector4i.ZERO
-			ground.set_pixel(x, y, Color(BoardSpace.world_y_of_height(corners.x),
-				BoardSpace.world_y_of_height(corners.y), BoardSpace.world_y_of_height(corners.z),
-				BoardSpace.world_y_of_height(corners.w)))
-			mid.set_pixel(x, y, Color(BoardSpace.world_y_of_height(Terrain.height_at_uv(corners, 0.5, 0.5)), 0, 0))
+			var drop := BoardSpace.basin_drop(cell)
+			ground.set_pixel(x, y, Color(BoardSpace.world_y_of_height(corners.x) - drop,
+				BoardSpace.world_y_of_height(corners.y) - drop, BoardSpace.world_y_of_height(corners.z) - drop,
+				BoardSpace.world_y_of_height(corners.w) - drop))
+			mid.set_pixel(x, y, Color(BoardSpace.world_y_of_height(Terrain.height_at_uv(corners, 0.5, 0.5)) - drop,
+				0, 0))
 			var near := 0
 			var neighbours := 0
 			var bit := 0
@@ -315,7 +319,9 @@ func _ground_span(cell: Vector2i) -> Vector2:
 	var corners := heights.corners_at(cell) if heights != null else Vector4i.ZERO
 	var lo := mini(mini(corners.x, corners.y), mini(corners.z, corners.w))
 	var hi := maxi(maxi(corners.x, corners.y), maxi(corners.z, corners.w))
-	return Vector2(BoardSpace.world_y_of_height(lo), BoardSpace.world_y_of_height(hi))
+	# Dropped with the ground texture, or the box would clip the bottom of a pool lying in the basin.
+	var drop := BoardSpace.basin_drop(cell)
+	return Vector2(BoardSpace.world_y_of_height(lo) - drop, BoardSpace.world_y_of_height(hi) - drop)
 
 
 func _column_top(packed: int) -> float:
@@ -381,7 +387,7 @@ func _build_flash_clusters(shown: Dictionary[Vector2i, int]) -> void:
 				flashing = kind
 		if flashing < 0:
 			continue
-		var at := BoardSpace.surface_point(cell, heights) + BoardSpace.staged_offset(cell)
+		var at := BoardSpace.surface_point(cell, heights) + BoardSpace.drawn_offset(cell)
 		var key := _cluster_of(cell)
 		sums[key] = sums.get(key, Vector4.ZERO) + Vector4(at.x, at.y + FLASH_LIFT, at.z, 1.0)
 		if not _flash_kinds.has(key):
@@ -691,7 +697,7 @@ func _floor_mesh(shown: Dictionary[Vector2i, int]) -> Mesh:
 	var fan: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
 	for cell: Vector2i in shown:
 		var corners := heights.corners_at(cell) if heights != null else Vector4i.ZERO
-		var offset := BoardSpace.staged_offset(cell) + Vector3(0.0, lift, 0.0)
+		var offset := BoardSpace.drawn_offset(cell) + Vector3(0.0, lift, 0.0)
 		var centre := _floor_point(cell, corners, Vector2(0.5, 0.5), offset)
 		st.set_color(_tint_at(centre).srgb_to_linear())
 		for i in 4:
@@ -729,7 +735,7 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 			total += Gas.level_in(packed, kind)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash(cell)
-		var offset := BoardSpace.staged_offset(cell)
+		var offset := BoardSpace.drawn_offset(cell)
 		for slot: Array in slots:
 			var kind := _weighted_kind(packed, kinds, total, rng)
 			var dir: Vector2 = slot[0]

@@ -285,6 +285,151 @@ func test_a_fill_already_drawn_re_places_when_the_depth_moves() -> void:
 	om.show_attack_reach([] as Array[Vector2i], [] as Array[Vector2i])
 
 
+# --- Gas, shock and landing dust over water (#1363) --------------------------------------------------
+
+func _gas() -> GasMirror:
+	return _scene.get_node("GasMirror") as GasMirror
+
+
+# A gas whose look flashes, so a cell holding it is a strike.
+func _flashing_kind() -> Gas.Kind:
+	for kind: Gas.Kind in Gas.Kind.values():
+		if GasLook.for_kind(kind).flash > 0.0:
+			return kind
+	assert_bool(false).override_failure_message("no gas look flashes; vacuous").is_true()
+	return Gas.Kind.STEAM
+
+
+# The cell of the two whose centre a puff stands nearer: a puff leans toward a gassy neighbour but
+# never past half a cell.
+func _nearer(at: Vector3, a: Vector2i, b: Vector2i) -> Vector2i:
+	var to_a := Vector2(at.x, at.z).distance_to(Vector2(a) + Vector2(0.5, 0.5))
+	var to_b := Vector2(at.x, at.z).distance_to(Vector2(b) + Vector2(0.5, 0.5))
+	return a if to_a <= to_b else b
+
+
+func test_gas_over_water_lies_in_the_basin() -> void:
+	var lake := await _lake()
+	var shallow: Vector2i = lake["shallow"]
+	var dry: Vector2i = lake["dry"]
+	var field: GasField = _game.gas_field
+	field.set_level(dry, Gas.Kind.STEAM, Gas.Level.THICK)
+	field.set_level(shallow, Gas.Kind.STEAM, Gas.Level.THICK)
+	await _settle()
+	assert_int(Gas.level_in(field.packed_at(shallow), Gas.Kind.STEAM)).override_failure_message(
+			"the store refused gas over water; vacuous").is_equal(Gas.Level.THICK)
+	var gas := _gas()
+	var drawn := {dry: _rules_y(dry), shallow: _rules_y(shallow) - DEPTH}
+
+	# The floor: each fan's centre vertex lies on the surface you see, lifted into the markup stack.
+	var lift := (_scene.get_node("BoardOverlays") as BoardOverlays).gas_floor_lift()
+	var vertices: PackedVector3Array = (gas.floor_node().mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var centres := 0
+	for v in vertices:
+		for cell: Vector2i in [dry, shallow]:
+			if is_equal_approx(v.x, cell.x + 0.5) and is_equal_approx(v.z, cell.y + 0.5):
+				centres += 1
+				assert_float(v.y).override_failure_message("the gas floor at %s floats off the drawn surface" % cell) \
+						.is_equal_approx(float(drawn[cell]) + lift, 0.0001)
+	assert_int(centres).override_failure_message("no floor fan centre on either cell; vacuous").is_greater(0)
+
+	# The volume's ground, corner by corner and at the middle, and the box its march is bounded by.
+	var rect: Rect2i = _game.grid.get_used_rect()
+	var ground := (gas.board_textures()[3] as Texture2D).get_image()
+	var mid := (gas.board_textures()[4] as Texture2D).get_image()
+	for cell: Vector2i in [dry, shallow]:
+		var want: float = drawn[cell]
+		var corners := ground.get_pixelv(cell - rect.position)
+		for y: float in [corners.r, corners.g, corners.b, corners.a]:
+			assert_float(y).override_failure_message("the volume's ground at %s is not the drawn surface" % cell) \
+					.is_equal_approx(want, 0.0001)
+		assert_float(mid.get_pixelv(cell - rect.position).r).is_equal_approx(want, 0.0001)
+	var lowest := INF
+	for box: AABB in gas.region_boxes():
+		lowest = minf(lowest, box.position.y)
+	assert_float(lowest).override_failure_message("the region box would clip the pool lying in the basin") \
+			.is_equal_approx(_rules_y(shallow) - DEPTH - GasRegions.BELOW, 0.0001)
+
+	# A strike glows over the water you see.
+	field.clear()
+	field.set_level(shallow, _flashing_kind(), Gas.Level.THICK)
+	await _settle()
+	var strikes := gas.strike_points()
+	assert_int(strikes.size()).override_failure_message("the flashing gas struck nowhere; vacuous").is_equal(1)
+	assert_float(strikes.values()[0].y).is_equal_approx(_rules_y(shallow) - DEPTH + GasMirror.FLASH_LIFT, 0.0001)
+	field.clear()
+
+
+# The WIRE: a depth move changes no gas, no height and no grid, so only the basin's own version can
+# tell the mirror to re-place what it already drew.
+func test_moving_the_depth_knob_re_places_gas_already_drawn() -> void:
+	var lake := await _lake()
+	var shallow: Vector2i = lake["shallow"]
+	var dry: Vector2i = lake["dry"]
+	var field: GasField = _game.gas_field
+	field.set_level(dry, Gas.Kind.STEAM, Gas.Level.THICK)
+	field.set_level(shallow, Gas.Kind.STEAM, Gas.Level.THICK)
+	await _settle()
+	var before: Array = _gas().puff_entries().duplicate()
+	assert_int(before.size()).override_failure_message("no puffs drawn; vacuous").is_greater(0)
+
+	BoardSpace.WATER_BASIN_DEPTH = DEPTH * 0.5
+	await _settle()
+	var after: Array = _gas().puff_entries()
+	assert_int(after.size()).is_equal(before.size())
+	var wet := 0
+	for i in before.size():
+		var was: Vector3 = before[i][0]
+		var now: Vector3 = after[i][0]
+		var rise := DEPTH * 0.5 if _nearer(was, dry, shallow) == shallow else 0.0
+		wet += 1 if rise > 0.0 else 0
+		assert_float(now.y - was.y).override_failure_message(
+				"a puff at %s did not follow the basin depth" % was).is_equal_approx(rise, 0.0001)
+	assert_int(wet).override_failure_message("no puff stands over the water; vacuous").is_greater(0)
+	field.clear()
+
+
+# The two answers the shock is handed (#887): where a cell is drawn, for the bolts, and where a body
+# standing on it is drawn, for its sparks -- asked through the callables battle3d really wired.
+func test_a_shock_over_water_arcs_off_the_water_and_sparks_off_the_body() -> void:
+	var lake := await _lake()
+	var shallow: Vector2i = lake["shallow"]
+	var dry: Vector2i = lake["dry"]
+	var arc: ArcLightning = _scene._arc
+	assert_float((arc.point_of.call(shallow) as Vector3).y).is_equal_approx(_rules_y(shallow) - DEPTH, 0.0001)
+	assert_float((arc.point_of.call(dry) as Vector3).y).is_equal_approx(_rules_y(dry), 0.0001)
+
+	var unit := _a_unit()
+	assert_object(unit).override_failure_message("no active unit on the board; vacuous").is_not_null()
+	var mirror := _scene.get_node("UnitMirror") as UnitMirror
+	unit.movement.set_cell(shallow)
+	await _settle()
+	var feet: Vector3 = arc.feet_of.call(unit, shallow)
+	assert_float(feet.y).override_failure_message("a wader's sparks do not start from its drawn feet") \
+			.is_equal_approx(_rules_y(shallow) - DEPTH - WADE, 0.0001)
+	assert_float(feet.y).override_failure_message("the sparks and the mirror disagree where the body stands") \
+			.is_equal_approx(mirror.sprite_for(unit).position.y, 0.0001)
+
+	var states: Dictionary = {}
+	states[shallow] = [Terrain.TileState.FROZEN]
+	_game.terrain_states.load_state_dict(states)
+	await _settle()
+	assert_float((arc.feet_of.call(unit, shallow) as Vector3).y).override_failure_message(
+			"a body standing ON frozen water wades no deeper than the ice").is_equal_approx(_rules_y(shallow) - DEPTH, 0.0001)
+
+
+func test_a_landing_on_water_puffs_from_the_water() -> void:
+	var lake := await _lake()
+	var dust: StagingDust = _scene._staging_dust
+	for key: String in ["shallow", "dry"]:
+		var cell: Vector2i = lake[key]
+		var cells: Array[Vector2i] = [cell]
+		_scene._puff_landings(cells)
+		var want := _rules_y(cell) - (DEPTH if key == "shallow" else 0.0)
+		assert_float(dust.last_origin.y).override_failure_message("the %s landing's dust starts off the surface" % key) \
+				.is_equal_approx(want, 0.0001)
+
+
 # The submerged bank's bits (#654) for one board cell, off the mask the mirror last pushed. Read off
 # the recorded image, since a headless ImageTexture reads back only the first picture it was given.
 func _mask_bits(cell: Vector2i) -> int:

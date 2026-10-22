@@ -178,6 +178,29 @@ func test_a_caught_body_throws_a_burst() -> void:
 		"the blow caught two bodies and threw %d bursts" % _arc.sparks_thrown()).is_equal(2)
 
 
+# A burst comes off the BODY, so it measures from where the host draws its feet -- below the ground
+# for a wader (#1363) -- and never from the surface the bolts cross.
+func test_a_caught_body_sparks_from_where_its_feet_are_drawn() -> void:
+	_arc.point_of = _surface_of
+	var sunk := Vector3(0.0, -0.3, 0.0)
+	_arc.feet_of = func(_unit: Unit, cell: Vector2i) -> Vector3: return _surface_of(cell) + sunk
+	ArcLightning.strike_delay = 0.0
+	ArcLightning.arc_step_delay = 0.0
+	var body: Unit = H.spawn_unit(self, ENEMY, Vector2i(1, 0))
+	var caught: Array[Unit] = [body]
+	var shot := _shot(caught, 3)
+
+	_arc.strike(shot, PackedVector3Array())
+	_arc._process(0.01)
+
+	assert_int(_arc.sparks_thrown()).override_failure_message("fixture: the body threw no burst").is_equal(1)
+	var lift := ArcLightning.look_of(shot).num("spark_lift", ArcLightning.spark_lift)
+	var want := _surface_of(body.movement.cell) + sunk + Vector3.UP * lift
+	assert_vector(_arc._sparks.last_origin).override_failure_message(
+		"the burst started at %s, not %s up from the body's drawn feet" % [_arc._sparks.last_origin, lift]
+		).is_equal_approx(want, Vector3.ONE * 0.0001)
+
+
 # The stagger again, one channel over: a body the current has not reached yet is not sparking. Same
 # property the bolts have, asserted separately because a second schedule is exactly what this
 # design avoids and a case is what says so.
