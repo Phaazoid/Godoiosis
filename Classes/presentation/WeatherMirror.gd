@@ -390,7 +390,7 @@ func _sync_mask() -> void:
 		return
 	_mask_versions = versions
 	_rect = rect
-	var image := WeatherMask.build(grid, heights, rect, drawn_offset)
+	var image := WeatherMask.build(grid, heights, rect, BoardSpace.drawn_offset)
 	_span = WeatherMask.span(image)
 	var texture := ImageTexture.create_from_image(image)
 	_mask = texture
@@ -426,13 +426,6 @@ func board_rect() -> Rect2i:
 # The board's wind (#1286), world units a second on x / z: still air with no source.
 func board_wind() -> Vector2:
 	return _wind()
-
-
-# Where a cell is DRAWN relative to its rules surface: lifted onto the stage by a tear-out (#521), and
-# lowered into its basin on a water cell (#654) -- the basin's rule is that every reader which lays
-# something on a water cell subtracts the drop, and a raindrop lands on one.
-static func drawn_offset(cell: Vector2i) -> Vector3:
-	return BoardSpace.staged_offset(cell) - Vector3(0.0, BoardSpace.basin_drop(cell), 0.0)
 
 
 # The two ground decals, rebuilt when the board or the look they paint changes. A decal's texture is

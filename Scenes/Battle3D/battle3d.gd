@@ -303,6 +303,7 @@ func _ready() -> void:
 	# only this host knows the mirror, and the answer MOVES when the fight is torn out onto a stage.
 	_arc = ArcLightning.new()
 	_arc.point_of = _surface_of
+	_arc.feet_of = _feet_of
 	add_child(_arc)
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
@@ -447,8 +448,8 @@ func _drive_transition(delta: float) -> void:
 
 
 # The dust each landing throws (#656). DIRECTION-BLIND on purpose: a landing is a landing, and
-# BoardMirror.surface_point already answers where -- the diorama's surface on the way in, the tile's
-# own socket on the way out -- so neither arm needs a rule of its own.
+# _surface_of already answers where -- the diorama's surface on the way in, the tile's own socket on
+# the way out, the water you see on a basin cell (#1363) -- so neither arm needs a rule of its own.
 #
 # THE EXIT'S PUFFS ARE CURRENTLY OFF-SCREEN, and that is measured rather than overlooked. #602 round
 # 7 keeps the camera up at the diorama through every exit landing (the tiles are watched FALLING,
@@ -458,10 +459,8 @@ func _drive_transition(delta: float) -> void:
 func _puff_landings(cells: Array[Vector2i]) -> void:
 	if cells.is_empty() or _staging_dust == null:
 		return
-	var heights: BoardHeights = game.board_heights
 	for cell in cells:
-		_staging_dust.puff(_board_mirror.surface_point(cell, heights),
-				StagingDust.burst_key(cell, BoardSpace.staging_version))
+		_staging_dust.puff(_surface_of(cell), StagingDust.burst_key(cell, BoardSpace.staging_version))
 
 
 # A blow landed. A shock's (#887): the effect owns everything about what a bolt looks like; this owns
@@ -482,11 +481,17 @@ func _on_volley_struck(attack: AttackAction) -> void:
 		_board_mirror.push_shock(game.grid, Conduction.steps_of(attack.arc_links))
 
 
-# Where anything standing on this cell goes -- the mirror's one answer, which already carries the
-# tear-out's offset, so a bolt drawn during a fight lands on the diorama and not on the empty socket
-# forty cells below it. Pushed at the effect rather than looked up by it.
+# Where this cell's surface is DRAWN: the tear-out's offset, so a bolt drawn during a fight lands on
+# the diorama and not on the empty socket forty cells below it, and the basin's drop, so it lands on
+# the water you see (#1363). Pushed at the effects rather than looked up by them.
 func _surface_of(cell: Vector2i) -> Vector3:
-	return _board_mirror.surface_point(cell, game.board_heights)
+	return BoardSpace.surface_point(cell, game.board_heights) + BoardSpace.drawn_offset(cell)
+
+
+# ...and where a body standing on it is drawn: a wader's feet go below the water by the mirror's own
+# wade (#654), so a shock's sparks start where they do on dry ground, up the body (#1363).
+func _feet_of(unit: Unit, cell: Vector2i) -> Vector3:
+	return _surface_of(cell) - Vector3(0.0, _unit_mirror.wade_at(unit, cell), 0.0)
 
 
 # The shot's own trajectory, in world space.

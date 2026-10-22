@@ -634,6 +634,13 @@ static func basin_drop(cell: Vector2i) -> float:
 	return basin_depth()
 
 
+# Where a cell is DRAWN relative to its rules surface: lifted onto the stage by a tear-out (#521), and
+# lowered into its basin on water. What a reader adds to a rules point to lie something on the cell
+# you see -- rain (#1260), gas, a shock's bolts and a landing's dust (#1363).
+static func drawn_offset(cell: Vector2i) -> Vector3:
+	return staged_offset(cell) - Vector3(0.0, basin_drop(cell), 0.0)
+
+
 # Whether this cell is drawn as flat water, in a basin -- whatever the depth knob says.
 static func is_basin(cell: Vector2i) -> bool:
 	return _basin_cells.has(cell)
