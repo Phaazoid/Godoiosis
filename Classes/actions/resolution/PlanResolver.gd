@@ -894,8 +894,7 @@ static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalRe
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
 	for reaction in fired:
-		if reaction.gas_level != Gas.Level.NONE:
-			effect.add_gas(reaction.gas, reaction.gas_level)
+		effect.add_gases(reaction.gases)
 	if effect.gas_added.is_empty():
 		return
 	effect.cause = action
@@ -1535,13 +1534,13 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	if attacker == null or not is_instance_valid(attacker):
 		return effects
 	# Two halves with different gates. The ELEMENT reacts with the ground only on a map-hitting attack;
-	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gas_level's note).
+	# the attack's own GAS (#508) lands whatever Targets says (AttackData.gases' note).
 	var elements: Array[Elemental.Element] = []
 	if _source_hits_map(action):
 		elements = _source_elements(action)
 	var fired := action.fired_attack
-	var gas_level: int = fired.gas_level if fired != null else Gas.Level.NONE
-	if elements.is_empty() and gas_level == Gas.Level.NONE:
+	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
+	if elements.is_empty() and not leaves_gas:
 		return effects
 	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
@@ -1551,11 +1550,11 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 		var effect: ResolvedCellEffect = null
 		if not elements.is_empty():
 			effect = _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
-		if gas_level != Gas.Level.NONE:
+		if leaves_gas:
 			if effect == null:
 				effect = ResolvedCellEffect.new()
 				effect.cell = cell
-			effect.add_gas(fired.gas, gas_level)
+			effect.add_gases(fired.gases)
 		# Gas lies only where it could travel (GasSpread.holds_gas), whoever released it -- so the
 		# preview never promises gas the board would not hold (Law #2).
 		if effect != null and not effect.gas_added.is_empty() and not GasSpread.holds_gas(cell, board):
@@ -1590,7 +1589,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 		for s in reaction.remove_tile_states:
 			if not effect.states_removed.has(s):
 				effect.states_removed.append(s)
-		effect.add_gas(reaction.gas, reaction.gas_level)
+		effect.add_gases(reaction.gases)
 		if reaction.popup != "":
 			effect.popups.append(reaction.popup)
 		if reaction.icon != null:

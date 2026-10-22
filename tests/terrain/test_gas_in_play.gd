@@ -49,7 +49,7 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 func _steaming_swing() -> Unit:
 	_spawn(ENEMY, FOE_CELL)
 	var hero := _spawn(PLAYER, FOE_CELL + Vector2i.LEFT)
-	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_level = LEVEL
+	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.gases = {Gas.Kind.STEAM: LEVEL}
 	game.squad_manager.active_squad = hero.squad
 	var action := AttackAction.declare(hero, hero.movement.cell, FOE_CELL)
 	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(

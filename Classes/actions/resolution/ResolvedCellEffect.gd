@@ -18,6 +18,12 @@ var gas_added: Dictionary[Gas.Kind, int] = {}
 func add_gas(kind: Gas.Kind, levels: int) -> void:
 	if levels > 0:
 		gas_added[kind] = mini(gas_added.get(kind, 0) + levels, Gas.MAX_LEVEL)
+
+
+# Everything one holder's `gases` releases (an attack's or a reaction's, #1335), in kind order.
+func add_gases(gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
+	for kind: Gas.Kind in Gas.released(gases):
+		add_gas(kind, gases[kind])
 # The blow that deposited it, or null for an order's own deposit (Burrow's COVER). Live applies a
 # pass's deposits in one batch, so nothing in playback reads this; the Split forecast does (#367),
 # to hand a break over ice this pass melts to the fire that melted it.

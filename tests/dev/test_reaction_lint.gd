@@ -93,8 +93,7 @@ func test_inputs_that_leave_out_the_incoming_element_degrade() -> void:
 func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 	var r := TerrainReaction.new()
 	r.incoming_element = Elemental.Element.FIRE
-	r.gas = Gas.Kind.STEAM
-	r.gas_level = Gas.Level.MEDIUM
+	r.gases = {Gas.Kind.STEAM: Gas.Level.MEDIUM}
 	r.equation = "F2 + W2 -> F2 + W2"
 	var found := ReactionLint.check(r, _catalog())
 	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
@@ -103,7 +102,7 @@ func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 
 func test_a_unit_reaction_whose_released_gas_is_missing_from_the_outputs_degrades() -> void:
 	var r := _elemental("F2 + W2 -> F2 + W2", Elemental.Element.FIRE)
-	r.gas_level = Gas.Level.THIN
+	r.gases = {Gas.Kind.STEAM: Gas.Level.THIN}
 	var found := ReactionLint.check(r, _catalog())
 	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
 	assert_str(found[0]["text"]).contains("steam")
@@ -115,16 +114,17 @@ func test_a_gas_the_equation_makes_is_unreleased_until_the_reaction_releases_it(
 	var made: Array[Gas.Kind] = [Gas.Kind.STEAM]
 	var r := _elemental("F2 + W2 -> 2FW", Elemental.Element.FIRE)
 	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_equal(made)
-	r.gas = Gas.Kind.SMOKE
-	r.gas_level = Gas.Level.THIN
+	r.gases = {Gas.Kind.SMOKE: Gas.Level.THIN}
 	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_equal(made)
-	r.gas = Gas.Kind.STEAM
+	r.gases = {Gas.Kind.SMOKE: Gas.Level.THIN, Gas.Kind.STEAM: Gas.Level.THIN}
 	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_empty()
 
 	var t := TerrainReaction.new()
 	t.equation = "F2 + W2 -> 2FW"
 	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_equal(made)
-	t.gas_level = Gas.Level.MEDIUM
+	t.gases = {Gas.Kind.STEAM: Gas.Level.NONE}   # a key at NONE releases nothing
+	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_equal(made)
+	t.gases = {Gas.Kind.STEAM: Gas.Level.MEDIUM}
 	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_empty()
 
 

@@ -168,8 +168,8 @@ static func reaction_line(r: ElementalReaction) -> String:
 		effects.append("applies %s" % Elemental.state_display_name(state))
 	for state: Elemental.State in r.remove_states:
 		effects.append("clears %s" % Elemental.state_display_name(state))
-	if r.gas_level != Gas.Level.NONE:
-		effects.append(_releases(r.gas))
+	if not Gas.released(r.gases).is_empty():
+		effects.append(_releases(r.gases))
 	return _assemble_line(trigger, effects, r.popup)
 
 static func _terrain_reaction_line(r: TerrainReaction) -> String:
@@ -188,13 +188,13 @@ static func _terrain_effects(r: TerrainReaction) -> Array[String]:
 		effects.append("sets %s" % Terrain.tile_state_display_name(state))
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
-	if r.gas_level != Gas.Level.NONE:
-		effects.append(_releases(r.gas))
+	if not Gas.released(r.gases).is_empty():
+		effects.append(_releases(r.gases))
 	return effects
 
-# A reaction releasing gas, worded once for both kinds of reaction (#1329).
-static func _releases(kind: Gas.Kind) -> String:
-	return "releases %s" % Gas.display_name(kind)
+# A reaction releasing gas, worded once for both kinds of reaction (#1329): "releases Steam and Smoke".
+static func _releases(gases: Dictionary[Gas.Kind, Gas.Level]) -> String:
+	return "releases %s" % Gas.released_names(gases)
 
 # The interactions that can touch ONE tile — the tile hover card's list (#135 round 2). The
 # kind/state gate is TerrainReaction.applies_to_tile, the same predicate the resolver's deposit

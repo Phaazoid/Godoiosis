@@ -176,10 +176,11 @@ func test_heat_melts_frozen_water() -> void:
 func test_heat_boils_open_water() -> void:
 	var boils := _authored_tile(func(r: TerrainReaction) -> bool:
 		return r.fires_for(_only(HEAT)) and r.required_kind == Terrain.Kind.WATER \
-			and r.gas_level != Gas.Level.NONE, "that heat boils water with")
+			and not Gas.released(r.gases).is_empty(), "that heat boils water with")
 	var plan := _hit_tile(HEAT, _KindBoard.new(null, { TARGET_CELL: Terrain.Kind.WATER }))
 	assert_int(plan.cell_effects.size()).is_equal(1)
-	assert_int(plan.cell_effects[0].gas_added.get(boils.gas, 0)).is_equal(boils.gas_level)
+	for kind: Gas.Kind in Gas.released(boils.gases):
+		assert_int(plan.cell_effects[0].gas_added.get(kind, 0)).is_equal(boils.gases[kind])
 
 
 # Heat warms and never ignites; fire on the same ground is the control, so a board on which nothing

@@ -681,6 +681,13 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 					add_cell_grid(container, label, resource, prop.name)
 				else:
 					add_lineedit(container, label, cells_to_text(value), func(s): write(resource, prop.name, cells_from_text(s)))
+		TYPE_DICTIONARY:
+			# An enum -> enum map gets one dropdown per key (#1335, AttackData.gases). Any other
+			# dictionary is still not drawn.
+			if _is_enum_map(prop):
+				add_enum_map(container, label, prop.hint_string,
+						func() -> Dictionary: return resource.get(prop.name),
+						func(map: Dictionary): write(resource, prop.name, map))
 	_tip_rows_from(container, first, tip)
 
 
@@ -705,6 +712,39 @@ static func write_many(resource: Resource, values: Dictionary) -> void:
 	for prop_name: String in values:
 		resource.set(prop_name, values[prop_name])
 	resource.emit_changed()
+
+
+# Is this exported Dictionary typed enum -> enum? A typed dictionary reports each half as
+# "<TYPE_ id>/<hint id>:<hint string>", the two halves joined by ';' -- the typed array's form twice.
+static func _is_enum_map(prop: Dictionary) -> bool:
+	var halves: PackedStringArray = String(prop.hint_string).split(";")
+	var enum_half := "%d/%d:" % [TYPE_INT, PROPERTY_HINT_ENUM]
+	return halves.size() == 2 and halves[0].begins_with(enum_half) and halves[1].begins_with(enum_half)
+
+
+# An enum -> enum map as a heading and one dropdown per KEY member. The value's first entry (None
+# for a Gas.Level) ERASES its key, so the map never stores an entry that says nothing. `read` hands
+# back the live map: a write replaces it, so a captured copy would go stale after the first pick.
+static func add_enum_map(container: Node, label_text: String, hint_string: String, read: Callable,
+		on_change: Callable) -> void:
+	var halves := hint_string.split(";")
+	var keys := parse_enum_hint(halves[0].substr(halves[0].find(":") + 1))
+	var values_hint := halves[1].substr(halves[1].find(":") + 1)
+	var off: int = parse_enum_hint(values_hint)[0]["value"]
+	var heading := Label.new()
+	heading.text = label_text
+	container.add_child(heading)
+	var current: Dictionary = read.call()
+	for entry: Dictionary in keys:
+		var key: int = entry["value"]
+		add_enum_option(container, "  " + String(entry["name"]), values_hint, int(current.get(key, off)),
+				func(picked: int):
+					var map: Dictionary = (read.call() as Dictionary).duplicate()
+					if picked == off:
+						map.erase(key)
+					else:
+						map[key] = picked
+					on_change.call(map))
 
 
 # Is this exported Array an Array[Vector2i]?

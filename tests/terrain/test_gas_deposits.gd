@@ -105,7 +105,7 @@ func _authored(pick: Callable, what: String) -> TerrainReaction:
 func test_an_attack_leaves_its_gas_on_every_tile_it_strikes_whatever_its_targets() -> void:
 	# A unit-only, elementless attack: neither half of the old deposit gate would let it touch the map.
 	var attacker := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
-	attacker.get_fired_attack().gas_level = Gas.Level.MEDIUM
+	attacker.get_fired_attack().gases = {STEAM: Gas.Level.MEDIUM}
 	var struck: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1)]
 	var plan := _resolve(_one(_aim(attacker, struck)), _KindBoard.new(null, {}))
 	assert_int(plan.cell_effects.size()).is_equal(struck.size())
@@ -128,7 +128,7 @@ func test_gas_never_lands_where_there_is_no_ground() -> void:
 	var bare: TileMapLayer = auto_free(TileMapLayer.new())
 	add_child(bare)
 	var attacker := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
-	attacker.get_fired_attack().gas_level = Gas.Level.MEDIUM
+	attacker.get_fired_attack().gases = {STEAM: Gas.Level.MEDIUM}
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var plan := _resolve(_one(_aim(attacker, struck)), _KindBoard.new(null, {}, bare))
 	assert_int(plan.cell_effects.size()).is_equal(0)
@@ -140,7 +140,7 @@ func test_a_tile_a_unit_could_not_stand_on_takes_no_gas() -> void:
 	var bare: TileMapLayer = auto_free(TileMapLayer.new())
 	add_child(bare)
 	var attacker := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
-	attacker.get_fired_attack().gas_level = Gas.Level.MEDIUM
+	attacker.get_fired_attack().gases = {STEAM: Gas.Level.MEDIUM}
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var plan := _resolve(_one(_aim(attacker, struck)), _WallBoard.new(null, {}, bare))
 	assert_int(plan.cell_effects.size()).is_equal(0)
@@ -149,7 +149,7 @@ func test_a_tile_a_unit_could_not_stand_on_takes_no_gas() -> void:
 func test_a_volley_leaves_its_gas_once_not_once_per_victim() -> void:
 	# THIN, so a second deposit would read MEDIUM rather than vanish under the cap at thick.
 	var attacker := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
-	attacker.get_fired_attack().gas_level = Gas.Level.THIN
+	attacker.get_fired_attack().gases = {STEAM: Gas.Level.THIN}
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var lead := _aim(attacker, struck)
 	var second := _aim(attacker, struck)
@@ -166,7 +166,7 @@ func test_a_volley_leaves_its_gas_once_not_once_per_victim() -> void:
 func test_water_dousing_a_fire_releases_steam() -> void:
 	var douse := _authored(func(r: TerrainReaction) -> bool:
 		return r.incoming_element == Elemental.Element.WATER \
-			and r.required_tile_state == Terrain.TileState.BURNING and r.gas_level != Gas.Level.NONE,
+			and r.required_tile_state == Terrain.TileState.BURNING and not Gas.released(r.gases).is_empty(),
 		"puts out fire and releases gas")
 	var attacker := _attacker(Elemental.Element.WATER, EquippableData.TargetMode.MAP)
 	var struck: Array[Vector2i] = [TARGET_CELL]
@@ -174,19 +174,19 @@ func test_water_dousing_a_fire_releases_steam() -> void:
 	var plan := _resolve(_one(_aim(attacker, struck)), board)
 	assert_int(plan.cell_effects.size()).is_equal(1)
 	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.BURNING)).is_true()
-	assert_int(plan.cell_effects[0].gas_added.get(douse.gas, 0)).is_equal(douse.gas_level)
+	_assert_releases(plan.cell_effects[0], douse.gases)
 
 
 func test_fire_on_open_water_boils_it() -> void:
 	var boils := _authored(func(r: TerrainReaction) -> bool:
 		return r.incoming_element == Elemental.Element.FIRE \
-			and r.required_kind == Terrain.Kind.WATER and r.gas_level != Gas.Level.NONE,
+			and r.required_kind == Terrain.Kind.WATER and not Gas.released(r.gases).is_empty(),
 		"boils water")
 	var attacker := _attacker(Elemental.Element.FIRE, EquippableData.TargetMode.MAP)
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var plan := _resolve(_one(_aim(attacker, struck)), _KindBoard.new(null, { TARGET_CELL: Terrain.Kind.WATER }))
 	assert_int(plan.cell_effects.size()).is_equal(1)
-	assert_int(plan.cell_effects[0].gas_added.get(boils.gas, 0)).is_equal(boils.gas_level)
+	_assert_releases(plan.cell_effects[0], boils.gases)
 
 
 func _melt() -> TerrainReaction:
@@ -212,15 +212,15 @@ func test_fire_on_frozen_water_melts_it_and_does_not_boil_it() -> void:
 	assert_bool(plan.cell_effects[0].states_removed.has(Terrain.TileState.FROZEN)).is_true()
 	assert_int(_steam_on(plan, TARGET_CELL)).override_failure_message(
 			"frozen water gave more steam than the melt alone -- it boiled as well") \
-			.is_equal(melt.gas_level if melt.gas == STEAM else 0)
+			.is_equal(int(melt.gases.get(STEAM, Gas.Level.NONE)))
 
 
 # The melt releases what its equation makes (#1324): the essence the ice held, `F2 + 2QW -> Q2 + ...`.
 func test_melting_ice_releases_the_melts_own_gas_on_the_thawed_tile() -> void:
 	var melt := _melt()
-	assert_int(melt.gas_level).override_failure_message("fixture: the authored melt releases no gas").is_not_equal(Gas.Level.NONE)
+	assert_bool(Gas.released(melt.gases).is_empty()).override_failure_message("fixture: the authored melt releases no gas").is_false()
 	var plan := _melt_frozen_water()
-	assert_int(plan.cell_effects[0].gas_added.get(melt.gas, 0)).is_equal(melt.gas_level)
+	_assert_releases(plan.cell_effects[0], melt.gases)
 
 
 func test_a_reaction_that_only_releases_gas_still_names_itself_on_the_tile_card() -> void:
@@ -241,7 +241,7 @@ func _unit_release() -> ElementalReaction:
 	var fire: Array[Elemental.Element] = [Elemental.Element.FIRE]
 	for reaction in ReactionCatalog.get_all():
 		if reaction.fires_for(fire) and reaction.required_state == Elemental.State.WET \
-				and reaction.remove_states.has(Elemental.State.WET) and reaction.gas_level != Gas.Level.NONE:
+				and reaction.remove_states.has(Elemental.State.WET) and not Gas.released(reaction.gases).is_empty():
 			return reaction
 	assert_bool(false).override_failure_message("no authored reaction dries a wet unit and releases gas -- point this case at one the catalog has").is_true()
 	return null
@@ -278,7 +278,7 @@ func test_fire_drying_a_wet_unit_releases_its_water_on_that_units_cell() -> void
 	var wet := _fire_at(TARGET_CELL, true)
 	var plan := _resolve_on_units(_one(H.stamped_attack(wet[0], wet[1])), wet)
 	assert_bool(plan.attacks[0].resolved.states_removed.has(Elemental.State.WET)).is_true()
-	assert_int(_gas_on(plan, TARGET_CELL, release.gas)).is_equal(release.gas_level)
+	_assert_gas_on(plan, TARGET_CELL, release.gases)
 
 	var dry := _fire_at(TARGET_CELL, false)
 	var dry_plan := _resolve_on_units(_one(H.stamped_attack(dry[0], dry[1])), dry)
@@ -297,8 +297,9 @@ func test_the_steam_rises_where_the_unit_was_hit_not_where_a_shove_lands_it() ->
 	var landed: Vector2i = shove.resolved.knockback_to
 	assert_bool(shove.resolved.knockback_applied and landed != TARGET_CELL).override_failure_message(
 			"the shove never moved the target, so this case cannot tell the two cells apart").is_true()
-	assert_int(_gas_on(plan, TARGET_CELL, release.gas)).is_equal(release.gas_level)
-	assert_int(_gas_on(plan, landed, release.gas)).is_equal(0)
+	_assert_gas_on(plan, TARGET_CELL, release.gases)
+	for kind: Gas.Kind in Gas.released(release.gases):
+		assert_int(_gas_on(plan, landed, kind)).is_equal(0)
 
 
 # Each victim's water is its own, so a volley releases once per wet victim -- where an attack's own gas
@@ -317,15 +318,27 @@ func test_each_wet_victim_of_one_volley_releases_its_own_steam() -> void:
 	lead.volley = volley
 	second.volley = volley
 	var plan := _resolve_on_units(volley, units)
-	assert_int(_gas_on(plan, TARGET_CELL, release.gas)).is_equal(release.gas_level)
-	assert_int(_gas_on(plan, second_cell, release.gas)).is_equal(release.gas_level)
+	_assert_gas_on(plan, TARGET_CELL, release.gases)
+	_assert_gas_on(plan, second_cell, release.gases)
 
 
 func test_a_unit_reaction_that_releases_gas_says_so_in_its_line() -> void:
 	var reaction := ElementalReaction.new()
 	reaction.incoming_element = Elemental.Element.FIRE
 	reaction.required_state = Elemental.State.WET
-	reaction.gas_level = Gas.Level.THIN
-	assert_str(Glossary.reaction_line(reaction)).contains(Gas.display_name(reaction.gas))
-	reaction.gas_level = Gas.Level.NONE
-	assert_str(Glossary.reaction_line(reaction)).not_contains(Gas.display_name(reaction.gas))
+	reaction.gases = {STEAM: Gas.Level.THIN}
+	assert_str(Glossary.reaction_line(reaction)).contains(Gas.display_name(STEAM))
+	reaction.gases = {}
+	assert_str(Glossary.reaction_line(reaction)).not_contains(Gas.display_name(STEAM))
+
+
+# Every gas a holder's `gases` releases, at its authored level, on one effect.
+func _assert_releases(effect: ResolvedCellEffect, gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
+	for kind: Gas.Kind in Gas.released(gases):
+		assert_int(effect.gas_added.get(kind, 0)).is_equal(gases[kind])
+
+
+# The same, summed over a plan's effects on one cell.
+func _assert_gas_on(plan: ResolvedPlan, cell: Vector2i, gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
+	for kind: Gas.Kind in Gas.released(gases):
+		assert_int(_gas_on(plan, cell, kind)).is_equal(gases[kind])

@@ -232,6 +232,29 @@ func test_the_effect_choice_writes_the_pair_and_never_both() -> void:
 	assert_bool(attack.deals_no_damage).is_false()
 
 
+# --- the gas map (#1335) ----------------------------------------------------------------------
+
+# `gases` is a dictionary, which the reflective form drew nothing for until #1335: one dropdown per
+# gas, None erasing the key, so a carving's gas stays editable in play.
+func test_the_gas_rows_write_one_kind_each_and_none_erases_it() -> void:
+	var attack := WeaponAttackData.new()
+	_open(attack)
+	var smoke := _option("  " + Gas.display_name(Gas.Kind.SMOKE))
+	var steam := _option("  " + Gas.display_name(Gas.Kind.STEAM))
+	assert_object(smoke).override_failure_message("no Smoke row in the gas map").is_not_null()
+	assert_object(steam).override_failure_message("no Steam row in the gas map").is_not_null()
+
+	smoke.item_selected.emit(Gas.Level.THICK)   # the entries are the levels, in enum order
+	steam.item_selected.emit(Gas.Level.THIN)
+	assert_int(attack.gases.get(Gas.Kind.SMOKE, Gas.Level.NONE)).is_equal(Gas.Level.THICK)
+	assert_int(attack.gases.get(Gas.Kind.STEAM, Gas.Level.NONE)).is_equal(Gas.Level.THIN)
+
+	smoke.item_selected.emit(Gas.Level.NONE)
+	assert_bool(attack.gases.has(Gas.Kind.SMOKE)).override_failure_message(
+		"None left a key that releases nothing").is_false()
+	assert_int(attack.gases.get(Gas.Kind.STEAM, Gas.Level.NONE)).is_equal(Gas.Level.THIN)
+
+
 func test_a_no_damage_attack_stops_offering_power_and_the_kind_picker() -> void:
 	var attack := WeaponAttackData.new()
 	_open(attack)

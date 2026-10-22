@@ -48,11 +48,10 @@ class_name TerrainReaction
 # flame, not to what it is reaching for.
 @export var spread_and_a_half: bool = false
 
-# Gas the reaction RELEASES on its cell (#508), its levels added to what is there -- water dousing a
-# fire makes steam. AttackData's gas/gas_level pair, one spelling for all three (ElementalReaction's
-# since #1329): NONE is the off switch, since STEAM is the kind enum's zero.
-@export var gas: Gas.Kind = Gas.Kind.STEAM
-@export var gas_level: Gas.Level = Gas.Level.NONE
+# Gas the reaction RELEASES on its cell (#508), each kind's level added to what is there -- water
+# dousing a fire makes steam, a burning plant steam and smoke (#1335). AttackData's `gases`, one
+# spelling for all three holders (ElementalReaction's since #1329). Read through Gas.released.
+@export var gases: Dictionary[Gas.Kind, Gas.Level] = {}
 
 # The reaction as Deep Alchemy writes it, ElementalReaction.equation's twin. Read by ReactionLint only.
 @export_placeholder("F2 + W2 -> 2FW") var equation: String = ""

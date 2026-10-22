@@ -10,8 +10,9 @@ required_state = 2
 also_triggered_by = Array[int]([9])
 damage_bonus = 5
 remove_states = Array[int]([2])
-gas = 6
-gas_level = 2
+gases = Dictionary[int, int]({
+6: 2
+})
 equation = "F2 + 2QW -> Q2 + W2 + 2F"
 popup = "Temperature Shock!"
 icon = ExtResource("2_tshck")
