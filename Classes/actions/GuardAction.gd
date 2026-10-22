@@ -27,6 +27,11 @@ var guard_range: int = 1 # stamped at declare (Law #2 provenance, CaptureAction'
 # AttackAction.resolved: the resolver writes it, execution only plays it back.
 var resolved_spent := false
 
+# The resolver's other verdict (#1354): were the pair within guard_range AT THIS ORDER'S QUEUE SLOT, on
+# the pass's own cells? That is when the ward arms, so a shove queued after it is counterplay and one
+# queued before it can part the pair. Rewritten every resolve; the validator reds the order on it.
+var resolved_in_range := true
+
 func init(guarding_unit: Unit, warded_unit: Unit) -> void:
 	actor = guarding_unit
 	target = warded_unit

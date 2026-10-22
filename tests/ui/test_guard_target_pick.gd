@@ -122,12 +122,14 @@ func test_walking_out_of_range_invalidates_the_queued_guard() -> void:
 		.override_failure_message("fixture failed to queue the Guard").is_true()
 	assert_bool(guard.is_valid).is_true()
 
-	# The blocker is dragged five cells down the row by a re-plan it authored itself.
+	# The blocker is dragged five cells down the row by a re-plan it authored itself. Re-validated the
+	# way the game does after any queue change -- resolve, then validate WITH the plan -- because where
+	# the pair stands when the ward arms is the resolve's answer (#1354).
 	var move := MoveAction.new()
 	var path: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0)]
 	move.init(blocker, path, null)
 	blocker.squad._queue_action(move)
-	game.squad_manager.validate_squad_plan(blocker.squad)
+	game.refresh_action_queue(blocker.squad)
 
 	assert_bool(guard.is_valid) \
 		.override_failure_message("a Guard covering nobody stayed green").is_false()
