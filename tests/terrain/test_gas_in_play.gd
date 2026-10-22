@@ -170,3 +170,29 @@ func test_a_spreading_fire_gives_off_the_smoke_the_outline_foretold() -> void:
 		assert_int(field.packed_at(cell)).is_not_equal(0)
 	assert_int(field.cells().size()).override_failure_message(
 			"the round left gas the outline never drew").is_equal(expected.size())
+
+
+# #1335 through the real path: a shock swing on a soaked foe arcs into the soaked foe beside it, and
+# the plan the queue previews leaves ozone on BOTH cells -- the second only because the current ran
+# there (AttackAction.arc_links, stamped by the real volley builder), never re-derived.
+func test_a_shocks_current_leaves_ozone_where_it_ran_in_the_previewed_plan() -> void:
+	var foe := _spawn(ENEMY, FOE_CELL)
+	var beside := FOE_CELL + Vector2i.RIGHT
+	var second := _spawn(ENEMY, beside)
+	foe.add_element_state(Elemental.State.WET)
+	second.add_element_state(Elemental.State.WET)
+	var hero := _spawn(PLAYER, FOE_CELL + Vector2i.LEFT)
+	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.elemental_damage_type = Elemental.Element.SHOCK
+	game.squad_manager.active_squad = hero.squad
+	var action := AttackAction.declare(hero, hero.movement.cell, FOE_CELL)
+	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
+			"fixture: the swing never queued (%s)" % [", ".join(action.validation_errors)]).is_true()
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(hero.squad, game._board())
+	var ran := false
+	for atk in plan.attacks:
+		for link: Conduction.Link in atk.arc_links:
+			ran = ran or link.to == beside
+	assert_bool(ran).override_failure_message("fixture: the current never reached the second foe").is_true()
+	for cell: Vector2i in [FOE_CELL, beside]:
+		assert_bool(plan.pending_deposits().has({"cell": cell, "gas": Gas.Kind.OZONE})).override_failure_message(
+				"the previewed plan leaves no ozone on %s" % [cell]).is_true()

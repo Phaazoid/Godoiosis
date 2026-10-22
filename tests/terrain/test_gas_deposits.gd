@@ -570,3 +570,65 @@ func test_a_shoving_air_hit_blows_gas_an_earlier_order_in_the_same_plan_left() -
 	_play(plan, board)
 	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
 	assert_int(board.gas.level_at(landing, STEAM)).is_equal(Gas.Level.MEDIUM)
+
+
+# --- a shock hit makes ozone (#1335) --------------------------------------------------------------
+
+func _ozone() -> TerrainReaction:
+	return _authored(func(r: TerrainReaction) -> bool:
+		return r.in_the_air and r.fires_for([Elemental.Element.SHOCK] as Array[Elemental.Element]) \
+			and Gas.released(r.gases).has(Gas.Kind.OZONE), "makes ozone from a shock in the air")
+
+
+func _link(from: Vector2i, to: Vector2i, step: int) -> Conduction.Link:
+	var link := Conduction.Link.new()
+	link.from = from
+	link.to = to
+	link.step = step
+	return link
+
+
+# In the AIR, so a UNIT-only shock leaves it too: on the cell it struck AND on every cell its stamped
+# current ran through -- the volley's own tree, never re-derived.
+func test_a_shock_leaves_ozone_where_it_struck_and_all_along_its_current() -> void:
+	var ozone := _ozone()
+	var attacker := _attacker(Elemental.Element.SHOCK, EquippableData.TargetMode.UNIT)
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var aim := _aim(attacker, struck)
+	var far := TARGET_CELL + Vector2i(1, 0)
+	var farther := TARGET_CELL + Vector2i(2, 0)
+	var links: Array[Conduction.Link] = [_link(TARGET_CELL, far, 1), _link(far, farther, 2)]
+	aim.arc_links = links
+	var plan := _resolve(_one(aim), _KindBoard.new(null, {}))
+	var level: int = ozone.gases[Gas.Kind.OZONE]
+	for cell: Vector2i in [TARGET_CELL, far, farther]:
+		assert_int(_gas_on(plan, cell, Gas.Kind.OZONE)).override_failure_message(
+				"no ozone on %s" % [cell]).is_equal(level)
+	assert_int(_gas_on(plan, TARGET_CELL + Vector2i(3, 0), Gas.Kind.OZONE)).is_equal(0)
+
+
+# A MAP-only shock strikes no one and still leaves it.
+func test_a_map_only_shock_leaves_ozone_on_the_cells_it_strikes() -> void:
+	var attacker := _attacker(Elemental.Element.SHOCK, EquippableData.TargetMode.MAP)
+	var struck: Array[Vector2i] = [TARGET_CELL, TARGET_CELL + Vector2i(0, 1)]
+	var plan := _resolve(_one(_aim(attacker, struck)), _KindBoard.new(null, {}))
+	for cell in struck:
+		assert_int(_gas_on(plan, cell, Gas.Kind.OZONE)).override_failure_message(
+				"a map-only shock left no ozone on %s" % [cell]).is_greater(0)
+
+
+# Only the AIR reaches the current's cells: an attack's own gas and the ground's reactions stay on what
+# it struck.
+func test_the_current_carries_the_air_half_only() -> void:
+	var attacker := _attacker(Elemental.Element.SHOCK, EquippableData.TargetMode.UNIT)
+	attacker.get_fired_attack().gases = {STEAM: Gas.Level.THIN}
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var aim := _aim(attacker, struck)
+	var far := TARGET_CELL + Vector2i(1, 0)
+	var links: Array[Conduction.Link] = [_link(TARGET_CELL, far, 1)]
+	aim.arc_links = links
+	var plan := _resolve(_one(aim), _KindBoard.new(null, {}))
+	assert_int(_steam_on(plan, TARGET_CELL)).is_equal(Gas.Level.THIN)
+	assert_int(_steam_on(plan, far)).override_failure_message(
+			"the attack's own gas rode the current past what it struck").is_equal(0)
+	assert_int(_gas_on(plan, far, Gas.Kind.OZONE)).is_greater(0)

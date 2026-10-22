@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05; #1251 (a tint brighter than the art reaches the 3D sprite) folded in 2026-10-07; #654 (the water basin experiment) folded in 2026-10-08; #1260's weather folded in 2026-10-08; #1269's snow and the weather's own grade folded in 2026-10-09; #1278's readable snow ground, buried tufts and the two snow bugs folded in the same day, and its ice-blue unit caps after it; #1285's fog folded in 2026-10-09, and its re-tuned ladder (the old Mist is now Thick Fog) and its never-climbing cards, slow sink off a ledge and edge dissolve the same day; #1286's wind folded in 2026-10-10; #654's submerged bank folded in 2026-10-10, and #654's basin and bank promoted out of Experiments the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10; #1304's held camera-following emitters folded in 2026-10-10; #1305's flake ceiling folded in 2026-10-11; Deep Alchemy Phase 2 folded in 2026-10-11; #1363's gas, shock and landing dust on the drawn water folded in 2026-10-22; #1335's smoke folded in 2026-10-22; #1332's blown gas and the outline's folded deposits the same day.**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05; #1251 (a tint brighter than the art reaches the 3D sprite) folded in 2026-10-07; #654 (the water basin experiment) folded in 2026-10-08; #1260's weather folded in 2026-10-08; #1269's snow and the weather's own grade folded in 2026-10-09; #1278's readable snow ground, buried tufts and the two snow bugs folded in the same day, and its ice-blue unit caps after it; #1285's fog folded in 2026-10-09, and its re-tuned ladder (the old Mist is now Thick Fog) and its never-climbing cards, slow sink off a ledge and edge dissolve the same day; #1286's wind folded in 2026-10-10; #654's submerged bank folded in 2026-10-10, and #654's basin and bank promoted out of Experiments the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10; #1304's held camera-following emitters folded in 2026-10-10; #1305's flake ceiling folded in 2026-10-11; Deep Alchemy Phase 2 folded in 2026-10-11; #1363's gas, shock and landing dust on the drawn water folded in 2026-10-22; #1335's smoke folded in 2026-10-22, its ozone the same day; #1332's blown gas and the outline's folded deposits the same day.**
 
 ---
 
@@ -1270,7 +1270,7 @@ is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` und
   overlaps or renumbering pinned ones.
 - **A tear-out's diorama carries its gas**: a lifted region reads the same field at the stage offset,
   only from the cells that went up. Gas on cells IN FLIGHT is hidden until they land.
-- **Thunder has one CPU flash schedule** per 2x2 cluster, and a bolt belongs to a STRIKE, not a cell:
+- **Ozone (Thunder until #1335) has one CPU flash schedule** per 2x2 cluster, and a bolt belongs to a STRIKE, not a cell:
   each cluster's glow point is where the volume lights and the one bolt stands, so the two cannot
   drift apart. Under photosensitivity every cloud holds a steady dim glow and the bolts never show.
 - **Frost's sparkle is the pixel snow.** The volume's own glints (a distance-to-the-ray test per
@@ -1316,6 +1316,11 @@ ignition puts thick smoke on its cell. Three presentation pieces came with it, a
 
 **Alt's outline draws a spreading fire's smoke.** The round now runs the gas before the tiles, so
 `GasField.next_round` (the outline) already holds the smoke the fire front will give off this round.
+
+**Ozone wears the old Thunder look** (#1335, 2026-10-22). `Gas.Kind.THUNDER` was renamed `OZONE` and
+`GasLooks/THUNDER.tres` moved to `OZONE.tres` unchanged: its glow and pixel lightning now read as the
+charge a strike leaves. Every shock hit leaves thin ozone on the cells it struck and the cells its current
+ran through, ghosted before Execute with the kind's puff like any deposit. A first pass, for the dev to tune.
 
 **A hit that shoves blows the gas, and Alt outlines from where it lands** (#1332, 2026-10-22; the rule is
 deep-alchemy.md -> *What is built*). No new art: a push is a cleared tile plus an ordinary deposit, so

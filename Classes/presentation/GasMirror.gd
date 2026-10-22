@@ -374,7 +374,7 @@ func _on_look_changed() -> void:
 	_seen = []
 
 
-# --- thunder: one CPU schedule, so the volume's glow and the pixel bolts strike together ----------
+# --- a flashing gas (ozone, the charge a strike leaves): one CPU schedule, so glow and bolts strike together
 
 # Every 2x2 cluster of a flashing gas strikes on its own beat, glowing above the middle of its cells.
 func _build_flash_clusters(shown: Dictionary[Vector2i, int]) -> void:

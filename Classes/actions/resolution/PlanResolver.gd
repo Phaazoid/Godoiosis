@@ -1583,10 +1583,19 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
 	# victim, and who that was is this pass's answer, gone by the time anything could re-ask; and a
 	# watch shot's geometry was frozen when it armed. Once per tile, however often a path revisits it.
+	# The AIR half reaches further: every cell a shock's current ran through as well (#1335, ozone), off
+	# the volley's stamped tree, never re-derived. The ground and the attack's own gas stay on what it struck.
+	var struck := {}
 	for cell in action.struck_cells:
+		struck[cell] = true
+	var cells: Array[Vector2i] = action.struck_cells.duplicate()
+	for cell in _current_cells(action):
+		if not struck.has(cell):
+			cells.append(cell)
+	for cell in cells:
 		var effect: ResolvedCellEffect = null
 		var gas_here := board.gas.projected_packed_at(cell, in_pass) if board.gas != null else 0
-		if not ground.is_empty():
+		if struck.has(cell) and not ground.is_empty():
 			effect = _resolve_cell_effect_at(cell, ground, board, terrain_reactions)
 		if not elements.is_empty():
 			effect = _resolve_air_at(cell, elements, board, terrain_reactions, effect, gas_here)
@@ -1594,7 +1603,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 			var landing := _gas_landing(action, cell, board)
 			if landing != cell:
 				blown.append({"to": landing, "gas": gas_here})
-		if leaves_gas:
+		if leaves_gas and struck.has(cell):
 			if effect == null:
 				effect = ResolvedCellEffect.new()
 				effect.cell = cell
@@ -1642,6 +1651,17 @@ static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardConte
 			break
 		pos += dir
 	return pos
+
+# The cells a shock's CURRENT ran through (#1335): both ends of every link the volley stamped
+# (AttackAction.arc_links), each once, in link order. Empty on anything that carries no shock.
+static func _current_cells(action: AttackAction) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for link: Conduction.Link in action.arc_links:
+		if not out.has(link.from):
+			out.append(link.from)
+		if not out.has(link.to):
+			out.append(link.to)
+	return out
 
 # One cell's terrain reaction: match the incoming elements against the tile's kind and return the
 # resolved deposit, or null when no reaction fires there. The GROUND half: a reaction in the air is
