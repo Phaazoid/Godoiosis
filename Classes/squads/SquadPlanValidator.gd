@@ -42,6 +42,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 	# hunted its victim on the cell its own shove had just cleared. No plan = attacks untouched.
 	if plan != null:
 		_revalidate_unit_attacks(actions, plan)
+		_revalidate_guard_range(actions)
 		_revalidate_rescue_targets(actions, board, plan)
 		_revalidate_watch_material(actions, board)
 		_revalidate_fire_gates(actions)
@@ -143,12 +144,8 @@ static func _revalidate_rescues(actions: Array[BaseAction]) -> void:
 		if not _actor_ends_adjacent_to(rescue, target, actions):
 			rescue.add_validation_error("Rescuer no longer adjacent to the downed ally")
 
-# The pair must still be together WHEN THE GUARD ARMS, so a re-planned move that walks the blocker
-# out of range refuses the order rather than arming a Guard that covers nothing (#414).
-#
-# Only at arming: the pair drifting apart AFTERWARDS is not an invalid order, it is the authored
-# counterplay (shove the blocker, shove the ward). That question is asked per hit, against threaded
-# positions, by PlanResolver._guard_for — same rule (GuardWard.in_range), different positional fact.
+# A Guard needs a ward to guard. Whether the pair is in RANGE is not asked here: that belongs to the
+# moment the ward arms, which only the resolve can see (_revalidate_guard_range, below).
 static func _revalidate_guards(actions: Array[BaseAction]) -> void:
 	for action in actions:
 		if not (action is GuardAction):
@@ -157,9 +154,6 @@ static func _revalidate_guards(actions: Array[BaseAction]) -> void:
 		var ward: Unit = guard.target
 		if ward == null or not is_instance_valid(ward) or ward.is_dead():
 			guard.add_validation_error("Guard target is gone")
-			continue
-		if not GuardWard.in_range(projected_cell_for(guard.actor, actions), ward.get_projected_destination(), guard.guard_range):
-			guard.add_validation_error("Too far from the unit being guarded")
 
 # A re-planned move that walks the actor out of the zone invalidates the capture, rather than
 # claiming wherever it ended up. Same shape as rescue; the context is a CELL.
@@ -192,6 +186,20 @@ static func _revalidate_unit_attacks(actions: Array[BaseAction], plan: ResolvedP
 		# queued -- one-way validity, the whiff's own rule. The resolve's answer, never a re-derivation.
 		if _plan_fizzled(plan, aim):
 			aim.add_validation_error("Fizzles where they'll be standing")
+
+# The pair must still be together WHEN THE GUARD ARMS, so a re-plan that parts them refuses the order
+# rather than arming a Guard that covers nothing (#414). The ward arms at the order's QUEUE SLOT in the
+# attack walk, so the answer is the resolve's (GuardAction.resolved_in_range, #1354), read beside the
+# whiff clause for its reason: a shove queued AFTER the Guard is the authored counterplay (shove the
+# blocker, shove the ward), asked per hit by PlanResolver._guard_for, while one queued before it really
+# can part the pair. A CANDIDATE Guard is judged at the gate (SquadManager._candidate_guard_in_range).
+static func _revalidate_guard_range(actions: Array[BaseAction]) -> void:
+	for action in actions:
+		var guard := action as GuardAction
+		if guard == null or not guard.is_valid:
+			continue   # already red: the ward is gone
+		if not guard.resolved_in_range:
+			guard.add_validation_error("Too far from the unit being guarded")
 
 # A stored WATCH's twin of the clause above (Deep Alchemy Phase 2): the resolve stamped where the watch
 # arms (OverwatchAction.resolved_anchor), and a carving that fizzles from there could only ever fire a

@@ -481,10 +481,25 @@ static func _plan_refusal(action: BaseAction) -> String:
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 	validate_squad_plan_preview(squad, action)
 	if action.is_valid and _candidate_carving_holds(squad, action) and _candidate_aim_connects(squad, action) \
-			and _candidate_rescue_target_ok(squad, action):
+			and _candidate_rescue_target_ok(squad, action) and _candidate_guard_in_range(squad, action):
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
+	return false
+
+# The range half of a candidate Guard (#1354), the whiff clause's shape. A STORED Guard's range is the
+# resolve's, judged at its queue slot (GuardAction.resolved_in_range); a candidate's slot is the END of
+# the queue, after every queued aim has landed its shove, which is exactly the published projection --
+# the reading RulesService.guard_candidates offers the menu's row from, so the row and the gate agree.
+func _candidate_guard_in_range(squad: Squad, action: BaseAction) -> bool:
+	var guard := action as GuardAction
+	if guard == null or guard.target == null or not is_instance_valid(guard.target):
+		return true
+	var one: Array[BaseAction] = [action]
+	var blocker_cell := Unit.projected_cell(guard.actor, _hypothetical_actions(squad, one), true, true)
+	if GuardWard.in_range(blocker_cell, guard.target.get_projected_destination(), guard.guard_range):
+		return true
+	guard.add_validation_error("Too far from the unit being guarded")
 	return false
 
 # The fizzle half of the gate (Deep Alchemy Phase 2), the whiff clause's sibling: a candidate carving
@@ -681,9 +696,21 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# squad and a counter-er always in a DEFENDING one, so no unit can do both in one pass.
 	if countering_unit.is_standing_watch():
 		return false
+	# A member the pass has already FELLED is out of the fight (#1354; dev, 2026-10-21: downed as well as
+	# killed). One downed before the pass has already been ejected from the party, so one downed during
+	# it is treated the same way and the counter goes to the next standing member. This is the party's
+	# question, not an aimed hit's: a blow AIMED at a body still lands on it (#1350).
+	if not PlanResolver.actor_is_live(target_unit, hypo):
+		return false
 
 	var counter_cell := PlanResolver.projected_position(countering_unit, hypo)
 	var aimed_from: Vector2i = target_cell if target_cell != null else PlanResolver.projected_position(target_unit, hypo)
+
+	# A counter whose carving FIZZLES where the counter-er stands lands nothing, so it answers nobody
+	# (#1354). The resolve skips one (PlanResolver.resolve_counters) and ThreatField draws no reach for
+	# one, so this is what keeps the AI's exchange scoring from counting it.
+	if CellSubstances.fizzle_reason(countering_unit.get_counter_attack(), counter_cell, board, countering_unit) != "":
+		return false
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
 	# not by whatever this unit last aimed with. Reading the live pick here let a melee unit
@@ -932,6 +959,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		if action.action_type == BaseAction.ActionType.GUARD:
 			var order := action as GuardAction
 			order.resolved_spent = false   # rewritten below; a re-resolve must not inherit last pass's verdict
+			order.resolved_in_range = true # ...and so is this one, two lines down
 			# R7 liveness at the QUEUE SLOT (#1005): a bodyguard the move phase already felled never
 			# steps in front of anyone, so the ward is not appended and nothing downstream is
 			# offered a substitution it cannot make. The slot is only HALF the answer -- a Guard is
@@ -940,6 +968,12 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 			if not PlanResolver.actor_is_live(order.actor, hypo):
 				continue
 			if order.target != null and is_instance_valid(order.target):
+				# The pair must be together WHEN THE GUARD ARMS (#414), and this slot is that moment
+				# (#1354): judged on the pass's own cells, so a shove queued AFTER the Guard is drift the
+				# ward has already armed through, while one queued before it can part the pair. The
+				# validator reds the order on it; a candidate is judged at the gate instead.
+				order.resolved_in_range = GuardWard.in_range(PlanResolver.projected_position(order.actor, hypo),
+						PlanResolver.projected_position(order.target, hypo), order.guard_range)
 				var ward := GuardWard.make(order.actor, order.target, order.guard_range)
 				plan.guards.append(ward)
 				guard_orders[ward] = order
