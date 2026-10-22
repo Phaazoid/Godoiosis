@@ -16,6 +16,13 @@ var is_trailing := false
 # stops at the crossing cell, and so does one it throws.
 var resolved_stop_index := -1
 
+# Did THIS pass move the walker again after the walk ended (#1349)? A shove always lands after the
+# walk inside one pass, so a shove the pass published beats THIS walk -- Unit.projected_cell reads it.
+# A walk queued AFTER the publish carries no stamp, and beats the now-stale shove. Cleared with
+# resolved_stop_index when the walk resolves and written once the attack walk is over
+# (SquadManager._resolve_actions), so no pass reads another's verdict.
+var resolved_displaced := false
+
 # What the WALK ITSELF did to the mover (#884 -- wading soaks you). Written every resolve beside
 # resolved_stop_index and for the same reason: a walk re-planned out of the river must not keep last
 # pass's verdict. Null when the walk changes nothing, which is nearly always.

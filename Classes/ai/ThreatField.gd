@@ -30,6 +30,26 @@ var by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
 # construction rather than by a second rule: a Hold unit yields its own cell because that is
 # where its archetype fires from.
 var move_by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
+var traces := 0   # sight traces this build ran (#1344) -- the cost regression check counts these
+
+
+# ONE BUILD'S SIGHT-TRACE VERDICTS (#1344): attack -> origin -> {cell: bool}. A verdict reads the attack,
+# the two cells and the board, and no unit, so every unit with that attack shares it. It lives exactly
+# one build, the dev's pick over a cache carried between builds: that would outlive an attack or a tile
+# edited in the dev tools. If line of sight ever reads a unit, this can no longer be shared.
+class TraceMemo:
+	var verdicts := {}
+	var count := 0
+
+	func at(attack: AttackData, origin: Vector2i) -> Dictionary:
+		var by_origin: Dictionary = verdicts.get_or_add(attack, {})
+		return by_origin.get_or_add(origin, {})
+
+	func aim_ok(known: Dictionary, attack: AttackData, origin: Vector2i, cell: Vector2i, board: BoardContext) -> bool:
+		if not known.has(cell):
+			known[cell] = Reach.vertical_aim_ok(attack, origin, cell, board)
+			count += 1
+		return known[cell]
 
 
 # Every unit hostile to `viewer`, so an ally's board reads the same field the player's does.
@@ -37,6 +57,7 @@ var move_by_unit: Dictionary = {}   # Unit -> Dictionary[Vector2i, true]
 # one place a soaking that has not happened yet exists -- the board only knows who is wet NOW.
 static func build(board: BoardContext, viewer: Team.Faction, pending: Dictionary = {}) -> ThreatField:
 	var field := ThreatField.new()
+	var memo := TraceMemo.new()
 	for unit in board.units:
 		if not is_instance_valid(unit) or not unit.is_active():
 			continue
@@ -53,12 +74,13 @@ static func build(board: BoardContext, viewer: Team.Faction, pending: Dictionary
 		for cell in origins:
 			moves[cell] = true
 		field.move_by_unit[unit] = moves
-		var reach := _threat_of(unit, board, origins, pending)
+		var reach := _threat_of(unit, board, origins, pending, memo)
 		field.by_unit[unit] = reach
 		for cell in reach:
 			if not field.cells.has(cell):
 				field.cells[cell] = []
 			field.cells[cell].append(unit)
+	field.traces = memo.count
 	return field
 
 
@@ -135,7 +157,7 @@ static func reach_from(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 	var out: Array[Vector2i] = []
 	if unit == null or not is_instance_valid(unit) or board == null or origins.is_empty():
 		return out
-	out.assign(_reach_of(unit, board, origins).keys())
+	out.assign(_reach_of(unit, board, origins, TraceMemo.new()).keys())
 	return out
 
 
@@ -195,17 +217,18 @@ static func _origins_of(unit: Unit, board: BoardContext, zone: Dictionary) -> Ar
 #
 # This is reach_from's walk too, and deliberately ONLY these two passes: the watch lanes and the
 # current are predictions about an enemy turn (_threat_of), and your own red is a permission.
-static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Dictionary:
+static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], memo: TraceMemo) -> Dictionary:
 	var out := {}
-	for cells: Dictionary in _reach_by_attack(unit, board, origins).values():
+	for cells: Dictionary in _reach_by_attack(unit, board, origins, memo).values():
 		out.merge(cells)
 	return out
 
 
 # What this unit could hit on its next turn -- _reach_of plus the two mechanisms #1197 found it
 # painting safe. The lanes come first so the current is traced from them as well.
-static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], pending: Dictionary) -> Dictionary:
-	var by_attack := _reach_by_attack(unit, board, origins)
+static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], pending: Dictionary,
+		memo: TraceMemo) -> Dictionary:
+	var by_attack := _reach_by_attack(unit, board, origins, memo)
 	_add_watch_reach(unit, board, origins, by_attack)
 	_add_splash(by_attack)
 	var out := {}
@@ -219,25 +242,41 @@ static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 # KEYED BY ATTACK, because the current depends on the element of the attack that made the hit -- a
 # non-shock swing that reaches the lake must not light it (#1197). Nothing selectable (unarmed, an
 # aura-dry rune) reaches nothing, as it can fire nothing (#1215).
-static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Dictionary:
+#
+# A UNION, so a cell one origin already reaches is never traced again (#1344): most of a big board's
+# cost was the same cell re-traced from every origin in range.
+static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i], memo: TraceMemo) -> Dictionary:
 	var by_attack := {}
-	var attacks: Array[AttackData] = unit.get_selectable_attacks()
+	var attacks: Array[AttackData] = []
+	for attack in unit.get_selectable_attacks():
+		if unit.is_attack_fireable(attack):   # reads the kit, never the origin
+			attacks.append(attack)
+	var fizzled := {}   # this unit's, shared with the rim: a fizzle reads the caster
 	for origin in origins:
 		for attack in attacks:
-			if not unit.is_attack_fireable(attack):
-				continue
 			# A carving that fizzles from this origin threatens nothing from it -- the AI's own candidate
 			# filter (AITactics._attack_candidates), asked of the same cell, so the field stays a superset
 			# of what it could aim.
-			if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+			if _fizzles(unit, attack, origin, board, fizzled):
 				continue
 			var out: Dictionary = by_attack.get_or_add(attack, {})
+			var known := memo.at(attack, origin)
 			for cell in Reach.get_all_attack_cells_from(unit, origin, attack):
-				if not Reach.is_directional_attack(attack) and not Reach.vertical_aim_ok(attack, origin, cell, board):
+				if out.has(cell):
+					continue
+				if not Reach.is_directional_attack(attack) and not memo.aim_ok(known, attack, origin, cell, board):
 					continue
 				out[cell] = true
-	_add_counter_reach(unit, board, origins, by_attack)
+	_add_counter_reach(unit, board, origins, by_attack, memo, fizzled)
 	return by_attack
+
+
+# Asked once per attack and origin within a unit's walk: the counter rim re-asks the opening pass's.
+static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: BoardContext, asked: Dictionary) -> bool:
+	var by_origin: Dictionary = asked.get_or_add(attack, {})
+	if not by_origin.has(origin):
+		by_origin[origin] = CellSubstances.fizzle_reason(attack, origin, board, unit) != ""
+	return by_origin[origin]
 
 
 # THE COUNTER, walked on its own (#710 slice 4). It was born to answer the zone clip the pass above
@@ -254,16 +293,20 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 # fires during your own move, on the cells you walk through, which is the watch overlay's to draw
 # rather than this field's -- so dropping the rim there would under-state exactly where the warning
 # matters.
-static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[Vector2i], by_attack: Dictionary) -> void:
+static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[Vector2i], by_attack: Dictionary,
+		memo: TraceMemo, fizzled: Dictionary) -> void:
 	if not unit.attack_source_can_counter():
 		return
 	var counter := unit.get_counter_attack()
 	var out: Dictionary = by_attack.get_or_add(counter, {})
 	for origin in origins:
-		if CellSubstances.fizzle_reason(counter, origin, board, unit) != "":
+		if _fizzles(unit, counter, origin, board, fizzled):
 			continue   # a counter that would fizzle there lands nothing (PlanResolver.resolve_counters)
+		var known := memo.at(counter, origin)
 		for cell in Reach.get_all_attack_cells_from(unit, origin, counter):
-			if not Reach.is_directional_attack(counter) and not Reach.vertical_aim_ok(counter, origin, cell, board):
+			if out.has(cell):
+				continue
+			if not Reach.is_directional_attack(counter) and not memo.aim_ok(known, counter, origin, cell, board):
 				continue
 			out[cell] = true
 

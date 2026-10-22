@@ -819,3 +819,60 @@ func test_every_unit_a_splash_or_payload_hits_stands_inside_the_field() -> void:
 	for victim: Unit in [close, downrange]:
 		assert_bool(hit.has(victim)).override_failure_message(
 				"fixture is vacuous: a target was never hit, so its shape went unexercised").is_true()
+
+
+# --- #1344: what one build costs -----------------------------------------------------------------
+#
+# Counts, never milliseconds: `traces` is how many sight traces the build ran. The field is a union, so
+# a cell one origin reaches is not traced again, and a verdict is traced once per build however many
+# passes ask it. Each case pins one of those, against the count the old walk ran.
+
+func _open_board() -> Dictionary:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 12, 12))
+	return board
+
+
+# A plain ranged point attack reaching 1 to 3 -- the shape that re-traced the most on The Gorge.
+func _gunner(board: Dictionary, cell: Vector2i, archetype: AIArchetype.Type) -> Unit:
+	var unit: Unit = _spawn(board, ENEMY, cell)
+	(unit.equipped_weapon as WeaponInstance).template.main_attack.max_range = 3
+	_bind(unit, archetype)
+	return unit
+
+
+# On flat open ground every trace passes, so a walk that traces a reached cell once runs at most one
+# trace per cell it marks. The old walk traced each cell from every origin in range, rim included.
+func test_open_ground_traces_each_reached_cell_once() -> void:
+	var board := _open_board()
+	var gunner := _gunner(board, Vector2i(6, 6), AIArchetype.Type.RUSHDOWN)
+	var field := ThreatField.build(_context(board), PLAYER)
+	var reached := field.reach_of(gunner).size()
+	var attack: AttackData = gunner.get_counter_attack()
+	var old_walk := 0
+	for origin: Vector2i in field.move_of(gunner):
+		old_walk += 2 * Reach.get_all_attack_cells_from(gunner, origin, attack).size()   # opening + rim
+	assert_int(old_walk).override_failure_message(
+			"fixture is vacuous: the old walk traced no more than the cells it reached").is_greater(reached)
+	assert_int(field.traces).override_failure_message(
+			"%d traces for %d reached cells: a cell already reached was traced again" % [field.traces, reached]
+			).is_less_equal(reached)
+
+
+# A refused cell never enters the reach, so the counter rim asks about it again. One origin and a wall:
+# every (origin, cell) the ring holds is traced once, and the rim re-asks are answered from the build.
+func test_the_counter_rim_retraces_nothing_the_opening_pass_did() -> void:
+	var board := _open_board()
+	var gunner := _gunner(board, Vector2i(5, 5), AIArchetype.Type.HOLD)
+	board.board_heights.set_cell(Vector2i(6, 5), 4 * Terrain.UNITS_PER_LEVEL)   # a column in the line of fire
+	var counter: AttackData = gunner.get_counter_attack()
+	assert_array(gunner.get_selectable_attacks()).override_failure_message(
+			"fixture is vacuous: the rim walks a different attack from the opening pass").contains([counter])
+	var ring := Reach.get_all_attack_cells_from(gunner, gunner.movement.cell, counter)
+	var field := ThreatField.build(_context(board), PLAYER)
+	assert_int(field.reach_of(gunner).size()).override_failure_message(
+			"fixture is vacuous: the column refused nothing, so the rim had nothing to re-ask").is_less(ring.size())
+	assert_int(field.traces).override_failure_message(
+			"%d traces for a ring of %d from one origin: the rim re-traced what the opening pass did" % [
+			field.traces, ring.size()]).is_less_equal(ring.size())

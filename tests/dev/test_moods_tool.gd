@@ -256,32 +256,56 @@ func test_typing_a_colour_channel_moves_the_live_property_and_the_slider() -> vo
 
 # --- Reset --------------------------------------------------------------------------------
 
-# Asserted knob-by-knob rather than through a summary: this used to lean on Copy Values'
-# changed_values() as a probe, and that feature is gone (#386).
-func test_reset_puts_every_knob_back_to_its_authored_value() -> void:
-	var before: Array = []
-	for knob: Dictionary in LookKnobs.KNOBS:
-		before.append(_moods.read(knob))
+# RESET MEANS THE FILE ON DISK (dev ruling, #1376). Nothing is loaded through the panel and this
+# suite builds no board, so the file is the mood an empty board wears: the default. The expectation
+# is read off the FILE, never off the scene, and asserted knob-by-knob.
+func test_reset_puts_every_knob_back_to_the_saved_file() -> void:
+	var saved := DevWidgets.saved_copy(LookKnobs.DEFAULT_PATH) as LookPreset
+	assert_object(saved).override_failure_message("the default mood file did not read").is_not_null()
 	var moved := 0
-	for i in LookKnobs.KNOBS.size():
-		var knob: Dictionary = LookKnobs.KNOBS[i]
-		if typeof(before[i]) == TYPE_NIL:
+	for knob: Dictionary in LookKnobs.KNOBS:
+		var key := LookKnobs.preset_key(knob)
+		if typeof(_moods.read(knob)) == TYPE_NIL or not saved.values.has(key):
 			continue
-		_moods.write(knob, _nudged(knob, before[i]))
-		if not LookKnobs.same_value(_moods.read(knob), before[i]):
+		_moods.write(knob, _nudged(knob, saved.values[key]))
+		if not LookKnobs.same_value(_moods.read(knob), saved.values[key]):
 			moved += 1
+	_moods._touch()
 	# Without this the case would pass against a panel whose writes never landed at all.
 	assert_int(moved).override_failure_message(
-		"nothing moved, so Reset had nothing to undo and this case asserts nothing").is_greater(0)
+		"nothing moved off the file, so Reset had nothing to undo and this case asserts nothing").is_greater(0)
 
 	_moods._on_reset_pressed()
 
-	for i in LookKnobs.KNOBS.size():
-		var knob: Dictionary = LookKnobs.KNOBS[i]
-		assert_bool(LookKnobs.same_value(_moods.read(knob), before[i])).override_failure_message(
-			"'%s' did not come back to its authored value" % knob["label"]).is_true()
+	for knob: Dictionary in LookKnobs.KNOBS:
+		var key := LookKnobs.preset_key(knob)
+		if not saved.values.has(key):
+			continue
+		assert_bool(LookKnobs.same_value(_moods.read(knob), saved.values[key])).override_failure_message(
+			"'%s' did not come back to the saved file's value" % knob["label"]).is_true()
 	# Reset redraws every row, and a detached-then-queue_free'd node reads as a gdUnit orphan
 	# until a frame processes the queue (#215's lesson).
+	await await_idle_frame()
+
+
+# What tells the ruling from the old Reset: a look applied with NO FILE behind it is not "saved", so
+# Reset goes past it to the board's file. The snapshot Reset this replaced returned to it.
+func test_reset_skips_a_look_that_was_never_saved() -> void:
+	var knob := _knob("Sun", "light_energy")
+	var on_file: Variant = (DevWidgets.saved_copy(LookKnobs.DEFAULT_PATH) as LookPreset).values[LookKnobs.preset_key(knob)]
+	_moods.write(knob, _nudged(knob, on_file))
+	var unsaved := _moods.capture_preset("never saved")
+	_moods.apply_preset(unsaved)
+	var applied: Variant = _moods.read(knob)
+	assert_bool(LookKnobs.same_value(applied, on_file)).override_failure_message(
+		"the unsaved look landed on the file's own value, so this case would assert nothing").is_false()
+	_moods.write(knob, (float(applied) + float(on_file)) / 2.0)   # off both, so neither reading is free
+	_moods._touch()
+
+	_moods._on_reset_pressed()
+
+	assert_bool(LookKnobs.same_value(_moods.read(knob), on_file)).override_failure_message(
+		"Reset returned to a look that has no file -- that is the last APPLIED, not the last saved").is_true()
 	await await_idle_frame()
 
 
@@ -398,22 +422,25 @@ func test_a_captured_preset_round_trips_through_apply() -> void:
 	await await_idle_frame()
 
 
-# The dev's call: load a mood, tweak it, Reset returns to the MOOD. Getting back to Battle3D.tscn
-# is the dropdown's own "(authored scene)" row instead.
-func test_reset_returns_to_the_loaded_preset_not_the_authored_scene() -> void:
+# The dev's call: load a mood, tweak it, Reset returns to that MOOD'S FILE. A shipped mood, read
+# rather than pinned: which one does not matter, only that the expectation comes off its file.
+func test_reset_returns_to_the_loaded_moods_file() -> void:
+	var names := LookKnobs.saved_presets()
+	assert_array(names).override_failure_message(
+		"no mood ships under %s, so this case has nothing to load" % LookKnobs.PRESET_DIR).is_not_empty()
+	var path := LookKnobs.preset_path(names[0])
+	_moods.apply_preset(LookKnobs.resolve(names[0]))
 	var knob := _knob("WorldEnvironment", "environment:adjustment_saturation")
-	var authored: Variant = _moods.read(knob)
-	_moods.write(knob, _nudged(knob, authored))
-	var preset := _moods.capture_preset("mood")
-	_moods._on_default_pressed()
-	_moods.apply_preset(preset)
-	var in_preset: Variant = _moods.read(knob)
-	assert_bool(LookKnobs.same_value(in_preset, authored)).is_false()
+	var on_file: Variant = (DevWidgets.saved_copy(path) as LookPreset).values[LookKnobs.preset_key(knob)]
+	_moods.write(knob, _nudged(knob, _moods.read(knob)))
+	_moods._touch()
+	assert_bool(LookKnobs.same_value(_moods.read(knob), on_file)).is_false()
 
-	_moods.write(knob, _nudged(knob, in_preset))
-	assert_bool(LookKnobs.same_value(_moods.read(knob), in_preset)).is_false()
 	_moods._on_reset_pressed()
-	assert_bool(LookKnobs.same_value(_moods.read(knob), in_preset)).is_true()
+
+	assert_bool(LookKnobs.same_value(_moods.read(knob), on_file)).override_failure_message(
+		"Reset did not come back to the loaded mood's file").is_true()
+	assert_str(_moods.saved_path()).is_equal(path)
 	await await_idle_frame()
 
 

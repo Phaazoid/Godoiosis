@@ -33,6 +33,9 @@ var _picked := 0                       # survives the rebuild every field write 
 var _save_button: Button
 var _globals_button: Button
 var _rules_button: Button
+var _fields_reset: Button
+var _rules_reset: Button
+var _globals_reset: Button
 # The authored terrain reactions, re-read per rebuild. The catalog CACHES its scan (#1213), so a
 # tick's create or delete is visible in the same breath only because _after_ground_change refreshes
 # it first -- this page is the one runtime writer that changes which reaction files exist.
@@ -72,10 +75,25 @@ func _ready() -> void:
 		"Write the game-wide defaults you have moved into the declarations that author them.\nThese are one value for every board, not this tile's -- the section says which rows.",
 		_on_save_globals_pressed)
 	buttons.add_child(_globals_button)
-	buttons.add_child(_button("Reset defaults",
-		"Put the game-wide defaults back to what is currently saved on disk. The per-tile fields\nand the ground rules are not touched -- they are different files.",
-		_on_reset_globals_pressed))
 	add_child(buttons)
+	# One Reset per Save (dev, #1376): three files, so putting one back never discards another's edits.
+	var resets := HBoxContainer.new()
+	_fields_reset = _button("Reset tile fields",
+		"Put every per-tile field back to what the saved TILESET says. Greyed while nothing has moved.",
+		_on_reset_fields_pressed)
+	resets.add_child(_fields_reset)
+	_rules_reset = _button("Reset ground rules",
+		"Put every burn clock and spread reach you have moved back to what its ignition reaction file\nsays. The burnable TICK is not undone here -- it already wrote or deleted its file.",
+		_on_reset_rules_pressed)
+	resets.add_child(_rules_reset)
+	_globals_reset = _button("Reset defaults",
+		"Put the game-wide defaults back to what is currently saved on disk. The per-tile fields\nand the ground rules are not touched -- they are different files.",
+		_on_reset_globals_pressed)
+	resets.add_child(_globals_reset)
+	add_child(resets)
+	_refresh_save_mark()
+	_refresh_rules_mark()
+	_refresh_globals_mark()
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_status)
@@ -510,6 +528,36 @@ func _save_rules_confirmed() -> void:
 	_status.text = "Saved %d of %d ground rule(s)." % [landed.size(), landed.size() + _staged_rules.size()]
 
 
+# Each staged reaction re-read from its FILE onto the very instance the running fire holds, so the
+# burn follows with no re-wire. One that fails to read stays staged, Save's rule from the other end.
+func _on_reset_rules_pressed() -> void:
+	var landed := 0
+	for fuel: TerrainReaction in _staged_rules.duplicate():
+		if DevWidgets.revert_to_saved(fuel, fuel.resource_path, _status):
+			_staged_rules.erase(fuel)
+			landed += 1
+	_rules_dirty = not _staged_rules.is_empty()
+	_refresh_rules_mark()
+	_rebuild()
+	if _staged_rules.is_empty():
+		_status.text = "Ground rules back to what is saved on disk (%d file(s))." % landed
+
+
+# --- Resetting the tile fields --------------------------------------------------------------------
+
+func _on_reset_fields_pressed() -> void:
+	var tiles := _tile_set()
+	if tiles == null:
+		return
+	if not ObjectKnobs.revert_fields(tiles, _status):
+		return
+	_clear_dirty()
+	if _host != null:
+		_host.rebuild_props()
+	_rebuild()
+	_status.text = "Tile fields back to what %s says on disk." % tiles.resource_path.get_file()
+
+
 # --- Saving the game-wide defaults ----------------------------------------------------------------
 
 func _capture_globals_baseline() -> void:
@@ -595,11 +643,15 @@ func _clear_dirty() -> void:
 func _refresh_save_mark() -> void:
 	if is_instance_valid(_save_button):
 		DevWidgets.mark_unsaved(_save_button, "Save tile fields", _dirty)
+	if is_instance_valid(_fields_reset):
+		DevWidgets.offer_reset(_fields_reset, _dirty)
 
 
 func _refresh_rules_mark() -> void:
 	if is_instance_valid(_rules_button):
 		DevWidgets.mark_unsaved(_rules_button, "Save ground rules", _rules_dirty)
+	if is_instance_valid(_rules_reset):
+		DevWidgets.offer_reset(_rules_reset, _rules_dirty)
 
 
 # RE-DERIVED off the baseline rather than latched: a partial save leaves real edits behind, and a
@@ -613,6 +665,8 @@ func _refresh_globals_dirty() -> void:
 func _refresh_globals_mark() -> void:
 	if is_instance_valid(_globals_button):
 		DevWidgets.mark_unsaved(_globals_button, "Save game-wide defaults", _globals_dirty)
+	if is_instance_valid(_globals_reset):
+		DevWidgets.offer_reset(_globals_reset, _globals_dirty)
 
 func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
 	var button := Button.new()

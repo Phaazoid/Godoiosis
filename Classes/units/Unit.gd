@@ -1078,7 +1078,7 @@ func clear_projected_rescue() -> void:
 # HYPOTHETICAL queue (SquadManager.validate_squad_plan_preview).
 static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid: bool, use_published: bool) -> Vector2i:
 	# A rescue beats everything, because it runs LAST — the side channel, after every move and shove
-	# has played back. Same "later wins" reasoning that makes a real move beat a shove below.
+	# has played back. "Later wins", the rule the shove below follows too.
 	if use_published and unit._has_projected_rescue:
 		return unit._projected_rescue_cell
 	var shoved: bool = use_published and unit._has_projected_knockback
@@ -1088,9 +1088,11 @@ static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid
 		if require_valid and not action.is_valid:
 			continue
 		# A hold-position move means "not going anywhere under my own power" — a shove still moves
-		# you, so it wins. A REAL move beats the shove: you walked out from under it. A walk the
-		# pass HALTED (#413) did not: it was stopped where the shot found it.
-		if shoved and (action.is_hold_position or (action as MoveAction).was_halted()):
+		# you, so it wins. So does a shove the pass landed AFTER this walk (#1349): the walk resolves
+		# first, so the walker is standing where it was thrown, halted mid-walk (#413) or not. A walk
+		# without that stamp was queued after the shove was published, which makes the shove STALE
+		# (it was gathered where the unit used to stand) -- the walk wins until the next resolve.
+		if shoved and (action.is_hold_position or (action as MoveAction).resolved_displaced):
 			return unit._projected_knockback_cell
 		return action.get_destination()
 	return unit._projected_knockback_cell if shoved else unit.movement.cell

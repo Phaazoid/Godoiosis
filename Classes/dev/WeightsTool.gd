@@ -40,15 +40,16 @@ const MOD_TITLE := "Weapon mods"
 const CHARACTER_TITLE := "Characters (BLD)"
 
 var _save_button: Button
+var _reset_button: Button
 var _status: Label
 var _bands: Label
 var _body: VBoxContainer
 # Every editable row's resource -> its SpinBox, so a test (and Reset) can find a row by what it edits.
 var _spins: Dictionary[Resource, SpinBox] = {}
 var _readouts: Dictionary[UnitData, Label] = {}
-# Touched since the last save/reset: resource -> what it held BEFORE the first edit (a UnitData's
-# entry is null when BLD was unauthored, so Reset can put the sparse key back exactly).
-var _touched: Dictionary[Resource, Variant] = {}
+# Touched since the last save/reset. A SET: Reset reads what to put back from the file (#1376), never
+# from a snapshot, which would undo a save another page made since the first touch.
+var _touched: Dictionary[Resource, bool] = {}
 
 
 func _ready() -> void:
@@ -59,11 +60,12 @@ func _ready() -> void:
 	_save_button.tooltip_text = "Write every file changed on this page since the last save. Asks first."
 	_save_button.pressed.connect(_on_save_pressed)
 	buttons.add_child(_save_button)
-	var reset := Button.new()
-	reset.text = "Reset"
-	reset.tooltip_text = "Put every unsaved change on this page back to what is saved on disk."
-	reset.pressed.connect(_on_reset_pressed)
-	buttons.add_child(reset)
+	_reset_button = Button.new()
+	_reset_button.text = "Reset"
+	_reset_button.tooltip_text = "Put every unsaved change on this page back to what is saved on disk. Greyed while nothing has moved."
+	_reset_button.pressed.connect(_on_reset_pressed)
+	buttons.add_child(_reset_button)
+	_refresh_dirty()
 	_status = _note("")
 	_bands = _note("")
 	_note("A change reaches the next unit spawned. Weapon families and mods are shared, so a weapon "
@@ -211,8 +213,7 @@ static func value_of(res: Resource) -> int:
 
 # What a row's SpinBox calls. Public so a caller can drive a row without a widget in hand.
 func edit(res: Resource, value: int) -> void:
-	if not _touched.has(res):
-		_touched[res] = _snapshot(res)
+	_touched[res] = true
 	_write(res, value)
 	if _spins.has(res):
 		_spins[res].set_value_no_signal(value)
@@ -253,6 +254,7 @@ func is_dirty() -> bool:
 
 func _refresh_dirty() -> void:
 	DevWidgets.mark_unsaved(_save_button, "Save", is_dirty())
+	DevWidgets.offer_reset(_reset_button, is_dirty())
 
 
 func touched_files() -> PackedStringArray:
@@ -301,9 +303,18 @@ func save_touched() -> void:
 	_refresh_dirty()
 
 
+# Only the field this page edits, read from the FILE: a sparse BLD comes back absent, and the rest of
+# the resource is left to whatever page owns it. A file that will not read stays touched.
 func _on_reset_pressed() -> void:
-	for res: Resource in _touched:
-		_write(res, _touched[res])
-	_touched.clear()
+	var failed := PackedStringArray()
+	for res: Resource in _touched.keys():
+		var saved := DevWidgets.saved_copy(res.resource_path)
+		if saved == null or saved.get_script() != res.get_script():
+			failed.append(res.resource_path.get_file())
+			continue
+		_write(res, _snapshot(saved))
+		_touched.erase(res)
 	_rebuild()
-	_status.text = "Back to what is saved on disk."
+	_refresh_dirty()
+	_status.text = "Back to what is saved on disk." if failed.is_empty() \
+		else "FAILED to read back: %s" % ", ".join(failed)

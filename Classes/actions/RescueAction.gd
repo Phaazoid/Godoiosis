@@ -19,6 +19,12 @@ var target: Unit   # the downed ally being picked up
 # lies this IS its own cell, so an ordinary rescue moves nobody and needs no special case.
 var haul_to: Vector2i = GridUtils.NO_CELL
 
+# The resolver's verdict for THIS pass (#1349): is the rescuer still beside the body when the side
+# channel reaches it, on the pass's threaded cells? A counter can shove either of them away after the
+# plan was authored, and only the pass knows it. Rewritten every resolve, resolved_spent's rule; the
+# validator reds the order on it (SquadPlanValidator._revalidate_rescue_targets).
+var resolved_within_reach := true
+
 # REQUIRED, not defaulted: every caller states its own answer rather than inheriting a pick this
 # class made for them — the menu passes what the player clicked, the AI and the Play API pass
 # RulesService.rescue_landings(...)[0], which is the deterministic answer that used to be the rule.
@@ -53,13 +59,17 @@ func execute() -> void:
 		push_error("Rescue executed against a target that is not down: %s -> %s" % [actor.get_unit_name(), target.get_unit_name()])
 	finish_execution()
 
-# A Law #2 BACKSTOP, not a rule (#126). The validator's stamp is the only other guard and it is
-# computed before the pass runs, so a mid-pass shove is exactly what could separate the two between
-# the stamp and the act. By the time the side channel runs, moves, attacks and counters have all
-# landed, so both cells are final. If this ever fires, preview and execution disagreed — hence the
-# warning rather than a silent no-op.
+# A Law #2 BACKSTOP, not a rule (#126). The resolve already asked the same question of the pass's own
+# cells (resolved_within_reach, #1349) and a plan that fails it cannot execute. By the time the side
+# channel runs, moves, attacks and counters have all landed, so both cells are final. If this ever
+# fires, preview and execution disagreed — hence the warning rather than a silent no-op.
 func _still_adjacent() -> bool:
-	return GridUtils.manhattan_distance(actor.movement.cell, target.movement.cell) <= 1
+	return within_reach(actor.movement.cell, target.movement.cell)
+
+# THE reach rule for a pickup: beside the body, or on it. One spelling for execution, the resolve's
+# stamp and the validator, each handing in the cells it trusts.
+static func within_reach(rescuer_cell: Vector2i, body_cell: Vector2i) -> bool:
+	return GridUtils.manhattan_distance(rescuer_cell, body_cell) <= 1
 
 # Drag the body clear (#116). It goes to the cell STAMPED on this order — the one the player picked —
 # never a freshly derived one: execution replays the plan (Law #2, and the BREAK repeal made that
