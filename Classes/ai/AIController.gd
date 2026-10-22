@@ -350,9 +350,9 @@ static func _merged(intents: Array[ThreatIntent]) -> Array[ThreatIntent]:
 # (tests/ai/test_threat_field.gd pins that), so a false is a proof rather than an estimate.
 #
 # ITS BITE SHRINKS AS RANGES GROW -- a long-enough weapon reaches the whole board and nothing is
-# ever skipped. That is the honest behaviour, not a defect; see docs/performance.md. Slice 4's
-# counter rim widened the superset the same way for a SENTRY: one whose rim touches a player is now
-# planned where it used to be skipped, and it simply decides to do nothing. Cost, never correctness.
+# ever skipped. That is the honest behaviour, not a defect; see docs/performance.md. A SENTRY's reach
+# runs past its zone since #1377 (its zone limits where it walks, not what it hits), so one is skipped
+# only when nobody stands within reach of the ground it may stand on. Cost, never correctness.
 static func _squad_can_reach_anyone(squad: Squad, field: ThreatField, board: BoardContext) -> bool:
 	var faction := squad.leader.get_faction()
 	for member: Unit in squad.get_members():

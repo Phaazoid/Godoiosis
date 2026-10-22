@@ -1,8 +1,10 @@
-# SentryArchetype (#29): the zone-bound guard's three stateless branches — engage an
-# intruder (zone-clamped), walk home when clear, idle at the post. Also the lure-proofing
-# contract: an enemy in weapon reach but OUTSIDE the zone is pointedly ignored, and no
-# queued destination may leave zone∪post. Real managers + TestTiles via board_builder.
+# SentryArchetype (#29): the zone-bound guard's stateless branches — engage (zone-clamped),
+# pursue an intruder, walk home when clear, hold the post. Its zone limits where it WALKS, never
+# what it hits (#1377, dev 2026-10-21): an enemy outside the zone that it can reach from inside is
+# fought, and no queued destination may leave zone∪post. Real managers + TestTiles via board_builder.
 extends GdUnitTestSuite
+
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
@@ -89,18 +91,78 @@ func test_idle_at_post_takes_a_fallback_action_but_never_moves_or_attacks() -> v
 	assert_int(H.given_orders(squad)[0].action_type).is_equal(BaseAction.ActionType.REV)
 
 
-func test_cannot_be_lured_by_enemy_in_reach_but_outside_zone() -> void:
+# #1377 retired the lure test that stood here: an enemy in reach but outside the zone was "bait"
+# and pointedly ignored. The zone now limits the FOOTING alone, so the same board is a fight.
+func test_attacks_an_enemy_in_reach_outside_its_zone_without_stepping_out() -> void:
 	var board: Dictionary = _build_board()
 	var zones: ZoneManager = _make_zone_manager()
 	var guard: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1))       # zone edge, at its post
 	var squad: Squad = _bind_sentry(guard, Vector2i(3, 1))
-	var _bait: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(4, 1))      # adjacent = in weapon reach, NOT in zone
+	var outsider: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(4, 1))   # adjacent = in weapon reach, NOT in zone
 
 	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
 
-	# Revving at the post is not being lured (#726); moving toward or swinging at the bait would be.
+	var aims: Array[AttackAction] = _attack_aims(squad)
+	assert_int(aims.size()).override_failure_message(
+			"the sentry let an enemy it could hit from its post stand there unanswered").is_equal(1)
+	assert_that(aims[0].target_cell).is_equal(outsider.movement.cell)
+	for cell in _move_destinations(squad):
+		assert_bool(zones.contains(ZONE, cell) or cell == squad.home_cell).override_failure_message(
+				"the sentry stepped out of its zone to %s" % cell).is_true()
+
+
+# ...and the footing half still holds: an enemy it could only hit by standing outside is left alone.
+# Mutant: drop `allowed` from the engagement and it steps out to (4, 1) and swings.
+func test_never_steps_out_of_its_zone_to_reach_an_enemy() -> void:
+	var board: Dictionary = _build_board()
+	var zones: ZoneManager = _make_zone_manager()
+	var guard: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1))       # zone edge, at its post
+	var squad: Squad = _bind_sentry(guard, Vector2i(3, 1))
+	var _outsider: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(5, 1))  # two out: only hittable from (4, 1)
+
+	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
+
 	assert_array(_move_destinations(squad)).is_empty()
 	assert_array(_attack_aims(squad)).is_empty()
+	assert_int(H.given_orders(squad).size()).is_equal(1)
+	assert_int(H.given_orders(squad)[0].action_type).is_equal(BaseAction.ActionType.REV)
+
+
+# AT THE POST it attacks whatever it can hit from where it stands -- here with an extra that outranges
+# the melee main the engagement fork reads, so only the post branch can fire it. It took the fallback
+# verbs alone until #1377, so this queued a REV and nothing else.
+func test_at_its_post_it_fires_a_longer_attack_at_an_enemy_outside_its_zone() -> void:
+	var board: Dictionary = _build_board()
+	var zones: ZoneManager = _make_zone_manager()
+	var guard: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(3, 1))       # zone edge, at its post
+	guard.equipped_weapon = _melee_with_a_long_extra()
+	var lob: AttackData = guard.get_selectable_attacks()[1]
+	var squad: Squad = _bind_sentry(guard, Vector2i(3, 1))
+	var outsider: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(6, 1))   # three out: the melee cannot reach it from the zone
+
+	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
+
+	assert_array(_move_destinations(squad)).is_empty()
+	var aims: Array[AttackAction] = _attack_aims(squad)
+	assert_int(aims.size()).override_failure_message(
+			"the sentry held its long shot at an enemy it could hit from its post").is_equal(1)
+	assert_that(aims[0].target_cell).is_equal(outsider.movement.cell)
+	assert_object(aims[0].fired_attack).is_same(lob)
+
+
+# A melee main (Manhattan 1, the counter) plus an extra that fires at range 1 to 3.
+func _melee_with_a_long_extra() -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	var lob := WeaponAttackData.new()
+	lob.display_name = "Lob"
+	lob.power = 3
+	P.point(lob, 3)
+	var extras: Array[WeaponAttackData] = [lob]
+	template.extra_attacks = extras
+	return WeaponInstance.make(template)
 
 
 func test_intruder_triggers_zone_clamped_engage() -> void:
