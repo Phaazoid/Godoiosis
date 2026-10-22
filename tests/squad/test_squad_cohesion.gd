@@ -774,3 +774,51 @@ func test_smoke_a_pass_lays_under_the_leader_is_forecast_and_splits_the_squad() 
 	await game.order_executor.execute_orders(setup.leader)
 	assert_bool(squad.get_members().has(member)).override_failure_message(
 			"the forecast split never happened when the pass played").is_false()
+
+
+# #1332: smoke an Air hit BLOWS under ANOTHER squad's leader is a cell effect like any deposit, so the
+# forecast names the split on the blow and the real pass makes it -- the enemy's squad, not the caster's.
+func test_smoke_blown_under_an_enemy_leader_is_forecast_and_splits_their_squad() -> void:
+	for x in range(-12, 13):
+		for y in range(-12, 13):
+			game.grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.DEX: DEX_FAST}, Team.Faction.ENEMY), Vector2i.ZERO)
+	var member: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.DEX: DEX_SLOW}, Team.Faction.ENEMY), Vector2i(0, 3))
+	var hero: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(-3, 0))
+	assert_bool(leader != null and member != null and hero != null).override_failure_message(
+			"fixture: a unit never spawned").is_true()
+	leader.unit_instance.stats[Stats.Stat.COH] = FIXTURE_COH
+	await await_idle_frame()
+	game.squad_manager.join_squad(member, leader.squad)
+	var squad: Squad = leader.squad
+	assert_bool(maxi(squad.get_max_squad_range() + _smoke_drop(), 0) < 3).override_failure_message(
+			"fixture: a smoky leash would still reach the member").is_true()
+
+	var disperse: TerrainReaction = null
+	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air and reaction.disperses_gas:
+			disperse = reaction
+	assert_object(disperse).override_failure_message("fixture: no authored reaction disperses gas").is_not_null()
+	hero.equipped_weapon = H.make_weapon(1)   # this fixture's units spawn unarmed
+	var gust := hero.get_fired_attack()
+	gust.targets = EquippableData.TargetMode.MAP
+	gust.max_range = 3
+	gust.deals_no_damage = true
+	gust.elemental_damage_type = disperse.incoming_element
+	gust.knockback = 2
+	var struck := Vector2i(-2, 0)   # two tiles short of the leader, on the line from the hero
+	game.gas_field.set_level(struck, Gas.Kind.SMOKE, Gas.Level.THICK)
+	game.squad_manager.active_squad = hero.squad
+	var aim := AttackAction.declare(hero, hero.movement.cell, struck)
+	assert_bool(game.squad_manager.queue_action(hero.squad, aim)).override_failure_message(
+			"fixture: the gust never queued (%s)" % [", ".join(aim.validation_errors)]).is_true()
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(hero.squad, game._board())
+	assert_int(Gas.level_in(game.gas_field.projected_packed_at(Vector2i.ZERO, plan.cell_effects), Gas.Kind.SMOKE)) \
+		.override_failure_message("fixture: the gust does not blow the smoke onto the leader").is_greater_equal(_smoke_level())
+	assert_bool(SplitForecast.leavers(plan).has(member)).override_failure_message(
+			"no row forecast the enemy member leaving once the smoke is blown onto its leader").is_true()
+
+	await game.order_executor.execute_orders(hero)
+	assert_bool(squad.get_members().has(member)).override_failure_message(
+			"the forecast split never happened when the pass played").is_false()

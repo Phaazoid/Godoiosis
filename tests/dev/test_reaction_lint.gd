@@ -13,16 +13,17 @@
 # does not do yet, to work through one by one or all together later. Each line names a reaction that
 # exists and has an equation, and no reaction is both pending and listed. Its GAS half is checked
 # (#1329): a gas an equation makes that its reaction does not release reds until it is released or
-# listed here.
+# listed here. Its STATE half is checked with no ledger at all (#1423): a unit state an equation leaves
+# on the body must be applied.
 extends GdUnitTestSuite
 
 const PENDING := {
-	"res://Resources/TerrainReactions/Disperse.tres": "dispersal moves gas without changing it, so its equation is bookkeeping: c3potheds's to write (#1335)",
+	"res://Resources/TerrainReactions/Disperse.tres": "dispersing and blowing (#1332) both move gas without changing it, so its equation is bookkeeping: c3potheds's to write (#1335)",
 }
 
 const NOT_YET_FOLLOWED := {
 	"res://Resources/TerrainReactions/Melt.tres": "the heat is not released (the essence is, #1324)",
-	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the heat is not released and the meltwater does not wet the unit (the essence is, #1324); the +5 is the temperature change, not chemistry (Phaazoid)",
+	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the heat is not released (the essence is, #1324); the +5 is the temperature change, not chemistry (Phaazoid)",
 	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder (#1270) and the heat are not made; its ozone is the struck cell's Ozone reaction (#1335)",
 	"res://Resources/TerrainReactions/Ozone.tres": "the thunder (#1270) and the heat are not made",
 }
@@ -133,6 +134,34 @@ func test_a_gas_on_both_sides_is_not_made() -> void:
 	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_empty()
 
 
+# The state half (#1423): water a unit reaction makes is Wet it owes, until it applies it. Water on
+# both sides is not made (a shock keeps the unit wet), and a terrain reaction's water is the ground's.
+func test_a_state_the_equation_leaves_on_the_body_is_unapplied_until_the_reaction_applies_it() -> void:
+	var owed: Array[Elemental.State] = [Elemental.State.WET]
+	var r := _elemental("2FW -> F2 + W2", Elemental.Element.FIRE)
+	assert_array(ReactionLint.unapplied_states(r, _catalog())).is_equal(owed)
+	r.add_states.assign([Elemental.State.WET])
+	assert_array(ReactionLint.unapplied_states(r, _catalog())).is_empty()
+
+	var kept := _elemental("F2 + W2 -> F2 + W2", Elemental.Element.FIRE)
+	assert_array(ReactionLint.unapplied_states(kept, _catalog())).is_empty()
+
+	var t := TerrainReaction.new()
+	t.equation = "2FW -> F2 + W2"
+	assert_array(ReactionLint.unapplied_states(t, _catalog())).is_empty()
+
+
+# Smoke is both a gas and the Smoked state, so a reaction that releases it has accounted for it.
+func test_a_substance_released_as_gas_is_not_owed_as_a_state() -> void:
+	var catalog := _catalog()
+	catalog["smoke"] = _sub("AE2")
+	var r := _elemental("F2 -> smoke", Elemental.Element.FIRE)
+	var owed: Array[Elemental.State] = [Elemental.State.SMOKED]
+	assert_array(ReactionLint.unapplied_states(r, catalog)).is_equal(owed)
+	r.gases = {Gas.Kind.SMOKE: Gas.Level.THIN}
+	assert_array(ReactionLint.unapplied_states(r, catalog)).is_empty()
+
+
 func test_a_map_entry_with_no_substance_is_skipped_rather_than_faulted() -> void:
 	# COVER is a shape dug in the ground (a NONE line), so a reaction on it cannot be held to naming one.
 	var r := TerrainReaction.new()
@@ -208,3 +237,14 @@ func test_every_gas_an_equation_makes_is_released_or_on_the_ledger() -> void:
 			unlisted.append("%s makes %s and does not release it: release it, or say so on NOT_YET_FOLLOWED" % [
 					path, Gas.display_name(kind)])
 	assert_array(unlisted).is_empty()
+
+
+# The state half, which honours NO ledger: Temperature Shock stays listed for its heat, so a skip would
+# never check its meltwater. The first reaction that needs an exception adds one.
+func test_every_state_an_equation_leaves_on_a_body_is_applied() -> void:
+	var unapplied: Array[String] = []
+	for reaction: Resource in _shipped():
+		for state: Elemental.State in ReactionLint.unapplied_states(reaction):
+			unapplied.append("%s makes %s and does not apply %s" % [reaction.resource_path,
+					SubstanceMap.of_state(state), Elemental.state_display_name(state)])
+	assert_array(unapplied).is_empty()

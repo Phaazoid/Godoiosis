@@ -1363,7 +1363,7 @@ static func _describe_deposits(plan: ResolvedPlan) -> Array:
 	for deposit: Dictionary in plan.pending_deposits():
 		var what: String
 		if deposit.has("clears_gas"):
-			what = "disperses gas"   # an Air hit clears the cell (#1335)
+			what = "gas leaves"   # an Air hit clears the cell (#1335), or blows it to a "gas" entry (#1332)
 		elif deposit.has("gas"):
 			what = Gas.display_name(deposit["gas"])
 		else:
@@ -1516,7 +1516,7 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 		if gas_field != null:
 			gas_field.apply(effect)
 		if effect.gas_cleared:
-			events.append("%s's gas disperses" % str(effect.cell))
+			events.append("%s's gas leaves" % str(effect.cell))   # dispersed, or blown to a "gains" line (#1332)
 		for kind: Gas.Kind in effect.gas_added:
 			events.append("%s gains %s %s" % [str(effect.cell), Gas.Level.keys()[effect.gas_added[kind]], Gas.name_of(kind)])
 

@@ -9,6 +9,7 @@ incoming_element = 1
 required_state = 2
 also_triggered_by = Array[int]([9])
 damage_bonus = 5
+add_states = Array[int]([1])
 remove_states = Array[int]([2])
 gases = Dictionary[int, int]({
 6: 2

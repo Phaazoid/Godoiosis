@@ -96,6 +96,39 @@ func test_fire_on_a_chilled_target_is_temperature_shock() -> void:
 	var shock := _authored(Elemental.Element.FIRE, CHILLED)
 	assert_int(attack.resolved.damage).is_equal(int(round(BASE + shock.damage_bonus)))
 	assert_bool(attack.resolved.states_removed.has(CHILLED)).is_true()
+	# The meltwater wets the unit (#1423), and the same hit does not then dry it: every reaction is
+	# matched against the states held BEFORE the hit (E8), and a Chilled unit is never Wet (#1092).
+	assert_bool(attack.resolved.states_added.has(WET)).is_true()
+	assert_bool(attack.resolved.fired_reactions.has(_authored(Elemental.Element.FIRE, WET))).is_false()
+
+func _thaw_then(follow: Elemental.Element) -> Array[AttackAction]:
+	var fire := _attacker(Elemental.Element.FIRE, Vector2i(0, 0))
+	var second := _attacker(follow, Vector2i(0, 1))
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
+	target.add_element_state(CHILLED)
+	var hits: Array[AttackAction] = [H.stamped_attack(fire, target), H.stamped_attack(second, target)]
+	var plan := ResolvedPlan.new()
+	plan.attacks.append_array(hits)
+	PlanResolver.resolve(plan)
+	return hits
+
+# The combo the thaw opens: a shock later in the same pass sees the meltwater (E4).
+func test_a_shock_after_the_thaw_electrocutes() -> void:
+	var shock := _thaw_then(Elemental.Element.SHOCK)[1]
+
+	var electrocute := _authored(Elemental.Element.SHOCK, WET)
+	assert_bool(shock.resolved.fired_reactions.has(electrocute)).is_true()
+	assert_int(shock.resolved.damage).is_equal(BASE + electrocute.damage_bonus)
+
+# ...and a second fire hit dries it, the Quick Dry the first could not be.
+func test_a_second_fire_hit_dries_the_meltwater() -> void:
+	var dry := _thaw_then(Elemental.Element.FIRE)[1]
+
+	var quick_dry := _authored(Elemental.Element.FIRE, WET)
+	assert_bool(dry.resolved.fired_reactions.has(quick_dry)).is_true()
+	assert_bool(dry.resolved.fired_reactions.has(_authored(Elemental.Element.FIRE, CHILLED))).is_false()
+	assert_int(dry.resolved.damage).is_equal(int(round(BASE * quick_dry.damage_mult + quick_dry.damage_bonus)))
+	assert_bool(dry.resolved.states_removed.has(WET)).is_true()
 
 # --- The door pairing (unit level) ----------------------------------------------------------------
 
@@ -194,3 +227,38 @@ func test_a_real_ice_attack_deep_chills_through_the_play_api() -> void:
 		if effect.source_name == source:
 			clock = effect.turns_remaining
 	assert_int(clock).is_equal(int(deep.add_state_turns[CHILLED]))
+
+# Temperature Shock's meltwater (#1423): the preview row says it before Execute, and playback lands it.
+func test_a_real_fire_attack_thaws_a_chilled_unit_to_wet_through_the_play_api() -> void:
+	var b := BoardBuilder.build(self, "ThawRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var hero: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), "Hero", PLAYER), Vector2i(0, 0))
+	var foe: Unit = BoardBuilder.spawn(b, UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), "Foe", ENEMY), Vector2i(1, 0))
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = BASE
+	template.main_attack.elemental_damage_type = Elemental.Element.FIRE
+	hero.add_item(WeaponInstance.make(template))
+	foe.add_element_state(CHILLED)
+	var dex_chilled := foe.get_body_stat(Stats.Stat.DEX)
+
+	var sess = PlaySession.new(b)
+	var res: Dictionary = sess.queue_attack(sess.handle_for(hero), Vector2i(1, 0))
+	assert_bool(res.ok).is_true()
+	var preview: Dictionary = sess.preview()
+	assert_bool(preview.ok).is_true()
+	var gains: Array = []
+	var loses: Array = []
+	for row: Dictionary in preview.plan.rows:
+		if row.get("target", "") == sess.handle_for(foe) and row.has("gains"):
+			gains = row["gains"]
+			loses = row["loses"]
+	assert_bool(gains.has(Elemental.state_display_name(WET))).is_true()
+	assert_bool(loses.has(Elemental.state_display_name(CHILLED))).is_true()
+	sess.execute()
+
+	assert_bool(foe.element_states.has(WET)).is_true()
+	assert_bool(foe.element_states.has(CHILLED)).is_false()
+	assert_int(foe.get_body_stat(Stats.Stat.DEX)).is_equal(dex_chilled - Elemental.CHILL_STAT_MODS[Stats.Stat.DEX])

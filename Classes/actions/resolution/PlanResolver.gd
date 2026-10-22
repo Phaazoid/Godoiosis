@@ -66,7 +66,7 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 	for atk in group:
 		_resolve_one(atk, plan, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
-			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions):
+			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, plan.cell_effects):
 				plan.cell_effects.append(cell_effect)
 
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
@@ -98,7 +98,7 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		else:
 			_resolve_one(ctr, plan, reactions, hypo, board)
 			if board != null and not ctr.is_secondary_hit:
-				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
+				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.cell_effects):
 					plan.cell_effects.append(cell_effect)
 		ordered.append(ctr)
 		if i == derived.size() - 1 or not is_same(derived[i + 1].volley, ctr.volley) or ctr.volley.is_empty():
@@ -1155,10 +1155,16 @@ static func _shove_against(action: AttackAction, target: Unit, target_hypo: _Hyp
 	var authored := _source_knockback(action)
 	if authored <= 0 or target == null:
 		return Vector2i.ZERO
-	if GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position) == Vector2i.ZERO:
+	if _shove_direction(action, target_hypo.position) == Vector2i.ZERO:
 		return Vector2i.ZERO   # a payload stuck to its victim shoves nobody, so nothing is held either
 	var held := mini(authored, Stats.weight_band(target.get_weight()))
 	return Vector2i(authored - held, held)
+
+# Which way this hit shoves whatever is on `cell`: away from where it was fired from, GridUtils'
+# tie-break settling a diagonal. ZERO on the origin's own cell. A body and the gas it stands in (#1332)
+# both ask here, so they fly the same way.
+static func _shove_direction(action: AttackAction, cell: Vector2i) -> Vector2i:
+	return GridUtils.cardinal_direction_i_between(action.origin_cell, cell)
 
 # One shove's full result (#259): where it ends, every cell it crosses, and what the landing does.
 class _Landing:
@@ -1179,7 +1185,7 @@ static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: 
 	var distance := _shove_against(action, target, target_hypo).x
 	if distance <= 0 or board == null:
 		return null
-	var dir := GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position)
+	var dir := _shove_direction(action, target_hypo.position)
 	if dir == Vector2i.ZERO:
 		return null
 
@@ -1527,7 +1533,14 @@ class _Hypo extends LethalityRules.Situation:
 # A reaction on a UNIT releases its gas from _resolve_one instead (_release_reaction_gas, #1329).
 # Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
 # that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
-static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> Array[ResolvedCellEffect]:
+#
+# THE GAS IS READ AS THE PASS LEAVES IT (#1332): the live field with `prior`, the plan's earlier cell
+# effects, folded in -- exactly what the batch apply will have laid before this hit's own effects land,
+# since both walk plan.cell_effects in append order. So a Gust blows the steam a douse queued ahead of
+# it, and a second Gust moves what the first blew in. Fizzle, empowerment and the air reading still
+# read the board as it stands: they ask what a caster draws on, which is a different question.
+static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction],
+		prior: Array[ResolvedCellEffect] = []) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
@@ -1543,6 +1556,13 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
 	if elements.is_empty() and not leaves_gas:
 		return effects
+	var in_pass: Array[ResolvedCellEffect] = board.deposits.duplicate()
+	in_pass.append_array(prior)
+	# What each struck tile's dispersal carries off, by where it lands (#1332). Every tile is read
+	# before anything moves, and landed only after the loop, so a cloud across a struck line shifts
+	# intact rather than eating itself.
+	var blown: Array[Dictionary] = []   # {"to": Vector2i, "gas": int}
+	var at: Dictionary[Vector2i, ResolvedCellEffect] = {}
 	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
 	# victim, and who that was is this pass's answer, gone by the time anything could re-ask; and a
@@ -1558,10 +1578,15 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 			cells.append(cell)
 	for cell in cells:
 		var effect: ResolvedCellEffect = null
+		var gas_here := board.gas.projected_packed_at(cell, in_pass) if board.gas != null else 0
 		if struck.has(cell) and not ground.is_empty():
 			effect = _resolve_cell_effect_at(cell, ground, board, terrain_reactions)
 		if not elements.is_empty():
-			effect = _resolve_air_at(cell, elements, board, terrain_reactions, effect)
+			effect = _resolve_air_at(cell, elements, board, terrain_reactions, effect, gas_here)
+		if effect != null and effect.gas_cleared and gas_here != 0:
+			var landing := _gas_landing(action, cell, board)
+			if landing != cell:
+				blown.append({"to": landing, "gas": gas_here})
 		if leaves_gas and struck.has(cell):
 			if effect == null:
 				effect = ResolvedCellEffect.new()
@@ -1576,7 +1601,40 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 		if effect != null:
 			effect.cause = action
 			effects.append(effect)
+			at[cell] = effect
+	# A push is the clear above plus an ordinary deposit where the gas lands, so every reader of the
+	# channel already folds it. A tile it lands on that this hit struck takes it in that tile's own
+	# effect, after its own gas has gone (ResolvedCellEffect folds the clear first).
+	for push: Dictionary in blown:
+		var to: Vector2i = push["to"]
+		var effect: ResolvedCellEffect = at.get(to, null)
+		if effect == null:
+			effect = ResolvedCellEffect.new()
+			effect.cell = to
+			effect.cause = action
+			effects.append(effect)
+			at[to] = effect
+		var packed: int = push["gas"]
+		for kind: Gas.Kind in Gas.kinds_in(packed):
+			effect.add_gas(kind, Gas.level_in(packed, kind))
 	return effects
+
+# Where the gas a hit clears from `cell` comes to rest (#1332): as far as the hit SHOVES, along the
+# shove's own direction, so a body and the gas it stands in fly together. Gas weighs nothing, so no
+# weight band holds it. It walks tile by tile through GasSpread.can_cross -- the round's spread rule,
+# so a wall, a tree, a sheer ledge, a hole or the board's edge stops it -- and rests on the last tile it
+# reached. `cell` itself when it cannot move at all: a hit that shoves nobody, the origin's own tile,
+# or gas pinned against a wall. That gas disperses.
+static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardContext) -> Vector2i:
+	var dir := _shove_direction(action, cell)
+	if dir == Vector2i.ZERO:
+		return cell
+	var pos := cell
+	for _i in range(_source_knockback(action)):
+		if not GasSpread.can_cross(pos, pos + dir, board):
+			break
+		pos += dir
+	return pos
 
 # The cells a shock's CURRENT ran through (#1335): both ends of every link the volley stamped
 # (AttackAction.arc_links), each once, in link order. Empty on anything that carries no shock.
@@ -1613,9 +1671,9 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 
 # The AIR half (#1335): the reactions that happen over the cell, folded into `effect` (created when a
 # reaction fires and there was none). Same gates as the ground's, plus a dispersal's own: only where
-# the cell holds gas as the board stands.
+# the cell holds gas, `gas_here` being that gas as the pass leaves it (#1332).
 static func _resolve_air_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext,
-		terrain_reactions: Array[TerrainReaction], effect: ResolvedCellEffect) -> ResolvedCellEffect:
+		terrain_reactions: Array[TerrainReaction], effect: ResolvedCellEffect, gas_here: int) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
 	var held: Array[Terrain.TileState] = []
 	if board.terrain_states != null:
@@ -1624,7 +1682,7 @@ static func _resolve_air_at(cell: Vector2i, elements: Array[Elemental.Element], 
 		if not reaction.in_the_air or not reaction.fires_for(elements) \
 				or not reaction.applies_to_tile(kind, held):
 			continue
-		if reaction.disperses_gas and board.gas_at(cell) == 0:
+		if reaction.disperses_gas and gas_here == 0:
 			continue
 		if effect == null:
 			effect = ResolvedCellEffect.new()

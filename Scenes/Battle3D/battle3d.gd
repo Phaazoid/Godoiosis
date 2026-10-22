@@ -225,7 +225,7 @@ func _ready() -> void:
 	_gas.lights_source = _board_mirror.lights
 	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
 	_gas.overlays = _overlays
-	_gas.board_source = func() -> BoardContext: return game._board()   # next round's forecast rules on it
+	_gas.board_source = _gas_outline_board   # next round's forecast rules on it, the plan's deposits folded
 	_gas.wind_source = wind_source
 	add_child(_gas)
 	# The board's weather (#1260), drawn off the RULE store so it cannot look like one weather and
@@ -2169,6 +2169,19 @@ func _previewed_plan() -> ResolvedPlan:
 		return forecast
 	var squads: SquadManager = game.squad_manager
 	return squads.resolved_plan_for(squads.active_squad)
+
+
+# The board next round's gas outline is ruled on (#1332): the live one with the previewed plan's
+# deposits folded in, so a queued push outlines from where it will leave the gas. Never while a pass
+# runs: its deposits land in the live store partway through, and folding them again counts them twice.
+func _gas_outline_board() -> BoardContext:
+	var board: BoardContext = game._board()
+	if game.order_executor.executing_plan != null:
+		return board
+	var plan := _previewed_plan()
+	if plan == null or plan.cell_effects.is_empty():
+		return board
+	return board.with_deposits(plan.cell_effects)
 
 
 # ...and who its end-of-turn effect pass is about (#534). A separate question from the plan because
