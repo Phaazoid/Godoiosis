@@ -10,6 +10,7 @@ extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
+const H := preload("res://tests/support/squad_fixtures.gd")
 # Where a gas's drift sits among the floats GasMirror._pack_looks writes per look (gas_volume.glsl's `wind`).
 const GAS_WIND_SLOT := 20
 
@@ -346,6 +347,74 @@ func test_holding_the_key_outlines_next_round_as_the_round_will_play_it() -> voi
 
 	await _hold_floor(false)
 	assert_bool(_gas.forecast_node().visible).is_false()
+
+
+func _assert_outline(expected: Dictionary[Vector2i, int], what: String) -> void:
+	var drawn := _gas.forecast_cells()
+	assert_int(drawn.size()).override_failure_message("the outline %s has %d cells, not %d" % [what, drawn.size(), expected.size()]) \
+		.is_equal(expected.size())
+	for at: Vector2i in expected:
+		assert_int(drawn.get(at, -1)).override_failure_message("the outline %s disagrees at %s" % [what, at]).is_equal(expected[at])
+
+
+# A free tile to stand on and a free tile to strike beside it, with two tiles beyond the struck one that
+# gas may cross onto: what a two-tile shove needs to carry gas all the way. Empty when the board has none.
+func _push_lane() -> Dictionary:
+	var board: BoardContext = _game._board()
+	for struck: Vector2i in _game.grid.get_used_cells():
+		for away: Vector2i in GasSpread.SIDES:
+			var stand := struck - away
+			if _game.can_spawn_at(stand) and _game.can_spawn_at(struck) \
+					and GasSpread.can_cross(stand, struck, board) \
+					and GasSpread.can_cross(struck, struck + away, board) \
+					and GasSpread.can_cross(struck + away, struck + away * 2, board):
+				return {"stand": stand, "struck": struck}
+	return {}
+
+
+# #1332: holding the key with a push QUEUED outlines next round from where the push leaves the gas (the
+# previewed plan's deposits folded in), and once the pass has played, from the live store alone, so
+# nothing is counted twice. The tiles are FOUND (the content razor).
+func test_the_outline_folds_a_queued_push_and_drops_it_once_played() -> void:
+	_game.scenario_manager.clear_board()
+	_game.game_state = _game.GameState.IDLE
+	await _settle()
+	var lane := _push_lane()
+	assert_bool(lane.is_empty()).override_failure_message(
+		"no free tile on this board has two tiles of open ground beyond it to blow gas across").is_false()
+	if lane.is_empty():
+		return
+	var disperse: TerrainReaction = null
+	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air and reaction.disperses_gas:
+			disperse = reaction
+	assert_object(disperse).override_failure_message("fixture: no authored reaction disperses gas").is_not_null()
+	var stand: Vector2i = lane["stand"]
+	var struck: Vector2i = lane["struck"]
+	var hero: Unit = _game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), stand)
+	var foe: Unit = _game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), struck)
+	assert_bool(hero != null and foe != null).override_failure_message("fixture: the pair never spawned").is_true()
+	hero.equipped_weapon = H.make_weapon(1)
+	var swing := hero.get_fired_attack()
+	swing.elemental_damage_type = disperse.incoming_element
+	swing.knockback = 2
+	_field().set_level(struck, Gas.Kind.STEAM, Gas.Level.THICK)
+	_game.squad_manager.active_squad = hero.squad
+	var action := AttackAction.declare(hero, stand, struck)
+	assert_bool(_game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
+		"fixture: the swing never queued (%s)" % [", ".join(action.validation_errors)]).is_true()
+	_game.refresh_action_queue(hero.squad)
+	var plan: ResolvedPlan = _game.squad_manager.resolved_plan_for(hero.squad)
+	var folded := _field().next_round(_game._board().with_deposits(plan.cell_effects))
+	assert_bool(folded == _field().next_round(_game._board())).override_failure_message(
+		"fixture: the queued push changes nothing about next round").is_false()
+
+	await _hold_floor(true)
+	_assert_outline(folded, "with the push queued")
+	await _game.order_executor.execute_orders(hero)
+	await _settle()
+	_assert_outline(_field().next_round(_game._board()), "once the push has played")
+	await _hold_floor(false)
 
 
 # The billows drift with the board's wind (#1286), each gas its own share of it: what the mirror packs for

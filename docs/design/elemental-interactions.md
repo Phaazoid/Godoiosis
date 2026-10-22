@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first *(both exist now: tile states since 2026-06-28, the end-of-turn pass in `TurnBoundary`; only a unit damage-over-time still needs its own tick, [elemental-system.md](elemental-system.md) → *Deferred layers*)*.
 
-**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22; #1423's meltwater the same day.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22; #1332's blown gas the same day; #1423's meltwater the same day.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -181,7 +181,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | *(any unit)* | Wind Blast | **shove the unit back** — repositioning (Axiom 4). *("Wind" survives here as an attack name — the sanctioned use.)* *(The shove shipped as the **Gust** carving, `Push(A2)`, knockback 2, damageless — an authored shove on the attack, not a reaction.)* |
 | AIRBORNE | Gale | launch further / fling into a hazard 🔗 |
 | BURNING | Backdraft | spread BURNING to adjacent, +dmg 🔗 |
-| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(BUILT [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), 2026-10-22: an AIR hit removes every gas on the cells it strikes, previewed (`Disperse.tres`, the first reaction in the air); pushing gas along the cast is [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332).)* |
+| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(BUILT [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), 2026-10-22: an AIR hit removes every gas on the cells it strikes, previewed (`Disperse.tres`, the first reaction in the air). Since [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332), 2026-10-22, an AIR hit that SHOVES blows the gas as far as it shoves instead, away from the caster, and disperses only gas with no room to move.)* |
 | SUBLIMED | Scatter | ++dmg (tear the vapor apart) |
 
 ### EARTH
@@ -308,7 +308,7 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 >
 > **[#1302](https://github.com/Phaazoid/Godoiosis/issues/1302) (2026-10-10):** The Sandstorm / Ashfall row is built as six LOOKS with no rule at all -- Dust, Sandstorm and Dust Wall, and Light Ashfall, Ashfall and Ash Storm: blowing grit and dust clouds that follow the board's wind, sand and soot on the ground, falling ash and rising embers. The row's rules (less sight, slow going, abrasion on the unsheltered) are unbuilt (dev: *"Looks only"*). How they look is [presentation-effects.md](presentation-effects.md) → *Weather: sand and ash*.
 >
-> **[#1286](https://github.com/Phaazoid/Godoiosis/issues/1286) (2026-10-10):** The wind exists as a LOOK with no rule at all, and as a second board axis rather than a row of this table: a board names a strength (Calm, Breeze, Strong Wind, Gale) and a direction beside its weather, and every weather, gas cloud and plant drifts with it. The Tempest / High Winds row above (shoving units, dispersing atmospheres) and the Doldrums row are unbuilt (an AIR hit clearing gas is ruled in #1335, pushing it is #1332); a Gale is the Tempest's look before its rule (dev: *"Looks only, rules later"*).
+> **[#1286](https://github.com/Phaazoid/Godoiosis/issues/1286) (2026-10-10):** The wind exists as a LOOK with no rule at all, and as a second board axis rather than a row of this table: a board names a strength (Calm, Breeze, Strong Wind, Gale) and a direction beside its weather, and every weather, gas cloud and plant drifts with it. The Tempest / High Winds row above (shoving units, dispersing atmospheres) and the Doldrums row are unbuilt (an AIR hit clearing gas is built by #1335, and one that shoves blowing it by #1332; the wind moves no gas); a Gale is the Tempest's look before its rule (dev: *"Looks only, rules later"*).
 >
 > **[#1269](https://github.com/Phaazoid/Godoiosis/issues/1269) (2026-10-09):** Light Snow, Snow and Blizzard exist as LOOKS with no rule at all -- the Blizzard row above (Chill accrual, freezing, ice bridges, weak fire) is unbuilt. Snow settling on units and their frost breath are drawn before any Chilled rule backs them (dev: *"Full look, rules later"*).
 
