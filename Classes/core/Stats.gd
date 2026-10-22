@@ -22,7 +22,8 @@ const STAT_DEFAULTS: Dictionary[Stat, int] = {
 	Stat.CON: 5,
 	# Cohesion radius: how far a squadmate may stand from its LEADER, in PATH distance over terrain
 	# the member can traverse (#151 — walls block cohesion; was Manhattan until 2026-08-06). Read off
-	# the leader only — Squad.get_max_squad_range() is the single reader. Still decoupled from LDR
+	# the leader only — Squad.range_of, read where the leader stands by SquadCohesion.reach_at (smoke
+	# there shortens it, #1335). Still decoupled from LDR
 	# (#63): LDR buys squad capacity, COH buys leash length, and no band feeds either into the other.
 	Stat.COH: 4,   # playtest-tunable; 3 -> 4 on 2026-08-06 ahead of path-based cohesion (#151),
 				   # which is a strictly tighter leash at the same number (path >= Manhattan always)
