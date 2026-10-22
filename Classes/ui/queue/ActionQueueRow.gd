@@ -40,6 +40,7 @@ const BADGE_TANK := "Tank"
 const BADGE_SPLIT := "Split"        # the dev's word (#367); one unit leaves its squad
 const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
 const BADGE_FIZZLED := "Fizzle"     # a carving with nothing to work with
+const BADGE_WHIFFED := "Whiff"      # a swing at a target this pass already killed (#1350)
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -180,6 +181,10 @@ func _build_consequence(outcome: ResolvedOutcome) -> void:
 	# by dimming. Its outcome reads no HP, so this badge is the whole readout.
 	if outcome.fizzled:
 		_add_event(BADGE_FIZZLED, PlanResolver.FIZZLED_POPUP)
+	# A WHIFF (#1350): the target is already gone by this swing, so nothing lands -- but the swing still
+	# happens, so the row does not dim, and its Vial and Tank chips below say what it still costs.
+	if outcome.whiffed:
+		_add_event(BADGE_WHIFFED, PlanResolver.WHIFFED_POPUP)
 	if outcome.insulated:
 		_add_event(BADGE_INSULATED, PlanResolver.INSULATED_POPUP)
 	# A fully held shove draws no trail, so this badge is the queue's whole account of it (Law #2).

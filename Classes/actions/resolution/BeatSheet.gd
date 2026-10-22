@@ -76,6 +76,11 @@ class Beat:
 			if shot != null and shot.is_watch_shot and shot.triggered_by != null \
 					and is_instance_valid(shot.triggered_by):
 				return shot.triggered_by
+			# A WHIFF's target is gone by the time it plays (#1350), so it frames nobody: a volley goes to
+			# the victims it does reach, and a lone whiff falls through to the swinger, as a swing at open
+			# ground does (dev, 2026-10-22: "show the unit swinging at nothing").
+			if shot != null and shot.resolved != null and shot.resolved.whiffed:
+				continue
 			var who := action.aimed_at()
 			if who != null and is_instance_valid(who):
 				return who

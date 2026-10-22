@@ -699,7 +699,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# A member the pass has already FELLED is out of the fight (#1354; dev, 2026-10-21: downed as well as
 	# killed). One downed before the pass has already been ejected from the party, so one downed during
 	# it is treated the same way and the counter goes to the next standing member. This is the party's
-	# question, not an aimed hit's: a blow AIMED at a body still lands on it (#1350).
+	# question, not an aimed hit's: a blow AIMED at a downed body still lands on it, and one aimed at a
+	# body the pass killed whiffs (#1350).
 	if not PlanResolver.actor_is_live(target_unit, hypo):
 		return false
 
@@ -780,7 +781,11 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 		#
 		# ABOVE THE LEDGER for the friendly-hit clause's reason: a skipped attack must not spend
 		# the defending squad's one reaction, so a real hit later in the same plan still answers.
-		if attack.resolved != null and attack.resolved.skipped:
+		#
+		# A WHIFF provokes nothing either (#1350): it hit nobody, like a #47 shot at open ground, and a
+		# reaction answers a hit. Unobservable in ordinary play -- the blow that killed the target
+		# already spent its squad's reaction -- except when a watch shot's splash did the killing.
+		if attack.resolved != null and (attack.resolved.skipped or attack.resolved.whiffed):
 			continue
 
 		var defender_squad = defender.squad

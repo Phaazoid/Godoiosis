@@ -147,6 +147,14 @@ var skipped: bool = false
 # validator's red ("Fizzles where they'll be standing"). Nothing lands: no damage, no reaction, no deposit, no payload.
 var fizzled: bool = false
 
+# The swing WHIFFED (#1350, dev 2026-10-21: "It should whiff and still spend"): an earlier hit in the
+# same pass already took the target off the board, so this one lands on nobody. NOT `skipped`, which
+# says the order does not happen and spends nothing -- a whiff was fired, so the lunge plays and what
+# firing costs is paid, off the burned_vial and charge_spent stamps beside it. Nothing else is set:
+# no damage, state, shove or rung, and it reads no HP. Execution reads this rather than asking the
+# live board whether the target is still there.
+var whiffed: bool = false
+
 # The Iron Will cap actually BIT on this hit (#524): incoming damage exceeded the cap and was
 # clamped, so the target is standing because of the ability rather than in spite of the hit. A
 # RECORDED decision like lethality, not a derivation — by the time anything plays back, `damage`

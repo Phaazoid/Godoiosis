@@ -10,6 +10,7 @@ const DROWNING_POPUP := "Drowning!"
 const VOID_POPUP := "Into the void!"
 const HELD_POPUP := "Held %d!"   # #120: tiles of a shove the target's weight absorbed
 const FIZZLED_POPUP := "Fizzled!"   # a carving whose argument was not present (CellSubstances)
+const WHIFFED_POPUP := "Whiffed!"   # a swing at a target this pass already killed (#1350)
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
@@ -234,6 +235,8 @@ static func _guard_for(action: AttackAction, plan: ResolvedPlan, hypo: Dictionar
 	var victim := action.target
 	if victim == null or not is_instance_valid(victim):
 		return null                     # a cell-targeted attack (#47) has nobody to guard
+	if projected_lifecycle(victim, hypo) == Unit.LifecycleState.DEAD:
+		return null                     # nor a body this pass already killed: the blow whiffs (#1350)
 	var attack := action.fired_attack
 	if attack != null and (attack.heals or attack.deals_no_damage or attack.pierces_guard):
 		return null                     # heals and pure utility pass through; pierce is the authored counter
@@ -606,8 +609,8 @@ static func _drops_of(group: Array, hypo: Dictionary) -> Array[Dictionary]:
 	for member: AttackAction in group:
 		if member.target == null or not is_instance_valid(member.target) or not member.direct:
 			continue
-		if member.resolved != null and member.resolved.skipped:
-			continue
+		if member.resolved != null and (member.resolved.skipped or member.resolved.whiffed):
+			continue   # ...and a whiff hit nobody, so it is the miss that drops nothing (#1350)
 		drops.append({"cell": projected_position(member.target, hypo),
 				"facing": _drop_facing(carrier, member.hit_facing), "parent": member})
 	return drops
@@ -674,6 +677,18 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	var attacker := action.actor
 	var target := action.target
 	if attacker == null or target == null or not is_instance_valid(attacker) or not is_instance_valid(target):
+		action.resolved = outcome
+		return
+
+	# THE WHIFF (#1350, dev 2026-10-21: "It should whiff and still spend"). An earlier hit this pass
+	# already took the target off the board, so this one lands on nobody -- but it was FIRED, so the
+	# spend stamps are taken by the same call that takes them for a hit, and nothing is threaded into
+	# the target. DEAD only: a downed body is still an ordinary target, there to be finished (ruling 9).
+	if projected_lifecycle(target, hypo) == Unit.LifecycleState.DEAD:
+		outcome.whiffed = true
+		outcome.reads_hp = false
+		outcome.popups.append(WHIFFED_POPUP)
+		_source_base_damage(action, board, hypo, outcome)
 		action.resolved = outcome
 		return
 

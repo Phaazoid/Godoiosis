@@ -58,6 +58,32 @@ Execution order: moves (parallel) → attacks (sequential — combo order matter
 
 **Two traps that shaped it: a felled actor's volley is EXPANDED and then marked, never dropped** (the whiff clause looks for a derived attack with a target, so an unexpanded aim reddens the plan -- refusing Execute for a human and conceding an AI squad's whole TURN), **and `is_inert()` is kept apart from `is_refused()`** -- an inert row is legal, stays queued and dims, where folding it into `is_valid` would refuse Execute over the pass's own consequences. A downed unit being HEALED is untouched and legal ([#1002](https://github.com/Phaazoid/Godoiosis/issues/1002)); what is refused is the body ACTING.
 
+**AND A HIT ON A BODY THE PASS ALREADY KILLED WHIFFS, AND STILL SPENDS ([#1350](https://github.com/Phaazoid/Godoiosis/issues/1350), 2026-10-22; dev, 2026-10-21: *"It should whiff and still spend, and the preview should reflect that"*).** Until then the resolver and execution disagreed about whether such a swing happens. The resolver never asked the pass's lifecycle, so it resolved a full hit and stamped the vial burn and the tank charge, which the queue row showed. Execution asked the LIVE board, and `open_playback` refused a freed target, so nothing was spent. A dead LEAD in an AoE took the whole volley's spend and its `volley_struck` with it.
+
+The resolver decides it now. `_resolve_one` asks `projected_lifecycle(target, hypo) == DEAD` first and stamps `ResolvedOutcome.whiffed`. The stamp carries no damage, state, shove or rung, and no HP reading. It does carry the spend stamps, taken by the same `_source_base_damage` call a hit uses.
+
+`actor_is_live` was the wrong question for a target. A DOWNED body is an ordinary target, there to be finished. Only a body the pass KILLED is gone.
+
+A whiff is not `skipped`. The swing happens, so `open_playback` opens it on the stamp alone and `land` keeps its hands off the body. The lead still lunges, publishes the one impact and settles its spends, in both hosts. `land`'s freed-node test is a guard and decides nothing.
+
+The derived hit keeps its target, so the AIM stays green. A whiff the pass made is legal, while an aim at a cell that is already empty is still refused at the gate.
+
+Its readers follow the stamp:
+- a Guard does not step in front of it (`_guard_for`);
+- it drops no payload (`_drops_of`, ruling 45);
+- it provokes no counter (`calculate_reactions_for_squad`);
+- it shows no threat intent (`AIController._intent_for`);
+- the queue row wears a "Whiff" chip and keeps its Vial/Tank chips, undimmed;
+- the camera frames the swinger, or for a volley the victims it does reach (`BeatSheet.subject`, dev 2026-10-22: *"show the unit swinging at nothing"*).
+
+That last one is not a nicety. The beat's subject is scheduled before the pass, so it was the corpse, and `pan_to` on a freed unit is a script error that ended the game host's pass outright. The test reproduces it with the resolver's stamp removed.
+
+**The two hosts disagreed before this, and a Godot quirk hid it.** By the time the game host plays the second swing, a frame has passed and the body is FREED, and a freed reference compares `== null`. So the old `target != null` refusal skipped itself, and the swing played like a #47 cell attack and spent. The headless host's body was only queued for deletion, so it refused and spent nothing. The stamp is what makes them one answer.
+
+A path swing stops at the body and whiffs. It does not reach through to the unit behind.
+
+**The Crisis corollary (dev, 2026-10-22: each row shows what its hit does — the Crisis entry, then the kill, then whiffs).** `LethalityRules.predict` used to flag every later hit on a dead Crisis unit KILLED when it alone would have killed from pass-start HP (the 2026-06-26 call). Those hits are whiffs now, and the dead answer NONE before the Crisis branch is asked. Pinned by `tests/squad/test_whiff_on_a_felled_target.gd`, and in both hosts by `tests/flow/test_execute_two_hosts.gd`.
+
 **The queue is filled by `game.spawn_unit` connecting `Unit.went_downed` → `OrderExecutor.on_unit_downed`, and that one line was missing until 2026-07-29** — the only `went_downed.connect` in the repo was `play/play_session.gd`'s, so the headless API ejected and the game never did. Both consumers of `_downed_pending` were therefore dead code in the game: downed units stayed squad members (so their tiles stayed walkable to squadmates — `compute_move_range` only excludes cells held by *non*-squadmates, since squads rotate through each other), a downed leader kept the squad and its cohesion leash, and **the Crisis prompt could not fire at all**.
 
 **That wiring moved down one level in [#738](https://github.com/Phaazoid/Godoiosis/issues/738) (2026-09-05) and the reason is worth keeping**: `spawn_unit` was the single door for every board-entry path (scenario load, dev spawner, TestBoard), which is why the connection belonged there beside the `unit_died` one — and the moment a SECOND way to build a unit appeared (`game.spawn_reserve_unit`, the off-board roster), one door became two and a per-door copy of the wiring would have been the identical thirteen-month hole. `game._build_unit` is the shared half now: it creates and wires and deliberately does NOT parent, because `spawn_unit` gates *after* building and frees on a refusal. Pinned by `tests/squad/test_downed_ejection.gd`. The generalizable warning: *a feature can be fully built, correct at both ends, and tested at both ends, and still never run because nobody tested the wire* — and a second live implementation of the same seam (the Play API's) is what let it hide.

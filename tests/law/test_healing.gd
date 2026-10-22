@@ -92,10 +92,12 @@ func test_heal_caps_at_max_hp_no_overheal() -> void:
 
 func test_heal_ignores_all_def() -> void:
 	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
-	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.CON: 5})
+	# MHP above the -50 offset: at the fixture default (10) the old `else 0` set HP to 0, which KILLS the
+	# target, and a heal at a dead unit is a whiff (#1350).
+	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.CON: 5, Stats.Stat.MHP: 60})
 	target.worn_armor = _make_armor(40)   # would floor an equal-sized damage hit at 0 (test_def_mitigation)
 	var max_hp := target.get_max_hp()
-	target.set_current_hp(max_hp - 50 if max_hp > 50 else 0)
+	target.set_current_hp(max_hp - 50)
 
 	var attack := _heal_attack(healer, target, 6)   # base 10 (power 6 + STR 4)
 	var plan := ResolvedPlan.new()
