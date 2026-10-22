@@ -56,6 +56,7 @@ A pointer reads `→ docs/architecture/ui.md → *ModalLock*`: file, then sectio
   - **anyone (the player):** a **`PlayerSettings`** row (#394). *By degree*, a `PlayerSettings.Scale` multiplier over the dev's value, so no slider is ever inert. *On the same axis*, the value moves to `PlayerSettings`. *Between authored sets*, a palette (only a ROLE colour needs re-authoring per palette, #685).
 
   Never put a game-wide value in Look. **A knob may only name a property that is authored and READ**: anything the game writes back per frame gives a slider that silently reverts (`tests/dev/test_moods_tool.gd`). An `@export` is still right for a value tuned in the editor rather than in play. → `docs/workflow.md` → *Aesthetic tuning values get a knob, not a guess*; `docs/design/presentation-effects.md` → *Where a presentation value is authored*
+- **Probes run on Sonnet 5.5 (dev rule, 2026-10-22).** A probe is any non-fork subagent (research, search, review, Explore, Plan); forks and full sessions keep the main model. His user settings default every probe to Sonnet (`CLAUDE_CODE_SUBAGENT_MODEL`), but Explore and Plan ignore that default, so pass them `model: "sonnet"`. **A stronger probe needs his OK first:** ask, with the reason. → `docs/workflow.md` → *Probes run on Sonnet 5.5*
 
 ## GitHub issue workflow (Claude ↔ human handoff)
 
