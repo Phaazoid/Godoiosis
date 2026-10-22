@@ -1336,6 +1336,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("into the void")
 	if r.fizzled:
 		events.append("fizzles")
+	if r.whiffed:
+		events.append("whiffs")
 	if r.insulated:
 		events.append("insulated")
 	if r.burned_vial != null:
@@ -1371,6 +1373,7 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 	var lethality := r.lethality if r != null else ResolvedOutcome.Lethality.NONE
 	var skipped := r.skipped if r != null else false
 	var fizzled := r.fizzled if r != null else false
+	var whiffed := r.whiffed if r != null else false
 	return {
 		"actor": handle_for(atk.actor),
 		"target": handle_for(atk.target),
@@ -1380,6 +1383,7 @@ func _describe_attack(atk: AttackAction) -> Dictionary:
 		"lethality": lethality,   # NONE / DOWNED / KILLED (mirrors Unit.take_damage — Law #2)
 		"skipped": skipped,       # counter-er was downed/killed earlier this pass -> no counter
 		"fizzled": fizzled,       # ...or its carving had nothing to work with where it stood
+		"whiffed": whiffed,       # thrown at a body this pass already killed: lands nothing, still spends
 	}
 
 # ---- execute (headless application of the resolved plan) ----
@@ -1517,11 +1521,11 @@ func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:
 
 
 # One attack's playback: AttackAction's own state steps, in the order execute() takes them (#46), so
-# a heal heals and a shot whose target vanished or that the pass skipped spends nothing, here as in
-# the game. This host's own are the event log and the knockback, which execute() slides along the
-# resolver's trail and this teleports to the landing the resolver picked (stopped at any
-# wall/unit/edge). execute()'s awaits -- the lunges, the slide, the hang and plummet -- have nothing
-# to stand for headless.
+# a heal heals, a shot the pass skipped spends nothing, and a whiff at a body the pass killed (#1350)
+# lands nothing and still spends, here as in the game. This host's own are the event log and the
+# knockback, which execute() slides along the resolver's trail and this teleports to the landing the
+# resolver picked (stopped at any wall/unit/edge). execute()'s awaits -- the lunges, the slide, the
+# hang and plummet -- have nothing to stand for headless.
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	if not atk.open_playback():
 		return
@@ -1550,6 +1554,8 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 				if state != Elemental.State.NONE:
 					events.append("%s loses %s" % [handle_for(target), Elemental.state_display_name(state)])
 		atk.remove()
+	elif r != null and r.whiffed:
+		events.append("%s whiffs" % handle_for(actor))   # the body has left the board: name the swinger alone
 	atk.settle()
 
 # A side-channel order's log line (#46): who and to whom by handle, then the game's own words, which

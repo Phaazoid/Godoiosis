@@ -220,17 +220,20 @@ func open_playback() -> bool:
 	# or lands on an empty cell has still been taken; lead volley member only.
 	if is_watch_shot and not is_secondary_hit:
 		actor.spend_watch()
-	# Not a UNIT attack whose target vanished this pass — nothing to hit, no lunge (a null target is
-	# intentional, a cell attack, and plays on) — nor a skipped one, a counter-er that went down/dead
-	# this pass (R7): no lunge, no damage, and nothing spent.
-	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
-		return false
+	# Not a skipped one, a swinger or counter-er the pass felled first (R7) or a fizzle: no lunge, no
+	# damage, and nothing spent. A target this pass already KILLED is not a refusal (#1350): the resolve
+	# stamped the swing `whiffed`, so it plays on -- the lunge, the impact and the spend -- and land()
+	# keeps its hands off the body. The stamp decides, never whether the target is still on the board.
 	return resolved == null or not resolved.skipped
 
-# The blow lands on the target: false, and nothing done, for a cell attack (target null, #47) or an
-# unresolved one, which have no unit consequence.
+# The blow lands on the target: false, and nothing done, for a cell attack (target null, #47), an
+# unresolved one, or a whiff (#1350), none of which has a unit consequence. The freed-node test is a
+# guard and decides nothing: a target gone without a whiff stamp is a resolve that missed a death,
+# and settle() still spends what the preview said it would.
 func land() -> bool:
-	if target == null or resolved == null:
+	if target == null or resolved == null or resolved.whiffed:
+		return false
+	if not is_instance_valid(target) or target.is_queued_for_deletion():
 		return false
 	# The Guard absorbs exactly one trigger, and THIS was it (#414). Spent before the payload
 	# lands, so a shove into the void that frees the node below cannot skip it. Only the LIVE

@@ -366,45 +366,145 @@ func test_a_payload() -> void:
 	_assert_hosts_agree(ran)
 
 
-# A cast that draws on a vial's charge burns it (#697), in both hosts.
-func test_a_vial_burn() -> void:
+# An alchemist whose one carving is a range-2 Fireball, carrying a Vial of Sulfur for _attune_at.
+func _alchemist(cell: Vector2i) -> Unit:
 	var fire := Elemental.Element.FIRE
-	var path := _author("vial", func() -> void:
-		var alchemist := _spawn(PLAYER, Vector2i(1, 1))
-		alchemist.unit_instance.aura = {fire: 4}
-		var affinity: Array[Elemental.Element] = [fire]
-		alchemist.unit_instance.affinity = affinity
-		var fireball := TransmutationData.new()
-		fireball.display_name = "Fireball"
-		fireball.power = 4
-		# Its flame made out of the ambient air: a lone Push(F2) FIZZLES on a board with no fire on it
-		# (Deep Alchemy Phase 2), and a fizzle burns no vial.
-		fireball.recipe = "Break(F, A) + Push(F2)"
-		fireball.targets = EquippableData.TargetMode.UNIT
-		P.point(fireball, 2)
-		var rune := RuneData.new()
-		rune.size = RuneData.Size.LARGE
-		rune.inscriptions.assign([fireball])
-		assert_bool(alchemist.add_item(rune)).override_failure_message("fixture: the rune did not fit").is_true()
-		var vial := VialData.new()
-		vial.element = fire
-		vial.display_name = "Vial of Sulfur"
-		assert_bool(alchemist.add_item(vial)).override_failure_message("fixture: the vial did not fit").is_true()
-		_spawn(ENEMY, Vector2i(3, 1), 200))
-	# Popped through the inventory's own door, on each host's copy -- a live attunement is not saved.
-	var attune := func(units: Dictionary) -> void:
-		var alchemist: Unit = units[Vector2i(1, 1)]
+	var alchemist := _spawn(PLAYER, cell)
+	alchemist.unit_instance.aura = {fire: 4}
+	var affinity: Array[Elemental.Element] = [fire]
+	alchemist.unit_instance.affinity = affinity
+	var fireball := TransmutationData.new()
+	fireball.display_name = "Fireball"
+	fireball.power = 4
+	# Its flame made out of the ambient air: a lone Push(F2) FIZZLES on a board with no fire on it
+	# (Deep Alchemy Phase 2), and a fizzle burns no vial.
+	fireball.recipe = "Break(F, A) + Push(F2)"
+	fireball.targets = EquippableData.TargetMode.UNIT
+	P.point(fireball, 2)
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	rune.inscriptions.assign([fireball])
+	assert_bool(alchemist.add_item(rune)).override_failure_message("fixture: the rune did not fit").is_true()
+	var vial := VialData.new()
+	vial.element = fire
+	vial.display_name = "Vial of Sulfur"
+	assert_bool(alchemist.add_item(vial)).override_failure_message("fixture: the vial did not fit").is_true()
+	return alchemist
+
+
+# The `prepare` that pops the alchemist's vial through the inventory's own door, on each host's copy --
+# a live attunement is not saved.
+func _attune_at(cell: Vector2i) -> Callable:
+	return func(units: Dictionary) -> void:
+		var alchemist: Unit = units[cell]
 		var at := -1
 		for i in alchemist.inventory.size():
 			if alchemist.inventory[i] is VialData:
 				at = i
 		assert_str(alchemist.use_vial(at)).override_failure_message("fixture: the vial would not pop").is_equal("")
 
-	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": Vector2i(1, 1), "at": Vector2i(3, 1)}], attune)
+
+# A cast that draws on a vial's charge burns it (#697), in both hosts.
+func test_a_vial_burn() -> void:
+	var path := _author("vial", func() -> void:
+		_alchemist(Vector2i(1, 1))
+		_spawn(ENEMY, Vector2i(3, 1), 200))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": Vector2i(1, 1), "at": Vector2i(3, 1)}],
+			_attune_at(Vector2i(1, 1)))
 
 	var plan: ResolvedPlan = ran.plan
 	var burned := false
 	for attack in plan.attacks:
 		burned = burned or (attack.resolved != null and attack.resolved.burned_vial != null)
 	assert_bool(burned).override_failure_message("fixture: the cast drew on no charge").is_true()
+	_assert_hosts_agree(ran)
+
+
+# A second hit on a target the pass already killed WHIFFS and still spends (#1350; dev, 2026-10-21: "It
+# should whiff and still spend, and the preview should reflect that"). The killer swings first; the
+# alchemist's cast then finds the foe gone. The preview stamps the whiff and the vial it burns, and both
+# hosts burn that vial. Until #1350 both skipped the swing outright, keeping a charge the queue showed spent.
+func test_a_whiff_on_a_target_the_pass_killed() -> void:
+	var killer_cell := Vector2i(2, 1)
+	var alchemist_cell := Vector2i(2, 2)
+	var foe_cell := Vector2i(3, 1)
+	var path := _author("whiff", func() -> void:
+		var killer := _spawn(PLAYER, killer_cell)
+		_arm(killer, _blow(40))
+		game.squad_manager.join_squad(_alchemist(alchemist_cell), killer.squad)
+		_spawn(ENEMY, foe_cell).set_current_hp(1))
+
+	var ran: Dictionary = await _run(path, [
+			{"verb": "attack", "from": killer_cell, "at": foe_cell},
+			{"verb": "attack", "from": alchemist_cell, "at": foe_cell}], _attune_at(alchemist_cell))
+
+	var plan: ResolvedPlan = ran.plan
+	var cast: AttackAction = null
+	for attack in plan.attacks:
+		if attack.actor == ran.game[alchemist_cell]:
+			cast = attack
+	assert_object(cast).override_failure_message("fixture: the alchemist's aim expanded to nothing").is_not_null()
+	assert_bool(cast.resolved.whiffed).override_failure_message("the preview did not show the cast whiffing").is_true()
+	assert_object(cast.resolved.burned_vial).override_failure_message("the preview's whiff burns no vial").is_not_null()
+	# ...and what the preview spent, each host spends.
+	for host: String in ["game", "play"]:
+		var units: Dictionary = ran[host]
+		assert_str(_picture(units, foe_cell)).override_failure_message(
+				"fixture: the killer's blow did not kill in %s" % host).is_equal("gone")
+		assert_object((units[alchemist_cell] as Unit).attunement).override_failure_message(
+				"the %s host kept the vial the preview showed the whiff burning" % host).is_null()
+	_assert_hosts_agree(ran)
+
+
+# ...and the AoE shape of it: a volley whose LEAD victim the pass killed still fires. The lead whiffs, the
+# second victim takes its hit, the round is spent once and the blow publishes its one impact. Until #1350
+# the dead lead refused playback, and with it the whole volley's spend and its volley_struck.
+func test_a_volley_whose_lead_the_pass_killed() -> void:
+	var killer_cell := Vector2i(2, 1)
+	var gunner_cell := Vector2i(2, 2)
+	var lead_cell := Vector2i(3, 1)
+	var second_cell := Vector2i(4, 1)
+	var path := _author("whiff_volley", func() -> void:
+		var killer := _spawn(PLAYER, killer_cell)
+		_arm(killer, _blow(40))
+		var gunner := _spawn(PLAYER, gunner_cell)
+		var burst := _blow(4)
+		burst.requires_readiness = true
+		burst.consumes_readiness = true
+		# The aimed cell and the one east of it, as a true AoE: a placed shape emits west to east within
+		# a row, so the foe on the aimed cell is the volley's lead.
+		P.stamped(burst, 2, [Vector2i(0, 0), Vector2i(1, 0)] as Array[Vector2i])
+		burst.swing = false
+		_arm(gunner, burst, WeaponData.WeaponType.CARBINE)
+		game.squad_manager.join_squad(gunner, killer.squad)
+		_spawn(ENEMY, lead_cell).set_current_hp(1)
+		_spawn(ENEMY, second_cell))
+	var struck: Array[AttackAction] = []
+	game.order_executor.volley_struck.connect(func(attack: AttackAction) -> void: struck.append(attack))
+
+	var ran: Dictionary = await _run(path, [
+			{"verb": "attack", "from": killer_cell, "at": lead_cell},
+			{"verb": "attack", "from": gunner_cell, "at": lead_cell}])
+
+	var gunner: Unit = ran.game[gunner_cell]
+	var volley: Array[AttackAction] = []
+	for attack in (ran.plan as ResolvedPlan).attacks:
+		if attack.actor == gunner:
+			volley.append(attack)
+	assert_int(volley.size()).override_failure_message("fixture: the burst reached %d victims" % volley.size()).is_equal(2)
+	assert_object(volley[0].target).override_failure_message("fixture: the killed foe is not the lead").is_same(ran.game[lead_cell])
+	assert_bool(volley[0].resolved.whiffed).override_failure_message("the dead lead did not whiff").is_true()
+	assert_bool(volley[1].resolved.whiffed).override_failure_message("the living second victim whiffed").is_false()
+
+	var impacts := struck.filter(func(attack: AttackAction) -> bool: return attack.actor == gunner).size()
+	assert_int(impacts).override_failure_message("the gunner's volley published %d impacts, not one" % impacts).is_equal(1)
+	for host: String in ["game", "play"]:
+		var units: Dictionary = ran[host]
+		var second: Unit = units[second_cell]
+		assert_int(second.get_current_hp()).override_failure_message(
+				"the %s host's volley never reached its living victim" % host).is_less(second.get_max_hp())
+		var carbine := (units[gunner_cell] as Unit).get_equipped_weapon() as CarbineWeaponInstance
+		assert_int(carbine.shots_remaining).override_failure_message(
+				"the %s host's volley spent no round for its dead lead" % host).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE - 1)
 	_assert_hosts_agree(ran)

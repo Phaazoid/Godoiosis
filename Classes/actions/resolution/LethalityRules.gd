@@ -33,7 +33,7 @@ static var LIMB_LOSS_DAMAGE_WOUNDED := 8
 # hypothetical straight in with no copy and no field-mapping to keep in sync.
 class Situation:
 	var hp: int = 0                          # HP going into THIS hit (threaded mid-pass by the resolver)
-	var start_hp: int = 0                    # HP at pass start — only the crisis-corpse case reads it
+	var start_hp: int = 0                    # HP at pass start — PlanResolver.plan_changes reads it (#354)
 	var lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
 	var in_crisis: bool = false
 	var wounded: bool = false                # went down this battle (#1174): a smaller blow takes a limb
@@ -87,18 +87,16 @@ static func crisis_armed_for(unit: Unit) -> bool:
 # the unit survives (#1174).
 #
 # Crisis-in-progress is special (dev call 2026-06-26): it never downs/maims (a would-be-down is
-# death), and EVERY independently-lethal hit stays flagged KILLED even after the unit "dies"
-# earlier in the pass — the player must see that dodging one fatal counter won't save them.
-# "Independently lethal" = the hit alone would fell the unit at pass-start HP. Execution ignores
-# that flag on an already-dead unit; it exists for the preview.
+# death). A unit already DEAD takes no rung at all, in Crisis or not: a later hit in the same pass is a
+# WHIFF, which the resolver stamps before it ever asks the ladder (#1350, dev 2026-10-22: each row
+# shows what its hit does -- the Crisis entry, then the kill, then whiffs). That retired the 06-26
+# call's other half, which kept every independently-lethal hit after the death flagged KILLED.
 static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
+	if s.lifecycle == Unit.LifecycleState.DEAD:
+		return ResolvedOutcome.Lethality.NONE
 	if s.in_crisis:
-		if s.lifecycle == Unit.LifecycleState.DEAD:
-			return ResolvedOutcome.Lethality.KILLED if damage >= s.start_hp else ResolvedOutcome.Lethality.NONE
 		if damage >= s.hp:
 			return ResolvedOutcome.Lethality.KILLED
-		return ResolvedOutcome.Lethality.NONE
-	if s.lifecycle == Unit.LifecycleState.DEAD:
 		return ResolvedOutcome.Lethality.NONE
 	if s.lifecycle == Unit.LifecycleState.DOWNED:
 		# A hit that deals nothing cannot finish a body (#126) — that is what makes a 0-damage shove

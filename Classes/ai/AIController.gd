@@ -317,8 +317,8 @@ static func _intent_for(attack: AttackAction, plan: ResolvedPlan, saved: Diction
 	if not Team.is_enemy(attack.actor.get_faction(), victim.get_faction()):
 		return null   # friendly fire is not an intention against the viewer
 	var outcome: ResolvedOutcome = attack.resolved
-	if outcome.skipped:
-		return null
+	if outcome.skipped or outcome.whiffed:
+		return null   # never thrown, or thrown at a body the plan already killed (#1350)
 	var after: int = LethalityRules.displayed_hp(outcome.target_hp_after,
 			LethalityRules.lifecycle_for(outcome.lethality))
 	return ThreatIntent.make(attack.actor, victim,

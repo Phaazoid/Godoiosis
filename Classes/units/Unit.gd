@@ -913,7 +913,7 @@ func take_damage(damage: int, non_blow := 0):
 				unit_instance.apply_damage(damage, get_max_hp())   # survivable hit — ordinary HP loss
 		ResolvedOutcome.Lethality.KILLED:
 			if lifecycle_state == LifecycleState.DEAD:
-				return                               # already gone; the flag is preview-only (R9)
+				return                               # already gone (predict answers NONE for the dead, #1350; a guard)
 			if lifecycle_state == LifecycleState.DOWNED or in_crisis:
 				die()                                # Fork 3 / the Crisis gambit: no safety net left
 			else:
