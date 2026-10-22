@@ -60,7 +60,7 @@ const GASES: Dictionary[Gas.Kind, String] = {
 	Gas.Kind.SMOKE: "smoke",
 	Gas.Kind.POISON: "chlorine",
 	Gas.Kind.FROST: "frost",
-	Gas.Kind.THUNDER: "thunder",
+	Gas.Kind.OZONE: "ozone",
 	Gas.Kind.SULFUR: "sulfur_gas",
 	Gas.Kind.ESSENCE: "essence",
 }

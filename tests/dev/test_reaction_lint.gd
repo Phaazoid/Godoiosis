@@ -23,7 +23,8 @@ const PENDING := {
 const NOT_YET_FOLLOWED := {
 	"res://Resources/TerrainReactions/Melt.tres": "the heat is not released (the essence is, #1324)",
 	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the heat is not released and the meltwater does not wet the unit (the essence is, #1324); the +5 is the temperature change, not chemistry (Phaazoid)",
-	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder, ozone and heat are not made",
+	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder (#1270) and the heat are not made; its ozone is the struck cell's Ozone reaction (#1335)",
+	"res://Resources/TerrainReactions/Ozone.tres": "the thunder (#1270) and the heat are not made",
 }
 
 
