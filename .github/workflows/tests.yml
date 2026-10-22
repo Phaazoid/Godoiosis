@@ -15,9 +15,12 @@ name: Tests
 # `paths-ignore`, which cannot re-include: LATER patterns win, so the list skips docs/ and every
 # .md, then lets CHANGELOG.md back in.
 
-# A SUPERSEDED PR RUN HAS NO VALUE, and sharding multiplied the cost of one push by five.
-# Keyed on the ref, so a PR yields its older run to its newer one. main NEVER cancels:
-# every commit that lands must keep its own verdict, and a cancelled run has none.
+# A SUPERSEDED PR RUN HAS NO VALUE, and sharding multiplied the cost of one push by six.
+# Keyed on the ref, so a PR yields its older run to its newer one. main never cancels a
+# RUNNING run, but a group holds one running and ONE pending run, and a newer push replaces
+# the pending one: in a burst of merges only the newest is tested (#1400). Its verdict covers
+# every commit beneath it; what is lost is WHICH merge broke a red tip. To get that back,
+# push a middle commit to a temporary branch and dispatch this workflow there.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

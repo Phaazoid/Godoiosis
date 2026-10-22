@@ -1,12 +1,11 @@
 extends Object
 class_name SentryArchetype
 
-# Zone-bound guard (#29): holds its post until an enemy stands in the squad's painted
-# zone, then rushes it down with every destination clamped to the zone -- it can't be lured
-# out. When the zone empties it walks back to its post (the leader's scenario spawn cell)
-# and stands down. Re-derived fresh each turn: no engaged/returning state is stored.
-# AT the post it still takes the fallback main actions -- reload, rev, burrow -- never an attack
-# (#726, dev 2026-09-03: "at the post only").
+# Zone-bound guard (#29). Its painted zone limits where it WALKS, never what it hits (#1377, dev
+# 2026-10-21): every destination is clamped to zone∪post, and it fights anyone it can attack this turn
+# from there, wherever that enemy stands. With nobody in reach it pursues an intruder inside the zone;
+# with nobody there either it walks back to its post (the leader's scenario spawn cell), and at the post
+# it attacks whatever is in reach. Re-derived fresh each turn: no engaged/returning state is stored.
 static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	var leader := squad.get_leader()
 	if squad.home_cell == Squad.NO_HOME:
@@ -21,11 +20,12 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 	var allowed := zone_set.duplicate()
 	allowed[squad.home_cell] = true   # the post counts as inside even if painted over
 
-	# `allowed` as well as `zone_set`: the leash decides which cells this sentry may fight FROM, and
-	# a target it cannot legally walk to is not one it can engage.
-	var intruder := AITactics.choose_engagement_target(leader, board, squad_manager, zone_set, allowed)
-	if intruder != null:
-		AITactics.engage(squad, intruder, board, squad_manager, allowed, zone_set)
+	# `allowed` is the footing -- the cells this sentry may fight FROM -- and the only leash engagement
+	# reads. `zone_set` is asked by pursuit alone: with nobody to hit this turn it walks at an intruder
+	# inside its zone, never at anyone outside it.
+	var target := AITactics.choose_engagement_target(leader, board, squad_manager, zone_set, allowed)
+	if target != null:
+		AITactics.engage(squad, target, board, squad_manager, allowed)
 		return
 
 	if leader.movement.cell != squad.home_cell:
@@ -34,12 +34,11 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 			AITactics.group_move(squad, destination, board, squad_manager, allowed)
 		return
 
-	# AT THE POST with nobody in the zone: the fallback verbs, never ATTACK -- an enemy in reach but
-	# outside the zone is bait, and the lure-proofing above still holds. A drill digs in, a
-	# chainsword revs, a carbine tops off; this branch queued nothing before #726, so an idle sentry
-	# never reloaded either. The walk-home branch stays silent on purpose: entrenching a cell you
-	# are leaving is waste.
-	AITactics.queue_fallback_actions_for_squad(squad, board, squad_manager)
+	# AT THE POST with nobody to engage: whatever a member can hit from where it stands (a longer attack
+	# than the one the fork reads included), then the fallback verbs -- a drill digs in, a chainsword
+	# revs, a carbine tops off (#726). The walk-home branch stays silent on purpose: entrenching a cell
+	# you are leaving is waste.
+	AITactics.queue_main_actions_for_squad(squad, board, squad_manager)
 
 
 static func _zone_set(squad: Squad, board: BoardContext) -> Dictionary:

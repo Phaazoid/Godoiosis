@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #969 (2026-09-15); #120's weight bands and authored table folded in 2026-10-01; #46's shared execute steps folded in 2026-10-04; #1228's `has_surface` folded in 2026-10-05; #1313 (runes hold library carvings) folded in 2026-10-12.**
+**Canon checked through #1415 (2026-10-22).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -21,7 +21,7 @@ The dev's reframe, and it is the load-bearing one:
 > think about directionality of platforms/ramps."*
 
 So the board is **contiguous same-height platforms connected by directional ramps**. Nothing in the
-movement rules ever computes `abs(z_a - z_b)`; the only arithmetic is equality and ±1. Everything
+movement rules ever computes `abs(z_a - z_b)`; the only arithmetic is equality and ±1 (since #427 slice 3, equality only: the shared-edge comparison). Everything
 below follows from taking that literally.
 
 ### Where height lives
@@ -70,7 +70,7 @@ below follows from taking that literally.
 > and a sloped half — the RCT shape; the other diagonal turns an outer corner into a hip roof. **The
 > mesh generator calls that same function** rather than reimplementing its rule, because both
 > triangulations meet all four corners and only a point INSIDE can tell them apart: disagree, and a
-> unit crossing a corner cell floats or sinks by up to a quarter of the climb.
+> unit crossing a corner cell floats or sinks by up to a quarter of the climb. *(Correction, canon sweep 2026-10-22: the generator never called it. `_form_mesh` restates the same diagonal test, `corners.y == corners.w`, and the law below is what keeps the two in agreement; `BoardOverlays._build_bent_mesh` likewise repeats the test.)*
 > `tests/law/test_cap_mesh_matches_the_surface.gd` samples each drawn triangle at its own centroid,
 > which is where a wrong diagonal shows.
 >
@@ -86,7 +86,7 @@ below follows from taking that literally.
 > mistake. Four non-coplanar points, and an affine transform maps a plane to a plane: the best-fit
 > plane CROSSES the ground by a quarter of the climb at every corner, alternating sign — an eighth of
 > a cell on the gentle slope, an order of magnitude past `fill_lift` whatever that is tuned to (0.02
-> when this was written, 0.04 since #710 slice 4), which is why it read as z-fighting on the
+> when this was written, 0.04 since #710 slice 4; *strictly about six times then and three times now, not an order of magnitude*), which is why it read as z-fighting on the
 > tile's flat half and as arrows cutting through it. So **`lie_on` returns an identity basis on a
 > non-planar form** rather than a tilt it cannot honour, `Terrain.is_planar_form` is the question, and
 > **the FOLD lives in the marker's MESH** (`BoardOverlays._surface_mesh`): four vertices at their true
@@ -254,7 +254,7 @@ palette that explodes. Per-cell also makes painting it a **brush mode** rather t
 which is the shape #174 already established for Tile States.
 
 **Its own store, not folded into `TerrainStateManager`.** That manager holds a *stack of enum states
-with durations*; height is a scalar with different serialization and a different lifecycle. And the
+with durations*; height is a scalar with different serialization and a different lifecycle *(four corner heights per cell since #427, saved as `ScenarioData.corner_heights`)*. And the
 lifecycle is not guaranteed static forever — [terrain.md](terrain.md)'s "attack the map" list already
 carries **EARTH raising a destructible wall**, so nothing should be built on the assumption that
 height never changes mid-battle.
@@ -310,7 +310,7 @@ Rejected: **high side** (makes a ramp a third kind of thing rather than an annot
 >
 > `PlanResolver`'s two landing rules ask the same question: a flight slides onto a descending ramp
 > for free when the drop equals **that ramp's** climb, and a tumble continues when the next ramp's
-> high edge meets this cell's base.
+> high edge meets this cell's base. *(Slice 3 replaced the step and the flight with one shared-edge comparison: `height_step_ok` (see Movement), and the flight now asks whether its entry edge is level with it, `edge_of_corners(corners, -dir) == Vector2i(flight_height, flight_height)`. The tumble's continuation still compares `ramp_climb_at`.)*
 
 The visual midpoint stays purely presentational and already is — `UnitSprite3D.stand_at` is an
 injectable `Callable` precisely so the walk demo could lower ramp cells without the component knowing
@@ -321,11 +321,11 @@ statement about level, and does not conflict.
 
 ## Movement
 
-`RulesService.movement_cost(cell, unit, board)` and `can_traverse(cell, unit, board)` are **cell**
+`RulesService.movement_cost(cell, unit, board)` (with a `from` since #257) and `can_traverse(cell, unit, board)` are **cell**
 questions. Every verticality movement rule is an **edge** question — *from where?* — so the rules
 engine grows one:
 
-- **`can_stand(cell)`** — unchanged, the existing cell-scoped answer.
+- **`can_stand(cell)`** — unchanged, the existing cell-scoped answer. *(No function by that name exists; the cell-scoped answer is `can_traverse(cell, unit, board)`, over `BoardContext.is_walkable`.)*
 - **`can_step(from, to)`** — new. Same height → ordinary terrain rules. Different height → legal only
   if one of the two cells is a ramp whose axis matches the step direction and whose high/low sides
   line up. **Ramps connect exactly their own CLIMB** (±1 level until #427 slice 2 made steepness
@@ -358,7 +358,7 @@ engine grows one:
 production caller (`compute_move_range`'s BFS) and it already holds `current_cell`. `can_traverse` has
 three: `movement_cost`, `path_hops` (also a BFS holding the previous cell), and
 `AITactics._standable_firing_cells` — and that third one asks a genuinely cell-shaped question
-("could anyone stand here") and correctly does **not** change.
+("could anyone stand here") and correctly does **not** change. *(Counts as of 2026-08-14. Since then `route_to` (#920) is a second `movement_cost` caller, both searches reach `can_traverse` through `can_step`, and the AI function is named `_standable_attack_cells`.)*
 
 ### No climb cost [DECIDED]
 
@@ -371,7 +371,7 @@ ground costs so long as ramps connect.
 
 `path_hops` is deliberately **unweighted** ("how terrain connects, not what a move costs"), so a ramp
 climb costs 1 hop for cohesion and AI routing regardless of anything added later. That is correct and
-someone will eventually try to "fix" it — it wants a comment at the site.
+someone will eventually try to "fix" it — it wants a comment at the site. *(It has one now, in the `path_hops` header.)*
 
 ---
 
@@ -380,7 +380,7 @@ someone will eventually try to "fix" it — it wants a comment at the site.
 Dev ruling: *"anything that blocks line of sight (1 block tall) should block squad range, like we
 already have it today with unwalkable terrain."*
 
-**This falls out for free.** `SquadCohesion.field` is a `path_hops` walk over `can_traverse` — a
+**This falls out for free.** `SquadCohesion.field` is a `path_hops` walk over `can_traverse` *(over `can_step` as built: terrain through `can_traverse` plus the edge rule; since #257 an unramped step is un-steppable, and since #427 a half-level one too)* — a
 connectivity field, not a radius. The moment a 1-level step without a ramp is un-steppable, the
 cohesion leash routes around a cliff exactly the way it routes around water today. Same mechanism, not
 a lookalike; zero new code.
@@ -391,7 +391,7 @@ a lookalike; zero new code.
 
 **A per-attack vertical rule**, checked *alongside* Manhattan distance, never folded into it. A
 ranged attack authors an up-tolerance and a down-tolerance (a lobbed shell looser going down than
-up); melee authors the STEP rule instead (below) — the tolerance illustration this section used to
+up); melee authors the STEP rule instead (below; `VerticalRule.MELEE` since [#473](https://github.com/Phaazoid/Godoiosis/issues/473) renamed STEP/TOLERANCE) — the tolerance illustration this section used to
 give for a sword did not survive play.
 
 **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258), REWORKED in review the same
@@ -403,7 +403,9 @@ one gate is `Reach.vertical_aim_ok`, and `Reach.can_hit_cell_from` conjoins it w
 takes the `BoardContext` as a REQUIRED parameter (the `movement_cost` precedent: an optional would
 give one question two answers). Starter content: melee mains are MELEE; Fireball is 3 up with
 `arc_clearance = 3` (clears 1/2/3-walls to the far side, dies on a 4 — the dev's asked-for shape);
-guns and the other carvings RANGED-unlimited with clearance 0.
+guns and the other carvings RANGED-unlimited with clearance 0. *(Since #427 made a level two height
+units, Fireball is authored `up_tolerance = 6` / `arc_clearance = 6`, the same three levels; Rock
+Throw and Lob Shot are 2/2, one level.)*
 
 ### Lobs vs guns need no second mechanism [DECIDED 2026-08-20]
 
@@ -429,7 +431,10 @@ obeys tolerance and the sight trace while the same gun watches a line straight t
 
 **A spread is now TRUNCATED at the first cell its shot cannot reach** (*"truncate, and all 8"*), and
 that applies to every directional attack, not to watches alone — Line Snipe, Cleave, Spring, Zap
-Cannon, Splash, Freeze, Lance and Overwatch. **A cell BEHIND a cut cell is cut whether or not its own
+Cannon, Splash, Freeze, Lance and Overwatch. *(Line Snipe, Overwatch and Pressure Spray are
+single-target swings since [#1054](https://github.com/Phaazoid/Godoiosis/issues/1054)/[#1057](https://github.com/Phaazoid/Godoiosis/issues/1057), drawn on `Path Line` shapes:
+`Reach.get_paths_from` walks each path and cuts it at the first tile the same per-tile gate
+refuses.)* **A cell BEHIND a cut cell is cut whether or not its own
 line is clear**, which is the whole difference between truncating and filtering: a target in a dip
 past a ledge the shot cannot clear has a clean line of its own and is still unreachable.
 
@@ -487,13 +492,14 @@ from `can_step` so melee and movement can never disagree about which edges conne
 guards stay movement-only: swinging past a ramp's side is not walking onto it. **#427 slice 3 made
 that moot** — the guards are gone and the shared core is now the whole rule, so melee and movement
 answer identically with nothing left to keep movement-only.) Bare fists are
-STEP too — punching is melee. The earlier melee worry ("I don't like not being able to melee up a
+STEP (MELEE since #473) too — punching is melee. The earlier melee worry ("I don't like not being able to melee up a
 slope") is exactly what the half step preserves.
 
 ### The aim, not the footprint — amended by [#756](https://github.com/Phaazoid/Godoiosis/issues/756)
 
 The vertical check attached to the **aim** question (`Reach.can_hit_cell_from` /
-`get_all_attack_cells_from`) and not the **footprint** question (`get_affected_cells_from`), on the
+`get_all_attack_cells_from`; *the union takes no board today, and what the overlay hatches as
+blocked is `Reach.blocked_cells_from`*) and not the **footprint** question (`get_affected_cells_from`), on the
 argument that whether a blast covers a volume is a different question from whether the shot could be
 placed there — which halved how much of `Reach` had to learn about the board.
 
@@ -505,39 +511,43 @@ a placed footprint reads the board too, spreading from its impact cell. So the s
 entirely — every footprint question is a board question now, including a TRUE AoE's
 ([#1055](https://github.com/Phaazoid/Godoiosis/issues/1055)), which drops the trace and keeps the
 height rule. What keeps the scope honest instead is that shapes stay pure geometry: all three
-filters live in `Reach`, which already owned the sight trace.
+filters live in `Reach`, which already owned the sight trace. *(Joined since by #1057's walked
+paths and [#1228](https://github.com/Phaazoid/Godoiosis/issues/1228)'s surface trim, both still in `Reach`.)*
 
 ### What this buys, all from one rule
 
 - **Height advantage** — the high ground covers more than the low ground can answer.
 - **Counter denial, with no new rule.** `SquadManager.can_counter` is the counter-reach check (it
   now takes the board, threaded down from `resolve_plan`); a unit two levels up with an
-  up-tolerance-1 weapon below it simply generates no counter. Pinned by the ledge cases in
+  up-tolerance-1 weapon *(one level, authored as 2 since #427)* below it simply generates no counter. Pinned by the ledge cases in
   `tests/squad/test_counters.gd`, falsified against the board being dropped.
 - **The AI sees it with zero AI-side wiring** — `AITactics` probes candidates through `Reach` and
   scores through the real `PlanResolver`. That satisfies #117's standing lesson and the integration
-  contract in `CLAUDE.md`.
+  contract in `CLAUDE.md` *(now [`docs/architecture/ai.md`](../architecture/ai.md) → *Archetype AI*; CLAUDE.md keeps the one-line rule)*.
 - **The "invulnerable ledge camper" becomes an authoring dial**, not a rules problem: a 1-level
   terrace is crossable by most melee, a 2-level one is a genuine barrier. Same power-gating argument
-  as the shove kill — the level designer sets the frequency.
+  as the shove kill — the level designer sets the frequency. *(For melee this predates the
+  2026-08-20 revision above: any SHEER edge is a melee barrier, and only an adjacent ramp-connected
+  one is melee-legal. The tolerance dial is a RANGED one.)*
 
 ### `ResolvedOutcome.elevation_delta` — the wire for later [BUILT, #258]
 
 > *"it is important that we can track *if* attacks are happening up and down slopes so the wiring is
 > there for later."*
 
-The resolver stamps `elevation_delta` (target height − attacker height) onto each `ResolvedOutcome`.
+The resolver stamps `elevation_delta` (target height − attacker height; *in the code, the target's threaded cell
+against the order's frozen `origin_cell`, in height units since #427*) onto each `ResolvedOutcome`.
 No behaviour in v1; a future height-damage rule reads it, and the tile card can say "uphill"
 immediately.
 
 **It must be FROZEN, not re-derived** — the same reason `fired_attack` is stamped at declare time.
 Units get shoved mid-pass, so re-deriving the delta later from live positions would give a different
 number than the one previewed, which is a Law #2 break. Built exactly so: the stamp reads the frozen
-`origin_cell` against the THREADED hypo position (the same pair `_resolve_knockback` uses), and the
+`origin_cell` against the THREADED hypo position (the same pair `_resolve_knockback` used — `_knockback_landing` since #259), and the
 queue row already prints an `uphill`/`downhill` token off it. Pinned by
 `tests/law/test_elevation_delta.gd`, whose shove-then-hit case is falsified against the live read.
 
-This is not pre-building a deferred seam ([`CLAUDE.md`](../../CLAUDE.md)'s counterweight rule): it was
+This is not pre-building a deferred seam ([`CLAUDE.md`](../../CLAUDE.md)'s counterweight rule; *no rule by that name exists in CLAUDE.md, then or now*): it was
 explicitly requested, it is one field, and it is computed where the resolver already holds the board
 and both cells.
 
@@ -586,7 +596,10 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
 ```
 
 - **Endpoints at the SPRITE'S CENTER** (EYE = 0.5 — dev: the line "should originate from the center
-  of the sprite rather than the top") — the #218 offset's purpose survives: standing ON a cliff
+  of the sprite rather than the top") — *(since #427 the constant is `Reach.EYE_HEIGHT = 1.0` height
+  units, the same half level. [#1059](https://github.com/Phaazoid/Godoiosis/issues/1059) measured it at about 80% of a sprite's ink, near the
+  head, not the centre; the centre ruling is honoured by the look-only `ThreatLines2D.MARK_HEIGHT`,
+  and the two are declared apart in `Reach`)* — the #218 offset's purpose survives: standing ON a cliff
   edge, your own shot down clears. Standing one cell BACK from a tall edge, your own lip can occlude
   a steep shot — real lip occlusion, step forward to shoot. A target standing on a far lip is
   silhouetted and shootable; a step back and it is covered.
@@ -608,7 +621,8 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
     (`has_custom_data` answers whether the LAYER exists, never whether a tile authored). `SOLID_SHAPES`
     stand one LEVEL, `BILLBOARD` and `TUFT` stand nothing. So the dev's standing "1 block tall blocks
     line of sight" ships as the default rather than as an authored value on every wall tile, and
-    nothing in `TestTiles.tres` authors the column at all.
+    nothing in `TestTiles.tres` authors the column at all. *(No longer: the tree tile authors 1,
+    half a level.)*
   - **Authored in the Tiles tab** ("Rules height"), deliberately next to "Block height" so the
     rules/looks split is stated rather than rediscovered. The slider stops at
     `GridUtils.MAX_DRAWABLE_RULE_HEIGHT`, and `tests/law/test_a_prop_never_claims_more_wall_than_it_draws.gd`
@@ -619,7 +633,8 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
     `cells_crossed` is a cell walk. Ruled acceptable for v1 (dev, 2026-09-02) on the content: no
     single-edge wall is authored anywhere, every one is a full run (N|S, E|W) or a corner L. What
     stays over-blocked is a diagonal threading a corner piece's open quadrant, and a shot running
-    along a wall's own axis. The seam if it is ever wanted is the per-cell test in `sight_trace`.
+    along a wall's own axis. The seam if it is ever wanted is the per-cell test in `sight_trace` (*inside `Reach._trace`, which
+    `sight_trace` wraps*).
 - **Terrain only; units never block** — they move every turn, so a unit-blocked preview could not
   stay truthful (Law #2).
 - **The readout**: `HoverPresenter` computes the trace once per hovered aim and stores it on
@@ -627,7 +642,7 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   change signal); `SightTrace2D` draws the polyline flat, `OverlayMirror` lifts the same points
   into the diorama at their true heights (`BoardOverlays.Layer.SIGHT_TRACE`, the sink's LINE kind).
   **Only ranged point aims draw it** (`Reach.draws_sight_trace`): melee is "visually obvious
-  anytime" (dev) — STEP attacks and bare fists show no line, though the gate still judges their
+  anytime" (dev) — MELEE attacks (STEP until #473) and bare fists show no line, though the gate still judges their
   trace — and a directional spread has no single line. Pinned by
   `tests/weapons/test_sight_trace.gd` — including the law that the gate and the trace can never
   disagree — falsified against a wrong eye height and against the version bump being dropped.
@@ -650,7 +665,10 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   which are twenty ribbons on one mesh at twenty different ages. That is why the strip build and
   `beam_tangents` are statics now and why the shader multiplies by the VERTEX COLOUR: a material
   carries one colour, and only a per-vertex channel can vary inside one draw. The bead passes white
-  and is unchanged. The file is still named for the sight beam; the shader is both.
+  and is unchanged. The file is still named for the sight beam; the shader is both. *(It has more
+  tenants since: the reach marks, the focus edge, the squad's lines and `StormBolts`' weather
+  lightning all draw through `add_beam_strip` — presentation-effects.md → *THE BLOW-LANDED WIRE,
+  and the first attack that draws itself*.)*
 - **Two visual regressions shipped on this before it was right, and both are worth carrying.** The
   cross-ribbon `abs()` was taken in the VERTEX stage, where every vertex sits on a rim, so it
   interpolated to a constant and ALPHA came out **zero everywhere** — a beam built correctly,
@@ -731,7 +749,9 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
   on the doc's original tumble entry (a connected descending ramp — its high edge meets the flight
   level) = a free tumble, no fall. **Ending on any other ramp tumbles too**, down the slope's OWN
   downhill — after paying the drop, and possibly bending the shove's path once, which is why
-  `ResolvedOutcome.knockback_path` now carries the full trail the preview draws. **A tumble that
+  `ResolvedOutcome.knockback_path` now carries the full trail the preview draws. *(A corner form
+  has no cardinal downhill, so it tumbles on in the shove's own direction: provisional, dev
+  2026-08-23, #427.)* **A tumble that
   runs off into a hole is removed exactly as the flight is**
   ([#969](https://github.com/Phaazoid/Godoiosis/issues/969), 2026-09-15) — one rule for what a hole
   does to a moving body, whichever half of the shove is moving it — and it pays **no** fall for the
@@ -1013,7 +1033,8 @@ Two consequences, both ruled the conservative way:
    — keep fall damage to shoves that push a unit *directly* over a vertical edge, so the two
    mechanics never compound into a two-stage prediction on day one, and add tumble-then-plummet
    later once the base case had been felt. It was felt, and the addition landed in the same arc.
-   A downhill step below the ramp's base now accumulates `fall_levels`, steps into the lower cell,
+   A downhill step below the ramp's base now accumulates `fall_levels` (*`_Landing.fall_units` since
+   #427; the outcome's `fall_levels` derives from it*), steps into the lower cell,
    and **keeps whatever descent waits below** (another ramp tumbles again, a flat cell catches it) —
    dev: *"continue whatever descent awaits them."* One shove can therefore break its surface more
    than once, which is what the drop pointer's per-edge rule above exists to draw. Pinned by
@@ -1080,12 +1101,14 @@ Two costs that *do* scale with span, neither of them art:
 
 1. **2D sprite displacement.** At 20 levels a per-level Y offset stacks into a large visual shift and
    the sprite-overlap problem gets severe. That offset is a feel value, so it ships as an `@export`
-   knob and tall maps run a compressed one.
+   knob and tall maps run a compressed one. *(Unbuilt: the 2D render is [#266](https://github.com/Phaazoid/Godoiosis/issues/266), open.)*
 2. **Fall damage.** A 20-level drop should be lethal, which the drop/void split already handles.
 
 ---
 
 ## The 2D bill
+
+*(Unbuilt, all of it: [#266](https://github.com/Phaazoid/Godoiosis/issues/266), open.)*
 
 Dev ruling, 2026-08-14 on #218: elevation is **not a 3D-only feature** — the flat 2D view has to
 render and play it, and the cost is *"new sprites to represent height differences."* This sharpens the
@@ -1102,7 +1125,7 @@ survives elevation"* to *"2D renders elevation, and here is the bill."*
 
 ---
 
-## Build slices [APPROVED]
+## Build slices [APPROVED — all three BUILT; slice 1's 2D render is #266, open]
 
 Split so each is one reviewable diff and one feel-check, per the bite-sized-parts rule.
 
@@ -1112,7 +1135,7 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    store half shipped with a throwaway F5 readout instead of real rendering, because wall-face and
    ramp art is gated on a tileset choice that has not been made. The 2D render — wall autotiles,
    ramp sprites, per-level sprite Y-offset, and the `HoverPresenter` sprite-vs-cell disambiguation —
-   became its own ticket.
+   became its own ticket, [#266](https://github.com/Phaazoid/Godoiosis/issues/266).
 2. **Height → reach.** Per-attack asymmetric tolerances in `Reach` (aim methods only), plus
    `ResolvedOutcome.elevation_delta`, plus the "in range but blocked" preview treatment.
    **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258) (2026-08-20), reworked in
@@ -1169,7 +1192,7 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > Steepness is a **separate control from direction** (dev call, 2026-08-23), against folding both
 > into one nine-entry dropdown: a Rise Amount picker (Full 45° / Half 26.6°) beside the compass, and
 > **X** cycles it — between Z and C, so turn-left / change-pitch / turn-right read as one gesture. It
-> greys with the direction on a tile that stands up, for the same reason. The amount deliberately
+> greys with the direction on a tile that stands up, for the same reason *(since #342 round 2, on a tile that is not GROUND, `GridUtils.is_ground_shape`: a tuft stands up and does not grey)*. The amount deliberately
 > survives *Reset to flat*: it is a steepness preference, not a piece of the shape.
 
 > **THE RE-METRIC BROKE EVERY BOX THAT DRAWS A CELL VOLUME (dev, 2026-08-23, with screenshots).**
@@ -1212,12 +1235,12 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > gone rather than the gate.
 >
 > The zoom-in floor came down with it (`CameraRig3D.min_distance` 6.0 → 1.0, and its Game-tab knob
-> now reaches 0.25): *"it really makes it hard to zoom in and see what I'm trying to brush paint."*
+> now reaches 0.25; *then removed entirely the same day, so there is no `min_distance`, and since #1280 a notch closes a share of the distance*): *"it really makes it hard to zoom in and see what I'm trying to brush paint."*
 
 
 Kept deliberately minimal for now (dev): **scroll wheel sets the level the brush places at, with a
 dedicated button to reset it to 0.** Painting textures onto wall faces and other authoring niceties
-come later and do not gate anything.
+come later and do not gate anything *(now [#639](https://github.com/Phaazoid/Godoiosis/issues/639), paint one cell's wall face, and [#638](https://github.com/Phaazoid/Godoiosis/issues/638), a tile declares its side art; both open)*.
 
 **BUILT 2026-08-15 ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)), then MERGED INTO THE
 TERRAIN BRUSH 2026-08-16 ([#340](https://github.com/Phaazoid/Godoiosis/issues/340)).** #260 shipped it
@@ -1232,14 +1255,14 @@ rise are now always-live rows on the TERRAIN brush, one click writes tile + leve
 consequences fall out: a paint on virgin board now CREATES the ground it raises (the old groundless
 refusal is answered by ordering — tile first, then height), and a ramp wears the tile painted on it
 (*Ramps wear their ground* below). One click still writes both height fields, because
-`BoardHeights.set_cell` takes both and a cell is one answer; two brushes would be two ways to author
+`BoardHeights.set_cell` takes both and a cell is one answer *(three since #427 slice 2 — level, rise and climb — written as four corners)*; two brushes would be two ways to author
 one thing. The wheel is read **first** in `DevController.handle_tile_brush` and returns, so a notch
 mid-stroke changes the level without ending the stroke, and it is gated on `event.pressed` because
 Godot emits a press *and* a release per notch. Six rulings worth keeping:
 
 - **Negative levels are reachable, deliberately.** The dev: *"if I start designing a level and want a
   dip, without allowing negatives, I would have to shift everything up. no bueno."* Nothing in
-  `can_step` cares — its only arithmetic is equality and ±1, which is symmetric about zero. The 3D
+  `can_step` cares — its only arithmetic is equality and ±1, which is symmetric about zero *(since #427 slice 3 its only height question is whether two shared edges match, still symmetric)*. The 3D
   PICKER did care, until [#294](https://github.com/Phaazoid/Godoiosis/issues/294): a column one
   deep tops out at level `0`, which was also its "there is no column here" answer, so a dip read as
   flat inside the authoring apron and was unclickable outside it. `BoardPicker.NO_COLUMN` separates
@@ -1278,8 +1301,8 @@ Godot emits a press *and* a release per notch. Six rulings worth keeping:
   only then is the ghost under the cursor at all, since the picked column is where the ray crosses;
   the geometry pick is what displaces it. The drag was the same fault moving: a pick that reads
   geometry the drag is MUTATING slips onto a neighbour the moment a cell sinks, and a plane cannot.
-  So it is unconditional in **TERRAIN and CORNER**, the two modes that ask for a height; ZONE and
-  STATE keep geometry picking, marking a cell you can see. The accepted cost is the one the toggle
+  So it is unconditional in **TERRAIN and CORNER**, the two modes that ask for a height; ZONE,
+  STATE and GAS keep geometry picking, marking a cell you can see. The accepted cost is the one the toggle
   was protecting: reaching a column whose top is elsewhere means scrolling the wheel to that height
   first, which the selector makes visible rather than surprising.
 - **Elevation goes with the ground.** `BoardHeights.prune_groundless` runs at both sites the tile-state
@@ -1290,7 +1313,7 @@ Godot emits a press *and* a release per notch. Six rulings worth keeping:
 - **The readout lights itself.** Arming the brush that carries a level shows `HeightDebugOverlay` —
   painting height into an invisible store is blind. Its `visible` is **derived** from two named flags
   (F5, and the brush) rather than assigned by either, so leaving the mode cannot switch off a readout
-  F5 asked for. That brush is TERRAIN since #340; the rule is unchanged, only which mode owns it.
+  F5 asked for. That brush is TERRAIN since #340 (and CORNER since #427 slice 4); the rule is unchanged, only which mode owns it.
 - **Painting was a 2D-view job until [#285](https://github.com/Phaazoid/Godoiosis/issues/285)
   (2026-08-15)**, because the readout is a child of the flat grid and nothing rendered elevation in
   3D. #273 removed the second half of that, and #285 the first. See *Painting it in 3D* below.
@@ -1311,7 +1334,7 @@ put it in the render slice instead: it would settle
 from*) by fait accompli, that issue having explicitly listed the alternative-tile flags as the
 candidate to *investigate first*; and `BoardMirror.item_for_tile` returns no item for any
 `alternative != 0`, so a rotated tile silently falls back to its generic Kind block and loses its art
-in the view the game boots into.
+in the view the game boots into. *(#263 has since closed on a per-tile `wall_edges` mask, PR #287, so the first reason is moot; the `item_for_tile` reason stands. Orientation itself is untracked.)*
 
 **The palette absorbed elevation as [#340](https://github.com/Phaazoid/Godoiosis/issues/340)
 (2026-08-16)**, and both questions this section had parked were answered by the dev rather than
@@ -1427,14 +1450,14 @@ feedback and one binding. Four rulings, all the dev's:
   advance. The merged brush paints the tile first, so that click is now a real paint and the ghost
   has to show it. The rule it enforced (*elevation goes with the ground*) is intact: erase still
   takes the height with the tile.
-- **The wheel is the brush's only in TERRAIN mode.** Zones and Tile States never read it, so camera
+- **The wheel is the brush's only in TERRAIN mode** *(and CORNER since #427 slice 4)*. Zones, Tile States *(and Gas)* never read it, so camera
   zoom is untouched there; while the terrain brush is armed, `Ctrl+wheel` zooms.
 
 Two structural notes worth keeping. **The ghost answers what a click would PRODUCE**
 (`DevController.brush_ghost` returning a `BrushGhost`), replacing a TERRAIN-shaped predicate plus a
 separate layer getter — a preview carrying a level cannot be described by a bare cell, since the
 level is the brush's. (#285 made that answer per-MODE; #340 collapsed it back to one branch when the
-modes merged, and the art now comes off the tile-pick layer, because the paint writes a tile too.)
+modes merged — *#427 slice 4 added a second, the CORNER vertex ghost, `BrushGhost.Kind.VERTEX`* — and the art now comes off the tile-pick layer, because the paint writes a tile too.)
 And **the wheel suppression is DECLARATIVE, not
 a consume**: the camera rig is a *child* of `battle3d`, so it sees `_unhandled_input` first and
 `set_input_as_handled()` in the parent lands after the zoom has already happened (measured — the
@@ -1470,7 +1493,7 @@ itself.
   the trace from the impact — so a flat one lobbed behind a wall does not spray back over it; and the
   reach is a PROPAGATION rather than a filter, so a cell whose own line is clear is still cut when
   the cell the blast had to cross was not. What remains genuinely deferred is a blast that covers a
-  VOLUME rather than a heightmap's surface, which is all this was ever really about.
+  VOLUME rather than a heightmap's surface, which is all this was ever really about. *(Untracked; it needs multi-surface cells first, [#640](https://github.com/Phaazoid/Godoiosis/issues/640) under the [#641](https://github.com/Phaazoid/Godoiosis/issues/641) umbrella.)*
   **And the propagation became OPTIONAL at
   [#1055](https://github.com/Phaazoid/Godoiosis/issues/1055)** (`AttackData.swing`): both of those
   two things are what an attack gives up by ticking Swing off, and the height rule is what it keeps.
@@ -1478,7 +1501,7 @@ itself.
   of a fire following it when it goes off, for when the advanced battle zoom is disabled"*. The
   trajectory function is already the one home the flight path would read.
 - **Terrain interlocks** — water flowing downhill, fire climbing, fog settling in low ground. A rich
-  vein and a separate project; see [terrain.md](terrain.md).
+  vein and a separate project; see [terrain.md](terrain.md). *(First instance: #508's gas stops at a ledge, spreading only across an edge a unit could step, `GasSpread.can_cross`.)*
 - ~~**30° two-tile slopes**~~ — **SUPERSEDED by [#427](https://github.com/Phaazoid/Godoiosis/issues/427)
   (2026-08-23), and deliberately not built as described.** The gentler slope arrives as a HALF-level
   rise over ONE cell — `atan(1/2)` ≈ 26.6°, the actual RollerCoaster Tycoon angle — never as one
@@ -1493,11 +1516,11 @@ itself.
 
 Design session [#218](https://github.com/Phaazoid/Godoiosis/issues/218) (2026-08-14). Code:
 `RulesService` (`movement_cost` / `can_traverse` / `path_hops`), `SquadCohesion`, `Reach`,
-`AttackData`, `PlanResolver._resolve_knockback`, `ScenarioData`, `TerrainStateManager`.
+`AttackData`, `PlanResolver._knockback_landing` (ex-`_resolve_knockback`), `ScenarioData`, `TerrainStateManager`.
 See [terrain.md](terrain.md) (the tile model and the state store), [weapons.md](weapons.md) (patterns
 as pure geometry, `arc_clearance`), [presentation-effects.md](presentation-effects.md) (the Triangle
 Strategy / FFT reference shelf), [philosophy.md](philosophy.md) (Axioms 3 and 4),
-[resolution-pipeline.md](resolution-pipeline.md) (where `elevation_delta` is stamped), and
+[resolution-pipeline.md](resolution-pipeline.md) (*the resolver's stages; `elevation_delta` itself is stamped in `PlanResolver` and recorded in this doc's* `ResolvedOutcome.elevation_delta` *section*), and
 [`CLAUDE.md`](../../CLAUDE.md) (the design laws, the tuning rule, the version-label rule).
 Related issues: [#116](https://github.com/Phaazoid/Godoiosis/issues/116) (shove/fall),
 [#120](https://github.com/Phaazoid/Godoiosis/issues/120) (weight),

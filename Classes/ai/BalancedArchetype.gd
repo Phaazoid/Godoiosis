@@ -15,6 +15,6 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 		return
 	var enemy := AITactics.choose_balanced_target(leader, board, squad_manager)
 	if enemy != null:
-		AITactics.engage(squad, enemy, board, squad_manager, null, null, true)
+		AITactics.engage(squad, enemy, board, squad_manager, null, true)
 	else:
 		AITactics.queue_main_actions_for_squad(squad, board, squad_manager)
