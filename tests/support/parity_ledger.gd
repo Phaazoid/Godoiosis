@@ -404,7 +404,7 @@ static func gases() -> Dictionary:
 			K.SMOKE: {"ai": gap("#117", "the AI is blind to smoke: it neither seeks nor avoids the cloud that shortens its leash (#1335)")},
 			K.POISON: {"ai": inert()},
 			K.FROST: {"ai": air},
-			K.THUNDER: {"ai": inert()},
+			K.OZONE: {"ai": air},
 			K.SULFUR: {"ai": inert()},
 			K.ESSENCE: {"ai": air},
 		},
