@@ -17,7 +17,7 @@
 extends GdUnitTestSuite
 
 const PENDING := {
-	"res://Resources/TerrainReactions/Disperse.tres": "dispersal moves gas without changing it, so its equation is bookkeeping: c3potheds's to write (#1335)",
+	"res://Resources/TerrainReactions/Disperse.tres": "dispersing and blowing (#1332) both move gas without changing it, so its equation is bookkeeping: c3potheds's to write (#1335)",
 }
 
 const NOT_YET_FOLLOWED := {
