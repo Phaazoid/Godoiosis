@@ -163,6 +163,35 @@ func test_a_tick_that_moves_nothing_marks_nothing() -> void:
 	assert_int(field.dirty.version).is_equal(before)
 
 
+# #1332: a board carrying deposits is ruled from where they leave the gas -- the Alt outline hands it
+# the previewed plan's -- while a board with none gets the store's own round, which is the tick's.
+func test_next_round_rules_on_the_gas_a_boards_deposits_leave() -> void:
+	var field := GasField.new()
+	field.set_level(A, Gas.Kind.STEAM, THICK)
+	var moved := A + Vector2i(3, 0)
+	var cleared := ResolvedCellEffect.new()
+	cleared.cell = A
+	cleared.gas_cleared = true
+	var landed := ResolvedCellEffect.new()
+	landed.cell = moved
+	landed.add_gas(Gas.Kind.STEAM, THICK)
+	var effects: Array[ResolvedCellEffect] = [cleared, landed]
+	var projected := field.projected_cells(effects)
+	assert_bool(projected.has(A)).override_failure_message("the projection kept gas a deposit cleared").is_false()
+	assert_int(Gas.level_in(projected.get(moved, 0), Gas.Kind.STEAM)).is_equal(THICK)
+
+	var no_units: Array[Unit] = []
+	var bare := BoardContext.new(null, no_units, null)
+	var folded := field.next_round(bare.with_deposits(effects))
+	assert_dict(folded).is_equal(GasSpread.next(projected, bare))
+	assert_bool(folded.has(A) or not folded.has(moved)).override_failure_message(
+		"next round was ruled on the store, not on where the deposits leave the gas").is_false()
+	var live := field.next_round(bare)
+	assert_bool(live.has(A) and not live.has(moved)).override_failure_message(
+		"a board with no deposits no longer gets the store's own round").is_true()
+	assert_int(field.level_at(A, Gas.Kind.STEAM)).override_failure_message("the projection wrote the store").is_equal(THICK)
+
+
 func test_the_scenario_bridge_carries_gas_both_ways() -> void:
 	# BoardSnapshot.from_scenario / write_into are the ONE place "which fields are the board" is
 	# written down, so a save, a load and an undo all ride this.

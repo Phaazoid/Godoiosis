@@ -15,6 +15,8 @@ var icons: Array[Texture2D] = []
 var gas_added: Dictionary[Gas.Kind, int] = {}
 # Every gas the cell held is cleared FIRST, before gas_added lands (#1335: an Air hit disperses it).
 # GasField.apply and projected_packed_at fold it in that order, so the forecast and both executors agree.
+# A hit that shoves BLOWS the gas instead (#1332): the same clear here, plus the same levels in the
+# gas_added of the effect on the tile it lands on, so a push needs no field of its own.
 var gas_cleared := false
 
 

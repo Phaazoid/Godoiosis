@@ -192,7 +192,7 @@ static func _terrain_effects(r: TerrainReaction) -> Array[String]:
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
 	if r.disperses_gas:
-		effects.append("clears every gas")
+		effects.append("clears every gas, or blows it as far as the hit shoves")   # #1332
 	if not Gas.released(r.gases).is_empty():
 		effects.append(_releases(r.gases))
 	return effects

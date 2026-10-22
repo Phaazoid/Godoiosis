@@ -75,9 +75,26 @@ func projected_packed_at(cell: Vector2i, effects: Array[ResolvedCellEffect]) -> 
 	return packed
 
 
+# Every cell as it will stand once these deposits land, written nowhere: projected_packed_at over the
+# whole field, cells the deposits empty dropped.
+func projected_cells(effects: Array[ResolvedCellEffect]) -> Dictionary[Vector2i, int]:
+	var out: Dictionary[Vector2i, int] = _cells.duplicate()
+	for effect in effects:
+		var packed := projected_packed_at(effect.cell, effects)
+		if packed == 0:
+			out.erase(effect.cell)
+		else:
+			out[effect.cell] = packed
+	return out
+
+
 # What the field WILL hold after the next round, written nowhere -- the forecast's read, and the
-# tick's, so the two cannot disagree.
+# tick's, so the two cannot disagree. A board carrying deposits (#1332) is ruled from where they leave
+# the gas: the Alt outline hands it the previewed plan's, so a queued push outlines from where it lands.
+# The tick's board carries none.
 func next_round(board: BoardContext) -> Dictionary[Vector2i, int]:
+	if board != null and not board.deposits.is_empty():
+		return GasSpread.next(projected_cells(board.deposits), board)
 	return GasSpread.next(_cells, board)
 
 

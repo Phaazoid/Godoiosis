@@ -43,6 +43,18 @@ class _OpenBoard extends BoardContext:
 		return true
 
 
+# Open ground everywhere but `walls`, on a real (empty) grid so GasSpread judges where gas may go: a
+# gridless board waves every crossing through (#1332).
+class _RoomBoard extends _KindBoard:
+	var walls: Array[Vector2i] = []
+	func has_ground(_cell: Vector2i) -> bool:
+		return true
+	func is_void_at(_cell: Vector2i) -> bool:
+		return false
+	func is_walkable(cell: Vector2i) -> bool:
+		return not walls.has(cell)
+
+
 func _attacker(element: Elemental.Element, targets: EquippableData.TargetMode) -> Unit:
 	var u: Unit = H.spawn_unit(self, PLAYER, Vector2i(0, 0))
 	var attack := (u.get_equipped_weapon() as WeaponInstance).template.main_attack
@@ -360,10 +372,12 @@ func _gassy_board() -> _KindBoard:
 
 
 # In the AIR, so a UNIT-only attack clears the cells it strikes too, and only where there is gas: the
-# clear second cell takes nothing, not an empty effect.
-func test_an_air_hit_disperses_every_gas_on_the_cells_it_strikes_whatever_its_targets() -> void:
+# clear second cell takes nothing, not an empty effect. This hit shoves nobody, so nothing is blown.
+func test_an_air_hit_that_shoves_nobody_disperses_every_gas_on_the_cells_it_strikes_whatever_its_targets() -> void:
 	var disperse := _disperse()
 	var attacker := _attacker(disperse.incoming_element, EquippableData.TargetMode.UNIT)
+	assert_int(attacker.get_attack_knockback(attacker.get_fired_attack())).override_failure_message(
+			"fixture: this hit shoves, so it would blow the gas rather than disperse it").is_equal(0)
 	var clear_cell := TARGET_CELL + Vector2i(1, 0)
 	var struck: Array[Vector2i] = [TARGET_CELL, clear_cell]
 	var board := _gassy_board()
@@ -402,3 +416,157 @@ func test_a_cleared_cell_keeps_the_gas_its_own_effect_releases() -> void:
 	field.apply(effect)
 	assert_int(Gas.level_in(field.packed_at(TARGET_CELL), Gas.Kind.SMOKE)).is_equal(0)
 	assert_int(Gas.level_in(field.packed_at(TARGET_CELL), STEAM)).is_equal(Gas.Level.THIN)
+
+
+# --- a hit that shoves blows it instead (#1332) ----------------------------------------------------
+
+func _room(walls: Array[Vector2i] = []) -> _RoomBoard:
+	var bare: TileMapLayer = auto_free(TileMapLayer.new())
+	add_child(bare)
+	var board := _RoomBoard.new(null, {}, bare)
+	board.walls = walls
+	board.gas = GasField.new()
+	return board
+
+
+# An Air attacker at the origin whose hit shoves `tiles`; _aim points it at TARGET_CELL.
+func _blower(tiles: int) -> Unit:
+	var attacker := _attacker(_disperse().incoming_element, EquippableData.TargetMode.UNIT)
+	attacker.get_fired_attack().knockback = tiles
+	assert_int(attacker.get_attack_knockback(attacker.get_fired_attack())).override_failure_message(
+			"fixture: the hit does not shove %d" % tiles).is_equal(tiles)
+	return attacker
+
+
+# The way a unit standing on `cell` would be shoved by `attacker`'s hit.
+func _away(attacker: Unit, cell: Vector2i) -> Vector2i:
+	return GridUtils.cardinal_direction_i_between(attacker.movement.cell, cell)
+
+
+# A packed cell's levels by kind, so a restarted hold does not read as a difference.
+func _levels(packed: int) -> Dictionary:
+	var out := {}
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		out[kind] = Gas.level_in(packed, kind)
+	return out
+
+
+# The plan's cell effects played into the board's store in order, as both executors play them.
+func _play(plan: ResolvedPlan, board: BoardContext) -> void:
+	for effect in plan.cell_effects:
+		board.gas.apply(effect)
+
+
+# Every kind on the tile, at its level, as far as the hit shoves and away from the caster -- and the
+# preview, the fold every forecast reads and the store all say the same thing (Law #2).
+func test_a_shoving_air_hit_blows_every_gas_on_the_tile_as_far_as_it_shoves() -> void:
+	var attacker := _blower(2)
+	var board := _gassy_board()
+	var before := _levels(board.gas.packed_at(TARGET_CELL))
+	var landing := TARGET_CELL + _away(attacker, TARGET_CELL) * 2
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	var deposits := plan.pending_deposits()
+	assert_bool(deposits.has({"cell": TARGET_CELL, "clears_gas": true})).override_failure_message(
+			"the board would not show the gas leaving before Execute").is_true()
+	for kind: Gas.Kind in before:
+		assert_bool(deposits.has({"cell": landing, "gas": kind})).override_failure_message(
+				"the board would not show %s landing on %s" % [Gas.name_of(kind), landing]).is_true()
+	assert_int(board.gas.projected_packed_at(TARGET_CELL, plan.cell_effects)).is_equal(0)
+	assert_dict(_levels(board.gas.projected_packed_at(landing, plan.cell_effects))).is_equal(before)
+	_play(plan, board)
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+	assert_dict(_levels(board.gas.packed_at(landing))).is_equal(before)
+
+
+# It walks through GasSpread.can_cross, the round's spread rule, and rests on the last tile it reached:
+# a wall two tiles on stops a three-tile shove after one.
+func test_blown_gas_stops_on_the_last_tile_it_can_cross() -> void:
+	var attacker := _blower(3)
+	var away := _away(attacker, TARGET_CELL)
+	var walls: Array[Vector2i] = [TARGET_CELL + away * 2]
+	var board := _room(walls)
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.MEDIUM)
+	assert_bool(GasSpread.can_cross(TARGET_CELL, TARGET_CELL + away, board)).override_failure_message(
+			"fixture: the first step is refused too").is_true()
+	assert_bool(GasSpread.can_cross(TARGET_CELL + away, walls[0], board)).override_failure_message(
+			"fixture: gas may cross onto the wall").is_false()
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	_play(_resolve(_one(_aim(attacker, struck)), board), board)
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+	assert_int(board.gas.level_at(TARGET_CELL + away, Gas.Kind.SMOKE)).override_failure_message(
+			"the gas did not come to rest against the wall").is_equal(Gas.Level.MEDIUM)
+	assert_int(board.gas.packed_at(walls[0])).is_equal(0)
+
+
+# With no room to move at all it disperses, as gas a hit that shoves nobody strikes does: pinned against
+# a wall, or on the tile the hit came from, where it has no line to follow.
+func test_blown_gas_with_no_room_to_move_disperses() -> void:
+	var attacker := _blower(2)
+	var walls: Array[Vector2i] = [TARGET_CELL + _away(attacker, TARGET_CELL)]
+	var board := _room(walls)
+	var origin := attacker.movement.cell
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.MEDIUM)
+	board.gas.set_level(origin, STEAM, Gas.Level.MEDIUM)
+	var struck: Array[Vector2i] = [TARGET_CELL, origin]
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	assert_int(plan.cell_effects.size()).override_failure_message(
+			"gas with nowhere to go was laid somewhere").is_equal(struck.size())
+	_play(plan, board)
+	assert_bool(board.gas.is_empty()).override_failure_message("gas with no room to move survived the hit").is_true()
+
+
+# The deposit rule where it lands: levels add per kind, capped at thick -- thin onto thin is medium, and
+# thick onto medium stays thick. The fold the forecasts read agrees with the store.
+func test_blown_gas_adds_to_what_it_lands_on_capped_at_thick() -> void:
+	var attacker := _blower(1)
+	var landing := TARGET_CELL + _away(attacker, TARGET_CELL)
+	var board := _room()
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.THIN)
+	board.gas.set_level(TARGET_CELL, STEAM, Gas.Level.THICK)
+	board.gas.set_level(landing, Gas.Kind.SMOKE, Gas.Level.THIN)
+	board.gas.set_level(landing, STEAM, Gas.Level.MEDIUM)
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	var projected := board.gas.projected_packed_at(landing, plan.cell_effects)
+	_play(plan, board)
+	assert_int(board.gas.level_at(landing, Gas.Kind.SMOKE)).is_equal(Gas.Level.MEDIUM)
+	assert_int(board.gas.level_at(landing, STEAM)).is_equal(Gas.Level.THICK)
+	assert_int(board.gas.packed_at(landing)).is_equal(projected)
+
+
+# A cloud across a struck line shifts intact: every tile is read before any gas moves, and a tile's own
+# gas leaves before what is blown onto it lands.
+func test_a_struck_line_of_gas_shifts_intact() -> void:
+	var attacker := _blower(1)
+	var away := _away(attacker, TARGET_CELL)
+	var near := TARGET_CELL
+	var far := TARGET_CELL + away
+	var board := _room()
+	board.gas.set_level(near, Gas.Kind.SMOKE, Gas.Level.THIN)
+	board.gas.set_level(far, STEAM, Gas.Level.MEDIUM)
+	var struck: Array[Vector2i] = [near, far]
+	_play(_resolve(_one(_aim(attacker, struck)), board), board)
+	assert_int(board.gas.packed_at(near)).is_equal(0)
+	assert_dict(_levels(board.gas.packed_at(far))).override_failure_message(
+			"the far tile lost what the near one blew onto it, or kept its own").is_equal({Gas.Kind.SMOKE: Gas.Level.THIN})
+	assert_dict(_levels(board.gas.packed_at(far + away))).is_equal({STEAM: Gas.Level.MEDIUM})
+
+
+# The gas is read as the PASS leaves it: steam an earlier order in the same plan laid is blown on, which
+# is what the batch apply plays.
+func test_a_shoving_air_hit_blows_gas_an_earlier_order_in_the_same_plan_left() -> void:
+	var steamer := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
+	steamer.get_fired_attack().gases = {STEAM: Gas.Level.MEDIUM}
+	var attacker := _blower(1)
+	var landing := TARGET_CELL + _away(attacker, TARGET_CELL)
+	var board := _room()
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var attacks: Array[AttackAction] = [_aim(steamer, struck), _aim(attacker, struck)]
+	var plan := _resolve(attacks, board)
+	assert_int(board.gas.projected_packed_at(TARGET_CELL, plan.cell_effects)).is_equal(0)
+	assert_int(Gas.level_in(board.gas.projected_packed_at(landing, plan.cell_effects), STEAM)).override_failure_message(
+			"the Air hit read the board as it stood, not the steam the order before it left").is_equal(Gas.Level.MEDIUM)
+	_play(plan, board)
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+	assert_int(board.gas.level_at(landing, STEAM)).is_equal(Gas.Level.MEDIUM)

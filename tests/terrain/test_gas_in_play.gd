@@ -63,17 +63,20 @@ func _steam_at(cell: Vector2i) -> int:
 	return field.level_at(cell, Gas.Kind.STEAM)
 
 
+# Whether the board ghosts this icon on this cell before Execute.
+func _ghosted(icon: Texture2D, cell: Vector2i) -> bool:
+	var om: OverlayManager = game.overlay_manager
+	var at := GridUtils.cell_world(om.board_tilemap, cell)
+	for sprite: Sprite2D in om.terrain_preview_sprites:
+		if is_instance_valid(sprite) and sprite.texture == icon and sprite.global_position.is_equal_approx(at):
+			return true
+	return false
+
+
 func test_the_board_shows_where_the_steam_will_land_before_execute() -> void:
 	_steaming_swing()
 	assert_int(_steam_at(FOE_CELL)).override_failure_message("fixture: steam before anything ran").is_equal(0)
-	var om: OverlayManager = game.overlay_manager
-	var at := GridUtils.cell_world(om.board_tilemap, FOE_CELL)
-	var ghosted := false
-	for sprite: Sprite2D in om.terrain_preview_sprites:
-		if is_instance_valid(sprite) and sprite.texture == GasPuffArt.icon(Gas.Kind.STEAM) \
-				and sprite.global_position.is_equal_approx(at):
-			ghosted = true
-	assert_bool(ghosted).override_failure_message(
+	assert_bool(_ghosted(GasPuffArt.icon(Gas.Kind.STEAM), FOE_CELL)).override_failure_message(
 			"the queued swing leaves steam, but the board ghosts none on its cell").is_true()
 
 
@@ -82,6 +85,44 @@ func test_after_the_pass_the_steam_is_on_the_board() -> void:
 	var hero := _steaming_swing()
 	await game.order_executor.execute_orders(hero)
 	assert_int(_steam_at(FOE_CELL)).is_equal(LEVEL)
+
+
+# #1332: the same swing turned to the element that disperses gas, with a shove, at an enemy standing in
+# steam. Where the steam lands is the plan's own answer, read off the resolve, never a pinned tile.
+func test_a_shoving_air_swing_shows_where_it_blows_the_steam_and_the_pass_puts_it_there() -> void:
+	var disperse: TerrainReaction = null
+	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air and reaction.disperses_gas:
+			disperse = reaction
+	assert_object(disperse).override_failure_message("fixture: no authored reaction disperses gas").is_not_null()
+	_spawn(ENEMY, FOE_CELL)
+	var hero := _spawn(PLAYER, FOE_CELL + Vector2i.LEFT)
+	var swing := (hero.get_equipped_weapon() as WeaponInstance).template.main_attack
+	swing.elemental_damage_type = disperse.incoming_element
+	swing.knockback = 2
+	game.gas_field.set_level(FOE_CELL, Gas.Kind.STEAM, LEVEL)
+	game.squad_manager.active_squad = hero.squad
+	var action := AttackAction.declare(hero, hero.movement.cell, FOE_CELL)
+	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
+			"fixture: the swing never queued (%s)" % [", ".join(action.validation_errors)]).is_true()
+	game.refresh_action_queue(hero.squad)
+
+	var plan: ResolvedPlan = game.squad_manager.resolved_plan_for(hero.squad)
+	var landing := GridUtils.NO_CELL
+	for effect in plan.cell_effects:
+		if effect.gas_added.has(Gas.Kind.STEAM):
+			landing = effect.cell
+	assert_bool(landing != GridUtils.NO_CELL and landing != FOE_CELL).override_failure_message(
+			"the queued Air swing blows the steam nowhere").is_true()
+	assert_bool(_ghosted(OverlayManager.GAS_CLEARED_ICON, FOE_CELL)).override_failure_message(
+			"the board does not show the steam leaving the struck tile").is_true()
+	assert_bool(_ghosted(GasPuffArt.icon(Gas.Kind.STEAM), landing)).override_failure_message(
+			"the board does not show the steam landing on %s" % [landing]).is_true()
+
+	await game.order_executor.execute_orders(hero)
+	assert_int(_steam_at(FOE_CELL)).is_equal(0)
+	assert_int(_steam_at(landing)).override_failure_message(
+			"the pass did not put the steam where the board showed it").is_equal(LEVEL)
 
 
 # The round's wire: TurnManager.round_completed -> game._on_round_completed -> GasField.tick. The
