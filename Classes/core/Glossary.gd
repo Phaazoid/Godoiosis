@@ -37,7 +37,7 @@ enum Term {
 	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
 	# Elemental -- affinity then aura, in the order a reader needs them: which elements you can touch
 	# at all, then how hard you hit with one (#930 put both on screen for the first time).
-	ELEMENTS, AFFINITY, AURA, WET, CHILLED, REACTIONS, ATMOSPHERE,
+	ELEMENTS, AFFINITY, AURA, WET, CHILLED, SMOKED, REACTIONS, ATMOSPHERE,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Lifecycle
@@ -132,6 +132,7 @@ static func term_for_element_state(state: Elemental.State) -> Term:
 	const MAP: Dictionary[Elemental.State, Term] = {
 		Elemental.State.WET: Term.WET,
 		Elemental.State.CHILLED: Term.CHILLED,
+		Elemental.State.SMOKED: Term.SMOKED,
 	}
 	return MAP[state]
 
@@ -168,12 +169,14 @@ static func reaction_line(r: ElementalReaction) -> String:
 		effects.append("applies %s" % Elemental.state_display_name(state))
 	for state: Elemental.State in r.remove_states:
 		effects.append("clears %s" % Elemental.state_display_name(state))
-	if r.gas_level != Gas.Level.NONE:
-		effects.append(_releases(r.gas))
+	if not Gas.released(r.gases).is_empty():
+		effects.append(_releases(r.gases))
 	return _assemble_line(trigger, effects, r.popup)
 
 static func _terrain_reaction_line(r: TerrainReaction) -> String:
 	var trigger: String = Elemental.trigger_names(r.incoming_element, r.also_triggered_by)
+	if r.in_the_air:
+		trigger += " in the air"   # over any tile, whatever the attack targets (#1335)
 	if r.required_kind != Terrain.Kind.NONE:
 		trigger += " on %s" % Terrain.kind_display_name(r.required_kind)
 	if r.required_tile_state != Terrain.TileState.NONE:
@@ -188,13 +191,15 @@ static func _terrain_effects(r: TerrainReaction) -> Array[String]:
 		effects.append("sets %s" % Terrain.tile_state_display_name(state))
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
-	if r.gas_level != Gas.Level.NONE:
-		effects.append(_releases(r.gas))
+	if r.disperses_gas:
+		effects.append("clears every gas")
+	if not Gas.released(r.gases).is_empty():
+		effects.append(_releases(r.gases))
 	return effects
 
-# A reaction releasing gas, worded once for both kinds of reaction (#1329).
-static func _releases(kind: Gas.Kind) -> String:
-	return "releases %s" % Gas.display_name(kind)
+# A reaction releasing gas, worded once for both kinds of reaction (#1329): "releases Steam and Smoke".
+static func _releases(gases: Dictionary[Gas.Kind, Gas.Level]) -> String:
+	return "releases %s" % Gas.released_names(gases)
 
 # The interactions that can touch ONE tile — the tile hover card's list (#135 round 2). The
 # kind/state gate is TerrainReaction.applies_to_tile, the same predicate the resolver's deposit
@@ -203,6 +208,8 @@ static func _releases(kind: Gas.Kind) -> String:
 static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.TileState]) -> Array[String]:
 	var lines: Array[String] = []
 	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air:
+			continue   # true over every tile, so not this tile's to list (#1335); the Reactions page has it
 		if not reaction.applies_to_tile(kind, states):
 			continue
 		var effects := _terrain_effects(reaction)
@@ -511,6 +518,15 @@ static func _build_entries() -> Dictionary:
 			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX]
 			+ "the unit's next activation, twice that when the ice caught it soaked. Fire ends the "
 			+ "chill early, painfully: the sudden swing from cold to heat is its own reaction."}
+	# #1335: held while standing in smoke, so its clock is the cloud's, not the unit's.
+	e[Term.SMOKED] = {"category": Category.ELEMENTAL, "title": "Smoked",
+		"short": "Can't see: %+d COH while standing in medium or thick smoke."
+			% Elemental.SMOKE_STAT_MODS[Stats.Stat.COH],
+		"long": "Smoke blinds whoever stands in it. A leader who can't see holds its squad closer: "
+			+ "%+d COH, so a member left too far away splits off. It lasts exactly as long as the "
+			% Elemental.SMOKE_STAT_MODS[Stats.Stat.COH]
+			+ "unit stands in medium or thick smoke; thin smoke is harmless. A burning plant gives "
+			+ "off thick smoke, and an Air hit clears it."}
 	e[Term.REACTIONS] = {"category": Category.ELEMENTAL, "title": "Reactions",
 		"short": "Element meets state, always the same way: reactions are fixed rules, never chance.",
 		"long": "When an attack's element meets a state the target holds, the reaction changes "

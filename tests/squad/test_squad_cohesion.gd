@@ -668,3 +668,109 @@ func test_a_board_with_deposits_reads_the_ice_they_freeze_and_melt() -> void:
 	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, frozen.with_deposits([melt]))) \
 		.override_failure_message("range still crosses ice a deposit melts").is_false()
 	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, frozen)).is_true()
+
+
+# ------------------------------------------------------------------------------
+#  Smoke shortens the leash (#1335)
+# ------------------------------------------------------------------------------
+# A leader standing in medium-or-thick smoke can't see, so its leash is its COH plus the blind state's
+# COH change, read where it stands (SquadCohesion.reach_at) -- and every cohesion check reads that one
+# answer. Numbers come off the authored smoke rules, never a literal: they are the dev's to tune.
+
+# What standing in smoke takes off the leash, failing loudly when the content no longer says.
+func _smoke_drop() -> int:
+	var rules := GasRules.for_kind(Gas.Kind.SMOKE)
+	assert_bool(rules != null and rules.while_standing).override_failure_message(
+			"fixture: smoke no longer blinds whoever stands in it").is_true()
+	var drop := int(Elemental.paired_stat_mods(rules.state).get(Stats.Stat.COH, 0))
+	assert_int(drop).override_failure_message("fixture: the blind state no longer shortens COH").is_less(0)
+	return drop
+
+
+func _smoke_level() -> int:
+	return GasRules.for_kind(Gas.Kind.SMOKE).state_from
+
+
+func test_smoke_where_the_leader_stands_shortens_its_leash_and_nowhere_else() -> void:
+	var setup: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var leader: Unit = setup.leader
+	var member: Unit = setup.member
+	var reach := (setup.squad as Squad).get_max_squad_range()
+	var drop := _smoke_drop()
+
+	game.gas_field.set_level(member.movement.cell, Gas.Kind.SMOKE, Gas.Level.THICK)
+	assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).override_failure_message(
+			"smoke on a MEMBER shortened the leash -- only the leader's sight is read").is_equal(reach)
+
+	if _smoke_level() > Gas.Level.THIN:
+		game.gas_field.set_level(Vector2i.ZERO, Gas.Kind.SMOKE, _smoke_level() - 1)
+		assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).override_failure_message(
+				"smoke thinner than its authored level blinded the leader").is_equal(reach)
+	game.gas_field.set_level(Vector2i.ZERO, Gas.Kind.SMOKE, _smoke_level())
+	assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).is_equal(maxi(reach + drop, 0))
+	assert_bool(SquadCohesion.in_range(setup.squad, Vector2i.ZERO, member, Vector2i(0, reach), game._board())) \
+		.override_failure_message("the leash edge did not move with the smoke").is_false()
+
+	# A leader already HOLDING the state (a hit gave it) is docked once, not twice.
+	leader.add_element_state(Elemental.State.SMOKED)
+	assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).override_failure_message(
+			"a smoked leader standing in smoke was docked twice").is_equal(maxi(reach + drop, 0))
+
+
+func test_a_member_cannot_be_ordered_past_a_smoky_leaders_leash() -> void:
+	var setup: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var reach := maxi((setup.squad as Squad).get_max_squad_range() + _smoke_drop(), 0)
+	game.gas_field.set_level(Vector2i.ZERO, Gas.Kind.SMOKE, Gas.Level.THICK)
+	assert_bool(reach < 3).override_failure_message("fixture: the smoky leash still reaches the member").is_true()
+
+	assert_bool(_order_move(setup.member, Vector2i(0, reach + 1))).override_failure_message(
+			"a squadmate was ordered outside a smoke-blind leader's leash").is_false()
+	assert_bool(_order_move(setup.member, Vector2i(0, maxi(reach, 1)))).override_failure_message(
+			"a squadmate was refused a cell inside the shortened leash").is_true()
+
+
+# The #1069 refusal reads the leash at the DESTINATION, so a leader cannot walk into smoke that would
+# strand its squad -- and the same cell, clear, is still offered (the control).
+func test_a_leader_may_not_walk_into_smoke_that_strands_its_squad() -> void:
+	var setup: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(-3, 0))
+	var leader: Unit = setup.leader
+	var into := Vector2i(2, 0)
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+	assert_bool(game.leader_followable.has(into)).override_failure_message(
+			"fixture: the squad cannot follow the leader to %s even in clear air" % [into]).is_true()
+	game.exit_current_mode()
+
+	game.gas_field.set_level(into, Gas.Kind.SMOKE, Gas.Level.THICK)
+	_move_to(leader, into)
+	assert_object(_move_for(leader)).override_failure_message(
+			"the leader walked into smoke that leaves its slow squadmate out of reach").is_null()
+
+
+# A pass that lays smoke under its own leader: the forecast names the split on the blow that laid it,
+# and the real pass ejects the same member. The forecast is SplitForecast's existing deposit replay --
+# nothing smoke-specific -- so this is what proves the leash reads the landed board.
+func test_smoke_a_pass_lays_under_the_leader_is_forecast_and_splits_the_squad() -> void:
+	var setup: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = setup.squad
+	var member: Unit = setup.member
+	assert_bool(maxi(squad.get_max_squad_range() + _smoke_drop(), 0) < 3).override_failure_message(
+			"fixture: a smoky leash would still reach the member").is_true()
+	member.equipped_weapon = H.make_weapon(1)   # this fixture's units spawn unarmed
+	var smoker := member.get_fired_attack()
+	smoker.targets = EquippableData.TargetMode.MAP
+	smoker.max_range = 3
+	smoker.deals_no_damage = true
+	smoker.gases = {Gas.Kind.SMOKE: Gas.Level.THICK}
+	game.squad_manager.active_squad = squad
+	var aim := AttackAction.declare(member, member.movement.cell, Vector2i.ZERO)
+	assert_bool(game.squad_manager.queue_action(squad, aim)).override_failure_message(
+			"fixture: the smoke aim never queued (%s)" % [", ".join(aim.validation_errors)]).is_true()
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(squad, game._board())
+	assert_bool(SplitForecast.leavers(plan).has(member)).override_failure_message(
+			"no row forecast the member leaving once the smoke lands on its leader").is_true()
+
+	await game.order_executor.execute_orders(setup.leader)
+	assert_bool(squad.get_members().has(member)).override_failure_message(
+			"the forecast split never happened when the pass played").is_false()

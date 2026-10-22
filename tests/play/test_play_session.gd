@@ -176,7 +176,7 @@ func test_end_turn_hands_over_control() -> void:
 # applied would have the Play API and the game disagree about the board after a pass.
 func test_an_attack_that_leaves_gas_leaves_it_on_the_headless_board_too() -> void:
 	var attacker: Unit = _session.unit_by_handle("A")
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.gas_level = Gas.Level.MEDIUM
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.gases = {Gas.Kind.STEAM: Gas.Level.MEDIUM}
 	_session.queue_move("A", Vector2i(1, 0))
 	_session.queue_attack("A", Vector2i(2, 0))
 	var res: Dictionary = _session.execute()

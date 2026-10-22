@@ -10,7 +10,9 @@ required_state = 1
 also_triggered_by = Array[int]([9])
 damage_mult = 0.5
 remove_states = Array[int]([1])
-gas_level = 1
+gases = Dictionary[int, int]({
+0: 1
+})
 equation = "F2 + W2 -> 2FW"
 popup = "Dried Off!"
 icon = ExtResource("2_qkdry")

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://cs7okj15ujbag"]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_sqi3k"]
+
+[resource]
+script = ExtResource("1_sqi3k")
+incoming_element = 6
+in_the_air = true
+disperses_gas = true
+popup = "Disperses!"
+metadata/_custom_type_script = "uid://dxskrhe0srgid"

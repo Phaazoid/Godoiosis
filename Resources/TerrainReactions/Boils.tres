@@ -8,7 +8,9 @@ incoming_element = 1
 also_triggered_by = Array[int]([9])
 required_kind = 5
 forbidden_tile_state = 2
-gas_level = 2
+gases = Dictionary[int, int]({
+0: 2
+})
 equation = "F2 + W2 -> 2FW"
 popup = "Boils!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

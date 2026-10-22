@@ -15,5 +15,6 @@ swing = true
 hits_allies = true
 targets = 2
 damage_kind = 5
-gas = 3
-gas_level = 1
+gases = Dictionary[int, int]({
+3: 1
+})

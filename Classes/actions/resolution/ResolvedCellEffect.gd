@@ -13,11 +13,20 @@ var icons: Array[Texture2D] = []
 # Gas LEVELS this cell gains, added to what it holds (#508): the reactions that fired here plus the
 # attack's own deposit. GasField.apply plays it; a cell effect may carry gas and no state at all.
 var gas_added: Dictionary[Gas.Kind, int] = {}
+# Every gas the cell held is cleared FIRST, before gas_added lands (#1335: an Air hit disperses it).
+# GasField.apply and projected_packed_at fold it in that order, so the forecast and both executors agree.
+var gas_cleared := false
 
 
 func add_gas(kind: Gas.Kind, levels: int) -> void:
 	if levels > 0:
 		gas_added[kind] = mini(gas_added.get(kind, 0) + levels, Gas.MAX_LEVEL)
+
+
+# Everything one holder's `gases` releases (an attack's or a reaction's, #1335), in kind order.
+func add_gases(gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
+	for kind: Gas.Kind in Gas.released(gases):
+		add_gas(kind, gases[kind])
 # The blow that deposited it, or null for an order's own deposit (Burrow's COVER). Live applies a
 # pass's deposits in one batch, so nothing in playback reads this; the Split forecast does (#367),
 # to hand a break over ice this pass melts to the fire that melted it.

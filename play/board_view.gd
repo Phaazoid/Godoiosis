@@ -107,15 +107,16 @@ static func render_focus(session, handle: String) -> String:
 	lines.append(_grid_block(session, _content_bounds(session), overlay))
 	lines.append("")
 	lines.append("  " + _unit_line(session, unit))
-	lines.append("  " + _stats_line(unit))
-	for line in _attack_lines(unit, session._board()):
+	var board: BoardContext = session._board()
+	lines.append("  " + _stats_line(unit, board))
+	for line in _attack_lines(unit, board):
 		lines.append("    " + line)
 	return "\n".join(lines)
 
 
 # The unit's numbers as the game derives them, gear included (#46) -- what `focus` reads and the
 # compact unit line, which prints authored values, does not.
-static func _stats_line(unit: Unit) -> String:
+static func _stats_line(unit: Unit, board: BoardContext) -> String:
 	var parts: Array[String] = [
 		"HP %d/%d" % [unit.get_current_hp(), unit.get_max_hp()],
 		"MOV %d" % unit.get_mov(),
@@ -127,7 +128,8 @@ static func _stats_line(unit: Unit) -> String:
 	var squad := unit.squad
 	if squad != null:
 		parts.append("squad %d/%d" % [squad.members.size(), squad.max_size()])
-		parts.append("leash %d" % squad.get_max_squad_range())
+		# Where the leader stands, as every cohesion check reads it: smoke there shortens it (#1335).
+		parts.append("leash %d" % SquadCohesion.reach_at(squad.leader, squad.leader.movement.cell, board))
 	return "  ".join(parts)
 
 

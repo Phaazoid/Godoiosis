@@ -17,6 +17,7 @@ const STEAM := Gas.Kind.STEAM
 const THIN := Gas.Level.THIN
 const MEDIUM := Gas.Level.MEDIUM
 const THICK := Gas.Level.THICK
+const T := preload("res://tests/support/terrain_fixtures.gd")
 
 
 class _FakeBoard extends BoardContext:
@@ -135,13 +136,13 @@ func test_a_sheer_ledge_stops_it_and_a_ramp_lets_it_through() -> void:
 
 
 func test_a_gas_with_no_rules_file_never_moves() -> void:
-	assert_object(GasRules.for_kind(Gas.Kind.SMOKE)).override_failure_message(
-		"smoke has a rules file now -- point this case at a gas that does not").is_null()
-	var smoke := Gas.with_level(0, Gas.Kind.SMOKE, THICK)
-	var cells: Dictionary[Vector2i, int] = {C: smoke}
+	assert_object(GasRules.for_kind(Gas.Kind.POISON)).override_failure_message(
+		"poison has a rules file now -- point this case at a gas that does not").is_null()
+	var poison := Gas.with_level(0, Gas.Kind.POISON, THICK)
+	var cells: Dictionary[Vector2i, int] = {C: poison}
 	var next := GasSpread.next(cells, _board())
 	assert_int(next.size()).is_equal(1)
-	assert_int(next[C]).is_equal(smoke)
+	assert_int(next[C]).is_equal(poison)
 
 
 func test_the_answer_does_not_depend_on_the_order_cells_are_visited() -> void:
@@ -196,3 +197,46 @@ func test_the_rule_reads_the_field_and_writes_nothing_into_it() -> void:
 	var before := cells.duplicate()
 	GasSpread.next(cells, _board())
 	assert_bool(cells == before).is_true()
+
+
+# IGNITION (#1335): a cell fire takes this round gives off its ground's gases, the `gases` a hit lighting
+# it releases. The fixture's fuel carries its own (never the authored grass's), and the cell already
+# alight gives off nothing more -- "once", at the moment it catches.
+func test_a_cell_fire_takes_gives_off_its_grounds_gases_and_the_fire_itself_nothing() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	var fuel := store.fuel_at(C)
+	fuel.gases = {Gas.Kind.SMOKE: THICK, STEAM: THIN}
+	var lit := ResolvedCellEffect.new()
+	lit.cell = C
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	store.apply(lit)
+	var board := _board()
+	board.terrain_states = store
+	var taken := store.cells_fire_takes()
+	assert_bool(taken.is_empty()).override_failure_message("fixture: fire takes nothing").is_false()
+
+	var nothing: Dictionary[Vector2i, int] = {}
+	var next := GasSpread.next(nothing, board)
+	for cell: Vector2i in taken:
+		assert_int(_level(next, cell, Gas.Kind.SMOKE)).is_equal(THICK)
+		assert_int(_level(next, cell, STEAM)).is_equal(THIN)
+	assert_int(_level(next, C, Gas.Kind.SMOKE)).override_failure_message(
+			"the cell already alight gave off smoke again").is_equal(0)
+	assert_int(next.size()).is_equal(taken.size())
+
+
+# Laid AFTER spill and fade, so fresh smoke sits at its own level for a round with a fresh hold, and
+# is added to what already lies there.
+func test_a_spreading_fire_adds_its_gas_to_what_lies_there() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	store.fuel_at(E).gases = {STEAM: THIN}
+	var lit := ResolvedCellEffect.new()
+	lit.cell = C
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	store.apply(lit)
+	var board := _board()
+	board.terrain_states = store
+	assert_bool(store.cells_fire_takes().has(E)).override_failure_message("fixture: fire does not take E").is_true()
+	var next := GasSpread.next(_field({E: THIN}), board)
+	assert_int(_level(next, E)).is_equal(mini(_held(THIN) + THIN, Gas.MAX_LEVEL))
+	assert_int(Gas.age_in(next[E], STEAM)).override_failure_message("a fresh release kept an old hold").is_equal(0)

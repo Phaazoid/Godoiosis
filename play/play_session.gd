@@ -1361,8 +1361,13 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 static func _describe_deposits(plan: ResolvedPlan) -> Array:
 	var out: Array = []
 	for deposit: Dictionary in plan.pending_deposits():
-		var what: String = Gas.display_name(deposit["gas"]) if deposit.has("gas") \
-				else Terrain.tile_state_display_name(deposit["state"])
+		var what: String
+		if deposit.has("clears_gas"):
+			what = "disperses gas"   # an Air hit clears the cell (#1335)
+		elif deposit.has("gas"):
+			what = Gas.display_name(deposit["gas"])
+		else:
+			what = Terrain.tile_state_display_name(deposit["state"])
 		out.append({"cell": deposit["cell"], "what": what})
 	return out
 
@@ -1510,6 +1515,8 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
 		if gas_field != null:
 			gas_field.apply(effect)
+		if effect.gas_cleared:
+			events.append("%s's gas disperses" % str(effect.cell))
 		for kind: Gas.Kind in effect.gas_added:
 			events.append("%s gains %s %s" % [str(effect.cell), Gas.Level.keys()[effect.gas_added[kind]], Gas.name_of(kind)])
 
@@ -1714,10 +1721,10 @@ func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 # The two signal-driven halves of the boundary, connected in _init. round_completed fires before
 # turn_started, so a round's tile tick lands before the incoming faction's own ticks.
 func _on_round_completed() -> void:
+	if gas_field != null:
+		gas_field.tick(_board())   # game._on_round_completed's twin (#508), gas FIRST as it orders it (#1335)
 	if terrain_states != null:
 		terrain_states.tick_states()
-	if gas_field != null:
-		gas_field.tick(_board())   # game._on_round_completed's twin (#508)
 	mission.advance_round()   # the clock's ONE tick, LAST as the game orders it; the turn-start check sees it
 
 

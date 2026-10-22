@@ -11,6 +11,10 @@ add_tile_states = Array[int]([1])
 add_state_turns = Dictionary[int, int]({
 1: 3
 })
+gases = Dictionary[int, int]({
+0: 1,
+1: 3
+})
 equation = "F2 + green_plant -> F2 + 2FW + smoke"
 popup = "Ignites!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"

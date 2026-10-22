@@ -1084,10 +1084,14 @@ func _on_end_turn_button_pressed() -> void:
 			return
 	end_turn()
 
+# The gas round runs FIRST (#1335): a spreading fire's smoke lands on the cells the tile tick is about
+# to light, and GasSpread can only name them before they are alight -- the same frontier the Alt
+# outline (GasField.next_round) reads, so the outline is the round. The tile tick changes nothing the
+# gas round reads (FROZEN has no clock).
 func _on_round_completed() -> void:
+	gas_field.tick(_board())   # the gas's round (#508); GasMirror polls the store, so no redraw call
 	terrain_states.tick_states()
 	overlay_manager.redraw_terrain_live(terrain_states)
-	gas_field.tick(_board())   # the gas's round (#508); GasMirror polls the store, so no redraw call
 	mission_controller.advance_round()   # the mission clock's ONE tick (#101); the turn-start check() sees it
 
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the

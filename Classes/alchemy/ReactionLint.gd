@@ -85,15 +85,19 @@ static func _expected_outputs(reaction: Resource) -> Array[Dictionary]:
 		var r := reaction as ElementalReaction
 		for state: Elemental.State in r.add_states:
 			_expect(out, SubstanceMap.of_state(state), "the added %s" % Elemental.state_display_name(state))
-		if r.gas_level != Gas.Level.NONE:
-			_expect(out, SubstanceMap.of_gas(r.gas), "the released %s" % Gas.display_name(r.gas))
+		_expect_gases(out, r.gases)
 	elif reaction is TerrainReaction:
 		var r := reaction as TerrainReaction
 		for state: Terrain.TileState in r.add_tile_states:
 			_expect(out, SubstanceMap.of_tile_state(state), "the added %s" % Terrain.TileState.keys()[state].capitalize())
-		if r.gas_level != Gas.Level.NONE:
-			_expect(out, SubstanceMap.of_gas(r.gas), "the released %s" % Gas.display_name(r.gas))
+		_expect_gases(out, r.gases)
 	return out
+
+
+# Every gas a reaction releases must be in its outputs, the added states' rule.
+static func _expect_gases(out: Array[Dictionary], gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
+	for kind: Gas.Kind in Gas.released(gases):
+		_expect(out, SubstanceMap.of_gas(kind), "the released %s" % Gas.display_name(kind))
 
 
 # The gases this reaction's equation MAKES (named in its outputs, not its inputs) that it does not
@@ -121,11 +125,9 @@ static func unreleased_gases(reaction: Resource, catalog: Dictionary = {}) -> Ar
 
 static func _releases(reaction: Resource, kind: Gas.Kind) -> bool:
 	if reaction is ElementalReaction:
-		var r := reaction as ElementalReaction
-		return r.gas == kind and r.gas_level != Gas.Level.NONE
+		return Gas.released((reaction as ElementalReaction).gases).has(kind)
 	if reaction is TerrainReaction:
-		var r := reaction as TerrainReaction
-		return r.gas == kind and r.gas_level != Gas.Level.NONE
+		return Gas.released((reaction as TerrainReaction).gases).has(kind)
 	return false
 
 

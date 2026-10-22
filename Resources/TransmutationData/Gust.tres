@@ -9,6 +9,7 @@ recipe = "Push(A2)"
 display_name = "Gust"
 max_range = 3
 hits_allies = true
+targets = 2
 knockback = 2
 deals_no_damage = true
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"

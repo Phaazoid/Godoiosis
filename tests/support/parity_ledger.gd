@@ -401,7 +401,7 @@ static func gases() -> Dictionary:
 		"play_all": covered(SESSION, "Gas.kinds_in"),
 		"rows": {
 			K.STEAM: {"ai": gap("#117", "the AI is blind to steam's soak (terrain.md)")},
-			K.SMOKE: {"ai": inert()},
+			K.SMOKE: {"ai": gap("#117", "the AI is blind to smoke: it neither seeks nor avoids the cloud that shortens its leash (#1335)")},
 			K.POISON: {"ai": inert()},
 			K.FROST: {"ai": air},
 			K.THUNDER: {"ai": inert()},

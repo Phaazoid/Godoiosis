@@ -71,3 +71,22 @@ static func name_of(kind: Kind) -> String:
 # which is what the look files are named by.
 static func display_name(kind: Kind) -> String:
 	return name_of(kind).capitalize()
+
+
+# What a `gases` field releases (#1335): AttackData's, TerrainReaction's and ElementalReaction's one
+# shape, kind -> level. In KIND order rather than the dictionary's, so a resolve or a readout never
+# leans on insertion order, and a NONE level releases nothing.
+static func released(gases: Dictionary[Kind, Level]) -> Array[Kind]:
+	var out: Array[Kind] = []
+	for kind: Kind in Kind.values():
+		if int(gases.get(kind, Level.NONE)) > Level.NONE:
+			out.append(kind)
+	return out
+
+
+# The same list as the player reads it: "Steam and Smoke".
+static func released_names(gases: Dictionary[Kind, Level]) -> String:
+	var names: Array[String] = []
+	for kind: Kind in released(gases):
+		names.append(display_name(kind))
+	return " and ".join(names)

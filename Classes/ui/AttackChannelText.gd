@@ -51,8 +51,8 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 			out.append("%s drops %s where it hits" % [_name_of(dropper), _name_of(payload)])
 		dropper = payload
 
-	if attack.gas_level != Gas.Level.NONE:
-		out.append("Leaves %s where it hits" % Gas.display_name(attack.gas))
+	if not Gas.released(attack.gases).is_empty():
+		out.append("Leaves %s where it hits" % Gas.released_names(attack.gases))
 
 	if can_overwatch:
 		out.append("Watch only — declared as a standing watch, never fired directly")

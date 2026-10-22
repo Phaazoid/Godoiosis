@@ -997,7 +997,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# body is lost.
 	var downed := unit.is_downed()
 	var downed_turns: int = unit.downed_turns_remaining if downed else -1
-	var row: Array[Texture2D] = StateIcons.textures_for(unit.element_states)
+	var row: Array[Texture2D] = StateIcons.textures_for(_states_shown(unit))
 	if downed:
 		row.append(StateIcons.DOWNED)
 	if downed_turns <= 0:
@@ -1028,6 +1028,18 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 # sprite is hidden — and a bar parented to that sprite would vanish exactly when a hovered unit
 # most needs one. Reading the projected cell also covers the knockback ghost, whose 2D preview
 # sprites carry no unit identity to hang anything off.
+# What the row says the unit IS: the states it holds, then any it holds only while it stands where it
+# does (smoke, #1335) -- stored nowhere, so asked of the frame's board at the unit's own cell.
+func _states_shown(unit: Unit) -> Array[Elemental.State]:
+	var shown: Array[Elemental.State] = unit.element_states.duplicate()
+	if _frame_board == null:
+		return shown
+	for state: Elemental.State in GasRules.states_while_standing(_frame_board.gas_at(unit.movement.cell)):
+		if not shown.has(state):
+			shown.append(state)
+	return shown
+
+
 func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
 	# Measured, not assumed: hud_lift is clearance above the ART's topmost opaque pixel, so units
 	# whose sprites carry different amounts of transparent padding still wear the readout at the

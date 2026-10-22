@@ -565,8 +565,7 @@ func test_gas_this_pass_leaves_does_not_move_a_later_cast_in_it() -> void:
 	var id: String = GasRules.for_kind(kind).air.keys()[0]
 	var thrower_carving := _carving(DRAWS["inert_air"])
 	thrower_carving.hits_allies = true
-	thrower_carving.gas = kind
-	thrower_carving.gas_level = Gas.Level.THICK
+	thrower_carving.gases = {kind: Gas.Level.THICK}
 	var thrower := _alchemist(thrower_carving)
 	var caster_carving := _carving(DRAWS[id])
 	var caster := _alchemist(caster_carving)

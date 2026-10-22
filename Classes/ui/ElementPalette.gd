@@ -47,4 +47,5 @@ static func color_for_state(state: Elemental.State) -> Color:
 	match state:
 		Elemental.State.WET: return ELEMENT_WATER
 		Elemental.State.CHILLED: return ELEMENT_ICE
+		Elemental.State.SMOKED: return ELEMENT_FIRE   # a fire's smoke (#1335)
 	return NEUTRAL

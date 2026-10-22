@@ -323,6 +323,11 @@ static func make_ignition(kind: Terrain.Kind) -> TerrainReaction:
 	var turns: Dictionary[Terrain.TileState, int] = {}
 	turns[Terrain.TileState.BURNING] = DEFAULT_BURN_TURNS
 	reaction.add_state_turns = turns
+	# Every ignition gives off thick smoke (#1335, ruling 4) -- a SEED like the turns, tuned in the
+	# inspector afterwards.
+	var smoke: Dictionary[Gas.Kind, Gas.Level] = {}
+	smoke[Gas.Kind.SMOKE] = Gas.Level.THICK
+	reaction.gases = smoke
 	reaction.popup = "Ignites!"
 	var script_uid := ResourceLoader.get_resource_uid(REACTION_SCRIPT)
 	if script_uid != ResourceUID.INVALID_ID:

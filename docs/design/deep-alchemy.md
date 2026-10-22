@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-21. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-22. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -592,7 +592,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **The notation** is `AlchemyFormula`. A formula token resolves to the one molecule with those atoms; two molecules sharing a formula must be named by id. A compound is only ever named by id.
 - **Equations** are one line of text on each reaction, `ElementalReaction.equation` and `TerrainReaction.equation`, written as above (`F2 + W2 -> 2FW`).
 - **What each game thing is made of** is `SubstanceMap`: one row for every element, unit state, tile state, ground and gas. Every row names a substance except COVER and VOID, which hold none. A vial carries its own `substance` field; ichor's is still open.
-- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty since 2026-10-11, kept so a new reaction without an equation still reds), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later. Its gas half is checked since #1329: a gas an equation makes that its reaction does not release reds until it is released or listed.
+- **`ReactionLint`** refuses an equation that does not balance or names nothing real, and warns when an equation leaves out what its reaction is about (the incoming element, a required state, an added state or gas). CI holds every shipped reaction to it. `tests/dev/test_reaction_lint.gd` keeps two ledgers: **PENDING**, the reactions still waiting on a design answer (empty from 2026-10-11 until Disperse joined it on 2026-10-22, #1335; a new reaction without an equation reds until it is listed), and **NOT_YET_FOLLOWED**, c3potheds@'s list of what an equation says that the game does not do yet, to work through one by one or all together later. Its gas half is checked since #1329: a gas an equation makes that its reaction does not release reds until it is released or listed.
 
 **The rulings behind the equations** (c3potheds@ and Phaazoid@ in #claude-sessions, 2026-10-08 to 2026-10-11):
 
@@ -743,11 +743,11 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Thin.** Thin steam never soaks and never spreads, so drying stays drying. Medium would let Blow Dry dry an ally and then re-soak them at the end of your own turn.
 - **On the cell the unit was hit on**, before any shove from the same hit. A guard who takes the blow steams on its own cell.
 - **Plants wait for smoke.** A plant fire is mostly smoke; its steam is only the green plant's sap (`green_plant` is `AE + 2FA + W2`, and tall grass, a dry plant, gives smoke alone). So Burning and GrassIgnites keep their ledger line and release both gases in one later diff.
-- **How:** `ElementalReaction` has TerrainReaction's `gas`/`gas_level` pair, and `PlanResolver._release_reaction_gas` puts a fired reaction's gas into the one cell-effect channel every deposit uses. So the board ghosts it before Execute and both executors play it. It is released once per wet victim, where an attack's own gas lands once per volley, and the glossary line says "releases Steam".
+- **How:** `ElementalReaction` has TerrainReaction's `gas`/`gas_level` pair *(a `gases` list on all three since #1335)*, and `PlanResolver._release_reaction_gas` puts a fired reaction's gas into the one cell-effect channel every deposit uses. So the board ghosts it before Execute and both executors play it. It is released once per wet victim, where an attack's own gas lands once per volley, and the glossary line says "releases Steam".
 - **The ledger's gas half is checked:** `ReactionLint.unreleased_gases` names any gas an equation makes (in its outputs, not its inputs) that its reaction does not release, and the lint suite reds unless that reaction is on NOT_YET_FOLLOWED.
 - **Not built:**
-  - A reaction holds ONE gas, so a burning plant cannot yet release steam and smoke together. Smoke's diff decides the shape.
-  - Whether a fire that SPREADS releases gas, rather than only one a hit lights, is open. It is the same question for both gases.
+  - A reaction holds ONE gas, so a burning plant cannot yet release steam and smoke together. Smoke's diff decides the shape. *(Built 2026-10-22, #1335: a list.)*
+  - Whether a fire that SPREADS releases gas, rather than only one a hit lights, is open. It is the same question for both gases. *(It does since #1335.)*
   - Steam scalding: [#1331](https://github.com/Phaazoid/Godoiosis/issues/1331).
 
 **Built 2026-10-19: the weather moves the reading ([#1324](https://github.com/Phaazoid/Godoiosis/issues/1324), slice 4).** Rulings by Phaazoid@ in a Claude session (2026-10-19), approving a plan:
@@ -796,10 +796,30 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **The renderer holds eight kinds.** The cells texture packs a cell's kinds in one byte, so `gas_puff.gdshader` and `gas_floor.gdshader` size their per-kind arrays to eight, and `tests/law/test_gas_look_coverage.gd` reds an array shorter than the kind count. Essence is the 7th; the smoke/ozone design ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)) renames Thunder to Ozone rather than spending the 8th, and reuses `GasRules.air` for ozone's heat.
 - **Amended:** #508 ruling 22's "`Melt.tres` releases no gas" (2026-10-07, below). Melt still makes water, not steam, and a second fire hit still boils it; it now also releases essence.
 
+**Built 2026-10-22: smoke ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)).** Rulings by Phaazoid@ in Claude sessions (2026-10-18/19, the issue body; amended 2026-10-22 approving the plan):
+- **Smoke blinds whoever stands in it.** *"If someone walks into a smoke cloud, they will be unable to see while in the smoke cloud."* Unable to see is a shorter leash: a unit standing in **medium or thick** smoke holds the new **Smoked** state (`Elemental.State.SMOKED`, −2 COH through `Elemental.paired_stat_mods`, Chilled's shape). It holds it for exactly as long as it stands there. This amends the issue's ruling 3 (a state gained at the end of the turn, on a clock) and #508 ruling 6's threshold (thick). Thin smoke does nothing, since only medium and thick smoke reach past the burning cell.
+  - Nothing is stored on the unit, so the gas field stays the one answer. `GasRules.while_standing` marks such a gas, and `GasRules.states_while_standing(packed)` names what a cell gives. `TileHitAction.gas_hits` grows no END OF TURN row for it.
+  - **The leash is read where the leader stands:** `SquadCohesion.reach_at(leader, center, board)` is COH plus the COH change of every such state the gas at `center` gives (through `BoardContext.gas_at`, which folds deposits as `air_at` does), floored at 0. A leader already HOLDING Smoked is docked once. `SquadCohesion` is the leash's only production reader, so the validator, the group-move solver, #1069's leader-move refusal, the pass-end sweep, `SplitForecast` and the range line all read it. `GroupMoveSolver.stranding` walks from the member's end (path distance is symmetric), so it walks as far as the longest destination leash and judges each destination by its own.
+  - **Forecast:** smoke a pass lays under a leader is a cell effect, so `SplitForecast`'s deposit replay names the split on the blow that laid it. Smoke that SPREADS onto a leader at the round tick splits at the next turn start, like every turn-start ejection (declared); Alt's outline shows it coming.
+  - **Readout:** the world-space status row shows Smoked while the unit stands in smoke, the tile card's gas row says "Smoked: -2 COH", and the Play API's "leash N" is read at the leader's cell. The 2D panels show HELD states only (declared).
+  - A hit can ADD Smoked like any state (2-turn default clock): the hook for a smoke carving, its own ticket.
+- **Every ignition gives off smoke once.** The ignition reactions carry it, so a hit and a spreading fire release the same gases: GrassIgnites and Burning `{smoke: thick, steam: thin}`, TallGrassIgnites `{smoke: thick}`. A plant fire is mostly smoke; thin steam is the green plant's sap and never soaks or spreads.
+  - **Spread:** `GasSpread.next` lays each cell `TerrainStateManager.cells_fire_takes()` names its fuel's gases, after spill and fade. **The round runs gas before tiles** (`game._on_round_completed` and the Play API's twin), so the release lands on the frontier the tile tick then lights, and Alt's outline (`GasField.next_round`) is the round. The dev Step Gas button releases on the frontier too.
+  - **Declared:** a TREE tile is not walkable, and gas lies only where a unit could stand (#508 ruling 6), so a burning tree's smoke goes nowhere; a forest fire smokes where it spreads into grass.
+  - A ground the Tiles page ticks burnable is seeded with thick smoke.
+- **A reaction holds a LIST of gases.** `gases: Dictionary[Gas.Kind, Gas.Level]` replaces the `gas`/`gas_level` pair on `AttackData`, `TerrainReaction` and `ElementalReaction` together. Readers walk it through `Gas.released` (kind order), and the Attack Editor draws one level row per gas.
+- **An Air hit disperses gas.** `Resources/TerrainReactions/Disperse.tres` (AIR) clears every gas on the cells the hit strikes, the wiki's Disperse.
+  - It is the first reaction **in the air** (`TerrainReaction.in_the_air`): it answers every struck cell whatever the attack's Targets says, since Targets is whether an element reacts with the GROUND.
+  - It fires only where the cell holds gas as the board stands. `ResolvedCellEffect.gas_cleared` folds first, so the END OF TURN forecast, the leash and both executors agree, and the board marks a cleared cell with the Air icon before Execute.
+  - **Gust aims at any tile** now (Targets: both), so it can clear smoke on an empty tile.
+  - Its equation is codev's to write: it is on the lint's PENDING ledger.
+- **Ledger:** TallGrassIgnites, Burning and GrassIgnites come off NOT_YET_FOLLOWED.
+- **The AI is blind to smoke** (#117): it neither seeks nor avoids a cloud. Its existing split term reads a smoke split the forecast stamps.
+
 **Next:**
 - **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte.
-- **Burning plants release smoke and steam** (Burning, GrassIgnites, TallGrassIgnites), with the shape for two gases and the spread question above.
+- **Ozone and thunder** ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)'s second half; thunder's clap moved to [#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)).
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 

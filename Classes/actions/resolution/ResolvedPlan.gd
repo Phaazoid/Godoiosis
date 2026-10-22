@@ -188,12 +188,18 @@ func attack_playback() -> Array[AttackAction]:
 
 # What this pass leaves on the ground, one entry per cell AND state ({"cell", "state"}) or cell AND
 # gas kind ({"cell", "gas"}), so two attacks igniting one cell count once while a cell gaining two
-# states counts twice. The board ghosts exactly this (game._preview_plan_effects) and the Play API's
-# preview prints it (#46): one answer to what the plan deposits.
+# states counts twice; and one {"cell", "clears_gas"} per cell an Air hit disperses (#1335). The board
+# ghosts exactly this (game._preview_plan_effects) and the Play API's preview prints it (#46): one
+# answer to what the plan deposits.
 func pending_deposits() -> Array[Dictionary]:
 	var deposits: Array[Dictionary] = []
 	var seen := {}
 	for effect in cell_effects:
+		if effect.gas_cleared:
+			var clear_key := "%s/%s/clear" % [effect.cell.x, effect.cell.y]
+			if not seen.has(clear_key):
+				seen[clear_key] = true
+				deposits.append({"cell": effect.cell, "clears_gas": true})
 		for state in effect.states_added:
 			var key := Vector3i(effect.cell.x, effect.cell.y, state)
 			if seen.has(key):
