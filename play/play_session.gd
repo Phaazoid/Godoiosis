@@ -1706,14 +1706,16 @@ func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 		return events
 	for hit in TurnBoundary.tile_hits(live_units(), terrain_states, gas_field, _weather(), faction):
 		hit.execute()
-		var soaked_by := hit.soak_source_name()
-		if soaked_by != "":
-			for gained in hit.resolved.states_added:
-				events.append("%s gains %s from %s" % [handle_for(hit.actor),
-						Elemental.state_display_name(gained), soaked_by])
-			continue
-		events.append("%s takes %d from %s%s" % [handle_for(hit.actor), hit.resolved.damage,
-				Terrain.tile_state_display_name(hit.state), _lethality_tag(hit.resolved.lethality)])
+		var source := hit.soak_source_name()
+		if source == "":
+			source = Terrain.tile_state_display_name(hit.state)
+		# The damage first, then the state, as execute lands them -- a scald is both (#1331).
+		if hit.resolved.damage > 0:
+			events.append("%s takes %d from %s%s" % [handle_for(hit.actor), hit.resolved.damage,
+					source, _lethality_tag(hit.resolved.lethality)])
+		for gained in hit.resolved.states_added:
+			events.append("%s gains %s from %s" % [handle_for(hit.actor),
+					Elemental.state_display_name(gained), source])
 	_process_downed_pending()
 	return events
 

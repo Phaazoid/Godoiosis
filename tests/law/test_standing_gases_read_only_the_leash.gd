@@ -32,10 +32,16 @@ func test_a_state_held_while_standing_changes_only_cohesion() -> void:
 			"only the leash reads a state held while standing: %s" % [unread]).is_empty()
 
 
+# No unit: the gas's own damage is read before anything asks the unit (RulesService.gas_damage_for), and
+# a while-standing gas with none never reaches it. One that gained damage would grow a row for THAT
+# (#1331), which is why the check is the state, not the row count.
 func test_a_gas_held_while_standing_grows_no_end_of_turn_row() -> void:
 	var held: Array[Elemental.State] = []
 	for kind in _standing_kinds():
-		var hits := TileHitAction.gas_hits(null, held, Gas.with_level(0, kind, Gas.Level.THICK))
-		assert_array(hits).override_failure_message(
-				"thick %s grew an END OF TURN row for a state it gives only while standing" % Gas.display_name(kind)
-				).is_empty()
+		var state := GasRules.for_kind(kind).state
+		var hits := TileHitAction.gas_hits(null, held, Gas.with_level(0, kind, Gas.Level.THICK),
+				LethalityRules.Situation.new())
+		for hit in hits:
+			assert_array(hit.resolved.states_added).override_failure_message(
+					"thick %s grew an END OF TURN row for a state it gives only while standing"
+					% Gas.display_name(kind)).not_contains([state])

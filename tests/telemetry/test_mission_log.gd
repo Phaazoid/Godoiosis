@@ -444,7 +444,8 @@ func test_burning_ground_is_recorded_as_turn_effects() -> void:
 			"a burn's row grew the soak's keys -- old runs no longer compare").is_false()
 
 
-# A soak rides the same event (#508 PR 3), naming its gas and what it gave, with no damage.
+# A soak rides the same event (#508 PR 3), naming its gas and what it gave, and since #1331 the scald
+# the same row deals, read off the rules.
 func test_a_steam_soak_is_recorded_as_turn_effects() -> void:
 	var rules := GasRules.for_kind(Gas.Kind.STEAM)
 	var hero := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
@@ -461,7 +462,8 @@ func test_a_steam_soak_is_recorded_as_turn_effects() -> void:
 	var row := hits[0] as Dictionary
 	assert_str(str(row.get("gas"))).is_equal(Gas.Kind.keys()[Gas.Kind.STEAM])
 	assert_array(row.get("states", []) as Array).contains_exactly([Elemental.State.keys()[rules.state]])
-	assert_int(int(row.get("damage", -1))).is_equal(0)
+	assert_int(int(row.get("damage", -1))).is_equal(
+			RulesService.gas_damage_for(hero, Gas.Kind.STEAM, Gas.MAX_LEVEL))
 
 
 func test_a_capture_is_recorded() -> void:

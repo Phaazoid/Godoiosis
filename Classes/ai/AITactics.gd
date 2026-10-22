@@ -1572,12 +1572,14 @@ static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) 
 	return out
 
 
-# A cell that hurts whoever ends on it: end-of-turn damage, or a hostile watch it would trip on the way
-# in (PlanResolver.watch_fires_at, the resolver's own trigger). The cell a unit already stands on trips
-# nothing -- a watch fires on ENTRY.
+# A cell that hurts whoever ends on it: end-of-turn damage -- the ground's burn, or the gas's scald
+# (#1331) -- or a hostile watch it would trip on the way in (PlanResolver.watch_fires_at, the
+# resolver's own trigger). The cell a unit already stands on trips nothing -- a watch fires on ENTRY.
 static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch]) -> bool:
 	if board.terrain_states != null \
 			and RulesService.occupant_damage_for(unit, board.terrain_states.states_at(cell)) > 0:
+		return true
+	if board.gas != null and RulesService.gas_damage_at(unit, board.gas.packed_at(cell)) > 0:
 		return true
 	if cell == unit.movement.cell:
 		return false

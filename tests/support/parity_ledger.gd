@@ -74,6 +74,13 @@ static func harmless(reason: String) -> Dictionary:
 	s["harms"] = false
 	return s
 
+# A gas whose end-of-turn damage the AI avoids ending in (#1331), checked against
+# RulesService.gas_damage_for -- the rule _is_hazard reads through gas_damage_at.
+static func gas_hazard() -> Dictionary:
+	var s := covered(TACTICS, "gas_damage_at")
+	s["harms"] = true
+	return s
+
 # A gas with no rules at all: checked against GasRules.for_kind, so the day it gains some this reds.
 static func inert() -> Dictionary:
 	var s := never("no rules: a look only")
@@ -357,7 +364,7 @@ static func plan_lists() -> Dictionary:
 			"cell_effects": {"play": covered(SESSION, ".cell_effects"),
 					"ai": gap("#117", "lingering deposits are not priced, so it never aims a Gust to blow a cloud anywhere (#1332)")},
 			"tile_hits": {"play": covered(SESSION, ".tile_hits"),
-					"ai": gap("#117", "the end-of-turn burn and steam's soak are not scored (ending on burning ground is avoided through _is_hazard)")},
+					"ai": gap("#117", "the end-of-turn burn, steam's scald and its soak are not scored (ending on burning ground or in scalding steam is avoided through _is_hazard)")},
 			"sinks": {"play": covered(SESSION, ".sinks"), "ai": covered(TACTICS, ".sinks")},
 			# A ward's substitution prints on the row it redirects.
 			"guards": {"play": covered(SESSION, "blocked_for"), "ai": never("a ward's substitution is already in the outcomes the score reads")},
@@ -401,7 +408,8 @@ static func gases() -> Dictionary:
 		"label": _enum_label(K.keys()),
 		"play_all": covered(SESSION, "Gas.kinds_in"),
 		"rows": {
-			K.STEAM: {"ai": gap("#117", "the AI is blind to steam's soak (terrain.md)")},
+			# The scald is avoided like a burn (#1331); the soak alone is still unpriced (#117).
+			K.STEAM: {"ai": gas_hazard()},
 			K.SMOKE: {"ai": gap("#117", "the AI is blind to smoke: it neither seeks nor avoids the cloud that shortens its leash (#1335)")},
 			K.POISON: {"ai": inert()},
 			K.FROST: {"ai": air},
@@ -437,7 +445,7 @@ static func weathers() -> Dictionary:
 		if kind != Weather.Kind.CLEAR:
 			members.append(kind)
 	var K := Weather.Kind
-	var blind := gap("#117", "the AI is blind to rain's soak, as it is to steam's (terrain.md); the vapor it adds is priced through the damage it moves")
+	var blind := gap("#117", "the AI is blind to rain's soak, as it is to the soak half of steam's row (terrain.md); the vapor it adds is priced through the damage it moves")
 	# A weather whose only rule is the air it moves (#1324): the AI reads that through the resolve.
 	var air := never("its only rule moves the air, which the AI prices through the damage it moves (Atmosphere.effective)")
 	return {

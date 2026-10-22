@@ -115,6 +115,26 @@ static func occupant_damage_for(unit: Unit, states: Array[Terrain.TileState]) ->
 		return 0
 	return Terrain.occupant_damage(states)
 
+# The gas's twin (#1331): what standing in this kind at this level costs this unit at its end of turn --
+# the rules file's damage at that level, zero for a unit insulated against its damage_element. The
+# forecast, the pass (both through TileHitAction.gas_hits) and the AI's hazard read ask this one rule.
+# The authored number is read first, so a gas that deals nothing never asks the unit.
+static func gas_damage_for(unit: Unit, kind: Gas.Kind, level: int) -> int:
+	var rules := GasRules.for_kind(kind)
+	if rules == null:
+		return 0
+	var damage := int(rules.damage.get(level, 0))
+	if damage <= 0 or unit.is_immune_to(rules.damage_element):
+		return 0
+	return damage
+
+# Every gas on one cell (`packed`, Gas.with_level's form), summed -- what AITactics._is_hazard asks.
+static func gas_damage_at(unit: Unit, packed: int) -> int:
+	var total := 0
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		total += gas_damage_for(unit, kind, Gas.level_in(packed, kind))
+	return total
+
 # May this unit step FROM one cell TO an orthogonally adjacent one (#257)? The EDGE question, and
 # the reason elevation needs one at all: can_traverse above answers "may this unit be on that cell",
 # which cannot express "only via a ramp, and only along the ramp's slope".

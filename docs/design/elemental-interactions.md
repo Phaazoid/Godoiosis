@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first *(both exist now: tile states since 2026-06-28, the end-of-turn pass in `TurnBoundary`; only a unit damage-over-time still needs its own tick, [elemental-system.md](elemental-system.md) → *Deferred layers*)*.
 
-**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22; #1332's blown gas the same day; #1423's meltwater the same day.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22; #1332's blown gas the same day; #1423's meltwater the same day; #1331's scald the same day.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -129,7 +129,7 @@ Deterministic only. `S` setup · `P` payoff/control · `i` instant · `e` EoT �
 | SUBLIMED | P,i | destabilized to vapor — can't counter; AIR/AETHER hit hard & disperse/reposition it. *Survivable, not lethal* |
 | COAGULATED | P,i | its states are **locked on** (can't be removed/consumed); body fixed in place |
 | REVEALED / DRY | P | anti-smoke (can't hide) / anti-WET (blocks one soak) |
-| 🤔 SCALDED · CALCINED · PUTREFIED · MESMERIZED | — | steam-burn / burnt-brittle-dry / rotting DoT / hypnotized (acts last, no counter) |
+| 🤔 SCALDED · CALCINED · PUTREFIED · MESMERIZED | — | steam-burn / burnt-brittle-dry / rotting DoT / hypnotized (acts last, no counter). *(The steam-burn shipped as end-of-turn damage, not a state, [#1331](https://github.com/Phaazoid/Godoiosis/issues/1331).)* |
 
 ---
 
@@ -239,7 +239,7 @@ Concise riffs on the ✅ items; they lean on states/reactions above.
 
 ## Solo (non-combinatrix) effects ◆
 
-Always-on modifiers, no second state needed: SMOKE/STEAM → −command & −attack range · FIRE → +vs unarmored · SHOCK → +vs metal/prosthesis (mechanist tax) · ICE/WATER → −move · AIR → 1-tile shove on hit. *(Ruled since: smoke's one payload is a leader's COH range (#508 ruling 6) and steam's one effect is WET (#508 ruling 9); the AIR shove shipped as the Gust carving.)*
+Always-on modifiers, no second state needed: SMOKE/STEAM → −command & −attack range · FIRE → +vs unarmored · SHOCK → +vs metal/prosthesis (mechanist tax) · ICE/WATER → −move · AIR → 1-tile shove on hit. *(Ruled since: smoke's one payload is a leader's COH range (#508 ruling 6) and steam's one effect was WET (#508 ruling 9, superseded by #1331: medium and thick steam also scald at the end of a unit's turn); the AIR shove shipped as the Gust carving.)*
 
 ## Terrain & terrain-as-target ("attack the map")
 

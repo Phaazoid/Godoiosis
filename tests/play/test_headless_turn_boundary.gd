@@ -97,6 +97,33 @@ func test_a_unit_standing_in_fire_burns_at_its_own_factions_end_of_turn() -> voi
 			.is_equal(foe_hp - foe_damage)
 
 
+# Steam's scald (#1331) reaches the headless stack too, and is REPORTED: a gas row used to print only its
+# state, so the damage it now carries would have landed with no line saying so.
+func test_a_unit_standing_in_steam_is_scalded_and_told_so() -> void:
+	var s := _field("ScaldRoot", [])
+	var sess = s.sess
+	var hero: Unit = s.hero
+	var gas: GasField = s.board.gas_field
+	gas.set_level(hero.movement.cell, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(hero, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	var hero_hp := hero.get_current_hp()
+	assert_int(scald).override_failure_message("fixture: thick steam scalds nobody").is_greater(0)
+	assert_int(hero_hp).override_failure_message("fixture: the scald would down the hero").is_greater(scald)
+
+	var res: Dictionary = sess.end_turn()   # the PLAYER's end of turn
+
+	assert_int(hero.get_current_hp()).override_failure_message(
+			"the player's end of turn did not scald the player standing in steam").is_equal(hero_hp - scald)
+	var told := "%s takes %d from %s" % [sess.handle_for(hero), scald, Gas.display_name(Gas.Kind.STEAM)]
+	var events: Array = res.get("ai_events", [])
+	var reported := false
+	for line in events:
+		if str(line).begins_with(told):
+			reported = true
+	assert_bool(reported).override_failure_message(
+			"the scald landed and end_turn did not say so: %s" % [events]).is_true()
+
+
 func test_a_burn_that_ends_the_mission_does_not_hand_off() -> void:
 	# game.end_turn checks the mission after its burn and bails; so must the headless one.
 	var s := _field("LastBurnRoot", [])

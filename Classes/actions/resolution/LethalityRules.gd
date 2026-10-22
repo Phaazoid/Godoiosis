@@ -14,7 +14,7 @@ class_name LethalityRules
 #
 # This class names the rung, and whether the blow takes a limb (#1174). It carries out neither:
 # Unit still owns execution (HP, lifecycle, entering Crisis, taking the limb) and PlanResolver still
-# owns threading the consequence into the next hit's hypothetical.
+# owns threading the consequence into the next hit's hypothetical (through land_rung, below).
 
 # Overkill ceiling: a hit exceeding remaining HP by more than this kills outright (rung 3 — so
 # low-HP units aren't immortal). Stub tuning.
@@ -167,6 +167,19 @@ static func hp_after(rung: ResolvedOutcome.Lethality, hp: int, damage: int) -> i
 		ResolvedOutcome.Lethality.CRISIS:
 			return Abilities.CRISIS_REVIVE_HP    # the gambit stands back up (enter_crisis)
 	return hp - damage
+
+# Thread a named rung onto a situation: the lifecycle it leaves, what it MARKS, the HP it leaves --
+# lifecycle_for and hp_after together, so the next hit is predicted against what this one left. A down
+# WOUNDS (#1174), so a later hit is held to the lower limb threshold. ONE spelling for every threader:
+# the resolver's hit and sinking (#922) on its hypo, and a unit's end-of-turn rows (#1331), where a
+# scald lands before the burn (TileHitAction.end_of_turn).
+static func land_rung(s: Situation, rung: ResolvedOutcome.Lethality, damage: int) -> void:
+	s.lifecycle = lifecycle_for(rung, s.lifecycle)
+	if rung == ResolvedOutcome.Lethality.DOWNED:
+		s.wounded = true
+	elif rung == ResolvedOutcome.Lethality.CRISIS:
+		s.in_crisis = true                          # the gambit: no safety net from here on
+	s.hp = hp_after(rung, s.hp, damage)
 
 # What a PREVIEW shows for HP the ladder has already sentenced. Since #1002 the threaded number is
 # already what execution lands on (hp_after above), so the only clamp left is the dead: a kill

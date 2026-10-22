@@ -260,6 +260,24 @@ func test_a_leader_fights_from_safe_ground_over_a_burning_tile() -> void:
 			"fixture: the leader must still fight, from %s" % [at]).is_true()
 
 
+# The gas twin (#1331): steam that scalds is end-of-turn damage like a burn, so the same rule keeps the
+# AI out of it. The thickest level, read off the rules rather than named.
+func test_a_leader_fights_from_safe_ground_over_scalding_steam() -> void:
+	var board := _build_board(Rect2i(0, 0, 12, 5))
+	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
+	var target := _spawn(board, PLAYER, Vector2i(6, 2), {Stats.Stat.MHP: 40})
+	(board.gas_field as GasField).set_level(Vector2i(5, 2), Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	assert_int(RulesService.gas_damage_for(leader, Gas.Kind.STEAM, Gas.MAX_LEVEL)).override_failure_message(
+			"fixture: thick steam scalds nobody, so nothing here is a hazard").is_greater(0)
+
+	_plan(leader.squad, board)
+
+	var at := leader.get_projected_destination()
+	assert_that(at).override_failure_message("the leader ended its turn in scalding steam").is_not_equal(Vector2i(5, 2))
+	assert_bool(_adjacent(at, target.movement.cell)).override_failure_message(
+			"fixture: the leader must still fight, from %s" % [at]).is_true()
+
+
 func test_a_leader_avoids_ending_in_a_hostile_watch() -> void:
 	var board := _build_board(Rect2i(0, 0, 12, 5))
 	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})

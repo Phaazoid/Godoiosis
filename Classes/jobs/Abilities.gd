@@ -52,7 +52,8 @@ const CRISIS_SURGE_TURNS := 3                          # playtest-tunable: a gam
 # FIRE is read by one more rule than the others (#892): RulesService.occupant_damage_for asks it of
 # the ground a unit stands on, so the same immunity answers a fireball and a burning tile. Insulation
 # strips the EFFECT of a delivered hit and leaves its damage to DEF (#424) -- a tile burn is not a
-# delivered hit and DEF never sees it, so there is no second half to offer there.
+# delivered hit and DEF never sees it, so there is no second half to offer there. HEAT is read the
+# same way by a gas's end-of-turn scald (#1331, GasRules.damage_element through RulesService.gas_damage_for).
 const INSULATION: Dictionary[Elemental.Element, Id] = {
 	Elemental.Element.SHOCK: Id.INSULATED_SHOCK,
 	Elemental.Element.FIRE: Id.INSULATED_FIRE,

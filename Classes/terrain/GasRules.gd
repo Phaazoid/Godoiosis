@@ -28,6 +28,14 @@ const FOLDER := "res://Resources/GasRules/"
 # 2026-10-22). Read where the board is asked: the leash (SquadCohesion.reach_at) and the status row.
 @export var while_standing := false
 
+# What a unit standing in this gas when its OWN side's turn ends takes, by level (#1331, steam's scald):
+# a level not named deals nothing, so thin steam stays harmless. A tile hit like fire's burn, not a
+# blow: no reaction answers it, DEF never sees it and no limb goes. Lands at the end of the turn even
+# for a while_standing gas, since damage needs a moment. RulesService.gas_damage_for is its one reader.
+@export var damage: Dictionary[Gas.Level, int] = {}
+# The insulation that stops that damage (Unit.is_immune_to). NONE: nothing does.
+@export var damage_element := Elemental.Element.NONE
+
 # How this gas moves the air's reading on the cell it lies on (#1324): substance id -> percentage
 # points PER LEVEL, negative to lower. WeatherRules.air's shape; BoardContext.air_at adds it over the
 # board's reading. The one answer to what a gas does to the air -- SubstanceMap.GASES says what the gas
@@ -72,6 +80,16 @@ static func standing_text(kind: Gas.Kind, level: int) -> String:
 		parts.append("%+d %s" % [mods[stat], Stats.Stat.keys()[stat]])
 	var said := Elemental.state_display_name(rules.state)
 	return said if parts.is_empty() else "%s: %s" % [said, ", ".join(parts)]
+
+
+# What standing in this kind at this level costs at the end of the turn, as the tile card says it
+# ("3 damage at end of turn"); empty when it costs nothing.
+static func scald_text(kind: Gas.Kind, level: int) -> String:
+	var rules := for_kind(kind)
+	if rules == null:
+		return ""
+	var amount := int(rules.damage.get(level, 0))
+	return "%d damage at end of turn" % amount if amount > 0 else ""
 
 
 # How one cell's gases move the air (`packed`, Gas.with_level's form): each kind's air times its level,
