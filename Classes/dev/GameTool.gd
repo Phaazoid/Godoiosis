@@ -39,6 +39,7 @@ var _tabs: TabContainer
 var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
 var _status: Label
 var _save_button: Button
+var _reset_button: Button
 # Touched since the last save/reset (#389). A FLAG for the marker; the exact answer is re-derived
 # where it is cheap -- once per save, from changed_indices()/changed_class_indices().
 var _dirty := false
@@ -82,8 +83,10 @@ func _ready() -> void:
 		"Write every value you have moved into the declaration that authors it, in the script that\ndeclares it. These are game-wide constants rather than mission mood, so this is the whole way\nto keep one -- the change shows up as an ordinary line in the diff. Editor runs only; res:// is\nread-only in a build.",
 		_on_save_pressed)
 	buttons.add_child(_save_button)
-	buttons.add_child(_button("Reset",
-		"Put every knob back to what is currently saved on disk.", _on_reset_pressed))
+	_reset_button = _button("Reset",
+		"Put every knob back to what is currently saved on disk. Greyed while nothing has moved.",
+		_on_reset_pressed)
+	buttons.add_child(_reset_button)
 	add_child(buttons)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -155,6 +158,8 @@ func _refresh_dirty() -> void:
 func _refresh_save_mark() -> void:
 	if is_instance_valid(_save_button):
 		DevWidgets.mark_unsaved(_save_button, "Save to source", _dirty)
+	if is_instance_valid(_reset_button):
+		DevWidgets.offer_reset(_reset_button, _dirty)
 
 
 func baseline_of(index: int) -> Variant:

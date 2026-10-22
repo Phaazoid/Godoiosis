@@ -210,6 +210,42 @@ static func save_fields(tiles: TileSet, status: Label = null) -> bool:
 	return DevWidgets.save_over(tiles, path, status)
 
 
+# Reset tile fields (#1376): every FIELDS column put back to what the tileset FILE holds, on the live
+# TileData every board draws from. Column by column rather than DevWidgets.revert_to_saved: adopting
+# a TileSet whole would swap its atlas sources out from under every TileMapLayer drawing them, and
+# the columns are all this page writes.
+static func revert_fields(tiles: TileSet, status: Label = null) -> bool:
+	if tiles == null:
+		return false
+	var saved := DevWidgets.saved_copy(tiles.resource_path) as TileSet
+	if saved == null:
+		var msg := "Could not read the tileset %s back from disk" % tiles.resource_path
+		push_warning(msg)
+		if status != null:
+			status.text = msg
+		return false
+	var every := func(_data: TileData, _shape: GridUtils.PropShape) -> bool: return true
+	var on_disk: Dictionary[Vector3i, TileData] = {}
+	for entry: Dictionary in _tiles_where(saved, every):
+		on_disk[_tile_key(entry)] = entry["data"]
+	for entry: Dictionary in _tiles_where(tiles, every):
+		var disk_data: TileData = on_disk.get(_tile_key(entry))
+		if disk_data == null:
+			continue
+		var live_data: TileData = entry["data"]
+		for field: Dictionary in FIELDS:
+			var layer: String = field["layer"]
+			if tiles.get_custom_data_layer_by_name(layer) < 0 or saved.get_custom_data_layer_by_name(layer) < 0:
+				continue
+			live_data.set_custom_data(layer, disk_data.get_custom_data(layer))
+	return true
+
+
+static func _tile_key(entry: Dictionary) -> Vector3i:
+	var coords: Vector2i = entry["coords"]
+	return Vector3i(entry["source_id"], coords.x, coords.y)
+
+
 # The seven globals' Save, into the @export declarations that author them. Three lines over
 # KnobSource because that file was built to take a table -- its own header says so: "the next table
 # that wants a Save gets this one rather than a copy that agrees right up until one of them is

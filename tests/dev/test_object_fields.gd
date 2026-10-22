@@ -43,6 +43,30 @@ func before_test() -> void:
 
 func after_test() -> void:
 	_mirror.free()
+	if FileAccess.file_exists(SCRATCH_TILES):
+		DirAccess.remove_absolute(SCRATCH_TILES)
+
+
+# --- Reset tile fields (#1376) -------------------------------------------------------------
+
+const SCRATCH_TILES := "user://__test_object_fields_reset.tres"
+
+# The page edits the CACHED tileset in place, so Reset must read the FILE and put the column back on
+# the very TileData the board draws -- not swap the source out from under it. A scratch sheet, saved
+# and loaded through the cache, is the board's own situation without touching TestTiles.tres.
+func test_reset_tile_fields_puts_a_moved_column_back_on_the_same_tile() -> void:
+	_data.set_custom_data("prop_light_energy", 1.5)
+	assert_int(ResourceSaver.save(_tiles, SCRATCH_TILES)).is_equal(OK)
+	var live := load(SCRATCH_TILES) as TileSet
+	var live_data := (live.get_source(0) as TileSetAtlasSource).get_tile_data(Vector2i.ZERO, 0)
+	live_data.set_custom_data("prop_light_energy", 4.0)
+
+	assert_bool(ObjectKnobs.revert_fields(live)).is_true()
+
+	assert_float(live_data.get_custom_data("prop_light_energy")).override_failure_message(
+		"the moved column did not come back to the file's value").is_equal_approx(1.5, 0.0001)
+	assert_object((live.get_source(0) as TileSetAtlasSource).get_tile_data(Vector2i.ZERO, 0)).override_failure_message(
+		"the reset replaced the tile the board draws instead of writing onto it").is_same(live_data)
 
 
 # --- The sentinel ------------------------------------------------------------------------

@@ -234,6 +234,44 @@ func test_an_edit_stays_marked_across_weathers_and_save_names_every_file() -> vo
 				% [Weather.name_of(kind), asked]).contains(WeatherLook.path_of(kind).trim_prefix("res://"))
 
 
+# Reset is Save's mirror (#1376): every touched file, not only the one on show, re-read from DISK onto
+# the cached look the mirror draws from. Put back by hand before asserting, as every case here does, so
+# a broken Reset cannot leak a look into later suites.
+func test_reset_puts_every_touched_file_back_to_disk() -> void:
+	var snow := WeatherLook.for_kind(Weather.Kind.SNOW)
+	var rain := WeatherLook.for_kind(Weather.Kind.RAIN)
+	assert_bool(snow != null and rain != null).override_failure_message("fixture: rain or snow has no look file") \
+			.is_true()
+	var snow_was := snow.fall_speed
+	var rain_was := rain.fall_speed
+	var snow_file := (DevWidgets.saved_copy(WeatherLook.path_of(Weather.Kind.SNOW)) as WeatherLook).fall_speed
+	var rain_file := (DevWidgets.saved_copy(WeatherLook.path_of(Weather.Kind.RAIN)) as WeatherLook).fall_speed
+	var page := WeatherTool.new()
+	add_child(page)
+	auto_free(page)
+	page.init(null)
+	var greyed_clean := page._reset.disabled
+	page._show(Weather.Kind.SNOW)
+	_slider_after(page, "Fall speed").value = snow_was + 1.0
+	page._show(Weather.Kind.RAIN)
+	_slider_after(page, "Fall speed").value = rain_was + 1.0
+	var lit := not page._reset.disabled
+	page._on_reset_pressed()
+	var snow_after := snow.fall_speed
+	var rain_after := rain.fall_speed
+	snow.fall_speed = snow_was
+	rain.fall_speed = rain_was
+	assert_bool(greyed_clean).override_failure_message("Reset is offered on a page with nothing to put back").is_true()
+	assert_bool(lit).override_failure_message("an edit left Reset greyed").is_true()
+	assert_float(snow_after).override_failure_message("snow, edited off screen, did not come back to its file") \
+			.is_equal_approx(snow_file, 0.0001)
+	assert_float(rain_after).override_failure_message("rain did not come back to its file") \
+			.is_equal_approx(rain_file, 0.0001)
+	assert_bool(page.has_unsaved_changes()).is_false()
+	assert_bool(page._reset.disabled).is_true()
+	await await_idle_frame()   # Reset refilled the rows
+
+
 # A rules edit re-resolves the open plan (#1370): its END OF TURN rows read the rules this page edits,
 # as the Scenario page's weather picker already redraws them. Driven through the real Soaks with picker.
 func test_a_soak_edit_redraws_the_open_plan() -> void:
