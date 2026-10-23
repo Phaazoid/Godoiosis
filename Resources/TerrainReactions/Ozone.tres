@@ -6,7 +6,8 @@
 script = ExtResource("1_vcwab")
 incoming_element = 3
 gases = Dictionary[int, int]({
-4: 1
+4: 1,
+7: 1
 })
 in_the_air = true
 equation = "2QF + 2A2 -> 2QA + FA2 + F"

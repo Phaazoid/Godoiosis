@@ -402,6 +402,29 @@ func test_an_element_the_air_reaction_does_not_answer_clears_nothing() -> void:
 	assert_int(plan.cell_effects.size()).is_equal(0)
 
 
+# EVERY kind goes, the ones that move the air included, and the cell then reads the board's own air: a
+# cleared cell returns to the level's normal reading (Phaazoid@, #1427). The gas goes, never the air
+# reading itself (c3potheds@, #1335).
+func test_an_air_hit_clears_every_kind_and_the_cell_reads_the_boards_own_air_again() -> void:
+	var disperse := _disperse()
+	var attacker := _attacker(disperse.incoming_element, EquippableData.TargetMode.UNIT)
+	assert_int(attacker.get_attack_knockback(attacker.get_fired_attack())).override_failure_message(
+			"fixture: this hit shoves, so it would blow the gas rather than disperse it").is_equal(0)
+	var board := _KindBoard.new(null, {})
+	board.gas = GasField.new()
+	for kind: Gas.Kind in Gas.Kind.values():
+		board.gas.set_level(TARGET_CELL, kind, Gas.Level.THICK)
+	assert_array(Atmosphere.differs(board.air_at(TARGET_CELL), board.atmosphere)).override_failure_message(
+			"fixture: no gas moves the air, so the reading half is unchecked").is_not_empty()
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	assert_int(plan.cell_effects.size()).is_equal(1)
+	board.gas.apply(plan.cell_effects[0])
+	assert_array(Gas.kinds_in(board.gas.packed_at(TARGET_CELL))).override_failure_message(
+			"an Air hit left these kinds behind").is_empty()
+	assert_dict(board.air_at(TARGET_CELL)).is_equal(board.atmosphere)
+
+
 # Cleared FIRST: what the same effect releases lands after, so dispersal never eats its own hit's gas.
 func test_a_cleared_cell_keeps_the_gas_its_own_effect_releases() -> void:
 	var field := GasField.new()
@@ -589,7 +612,8 @@ func _link(from: Vector2i, to: Vector2i, step: int) -> Conduction.Link:
 
 
 # In the AIR, so a UNIT-only shock leaves it too: on the cell it struck AND on every cell its stamped
-# current ran through -- the volley's own tree, never re-derived.
+# current ran through -- the volley's own tree, never re-derived. Every gas the reaction releases rides
+# it, the heat haze of its `+ F` (#1427) as well as the ozone.
 func test_a_shock_leaves_ozone_where_it_struck_and_all_along_its_current() -> void:
 	var ozone := _ozone()
 	var attacker := _attacker(Elemental.Element.SHOCK, EquippableData.TargetMode.UNIT)
@@ -600,11 +624,12 @@ func test_a_shock_leaves_ozone_where_it_struck_and_all_along_its_current() -> vo
 	var links: Array[Conduction.Link] = [_link(TARGET_CELL, far, 1), _link(far, farther, 2)]
 	aim.arc_links = links
 	var plan := _resolve(_one(aim), _KindBoard.new(null, {}))
-	var level: int = ozone.gases[Gas.Kind.OZONE]
-	for cell: Vector2i in [TARGET_CELL, far, farther]:
-		assert_int(_gas_on(plan, cell, Gas.Kind.OZONE)).override_failure_message(
-				"no ozone on %s" % [cell]).is_equal(level)
-	assert_int(_gas_on(plan, TARGET_CELL + Vector2i(3, 0), Gas.Kind.OZONE)).is_equal(0)
+	for kind: Gas.Kind in Gas.released(ozone.gases):
+		var level: int = ozone.gases[kind]
+		for cell: Vector2i in [TARGET_CELL, far, farther]:
+			assert_int(_gas_on(plan, cell, kind)).override_failure_message(
+					"no %s on %s" % [Gas.display_name(kind), cell]).is_equal(level)
+		assert_int(_gas_on(plan, TARGET_CELL + Vector2i(3, 0), kind)).is_equal(0)
 
 
 # A MAP-only shock strikes no one and still leaves it.
