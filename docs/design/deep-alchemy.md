@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-22. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-23. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day; Air blowing gas (#1332) the same day; Temperature Shock's meltwater (#1423) the same day; steam's scald (#1331) the same day.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day; Air blowing gas (#1332) the same day; Temperature Shock's meltwater (#1423) the same day; steam's scald (#1331) the same day; heat haze (#1427) folded in 2026-10-23.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -601,7 +601,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **Every cell has an ambient baseline**: inert air, vital air, a trace of vapor and a trace of aether, and the ground's own substance. A real source (a river, a fire, a vial) empowers a cast.
 - **Aether is the heavens, not cold.** Ice is `QW`, water with heaven bound into it, and cold is not a substance. A Freeze hit carries free aether, which binds the first water it meets: a frozen tile and a wet unit freeze their own water, a dry unit takes frost out of the air's vapor. Chilled is frost on the body, which is also why Chilled beats Wet.
 - **Melting is heat.** Flame decays to heat (`F`), and the heat melts the ice.
-- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting. *(Its meltwater wets the unit since #1423, 2026-10-22.)*
+- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting. *(Its meltwater wets the unit since #1423, 2026-10-22, and its heat lands as heat haze since #1427, 2026-10-23. The reaction left the NOT_YET_FOLLOWED ledger then, so this line is the +5's one record.)*
 - **Electrocution's water conducts and is not used up**, so a shock no longer dries a wet unit (2026-10-11, c3potheds@ and Phaazoid@). How a unit dries off is a balance question for later.
 - **Plants store phlogiston as vital air.** Dry fuel doubles its flame, which is why tall grass spreads further; green plants burn off their water as steam. Burning gives off exactly one ash per inert air, which is where smoke's `AE + A2` comes from.
 - **Thunder is lightning in air**, its own natural reaction (`2QF + 2A2 -> 2QA + FA2 + F`, ozone `FA2` as the byproduct), which Electrocute's equation carries.
@@ -735,7 +735,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - `CellSubstances.available_near` now answers how much of each substance is present. `CellSubstances.fizzle_reason` is still the one predicate every caller asks. The Glossary's Transmutation page says the air holds only a little of anything.
 - **Not built:**
   - A vial as a source. A vial is not present for casts at all, and something consumed never gates a cast.
-  - A fire supplying heat. Flame has lent no heat since #1324, so `Push(3F)` fizzles even beside a fire.
+  - A fire supplying heat. Flame has lent no heat since #1324, so `Push(3F)` fizzles even beside a fire. *(Heat haze does, since #1427: it is a real gas, so `Push(3F)` holds beside one.)*
   - A lint refusing an unnumbered carving that needs a source.
 
 **Built 2026-10-19: Dried Off releases its steam ([#1329](https://github.com/Phaazoid/Godoiosis/issues/1329)).** First line off the NOT_YET_FOLLOWED ledger. Rulings by Phaazoid@ in a Claude session (2026-10-19), approving a plan:
@@ -790,10 +790,10 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   | Essence (new, the 7th kind; `essence`, Q2) | aether +5% | Melt and Temperature Shock release it **medium** on the thawed cell, as their equation `F2 + 2QW -> Q2 + W2 + 2F` says |
   | Frost (look-only until now; `frost`, `QW + A2`) | aether −5%, vapor −5% | Freeze leaves it **thin** on every tile it strikes: its recipe `Break(A, W) + Bind(Q, W)` locks the air's vapor and aether into ice |
 
-  So a Heal cast from medium essence heals +2 (codev's "ice-pack healing"), and one cast from thin frost heals 1 less; a Freeze cast from its own frost hits 2 softer. Melting ice gives back the aether freezing took. Giving frost a rules file also made it spread and fade, which brushed frost never did. Melt's and Temperature Shock's `2F` heat stays unreleased on the ledger: no shipped carving draws heat, and folding it into essence would make one gas stand for two products.
+  So a Heal cast from medium essence heals +2 (codev's "ice-pack healing"), and one cast from thin frost heals 1 less; a Freeze cast from its own frost hits 2 softer. Melting ice gives back the aether freezing took. Giving frost a rules file also made it spread and fade, which brushed frost never did. Melt's and Temperature Shock's `2F` heat stays unreleased on the ledger: no shipped carving draws heat, and folding it into essence would make one gas stand for two products. *(Released since #1427, 2026-10-23, as a gas of its own, heat haze: below.)*
 - **Read on the tile card**, its first gas line: an **Air** section, its own page since the card shows one section at a time (the T key or its tab row turns it, visual-clarity.md), with one row per gas and its level ("Essence, medium: elemental aether +10%"), then each substance where the cell differs from the board ("Elemental aether 20%, +2"). `Atmosphere.differs` is the one answer to which substances a cell has moved, which the Play API's board view prints too ("air: elemental aether 20% +2"). The corner HUD and the pre-mission Conditions stay board-wide. The Glossary's Atmosphere page says the air is read where the caster stands and lists every gas's nudge, composed from the files.
 - **The AI** prices it through the resolve, and `AITactics._group_key` gained the origin's air steps: two cells whose air differs no longer share a seek group. It never walks into a gas for its air (damage alone moves nobody, #760).
-- **The renderer holds eight kinds.** The cells texture packs a cell's kinds in one byte, so `gas_puff.gdshader` and `gas_floor.gdshader` size their per-kind arrays to eight, and `tests/law/test_gas_look_coverage.gd` reds an array shorter than the kind count. Essence is the 7th; the smoke/ozone design ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)) renames Thunder to Ozone rather than spending the 8th, and reuses `GasRules.air` for ozone's heat.
+- **The renderer holds eight kinds.** The cells texture packs a cell's kinds in one byte, so `gas_puff.gdshader` and `gas_floor.gdshader` size their per-kind arrays to eight, and `tests/law/test_gas_look_coverage.gd` reds an array shorter than the kind count. Essence is the 7th; the smoke/ozone design ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)) renames Thunder to Ozone rather than spending the 8th, and reuses `GasRules.air` for ozone's heat. *(Heat haze took the 8th and last, #1427.)*
 - **Amended:** #508 ruling 22's "`Melt.tres` releases no gas" (2026-10-07, below). Melt still makes water, not steam, and a second fire hit still boils it; it now also releases essence.
 
 **Built 2026-10-22: smoke ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)).** Rulings by Phaazoid@ in Claude sessions (2026-10-18/19, the issue body; amended 2026-10-22 approving the plan):
@@ -822,13 +822,13 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - It fires on every cell the hit struck and **every cell its current ran through**: both ends of each link the volley stamped (`AttackAction.arc_links`, `PlanResolver._current_cells`), never re-derived at playback.
   - Only the air half rides the current. The ground's reactions and an attack's own gas stay on the cells it struck.
 - **Thin ozone on each.** Thin never spreads, so ozone stays where the shock landed and fades after its hold (`GasRules/OZONE.tres`, `hold_rounds` 2). Repeated shocks thicken a cell, and medium ozone spills like any gas.
-- **Ozone lowers the heat where the alchemist stands**: `GasRules.air` `{"atom_fire": -10}` per level, one heat step per level, read through `BoardContext.air_at` at the caster's cell like every air gas.
+- **Ozone lowers the heat where the alchemist stands**: `GasRules.air` `{"atom_fire": -10}` per level, one heat step per level, read through `BoardContext.air_at` at the caster's cell like every air gas. *(Since #1427 every shock also leaves thin heat haze on the same cells, +10 a level, so a shock cell reads Normal heat for the strike's own round and −1 once the haze has faded: below.)*
   - It moves damage only, never presence: a tile still catches and a fire still spreads in ozone (the 2026-10-14 ruling).
   - No shipped carving draws heat from the air yet (Blow Dry makes its own), so nothing's numbers move until Fireball's heat form ([#1333](https://github.com/Phaazoid/Godoiosis/issues/1333)).
   - The tile card and the Glossary's Atmosphere page compose the line from the file.
 - **Ozone took THUNDER's gas slot by RENAME:** `Gas.Kind.THUNDER` is `OZONE` (the same int), `SubstanceMap.GASES` maps it to `ozone` (`FA2`), and `GasLooks/THUNDER.tres` is `OZONE.tres`. Its glow and pixel lightning are kept as the charge a strike leaves, a first-pass look. The renderer's 8th and last slot stays free; the `thunder` substance (`QA`) stays for the equations.
 - **Electrocute's ozone is the struck cell's Ozone reaction,** not a second release from the unit reaction.
-- **Ledger:** Electrocute now reads "the thunder (#1270) and the heat are not made", and Ozone.tres gets the same line. The reaction's `+ F` heat stays unreleased (dev, 2026-10-19), decided together with Melt's heat, since a heat gas would take the renderer's last slot.
+- **Ledger:** Electrocute now reads "the thunder (#1270) and the heat are not made", and Ozone.tres gets the same line. The reaction's `+ F` heat stays unreleased (dev, 2026-10-19), decided together with Melt's heat, since a heat gas would take the renderer's last slot. *(Decided 2026-10-23, #1427: it lands as thin heat haze, and both lines keep only the thunder.)*
 - **Thunder, the clap on every shock strike, is [#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)'s** (dev, 2026-10-22). Nothing in this build plays it.
 - **The AI needs nothing new:** it prices ozone through the resolve (`ResolvedOutcome.air_steps`), and its seek key already reads the origin's air.
 
@@ -870,9 +870,43 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **The AI avoids ending in scalding steam** while a safe cell offers the same: `AITactics._is_hazard` asks `RulesService.gas_damage_at`, beside the burn. It still scores no end-of-turn row in the resolve (#117).
 - **Declared:** the board's health bar shows no end-of-turn damage, fire's or steam's. The rows never write the plan's hypo, so the END OF TURN row and the Play API are the forecast.
 
+**Built 2026-10-23: released heat lands as a heat haze ([#1427](https://github.com/Phaazoid/Godoiosis/issues/1427)).** Phaazoid@ ruled on 2026-10-23 that the free heat three equations make lands as a heat gas ([on #1335](https://github.com/Phaazoid/Godoiosis/issues/1335#issuecomment-6357154577)). c3potheds@ agreed that heat is another kind of gas, and left how fast it fades to feel. Phaazoid@ approved every recommendation of the plan in a Claude session the same day ([the plan](https://github.com/Phaazoid/Godoiosis/issues/1427#issuecomment-6375338024)):
+- **Heat haze is the eighth `Gas.Kind`**: `HEAT_HAZE`, shown as "Heat Haze".
+  - It is free heat: `SubstanceMap.GASES` maps it to `atom_fire`.
+  - Its rules, `GasRules/HEAT_HAZE.tres`, move the air and nothing else, so it reaches a carving through `BoardContext.air_at` like every air gas.
+- **Who releases it, and at what level.** The equation's count is the level:
+
+  | Reaction | Heat made | Haze left |
+  |---|---|---|
+  | Melt (fire or heat on ice) | `2F` | medium, on the thawed tile |
+  | Temperature Shock (fire or heat on a Chilled unit) | `2F` | medium, on the unit's cell |
+  | Ozone (every shock hit, in the air) | `F` | thin, on every cell it struck and along its current |
+
+  Medium spills a thin cross onto its four sides at the round tick, and thin never spreads. Two releases on one cell stack: a melt under a Chilled unit leaves thick.
+- **+10% heat a level**, one `Atmosphere.STEP` and ozone's mirror. A carving that draws heat and is cast from inside it gets thin +1, medium +2 and thick +3. The tile card reads "Heat Haze, medium: heat +20%", then "Heat 40%, +2".
+- **It holds one round a level** (`hold_rounds` 1, where every other gas holds 2), because heat leaves fast. A melt's haze is medium until the round ends, then a thin cross for one round, then gone.
+- **On a shock cell it cancels ozone at first.** Thin ozone (−10) and thin haze (+10) are summed before steps, so the strike's own round reads Normal heat: the strike's heat. Once the haze fades at the round's end, ozone's −1 shows for its second round. Ozone's −10 is unchanged. The timing is the knob: `hold_rounds` on either file, or ozone's `air`.
+- **Damage only, never presence** (the 2026-10-14 ruling). It gives no state, deals no damage and holds no one, and a gas triggers no reaction, so it lights no grass, dries no unit and melts no ice. `tests/items/test_atmosphere.gd` holds any gas made of an ambient substance to raising that substance and touching nobody.
+  - *Declared:* as a real gas it is a real source (#1328), so a carving that needs more than one heat (`Push(3F)`) holds beside it, which a fire still does not allow. No shipped carving needs more than one.
+- **Nothing's numbers move yet.** No shipped carving draws heat from the air (Blow Dry makes its own), so nothing changes until Fireball's basic form, `Bind(F, F) + Push(F2)` ([#1333](https://github.com/Phaazoid/Godoiosis/issues/1333)), lands.
+- **An Air hit:** a Gust blows it along the shove (#1332). A hit that shoves nobody, or has no room to move it, clears it. A cleared cell reads the board's own air again (Phaazoid@ on Discord, 2026-10-23).
+- **Ledger:**
+  - Melt and Temperature Shock come off NOT_YET_FOLLOWED; Temperature Shock's +5 note survives in the rulings above.
+  - Electrocute and Ozone keep only the thunder (#1270).
+  - The gas sweep now checks all three releases against their equations.
+- **The renderer's eighth and last slot is spent.**
+  - No shader changed, since the per-kind arrays were already eight wide.
+  - `tests/law/test_gas_look_coverage.gd` now reds a kind count past the cells texture's one-byte mask.
+  - The look is a first pass: [presentation-effects.md](presentation-effects.md) → *Gas*.
+- **The AI** prices it through the resolve, and its seek key reads the origin's air (parity row `air`). It never walks into a gas for its air (#760).
+- **Not built:**
+  - Heat dissolving into liquids or solids: `Extract` heat from a hot object, `Infuse` it to boil water.
+  - A limiting-ingredient rule.
+  - Both were floated by c3potheds@ and not ruled.
+  - A refractive shimmer: the look is puffs and a volume like every gas.
+
 **Next:**
-- **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.
-- **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte.
+- **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
 - **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)) and the smoke carving ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
@@ -884,4 +918,4 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - whether gas spread must conserve matter (deferred)
 - light and shadow
 
-**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. *(Since #1324 slice 5, 2026-10-21, it releases essence, which is not steam; the boiling rule is unchanged.)* **Still open:** Whether gas spread must conserve matter is deferred.
+**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. *(Since #1324 slice 5, 2026-10-21, it releases essence, and since #1427, 2026-10-23, heat haze. Neither is steam, and the boiling rule is unchanged.)* **Still open:** Whether gas spread must conserve matter is deferred.
