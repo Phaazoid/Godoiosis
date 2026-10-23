@@ -374,8 +374,9 @@ func _channel_lines() -> Array[String]:
 		_weapon.effective_can_overwatch(_wielder, _attack),
 		_weapon.effective_hits_allies(_wielder, _attack)))
 
+	# What the SUPERCHARGE buys (#97), in the queue's tank chip's word -- a source is a carving's (#695).
 	if weapon_attack != null and weapon_attack.empowered_form != null:
-		lines.append("At a source, becomes %s" % weapon_attack.empowered_form.display_name)
+		lines.append("While supercharged, becomes %s" % weapon_attack.empowered_form.display_name)
 	return lines
 
 

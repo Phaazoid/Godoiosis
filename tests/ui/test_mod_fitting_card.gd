@@ -657,6 +657,35 @@ func test_every_readiness_family_names_its_own_noun() -> void:
 	assert_str(WeaponInstance.make(plain).readiness_noun()).is_equal("readiness")
 
 
+# An empowered form is what the Spitter's SUPERCHARGE buys (#97), so its line speaks the word the
+# queue's tank chip speaks. It used to borrow a carving's "at a source" (#695, #1413), which no
+# weapon has anything to do with.
+func test_an_empowered_form_is_worded_as_the_supercharge() -> void:
+	if not await _enter_phase():
+		return
+	var weapon := _weapon()
+	if weapon == null:
+		return
+	var card := await _open(weapon)
+
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHEMICAL_SPITTER
+	var spitter := WeaponInstance.make(template)
+	assert_object(spitter).is_not_null()
+	var spray := WeaponAttackData.new()
+	spray.empowered_form = WeaponAttackData.new()
+	spray.empowered_form.display_name = "Charged Spray"
+
+	card._weapon = spitter
+	card._attack = spray
+	var lines := card._channel_lines()
+	assert_array(lines).contains(["While supercharged, becomes Charged Spray"])
+	for line: String in lines:
+		assert_bool(line.contains("source")).override_failure_message(
+			"a weapon's line borrowed a carving's wording: %s" % line).is_false()
+	card.free()
+
+
 # The legend's "can aim" swatch is the ATTACK's colour, and the row is built once when _attack is
 # still null -- so a heal used to repaint the plate's cells green and leave this chip red, a legend
 # lying about the picture beside it.
