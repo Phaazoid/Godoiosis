@@ -196,3 +196,60 @@ func test_the_readout_names_the_composed_kind() -> void:
 
 	assert_str(weapon.attack_detail(hero, swing)).contains("pierce")
 	assert_str(weapon.attack_detail(hero, swing)).not_contains("blunt")
+
+# --- Overwatch (#1411) ---
+#
+# Since #590 a watch attack is never fired, so a fit that turns the main into one leaves the weapon
+# nothing to attack with. Every applies_to value reaches the main, which is why an ON override is a
+# fit the door has to judge rather than a field it can trust.
+
+func _watch_mod(setting: WeaponModData.Override, reach: WeaponModData.AppliesTo) -> WeaponModData:
+	var m := WeaponModData.new()
+	m.display_name = "Watch Rig"
+	m.can_overwatch_override = setting
+	m.applies_to = reach
+	return m
+
+func test_an_on_override_that_would_disarm_the_main_is_refused() -> void:
+	for reach: WeaponModData.AppliesTo in [WeaponModData.AppliesTo.EVERY_ATTACK, WeaponModData.AppliesTo.MAIN_ATTACK]:
+		var weapon := _weapon(_attack(0, false))
+		var mod := _watch_mod(WeaponModData.Override.ON, reach)
+		var reason := weapon.fit_block_reason(0, mod)
+		assert_str(reason).override_failure_message(
+			"applies_to %s: an ON override was let onto the main" % WeaponModData.AppliesTo.keys()[reach]
+			).contains("watch attack")
+		assert_str(reason).contains("Swing")   # names the main it would disarm
+		assert_bool(weapon.fit(0, mod)).is_false()
+
+# The other mod field that reaches the main, in both of its forms.
+func test_a_watch_replacement_main_is_refused_in_either_form() -> void:
+	var weapon := _weapon(_attack(0, false))
+	var replacer := WeaponModData.new()
+	replacer.replaces_main = _attack(0, false)
+	replacer.replaces_main.can_overwatch = true
+	assert_bool(weapon.can_fit(0, replacer)).is_false()
+
+	replacer.replaces_main = _attack(0, false)
+	replacer.replaces_main.empowered_form = _attack(0, false)
+	replacer.replaces_main.empowered_form.can_overwatch = true
+	assert_str(weapon.fit_block_reason(0, replacer)).contains("supercharged")
+
+# The refusal reads the fitted RESULT through effective_can_overwatch, so OFF-beats-ON is honoured: with
+# the main protected, an ON mod fits and moves only the extras into the watch view.
+func test_an_on_override_fits_beside_an_off_that_protects_the_main() -> void:
+	var main := _attack(0, false)
+	var extra := _attack(0, false)
+	var weapon := _weapon(main, extra)
+	_fit(weapon, 0, _watch_mod(WeaponModData.Override.OFF, WeaponModData.AppliesTo.MAIN_ATTACK))
+	_fit(weapon, 1, _watch_mod(WeaponModData.Override.ON, WeaponModData.AppliesTo.EVERY_ATTACK))
+
+	assert_bool(weapon.effective_can_overwatch(null, main)).is_false()
+	assert_bool(weapon.effective_can_overwatch(null, extra)).is_true()
+
+# Only a form THIS fit turns is the mod's fault. A template whose own main is a watch is
+# WeaponTemplateLint's BLOCKS, and must not also refuse every ordinary mod offered to it.
+func test_a_main_the_template_made_a_watch_does_not_refuse_every_mod() -> void:
+	var watch_main := _attack(0, false)
+	watch_main.can_overwatch = true
+	var weapon := _weapon(watch_main)
+	assert_str(weapon.fit_block_reason(0, WeaponModData.new())).is_empty()

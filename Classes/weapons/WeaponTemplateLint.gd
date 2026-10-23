@@ -54,13 +54,17 @@ static func _check_has_a_main(template: WeaponData, found: Array[Dictionary]) ->
 # The fix is content, and it is the one the Carbine takes -- keep the main fireable and give the
 # family a separate watch-only attack in extra_attacks.
 #
-# THE RULE IS ABOUT EVERYTHING effective_main CAN RETURN, not about the authored field. It has
-# three sources -- this template's main, a fitted mod's `replaces_main` (WeaponInstanceLint owns
-# that one, since a template cannot see a mod), and the EMPOWERED FORM of either, which is what
-# effective_main substitutes while the weapon is supercharged (#97). Checking only the authored
-# main was a real hole: ticking can_overwatch on `Chemical_Spitter_Charged.tres` passed every lint
-# and left a supercharged Spitter with zero selectable attacks, disarmed exactly while its tank was
-# full. Silent, and it reads as a tank bug.
+# THIS IS THE TEMPLATE'S HALF of a rule about everything effective_main can return, as
+# effective_can_overwatch composes it. Two of its sources are authored here: this template's main
+# and that main's EMPOWERED FORM, which effective_main substitutes while the weapon is supercharged
+# (#97). The other two are a fitted mod's, and a template cannot see a mod: its `replaces_main`, and
+# an ON `can_overwatch_override` (#1411). WeaponInstance.fit_block_reason refuses both, and
+# WeaponInstanceLint reports a weapon already wearing one. With no mods, the composed answer IS the
+# raw flag, so reading it here is the rule rather than a restatement of it.
+#
+# Checking only the authored main was a real hole: ticking can_overwatch on
+# `Chemical_Spitter_Charged.tres` passed every lint and left a supercharged Spitter with zero
+# selectable attacks, disarmed exactly while its tank was full. Silent, and it reads as a tank bug.
 static func _check_main_is_fireable(template: WeaponData, found: Array[Dictionary]) -> void:
 	var main := template.main_attack
 	if main == null:

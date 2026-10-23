@@ -183,9 +183,10 @@ func test_no_saved_variant_wears_an_illegal_fitting() -> void:
 #  The fitted main (#810 follow-up)
 # ==============================================================================
 #
-# THE THIRD DOOR onto effective_main, and the one no test touched: a mod's `replaces_main`. Nothing
-# in tests/ referenced that field before these cases, so the mod door stood open the whole time the
-# template door was guarded -- and a template lint structurally cannot see a mod.
+# The mod doors onto a watch-only main, which a template lint structurally cannot see: a mod's
+# `replaces_main`, and an ON `can_overwatch_override` (#1411). fit_block_reason refuses both since
+# #1411, so this lint finds them the way it finds the other four -- by re-asking the door -- and each
+# case builds its state PAST the door: hand-appended, as a .tres loads, or edited after the fit.
 
 func _watch_attack(name: String) -> WeaponAttackData:
 	var a := WeaponAttackData.new()
@@ -194,11 +195,18 @@ func _watch_attack(name: String) -> WeaponAttackData:
 	return a
 
 
+# What a .tres carrying the mod loads as, since the door would refuse it. A typed local, because an
+# Array[Array] takes a typed array appended and refuses one assigned into an index.
+func _hand_fit(w: WeaponInstance, m: WeaponModData) -> void:
+	var space: Array[WeaponModData] = [m]
+	w.spaces.append(space)
+
+
 func test_a_mod_replacing_the_main_with_a_watch_attack_reports() -> void:
 	var w := WeaponInstance.make(_template())
 	var m := _mod(1, "Sniper Kit")
 	m.replaces_main = _watch_attack("Line Watch")
-	assert_bool(w.fit(0, m)).is_true()
+	_hand_fit(w, m)
 
 	var texts := _texts(w)   # also asserts every finding is DEGRADES, per this file's rule
 
@@ -214,12 +222,51 @@ func test_a_mod_whose_replacement_empowers_into_a_watch_reports() -> void:
 	replacement.display_name = "Long Shot"
 	replacement.empowered_form = _watch_attack("Overcharged Watch")
 	m.replaces_main = replacement
-	assert_bool(w.fit(0, m)).is_true()
+	_hand_fit(w, m)
 
 	var texts := _texts(w)
 
 	assert_int(texts.size()).is_equal(1)
 	assert_str(texts[0]).contains("Overcharged Watch")
+
+
+# #1411 ITSELF: the main stays the template's own, and a fitted mod's ON override is what makes it a
+# watch. The old check read the raw can_overwatch flag and skipped the template's main outright, so it
+# saw neither. Reached the way shipped doors reach it: a shared mod's field flipped after the fit.
+func test_a_mod_whose_override_turns_the_main_watch_only_reports() -> void:
+	for reach: WeaponModData.AppliesTo in [WeaponModData.AppliesTo.EVERY_ATTACK, WeaponModData.AppliesTo.MAIN_ATTACK]:
+		var t := _template()
+		t.main_attack.display_name = "Shot"
+		var w := WeaponInstance.make(t)
+		var m := _mod(1, "Watch Rig")
+		m.applies_to = reach
+		assert_bool(w.fit(0, m)).is_true()
+		m.can_overwatch_override = WeaponModData.Override.ON
+
+		var texts := _texts(w)
+		var where := "applies_to %s" % WeaponModData.AppliesTo.keys()[reach]
+		assert_int(texts.size()).override_failure_message("%s: %s" % [where, texts]).is_equal(1)
+		assert_str(texts[0]).override_failure_message(where).contains("Watch Rig")
+		assert_str(texts[0]).override_failure_message(where).contains("\"Shot\" a watch attack")
+
+
+# OFF beats ON, so an ON mod is legal beside an OFF that protects the main -- and stops being legal the
+# moment that OFF comes off, through the real unfit door, which asks nothing.
+func test_taking_off_the_mod_protecting_the_main_reports_the_other() -> void:
+	var w := WeaponInstance.make(_template())
+	var guard := _mod(1, "Safety Governor")
+	guard.can_overwatch_override = WeaponModData.Override.OFF
+	guard.applies_to = WeaponModData.AppliesTo.MAIN_ATTACK
+	var rig := _mod(1, "Watch Rig")
+	rig.can_overwatch_override = WeaponModData.Override.ON
+	assert_bool(w.fit(0, guard)).is_true()
+	assert_bool(w.fit(1, rig)).is_true()
+	assert_array(_texts(w)).is_empty()
+
+	assert_bool(w.unfit(guard)).is_true()
+	var texts := _texts(w)
+	assert_int(texts.size()).is_equal(1)
+	assert_str(texts[0]).contains("Watch Rig")
 
 
 # The negative: an ordinary main replacement is what the field is FOR and must stay silent.

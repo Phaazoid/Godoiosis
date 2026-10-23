@@ -19,7 +19,11 @@ class_name WeaponInstanceLint
 #
 # ONE RULE, BORROWED -- BoardLint's discipline, and the reason those four cost one clause rather than
 # four. Every sentence is fit_block_reason's own, so a fifth clause added there is caught here for
-# free and no wording can drift from the door that enforces it.
+# free and no wording can drift from the door that enforces it. The fifth arrived with #1411: a fit
+# must not turn the main into a watch attack. This file used to check that itself off the raw
+# can_overwatch flag, which missed a mod's ON override; the door asks effective_can_overwatch, so
+# this file now reports it the way it reports the other four, including a state edited in after the
+# fit (a mod's override flipped, or the OFF mod that was protecting the main taken off).
 #
 # DEGRADES, all of it. The weapon is carried and it plays; the mod is inert. BLOCKS would refuse the
 # save in the Item Editor and leave the only tool that can repair the file unable to write it, which
@@ -51,33 +55,7 @@ static func check(weapon: WeaponInstance) -> Array[Dictionary]:
 			if reason != "":
 				_add(found, Severity.DEGRADES, "%s is fitted to space %d but would be refused there now: %s"
 						% [_name_of(mod), index + 1, reason])
-	_check_fitted_main_is_fireable(weapon, found)
 	return found
-
-
-# DEGRADES, deliberately: the weapon is already on disk in this state and the Item Editor is what
-# repairs it -- a BLOCKS refuses that save (_refuse_instance), which is the trap this whole file
-# stays DEGRADES to avoid. Quieter than the template's BLOCKS on the same rule, and correctly so:
-# a template fault is fixed in another tab, a fitting fault is fixed right here.
-#
-# The OTHER two doors onto effective_main, and the pair WeaponTemplateLint structurally
-# cannot see -- a fitted mod's `replaces_main`, and that replacement's own empowered form. Same
-# #590 rule as the template's authored main: a watch attack is never fired, so a weapon whose
-# effective main is one has nothing to attack with. Nothing referenced `replaces_main` in tests
-# before this, so the mod door was open the whole time the template door was guarded.
-#
-# base_main() rather than effective_main(): the replacement is what a mod actually installs, and
-# asking the supercharged form separately is what lets the message name WHICH of the two is wrong.
-# Passed a null wielder deliberately -- active_space_count reads UNREDUCED for an unheld weapon
-# (#732), so the lint sees every fitted mod rather than only a particular carrier's active spaces.
-static func _check_fitted_main_is_fireable(weapon: WeaponInstance, found: Array[Dictionary]) -> void:
-	var base := weapon.base_main(null)
-	if base == null or base == weapon.template.main_attack:
-		return   # the template's own main is WeaponTemplateLint's finding, not a second copy of it
-	if base.can_overwatch:
-		_add(found, Severity.DEGRADES, "A fitted mod replaces the main attack with \"%s\", which is a watch attack -- an overwatch attack is never fired, so this weapon has nothing to attack with." % base.display_name)
-	if base.empowered_form != null and base.empowered_form.can_overwatch:
-		_add(found, Severity.DEGRADES, "A fitted mod replaces the main attack with \"%s\", which empowers into the watch attack \"%s\" -- so this weapon has nothing to attack with while it is supercharged." % [base.display_name, base.empowered_form.display_name])
 
 
 # Would this mod be allowed onto this space TODAY? Asked on a PROBE -- a copy of the weapon with this

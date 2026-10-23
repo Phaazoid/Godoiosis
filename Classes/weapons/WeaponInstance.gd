@@ -259,6 +259,11 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 		if holder != null:
 			var name: String = holder.display_name if holder.display_name != "" else "Another fitted mod"
 			return "%s already changes this weapon's damage kind -- one kind-changing mod at a time, so fitting order can never decide what armour does to a swing." % name
+	# A FIT MUST NOT DISARM THE MAIN (#1411). Since #590 a watch attack is never fired, so a main that
+	# is one leaves the weapon nothing to attack with. Not fixed by freeing capacity, so asked first.
+	var disarm := _disarm_reason(index, mod)
+	if disarm != "":
+		return disarm
 	var capacity: int = template.mod_spaces[index]
 	if used_capacity(index) + mod.size > capacity:
 		return "Space %d holds %d of %d — this needs %d more." % [index + 1, used_capacity(index), capacity, mod.size]
@@ -325,16 +330,55 @@ func _kind_overrider() -> WeaponModData:
 				return mod
 	return null
 
+# The sentence for a fit that would turn a form of the main into a watch attack, or "". Two mod fields
+# reach that -- `replaces_main`, and an ON `can_overwatch_override`, which every applies_to value
+# carries onto the main -- so the question is asked of the fitted RESULT through
+# effective_can_overwatch rather than of either field: OFF-beats-ON answers here for free.
+#
+# Asked on a PROBE, since fit() asks this and cannot be called from it, and compared slot by slot with
+# the weapon as it stands: only a form THIS fit turns is the mod's fault. A main the template already
+# authored as a watch stays WeaponTemplateLint's finding, and does not refuse every mod after it.
+func _disarm_reason(index: int, mod: WeaponModData) -> String:
+	var probe := copy_for_grant() as WeaponInstance
+	if probe == null:
+		return ""   # an unmapped family: make() has already said so, loudly
+	probe._place(index, mod)
+	var before := _watch_main_forms()
+	var after := probe._watch_main_forms()
+	var held: String = mod.display_name if mod.display_name != "" else "That mod"
+	if after[0] != null and before[0] == null:
+		return "%s would make the main attack \"%s\" a watch attack -- a watch is never fired, so this weapon would have nothing to attack with." % [held, after[0].display_name]
+	if after[1] != null and before[1] == null:
+		return "%s would make \"%s\", the main's supercharged form, a watch attack -- so this weapon would have nothing to attack with while it is supercharged." % [held, after[1].display_name]
+	return ""
+
+# Each form of the main -- base, then empowered -- that is a watch attack once every fitted mod has had
+# its say, or null in its slot. A null wielder reads every space: fitting has no carrier (#732).
+func _watch_main_forms() -> Array[WeaponAttackData]:
+	var result: Array[WeaponAttackData] = [null, null]
+	var main := base_main(null)
+	if main == null:
+		return result
+	if effective_can_overwatch(null, main):
+		result[0] = main
+	if main.empowered_form != null and effective_can_overwatch(null, main.empowered_form):
+		result[1] = main.empowered_form
+	return result
+
 # THE one door that grows `spaces`, and it grows exactly as far as the mod being fitted (#624).
 # can_fit has already bounded the index against the template, so the reach is a real space.
 func fit(index: int, mod: WeaponModData) -> bool:
 	if not can_fit(index, mod):
 		return false
+	_place(index, mod)
+	return true
+
+# fit() without the asking. Its one other caller is _disarm_reason, on a throwaway probe.
+func _place(index: int, mod: WeaponModData) -> void:
 	while spaces.size() <= index:
 		spaces.append(_empty_space())
 	var fitted: Array = spaces[index]
 	fitted.append(mod)
-	return true
 
 # Proficiency N activates spaces 1..N — reduced capability, never locked out (weapons.md).
 # UNREDUCED means every space, whatever the count: since #486 a template authors how many it has,
