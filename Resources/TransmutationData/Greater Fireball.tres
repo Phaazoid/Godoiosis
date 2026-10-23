@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://dn3qgvwa0d7r3"]
+
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_dg6yn"]
+[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="2_ck1ki"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_wy5ol"]
+
+[resource]
+script = ExtResource("3_wy5ol")
+recipe = "Break(F, A) + Bind(F, F) + Push(F2)"
+popup = "Greater Fireball!"
+icon = ExtResource("2_ck1ki")
+display_name = "Greater Fireball"
+power = 7
+min_range = 2
+max_range = 2
+max_and_a_half = true
+hits_allies = true
+targets = 2
+up_tolerance = 6
+arc_clearance = 6
+damage_kind = 3
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"

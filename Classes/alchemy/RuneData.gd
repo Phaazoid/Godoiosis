@@ -28,8 +28,8 @@ const CAPACITY := {
 
 const CIRCLE_CAP := {
 	Size.SMALL: 1,    # the tied basics: Push(A2), Push(E2), Bind(Q, Q)
-	Size.MEDIUM: 2,   # the anywhere basics: Break(F, A) + Push(F2)
-	Size.LARGE: 3,    # Break(F, A) + Bind(Q, F) + Push(QF)
+	Size.MEDIUM: 2,   # the anywhere basics: Bind(F, F) + Push(F2)
+	Size.LARGE: 3,    # Break(F, A) + Bind(F, F) + Push(F2), Break(F, A) + Bind(Q, F) + Push(QF)
 }   # max verbs in a SINGLE carving inscribed on this size
 
 @export var size: Size = Size.SMALL
