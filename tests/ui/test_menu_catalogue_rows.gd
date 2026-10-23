@@ -626,3 +626,82 @@ func test_a_watch_carving_that_would_fizzle_greys_its_watch_row_with_the_reason(
 	await _enter_attack_ring(alch)
 	assert_bool(_disabled(_row_named(_open_rows(), "Spray"))).override_failure_message(
 			"a caster carrying its own water still had its watch row greyed").is_false()
+
+
+# ==============================================================================
+#  #1409: an unfireable main lists greyed, and the grey reason is the queue's
+# ==============================================================================
+
+# The kit row named `label`, asserted LISTED and GREYED with `reason`. The tooltip is wrapped, so it
+# is compared with its line breaks flattened, the same as the fizzle cases above.
+func _assert_greyed_with(rows: Array, label: String, reason: String) -> void:
+	var row := _row_named(rows, label)
+	assert_bool(row.is_empty()).override_failure_message(
+			"the '%s' row is missing -- an unusable attack greys, it never hides" % label).is_false()
+	assert_bool(_disabled(row)).override_failure_message("'%s' was listed live" % label).is_true()
+	assert_str(_tooltip(row).replace("\n", " ")).override_failure_message(
+			"'%s' greyed without the reason '%s': '%s'" % [label, reason, _tooltip(row)]).contains(reason)
+
+
+# A Carbine at 0/6 opens its kit slice (Reload and the watch keep it open) and the MAIN must be in it.
+# The ATTACK expander used to gate on the main being fireable, so the slice drew no Shot row at all.
+func test_a_dry_carbine_lists_its_main_greyed_with_the_reason() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var carbine := _carbine()
+	unit.add_item(carbine)
+	assert_object(unit.get_equipped_weapon()).is_same(carbine)
+	for _shot in CarbineWeaponInstance.MAGAZINE_SIZE:
+		carbine.consume_readiness_for(carbine.template.main_attack)
+	var reason := AttackAction.fire_block_reason(unit, carbine.template.main_attack)
+	assert_str(reason).override_failure_message("fixture: the magazine is not dry").is_not_empty()
+
+	await _enter_attack_ring(unit)
+	_assert_greyed_with(_open_rows(), "Shot", reason)
+
+
+# The same for a spring that gates its main: spent, the main lists greyed in the family's own words.
+func test_a_sprung_springspears_main_lists_greyed() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var spear := _sprung_springspear()
+	spear.template.main_attack.requires_readiness = true
+	unit.add_item(spear)
+	assert_object(unit.get_equipped_weapon()).is_same(spear)
+	var reason := AttackAction.fire_block_reason(unit, spear.template.main_attack)
+	assert_str(reason).override_failure_message("fixture: the spent spring does not gate the main").is_not_empty()
+
+	await _enter_attack_ring(unit)
+	_assert_greyed_with(_open_rows(), "Jab", reason)
+
+
+# A unit missing an arm cannot wield its two-handed weapon, and every row of that weapon says so in
+# the words the QUEUE refuses with. The rows used to ask Unit.attack_block_reason alone, which knows
+# the economy but not the wield lock, so the secondary and the watch listed live and the click was
+# refused. The main lists too: the lock is a reason to grey, not to hide.
+func test_a_wield_locked_weapon_greys_every_row_with_the_queues_reason() -> void:
+	var unit := _spawn(Vector2i(2, 0))
+	var foe: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(3, 0))
+	var weapon := H.make_weapon(4)
+	weapon.template.display_name = "Greatsword"
+	weapon.template.two_handed = true
+	weapon.template.main_attack.display_name = "Cleave"
+	var sweep := WeaponAttackData.new()
+	sweep.display_name = "Sweep"
+	sweep.power = 3
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Overwatch"
+	watch.can_overwatch = true
+	weapon.template.extra_attacks = [sweep, watch]
+	unit.equipped_weapon = weapon
+	unit.unit_instance.limbs[UnitInstance.LimbSlot.ARM_L].state = UnitInstance.LimbState.EMPTY
+	assert_str(unit.wield_block_reason()).override_failure_message("fixture: the wield lock is not engaged").is_not_empty()
+
+	unit.active_attack = sweep
+	var refused: String = game.squad_manager.try_queue_action(unit.squad,
+			AttackAction.declare(unit, unit.movement.cell, foe.movement.cell))
+	unit.active_attack = null
+	assert_str(refused).override_failure_message("the queue accepted a wield-locked secondary").is_not_empty()
+
+	await _enter_attack_ring(unit)
+	var rows := _open_rows()
+	for label: String in ["Cleave", "Sweep", "Overwatch"]:
+		_assert_greyed_with(rows, label, refused)
