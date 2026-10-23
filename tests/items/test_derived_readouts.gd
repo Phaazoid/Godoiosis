@@ -63,6 +63,34 @@ func test_a_retuned_plate_rewords_its_own_def_line() -> void:
 		"the DEF readout ignored the piece's own power").is_not_equal(before)
 
 
+# #1410: the hover is a PREVIEW, so a plate hovered while another CON-moving plate is worn is judged
+# with the worn one swapped OUT. The old readout read live CON, the worn plate's bonus included.
+func test_a_hovered_plate_is_judged_without_the_plate_already_worn() -> void:
+	var worn := ArmorData.new()
+	worn.display_name = "Worn Plate"
+	worn.stat_modifiers[Stats.Stat.CON] = 4
+	var hovered := ArmorData.new()
+	hovered.display_name = "Hovered Plate"
+	hovered.def_power = 5
+	hovered.stat_modifiers[Stats.Stat.CON] = 1
+	var wearer := _wielder({Stats.Stat.CON: 6})
+	assert_bool(wearer.add_item(worn) and wearer.wear_armor(wearer.inventory.find(worn))) \
+		.override_failure_message("fixture: the worn plate would not go on").is_true()
+
+	var promised := wearer.previewed_def(hovered)
+	var live_reading := Stats.armor_def(hovered.def_power, wearer.get_effective_stat(Stats.Stat.CON))
+	assert_int(live_reading).override_failure_message(
+		"fixture: the worn plate's CON must move the hovered plate's DEF, or this case proves nothing"
+		).is_not_equal(promised)
+	var text := hovered.mechanical_text(wearer)
+	assert_str(text).override_failure_message(
+		"the hover must promise the DEF the pre-mission card's arrow shows (%d): %s" % [promised, text]
+		).contains("DEF %d " % promised)
+	assert_str(text).override_failure_message(
+		"the hover judged the plate against the worn plate's CON: %s" % text
+		).not_contains("DEF %d " % live_reading)
+
+
 # --- the flavour half ------------------------------------------------------------------------
 
 # THE WIRE #745's body got wrong, and the reason the content pass could not have worked without it:
