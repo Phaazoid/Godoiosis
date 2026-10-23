@@ -109,3 +109,31 @@ func test_the_ceiling_still_frames_the_whole_board_from_the_centre() -> void:
 				problems.append("%s: corner %s off screen at the ceiling" % [path.get_file(), volume.get_endpoint(i)])
 	assert_array(problems).override_failure_message(
 		"The zoom ceiling no longer frames the board:\n  %s" % "\n  ".join(problems)).is_empty()
+
+
+# The yardstick itself (#1435). Every bound above derives from _board_volume, whose height came from
+# BoardPicker.max_top, a ROW count, read as world units: twice the board's height once a row became
+# half a level (#427), which lifted the opening shot's aim off the board. The expectation is the
+# drawn blocks' own, through BoardSpace.surface_y, the one spelling of where a row's top face sits.
+func test_the_board_volume_is_as_tall_as_the_highest_block_drawn() -> void:
+	var problems: Array[String] = []
+	var measured := 0
+	for path: String in _missions():
+		_scene.load_mission(path)
+		await await_idle_frame()
+		var cells: Array[Vector3i] = (_scene.get_node("Board") as GridMap).get_used_cells()
+		if cells.is_empty():
+			continue
+		var highest := cells[0].y
+		for cell: Vector3i in cells:
+			highest = maxi(highest, cell.y)
+		measured += 1
+		var top: float = (_scene._board_volume() as AABB).end.y
+		var expected := BoardSpace.surface_y(highest)
+		if not is_equal_approx(top, expected):
+			problems.append("%s: the volume stands %.2f tall, the highest block's top face is at %.2f"
+				% [path.get_file(), top, expected])
+	assert_int(measured).override_failure_message(
+		"no mission drew a single block; the case measured nothing").is_greater(0)
+	assert_array(problems).override_failure_message(
+		"The board volume is not the board's height:\n  %s" % "\n  ".join(problems)).is_empty()
