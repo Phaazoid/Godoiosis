@@ -481,7 +481,8 @@ static func _plan_refusal(action: BaseAction) -> String:
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 	validate_squad_plan_preview(squad, action)
 	if action.is_valid and _candidate_carving_holds(squad, action) and _candidate_aim_connects(squad, action) \
-			and _candidate_rescue_target_ok(squad, action) and _candidate_guard_in_range(squad, action):
+			and _candidate_watch_declarable(squad, action) and _candidate_rescue_target_ok(squad, action) \
+			and _candidate_guard_in_range(squad, action):
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
@@ -535,6 +536,20 @@ func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
 	if not SquadPlanValidator.aim_whiffs(aim, found):
 		return true
 	aim.add_validation_error("Nothing to hit on that cell")
+	return false
+
+# The aim half of a candidate WATCH (#1433): Reach.can_aim_at, the gate the click, the hover and the
+# Play API ask, from where the watcher will STAND -- the fizzle clause's origin. An order the player
+# could never declare is refused whoever authors it; the AI's builder asks the same gate first.
+func _candidate_watch_declarable(squad: Squad, action: BaseAction) -> bool:
+	var watch := action as OverwatchAction
+	if watch == null:
+		return true
+	var one: Array[BaseAction] = [action]
+	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
+	if Reach.can_aim_at(action.actor, origin, watch.target_cell, watch.fired_attack, board_source.call()):
+		return true
+	watch.add_validation_error("Can't aim a watch there")
 	return false
 
 # The rescue half of the gate (#124), the whiff clause's sibling: a candidate rescue may target a

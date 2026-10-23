@@ -4011,7 +4011,7 @@ A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks
 So the prediction reach (`ThreatField._threat_of`) now has four parts:
 1. **Fire, accumulated by attack.** Keyed by attack because the current depends on the element of the attack that made the hit.
 2. **The counter rim**, as above.
-3. **`_add_watch_reach`.** The union of every lane `AITactics.watch_lanes` could set from every origin, asked only of an archetype whose declared priority list has OVERWATCH (Rushdown's is NEVER), and only of a watch attack `AITactics.watch_attack_for` says is ready.
+3. **`_add_watch_reach`.** The union of every lane `AITactics.watch_lanes` could set from every origin, asked only of an archetype whose declared priority list has OVERWATCH (Rushdown's is NEVER), and only of the watch attacks `AITactics.watch_attacks_for` says are ready (every one since [#1433](https://github.com/Phaazoid/Godoiosis/issues/1433), not only the first).
    - These are the builder's own two doors, so the drawn lanes are the lanes it could set.
    - **They are not zone-clipped:** the shot takes anyone in the lane, and a Sentry at its post aims at the nearest enemy wherever that enemy stands.
 4. **`_add_arc`.** `Conduction.arc_cells`, seeded with each attack's own cells.

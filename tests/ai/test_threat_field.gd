@@ -450,13 +450,13 @@ func test_a_rushdown_never_marks_a_watch_lane() -> void:
 	for cell in ThreatField.reach_from(rusher, ctx, origins):
 		attacks[cell] = true
 	var lane_only := {}
-	var watch := AITactics.watch_attack_for(rusher)
-	for origin in origins:
-		var lanes := AITactics.watch_lanes(rusher, origin, watch, ctx)
-		for dir in lanes:
-			for cell: Vector2i in lanes[dir]:
-				if not attacks.has(cell):
-					lane_only[cell] = true
+	for watch in AITactics.watch_attacks_for(rusher):
+		for origin in origins:
+			var lanes := AITactics.watch_lanes(rusher, origin, watch, ctx)
+			for dir in lanes:
+				for cell: Vector2i in lanes[dir]:
+					if not attacks.has(cell):
+						lane_only[cell] = true
 	assert_int(lane_only.size()).override_failure_message(
 			"fixture is vacuous: every lane cell is already in the rusher's attack reach").is_greater(0)
 	assert_array(_sorted(field.reach_of(rusher))).override_failure_message(
@@ -477,6 +477,24 @@ func test_a_dry_watcher_marks_no_lane() -> void:
 	carbine.shots_remaining = CarbineWeaponInstance.MAGAZINE_SIZE
 	assert_bool(ThreatField.build(ctx, PLAYER).cells.has(Vector2i(5, 1))).override_failure_message(
 			"fixture is vacuous: the loaded watcher marks no lane either").is_true()
+
+
+# ...but a dry watcher with a SECOND watch that needs no round still marks that one (#1433): the
+# builder walks every watch, so the field draws every watch it could arm. The Line Sniper mod's shape.
+func test_a_dry_watcher_marks_the_lane_of_a_watch_that_needs_no_round() -> void:
+	var board: Dictionary = _build_board()
+	var watcher := _watcher(board, Vector2i(3, 1), AIArchetype.Type.HOLD)
+	var carbine := watcher.equipped_weapon as CarbineWeaponInstance
+	(carbine.template.extra_attacks[0] as WeaponAttackData).requires_readiness = true
+	var free := WeaponAttackData.new()
+	free.display_name = "Line Snipe"
+	free.power = 3
+	free.can_overwatch = true
+	P.line(free, 4)
+	carbine.template.extra_attacks.append(free)
+	carbine.shots_remaining = 0
+	assert_bool(ThreatField.build(_context(board), PLAYER).cells.has(Vector2i(7, 1))).override_failure_message(
+			"a dry watcher's second watch needs no round, and the field called its lane safe").is_true()
 
 
 # NOT ZONE-CLIPPED: the shot takes anyone in the lane, and a sentry at its post aims at the nearest
