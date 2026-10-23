@@ -1247,7 +1247,10 @@ is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` und
   slots lean toward neighbouring gas and tuck in from an empty edge; a mixed cell picks each slot's
   gas by the levels. **The dummy renderer a headless run uses keeps no MultiMesh instance data**
   (every transform and custom datum reads back zero), so `GasMirror.puff_entries()` is the readable
-  record of what the MultiMesh was handed.
+  record of what the MultiMesh was handed. **The puffs and the fog floor draw at the sprites' density**,
+  `UnitSprite3D.texels_per_unit` (#250's dial), read when the mirror is built (#1434; it restated 32
+  before). The dial is written once, at `UnitMirror._ready`, before battle3d builds the mirror, and
+  nothing moves it after, so build time is the only read it needs.
 - **Three levels step the look** (#508 PR 2, 2026-10-03; the store holds thin, medium or thick
   rather than 0-14). The volume's density is the level's third, so the existing `thin_floor` still
   sets how much thin steam shows; the puffs COUNT the level -- a slot table's thresholds are levels

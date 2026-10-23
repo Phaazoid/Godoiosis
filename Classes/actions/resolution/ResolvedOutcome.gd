@@ -20,7 +20,7 @@ var popups: Array[String] = []
 # popup and no art, and under that guard those said nothing at all.
 var fired_reactions: Array[ElementalReaction] = []
 # The elements that actually REACHED the target — post-insulation, so an absorbed hit records none
-# (#685). Recorded rather than derived: `PlanResolver._source_elements` is private and answers the
+# (#685). Recorded rather than derived: `PlanResolver.source_elements` answers the
 # pre-insulation question, so the queue row's element rail would otherwise claim a fire hit that the
 # target shrugged off. Empty on a heal, which short-circuits above the elemental stage.
 var elements: Array[Elemental.Element] = []
