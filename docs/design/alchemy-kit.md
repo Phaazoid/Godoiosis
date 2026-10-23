@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #1347 (2026-10-21).**
+**Canon checked through #1347 (2026-10-21); #1333's two Fireball forms folded in 2026-10-23.**
 
 **Deep Alchemy Phase 2 re-cut the rune model to VERBS (2026-10-11).** A carving is now a recipe of verbs with substances as their arguments (`Break(F, A) + Push(F2)`); cost is its verb count, aura demand is the atoms across every argument (an argument's amount excluded, #1328), and a hit carries and scales off what its last delivering verb leaves at the target. Sigils and flourishes are gone. Canon: [deep-alchemy.md](deep-alchemy.md) → *What is built*. Passages below that predate it carry a dated note.
 
@@ -75,8 +75,8 @@ Corrects two earlier errors: **not** "five runes, one per element" (stale `Alche
 
 **Size = TWO knobs, BUILT 2026-07-20 (#60), counted in VERBS since Deep Alchemy Phase 2 (2026-10-11).** Simplified to **S / M / L** for now (the wiki's "5 sizes" collapses later):
 - **S (small)** — circle cap 1, capacity 1 — the beginner's tool: one one-verb basic, tied to its material (`Push(A2)`). Common, easy to come by.
-- **M (medium)** — circle cap 2, capacity 4 — two two-verb carvings, or anywhere basics that make their own material (`Break(F, A) + Push(F2)`). Capacity was 3 until Phase 2 raised it so Freeze + Splash fit.
-- **L (large)** — circle cap 3, capacity 6 — two three-verb carvings or three two-verb ones; the big board.
+- **M (medium)** — circle cap 2, capacity 4 — two two-verb carvings, or anywhere basics that make their own material from the air (`Bind(F, F) + Push(F2)`, Fireball since #1333). Capacity was 3 until Phase 2 raised it so Freeze + Splash fit.
+- **L (large)** — circle cap 3, capacity 6 — two three-verb carvings or three two-verb ones; the big board. The Lightning Tome holds Zap Cannon and Greater Fireball (#1333).
 
 *(Before Phase 2 the knobs counted sigils, and the sizes read: S pures only, M a pair with a pure riding along on the Conjunction table, L triples. Historical.)*
 

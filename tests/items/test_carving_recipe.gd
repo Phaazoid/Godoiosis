@@ -181,6 +181,13 @@ func test_lightning_from_nowhere_fizzles() -> void:
 	assert_str(_walk("Extract(QF) + Push(QF)", _ambient())).is_not_empty()
 
 
+# Heat is in every cell's air, so binding it into flame needs nothing else (#1333): both Fireball forms
+# work anywhere, the stronger one breaking more heat out of vital air first.
+func test_binding_the_airs_heat_works_on_the_air_alone() -> void:
+	assert_str(_walk("Bind(F, F) + Push(F2)", _ambient())).is_empty()
+	assert_str(_walk("Break(F, A) + Bind(F, F) + Push(F2)", _ambient())).is_empty()
+
+
 func test_a_bind_needs_both_halves() -> void:
 	assert_str(_walk("Bind(Q, Q)", _ambient())).is_empty()
 	assert_str(_walk("Break(A, W) + Bind(Q, W)", _ambient())).is_empty()
