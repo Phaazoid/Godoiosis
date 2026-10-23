@@ -188,7 +188,8 @@ func _build_air_row() -> void:
 	DevWidgets.apply_tooltip(_air_row, DevWidgets.wrap_tooltip(
 		"What the air over this board holds, for the whole battle. A carving that draws a substance "
 		+ "from the air hits one harder for each step above Normal and one softer below: Fireball "
-		+ "breaks vital air, Freeze takes vapor and aether, Heal binds aether. A carving fed by a "
+		+ "binds heat, Greater Fireball breaks vital air and binds heat, Freeze takes vapor and "
+		+ "aether, Heal binds aether. A carving fed by a "
 		+ "real source, like Pressure Spray by a river, ignores it. A thin reading never makes a "
 		+ "carving fizzle. Normal and the step size per substance are Atmosphere.NORMAL and STEP. "
 		+ "Saved with the board."))

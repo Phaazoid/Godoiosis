@@ -21,8 +21,6 @@ const FLASH_LIFT := 1.1             # how far above the ground a strike glows
 const FLASH_SAFE_LEVEL := 0.15      # photosensitivity: every cloud holds a steady dim glow instead
 const FLOOR_SHADER := "res://Classes/presentation/gas_floor.gdshader"
 const PUFF_SHADER := "res://Classes/presentation/gas_puff.gdshader"
-const PIXEL_SIZE := 1.0 / 32.0      # one art pixel, in world units -- the sprites' density
-const ART_PIXELS_PER_CELL := 32.0
 const FLOOR_ACTION := &"show_gas_floor"
 # A cell's puff slots: which way it leans, the least LEVEL that shows it (summed over a mixed cell's
 # gases -- so thin shows one puff, medium three, thick all of them), its biggest size, its lift in
@@ -554,12 +552,15 @@ func _build_nodes() -> void:
 	_puff_material = ShaderMaterial.new()
 	_puff_material.shader = load(PUFF_SHADER) as Shader
 	_puff_material.set_shader_parameter("art", GasPuffArt.build())
-	_puff_material.set_shader_parameter("pixel_size", PIXEL_SIZE)
+	# The sprites' own density (#250's dial), read rather than restated (#1434). Read once: the dial is
+	# written at UnitMirror._ready, before battle3d builds this node, and nothing moves it after.
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	_puff_material.set_shader_parameter("pixel_size", texel)
 	_puff_material.set_shader_parameter("canvas_height", float(GasPuffArt.LAYER_SIZE.y))
 	_puff_material.set_shader_parameter("stride", float(GasPuffArt.STRIDE))
 	_puff_material.set_shader_parameter("extra_base", float(GasPuffArt.EXTRA_BASE))
 	var quad := QuadMesh.new()
-	quad.size = Vector2(GasPuffArt.LAYER_SIZE) * PIXEL_SIZE
+	quad.size = Vector2(GasPuffArt.LAYER_SIZE) * texel
 	quad.center_offset = Vector3(0.0, quad.size.y * 0.5, 0.0)
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -599,7 +600,8 @@ func _push_look_uniforms() -> void:
 		material.set_shader_parameter("palettes", palettes)
 		material.set_shader_parameter("patterns", patterns)
 		material.set_shader_parameter("kind_count", Gas.Kind.size())
-		material.set_shader_parameter("art_pixels", ART_PIXELS_PER_CELL)
+		# The floor's pixels are the puffs' (a cell is one world unit), never the ground art's 16.
+		material.set_shader_parameter("art_pixels", UnitSprite3D.texels_per_unit)
 	_puff_material.set_shader_parameter("boil_seconds", boil)
 	_puff_material.set_shader_parameter("bob", bob)
 	_puff_material.set_shader_parameter("sway", sway)

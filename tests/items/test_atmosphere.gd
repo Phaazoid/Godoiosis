@@ -13,7 +13,11 @@ const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 const HERE := Vector2i(8, 8)
 const FOE_CELL := Vector2i(9, 8)
-const FIREBALL := "Break(F, A) + Push(F2)"
+const FIREBALL := "Break(F, A) + Push(F2)"   # Fireball's recipe until #1333; still the vital-air drawer
+# The two Fireball forms of #1333, as literal recipes: flame from the air's own heat, and flame from
+# heat broken out of vital air bound with the air's.
+const BIND_THE_AIRS_HEAT := "Bind(F, F) + Push(F2)"
+const BIND_THE_BROKEN_HEAT := "Break(F, A) + Bind(F, F) + Push(F2)"
 
 # A recipe that draws each ambient substance from the air and nothing else (#1324's local air): literal
 # strings, checked by test_each_draws_recipe_draws_exactly_its_substance.
@@ -62,6 +66,16 @@ func test_a_need_of_more_than_one_is_not_drawn_from_the_air() -> void:
 
 func test_a_substance_drawn_twice_counts_once() -> void:
 	assert_array(_drawn("Bind(Q, Q)")).contains_exactly(["atom_aether"])
+
+
+# A step that needs a substance more times than earlier steps made it takes the rest from the air
+# (#1333): the Bind binds two heats and the Break freed one. A Break frees one of each argument, so
+# breaking flame frees both heats a Bind then needs.
+func test_a_need_beyond_what_earlier_steps_made_is_drawn_from_the_air() -> void:
+	assert_array(_drawn(BIND_THE_BROKEN_HEAT)).contains_exactly_in_any_order(["vital_air", "atom_fire"])
+	assert_array(_drawn(BIND_THE_AIRS_HEAT)).contains_exactly(["atom_fire"])
+	assert_array(_drawn("Break(F, A) + Push(F)")).contains_exactly(["vital_air"])
+	assert_array(_drawn("Break(F, F) + Bind(F, F)")).is_empty()
 
 
 # --- steps --------------------------------------------------------------------------------
@@ -452,6 +466,43 @@ func test_air_a_recipe_does_not_draw_moves_nothing() -> void:
 	var humid := _resolve(caster, carving, foe, _rich("vapor", 3))
 	assert_int(humid.base_damage).is_equal(normal.base_damage)
 	assert_int(humid.air_steps.size()).is_equal(0)
+
+
+# Flame bound from the air's own heat (#1333) is moved by the heat and nothing else: snow and ozone
+# lower heat where the caster stands, and vital air no longer moves it.
+func test_thin_heat_lowers_flame_bound_from_the_air_by_its_steps() -> void:
+	var carving := _carving(BIND_THE_AIRS_HEAT)
+	var caster := _alchemist(carving)
+	var foe := H.spawn_solo(self, _sm, ENEMY, FOE_CELL, { Stats.Stat.MHP: 60 })
+	var none: Dictionary[String, int] = {}
+	var normal := _resolve(caster, carving, foe, none)
+	var cold := _rich("atom_fire", -1)
+	var thin := _resolve(caster, carving, foe, cold)
+	assert_int(Atmosphere.steps_of("atom_fire", cold)).override_failure_message(
+			"fixture: the cold reading must sit below Normal heat").is_less(0)
+	assert_int(thin.base_damage - normal.base_damage).is_equal(Atmosphere.steps_of("atom_fire", cold))
+	assert_int(thin.air_steps.get("atom_fire", 0)).is_equal(Atmosphere.steps_of("atom_fire", cold))
+	var breathless := _resolve(caster, carving, foe, _rich("vital_air", 2))
+	assert_int(breathless.base_damage).is_equal(normal.base_damage)
+
+
+# The stronger form draws vital air and the air's heat both, so each moves it (#1333).
+func test_flame_from_broken_and_loose_heat_moves_by_both_substances() -> void:
+	var carving := _carving(BIND_THE_BROKEN_HEAT)
+	var caster := _alchemist(carving)
+	var foe := H.spawn_solo(self, _sm, ENEMY, FOE_CELL, { Stats.Stat.MHP: 60 })
+	var none: Dictionary[String, int] = {}
+	var normal := _resolve(caster, carving, foe, none)
+	var reading := _rich("vital_air", 2)
+	reading.merge(_rich("atom_fire", -1))
+	var moved := _resolve(caster, carving, foe, reading)
+	var vital := Atmosphere.steps_of("vital_air", reading)
+	var heat := Atmosphere.steps_of("atom_fire", reading)
+	assert_bool(vital != 0 and heat != 0 and vital + heat != 0).override_failure_message(
+			"fixture: the reading must move both substances, and not cancel").is_true()
+	assert_int(moved.base_damage - normal.base_damage).is_equal(vital + heat)
+	assert_int(moved.air_steps.get("vital_air", 0)).is_equal(vital)
+	assert_int(moved.air_steps.get("atom_fire", 0)).is_equal(heat)
 
 
 func test_a_damageless_carving_stays_at_zero_in_any_air() -> void:

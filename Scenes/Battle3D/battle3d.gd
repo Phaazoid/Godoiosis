@@ -889,9 +889,11 @@ func _board_volume() -> AABB:
 	# The bbox itself is BoardPicker's — it derives the same one to bound its walk, and
 	# two copies of "how big is this board" is exactly the seam Law #4 forbids (#231).
 	var rect := _board_rect
+	# max_top is a ROW, half a level tall since #427: read as world units, the box stood twice the
+	# board's height and the opening shot aimed above it (#1435).
 	return AABB(
 		Vector3(rect.position.x, 0.0, rect.position.y),
-		Vector3(rect.size.x, float(BoardPicker.max_top(_tops)), rect.size.y))
+		Vector3(rect.size.x, float(BoardPicker.max_top(_tops)) * BoardSpace.ROW_HEIGHT, rect.size.y))
 
 
 # What a bug report needs to know about the angle it was seen from (#240), pushed at

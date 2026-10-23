@@ -2,13 +2,13 @@
 
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_bs7q6"]
 [ext_resource type="Resource" uid="uid://cedpdcssc3i8a" path="res://Resources/TransmutationData/Zap Cannon.tres" id="2_f8pf0"]
-[ext_resource type="Resource" uid="uid://df4pvueay4oiy" path="res://Resources/TransmutationData/Fireball.tres" id="3_bs7q6"]
+[ext_resource type="Resource" uid="uid://dn3qgvwa0d7r3" path="res://Resources/TransmutationData/Greater Fireball.tres" id="3_f8pf0"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="5_h6ami"]
 
 [resource]
 script = ExtResource("5_h6ami")
 size = 2
-inscriptions = Array[ExtResource("1_bs7q6")]([ExtResource("2_f8pf0"), ExtResource("3_bs7q6")])
+inscriptions = Array[ExtResource("1_bs7q6")]([ExtResource("2_f8pf0"), ExtResource("3_f8pf0")])
 temper = 1
 display_name = "Lightning Tome"
 weight = 2

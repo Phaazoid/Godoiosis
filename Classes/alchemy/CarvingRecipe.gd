@@ -220,20 +220,28 @@ func fizzle_reason(available: Dictionary[String, int], catalog: Dictionary = {})
 	return ""
 
 
-# Which of `ambient` the recipe takes from the AIR: every need that is ambient and that no earlier
-# step made, once each. `Break(F, A) + Bind(Q, F)` draws vital air and aether; its heat comes from
-# its own Break. Fizzle_reason's walk, asking where a need came from rather than whether it is there.
+# Which of `ambient` the recipe takes from the AIR, once each: an ambient need a step names more times
+# than earlier steps made it. `Break(F, A) + Bind(Q, F)` draws vital air and aether, its one heat the
+# Break's; `Break(F, A) + Bind(F, F)` draws heat too, since the Bind binds two and the Break freed one
+# (#1333). Fizzle_reason's walk, asking where a need came from rather than whether it is there.
 # A need of more than one is never the air's: the air holds one, so a real source supplied it.
 func drawn_from(ambient: Array[String]) -> Array[String]:
-	var made: Array[String] = []
+	var made: Dictionary[String, int] = {}
 	var drawn: Array[String] = []
 	for step: Step in steps:
+		var wanted: Dictionary[String, int] = {}
 		for id: String in step.needs:
-			if step.amount == 1 and ambient.has(id) and not made.has(id) and not drawn.has(id):
+			wanted[id] = wanted.get(id, 0) + 1
+		for id: String in wanted:
+			if step.amount == 1 and ambient.has(id) and wanted[id] > made.get(id, 0) and not drawn.has(id):
 				drawn.append(id)
+		# One of each product; a Break frees one of each ARGUMENT (two heats from Break(F, F)).
 		for id: String in step.makes:
-			if not made.has(id):
-				made.append(id)
+			if step.verb != Flourish.Type.BREAK or not step.args.has(id):
+				made[id] = made.get(id, 0) + 1
+		if step.verb == Flourish.Type.BREAK:
+			for id: String in step.args:
+				made[id] = made.get(id, 0) + 1
 	return drawn
 
 
