@@ -259,7 +259,7 @@ func apply_unit_state(unit: Unit) -> void:
 			push_warning("Scenario load: could not grant '%s' — unmapped weapon family?" % inventory[i].display_name)
 			continue
 		if not unit.add_item(granted):
-			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].display_name)
+			push_warning("Scenario load: dropped '%s' — %s" % [inventory[i].display_name, unit.add_block_reason(granted)])
 	# add_item auto-equips the first equippable; the save's explicit choice wins either way.
 	# Direct assign, never the gated door (#157) — a save is authoritative, same as the armor
 	# slot below: re-gating would strip a rune off a unit whose aura drifted after saving.

@@ -210,7 +210,7 @@ func _seed_starting_kit(source: UnitData) -> void:
 			# variant .tres instead.
 			push_warning("%s: starting item '%s' is a base-class WeaponInstance for a subclassed family" % [get_unit_name(), granted.display_name])
 		if not add_item(granted):
-			push_warning("%s: inventory full — starting item '%s' dropped" % [get_unit_name(), authored.display_name])
+			push_warning("%s: starting item '%s' dropped — %s" % [get_unit_name(), authored.display_name, add_block_reason(granted)])
 			continue
 		slot_for_kit_index[i] = inventory.find(granted)
 
@@ -286,8 +286,8 @@ func add_block_reason(item: Item) -> String:
 	# the row tooltip all get the same sentence -- and it names the door that does work instead of only
 	# saying no.
 	#
-	# #812 owns the two seeding doors that never ask this at all: UnitData.starting_inventory and
-	# ScenarioUnitEntry.inventory are both Array[Item] and reach add_item directly.
+	# The two seeding doors, UnitData.starting_inventory and ScenarioUnitEntry.inventory, are both
+	# Array[Item] and reach it through add_item (#1412): an authored mod there is dropped with a warning.
 	if item is WeaponModData:
 		return "A mod is fitted to a weapon, not carried — open the weapon's spaces to fit it."
 	for slot: Item in inventory:
@@ -296,21 +296,19 @@ func add_block_reason(item: Item) -> String:
 	return "%s is carrying %d of %d." % [get_unit_name(), MAX_INVENTORY_SIZE, MAX_INVENTORY_SIZE]
 
 func add_item(item: Item) -> bool:
-	for i in range(inventory.size()):
-		if inventory[i] == null:
-			inventory[i] = item
+	# Derived, the shape remove_item has (#1412): it ran its own free-slot loop and took a loose mod.
+	if add_block_reason(item) != "":
+		return false
+	inventory[inventory.find(null)] = item
 
-			# Auto-equip the first WEAPON-shaped equippable only. ArmorData is an EquippableData
-			# too, but it fills a different slot -- auto-equipping it here would "arm" a unit with
-			# a vest and shadow the real weapon they pick up next. Armor is never auto-worn: the
-			# wear gate makes silent auto-wear ambiguous, so wearing is always an explicit act.
-			# Routed through the one gated door (#157): a dead rune lands carried, not equipped.
-			if equipped_weapon == null and item is EquippableData and not item is ArmorData:
-				set_equipped_weapon(item)
-
-			return true
-
-	return false
+	# Auto-equip the first WEAPON-shaped equippable only. ArmorData is an EquippableData too, but it
+	# fills a different slot -- auto-equipping it here would "arm" a unit with a vest and shadow the
+	# real weapon they pick up next. Armor is never auto-worn: the wear gate makes silent auto-wear
+	# ambiguous, so wearing is always an explicit act. Routed through the one gated door (#157): a
+	# dead rune lands carried, not equipped.
+	if equipped_weapon == null and item is EquippableData and not item is ArmorData:
+		set_equipped_weapon(item)
+	return true
 
 func get_map_sprite_texture() -> Texture2D:
 	if map_sprite == null:

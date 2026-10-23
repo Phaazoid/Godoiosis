@@ -22,7 +22,7 @@ class_name WeaponModData
 #
 # A unit may not CARRY one (dev, 2026-09-06: "Maybe later down the line they are lootable on the
 # battlefield, but for now, eh") -- Unit.add_block_reason is where that refusal lives, so every
-# surface gets it from one place. #812 owns the two seeding doors that never ask it.
+# surface gets it from one place, the two seeding doors included through add_item (#1412).
 
 
 @export var id: String = ""
