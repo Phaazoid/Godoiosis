@@ -405,11 +405,9 @@ func _on_job_toggled(id: String, pressed: bool) -> void:
 	else:
 		current.starting_jobs.erase(id)
 
-# The Unit Editor's weapons+armor+runes merge, CALLED rather than copied (Law #4) -- one answer
-# to "what can a dev put in a hand".
+# The Unit Editor's list, from the same one answer to "what can a dev put in a hand" (Law #4).
 func _item_catalog() -> Dictionary:
-	var unit_editor: UnitEditorTool = get_node("%Unit Editor")
-	return unit_editor._item_catalog()
+	return ItemCatalog.by_name()
 
 # The kit: what the character carries into any board, seeded through the gated doors at spawn
 # (#177). Slot picks stage the catalog FILE resource itself -- no copy -- so a save writes an
