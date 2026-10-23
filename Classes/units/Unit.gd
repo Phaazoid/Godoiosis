@@ -1514,11 +1514,11 @@ func has_any_fireable_attack() -> bool:
 			return true
 	return false
 	
-# Can the ATTACK entry offer anything? It gates on the ONE default attack, which the action ring
-# then lists by its own name (#467 — there is no generic "Attack" row any more). Deliberately NOT
-# get_fired_attack(): that returns a live active_attack, i.e. an aiming cursor left over from a
-# previous aim, so the gate would judge the entry by an attack it will never fire (#102).
-# A weapon with NO main attack (the #80 data-rot shape) fires nothing, so the entry closes:
+# Can this unit fire its ONE default attack right now? No longer the action ring's gate (#1409: the
+# ATTACK expander opens on HAVING a main, and an unfireable one lists greyed); no production code
+# asks it, only test fixtures and the readiness suites. Deliberately NOT get_fired_attack(): that
+# returns a live active_attack, an aiming cursor left over from a previous aim (#102).
+# A weapon with NO main attack (the #80 data-rot shape) fires nothing, so this answers false:
 # is_attack_fireable(null) answers true (null isn't a WeaponAttackData), which is the right
 # answer to "is this gated?" and the wrong one to "is there anything here?".
 func can_fire_default_attack() -> bool:
