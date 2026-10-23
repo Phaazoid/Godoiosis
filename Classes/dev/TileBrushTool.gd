@@ -128,6 +128,10 @@ var tile_dropdown: OptionButton
 var _tile_row: HBoxContainer
 var _undo_button: Button
 var _redo_button: Button
+var _undo_refusal := ""   # the gate's reason the row last drew; "" while it lets the history move
+
+const UNDO_TIP := "Undo the last board edit — a whole drag, not one cell (Ctrl+Z)"
+const REDO_TIP := "Redo the edit you just undid (Ctrl+Shift+Z or Ctrl+Y)"
 
 func _ready():
 	_build_extra_controls()
@@ -157,19 +161,33 @@ func _on_redo_pressed() -> void:
 	if game != null:
 		game.dev_controller.redo_board()
 
+# The history half of the row is pushed (history_changed); the dev-mode gate's half is polled,
+# because game_state announces nothing. Only a flip redraws.
+func _process(_delta: float) -> void:
+	if game == null or not is_visible_in_tree():
+		return
+	var controller: DevController = game.dev_controller
+	if controller.history_block_reason() != _undo_refusal:
+		_refresh_undo_row()
+
 # Greyed rather than hidden: a row that vanishes at the bottom of the history moves every control
-# under it. Built before init() runs, so this has to answer with no game ref too.
+# under it. Built before init() runs, so this has to answer with no game ref too. Greyed by the gate
+# too (#1432), with the gate's reason as the tooltip.
 func _refresh_undo_row() -> void:
 	if _undo_button == null:
 		return
 	var can_undo := false
 	var can_redo := false
+	_undo_refusal = ""
 	if game != null:
-		var history: BoardHistory = game.dev_controller.history   # typed: game is untyped
-		can_undo = history.can_undo()
-		can_redo = history.can_redo()
+		var controller: DevController = game.dev_controller   # typed: game is untyped
+		_undo_refusal = controller.history_block_reason()
+		can_undo = _undo_refusal == "" and controller.history.can_undo()
+		can_redo = _undo_refusal == "" and controller.history.can_redo()
 	_undo_button.disabled = not can_undo
 	_redo_button.disabled = not can_redo
+	_undo_button.tooltip_text = _undo_refusal if _undo_refusal != "" else UNDO_TIP
+	_redo_button.tooltip_text = _undo_refusal if _undo_refusal != "" else REDO_TIP
 
 func _populate_tile_dropdown() -> void:
 	tile_dropdown.clear()
@@ -282,12 +300,12 @@ func _build_extra_controls() -> void:
 	var undo_row := HBoxContainer.new()
 	_undo_button = Button.new()
 	_undo_button.text = "Undo"
-	_undo_button.tooltip_text = "Undo the last board edit — a whole drag, not one cell (Ctrl+Z)"
+	_undo_button.tooltip_text = UNDO_TIP
 	_undo_button.pressed.connect(_on_undo_pressed)
 	undo_row.add_child(_undo_button)
 	_redo_button = Button.new()
 	_redo_button.text = "Redo"
-	_redo_button.tooltip_text = "Redo the edit you just undid (Ctrl+Shift+Z or Ctrl+Y)"
+	_redo_button.tooltip_text = REDO_TIP
 	_redo_button.pressed.connect(_on_redo_pressed)
 	undo_row.add_child(_redo_button)
 	add_child(undo_row)

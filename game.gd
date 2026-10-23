@@ -1893,15 +1893,14 @@ func spawn_sandbox() -> void:
 # has to know before it has a unit to build -- and a hand-rolled copy of it there would be a second
 # answer to a question this one has already had three of (#109).
 #
-# Three clauses, in the order spawn_unit has always asked them and BoardLint._check_placement
-# borrows: off the map, nothing may stand there, someone already does. The middle one is
-# BoardContext.is_walkable, the ONE walkability answer (#109) -- the inline `walkable` custom-data
-# read it replaced could not see tile state, so dev-mode refused a FROZEN water tile that movement,
-# pathing and knockback all treat as solid ground. Occupancy stays SEPARATE from that: is_walkable
-# answers "may a unit stand here", never "is someone already standing here".
+# Three clauses, in the order spawn_unit has always asked them (RulesService.spawn_block_reason,
+# which BoardLint._check_placement asks too): off the map, nothing may stand there, someone already
+# does. The middle one is BoardContext.is_walkable, the ONE walkability answer (#109) -- the inline
+# `walkable` custom-data read it replaced could not see tile state, so dev-mode refused a FROZEN water
+# tile that movement, pathing and knockback all treat as solid ground. Occupancy stays SEPARATE from
+# that: is_walkable answers "may a unit stand here", never "is someone already standing here".
 #
 # `is_body` is the #116 exception: a drowning unit legitimately lies where nothing may stand.
-#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
 func can_spawn_at(pos: Vector2i, is_body := false) -> bool:
 	return RulesService.can_spawn_at(_board(), pos, is_body)   # one rule for both hosts (#46)
 

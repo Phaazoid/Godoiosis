@@ -10,12 +10,13 @@ class_name BoardLint
 # existed they were found by PLAYING the mission and noticing something wrong.
 #
 # This class BORROWS every rule it can rather than restating one -- objectives_missing_geometry,
-# spawn_unit's walkability pair, SquadManager.contact_breaks, LookKnobs.saved_presets -- so a rule
-# change lands here for free and the lint can never drift from the behaviour it warns about. The one
-# rule that LIVES here is the ai_factions check, which moved out of
-# tests/flow/test_scenario_load_integrity.gd the moment this file gave it a second reader. Note its
-# SCOPE stayed at the caller rather than moving with it: the test only ever asked it of boards under
-# missions/, and the button asks it of whatever is in your hands.
+# RulesService.spawn_block_reason, SquadManager.contact_breaks, LookKnobs.saved_presets -- so a rule
+# change lands here for free and the lint can never drift from the behaviour it warns about. The
+# rules that LIVE here are the ones nothing else asks: the ai_factions check (moved out of
+# tests/flow/test_scenario_load_integrity.gd the moment this file gave it a second reader), the
+# deployment pair, and the dialog and tutorial-name checks. RULES below lists every finding. Note the
+# ai_factions SCOPE stayed at the caller rather than moving with it: the test only ever asked it of
+# boards under missions/, and the button asks it of whatever is in your hands.
 #
 # It reads the LIVE BOARD, not a saved file, and for the placement check that is load-bearing:
 # apply_scenario DROPS a unit whose cell spawn refuses, so a board that has been through a load has
@@ -34,17 +35,71 @@ class_name BoardLint
 # and gates no play, unlike AttackLint's, so the tier is a VOLUME control plus that CI gate.
 enum Severity { BLOCKS, DEGRADES }
 
+# Every kind of finding this lint can file, in the order check() runs them.
+enum Rule {
+	OBJECTIVE_UNPAINTED, LOSE_CONDITION_UNSET, ENEMY_NOT_AI, PLACEMENT, COHESION, FITTING,
+	LOOK_PRESET_MISSING, ROSTER_MISSING, AI_PROFILE_MISSING, DEPLOYMENT_UNPAINTED, DEPLOYMENT_CAP,
+	BRIEFING_UNREACHABLE, BEAT_NO_TIMELINE, BEAT_EMPTY_TIMELINE, TUTORIAL_NAME, REPAIRED_CONTENT,
+}
 
-# One row per fault: {"severity": Severity, "text": String}. Empty means nothing found -- which is
-# a RESULT, and the panel says so out loud.
-static func check(game) -> Array[Dictionary]:
+# Each rule's tier and what it names, the ONE statement of both (#1432): _add files a finding at its
+# rule's tier, and the Check board tooltip is built from this table, so neither can drift from it.
+const RULES := {
+	Rule.OBJECTIVE_UNPAINTED: {"severity": Severity.BLOCKS,
+		"names": "an objective with no zone painted for it"},
+	Rule.LOSE_CONDITION_UNSET: {"severity": Severity.BLOCKS,
+		"names": "a lose condition with nothing set for it (lost at once)"},
+	Rule.ENEMY_NOT_AI: {"severity": Severity.DEGRADES,
+		"names": "ENEMY units the computer is not playing (you play both sides)"},
+	Rule.PLACEMENT: {"severity": Severity.BLOCKS,
+		"names": "a unit standing where spawn would refuse it (dropped on the next load)"},
+	Rule.COHESION: {"severity": Severity.DEGRADES,
+		"names": "a squadmate out of its leader's cohesion range (ejected the first time that squad acts)"},
+	Rule.FITTING: {"severity": Severity.DEGRADES,
+		"names": "a carried weapon wearing a mod it would refuse today"},
+	Rule.LOOK_PRESET_MISSING: {"severity": Severity.DEGRADES,
+		"names": "a look preset that no longer exists"},
+	Rule.ROSTER_MISSING: {"severity": Severity.BLOCKS,
+		"names": "a roster that no longer exists"},
+	Rule.AI_PROFILE_MISSING: {"severity": Severity.BLOCKS,
+		"names": "a unit naming an AI profile that no longer exists"},
+	Rule.DEPLOYMENT_UNPAINTED: {"severity": Severity.BLOCKS,
+		"names": "a roster with no Deployment zone painted"},
+	Rule.DEPLOYMENT_CAP: {"severity": Severity.DEGRADES,
+		"names": "a deployment cap larger than the Deployment zone"},
+	Rule.BRIEFING_UNREACHABLE: {"severity": Severity.DEGRADES,
+		"names": "a briefing on a board that opens no pre-mission screen"},
+	Rule.BEAT_NO_TIMELINE: {"severity": Severity.DEGRADES,
+		"names": "a dialog beat with no timeline"},
+	Rule.BEAT_EMPTY_TIMELINE: {"severity": Severity.DEGRADES,
+		"names": "a dialog beat whose timeline has no lines"},
+	Rule.TUTORIAL_NAME: {"severity": Severity.BLOCKS,
+		"names": "a tutorial step naming a unit that is not on the board"},
+	Rule.REPAIRED_CONTENT: {"severity": Severity.DEGRADES,
+		"names": "content that loaded only because a missing file was cut out of it"},
+}
+
+
+# What each rule at this tier names, in RULES order -- what the Check board tooltip lists.
+static func names_at(severity: Severity) -> Array[String]:
+	var names: Array[String] = []
+	for rule: Rule in RULES:
+		if RULES[rule]["severity"] == severity:
+			names.append(String(RULES[rule]["names"]))
+	return names
+
+
+# One row per fault: {"rule": Rule, "severity": Severity, "text": String}. Empty means nothing
+# found -- which is a RESULT, and the panel says so out loud. `authored` is the save mode the next
+# save will use (ScenarioHeader's Authored box), since what a load makes of a unit depends on it.
+static func check(game, authored := true) -> Array[Dictionary]:
 	var board: BoardContext = game._board()
 	var found: Array[Dictionary] = []
 
 	_check_objectives(game, found)
 	_check_lose_conditions(game, found)
 	_check_ai_factions(game, board, found)
-	_check_placement(game, board, found)
+	_check_placement(game, board, found, authored)
 	_check_cohesion(game, found)
 	_check_fittings(board, found)
 	_check_look_preset(game, found)
@@ -78,12 +133,12 @@ static func _check_repaired_content(found: Array[Dictionary]) -> void:
 		var missing := ContentRepair.missing_targets(path)
 		if lost.is_empty() and missing.is_empty():
 			continue
-		_add(found, Severity.DEGRADES,
+		_add(found, Rule.REPAIRED_CONTENT,
 			"%s loaded WITHOUT %s -- %s could not be found. Saving it now writes that loss into the file."
 			% [path.get_file(), ", ".join(lost), ", ".join(missing)])
 
-static func _add(found: Array[Dictionary], severity: Severity, text: String) -> void:
-	found.append({"severity": severity, "text": text})
+static func _add(found: Array[Dictionary], rule: Rule, text: String) -> void:
+	found.append({"rule": rule, "severity": RULES[rule]["severity"], "text": text})
 
 
 # A declared objective with nothing painted for it reads PENDING forever. MissionController owns
@@ -92,7 +147,7 @@ static func _add(found: Array[Dictionary], severity: Severity, text: String) -> 
 static func _check_objectives(game, found: Array[Dictionary]) -> void:
 	var mission: MissionController = game.mission_controller
 	for objective: MissionRules.Objective in mission.objectives_missing_geometry():
-		_add(found, Severity.BLOCKS,
+		_add(found, Rule.OBJECTIVE_UNPAINTED,
 			"Objective %s is declared but no matching zone is painted -- this mission cannot be won."
 				% MissionRules.Objective.keys()[objective])
 
@@ -103,12 +158,12 @@ static func _check_objectives(game, found: Array[Dictionary]) -> void:
 static func _check_lose_conditions(game, found: Array[Dictionary]) -> void:
 	var mission: MissionController = game.mission_controller
 	for condition: MissionRules.LoseCondition in mission.lose_conditions_missing_setup():
-		_add(found, Severity.BLOCKS,
+		_add(found, Rule.LOSE_CONDITION_UNSET,
 			"Lose condition %s is declared but nothing is set for it -- this mission would be lost immediately."
 				% MissionRules.LoseCondition.keys()[condition])
 
 
-# #150, and the one rule this file owns. Commanding is gated on faction == active faction, so a
+# #150, the first rule this file owned. Commanding is gated on faction == active faction, so a
 # board that doesn't hand ENEMY to the computer doesn't stall on the enemy turn -- you play both
 # sides. Scoped to ENEMY exactly as the test that used to hold this was: NEUTRAL and ALLY AI
 # stances are still undecided, so there is nothing to be wrong about yet.
@@ -130,39 +185,37 @@ static func _check_ai_factions(game, board: BoardContext, found: Array[Dictionar
 	var ai_controller: AIController = game.ai_controller
 	if ai_controller.ai_factions().has(Team.Faction.ENEMY):
 		return
-	_add(found, Severity.DEGRADES,
+	_add(found, Rule.ENEMY_NOT_AI,
 		("%d ENEMY unit%s on this board, but ENEMY is not computer-controlled -- you will play "
 			+ "both sides. Deliberate on a hotseat or test board; if it isn't, tick it on "
 			+ "Scenario > Squads & AI.")
 			% [enemies, "" if enemies == 1 else "s"])
 
 
-# A unit standing where spawn would refuse it. Only reachable by painting terrain UNDER a unit that
-# is already there (or erasing the tile), because spawn_unit guards both halves at placement time --
-# which is also why this can only be caught while authoring: the next load simply drops the unit.
+# A unit standing where spawn would refuse it. Reachable by painting terrain UNDER a unit that is
+# already there (or erasing the tile), or by a unit going down where nothing may stand, because
+# spawn_unit guards placement itself -- which is also why this can only be caught while authoring:
+# the next load simply drops the unit.
 #
-# Asked in spawn_unit's own order (off the map first, then walkability), through the same two calls,
-# so dev placement and this warning cannot disagree about which cells are legal.
-static func _check_placement(game, board: BoardContext, found: Array[Dictionary]) -> void:
-	var grid: BoardGrid = game.grid
+# Asked the way the loader asks it (#1432): spawn's own rule, against the board as the loader sees it
+# when this unit's turn comes (only the units placed before it), with the body exemption read off the
+# entry the next save writes. A downed cast unit saved by REFERENCE comes back standing, so its
+# exemption is gone -- unit.is_downed() would have kept it, and stayed silent about the drop.
+static func _check_placement(game, board: BoardContext, found: Array[Dictionary], authored: bool) -> void:
+	var scenario_manager: ScenarioManager = game.scenario_manager
+	var placed: Array[Unit] = []
 	for unit: Unit in board.units:
 		if not is_instance_valid(unit):
 			continue
 		var cell: Vector2i = unit.movement.cell
-		var reason := ""
-		if grid.get_cell_tile_data(cell) == null:
-			reason = "off the map"
-		elif not board.is_walkable(cell) and not unit.is_downed():
-			# A BODY is exempt (#116), the same exception spawn_unit takes: is_walkable answers "may
-			# a unit STAND here", and a drowning unit legitimately lies where nothing stands. Asked
-			# through is_downed rather than a saved flag so the button reads the LIVE board, which is
-			# this check's whole reason for existing.
-			reason = "a cell nothing may stand on"
+		var is_body := scenario_manager.capture_entry(unit, authored).spawns_as_body()
+		var reason := RulesService.spawn_block_reason(board.with_units(placed), cell, is_body)
 		if reason == "":
+			placed.append(unit)
 			continue
 
-		var text := "%s stands %s at %s -- this unit is DROPPED every time the board loads." % [
-			unit.get_unit_name(), reason, cell]
+		var text := "%s at %s: %s It is DROPPED every time the board loads." % [
+			unit.get_unit_name(), cell, reason]
 		# The leaderless-squad case, which has no separate check because it has no separate cause:
 		# apply_scenario's "saved without a leader -> leave them as solos" branch is reachable ONLY
 		# through a dropped leader, so it is this finding wearing its full consequence rather than
@@ -172,7 +225,7 @@ static func _check_placement(game, board: BoardContext, found: Array[Dictionary]
 			var others: int = unit.squad.members.size() - 1
 			text += " It leads %s, whose other %d member%s become solos when it goes." % [
 				squad_label, others, "" if others == 1 else "s"]
-		_add(found, Severity.BLOCKS, text)
+		_add(found, Rule.PLACEMENT, text)
 
 
 # A member the leader cannot reach within COH. apply_scenario's join_squad is ungated so the board
@@ -183,7 +236,7 @@ static func _check_cohesion(game, found: Array[Dictionary]) -> void:
 	var squad_manager: SquadManager = game.squad_manager
 	for member: Unit in squad_manager.contact_breaks():
 		var leader: Unit = member.squad.leader
-		_add(found, Severity.DEGRADES,
+		_add(found, Rule.COHESION,
 			("%s cannot reach %s over terrain it can cross -- it is ejected into a solo squad the "
 				+ "first time that squad acts.") % [member.get_unit_name(), leader.get_unit_name()])
 
@@ -206,7 +259,7 @@ static func _check_fittings(board: BoardContext, found: Array[Dictionary]) -> vo
 			if weapon == null:
 				continue
 			for finding: Dictionary in WeaponInstanceLint.check(weapon):
-				_add(found, Severity.DEGRADES, "%s's %s: %s" % [
+				_add(found, Rule.FITTING, "%s's %s: %s" % [
 					unit.get_unit_name(), weapon.shown_name(), finding["text"]])
 
 
@@ -219,7 +272,7 @@ static func _check_look_preset(game, found: Array[Dictionary]) -> void:
 	var preset: String = scenario_manager.current_look_preset
 	if preset == "" or LookKnobs.saved_presets().has(preset):
 		return
-	_add(found, Severity.DEGRADES,
+	_add(found, Rule.LOOK_PRESET_MISSING,
 		"This board names look preset '%s', which no longer exists -- it opens with the default look."
 			% preset)
 
@@ -238,7 +291,7 @@ static func _check_roster(game, found: Array[Dictionary]) -> void:
 	var roster: String = scenario_manager.current_roster
 	if roster == "" or RosterCatalog.saved_rosters().has(roster):
 		return
-	_add(found, Severity.BLOCKS,
+	_add(found, Rule.ROSTER_MISSING,
 		("This board names roster '%s', which does not exist -- the pre-mission phase has no units "
 		+ "to offer.") % roster)
 
@@ -252,7 +305,7 @@ static func _check_ai_profiles(board: BoardContext, found: Array[Dictionary]) ->
 	for unit in board.units:
 		if not is_instance_valid(unit) or unit.ai_profile == "" or known.has(unit.ai_profile):
 			continue
-		_add(found, Severity.BLOCKS,
+		_add(found, Rule.AI_PROFILE_MISSING,
 			"%s names AI profile '%s', which does not exist -- it would play Hard."
 				% [unit.get_unit_name(), unit.ai_profile])
 
@@ -290,14 +343,14 @@ static func _check_deployment(game, found: Array[Dictionary]) -> void:
 	# and a cap compared against a double-counted total is a cap compared against nothing.
 	var cells: Array[Vector2i] = zones.cells_of_kind(ZoneManager.Kind.DEPLOYMENT)
 	if cells.is_empty():
-		_add(found, Severity.BLOCKS,
+		_add(found, Rule.DEPLOYMENT_UNPAINTED,
 			("This board offers roster '%s' but paints no Deployment zone -- nobody deploys, so if "
 			+ "the roster IS this mission's force it opens with nothing to command. Paint one on "
 			+ "the Tile Brush tab.") % scenario_manager.current_roster)
 		return
 	var cap: int = scenario_manager.current_deployment_cap
 	if cap > 0 and cap > cells.size():
-		_add(found, Severity.DEGRADES,
+		_add(found, Rule.DEPLOYMENT_CAP,
 			("This board lets %d units deploy into a zone of %d cells -- only %d of them can "
 			+ "actually stand there.") % [cap, cells.size(), cells.size()])
 
@@ -314,12 +367,12 @@ static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -
 	var no_phase := scenario_manager.current_roster == "" or not scenario_manager.current_offers_pre_mission
 	for beat: DialogBeat in scenario_manager.current_dialog_beats:
 		if no_phase and beat.trigger == DialogBeat.Trigger.PRE_MISSION_START:
-			_add(found, Severity.DEGRADES,
+			_add(found, Rule.BRIEFING_UNREACHABLE,
 				"A briefing (PRE_MISSION_START) is authored, but this board opens no pre-mission screen "
 					+ "(no roster, or the Pre-mission screen box is unticked) -- it never plays.")
 	for beat: DialogBeat in scenario_manager.current_dialog_beats:
 		if beat.timeline == null:
-			_add(found, Severity.DEGRADES,
+			_add(found, Rule.BEAT_NO_TIMELINE,
 				"A dialog beat (%s) has no timeline -- it fires into nothing."
 					% DialogBeat.Trigger.keys()[beat.trigger])
 			continue
@@ -333,7 +386,7 @@ static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -
 		var read := DialogicSource.read_timeline(beat.timeline)
 		var lines: Array = read["lines"]
 		if bool(read["editable"]) and lines.is_empty():
-			_add(found, Severity.DEGRADES,
+			_add(found, Rule.BEAT_EMPTY_TIMELINE,
 				"A dialog beat (%s) plays a timeline with no lines in it."
 					% DialogBeat.Trigger.keys()[beat.trigger])
 
@@ -349,6 +402,6 @@ static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -
 			names[unit.unit_data.display_name] = true
 	for step: TutorialStep in game.scenario_manager.current_tutorial_steps:
 		if step.unit_name != "" and not names.has(step.unit_name):
-			_add(found, Severity.BLOCKS,
+			_add(found, Rule.TUTORIAL_NAME,
 				("A tutorial step names '%s', but no unit on this board carries that name -- "
 					+ "the step can never complete and the lesson stalls there.") % step.unit_name)

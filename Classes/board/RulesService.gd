@@ -14,11 +14,28 @@ const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, 
 # May a unit be PLACED here? spawn_unit's gate, and the pre-mission phase's on both hosts (#46):
 # on the map, somewhere a unit may stand (unless it is a body, #116), and nobody already there.
 static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) -> bool:
+	return spawn_block_reason(board, cell, is_body) == ""
+
+# WHY can_spawn_at refuses -- "" means it does not. Its own function so BoardLint can say which
+# clause a unit fails without re-asking any of them (#1432).
+#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
+static func spawn_block_reason(board: BoardContext, cell: Vector2i, is_body := false) -> String:
 	if board.grid.get_cell_tile_data(cell) == null:
-		return false
+		return "That cell is off the map."
 	if not is_body and not board.is_walkable(cell):
-		return false
-	return board.unit_at_cell(cell) == null
+		return "Nothing may stand on that cell."
+	if board.unit_at_cell(cell) != null:
+		return "Another unit already stands there."
+	return ""
+
+# May a unit be placed here WHILE A PLAN IS QUEUED (#1432)? can_spawn_at, and no queued plan ends a
+# unit here either: the cell is taken if someone stands on it now OR will once the plan runs. The dev
+# tools place mid-battle, and both halves are real there -- a unit dropped on a queued destination
+# breaks that move, and one dropped on the cell its unit plans to leave blocks it. A load or a
+# deployment has no plan, so there this is can_spawn_at exactly. The dev cursor and every dev
+# placement ask it, so the cursor cannot promise a cell the click refuses.
+static func can_place_at(board: BoardContext, cell: Vector2i) -> bool:
+	return can_spawn_at(board, cell) and board.projected_unit_at_cell(cell) == null
 
 # WHY this unit may not act at all -- "" means it is standing. Downed and dead units can't be
 # commanded (will-and-death.md). Its own question because the order chokepoint asks it without the
