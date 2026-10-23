@@ -3577,8 +3577,8 @@ collide with validity on any row that is both elemental and broken. The allocati
 ### What the row reads, and why two facts became recorded rather than derived
 
 - **`ResolvedOutcome.elements`** — the *surviving* elements, stamped where `_surviving_elements`
-  already computes them. Recorded rather than derived because `PlanResolver._source_elements` is
-  private and answers the **pre**-insulation question: a rail read off the authored attack would
+  already computes them. Recorded rather than derived because `PlanResolver.source_elements`
+  answers the **pre**-insulation question: a rail read off the authored attack would
   claim a fire hit the target shrugged off. An insulated hit therefore honestly wears no rail.
 - **`ResolvedOutcome.fired_reactions`** replaced `reaction_icons: Array[Texture2D]` (Law #4). The
   row needs three facts per reaction — its authored word, its art, and the element that triggered

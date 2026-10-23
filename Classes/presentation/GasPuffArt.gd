@@ -43,14 +43,6 @@ static func icon(kind: Gas.Kind) -> Texture2D:
 	return _icons_by_kind[kind]
 
 
-static func layer_of_puff(kind: Gas.Kind, size: int, variant: int) -> int:
-	return int(kind) * STRIDE + size * 3 + variant
-
-
-static func layer_of_extra(kind: Gas.Kind, frame: int) -> int:
-	return int(kind) * STRIDE + EXTRA_BASE + frame
-
-
 static func build() -> Texture2DArray:
 	var layers: Array[Image] = []
 	for kind: Gas.Kind in Gas.Kind.values():
