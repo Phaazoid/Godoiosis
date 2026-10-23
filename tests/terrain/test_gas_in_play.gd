@@ -172,6 +172,51 @@ func test_a_spreading_fire_gives_off_the_smoke_the_outline_foretold() -> void:
 			"the round left gas the outline never drew").is_equal(expected.size())
 
 
+# #1430: a tile a QUEUED hit lights spreads in Alt's outline (game.next_round_board, the previewed
+# plan's deposits folded) -- every cell the fire takes next round gives off its ground's gases there, as
+# for a tile already burning -- and the round then plays exactly the outline.
+func test_a_queued_hit_that_lights_grass_outlines_the_smoke_its_fire_spreads() -> void:
+	var hero := _spawn(PLAYER, Vector2i(1, 1))
+	var target := Vector2i(3, 2)
+	var attack: AttackData = (hero.get_equipped_weapon() as WeaponInstance).template.main_attack
+	attack.elemental_damage_type = Elemental.Element.FIRE
+	attack.targets = EquippableData.TargetMode.MAP
+	attack.max_range = 3
+	attack.deals_no_damage = true
+	game.squad_manager.active_squad = hero.squad
+	var action := AttackAction.declare(hero, hero.movement.cell, target)
+	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
+			"fixture: the fire swing never queued (%s)" % [", ".join(action.validation_errors)]).is_true()
+	game.refresh_action_queue(hero.squad)
+	var board: BoardContext = game.next_round_board()
+	assert_bool(board.has_tile_state(target, Terrain.TileState.BURNING)).override_failure_message(
+			"fixture: the previewed plan does not light the grass").is_true()
+	var live_takes: Array[Vector2i] = game.terrain_states.cells_fire_takes()
+	assert_bool(live_takes.is_empty()).override_failure_message("fixture: something already burns").is_true()
+	var taken: Array[Vector2i] = game.terrain_states.cells_fire_takes(board.deposits)
+	assert_bool(taken.is_empty()).override_failure_message("fixture: the lit grass spreads nowhere").is_false()
+	var fuel: TerrainReaction = game.terrain_states.fuel_at(target)
+	assert_bool(fuel != null and not Gas.released(fuel.gases).is_empty()).override_failure_message(
+			"fixture: this grass gives off nothing when it catches").is_true()
+
+	var field: GasField = game.gas_field
+	var expected := field.next_round(board)
+	for cell: Vector2i in taken:
+		for kind: Gas.Kind in Gas.released(fuel.gases):
+			assert_int(Gas.level_in(expected.get(cell, 0), kind)).override_failure_message(
+					"the outline gives %s none of the gas the fire it takes will give off" % [cell]) \
+				.is_greater_equal(fuel.gases[kind])
+
+	await game.order_executor.execute_orders(hero)
+	await game.end_turn()
+	await await_idle_frame()
+	for cell: Vector2i in expected:
+		assert_int(field.packed_at(cell)).override_failure_message(
+				"the round left %s other than the outline drew it" % [cell]).is_equal(expected[cell])
+	assert_int(field.cells().size()).override_failure_message(
+			"the round left gas the outline never drew").is_equal(expected.size())
+
+
 # #1335 through the real path: a shock swing on a soaked foe arcs into the soaked foe beside it, and
 # the plan the queue previews leaves ozone on BOTH cells -- the second only because the current ran
 # there (AttackAction.arc_links, stamped by the real volley builder), never re-derived.

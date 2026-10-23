@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05; #1251 (a tint brighter than the art reaches the 3D sprite) folded in 2026-10-07; #654 (the water basin experiment) folded in 2026-10-08; #1260's weather folded in 2026-10-08; #1269's snow and the weather's own grade folded in 2026-10-09; #1278's readable snow ground, buried tufts and the two snow bugs folded in the same day, and its ice-blue unit caps after it; #1285's fog folded in 2026-10-09, and its re-tuned ladder (the old Mist is now Thick Fog) and its never-climbing cards, slow sink off a ledge and edge dissolve the same day; #1286's wind folded in 2026-10-10; #654's submerged bank folded in 2026-10-10, and #654's basin and bank promoted out of Experiments the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10; #1304's held camera-following emitters folded in 2026-10-10; #1305's flake ceiling folded in 2026-10-11; Deep Alchemy Phase 2 folded in 2026-10-11; #1363's gas, shock and landing dust on the drawn water folded in 2026-10-22; #1335's smoke folded in 2026-10-22, its ozone the same day; #1332's blown gas and the outline's folded deposits the same day.**
+**Canon checked through #1024 (2026-09-18); #508's gas look and #1184's dev search folded in 2026-10-01; #508's gas mixes folded in 2026-10-02; #508's gas preview ghost, levels and next-round outline folded in 2026-10-03; #46 (the deposit walk is ResolvedPlan.pending_deposits) folded in 2026-10-05; #1251 (a tint brighter than the art reaches the 3D sprite) folded in 2026-10-07; #654 (the water basin experiment) folded in 2026-10-08; #1260's weather folded in 2026-10-08; #1269's snow and the weather's own grade folded in 2026-10-09; #1278's readable snow ground, buried tufts and the two snow bugs folded in the same day, and its ice-blue unit caps after it; #1285's fog folded in 2026-10-09, and its re-tuned ladder (the old Mist is now Thick Fog) and its never-climbing cards, slow sink off a ledge and edge dissolve the same day; #1286's wind folded in 2026-10-10; #654's submerged bank folded in 2026-10-10, and #654's basin and bank promoted out of Experiments the same day; #1298's auroras folded in 2026-10-10; #1302's sands and ashes folded in 2026-10-10; #1304's held camera-following emitters folded in 2026-10-10; #1305's flake ceiling folded in 2026-10-11; Deep Alchemy Phase 2 folded in 2026-10-11; #1363's gas, shock and landing dust on the drawn water folded in 2026-10-22; #1335's smoke folded in 2026-10-22, its ozone the same day; #1332's blown gas and the outline's folded deposits the same day; #1430's queued-fire outline and round-split tether folded in 2026-10-23.**
 
 ---
 
@@ -1326,9 +1326,17 @@ ran through, ghosted before Execute with the kind's puff like any deposit. A fir
 deep-alchemy.md -> *What is built*). No new art: a push is a cleared tile plus an ordinary deposit, so
 the board ghosts the Air icon on the tile the gas leaves and the gas's own puff on the tile it lands on,
 both through `pending_deposits`. The outline now folds the previewed plan's deposits
-(`battle3d._gas_outline_board`), so holding Alt with a push queued shows next round spreading from the
-landing tile, and the same is true of every queued deposit. *Declared:* the gas JUMPS to its new tile
-when the deposits land, as a cleared cell vanishes; a drift along the line of the cast is a follow-up.
+(`game.next_round_board`, battle3d's `_gas_outline_board` until #1430 moved it), so holding Alt with a
+push queued shows next round spreading from the landing tile, and the same is true of every queued
+deposit. *Declared:* the gas JUMPS to its new tile when the deposits land, as a cleared cell vanishes; a
+drift along the line of the cast is a follow-up.
+
+**A queued fire spreads in the outline, and the round's smoke split turns a tether red** (#1430,
+2026-10-23; the rules are deep-alchemy.md -> *What is built*). No new art. With a Fireball queued onto
+grass, Alt now outlines thick smoke on every tile that fire will take at the round, as it does for a tile
+already burning. A member whose leader next round's smoke will blind past reach wears the STRAIN red a
+stranding move draws (dev, 2026-10-23: the same red), on hover, selection, both move modes and aim, for
+either side.
 
 ### Weather: rain and the storm ([#1260](https://github.com/Phaazoid/Godoiosis/issues/1260), BUILT 2026-10-08)
 

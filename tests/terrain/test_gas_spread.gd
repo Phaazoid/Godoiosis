@@ -225,6 +225,52 @@ func test_a_cell_fire_takes_gives_off_its_grounds_gases_and_the_fire_itself_noth
 	assert_int(next.size()).is_equal(taken.size())
 
 
+# #1430: the board's DEPOSITS are where the fire spreads from -- what Alt's outline hands it, the
+# previewed plan's. A tile a queued hit lights spreads (and gives off) as if alight already; the live
+# store, which the round reads, still takes nothing.
+func test_a_tile_a_deposit_lights_spreads_its_fire_and_gas_from_the_deposits() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	store.fuel_at(C).gases = {Gas.Kind.SMOKE: THICK}
+	var lit := ResolvedCellEffect.new()
+	lit.cell = C
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	var effects: Array[ResolvedCellEffect] = [lit]
+	assert_bool(store.cells_fire_takes().is_empty()).override_failure_message(
+			"fixture: the live store is already burning").is_true()
+	var taken := store.cells_fire_takes(effects)
+	assert_array(taken).override_failure_message("a tile a deposit lights took nothing next round") \
+		.contains_exactly_in_any_order(GridUtils.cells_within_blended_range(C, 1, false).filter(
+			func(cell: Vector2i) -> bool: return cell != C))
+
+	var board := _board()
+	board.terrain_states = store
+	var nothing: Dictionary[Vector2i, int] = {}
+	assert_bool(GasSpread.next(nothing, board).is_empty()).override_failure_message(
+			"a board with no deposits spread a fire nothing has lit").is_true()
+	board.deposits = effects
+	var next := GasSpread.next(nothing, board)
+	for cell: Vector2i in taken:
+		assert_int(_level(next, cell, Gas.Kind.SMOKE)).override_failure_message(
+				"%s takes the fire without its smoke" % [cell]).is_equal(THICK)
+
+
+# ...and a deposit that puts a fire OUT takes its frontier away: a queued douse does not outline the
+# smoke of a spread the round will never make.
+func test_a_fire_a_deposit_puts_out_spreads_nothing() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	var lit := ResolvedCellEffect.new()
+	lit.cell = C
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	store.apply(lit)
+	assert_bool(store.cells_fire_takes().is_empty()).override_failure_message("fixture: fire takes nothing").is_false()
+	var douse := ResolvedCellEffect.new()
+	douse.cell = C
+	douse.states_removed.assign([Terrain.TileState.BURNING])
+	var effects: Array[ResolvedCellEffect] = [douse]
+	assert_bool(store.cells_fire_takes(effects).is_empty()).override_failure_message(
+			"a fire a deposit puts out still spreads").is_true()
+
+
 # Laid AFTER spill and fade, so fresh smoke sits at its own level for a round with a fresh hold, and
 # is added to what already lies there.
 func test_a_spreading_fire_adds_its_gas_to_what_lies_there() -> void:

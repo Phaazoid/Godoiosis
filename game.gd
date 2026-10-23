@@ -1799,12 +1799,14 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 		return
 	if squad.leader.has_squad():
 		var icons_to_draw = {}
-		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 		icons_to_draw = get_squad_icons(squad)
 		for unit in icons_to_draw.keys():
 			for icontype in icons_to_draw[unit]:
 				overlay_manager.create_unit_icon(unit, icontype)
 	refresh_action_queue(squad)
+	# AFTER the resolve, here and in the two repaints below: a red tether reads the plan it made (#1430).
+	if squad.leader.has_squad():
+		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 
 func _on_squad_has_no_actions(squad: Squad):
 	if squad_manager.previewing:
@@ -1833,10 +1835,10 @@ func _on_unit_action_queued(squad: Squad, action: BaseAction):
 func _repaint_squad_plan(squad: Squad) -> void:
 	# Squad-wide, so equivalent to the old per-actor unit.has_squad().
 	var has_squadmates: bool = squad.has_squadmates()
-	if squad_manager.active_squad == squad and has_squadmates:
-		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 	squad_manager.validate_squad_plan(squad)
 	refresh_action_queue(squad)
+	if squad_manager.active_squad == squad and has_squadmates:
+		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 
 	if has_squadmates:
 		overlay_manager.redraw_squad_unit_icons(squad)
@@ -1856,15 +1858,14 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 		if unit.is_leader():
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)
 
-	# has_squadmates too (#1070): every solo unit is its own leader, so this used to draw a cohesion
-	# range round a lone unit whenever it cancelled an order.
-	if unit.is_leader() and squad.has_squadmates():
-		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
-
 	squad_manager.validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 	overlay_manager.redraw_projected_units()
 	refresh_action_queue(squad)
+	# has_squadmates too (#1070): every solo unit is its own leader, so this used to draw a cohesion
+	# range round a lone unit whenever it cancelled an order.
+	if unit.is_leader() and squad.has_squadmates():
+		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 	overlay_manager.redraw_squad_unit_icons(squad)
 
 # ==============================================================================
@@ -2045,7 +2046,8 @@ func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 # destination being hovered -- and the range centres there. `placed` moves any MEMBER onto a stand-in
 # (a hover ghost, a formation ghost); everybody else stands on get_projected_destination(), which is
 # the anchor OverlayIcon's ring rides. `strained` names the members whose tether the hovered move would
-# break; `candidates` adds a GHOST tether from each unit that could join.
+# break; `candidates` adds a GHOST tether from each unit that could join. A member the round's smoke
+# will split off goes red too (#1430, _member_links).
 #
 # An ENEMY squad's lines wear the enemy colour (#1109) -- whose side, read off its leader here, so
 # no caller has to say.
@@ -2053,7 +2055,9 @@ func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 # Solo squads are the CALLERS' question: Squad Up draws round a lone unit on purpose.
 func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary = {},
 		strained: Array[Unit] = [], candidates: Array[Unit] = []) -> void:
-	var links := _member_links(squad, leader_cell, placed, strained)
+	var ahead := next_round_board()
+	var drawn: Array[Squad] = [squad]
+	var links := _member_links(squad, leader_cell, placed, strained, ahead, _next_round_gas(ahead, drawn))
 	for candidate in candidates:
 		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
 				"state": SquadLines2D.Strain.GHOST})
@@ -2066,24 +2070,44 @@ func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary
 func draw_squads_lines(squads: Array[Squad]) -> void:
 	var bubbles: Array = []
 	var links: Array[Dictionary] = []
+	var ahead := next_round_board()
+	var next := _next_round_gas(ahead, squads)
+	var none: Array[Unit] = []
 	for squad in squads:
 		var leader_cell := squad.get_leader().get_projected_destination()
 		bubbles.append(cohesion_bubble(squad, leader_cell))
-		links.append_array(_member_links(squad, leader_cell, {}, []))
+		links.append_array(_member_links(squad, leader_cell, {}, none, ahead, next))
 	overlay_manager.show_squad_lines(bubbles, links, _board(),
 			SquadLines2D.is_hostile(squads[0].get_leader().get_faction()))
 
-# One tether per member to `leader_cell`, from its stand-in in `placed` if it has one; `strained` turns red.
-func _member_links(squad: Squad, leader_cell: Vector2i, placed: Dictionary,
-		strained: Array[Unit]) -> Array[Dictionary]:
-	var links: Array[Dictionary] = []
+# One tether per member to `leader_cell`, from its stand-in in `placed` if it has one. RED for a member
+# in `strained`, and for one the round's gas will split off at the next turn start (#1430,
+# SplitForecast.round_leavers) where the bodies are drawn: `ahead` is next_round_board(), `next` its gas
+# next round.
+func _member_links(squad: Squad, leader_cell: Vector2i, placed: Dictionary, strained: Array[Unit],
+		ahead: BoardContext, next: Dictionary[Vector2i, int]) -> Array[Dictionary]:
+	var at: Dictionary[Unit, Vector2i] = {}
 	for member in squad.get_members():
-		if member == squad.leader:
-			continue
-		var state := SquadLines2D.Strain.STRAIN if strained.has(member) else SquadLines2D.Strain.SOLID
-		links.append({"from": placed.get(member, member.get_projected_destination()),
-				"to": leader_cell, "state": state})
+		if member != squad.leader:
+			at[member] = placed.get(member, member.get_projected_destination())
+	var red: Array[Unit] = strained.duplicate()
+	red.append_array(SplitForecast.round_leavers(squad, leader_cell, at, ahead, next))
+	var links: Array[Dictionary] = []
+	for member: Unit in at:
+		var state := SquadLines2D.Strain.STRAIN if red.has(member) else SquadLines2D.Strain.SOLID
+		links.append({"from": at[member], "to": leader_cell, "state": state})
 	return links
+
+# Next round's gas over `ahead` -- GasField.next_round, the outline's own answer -- for the tethers of
+# these squads; empty when none of them has a tether to draw, which spares the solo draws the round.
+func _next_round_gas(ahead: BoardContext, squads: Array[Squad]) -> Dictionary[Vector2i, int]:
+	var none: Dictionary[Vector2i, int] = {}
+	if gas_field == null:
+		return none
+	for squad in squads:
+		if squad.has_squadmates():
+			return gas_field.next_round(ahead)
+	return none
 
 # The joinable squads' own rings ARE the marking (#442) -- drawn through draw_squad_unit_icons, so
 # with ALWAYS_SHOW_SQUAD_RINGS on this is idempotent over the standing set and only the PULSE
@@ -2444,6 +2468,37 @@ func _board() -> BoardContext:
 	board.weather = scenario_manager.current_weather   # #1260
 	board.atmosphere = scenario_manager.air_reading()   # #1324: the authored air, moved by the weather
 	return board
+
+# The plan being previewed (#313), for every readout of what the queue will do: the health bars' ghosts
+# (UnitMirror), next round's gas outline and the red tether (both through next_round_board). Moved here
+# from battle3d for #1430, so the 2D tether and the 3D outline ask one question. Null whenever nothing
+# is being commanded: resolved_plan_for guards on squad identity, so an AI squad's own resolve never
+# shows as somebody else's intentions.
+#
+# While a pass is RUNNING the answer is the plan being executed (#354). #361 closed the divergence at
+# its source -- refresh_action_queue refuses to re-derive mid-pass, so the last resolve IS the executing
+# plan -- but the preference stays: it costs nothing and does not lean on that gate holding. An aim
+# shows what it WOULD do before the click (#929), read only while the aim is open so a forecast nothing
+# has cleared yet can never outlive it.
+func previewed_plan() -> ResolvedPlan:
+	if order_executor != null and order_executor.executing_plan != null:
+		return order_executor.executing_plan
+	if aim_forecast != null and game_state == GameState.ATTACK_TARGETING:
+		return aim_forecast
+	return squad_manager.resolved_plan_for(squad_manager.active_squad)
+
+# The board next round is ruled on (#1332): the live one with the previewed plan's deposits folded in,
+# so a queued push outlines from where it will leave the gas and a tile a queued hit lights spreads its
+# fire (#1430). Alt's outline (GasMirror) and the red tether (_member_links) both read it. Never while a
+# pass runs: its deposits land in the live store partway through, and folding them again counts them twice.
+func next_round_board() -> BoardContext:
+	var board := _board()
+	if order_executor != null and order_executor.executing_plan != null:
+		return board
+	var plan := previewed_plan()
+	if plan == null or plan.cell_effects.is_empty():
+		return board
+	return board.with_deposits(plan.cell_effects)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

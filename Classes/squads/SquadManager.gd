@@ -229,7 +229,8 @@ func release(unit: Unit):
 # COH leaves into a solo squad -- you cannot command what you cannot see or hear. Called at the two
 # points board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution
 # pass and turn start after the terrain/downed ticks. A PASS's ejections, this sweep's and the downed
-# ones alike, are forecast by SplitForecast into the queue's Split chip (#367); turn start's are not.
+# ones alike, are forecast by SplitForecast into the queue's Split chip (#367). Turn start's are not,
+# except the round's smoke, which SplitForecast.round_leavers paints as a red tether (#1430).
 #
 # WHAT REACHES HERE, corrected at #1069. This used to say movement could no longer author a split
 # because "the validator refuses it", and that was FALSE for a leader's own move for as long as it

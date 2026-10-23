@@ -33,6 +33,11 @@ class_name SplitForecast
 #
 # A DEATH IS NEVER COUNTED -- a death is not a split, and its tether plays a look of its own (#1104) --
 # and neither is a unit that leaves a squad of one.
+#
+# THE ROUND'S SPLITS are round_leavers (#1430), a separate question with no row to stamp: smoke the
+# round's gas step spills onto a leader shortens its leash, and the first contact sweep after it -- at
+# the next turn start, TurnBoundary.start_turn -> SquadManager.enforce_contact -- ejects whoever it no
+# longer reaches. The red tether is its readout (game._member_links).
 
 class _Band:
 	var leader: Unit
@@ -147,6 +152,30 @@ static func leavers(plan: ResolvedPlan) -> Array[Unit]:
 			if is_instance_valid(unit) and not out.has(unit):
 				out.append(unit)
 	return out
+
+
+# Who leaves `squad` at the first turn start after the round (#1430): in range of the leader on `board`
+# and out of it once `next` -- GasField.next_round(board), the round's own answer -- lies on the leader's
+# cell. `leader_cell` and `at` are where the bodies stand. One already out of range on `board` is not
+# the round's: the pass's own sweep takes it, and the Split chip says so. The two halves are
+# SquadCohesion's (reach_in, field_within), the pieces in_range is made of.
+static func round_leavers(squad: Squad, leader_cell: Vector2i, at: Dictionary[Unit, Vector2i],
+		board: BoardContext, next: Dictionary[Vector2i, int]) -> Array[Unit]:
+	var leavers: Array[Unit] = []
+	if squad == null or not squad.has_squadmates():
+		return leavers
+	var leader := squad.leader
+	var now := SquadCohesion.reach_in(leader, board.gas_at(leader_cell))
+	var then := SquadCohesion.reach_in(leader, next.get(leader_cell, 0))
+	if then >= now:
+		return leavers
+	for member: Unit in at:
+		if member == leader or not squad.members.has(member):
+			continue
+		var hops: int = SquadCohesion.field_within(now, leader_cell, member, board).get(at[member], -1)
+		if hops > then:
+			leavers.append(member)
+	return leavers
 
 
 static func _landed(outcome: ResolvedOutcome) -> bool:
