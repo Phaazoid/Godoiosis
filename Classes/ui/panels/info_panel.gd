@@ -201,9 +201,9 @@ func _stat_sources(stat: Stats.Stat) -> Array[String]:
 		var delta := effect.get_modifier(stat)
 		if delta != 0:
 			lines.append(effect_source_text(effect.source_name, delta, effect.turns_remaining))
-	var gear_delta := unit.get_effective_stat(stat) - unit.get_body_stat(stat)
-	if gear_delta != 0 and unit.worn_armor != null:
-		lines.append("%s %+d" % [unit.worn_armor.display_name, gear_delta])
+	# One line per gear source -- the worn piece and each fitted mod -- from the walk the stat sums.
+	for term: Array in unit.gear_terms(stat):
+		lines.append("%s %+d" % [(term[0] as Item).shown_name(), term[1]])
 	return lines
 
 # How much of `stat` is currently on loan — drives the temporary tint above.

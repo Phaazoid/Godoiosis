@@ -520,12 +520,26 @@ func _gear_modifier(stat: Stats.Stat) -> int:
 # number they get.
 func _gear_modifier_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> int:
 	var total := 0
-	if armor != null:
-		total += armor.stat_modifiers.get(stat, 0)
+	for term: Array in _gear_terms_for(stat, armor, weapons):
+		total += term[1]
+	return total
+
+# The walk's terms one source at a time, [source Item, delta], skipping a source that moves nothing.
+# The sum above is built FROM this, so a readout that itemizes the gear stage (#1410) and the number
+# it explains are one walk and cannot disagree.
+func _gear_terms_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> Array[Array]:
+	var terms: Array[Array] = []
+	if armor != null and armor.stat_modifiers.get(stat, 0) != 0:
+		terms.append([armor, armor.stat_modifiers[stat]])
 	for weapon in weapons:
 		for mod in weapon.active_modules(self):
-			total += mod.stat_modifiers.get(stat, 0)
-	return total
+			if mod.stat_modifiers.get(stat, 0) != 0:
+				terms.append([mod, mod.stat_modifiers[stat]])
+	return terms
+
+# The live gear's terms: the worn piece, then every mod _mod_sources says contributes.
+func gear_terms(stat: Stats.Stat) -> Array[Array]:
+	return _gear_terms_for(stat, worn_armor, _mod_sources())
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
