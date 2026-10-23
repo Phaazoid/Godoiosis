@@ -428,32 +428,13 @@ func _stage_unit_name(new_name: String) -> void:
 	_unit_name = new_name
 	_touch()
 
-# Weapons, armor, and authored rune variants in one ordered list, so a unit can equip any of
-# them. Built here and reused by both the picker and the pick handler so their indices stay in
-# lockstep. #30 D.
-# Everything a unit can be given, by display name. NOT equippables only since #697 -- a vial is
-# CARRIED and never slotted, and leaving it out made the four authored ones unreachable from any
-# editor. The Equip/Wear checkbox beside each slot already reads `is EquippableData` and greys
-# itself, so a carried non-equippable needs nothing else here. A conduit (#1312) is the second
-# carried kind.
+# Everything a unit can be given, by display name, in one ordered list reused by both the picker
+# and the pick handler so their indices stay in lockstep (#30 D). ItemCatalog's answer since #1414:
+# this was its own walk over the per-kind catalogs, and a kind added to ItemCatalog.SOURCES did not
+# reach it. The Equip/Wear checkbox beside each slot reads `is EquippableData` and greys itself, so
+# a carried non-equippable (a vial, a conduit) needs nothing else here.
 func _item_catalog() -> Dictionary:
-	var items := {}
-	var weapons := WeaponCatalog.get_editable()
-	for k in weapons:
-		items[k] = weapons[k]
-	var armors := ArmorCatalog.get_editable()
-	for k in armors:
-		items[k] = armors[k]
-	var runes := RuneCatalog.get_editable()
-	for k in runes:
-		items[k] = runes[k]
-	var vials := VialCatalog.get_editable()
-	for k in vials:
-		items[k] = vials[k]
-	var conduits := ConduitCatalog.get_editable()
-	for k in conduits:
-		items[k] = conduits[k]
-	return items
+	return ItemCatalog.by_name()
 
 func _add_inventory_section(into: VBoxContainer):
 	DevWidgets.add_label(into, "Inventory")
