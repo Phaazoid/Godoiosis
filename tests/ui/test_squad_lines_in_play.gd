@@ -483,6 +483,44 @@ func _strokes(segments: Array[PackedVector3Array]) -> Array:
 	return out
 
 
+# Move's hover keeps the range enter_move_mode searched (docs/performance.md, 2026-10-24), and searches
+# again when the member's leash centre, its leader's PROJECTED cell, moves. No player gesture moves it
+# while Move is up (#1487), so the case moves it through the queue to pin that the kept range follows.
+func test_a_move_hover_follows_the_leaders_projected_cell_when_it_moves() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_FAST, "cell": Vector2i(1, 1)}])
+	var leader: Unit = board.leader
+	var member: Unit = board.members[0]
+	var walk := MoveAction.new()
+	var path: Array[Vector2i] = game.route_to(leader, game.compute_move_range(leader), Vector2i(3, 0))
+	walk.init(leader, path, null)
+	assert_bool(game.squad_manager.queue_action(leader.squad, walk)).override_failure_message(
+			"fixture: the leader's move east never queued (%s)" % [", ".join(walk.validation_errors)]).is_true()
+
+	game.select_unit(member, member.movement.cell)
+	game.begin_move_planning(member)
+	var opened: Dictionary = game.compute_move_range(member)
+	game.squad_manager.cancel_move_for_unit(leader)   # his projected cell goes home, mid-mode
+	var now: Dictionary = game.compute_move_range(member)
+	var cell := GridUtils.NO_CELL
+	for candidate: Vector2i in now.reachable:
+		if not opened.reachable.has(candidate):
+			cell = candidate
+			break
+	assert_that(cell).override_failure_message("fixture is vacuous: no tile is takeable round the leader's "
+			+ "home and not round his queued cell, so a stale range could not be told apart") \
+		.is_not_equal(GridUtils.NO_CELL)
+
+	game.hover_presenter.update_hover_visuals(cell)
+	var drawn: MoveAction = _om().hover_move_preview
+	assert_object(drawn).override_failure_message(
+			"the hover drew no arrow onto a tile a fresh search says the member may take").is_not_null()
+	assert_array(drawn.path).override_failure_message(
+			"the hover's arrow is not the route a fresh search walks").is_equal(game.route_to(member, now, cell))
+	assert_array(_states()).override_failure_message(
+			"the hover strained the tether over a tile inside the leader's range") \
+		.contains_exactly([SquadLines2D.Strain.SOLID])
+
+
 # Off the whole range the red goes back to the unit's own tile -- what Move painted when it opened --
 # where it used to stay wherever the last legal tile had put it.
 func test_hovering_off_the_range_puts_the_red_back_where_move_opened_it() -> void:

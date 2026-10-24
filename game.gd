@@ -127,6 +127,13 @@ var leader_stranding: Dictionary = {}
 # mode is up, so it is stale exactly when leader_followable is, and the click and the commit still
 # search fresh. Built by enter_group_move_mode, cleared beside them.
 var group_move_range: Dictionary = {}
+# ...and in Move, the selected unit's own compute_move_range, so the hover need not search per cell
+# (docs/performance.md, 2026-10-24). Keyed, unlike Group Move's: a member's leash hangs off its leader's
+# PROJECTED cell, a plan fact rather than a board one, so move_mode_range_for searches again whenever
+# [unit, RulesService.leash_centre] differs. The click still searches fresh. Built by enter_move_mode,
+# cleared beside the others.
+var move_mode_range: Dictionary = {}
+var _move_mode_range_key: Array = []
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(cell: Vector2i) -> void
 # Bumped by every enter_cell_pick_mode. _click_picking_target snapshots it around the callback so a
@@ -1215,7 +1222,8 @@ func begin_group_move_planning(unit: Unit) -> void:
 	enter_group_move_mode(unit)
 
 func enter_move_mode(unit: Unit):
-	var moverange := compute_move_range(unit)
+	_move_mode_range_key = []   # entry always searches fresh, whatever an earlier entry kept
+	var moverange := move_mode_range_for(unit)
 	game_state = GameState.CHOOSING_MOVE
 	if unit.has_squad():
 		draw_squad_cohesion(unit.squad, unit.squad.leader.get_projected_destination())
@@ -1370,6 +1378,8 @@ func exit_current_mode():
 	leader_followable = {}
 	leader_stranding = {}
 	group_move_range = {}
+	move_mode_range = {}
+	_move_mode_range_key = []
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
@@ -2538,6 +2548,16 @@ func unit_at_pointer(cell: Vector2i) -> Unit:
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
+
+# compute_move_range's answer while CHOOSING_MOVE, off move_mode_range unless the unit or its leash centre
+# changed. Nothing else the search reads moves while the mode is up (docs/performance.md, Invariants).
+# Keyed by instance id, so it never serves one unit's range to another and holds no freed reference.
+func move_mode_range_for(unit: Unit) -> Dictionary:
+	var key := [unit.get_instance_id(), RulesService.leash_centre(unit)]
+	if key != _move_mode_range_key:
+		move_mode_range = compute_move_range(unit)
+		_move_mode_range_key = key
+	return move_mode_range
 
 # The path a move to `cell` walks (#920): the arrow and the click both ask this, so they cannot differ.
 func route_to(unit: Unit, moverange: Dictionary, cell: Vector2i) -> Array[Vector2i]:
