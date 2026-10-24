@@ -3,8 +3,9 @@
 # Before #1174 a limb only ever went with a down, and a downed unit acts no further (#1005), so a
 # maim could never land between a unit's orders. Now a big enough watch shot takes an arm off a
 # walker that then goes on to swing. Execution plays back resolved damage and the lost limb's stat
-# settle runs mid-pass, which stats.md declares un-modelled by preview and execution alike. This
-# suite drives that real sequence on the real game scene: the walk, the shot, the settle, the swing.
+# settle runs mid-pass, after the shot's damage lands (#1455); its effect on the walker's own swing
+# is un-modelled by preview and execution alike (stats.md, owed by #1480). This suite drives that
+# real sequence on the real game scene: the walk, the shot, the settle, the swing.
 #
 # Fixture is tests/flow/test_watch_shot_interrupts_the_walk.gd's -- see tests/README.md -> Testing
 # the game scene.
