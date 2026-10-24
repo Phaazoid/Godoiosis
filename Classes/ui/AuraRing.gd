@@ -383,7 +383,7 @@ func set_unit(target: Unit) -> void:
 
 # THE RING KEEPS ITSELF CURRENT rather than waiting to be told, because the pool moves under a
 # standing panel: every lost limb docks the deepest one, and `stats_changed` is the signal the settle
-# pass after a maim already fires (Unit._go_downed -> _settle_stat_change). A host that had to
+# pass after a maim already fires (Unit.take_damage -> _settle_stat_change). A host that had to
 # remember to refresh it is a host that will forget on the next door that downs somebody.
 func _bind() -> void:
 	if unit != null and not unit.stats_changed.is_connected(refresh):
