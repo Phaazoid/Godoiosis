@@ -137,7 +137,7 @@ func gauge() -> WeaponGauge:
 # Which attack rows print gauge(): the ones whose authored readiness flags tie them to the economy
 # (#108 -- the flags are the only thing a family may consult). A family whose count reaches its
 # attacks some other way (a tank, a rev timer) overrides this.
-func attack_gauge(_wielder: Unit, attack: AttackData) -> WeaponGauge:
+func attack_gauge(_wielder: UnitState, attack: AttackData) -> WeaponGauge:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return null
@@ -339,13 +339,13 @@ func fit(index: int, mod: WeaponModData) -> bool:
 # Proficiency N activates spaces 1..N — reduced capability, never locked out (weapons.md).
 # UNREDUCED means every space, whatever the count: since #486 a template authors how many it has,
 # so no fixed number can stand for "all of them" the way 3 used to.
-func active_space_count(wielder: Unit) -> int:
+func active_space_count(wielder: UnitState) -> int:
 	if template == null:
 		return 0
 	# NOBODY'S proficiency applies to a weapon nobody holds (#732): one sitting in the stash reads
 	# UNREDUCED, so the fitting card shows a BUILD rather than a weapon whose every mod is inert. Zero
 	# was the other reading and it teaches the wrong thing -- fitting a stash weapon would appear to do
-	# nothing at all. Every shipped caller passes a real Unit; that card is the first surface that can
+	# nothing at all. Every other caller passes a real body; that card is the first surface that can
 	# ask about an unheld one.
 	if wielder == null:
 		return space_count()
@@ -354,7 +354,7 @@ func active_space_count(wielder: Unit) -> int:
 		return space_count()
 	return mini(proficiency, space_count())
 
-func active_modules(wielder: Unit) -> Array[WeaponModData]:
+func active_modules(wielder: UnitState) -> Array[WeaponModData]:
 	var result: Array[WeaponModData] = []
 	for i in range(active_space_count(wielder)):
 		result.append_array(space(i))
@@ -370,7 +370,7 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 # Asked of is_main_form rather than of effective_main directly (#97): the supercharge makes what
 # effective_main answers depend on the TANK, and a stamp frozen under the other form would silently
 # lose every MAIN_ATTACK mod's power, element, kind and knockback. Both forms are the main.
-func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
+func _mods_for(wielder: UnitState, attack: WeaponAttackData) -> Array[WeaponModData]:
 	var result: Array[WeaponModData] = []
 	for mod in active_modules(wielder):
 		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or is_main_form(wielder, attack):
@@ -379,12 +379,12 @@ func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
 
 # --- Attack-source surface (EquippableData) ---
 
-func selectable_attacks(wielder: Unit) -> Array[AttackData]:
+func selectable_attacks(wielder: UnitState) -> Array[AttackData]:
 	return fireable_only(wielder, repertoire(wielder))
 
 # The repertoire in the base's own terms (#590). available_attacks answers the same question in
 # WeaponAttackData terms and stays the family-facing one; both views come off THIS.
-func repertoire(wielder: Unit) -> Array[AttackData]:
+func repertoire(wielder: UnitState) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	for a in available_attacks(wielder):
 		result.append(a)
@@ -400,7 +400,7 @@ func repertoire(wielder: Unit) -> Array[AttackData]:
 # FIRST replacer in space order wins. fit_block_reason refuses a second, so a weapon fitted
 # through the normal door can only carry one -- this is the answer for a hand-edited .tres, and
 # it is first rather than last so fitting into a LATER space cannot silently move the main.
-func effective_main(wielder: Unit) -> WeaponAttackData:
+func effective_main(wielder: UnitState) -> WeaponAttackData:
 	var main := base_main(wielder)
 	# The supercharge substitution (#97), applied AFTER the mod replacement so a mod-replaced main
 	# keeps its own empowered form rather than losing one. THE single point the whole feature enters
@@ -414,7 +414,7 @@ func effective_main(wielder: Unit) -> WeaponAttackData:
 # weapon's own terms -- what a mod replaced, or the template's. Split out because the tank asks it
 # (an empowered form is what a vial BUYS and so cannot be what qualifies one) and because
 # is_main_form needs both sides.
-func base_main(wielder: Unit) -> WeaponAttackData:
+func base_main(wielder: UnitState) -> WeaponAttackData:
 	if template == null:
 		return null
 	for mod in active_modules(wielder):
@@ -424,29 +424,29 @@ func base_main(wielder: Unit) -> WeaponAttackData:
 
 # Is this attack THE main, under either form? One question with two right answers, which is why it
 # is asked here rather than by comparing against whichever form happens to be live.
-func is_main_form(wielder: Unit, attack: AttackData) -> bool:
+func is_main_form(wielder: UnitState, attack: AttackData) -> bool:
 	var main := base_main(wielder)
 	if main == null or attack == null:
 		return false
 	return attack == main or attack == main.empowered_form
 
-func default_attack(wielder: Unit) -> AttackData:
+func default_attack(wielder: UnitState) -> AttackData:
 	return effective_main(wielder)
 
 # The repertoire lists the main in its LIVE form only, so while a tank is hot the base form is
 # missing from it and is still this weapon's main (#1283).
-func carries(wielder: Unit, attack: AttackData) -> bool:
+func carries(wielder: UnitState, attack: AttackData) -> bool:
 	return is_main_form(wielder, attack) or super(wielder, attack)
 
 # ALWAYS main, ignoring any live active_attack pick (#72 ruling; overwatch-style alt-attack
 # countering is out of scope, #73). This is the divergence from RuneData.counter_attack.
-func counter_attack(wielder: Unit) -> AttackData:
+func counter_attack(wielder: UnitState, _live_pick: AttackData) -> AttackData:
 	return effective_main(wielder)
 
 # The FIREABLE set minus main -- what the Weapon Action submenu lists. Was available_attacks minus
 # main until #590: a watch-only attack must never be offered as something to fire, and
 # selectable_attacks is the one place that clause is spelled.
-func secondary_attacks(wielder: Unit) -> Array[AttackData]:
+func secondary_attacks(wielder: UnitState) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	if template == null:
 		return result
@@ -472,7 +472,7 @@ func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 #
 # Deduped by identity, so two mods granting one authored resource list it once -- and so a
 # replacement that is also a stock extra does not appear twice.
-func available_attacks(wielder: Unit) -> Array[WeaponAttackData]:
+func available_attacks(wielder: UnitState) -> Array[WeaponAttackData]:
 	if template == null:
 		return []
 	var result: Array[WeaponAttackData] = []
@@ -493,7 +493,7 @@ func available_attacks(wielder: Unit) -> Array[WeaponAttackData]:
 # The family already says this in its own words, so REUSE status_text rather than authoring a
 # second set of strings: "Spent — needs Spring Load", "Ammo 0/2 — needs Reload". The constant is
 # only the fallback for a family with a readiness rule but nothing to say about it.
-func attack_block_reason(_wielder: Unit, attack: AttackData) -> String:
+func attack_block_reason(_wielder: UnitState, attack: AttackData) -> String:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null or is_attack_fireable(weapon_attack):
 		return ""
@@ -504,7 +504,7 @@ func attack_block_reason(_wielder: Unit, attack: AttackData) -> String:
 # The second itemises the way ArmorData.mechanical_text itemises DEF -- for THIS wielder, since
 # both halves depend on them. It reads the same effective_blend base_damage weighs, so a fitted
 # mod's shift is visible on hover rather than something you infer from a damage number moving.
-func attack_detail(wielder: Unit, attack: AttackData) -> String:
+func attack_detail(wielder: UnitState, attack: AttackData) -> String:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return ""
@@ -552,7 +552,7 @@ static func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]
 			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_change[stat])
 	return blend
 
-static func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
+static func scaling_contribution(wielder: UnitState, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
 	var blend := effective_blend(attack, mods)
 	var total_weight := 0
 	var weighted_sum := 0
@@ -568,7 +568,7 @@ static func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: 
 # attack" to the geometry layer (Reach) and "main" here: one value, two meanings, which is design
 # law #4 one level down from #102 itself. Callers wanting the headline view of a weapon pass
 # default_attack() explicitly -- see inventory_panel.
-func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
+func base_damage(wielder: UnitState, attack: WeaponAttackData) -> int:
 	if template == null or attack == null:
 		return 0
 	if attack.deals_no_damage:
@@ -583,7 +583,7 @@ func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 # scales as if they had fired it -- its own power, its own blend over their stats -- with no mods,
 # since there is no weapon to have fitted any. base_damage's rule with the weapon taken out, and
 # static for that reason: effective_blend and scaling_contribution never read a weapon either.
-static func unwielded_damage(wielder: Unit, attack: WeaponAttackData) -> int:
+static func unwielded_damage(wielder: UnitState, attack: WeaponAttackData) -> int:
 	if attack == null or attack.deals_no_damage:
 		return 0
 	var no_mods: Array[WeaponModData] = []
@@ -591,7 +591,7 @@ static func unwielded_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 
 # No attack means bare fists: not even fitted mods contribute, because the weapon isn't what's
 # landing. (A stamped attack still collects mod-added elements on top of its own.)
-func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.Element]:
+func get_elements(wielder: UnitState, attack: WeaponAttackData) -> Array[Elemental.Element]:
 	var result: Array[Elemental.Element] = []
 	if template == null or attack == null:
 		return result
@@ -608,7 +608,7 @@ func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.El
 # kind-overriding mod that reaches it, then AttackData.deliver applies the heal / no-damage rule --
 # one home for that rule, so a modded utility swing cannot come out blunt. A carving never comes
 # through here; it has no mods and answers delivered_kind() itself.
-func effective_kind(wielder: Unit, attack: AttackData) -> AttackData.Kind:
+func effective_kind(wielder: UnitState, attack: AttackData) -> AttackData.Kind:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return attack.delivered_kind()
@@ -618,7 +618,7 @@ func effective_kind(wielder: Unit, attack: AttackData) -> AttackData.Kind:
 			kind = mod.kind
 	return weapon_attack.deliver(kind)
 
-func effective_knockback(wielder: Unit, attack: AttackData) -> int:
+func effective_knockback(wielder: UnitState, attack: AttackData) -> int:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return super(wielder, attack)
@@ -629,7 +629,7 @@ func effective_knockback(wielder: Unit, attack: AttackData) -> int:
 
 # OFF short-circuits, which is what makes the rule order-independent: an OFF anywhere wins, so
 # fitting the same mods into different spaces cannot give different answers.
-func effective_hits_allies(wielder: Unit, attack: AttackData) -> bool:
+func effective_hits_allies(wielder: UnitState, attack: AttackData) -> bool:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return super(wielder, attack)
@@ -643,7 +643,7 @@ func effective_hits_allies(wielder: Unit, attack: AttackData) -> bool:
 
 # Same composition, same reason (#413): a mod may grant or revoke the watch capability, and OFF
 # short-circuits so fitting order cannot change the answer.
-func effective_can_overwatch(wielder: Unit, attack: AttackData) -> bool:
+func effective_can_overwatch(wielder: UnitState, attack: AttackData) -> bool:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return super(wielder, attack)

@@ -40,9 +40,9 @@ func test_available_attacks_reads_template_and_handles_no_template() -> void:
 	var main := _attack(1)
 	var w := WeaponInstance.make(_template_with(main))
 	var wielder := _wielder()
-	assert_array(w.available_attacks(wielder)).contains_exactly([main])
+	assert_array(w.available_attacks(wielder.state)).contains_exactly([main])
 	var bare := WeaponInstance.new()
-	assert_array(bare.available_attacks(wielder)).is_empty()
+	assert_array(bare.available_attacks(wielder.state)).is_empty()
 
 # --- per-attack damage (family scaling stays weapon-wide) ---
 
@@ -50,13 +50,13 @@ func test_base_damage_reads_the_attack_it_is_given() -> void:
 	var main := _attack(10)
 	var w := WeaponInstance.make(_template_with(main))
 	var wielder := _wielder({Stats.Stat.STR: 6})
-	assert_int(w.base_damage(wielder, main)).is_equal(16)   # 10 power + 6 STR (100% blend)
+	assert_int(w.base_damage(wielder.state, main)).is_equal(16)   # 10 power + 6 STR (100% blend)
 
 func test_base_damage_uses_passed_attack_over_main() -> void:
 	var spring := _attack(9)
 	var w := WeaponInstance.make(_template_with(_attack(2), [spring]))
 	var wielder := _wielder({Stats.Stat.STR: 6})
-	assert_int(w.base_damage(wielder, spring)).is_equal(15)   # 9 + 6 — blend is the family's, not the attack's
+	assert_int(w.base_damage(wielder.state, spring)).is_equal(15)   # 9 + 6 — blend is the family's, not the attack's
 
 func test_base_damage_of_no_attack_is_zero() -> void:
 	# `null` means NO ATTACK, not "the main one" (#102 follow-up, dev call 2026-07-28). It used to
@@ -64,7 +64,7 @@ func test_base_damage_of_no_attack_is_zero() -> void:
 	# bare-fist answer (STR) is the RESOLVER's to give; this method just declines to invent one.
 	var w := WeaponInstance.make(_template_with(_attack(10)))
 	var wielder := _wielder({Stats.Stat.STR: 6})
-	assert_int(w.base_damage(wielder, null)).is_equal(0)
+	assert_int(w.base_damage(wielder.state, null)).is_equal(0)
 
 # --- per-attack elements ---
 
@@ -73,13 +73,13 @@ func test_get_elements_reads_the_passed_attack() -> void:
 	var acid := _attack(0, false, Elemental.Element.WATER)
 	var w := WeaponInstance.make(_template_with(fire, [acid]))
 	var wielder := _wielder()
-	assert_array(w.get_elements(wielder, fire)).contains_exactly([Elemental.Element.FIRE])
-	assert_array(w.get_elements(wielder, acid)).contains_exactly([Elemental.Element.WATER])
+	assert_array(w.get_elements(wielder.state, fire)).contains_exactly([Elemental.Element.FIRE])
+	assert_array(w.get_elements(wielder.state, acid)).contains_exactly([Elemental.Element.WATER])
 
 func test_get_elements_of_no_attack_is_empty() -> void:
 	# Not even fitted mods contribute — with no attack the weapon isn't what's landing.
 	var w := WeaponInstance.make(_template_with(_attack(0, false, Elemental.Element.FIRE)))
-	assert_array(w.get_elements(_wielder(), null)).is_empty()
+	assert_array(w.get_elements(_wielder().state, null)).is_empty()
 
 # --- hits_map lives on the shared AttackData base ---
 

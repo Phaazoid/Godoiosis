@@ -1043,7 +1043,7 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# A PAYLOAD burns no vial (#1058): it was never fired, so it spends nothing. Terrain still
 		# empowers it, being where the thrower stands rather than something they would spend.
 		if charge.is_empty() or action.dropped_by != null:
-			return carving.base_damage(attacker, terrain, air)
+			return carving.base_damage(attacker.state, terrain, air)
 
 		# A burned vial (#697) is NOT positional, so it unions in HERE rather than inside Materia,
 		# beside the terrain answer -- the spot Materia.sources_at's header reserved for it.
@@ -1060,8 +1060,8 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# Recorded on the outcome rather than re-derived downstream (brace_bonus's precedent): the
 		# queue row names the vial from here and AttackAction.execute spends it from here, so the
 		# preview and the spend cannot disagree (Law #2).
-		var with_charge := carving.base_damage(attacker, empowered, air)
-		if outcome != null and with_charge != carving.base_damage(attacker, terrain, air):
+		var with_charge := carving.base_damage(attacker.state, empowered, air)
+		if outcome != null and with_charge != carving.base_damage(attacker.state, terrain, air):
 			outcome.burned_vial = attacker.attunement
 		return with_charge
 	if action.fired_attack is WeaponAttackData:
@@ -1074,7 +1074,7 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 			#
 			# Lead volley member only, mirroring the readiness and vial gates: one order spends
 			# once however many victims it reaches.
-			var base := weapon.base_main(attacker)
+			var base := weapon.base_main(attacker.state)
 			var charged: bool = base != null and base.empowered_form == action.fired_attack
 			# ...and no payload spends a charge either (#1058).
 			if charged and not action.is_secondary_hit and action.dropped_by == null:
@@ -1083,12 +1083,12 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 					hypo_state.charges -= 1
 					if outcome != null:
 						outcome.charge_spent = true
-			return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
+			return weapon.base_damage(attacker.state, action.fired_attack as WeaponAttackData)
 		# A payload thrown with no weapon in hand is still a real hit, scaled as if they fired it
 		# (ruling 42). Only a payload: an ordinary order stamped with a weapon attack nobody holds keeps
 		# the bare-fists reading below.
 		if action.dropped_by != null:
-			return WeaponInstance.unwielded_damage(attacker, action.fired_attack as WeaponAttackData)
+			return WeaponInstance.unwielded_damage(attacker.state, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 
 # The kind the hit DELIVERS (#424), source_elements' shape: a carving answers its own authored field,
@@ -1100,7 +1100,7 @@ static func _source_kind(action: AttackAction) -> AttackData.Kind:
 	if action.fired_attack is WeaponAttackData:
 		var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
-			return weapon.effective_kind(action.actor, action.fired_attack)
+			return weapon.effective_kind(action.actor.state, action.fired_attack)
 		return action.fired_attack.delivered_kind()
 	return AttackData.Kind.BLUNT
 
@@ -1137,7 +1137,7 @@ static func elements_of(actor: Unit, attack: AttackData, thrown := false) -> Arr
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon == null:
 			return attack.authored_elements() if thrown else none
-		return weapon.get_elements(actor, attack as WeaponAttackData)
+		return weapon.get_elements(actor.state, attack as WeaponAttackData)
 	return attack.authored_elements()
 
 # hits_map() lives on the shared AttackData base, so both kinds answer it directly — and with the
@@ -1384,7 +1384,7 @@ static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 # The board is the plain one -- the pass's own deposits are not present yet, empowerment's limit.
 static func _fizzles(action: AttackAction, board: BoardContext, hypo: Dictionary) -> bool:
 	return CellSubstances.fizzle_reason(action.fired_attack, projected_position(action.actor, hypo),
-			board, action.actor) != ""
+			board, action.actor.state) != ""
 
 # The fizzle's no-op: R7's `skipped` (so every "will not happen" reader -- counters, execution, the
 # beat sheet, the AI's score -- already ignores it), plus why. It read no HP, so the queue prints none.

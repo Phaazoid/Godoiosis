@@ -25,7 +25,7 @@ func _attacker_dealing(damage: int, cell: Vector2i) -> Unit:
 	var a := H.spawn_solo(self, _sm, PLAYER, cell, {}, true, 0)
 	var weapon := a.get_equipped_weapon() as WeaponInstance
 	var main: WeaponAttackData = weapon.template.main_attack
-	main.power = damage - weapon.base_damage(a, main)
+	main.power = damage - weapon.base_damage(a.state, main)
 	return a
 
 

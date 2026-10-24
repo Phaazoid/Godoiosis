@@ -146,7 +146,7 @@ static func _attack_lines(unit: Unit, board: BoardContext) -> Array[String]:
 
 static func _attack_line(unit: Unit, attack: AttackData, prefix: String, board: BoardContext) -> String:
 	var line := "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
-	var fizzle := CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), board, unit)
+	var fizzle := CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), board, unit.state)
 	if fizzle != "":
 		line += " (%s)" % fizzle
 	return line
@@ -474,7 +474,7 @@ static func _kit_row(session, label: String, item: Item, owner: Unit, mods: Dict
 			row += " (E)"
 		elif item == owner.worn_armor:
 			row += " (W)"
-		var reason := equippable.can_equip_reason(owner)
+		var reason := equippable.can_equip_reason(owner.state)
 		if reason != "":
 			row += "  ! " + reason
 	# The attack line only for what is equipped: _weapon_str reads the WIELDER's live attack views,
@@ -495,7 +495,7 @@ static func _kit_row(session, label: String, item: Item, owner: Unit, mods: Dict
 # "1 [1/2: Line Sniper]  2 [0/1 off]" -- each space numbered as `fit` takes it, with its fill, its
 # mods by the name `unfit` takes, and "off" past what this wielder's proficiency activates.
 static func _spaces_str(session, weapon: WeaponInstance, owner: Unit, mods: Dictionary) -> String:
-	var active := weapon.active_space_count(owner)
+	var active := weapon.active_space_count(UnitState.of(owner))
 	var parts: Array[String] = []
 	for i in range(weapon.space_count()):
 		var names: Array[String] = []
@@ -741,13 +741,14 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	if inst == null or inst.template == null:
 		return "(equip)"
 	var w := inst.template
+	var body := UnitState.of(wielder)
 	# The main this weapon FIRES (#1365): a mod's replacement or the tank's empowered form, read where
 	# the menu, Reach and the resolver read it. Named when it is not the family's own, so the name the
 	# `attack` verb takes is on the line.
-	var main: WeaponAttackData = inst.effective_main(wielder)
+	var main: WeaponAttackData = inst.effective_main(body)
 	var main_power: int = main.power if main != null else 0
 	# A watch main is the `overwatch` verb's, never `attack`'s (#1440), so the line says which.
-	var main_watches := main != null and inst.effective_can_overwatch(wielder, main)
+	var main_watches := main != null and inst.effective_can_overwatch(body, main)
 	# Show the GEOMETRY, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly different
 	# shape (an omnidirectional point attack at range vs a one-cell-deep cleave), which decides reach
 	# AND who can counter. Hiding it once made a correct no-counter look like a bug.
@@ -758,11 +759,11 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 		s += " (watch)"
 	s += " pow%d %s" % [main_power, _pattern_str(main)]
 	# The composed answers, mods included, as the resolver reads them (#1365).
-	for element in inst.get_elements(wielder, main):
+	for element in inst.get_elements(body, main):
 		s += "/" + Elemental.Element.keys()[element]
 	if main != null and main.can_ever_counter(main_watches):
 		s += "/ctr"
-	if main != null and inst.effective_hits_allies(wielder, main):
+	if main != null and inst.effective_hits_allies(body, main):
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
 	# Its live state in the family's own words (#663) -- a dry magazine or a sprung spear gates the next
 	# order, and the ring shows the same count off the same answer (#1045).
@@ -788,8 +789,8 @@ static func _rune_str(rune: RuneData, wielder: Unit) -> String:
 	if wielder == null:
 		return head
 	var parts: Array[String] = []
-	for attack in rune.choice_attacks(wielder):
-		parts.append(_attack_str(rune, wielder, attack, attack.can_ever_counter(rune.effective_can_overwatch(wielder, attack))))
+	for attack in rune.choice_attacks(wielder.state):
+		parts.append(_attack_str(rune, wielder, attack, attack.can_ever_counter(rune.effective_can_overwatch(wielder.state, attack))))
 	if parts.is_empty():
 		return head
 	return head + "  " + "; ".join(parts)
@@ -807,7 +808,7 @@ static func _attack_str(source: EquippableData, wielder: Unit, attack: AttackDat
 	var swing := attack as WeaponAttackData
 	var weapon := source as WeaponInstance
 	if swing != null and weapon != null:
-		for element in weapon.get_elements(wielder, swing):
+		for element in weapon.get_elements(wielder.state, swing):
 			s += "/" + Elemental.Element.keys()[element]
 	# heals/deals_no_damage reinterpret the power printed above, so a line without them misreads.
 	if attack.heals:
@@ -816,9 +817,9 @@ static func _attack_str(source: EquippableData, wielder: Unit, attack: AttackDat
 		s += "/nodmg"
 	if counters:
 		s += "/ctr"
-	if source.effective_hits_allies(wielder, attack):
+	if source.effective_hits_allies(wielder.state, attack):
 		s += "/ff"
-	var reason := source.attack_block_reason(wielder, attack)
+	var reason := source.attack_block_reason(wielder.state, attack)
 	if reason != "":
 		s += " (blocked: %s)" % reason
 	return s

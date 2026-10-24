@@ -47,18 +47,18 @@ static func block_reason(unit: Unit, verb: Verb, index: int) -> String:
 				return "%s is not something to equip." % item.shown_name()
 			if item == unit.get_equipped_weapon():
 				return "%s is already equipped." % item.shown_name()
-			return (item as EquippableData).can_equip_reason(unit)
+			return (item as EquippableData).can_equip_reason(unit.state)
 		Verb.WEAR:
 			if item.equip_slot() != Item.EquipSlot.ARMOR:
 				return "%s is not armour." % item.shown_name()
 			if item == unit.worn_armor:
 				return "%s is already worn." % item.shown_name()
-			return (item as ArmorData).can_equip_reason(unit)
+			return (item as ArmorData).can_equip_reason(unit.state)
 		Verb.USE:
 			var vial := item as VialData
 			if vial == null:
 				return "That is not a vial."
-			return vial.use_block_reason(unit)
+			return vial.use_block_reason(unit.state)
 	return ""
 
 

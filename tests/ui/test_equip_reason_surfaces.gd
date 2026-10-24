@@ -60,7 +60,7 @@ func test_both_explaining_surfaces_carry_the_gates_own_words() -> void:
 	var plate := _gated_plate()
 	assert_bool(unit.add_item(plate)).is_true()
 
-	var reason: String = plate.can_equip_reason(unit)
+	var reason: String = plate.can_equip_reason(unit.state)
 	assert_str(reason).override_failure_message(
 		"fixture: the plate does not actually refuse this body, so neither surface has anything to say"
 		).is_not_empty()

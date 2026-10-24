@@ -129,7 +129,7 @@ func test_re_seeding_drops_an_armed_watch() -> void:
 	var kit: Array[Item] = [H.make_weapon(4)]
 	var unit := _spawn_from_file(_saved_character(kit))
 	var watched: Array[Vector2i] = [Vector2i(1, 0)]
-	unit.arm_watch(Vector2i.ZERO, Vector2i(1, 0), watched, unit.get_equipped_weapon().default_attack(unit))
+	unit.arm_watch(Vector2i.ZERO, Vector2i(1, 0), watched, unit.get_equipped_weapon().default_attack(unit.state))
 	assert_object(unit.watch).is_not_null()
 
 	assert_bool(unit.reseed_kit()).is_true()

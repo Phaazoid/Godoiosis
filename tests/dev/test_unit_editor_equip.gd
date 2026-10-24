@@ -85,7 +85,7 @@ func test_equip_on_a_refused_rune_puts_it_in_hand_on_save() -> void:
 	assert_bool(unit.add_item(rune)).is_true()
 	assert_object(unit.get_equipped_weapon()).override_failure_message(
 		"precondition: the weapon should be in hand before the edit").is_same(weapon)
-	assert_bool(rune.can_equip(unit)).override_failure_message(
+	assert_bool(rune.can_equip(unit.state)).override_failure_message(
 		"precondition: the unit's own gate must refuse the rune, or this case proves nothing").is_false()
 
 	_editor.edit_unit(unit)

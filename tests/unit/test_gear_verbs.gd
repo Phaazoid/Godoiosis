@@ -75,7 +75,7 @@ func test_wear_refuses_in_the_armours_own_words_and_remove_takes_no_slot() -> vo
 
 	var refused := GearVerbs.perform(_unit, GearVerbs.Verb.WEAR, _slot_of(heavy))
 	assert_str(refused).override_failure_message("a plate the unit cannot wear was worn").is_not_empty()
-	assert_str(refused).is_equal(heavy.can_equip_reason(_unit))
+	assert_str(refused).is_equal(heavy.can_equip_reason(_unit.state))
 	assert_object(_unit.worn_armor).is_null()
 
 	assert_str(GearVerbs.perform(_unit, GearVerbs.Verb.WEAR, _slot_of(light))).is_empty()
@@ -110,7 +110,7 @@ func test_use_spends_the_vial_and_refuses_in_its_own_words() -> void:
 
 	var refused := GearVerbs.perform(_unit, GearVerbs.Verb.USE, _slot_of(fuel))
 	assert_str(refused).override_failure_message("a vial that empowers nothing was spent").is_not_empty()
-	assert_str(refused).is_equal(fuel.use_block_reason(_unit))
+	assert_str(refused).is_equal(fuel.use_block_reason(_unit.state))
 	assert_bool(_unit.inventory.has(fuel)).is_true()
 
 	assert_str(GearVerbs.perform(_unit, GearVerbs.Verb.USE, _slot_of(sigil))).is_empty()

@@ -72,7 +72,7 @@ func _board(kinds: Dictionary, cell_states: Dictionary = {}, lit: Dictionary = {
 
 
 func _supply(board: BoardContext, caster: Unit = null) -> Dictionary[String, int]:
-	return CellSubstances.available_near(HERE, board, caster, _catalog())
+	return CellSubstances.available_near(HERE, board, UnitState.of(caster), _catalog())
 
 
 func _present(board: BoardContext, caster: Unit = null) -> Array[String]:
@@ -85,7 +85,7 @@ func _fizzle(recipe: String, board: BoardContext, caster: Unit = null) -> String
 	var parsed := CarvingRecipe.parse(recipe, _catalog())
 	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
 			% [recipe, parsed.error]).is_empty()
-	return parsed.fizzle_reason(CellSubstances.available_near(HERE, board, caster, _catalog()), _catalog())
+	return parsed.fizzle_reason(CellSubstances.available_near(HERE, board, UnitState.of(caster), _catalog()), _catalog())
 
 
 # --- the baseline ---------------------------------------------------------------------------

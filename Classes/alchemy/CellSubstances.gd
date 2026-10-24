@@ -44,7 +44,7 @@ static var _parts_memo: Dictionary = {}
 #
 # `caster` is counted wherever it is: `cell` IS where it casts from, which is often a cell it has only
 # queued a move to, so the live scan below would not find it there.
-static func available_near(cell: Vector2i, board: BoardContext, caster: Unit = null,
+static func available_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
 		catalog: Dictionary = {}) -> Dictionary[String, int]:
 	var shared := catalog.is_empty()
 	if shared:
@@ -55,7 +55,7 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: Unit = n
 	if board != null:
 		for near: Vector2i in GridUtils.cells_within_manhattan_range(cell, Materia.REACH):
 			_add_cell(found, near, board)
-	if caster != null and is_instance_valid(caster):
+	if caster != null:
 		for state: Elemental.State in caster.element_states:
 			_add(found, SubstanceMap.of_state(state), PLENTY)
 		# What the caster carries in a conduit (#1312) -- the carrier's alone, never a neighbour's.
@@ -76,7 +76,7 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: Unit = n
 
 # Why `attack` fizzles cast from `cell`, or "". Only a carving can fizzle, and only one that parses; a
 # null board is no world to judge against, so nothing fizzles there.
-static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContext, caster: Unit = null) -> String:
+static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContext, caster: UnitState = null) -> String:
 	var carving := attack as TransmutationData
 	if carving == null or board == null:
 		return ""

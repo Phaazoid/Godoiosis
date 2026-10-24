@@ -517,7 +517,7 @@ func test_a_damageless_carving_stays_at_zero_in_any_air() -> void:
 func test_thin_air_never_takes_a_carving_below_zero() -> void:
 	var carving := _carving(FIREBALL)
 	var caster := _alchemist(carving)
-	assert_int(carving.base_damage(caster, [], -1000)).is_equal(0)
+	assert_int(carving.base_damage(caster.state, [], -1000)).is_equal(0)
 
 
 # The vial burns only when IT changed the answer, so the air has to sit on both sides of that compare:

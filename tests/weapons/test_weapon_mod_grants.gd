@@ -57,7 +57,7 @@ func test_a_fitted_mod_adds_its_attack_to_the_weapons_repertoire() -> void:
 	weapon.fit(0, _mod({}, [], granted))
 	unit.equipped_weapon = weapon
 
-	var available := weapon.available_attacks(unit)
+	var available := weapon.available_attacks(unit.state)
 	assert_array(available).contains([weapon.template.main_attack, extra])
 	# Main stays first -- the canonical order menus and the default pick read.
 	assert_object(available[0]).is_same(weapon.template.main_attack)
@@ -104,14 +104,14 @@ func test_a_mod_in_a_proficiency_locked_space_grants_nothing() -> void:
 	var granted: Array[WeaponAttackData] = [extra]
 	weapon.fit(1, _mod({Stats.Stat.STR: 4}, abilities, granted))   # space index 1 = inactive at proficiency 1
 
-	assert_array(weapon.available_attacks(unit)).not_contains([extra])
+	assert_array(weapon.available_attacks(unit.state)).not_contains([extra])
 	assert_bool(_has_ability(unit, Abilities.Id.BRACE)).is_false()
 	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(before)
 
 	# ...and the SAME mod in an active space does pay out, so the case above is a gate rather
 	# than a mod that never worked.
 	unit.unit_instance.set_proficiency(WeaponData.WeaponType.CHAINSWORD, 2)
-	assert_array(weapon.available_attacks(unit)).contains([extra])
+	assert_array(weapon.available_attacks(unit.state)).contains([extra])
 	assert_bool(_has_ability(unit, Abilities.Id.BRACE)).is_true()
 	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(before + 4)
 
@@ -188,8 +188,8 @@ func test_a_mod_grants_its_attack_only_to_the_weapon_it_is_fitted_to() -> void:
 	var sword := WeaponInstance.make(_template())
 	unit.equipped_weapon = sword
 
-	assert_array(sword.available_attacks(unit)).not_contains([kick])
-	assert_array(leg.available_attacks(unit)).contains([kick])
+	assert_array(sword.available_attacks(unit.state)).not_contains([kick])
+	assert_array(leg.available_attacks(unit.state)).contains([kick])
 
 # --- The live-read and the gate-blindness the chain depends on ---
 
@@ -218,10 +218,10 @@ func test_a_mod_granting_con_does_not_open_an_armor_wear_gate() -> void:
 	var gate := unit.get_body_stat(Stats.Stat.CON) + 3
 	var armor := ArmorData.new()
 	armor.stat_minimums[Stats.Stat.CON] = gate
-	assert_bool(armor.can_equip(unit)).is_false()
+	assert_bool(armor.can_equip(unit.state)).is_false()
 
 	weapon.fit(0, _mod({Stats.Stat.CON: 5}))
 	# The mod really did move the effective stat past the gate...
 	assert_int(unit.get_effective_stat(Stats.Stat.CON)).is_greater_equal(gate)
 	# ...and the gate still refuses, because it never reads gear.
-	assert_bool(armor.can_equip(unit)).is_false()
+	assert_bool(armor.can_equip(unit.state)).is_false()

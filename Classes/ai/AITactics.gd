@@ -418,7 +418,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 			continue
 		# A carving that FIZZLES from this origin is no candidate: the queue gate would refuse it, the
 		# player's row is greyed. The same CellSubstances.fizzle_reason, asked from the same cell.
-		if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+		if CellSubstances.fizzle_reason(attack, origin, board, unit.state) != "":
 			continue
 		var marks: Dictionary = patients if attack.heals else hostiles
 		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
@@ -944,7 +944,7 @@ static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: Squad
 	var watches: Array[AttackData] = []
 	for watch in watch_attacks_for(unit):
 		# A watch whose carving would fizzle here could only ever fire a fizzle: not worth the main action.
-		if CellSubstances.fizzle_reason(watch, origin, board, unit) == "":
+		if CellSubstances.fizzle_reason(watch, origin, board, unit.state) == "":
 			watches.append(watch)
 	if watches.is_empty():
 		return false

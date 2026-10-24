@@ -166,10 +166,10 @@ func test_every_minimum_gate_admits_at_its_threshold_and_refuses_below() -> void
 				continue   # a floor of 0 gates nothing; there is no "below" to test
 			checked += 1
 			var stat_name: String = Stats.Stat.keys()[stat]
-			assert_bool(piece.can_equip(_wearer_for(piece, stat, floor_value))) \
+			assert_bool(piece.can_equip(_wearer_for(piece, stat, floor_value).state)) \
 				.override_failure_message("%s must admit a wearer at exactly %s %d" % [name, stat_name, floor_value]) \
 				.is_true()
-			assert_bool(piece.can_equip(_wearer_for(piece, stat, floor_value - 1))) \
+			assert_bool(piece.can_equip(_wearer_for(piece, stat, floor_value - 1).state)) \
 				.override_failure_message("%s must refuse a wearer one short of %s %d" % [name, stat_name, floor_value]) \
 				.is_false()
 	assert_int(checked).is_greater(0)
@@ -184,10 +184,10 @@ func test_every_maximum_gate_admits_at_its_ceiling_and_refuses_above() -> void:
 			var ceiling: int = piece.stat_maximums[stat]
 			checked += 1
 			var stat_name: String = Stats.Stat.keys()[stat]
-			assert_bool(piece.can_equip(_wearer_for(piece, stat, ceiling))) \
+			assert_bool(piece.can_equip(_wearer_for(piece, stat, ceiling).state)) \
 				.override_failure_message("%s must admit a wearer at exactly %s %d" % [name, stat_name, ceiling]) \
 				.is_true()
-			assert_bool(piece.can_equip(_wearer_for(piece, stat, ceiling + 1))) \
+			assert_bool(piece.can_equip(_wearer_for(piece, stat, ceiling + 1).state)) \
 				.override_failure_message("%s must refuse a wearer one over %s %d" % [name, stat_name, ceiling]) \
 				.is_false()
 	assert_int(checked).is_greater(0)
@@ -204,7 +204,7 @@ func test_an_ungated_piece_admits_any_body() -> void:
 		checked += 1
 		var extreme: Unit = H.spawn_unit(self, ENEMY, _next_cell(),
 			{Stats.Stat.CON: 0, Stats.Stat.DEX: 99}, false)
-		assert_bool(piece.can_equip(extreme)) \
+		assert_bool(piece.can_equip(extreme.state)) \
 			.override_failure_message("%s declares no gate, so it must admit any body" % name) \
 			.is_true()
 	assert_int(checked).is_greater(0)
@@ -277,7 +277,7 @@ func test_mechanical_text_states_a_gate_only_when_one_exists() -> void:
 	var armors := _armors()
 	for name: String in armors:
 		var piece: ArmorData = armors[name]
-		var text := piece.mechanical_text(_wearer_for(piece, Stats.Stat.CON, 5))
+		var text := piece.mechanical_text(_wearer_for(piece, Stats.Stat.CON, 5).state)
 		var gated: bool = not piece.stat_minimums.is_empty() or not piece.stat_maximums.is_empty()
 		if gated:
 			assert_str(text).override_failure_message(
@@ -293,7 +293,7 @@ func test_mechanical_text_states_a_tax_only_when_one_exists() -> void:
 	var armors := _armors()
 	for name: String in armors:
 		var piece: ArmorData = armors[name]
-		var text := piece.mechanical_text(_wearer_for(piece, Stats.Stat.CON, 5))
+		var text := piece.mechanical_text(_wearer_for(piece, Stats.Stat.CON, 5).state)
 		if piece.stat_modifiers.is_empty():
 			assert_str(text).not_contains("While worn:")
 		else:
@@ -307,7 +307,7 @@ func test_mechanical_text_names_grants_only_when_they_exist() -> void:
 	var armors := _armors()
 	for name: String in armors:
 		var piece: ArmorData = armors[name]
-		var text := piece.mechanical_text(_wearer_for(piece, Stats.Stat.CON, 5))
+		var text := piece.mechanical_text(_wearer_for(piece, Stats.Stat.CON, 5).state)
 		if piece.granted_abilities.is_empty():
 			assert_str(text).not_contains("Grants:")
 		else:
@@ -336,7 +336,7 @@ func test_mechanical_text_previews_the_def_the_wearer_would_actually_get() -> vo
 			checked += 1
 			var wearer := _body_with_con(con)
 			wearer.worn_armor = piece
-			assert_str(piece.mechanical_text(wearer)) \
+			assert_str(piece.mechanical_text(wearer.state)) \
 				.override_failure_message(
 					"%s's readout disagrees with the DEF its wearer actually gets (%d) at CON %d"
 					% [name, wearer.get_effective_def(), con]) \

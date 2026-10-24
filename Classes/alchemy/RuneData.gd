@@ -109,13 +109,13 @@ func is_legal() -> bool:
 #
 # Both of them drop watch-only carvings (#590) -- a carving authored can_overwatch is declared as
 # a standing watch and never channelled, so it belongs to watch_attacks and to nothing here.
-func selectable_attacks(wielder: Unit) -> Array[AttackData]:
+func selectable_attacks(wielder: UnitState) -> Array[AttackData]:
 	return fireable_only(wielder, repertoire_of(channelable(wielder)))
 
 # Every carving this rune holds, fireable or watch-only -- the list watch_attacks comes off (#590).
 # Deliberately the UNFILTERED set, matching choice_attacks: an unaffordable watch carving lists and
 # greys with its reason like any other row.
-func repertoire(_wielder: Unit) -> Array[AttackData]:
+func repertoire(_wielder: UnitState) -> Array[AttackData]:
 	return repertoire_of(inscriptions)
 
 # Array[TransmutationData] -> Array[AttackData]. GDScript will not pass the first where the second
@@ -126,7 +126,7 @@ func repertoire_of(carvings: Array[TransmutationData]) -> Array[AttackData]:
 		result.append(t)
 	return result
 
-func default_attack(wielder: Unit) -> AttackData:
+func default_attack(wielder: UnitState) -> AttackData:
 	var fireable := selectable_attacks(wielder)
 	if fireable.is_empty():
 		return null
@@ -137,15 +137,16 @@ func default_attack(wielder: Unit) -> AttackData:
 # reason, the same law _attack_entry has always applied to a weapon's unfireable secondary, which
 # is why WeaponInstance.secondary_attacks likewise returns all of them. Whether a carving can be
 # paid for is asked per entry, by attack_block_reason.
-func choice_attacks(wielder: Unit) -> Array[AttackData]:
+func choice_attacks(wielder: UnitState) -> Array[AttackData]:
 	return fireable_only(wielder, repertoire(wielder))
 
 # A rune counters with whatever it is CURRENTLY firing — the live pick included (#30 quirk).
-# A weapon deliberately does NOT; see WeaponInstance.counter_attack.
-func counter_attack(wielder: Unit) -> AttackData:
-	return wielder.get_fired_attack()
+# A weapon deliberately does NOT; see WeaponInstance.counter_attack. Unit.get_fired_attack's own
+# answer, with the pick handed in.
+func counter_attack(wielder: UnitState, live_pick: AttackData) -> AttackData:
+	return live_pick if live_pick != null else default_attack(wielder)
 
-func channelable(wielder: Unit) -> Array[TransmutationData]:
+func channelable(wielder: UnitState) -> Array[TransmutationData]:
 	var result: Array[TransmutationData] = []
 	for t in inscriptions:
 		if t.can_channel(wielder, temper):
@@ -156,11 +157,11 @@ func channelable(wielder: Unit) -> Array[TransmutationData]:
 # Both delegate to the carving with this rune's TEMPER, which the carving cannot know on its own —
 # channeling is a property of the pairing, not of either half.
 
-func attack_block_reason(wielder: Unit, attack: AttackData) -> String:
+func attack_block_reason(wielder: UnitState, attack: AttackData) -> String:
 	var carving := attack as TransmutationData
 	return carving.channel_block_reason(wielder, temper) if carving != null else ""
 
-func attack_detail(wielder: Unit, attack: AttackData) -> String:
+func attack_detail(wielder: UnitState, attack: AttackData) -> String:
 	var carving := attack as TransmutationData
 	return carving.mechanical_text(wielder, temper) if carving != null else ""
 
@@ -173,7 +174,7 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 #
 # A refused rune says what EACH carving would need, because "one of three" means the player's choice
 # is which of the three gaps to close.
-func can_equip_reason(wielder: Unit) -> String:
+func can_equip_reason(wielder: UnitState) -> String:
 	if inscriptions.is_empty():
 		return "This rune is blank"
 	for carving: TransmutationData in inscriptions:

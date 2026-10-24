@@ -284,7 +284,7 @@ func test_load_does_not_re_run_the_wear_gate() -> void:
 	entry.apply_unit_state(b)
 
 	assert_object(b.worn_armor).is_not_null()
-	assert_bool(b.worn_armor.can_equip(b)).is_false()   # illegal, and kept anyway
+	assert_bool(b.worn_armor.can_equip(b.state)).is_false()   # illegal, and kept anyway
 
 func test_unarmored_unit_stays_unarmored() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
@@ -359,7 +359,7 @@ func test_affinity_survives_so_a_loaded_alchemist_can_still_channel() -> void:
 
 	var carving := TransmutationData.new()
 	carving.recipe = "Bind(Q, Q)"   # asks Aether 2
-	assert_bool(carving.can_channel(b, Elemental.Element.AETHER)).is_true()
+	assert_bool(carving.can_channel(b.state, Elemental.Element.AETHER)).is_true()
 
 func test_a_unit_with_no_affinity_stays_rebecca_after_a_round_trip() -> void:
 	# Empty affinity is a LEGAL saved value (the Rebecca rule), not "unsaved" -- which is why

@@ -91,7 +91,7 @@ func matches(other: Elemental.Element) -> bool:
 # This is NOT a second answer to can_equip_reason -- that one asks "may this be slotted", and a vial
 # is never slotted. And it is not a gate on any cast: the only thing it refuses is a burn that would
 # buy the holder nothing they do not already have, which is a kindness rather than a rule.
-func use_block_reason(user: Unit) -> String:
+func use_block_reason(user: UnitState) -> String:
 	if user == null:
 		return "There is nobody to use it."
 	# A non-sigil vial (Vitriol, #97) can empower no cast at all -- empowerment pays out as aura
@@ -104,19 +104,20 @@ func use_block_reason(user: Unit) -> String:
 	var held := user.attunement
 	if held == null:
 		return ""
+	# The name is identity, so it comes through the back-reference (#1480).
 	if held.is_alkahest:
 		# Alkahest already covers every element, so nothing can improve on it -- not even another
 		# alkahest vial.
-		return "%s is already attuned to %s." % [user.get_unit_name(), held.display_name]
+		return "%s is already attuned to %s." % [user.unit.get_unit_name(), held.display_name]
 	if not is_alkahest and held.element == element:
-		return "%s is already attuned to %s." % [user.get_unit_name(), Elemental.display_name(element)]
+		return "%s is already attuned to %s." % [user.unit.get_unit_name(), Elemental.display_name(element)]
 	return ""
 
 
 # What using this REPLACES -- "" when it replaces nothing. Separate from the refusal above because
 # an overwrite is allowed and merely worth saying out loud: the panel prints it on the button so the
 # trade is visible BEFORE the item is spent, never after.
-func use_replaces(user: Unit) -> String:
+func use_replaces(user: UnitState) -> String:
 	if user == null or user.attunement == null:
 		return ""
 	return user.attunement.display_name

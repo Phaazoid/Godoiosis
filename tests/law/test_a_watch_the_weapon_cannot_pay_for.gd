@@ -123,7 +123,7 @@ func test_reloading_brings_the_watch_back() -> void:
 	var watcher := _watcher(0)
 	assert_bool(watcher.watch.is_armed()).is_false()
 
-	(watcher.get_equipped_weapon() as CarbineWeaponInstance).reload(watcher)
+	(watcher.get_equipped_weapon() as CarbineWeaponInstance).reload(watcher.state)
 
 	assert_bool(watcher.watch.is_armed()).is_true()
 

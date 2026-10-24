@@ -40,10 +40,10 @@ func test_two_attacks_on_one_weapon_scale_off_different_stats() -> void:
 	unit.equipped_weapon = weapon
 
 	# Power is 0 on both, so base_damage IS the scaling contribution -- the claim is the routing.
-	assert_int(weapon.base_damage(unit, strong)).is_equal(unit.get_effective_stat(Stats.Stat.STR))
-	assert_int(weapon.base_damage(unit, quick)).is_equal(unit.get_effective_stat(Stats.Stat.DEX))
+	assert_int(weapon.base_damage(unit.state, strong)).is_equal(unit.get_effective_stat(Stats.Stat.STR))
+	assert_int(weapon.base_damage(unit.state, quick)).is_equal(unit.get_effective_stat(Stats.Stat.DEX))
 	# ...and they genuinely differ, so neither line above is passing by coincidence.
-	assert_int(weapon.base_damage(unit, strong)).is_not_equal(weapon.base_damage(unit, quick))
+	assert_int(weapon.base_damage(unit.state, strong)).is_not_equal(weapon.base_damage(unit.state, quick))
 
 func test_a_split_blend_lands_between_its_two_stats() -> void:
 	var unit := _wielder()
@@ -54,7 +54,7 @@ func test_a_split_blend_lands_between_its_two_stats() -> void:
 
 	var str_stat := unit.get_effective_stat(Stats.Stat.STR)
 	var dex_stat := unit.get_effective_stat(Stats.Stat.DEX)
-	var got := weapon.base_damage(unit, mixed)
+	var got := weapon.base_damage(unit.state, mixed)
 	assert_int(got).is_greater(mini(str_stat, dex_stat))
 	assert_int(got).is_less(maxi(str_stat, dex_stat))
 
@@ -66,11 +66,11 @@ func test_a_fitted_mod_shifts_the_attacks_own_blend() -> void:
 	var main := _attack(0, {Stats.Stat.STR: 100})
 	var weapon := _weapon(main)
 	unit.equipped_weapon = weapon
-	var unmodded := weapon.base_damage(unit, main)
+	var unmodded := weapon.base_damage(unit.state, main)
 
 	weapon.fit(0, _mod({Stats.Stat.DEX: 100}))
 	# STR 100 + DEX 100 = an even split, so the answer moves toward the (lower) DEX stat.
-	assert_int(weapon.base_damage(unit, main)).is_less(unmodded)
+	assert_int(weapon.base_damage(unit.state, main)).is_less(unmodded)
 
 func test_a_nudge_cannot_drive_a_weight_negative() -> void:
 	# A mod authored against a STR family, fitted to one that does not use STR at all. Left
@@ -82,10 +82,10 @@ func test_a_nudge_cannot_drive_a_weight_negative() -> void:
 	unit.equipped_weapon = weapon
 
 	weapon.fit(0, _mod({Stats.Stat.STR: -40}))
-	var blend := WeaponInstance.effective_blend(main, weapon.active_modules(unit))
+	var blend := WeaponInstance.effective_blend(main, weapon.active_modules(unit.state))
 	assert_int(blend.get(Stats.Stat.STR, 0)).is_greater_equal(0)
 	# The attack still scales off what it actually uses, unchanged.
-	assert_int(weapon.base_damage(unit, main)).is_equal(unit.get_effective_stat(Stats.Stat.DEX))
+	assert_int(weapon.base_damage(unit.state, main)).is_equal(unit.get_effective_stat(Stats.Stat.DEX))
 
 # --- The readout ---
 
@@ -106,11 +106,11 @@ func test_the_attack_tooltip_itemises_power_and_scaling() -> void:
 	var weapon := _weapon(main)
 	unit.equipped_weapon = weapon
 
-	var detail := weapon.attack_detail(unit, main)
+	var detail := weapon.attack_detail(unit.state, main)
 	assert_str(detail).contains("4 power")
 	assert_str(detail).contains("STR 100%")
 	# The headline survives above it -- the scaling line is an ADDITION, not a replacement.
-	assert_str(detail).contains(main.hit_text(weapon.base_damage(unit, main), weapon.effective_kind(unit, main)))
+	assert_str(detail).contains(main.hit_text(weapon.base_damage(unit.state, main), weapon.effective_kind(unit.state, main)))
 
 func test_a_damageless_attack_prints_no_blend() -> void:
 	# Scaling is suppressed entirely for a utility attack (#126), so naming a blend would describe
@@ -121,7 +121,7 @@ func test_a_damageless_attack_prints_no_blend() -> void:
 	var weapon := _weapon(utility)
 	unit.equipped_weapon = weapon
 
-	assert_str(weapon.attack_detail(unit, utility)).not_contains("power +")
+	assert_str(weapon.attack_detail(unit.state, utility)).not_contains("power +")
 
 # --- The lint ---
 

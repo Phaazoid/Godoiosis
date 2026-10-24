@@ -270,7 +270,7 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: BoardContext, asked: Dictionary) -> bool:
 	var by_origin: Dictionary = asked.get_or_add(attack, {})
 	if not by_origin.has(origin):
-		by_origin[origin] = CellSubstances.fizzle_reason(attack, origin, board, unit) != ""
+		by_origin[origin] = CellSubstances.fizzle_reason(attack, origin, board, unit.state) != ""
 	return by_origin[origin]
 
 
@@ -322,7 +322,7 @@ static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vec
 	for attack in AITactics.watch_attacks_for(unit):
 		var out: Dictionary = by_attack.get_or_add(attack, {})
 		for origin in origins:
-			if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+			if CellSubstances.fizzle_reason(attack, origin, board, unit.state) != "":
 				continue   # AITactics._try_overwatch arms no watch that would fizzle there
 			var lanes := AITactics.watch_lanes(unit, origin, attack, board)
 			for dir in lanes:

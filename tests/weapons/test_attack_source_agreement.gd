@@ -160,7 +160,7 @@ func test_can_fire_default_attack_is_false_without_a_main_attack() -> void:
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
 	unit.equipped_weapon = WeaponInstance.make(t)
 
-	assert_object(unit.equipped_weapon.default_attack(unit)).is_null()
+	assert_object(unit.equipped_weapon.default_attack(unit.state)).is_null()
 	assert_bool(unit.can_fire_default_attack()).is_false()
 
 # --- a null stamp means NO attack, on BOTH sides ---

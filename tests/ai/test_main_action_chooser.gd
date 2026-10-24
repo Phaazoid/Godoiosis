@@ -103,7 +103,7 @@ func test_the_ai_offers_no_candidate_for_a_carving_that_fizzles_where_it_stands(
 	var board := _board(units)
 	assert_bool(alch.is_attack_fireable(tied)).override_failure_message(
 			"fixture: the carving must be channelable, or the fizzle is not what refuses it").is_true()
-	assert_str(CellSubstances.fizzle_reason(tied, alch.movement.cell, board, alch)).override_failure_message(
+	assert_str(CellSubstances.fizzle_reason(tied, alch.movement.cell, board, alch.state)).override_failure_message(
 			"fixture: the carving must fizzle on this board").is_not_empty()
 
 	assert_array(AITactics._attack_candidates(alch, board, alch.movement.cell, {})).override_failure_message(

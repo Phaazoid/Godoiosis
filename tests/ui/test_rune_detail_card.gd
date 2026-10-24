@@ -329,7 +329,7 @@ func test_a_carving_the_carrier_cannot_channel_says_the_ladders_own_words() -> v
 	var card := await _open(rune, alch)
 
 	assert_str(card._aura.text).is_equal(
-		rune.inscriptions[0].channel_block_reason(alch, rune.temper))
+		rune.inscriptions[0].channel_block_reason(alch.state, rune.temper))
 	assert_str(card._aura.text).contains("Water")
 	# ...and the row in the list below carries that same refusal rather than inventing one.
 	assert_str(_list_tooltips(card)).contains("Water")
@@ -455,13 +455,13 @@ func test_a_row_says_how_comfortably_it_channels() -> void:
 	var leaning := _circle("Break(F, A) + Push(F)", "Zap Cannon")   # Air 0: one wildcard covers it
 	var refused := _circle("Push(W2)", "Pressure Spray")              # no Water anywhere: no anchor
 
-	assert_that(comfortable.channel_state(alch, FIRE)).override_failure_message(
+	assert_that(comfortable.channel_state(alch.state, FIRE)).override_failure_message(
 		"a recipe paid outright read as anything but clear"
 		).is_equal(TransmutationData.Channel.CLEAR)
-	assert_that(leaning.channel_state(alch, FIRE)).override_failure_message(
+	assert_that(leaning.channel_state(alch.state, FIRE)).override_failure_message(
 		"a carving leaning on a wildcard read the same as one paid outright"
 		).is_equal(TransmutationData.Channel.WILDCARD)
-	assert_that(refused.channel_state(alch, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
+	assert_that(refused.channel_state(alch.state, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
 
 	# ...and the three do not collapse onto two boxes on the way to the row.
 	var boxes := {}
@@ -483,7 +483,7 @@ func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
 	var alch := _alchemist({FIRE: 2})
 	var card := await _open(rune, alch)
 
-	assert_int(rune.inscriptions[0].total_deficit(alch)).override_failure_message(
+	assert_int(rune.inscriptions[0].total_deficit(alch.state)).override_failure_message(
 		"the fixture has no shortfall, so the wildcard half is absent either way").is_greater(0)
 
 	var text := _list_text(card)

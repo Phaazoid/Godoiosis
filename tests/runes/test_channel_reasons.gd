@@ -59,10 +59,10 @@ func test_no_aura_anywhere_reads_as_the_anchor_naming_the_elements() -> void:
 	var rebecca: Unit = _alchemist(no_aura)
 	var carving: TransmutationData = _carving("Push(F)")
 
-	var reason := carving.channel_block_reason(rebecca, FIRE)
+	var reason := carving.channel_block_reason(rebecca.state, FIRE)
 	assert_str(reason).contains("aura")
 	assert_str(reason).contains("Fire")
-	assert_bool(carving.can_channel(rebecca, FIRE)).is_false()
+	assert_bool(carving.can_channel(rebecca.state, FIRE)).is_false()
 
 
 func test_the_anchor_reason_lists_every_element_that_would_open_the_carving() -> void:
@@ -71,29 +71,29 @@ func test_the_anchor_reason_lists_every_element_that_would_open_the_carving() ->
 	var alch: Unit = _alchemist({ Elemental.Element.WATER: 5 })
 	var carving: TransmutationData = _carving("Break(F, E)")
 
-	var reason := carving.channel_block_reason(alch, FIRE)
+	var reason := carving.channel_block_reason(alch.state, FIRE)
 	assert_str(reason).contains("Fire")
 	assert_str(reason).contains("Earth")
-	assert_bool(carving.can_channel(alch, FIRE)).is_false()
+	assert_bool(carving.can_channel(alch.state, FIRE)).is_false()
 
 
 func test_a_coverage_shortfall_names_both_wildcard_numbers() -> void:
 	var alch: Unit = _alchemist({ FIRE: 1 })
 	var carving: TransmutationData = _carving("Push(F) + Push(F2)")   # Fire 3: deficit 2, capacity 1
 
-	var reason := carving.channel_block_reason(alch, FIRE)
+	var reason := carving.channel_block_reason(alch.state, FIRE)
 	assert_str(reason).contains("wildcard")
 	assert_str(reason).contains("2")
 	assert_str(reason).contains("1")
-	assert_bool(carving.can_channel(alch, FIRE)).is_false()
+	assert_bool(carving.can_channel(alch.state, FIRE)).is_false()
 
 
 func test_a_channelable_carving_has_no_reason_at_all() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 	var carving: TransmutationData = _carving("Push(F2)")
 
-	assert_str(carving.channel_block_reason(alch, FIRE)).is_empty()
-	assert_bool(carving.can_channel(alch, FIRE)).is_true()
+	assert_str(carving.channel_block_reason(alch.state, FIRE)).is_empty()
+	assert_bool(carving.can_channel(alch.state, FIRE)).is_true()
 
 
 # ==============================================================================
@@ -123,7 +123,7 @@ func test_the_unit_level_reason_is_the_carvings_own_words() -> void:
 	var rune: RuneData = _rune([dear])
 	alch.equipped_weapon = rune
 
-	assert_str(alch.attack_block_reason(dear)).is_equal(dear.channel_block_reason(alch, rune.temper))
+	assert_str(alch.attack_block_reason(dear)).is_equal(dear.channel_block_reason(alch.state, rune.temper))
 
 
 func test_an_empty_slot_and_a_null_attack_stay_inert() -> void:
@@ -186,12 +186,12 @@ func test_standing_on_a_source_does_not_grant_the_anchor() -> void:
 	var dry: Unit = _alchemist({})
 	var wet_carving: TransmutationData = _carving("Push(W2)", "Splash")
 
-	assert_bool(wet_carving.can_channel(dry, Elemental.Element.WATER)) \
+	assert_bool(wet_carving.can_channel(dry.state, Elemental.Element.WATER)) \
 		.override_failure_message("a materia source granted the anchor").is_false()
-	assert_str(wet_carving.channel_block_reason(dry, Elemental.Element.WATER)).is_not_empty()
+	assert_str(wet_carving.channel_block_reason(dry.state, Elemental.Element.WATER)).is_not_empty()
 	# ...and the source really is live for this pair, so the refusal above is not vacuous:
-	assert_int(wet_carving.base_damage(dry, EMPOWERED_WATER)) \
-		.is_greater(wet_carving.base_damage(dry))
+	assert_int(wet_carving.base_damage(dry.state, EMPOWERED_WATER)) \
+		.is_greater(wet_carving.base_damage(dry.state))
 
 
 func test_standing_on_a_source_does_not_widen_the_wildcard_budget() -> void:
@@ -200,10 +200,10 @@ func test_standing_on_a_source_does_not_widen_the_wildcard_budget() -> void:
 	var alch: Unit = _alchemist({ FIRE: 1 })
 	var stretched: TransmutationData = _carving("Push(F) + Push(W2)", "Steam")
 
-	assert_bool(stretched.can_channel(alch, FIRE)) \
+	assert_bool(stretched.can_channel(alch.state, FIRE)) \
 		.override_failure_message("a materia source paid a wildcard deficit").is_false()
-	assert_int(stretched.base_damage(alch, EMPOWERED_WATER)) \
-		.is_greater(stretched.base_damage(alch))
+	assert_int(stretched.base_damage(alch.state, EMPOWERED_WATER)) \
+		.is_greater(stretched.base_damage(alch.state))
 
 
 func test_a_rune_does_not_become_equippable_beside_a_source() -> void:
@@ -213,9 +213,9 @@ func test_a_rune_does_not_become_equippable_beside_a_source() -> void:
 	var wet_carving: TransmutationData = _carving("Push(W2)", "Splash")
 	var rune: RuneData = _rune([wet_carving])
 
-	assert_bool(rune.can_equip(dry)) \
+	assert_bool(rune.can_equip(dry.state)) \
 		.override_failure_message("a materia source made a dead rune equippable").is_false()
-	assert_str(rune.can_equip_reason(dry)).is_not_empty()
+	assert_str(rune.can_equip_reason(dry.state)).is_not_empty()
 
 
 # ==============================================================================
@@ -230,7 +230,7 @@ func test_a_refusal_reaches_the_readout_as_the_ladders_own_words() -> void:
 	var alch: Unit = _alchemist({ Elemental.Element.WATER: 5 })
 	var carving: TransmutationData = _carving("Break(F, E)")
 
-	assert_str(carving.aura_text(alch, FIRE)).is_equal(carving.channel_block_reason(alch, FIRE))
+	assert_str(carving.aura_text(alch.state, FIRE)).is_equal(carving.channel_block_reason(alch.state, FIRE))
 
 
 # The mutant this is the grave of: a positive sentence composed without asking the ladder first. Every
@@ -247,7 +247,7 @@ func test_no_refusal_is_ever_dressed_up_as_a_positive_sentence() -> void:
 	}
 	for alch: Unit in cases:
 		var carving: TransmutationData = cases[alch]
-		assert_str(carving.aura_text(alch, FIRE)).override_failure_message(
+		assert_str(carving.aura_text(alch.state, FIRE)).override_failure_message(
 			"a refused carving read as channelable").not_contains("Channels on")
 
 
@@ -262,14 +262,14 @@ func test_the_surplus_is_counted_once_per_delivered_element() -> void:
 	var spark: TransmutationData = _carving("Push(F)", "Spark")
 
 	# Measured against base_damage rather than retyped: the sentence's number IS what firing it pays.
-	var spare_on_flame := flame.base_damage(alch) - (flame.power + flame.demand_of(FIRE))
+	var spare_on_flame := flame.base_damage(alch.state) - (flame.power + flame.demand_of(FIRE))
 	assert_int(spare_on_flame).is_equal(3)
-	assert_str(flame.aura_text(alch, FIRE)).contains("3")
-	assert_str(flame.aura_text(alch, FIRE)).not_contains("6")
+	assert_str(flame.aura_text(alch.state, FIRE)).contains("3")
+	assert_str(flame.aura_text(alch.state, FIRE)).not_contains("6")
 	# ...and the same pool through a one-atom recipe is worth four.
-	var spare_on_spark := spark.base_damage(alch) - (spark.power + spark.demand_of(FIRE))
+	var spare_on_spark := spark.base_damage(alch.state) - (spark.power + spark.demand_of(FIRE))
 	assert_int(spare_on_spark).is_equal(4)
-	assert_str(spark.aura_text(alch, FIRE)).contains("4")
+	assert_str(spark.aura_text(alch.state, FIRE)).contains("4")
 
 
 # Aura past what the recipe asks, in an element it only SPENDS, buys no damage: Break(F, A) frees the
@@ -278,10 +278,10 @@ func test_spare_aura_in_an_element_the_recipe_only_spends_is_not_surplus() -> vo
 	var alch: Unit = _alchemist({ FIRE: 7, Elemental.Element.AIR: 4 })
 	var carving: TransmutationData = _carving("Break(F, A) + Push(F2)")
 
-	assert_int(carving.base_damage(alch) - (carving.power + carving.demand_of(FIRE))).is_equal(4)
-	assert_str(carving.aura_text(alch, FIRE)).contains("4")
+	assert_int(carving.base_damage(alch.state) - (carving.power + carving.demand_of(FIRE))).is_equal(4)
+	assert_str(carving.aura_text(alch.state, FIRE)).contains("4")
 	# Counting the spare Air too would make it seven.
-	assert_str(carving.aura_text(alch, FIRE)).not_contains("7")
+	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("7")
 
 
 # A carving whose recipe the carrier covers exactly has no surplus to describe, so the sentence stops
@@ -290,8 +290,8 @@ func test_an_exactly_covered_circle_claims_no_spare_damage() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 	var carving: TransmutationData = _carving("Push(F2)")
 
-	assert_str(carving.aura_text(alch, FIRE)).contains("Channels on")
-	assert_str(carving.aura_text(alch, FIRE)).not_contains("damage")
+	assert_str(carving.aura_text(alch.state, FIRE)).contains("Channels on")
+	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("damage")
 
 
 # A utility carving suppresses scaling outright (#126), so its spare aura buys nothing. Saying
@@ -301,9 +301,9 @@ func test_a_utility_circle_never_promises_damage_for_its_spare_aura() -> void:
 	var gust: TransmutationData = _carving("Push(F)")
 	gust.deals_no_damage = true
 
-	assert_int(gust.base_damage(alch)).is_equal(0)
-	assert_str(gust.aura_text(alch, FIRE)).contains("Channels on")
-	assert_str(gust.aura_text(alch, FIRE)).not_contains("damage")
+	assert_int(gust.base_damage(alch.state)).is_equal(0)
+	assert_str(gust.aura_text(alch.state, FIRE)).contains("Channels on")
+	assert_str(gust.aura_text(alch.state, FIRE)).not_contains("damage")
 
 
 # ==============================================================================
@@ -318,14 +318,14 @@ func test_the_three_channel_states_are_the_ladders_own_three_outcomes() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 
 	# Paid outright: anchored, nothing owed.
-	assert_that(_carving("Push(F)").channel_state(alch, FIRE)).is_equal(
+	assert_that(_carving("Push(F)").channel_state(alch.state, FIRE)).is_equal(
 		TransmutationData.Channel.CLEAR)
 	# Channels, but a wildcard is covering the Air it never grew.
-	assert_that(_carving("Break(F, A) + Push(F)").channel_state(alch, FIRE)).is_equal(
+	assert_that(_carving("Break(F, A) + Push(F)").channel_state(alch.state, FIRE)).is_equal(
 		TransmutationData.Channel.WILDCARD)
 	# No anchor at all.
 	assert_that(_carving("Push(W2)").channel_state(
-		alch, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
+		alch.state, FIRE)).is_equal(TransmutationData.Channel.REFUSED)
 
 
 # DERIVED, not a third opinion: anything the ladder refuses is REFUSED whatever its deficit reads,
@@ -335,9 +335,9 @@ func test_a_refused_carving_is_never_reported_as_merely_leaning() -> void:
 	# Deficit 2 against a capacity of 1 -- it has a shortfall AND it is refused.
 	var carving: TransmutationData = _carving("Push(F) + Push(F2)")
 
-	assert_int(carving.total_deficit(alch)).is_greater(0)
-	assert_str(carving.channel_block_reason(alch, FIRE)).is_not_empty()
-	assert_that(carving.channel_state(alch, FIRE)).override_failure_message(
+	assert_int(carving.total_deficit(alch.state)).is_greater(0)
+	assert_str(carving.channel_block_reason(alch.state, FIRE)).is_not_empty()
+	assert_that(carving.channel_state(alch.state, FIRE)).override_failure_message(
 		"a refused carving reported as merely leaning on a wildcard"
 		).is_equal(TransmutationData.Channel.REFUSED)
 

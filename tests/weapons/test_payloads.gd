@@ -651,7 +651,7 @@ func test_a_carving_payload_scales_off_the_throwers_aura() -> void:
 	_foe(Vector2i(0, -1))   # a hit on nobody resolves no damage at all
 	var dropped := _dropped(_resolve(thrower, Vector2i(0, -1)).attacks)
 	var none: Array[Elemental.Element] = []
-	assert_int(dropped[0].resolved.base_damage).is_equal(carving.base_damage(thrower, none))
+	assert_int(dropped[0].resolved.base_damage).is_equal(carving.base_damage(thrower.state, none))
 
 
 # A weapon attack thrown with no weapon in hand is still a real hit: its own blend over the

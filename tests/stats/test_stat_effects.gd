@@ -129,11 +129,11 @@ func test_the_pipeline_order_is_base_limb_jobs_effects_gear() -> void:
 func test_a_buff_can_unlock_a_gated_armor() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 5}, false)
 	var heavy := _gated_armor(Stats.Stat.CON, 8)
-	assert_bool(heavy.can_equip(unit)).is_false()
+	assert_bool(heavy.can_equip(unit.state)).is_false()
 
 	unit.apply_stat_effect(_effect({Stats.Stat.CON: 3}))
 
-	assert_bool(heavy.can_equip(unit)).is_true()
+	assert_bool(heavy.can_equip(unit.state)).is_true()
 
 
 func test_gates_still_ignore_the_wearers_own_gear() -> void:
@@ -144,7 +144,7 @@ func test_gates_still_ignore_the_wearers_own_gear() -> void:
 	var heavy := _gated_armor(Stats.Stat.CON, 8)
 	unit.worn_armor = _armor({Stats.Stat.CON: 5})
 	assert_int(unit.get_effective_stat(Stats.Stat.CON)).is_equal(10)
-	assert_bool(heavy.can_equip(unit)).is_false()
+	assert_bool(heavy.can_equip(unit.state)).is_false()
 
 
 # --- forced unequip ---

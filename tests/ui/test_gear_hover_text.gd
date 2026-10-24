@@ -206,7 +206,7 @@ func test_a_carried_row_itemizes_for_the_unit_holding_it() -> void:
 	assert_object(card).is_not_null()
 	var row := _row_for(card, plate)
 	assert_object(row).override_failure_message("the card drew no row for the carried armour").is_not_null()
-	_assert_says(row.tooltip_text, plate.mechanical_text(wearer),
+	_assert_says(row.tooltip_text, plate.mechanical_text(wearer.state),
 		"the card hovers a piece of armour without the numbers it is worth to THIS unit")
 
 
@@ -224,7 +224,7 @@ func test_the_stash_drops_the_terms_that_need_a_wearer() -> void:
 	mc.loadout().stash.append(loose)
 	await _redraw()
 
-	var itemized := loose.mechanical_text(wearer)
+	var itemized := loose.mechanical_text(wearer.state)
 	var bare := loose.mechanical_text(null)
 	assert_str(itemized).override_failure_message(
 		"itemized and bare read the same, so this case could not tell them apart"

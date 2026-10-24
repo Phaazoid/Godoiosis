@@ -82,12 +82,12 @@ func test_a_carving_needing_what_a_conduit_holds_fizzles_without_it_and_holds_wi
 	var carving := _draws(holds)
 	var caster := _alchemist(HERE, carving)
 
-	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).override_failure_message(
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster.state)).override_failure_message(
 			"the fixture's board offers the held substance already, so the conduit is not what is measured"
 			).is_not_empty()
 
 	assert_bool(caster.add_item(_conduit(holds))).is_true()
-	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).override_failure_message(
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster.state)).override_failure_message(
 			"a carried conduit did not make its substance present for its carrier").is_empty()
 
 
@@ -99,9 +99,9 @@ func test_a_conduit_supplies_more_than_one() -> void:
 		return
 	var carving := _draws(holds, 3)
 	var caster := _alchemist(HERE, carving)
-	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).contains("source of")
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster.state)).contains("source of")
 	assert_bool(caster.add_item(_conduit(holds))).is_true()
-	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).override_failure_message(
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster.state)).override_failure_message(
 			"a conduit supplied too little for an amount of three").is_empty()
 
 
@@ -115,7 +115,7 @@ func test_a_conduit_in_a_neighbours_pack_does_not_count() -> void:
 	var neighbour := H.spawn_solo(self, _sm, PLAYER, NEXT_DOOR, {}, false)
 	assert_bool(neighbour.add_item(_conduit(holds))).is_true()
 
-	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster)).override_failure_message(
+	assert_str(CellSubstances.fizzle_reason(carving, HERE, _board(), caster.state)).override_failure_message(
 			"a conduit counted for the unit standing beside its carrier").is_not_empty()
 
 

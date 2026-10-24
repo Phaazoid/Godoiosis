@@ -115,18 +115,18 @@ func test_the_unit_line_prints_the_main_a_mod_put_there_and_its_composed_marks()
 	assert_bool(inst.fit(0, mod)).override_failure_message("fixture: the mod did not fit").is_true()
 	unit.add_item(inst)
 	var sess = PlaySession.new(b)
-	var main := inst.effective_main(unit)
+	var main := inst.effective_main(unit.state)
 	if main == template.main_attack:
 		fail("fixture: the fitted mod did not replace the main, so the line cannot show it")
 		return
-	assert_bool(inst.effective_hits_allies(unit, main)).override_failure_message(
+	assert_bool(inst.effective_hits_allies(unit.state, main)).override_failure_message(
 			"fixture: the mod does not make the main hit allies").is_true()
 
 	var line: String = BoardView._unit_line(sess, unit)
 
 	assert_str(line).override_failure_message("the line does not name the main it fires: %s" % line) \
 			.contains(main.display_name)
-	for element in inst.get_elements(unit, main):
+	for element in inst.get_elements(unit.state, main):
 		assert_str(line).override_failure_message("the line drops the %s the mod adds: %s"
 				% [Elemental.Element.keys()[element], line]).contains("/" + Elemental.Element.keys()[element])
 	assert_str(line).override_failure_message("the line drops the friendly fire the mod turns on: %s" % line) \

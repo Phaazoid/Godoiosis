@@ -590,7 +590,7 @@ func test_a_carving_that_would_fizzle_is_greyed_with_the_reason() -> void:
 	var spray: AttackData = alch.get_transmutation_choices()[0]
 	assert_bool(alch.is_attack_fireable(spray)).override_failure_message(
 			"fixture: the carving must be channelable, or channeling is what greys it").is_true()
-	var reason := CellSubstances.fizzle_reason(spray, alch.get_projected_destination(), game._board(), alch)
+	var reason := CellSubstances.fizzle_reason(spray, alch.get_projected_destination(), game._board(), alch.state)
 	assert_str(reason).override_failure_message(
 			"fixture: the grass row holds no water, so the carving must fizzle").is_not_empty()
 
@@ -641,7 +641,7 @@ func test_a_watch_carving_that_would_fizzle_greys_its_watch_row_with_the_reason(
 	assert_object(alch.get_equipped_weapon()).override_failure_message("fixture failed to equip the rune").is_same(rune)
 	assert_bool(alch.is_attack_fireable(spray)).override_failure_message(
 			"fixture: the watch carving must be channelable, or channeling is what greys it").is_true()
-	var reason := CellSubstances.fizzle_reason(spray, alch.get_projected_destination(), game._board(), alch)
+	var reason := CellSubstances.fizzle_reason(spray, alch.get_projected_destination(), game._board(), alch.state)
 	assert_str(reason).override_failure_message("fixture: the grass row holds no water").is_not_empty()
 
 	await _enter_attack_ring(alch)

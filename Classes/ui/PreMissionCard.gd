@@ -822,7 +822,7 @@ func equip_block_reason(item: Item) -> String:
 	var equippable := item as EquippableData
 	if equippable == null:
 		return ""
-	return equippable.can_equip_reason(unit)
+	return equippable.can_equip_reason(unit.state)
 
 
 static func _clear(container: Node) -> void:

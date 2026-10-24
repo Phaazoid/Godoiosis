@@ -26,7 +26,7 @@ func tank_charges() -> int:
 
 # THE INJECTION. Reload's verb, and the first in the game whose rearm consumes inventory -- which is
 # the whole reason the seam takes a wielder now.
-func reload_block_reason(wielder: Unit) -> String:
+func reload_block_reason(wielder: UnitState) -> String:
 	if wielder == null:
 		return "There is nobody holding it."
 	if charges >= TANK_SIZE:
@@ -36,7 +36,7 @@ func reload_block_reason(wielder: Unit) -> String:
 	return ""
 
 
-func reload(wielder: Unit) -> void:
+func reload(wielder: UnitState) -> void:
 	if reload_block_reason(wielder) != "":
 		return
 	wielder.inventory[_vial_slot(wielder)] = null   # the vial is gone; the tank is what remains
@@ -57,7 +57,7 @@ func has_reload_verb() -> bool:
 #
 # ELEMENT-SPECIFIC FIRST. Alkahest is authored sparingly and answers for everything, so spending it
 # on a spitter that had an ordinary vial in the next slot is the one outcome nobody would choose.
-func _vial_slot(wielder: Unit) -> int:
+func _vial_slot(wielder: UnitState) -> int:
 	var element := _tank_element(wielder)
 	var alkahest := -1
 	for i in wielder.inventory.size():
@@ -76,7 +76,7 @@ func _vial_slot(wielder: Unit) -> int:
 # chooses (the ratified model, #97). Read through effective_main so a mod that replaced the main
 # also moved what the tank takes; asked of the BASE form, since the empowered one is what the tank
 # BUYS and cannot be what qualifies it.
-func _tank_element(wielder: Unit) -> Elemental.Element:
+func _tank_element(wielder: UnitState) -> Elemental.Element:
 	var main := base_main(wielder)
 	return main.elemental_damage_type if main != null else Elemental.Element.NONE
 
@@ -86,7 +86,7 @@ func gauge() -> WeaponGauge:
 
 # The tank reaches no attack through the readiness flags (see the header), so the row it shows on is
 # the one it changes: the main, under either form.
-func attack_gauge(wielder: Unit, attack: AttackData) -> WeaponGauge:
+func attack_gauge(wielder: UnitState, attack: AttackData) -> WeaponGauge:
 	return gauge() if is_main_form(wielder, attack) else null
 
 func status_text() -> String:

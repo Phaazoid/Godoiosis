@@ -71,11 +71,11 @@ func test_wear_gates_ignore_the_wearers_own_gear_tax() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.DEX: 5})
 	var ceiling := ArmorData.new()
 	ceiling.stat_maximums[Stats.Stat.DEX] = 4
-	assert_bool(ceiling.can_equip(unit)).is_false()
+	assert_bool(ceiling.can_equip(unit.state)).is_false()
 
 	unit.worn_armor = _taxing_armor(Stats.Stat.DEX, -1)   # effective DEX is now 4...
 	assert_int(unit.get_effective_stat(Stats.Stat.DEX)).is_equal(4)
-	assert_bool(ceiling.can_equip(unit)).is_false()       # ...but the gate still says no
+	assert_bool(ceiling.can_equip(unit.state)).is_false()       # ...but the gate still says no
 
 
 func test_gear_tax_composes_with_a_temporary_effect() -> void:

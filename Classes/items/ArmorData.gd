@@ -54,7 +54,7 @@ func coverage_text() -> String:
 #
 # EVERY failing gate is named, not the first: two points short on CON and three over on DEX is a
 # piece your build cannot wear, and a player told only about the CON goes and fixes the wrong thing.
-func can_equip_reason(wearer: Unit) -> String:
+func can_equip_reason(wearer: UnitState) -> String:
 	# Gates read the wearer's BODY — base -> limb -> jobs -> temporary effects — and NEVER gear
 	# (#112, amending #55/#89). Two rules in one line:
 	#
@@ -104,7 +104,7 @@ static func _gate_text(stat: Stats.Stat, value: int, is_ceiling: bool) -> String
 #
 # Both numbers are the wearer's PREVIEW with this piece swapped in (#745), never their live CON:
 # that would judge this piece against whatever is already worn (#1410).
-func mechanical_text(wearer: Unit) -> String:
+func mechanical_text(wearer: UnitState) -> String:
 	var lines: Array[String] = []
 	if wearer != null:
 		var con := wearer.previewed_stat(Stats.Stat.CON, self)

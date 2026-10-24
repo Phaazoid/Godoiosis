@@ -39,10 +39,10 @@ func test_a_retuned_mod_rewords_the_attack_readout() -> void:
 	mod.display_name = "Test Mod"
 	mod.power_delta = 3
 	assert_bool(weapon.fit(0, mod)).override_failure_message("fixture: the mod did not fit").is_true()
-	var before := weapon.attack_detail(unit, attack)
+	var before := weapon.attack_detail(unit.state, attack)
 
 	mod.power_delta = 9
-	var after := weapon.attack_detail(unit, attack)
+	var after := weapon.attack_detail(unit.state, attack)
 	assert_str(after).override_failure_message(
 		"the readout did not follow the mod's power: %s" % after).is_not_equal(before)
 	assert_str(after).override_failure_message(
@@ -57,9 +57,9 @@ func test_a_retuned_plate_rewords_its_own_def_line() -> void:
 	plate.def_power = 2
 	var wearer := _wielder({Stats.Stat.CON: 6})
 
-	var before := plate.mechanical_text(wearer)
+	var before := plate.mechanical_text(wearer.state)
 	plate.def_power = 5
-	assert_str(plate.mechanical_text(wearer)).override_failure_message(
+	assert_str(plate.mechanical_text(wearer.state)).override_failure_message(
 		"the DEF readout ignored the piece's own power").is_not_equal(before)
 
 
@@ -82,7 +82,7 @@ func test_a_hovered_plate_is_judged_without_the_plate_already_worn() -> void:
 	assert_int(live_reading).override_failure_message(
 		"fixture: the worn plate's CON must move the hovered plate's DEF, or this case proves nothing"
 		).is_not_equal(promised)
-	var text := hovered.mechanical_text(wearer)
+	var text := hovered.mechanical_text(wearer.state)
 	assert_str(text).override_failure_message(
 		"the hover must promise the DEF the pre-mission card's arrow shows (%d): %s" % [promised, text]
 		).contains("DEF %d " % promised)

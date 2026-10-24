@@ -167,9 +167,9 @@ func test_a_hot_tank_makes_the_empowered_form_the_main() -> void:
 	var base := weapon.template.main_attack
 	var charged := base.empowered_form
 
-	assert_object(weapon.effective_main(unit)).is_same(base)
+	assert_object(weapon.effective_main(unit.state)).is_same(base)
 	unit.reload_weapon()
-	assert_object(weapon.effective_main(unit)).override_failure_message(
+	assert_object(weapon.effective_main(unit.state)).override_failure_message(
 		"a full tank did not swap the main for its empowered form").is_same(charged)
 
 	# ...and every surface that reads the main follows, which is the point of substituting at ONE
@@ -178,7 +178,7 @@ func test_a_hot_tank_makes_the_empowered_form_the_main() -> void:
 	assert_object(unit.get_counter_attack()).is_same(charged)
 
 	weapon.charges = 0
-	assert_object(weapon.effective_main(unit)).is_same(base)
+	assert_object(weapon.effective_main(unit.state)).is_same(base)
 
 
 func test_the_base_form_is_never_offered_as_a_secondary_attack() -> void:
@@ -188,7 +188,7 @@ func test_the_base_form_is_never_offered_as_a_secondary_attack() -> void:
 	unit.reload_weapon()
 	var weapon := _tank(unit)
 
-	for attack: AttackData in weapon.secondary_attacks(unit):
+	for attack: AttackData in weapon.secondary_attacks(unit.state):
 		assert_object(attack).override_failure_message(
 			"the base form is listed as a secondary attack while the tank is hot").is_not_same(
 			weapon.template.main_attack)
@@ -202,7 +202,7 @@ func test_a_weapon_with_no_empowered_form_is_untouched_by_a_charge() -> void:
 	weapon.template.main_attack.empowered_form = null
 	weapon.charges = ChemicalSpitterWeaponInstance.TANK_SIZE
 
-	assert_object(weapon.effective_main(unit)).is_same(weapon.template.main_attack)
+	assert_object(weapon.effective_main(unit.state)).is_same(weapon.template.main_attack)
 
 
 func test_a_mod_fitted_to_the_main_still_reaches_the_charged_form() -> void:
@@ -223,12 +223,12 @@ func test_a_mod_fitted_to_the_main_still_reaches_the_charged_form() -> void:
 	# Measured against an UNMODDED twin rather than against raw power: base_damage also folds in
 	# the stat blend, so subtracting `power` alone would be comparing against the wrong number.
 	var plain := _tank(_wielder())
-	var base_gain := weapon.base_damage(unit, weapon.template.main_attack) \
-			- plain.base_damage(unit, plain.template.main_attack)
+	var base_gain := weapon.base_damage(unit.state, weapon.template.main_attack) \
+			- plain.base_damage(unit.state, plain.template.main_attack)
 	weapon.charges = ChemicalSpitterWeaponInstance.TANK_SIZE
 	plain.charges = ChemicalSpitterWeaponInstance.TANK_SIZE
-	var charged_gain := weapon.base_damage(unit, charged) \
-			- plain.base_damage(unit, plain.template.main_attack.empowered_form)
+	var charged_gain := weapon.base_damage(unit.state, charged) \
+			- plain.base_damage(unit.state, plain.template.main_attack.empowered_form)
 
 	assert_int(base_gain).override_failure_message(
 		"the mod does not reach the BASE form either -- the fixture is wrong, not the rule"
@@ -241,9 +241,9 @@ func test_a_mod_fitted_to_the_main_still_reaches_the_charged_form() -> void:
 func test_both_forms_answer_as_the_main() -> void:
 	var unit := _wielder()
 	var weapon := _tank(unit)
-	assert_bool(weapon.is_main_form(unit, weapon.template.main_attack)).is_true()
-	assert_bool(weapon.is_main_form(unit, weapon.template.main_attack.empowered_form)).is_true()
-	assert_bool(weapon.is_main_form(unit, WeaponAttackData.new())).is_false()
+	assert_bool(weapon.is_main_form(unit.state, weapon.template.main_attack)).is_true()
+	assert_bool(weapon.is_main_form(unit.state, weapon.template.main_attack.empowered_form)).is_true()
+	assert_bool(weapon.is_main_form(unit.state, WeaponAttackData.new())).is_false()
 
 
 # --- 3. the spend ---

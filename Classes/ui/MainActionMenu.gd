@@ -399,7 +399,7 @@ func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
 func _use_reason(unit: Unit, attack: AttackData) -> String:
 	var reason := AttackAction.fire_block_reason(unit, attack)
 	if reason == "":
-		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), game._board(), unit)
+		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), game._board(), unit.state)
 	return reason
 
 # Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring

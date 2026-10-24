@@ -195,7 +195,7 @@ func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 			use_btn.text = "Use — %s" % refusal
 			use_btn.disabled = true
 		else:
-			var replaced := vial.use_replaces(unit)
+			var replaced := vial.use_replaces(unit.state)
 			use_btn.text = "Use" if replaced == "" else "Use — replaces %s" % replaced
 			use_btn.pressed.connect(_do_use.bind(index))
 		vbox.add_child(use_btn)
@@ -307,8 +307,8 @@ func refresh():
 
 			# Append elemental damage — the computed view, so mod-added elements show too.
 			if item is WeaponInstance and unit != null:
-				var slot_main: WeaponAttackData = item.default_attack(unit) as WeaponAttackData
-				var elems: Array[Elemental.Element] = item.get_elements(unit, slot_main)
+				var slot_main: WeaponAttackData = item.default_attack(unit.state) as WeaponAttackData
+				var elems: Array[Elemental.Element] = item.get_elements(unit.state, slot_main)
 				if not elems.is_empty():
 					display_name += "  [%s]" % Elemental.display_name(elems[0])
 

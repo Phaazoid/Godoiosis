@@ -36,7 +36,7 @@ func gauge() -> WeaponGauge:
 
 # Rev reaches every attack this weapon fires, not the flag-authored ones (ignores_def is asked per
 # weapon, PlanResolver's mitigation stage).
-func attack_gauge(_wielder: Unit, attack: AttackData) -> WeaponGauge:
+func attack_gauge(_wielder: UnitState, attack: AttackData) -> WeaponGauge:
 	return gauge() if attack is WeaponAttackData else null
 
 func status_text() -> String:

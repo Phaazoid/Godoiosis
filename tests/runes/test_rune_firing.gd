@@ -99,7 +99,7 @@ func test_no_transmutation_uses_the_weapon() -> void:
 	PlanResolver.resolve(plan, no_reactions)
 
 	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
-	assert_int(atk.resolved.damage).is_equal(weapon.base_damage(attacker, weapon.template.main_attack))
+	assert_int(atk.resolved.damage).is_equal(weapon.base_damage(attacker.state, weapon.template.main_attack))
 
 # --- B2: the in-game firing path (auto-select + resolve_plan propagation) ---
 
@@ -115,6 +115,22 @@ func test_get_fired_attack_auto_picks_first_channelable_carving() -> void:
 	var fireball: TransmutationData = _fireball(5, EquippableData.TargetMode.BOTH)
 	alch.equipped_weapon = _make_rune(fireball)
 	assert_object(alch.get_fired_attack()).is_same(fireball)
+
+# A rune counters with its LIVE pick, not its first carving (#30) -- the weapon's opposite, which
+# test_weapon_attack_selection pins. The pick lives on the Unit and is handed to the rune (#1480), so
+# this is the wire that hands it over.
+func test_rune_wielder_counters_with_its_live_pick() -> void:
+	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 3 })
+	var first: TransmutationData = _fireball(5, EquippableData.TargetMode.BOTH)
+	var second: TransmutationData = _fireball(7, EquippableData.TargetMode.BOTH)
+	var rune := _make_rune(first)
+	assert_bool(rune.inscribe(second)).override_failure_message("precondition: the rune holds both").is_true()
+	alch.equipped_weapon = rune
+	assert_object(alch.get_counter_attack()).override_failure_message(
+		"with no pick, a rune counters with its first channelable carving").is_same(first)
+	alch.active_attack = second
+	assert_object(alch.get_counter_attack()).override_failure_message(
+		"a rune countered with its first carving rather than the live pick").is_same(second)
 
 # An aim carrying a carving survives resolve_plan: the derived cell attack keeps it and fires
 # aura-scaled, igniting the tree through the real terrain-reaction catalog (Burning.tres). The

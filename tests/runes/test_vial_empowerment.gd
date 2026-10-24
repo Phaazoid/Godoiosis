@@ -120,28 +120,28 @@ func test_a_second_vial_replaces_the_first() -> void:
 func test_using_a_vial_you_are_already_attuned_to_is_refused() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 	alch.attunement = _vial(FIRE)
-	assert_str(_vial(FIRE).use_block_reason(alch)).is_not_empty()
+	assert_str(_vial(FIRE).use_block_reason(alch.state)).is_not_empty()
 
 func test_an_element_vial_is_refused_over_an_alkahest_charge() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 	alch.attunement = _vial(Elemental.Element.NONE, true)
-	assert_str(_vial(FIRE).use_block_reason(alch)).is_not_empty()
+	assert_str(_vial(FIRE).use_block_reason(alch.state)).is_not_empty()
 
 # The other direction is an UPGRADE and must stay allowed -- alkahest covers what fire does and more.
 func test_an_alkahest_vial_may_replace_an_element_charge() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 	alch.attunement = _vial(FIRE)
-	assert_str(_vial(Elemental.Element.NONE, true).use_block_reason(alch)).is_equal("")
+	assert_str(_vial(Elemental.Element.NONE, true).use_block_reason(alch.state)).is_equal("")
 
 func test_a_different_element_may_replace_a_charge_and_says_what_it_replaces() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2, WATER: 2 })
 	alch.attunement = _vial(FIRE)
 	var water := _vial(WATER)
-	assert_str(water.use_block_reason(alch)).is_equal("")
-	assert_str(water.use_replaces(alch)).is_equal(alch.attunement.display_name)
+	assert_str(water.use_block_reason(alch.state)).is_equal("")
+	assert_str(water.use_replaces(alch.state)).is_equal(alch.attunement.display_name)
 
 func test_a_vial_replaces_nothing_when_nothing_is_held() -> void:
-	assert_str(_vial(FIRE).use_replaces(_alchemist({ FIRE: 2 }))).is_equal("")
+	assert_str(_vial(FIRE).use_replaces(_alchemist({ FIRE: 2 }).state)).is_equal("")
 
 # --- the payload ------------------------------------------------------------------------------
 
