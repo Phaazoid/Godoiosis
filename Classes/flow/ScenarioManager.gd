@@ -249,11 +249,17 @@ func restore_board(snapshot: BoardSnapshot) -> void:
 # authored (#177): cast units — those spawned from a standalone character file — save as a
 # REFERENCE to that file with no state captured, so every load re-reads the character as it is
 # then. Default false keeps every other caller (BugReporter's #87 mid-battle snapshot above all)
-# a byte-exact capture. Ad-hoc units snapshot fully in both modes; nothing else holds them.
+# a byte-exact capture. Ad-hoc units snapshot fully in both modes; nothing else holds them. An
+# authored save also writes no fire countdowns (#1483).
 func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	var scenario := ScenarioData.new()
 	scenario.scenario_name = scenario_name
 	capture_board().write_into(scenario)
+	# #1483: a fire's live countdown is a battle fact, so an authored save keeps none and each fire
+	# loads on its ground's own clock. Dropped HERE, not in capture_board: the authoring undo and
+	# every full capture put the clocks back exactly as they were.
+	if authored:
+		scenario.terrain_state_turns = {}
 	scenario.active_faction = turn_manager.active_faction()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
 	scenario.lose_conditions = game.mission_controller.lose_conditions.duplicate()   # #101: what loses it

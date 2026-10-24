@@ -4,7 +4,8 @@
 # having had two fire buttons for what is now one state on two grounds; right-click still clears the
 # whole cell. The round-trip case pins the two load-path fixes this feature exposed: clear_board
 # clears terrain state (and its icons), and apply_scenario redraws it (authored fire visible at turn
-# one, not at the first round tick).
+# one, not at the first round tick). The countdown cases at the bottom pin #1483: an authoring save
+# drops a fire's live clock, while a full capture and an undo keep it.
 #
 # The mouse->cell half (_paint reading get_global_mouse_position) can't be aimed headless; these
 # cases drive _paint_state/_erase_state directly beneath the dispatch match, and set the brush's
@@ -242,3 +243,52 @@ func test_the_authoring_loop_round_trips_with_icons() -> void:
 	game.scenario_manager.apply_scenario(captured)
 	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.COVER)).is_true()
 	assert_int(_live_icon_count()).is_equal(1)
+
+
+# --- an authoring save keeps no live countdown (#1483) ------------------------------------
+#
+# A countdown is a battle fact. An authoring save used to write whatever the clocks read when it
+# was pressed, so turns passed in dev mode shipped a mission whose fires were already part spent.
+# Each case spends one turn first, so the live remainder and the ground's clock differ.
+
+func _light_and_spend_one_turn() -> int:
+	var full := _burn_ticks()
+	assert_int(full).override_failure_message(
+			"precondition: grass burns for a single turn, so a spent fire is already out and nothing below proves anything"
+			).is_greater(1)
+	_brush._tile_state = Terrain.TileState.BURNING
+	game.dev_controller._paint_state(CELL)
+	game.terrain_states.tick_states()
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("precondition: the tick never spent the painted fire's clock") \
+		.is_equal(full - 1)
+	return full
+
+func test_an_authoring_save_starts_each_fire_on_its_grounds_clock() -> void:
+	var full := _light_and_spend_one_turn()
+	var captured: ScenarioData = game.scenario_manager.capture_scenario("authored-fire", true)
+	game.scenario_manager.apply_scenario(captured)
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the authoring save kept the live countdown, so the mission opens with its fire part spent") \
+		.is_equal(full)
+
+func test_a_full_capture_keeps_the_live_countdown() -> void:
+	# The control. A save slot, a bug report and a telemetry board all capture with authored=false:
+	# each puts a battle back, so the fire resumes where it had got to.
+	var full := _light_and_spend_one_turn()
+	var captured: ScenarioData = game.scenario_manager.capture_scenario("mid-battle-fire", false)
+	game.scenario_manager.apply_scenario(captured)
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("a full capture lost the fire's live countdown") \
+		.is_equal(full - 1)
+
+func test_an_authoring_undo_puts_the_live_countdown_back() -> void:
+	# capture_board is the undo's snapshot (#391), apart from the authored capture: an undo puts the
+	# board back as it was, clocks included.
+	var full := _light_and_spend_one_turn()
+	var snapshot: BoardSnapshot = game.scenario_manager.capture_board()   # typed: game is untyped
+	game.dev_controller._erase_state(CELL)
+	game.scenario_manager.restore_board(snapshot)
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("restoring the undo snapshot reset the fire's countdown") \
+		.is_equal(full - 1)
