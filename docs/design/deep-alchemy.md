@@ -868,7 +868,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - `TileHitAction.end_of_turn` is the one composition of a unit's whole end of turn, in play order: gas, then sky, then burn. Both the forecast and the pass call it. It threads the lethality situation between damage rows (`LethalityRules.land_rung`), because steam over fire is two damage rows and the burn is predicted on the HP the scald leaves.
   - The Play API reports the damage line, and the tile card's gas row says "3 damage at end of turn".
 - **The AI avoids ending in scalding steam** while a safe cell offers the same: `AITactics._is_hazard` asks `RulesService.gas_damage_at`, beside the burn. It still scores no end-of-turn row in the resolve (#117).
-- **Declared:** the board's health bar shows no end-of-turn damage, fire's or steam's. The rows never write the plan's hypo, so the END OF TURN row and the Play API are the forecast.
+- **Declared, then built by [#1428](https://github.com/Phaazoid/Godoiosis/issues/1428) (2026-10-23):** the board's health bar showed no end-of-turn damage, fire's or steam's, because the rows never write the plan's hypo. It now draws them in the same amber as a queued hit, for every unit of the side whose turn is ending, so a downed ally lying in scalding steam shows its death.
 
 **Next:**
 - **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.

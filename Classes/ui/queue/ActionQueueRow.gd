@@ -260,10 +260,9 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# (LethalityRules.hp_after), so a down already reads 1 here; only a kill still goes negative,
 	# and displayed_hp clamps that to 0. That clamp is LethalityRules' since #313: the ghost readout
 	# over the unit draws the same prediction, and two spellings would let this panel and the board
-	# disagree.
+	# disagree -- which is why the clamp is asked through the outcome's own door (#1428).
 	var hp_before: int = outcome.hp_before
-	var hp_after: int = LethalityRules.displayed_hp(outcome.target_hp_after,
-			LethalityRules.lifecycle_for(outcome.lethality))
+	var hp_after: int = outcome.displayed_hp_after()
 
 	# The "->" spelling is load-bearing: tests/presentation/test_predicted_health.gd finds this
 	# label by searching for it and parses split("->")[1].

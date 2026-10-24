@@ -33,6 +33,33 @@ static func tile_hits(units: Array[Unit], states: TerrainStateManager, gas: GasF
 	return hits
 
 
+# The faction's END OF TURN as it stands once `plan` has played (#1428): the plan's own rows for every
+# unit it spoke for (ResolvedPlan.end_of_turn_subjects, predicted from where the pass leaves them), and
+# the live rows above for the rest of the faction -- nothing the plan does reaches them, so the board
+# as it stands IS their end of turn. Two derivations of one composition, declared: the plan answers for
+# its subjects, the live board for everyone else. What the board's health bars read; the queue keeps
+# the plan's rows alone (#1353). `plan` may be null, or another faction's, and then answers for nobody.
+static func forecast(units: Array[Unit], states: TerrainStateManager, gas: GasField,
+		weather: Weather.Kind, faction: Team.Faction, plan: ResolvedPlan) -> Array[TileHitAction]:
+	var hits: Array[TileHitAction] = []
+	# Instance ids rather than Unit keys: a plan can outlive a unit it named, and a freed Unit dies on a
+	# typed key's check before any guard could run (#149).
+	var settled: Dictionary[int, bool] = {}
+	if plan != null:
+		for unit in plan.end_of_turn_subjects:
+			if is_instance_valid(unit) and unit.get_faction() == faction:
+				settled[unit.get_instance_id()] = true
+		for hit in plan.tile_hits:
+			if is_instance_valid(hit.actor) and settled.has(hit.actor.get_instance_id()):
+				hits.append(hit)
+	var rest: Array[Unit] = []
+	for unit in units:
+		if is_instance_valid(unit) and not settled.has(unit.get_instance_id()):
+			rest.append(unit)
+	hits.append_array(tile_hits(rest, states, gas, weather, faction))
+	return hits
+
+
 # Per-unit state that decays at the owning faction's turn start (downed clocks, crisis surge,
 # weapon rev, …). One pass; each tick self-guards, so no per-effect pre-filter. Add a new
 # turn-start tick as one line here — both stacks call this, so it reaches each at once.

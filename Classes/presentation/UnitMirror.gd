@@ -28,6 +28,10 @@ class_name UnitMirror
 # as the hit lands instead of vanishing at the moment of impact — and the readout leaves when the
 # PASS does, because the plan does.
 #
+# #1428 runs that prediction on to the END OF TURN: what fire's burn and steam's scald will take when
+# the active side's turn ends, read off battle3d's TurnBoundary.forecast rows and drawn as the same
+# span, so a unit standing in fire wears its loss all turn, queued or not.
+#
 # #350 adds the THIRD and last reason: a player who has asked for every bar, always. That one is a
 # PREFERENCE rather than a derivation, so it comes off PlayerSettings rather than off anything on
 # the board — one more disjunct in the same expression, no new per-unit state, nothing to compute.
@@ -217,6 +221,12 @@ var plan_source: Callable
 # one. Unset reads as "no pass running", the same graceful absence plan_source has.
 var effect_subjects_source: Callable
 
+# What the end of the active side's turn will do, injected beside them (#1428): END OF TURN rows,
+# battle3d's own TurnBoundary.forecast (or the running pass's list), never derived here. The bar's
+# prediction runs on to where they leave a unit, in the same colour as a queued hit (dev, 2026-10-23:
+# "Damage reads as damage, no matter the source"). Unset reads as no rows.
+var end_of_turn_source: Callable
+
 # The level's own viewing angle (CameraRig3D.home_yaw_degrees), injected beside them (#562): a readout
 # held in place squares to it rather than to world yaw 0. Unset reads as 0, the world axes.
 var home_yaw_source: Callable
@@ -387,6 +397,8 @@ func reconcile(delta := 0.0) -> void:
 	# ...and who the end-of-turn effect pass is about, asked once for the same reason (#534). Empty
 	# whenever no pass is running, which is nearly always.
 	var marked: Dictionary[int, bool] = _effect_subjects()
+	# ...and what the end of the turn does to each unit (#1428), grouped once for the same reason.
+	var turn_ends: Dictionary[int, Array] = _end_of_turn_rows()
 	# The player's standing preference (#350, three-valued since #418), asked once for the same
 	# reason: it cannot change mid-frame, and a static read per unit would be N reads answering one
 	# question. WHICH units it names is per-unit and belongs to _sync_bar.
@@ -437,7 +449,9 @@ func reconcile(delta := 0.0) -> void:
 		# Before the bar, so the readout draws the hold on the very frame it starts and ends.
 		var held_before := _settle_fall_hold(unit, id)
 		var held: int = _fall_held.get(id, 0)
-		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars,
+		var rows: Array[TileHitAction] = []
+		rows.assign(turn_ends.get(id, []))
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), rows, bars,
 				unhovered_numbers, held)
 		_settle_health_change(unit, id, _bars[id], held_before)
 		_sync_status(unit, id, _mirrored[id], delta)
@@ -927,6 +941,23 @@ func _effect_subjects() -> Dictionary[int, bool]:
 	return subjects
 
 
+# Each unit's END OF TURN rows, keyed like _bars (#1428), in the order the source lists them -- which
+# is the order end_of_turn threads them, so a unit's last row carries the rest. Grouping, not deriving.
+func _end_of_turn_rows() -> Dictionary[int, Array]:
+	var by_unit: Dictionary[int, Array] = {}
+	if not end_of_turn_source.is_valid():
+		return by_unit
+	var hits: Array[TileHitAction] = end_of_turn_source.call()
+	for hit in hits:
+		if hit.actor == null or not is_instance_valid(hit.actor):
+			continue
+		var id := hit.actor.get_instance_id()
+		if not by_unit.has(id):
+			by_unit[id] = []
+		by_unit[id].append(hit)
+	return by_unit
+
+
 # What the plan leaves this unit at, ALREADY CLAMPED for display — the raw threaded number goes
 # negative on a fatal hit, and LethalityRules.displayed_hp is the one answer to what a preview shows
 # for it, shared with the queue panel's own "before -> after" (#313). Drawn ONLY; the clamp flattens
@@ -938,8 +969,8 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
-		plan: ResolvedPlan, marked: bool, bars: PlayerSettings.HealthBars,
-		unhovered_numbers: bool, held: int) -> void:
+		plan: ResolvedPlan, marked: bool, turn_end: Array[TileHitAction],
+		bars: PlayerSettings.HealthBars, unhovered_numbers: bool, held: int) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -947,7 +978,12 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# WHO is a question about the plan and is asked of the plan (#354). It used to be "predicted
 	# differs from current", which made membership a function of LIVE HP — so every bar switched
 	# itself off at the instant its own hit landed, mid-pass, one at a time.
-	var foretold := plan != null and PlanResolver.plan_changes(unit, plan.hypo)
+	#
+	# The END OF TURN is the same reason, one moment later (#1428): a row that will take this unit's
+	# HP when its side's turn ends foretells it as surely as a queued hit does -- asked of the rows,
+	# never of live HP, for #354's reason. A soak alone moves no number and raises nothing.
+	var turn_hp := TileHitAction.shown_hp_after(turn_end)
+	var foretold := (plan != null and PlanResolver.plan_changes(unit, plan.hypo)) or turn_hp >= 0
 	# THE gate: FOUR reasons now, ONE expression (#350). #357's state-icon row rides it structurally —
 	# the icons hang off the bar — so a second visibility rule anywhere in this file is the bug.
 	#
@@ -1007,8 +1043,15 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# ONE forecast again (#1069): what YOUR plan does to this unit. #710 slice 3 composed a second
 	# span here for what the enemy intended -- the channel's first and only case of two writers --
 	# and it retired with the readout that fed it.
+	#
+	# ...run on to the END OF TURN (#1428), still one span: the rows are threaded from where the plan
+	# leaves the unit, so their last number already carries the plan's hits, and a unit with rows is
+	# drawn to that number instead. The alarm is either moment's rung.
 	if foretold:
-		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
+		var predicted := turn_hp if turn_hp >= 0 else _predicted_hp(unit, plan)
+		var fells := (plan != null and PlanResolver.plan_fells(unit, plan.hypo)) \
+				or TileHitAction.names_a_rung(turn_end)
+		bar.set_prediction(predicted, fells)
 	else:
 		bar.clear_prediction()
 	bar.position = _bar_anchor(unit, sprite)

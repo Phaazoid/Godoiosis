@@ -45,12 +45,15 @@ var _downed_pending: Array[Unit] = []
 # local -- so this is a published fact, not a second source of truth.
 var executing_plan: ResolvedPlan = null
 
-# Who the END-OF-TURN EFFECT PASS is about, non-empty only while one is running (#534). Published
-# for the same reason executing_plan is, and read by the same poll: a health readout is up because
-# something is ABOUT to happen to that unit (#350), and this phase is exactly that -- but it has no
-# ResolvedPlan to be read out of and must not fake one. Instance ids, since the reader asks per unit
-# per frame. apply_end_of_turn_tiles owns both ends; nothing here consumes it.
-var effect_pass_subjects: Dictionary[int, bool] = {}
+# What the END-OF-TURN EFFECT PASS will do, non-empty only while one is running (#534): the very list
+# apply_end_of_turn_tiles walks. Published for the same reason executing_plan is, and read by the same
+# poll: a health readout is up because something is ABOUT to happen to that unit (#350), and this
+# phase is exactly that -- but it has no ResolvedPlan to be read out of and must not fake one. The
+# ROWS rather than who they are about since #1428, because the bars draw what each row leaves and must
+# hold it while the pass plays (a re-read after a burn lands would show a second burn). Who the pass is
+# about is derived from it, never kept beside it. apply_end_of_turn_tiles owns both ends; nothing here
+# consumes it.
+var effect_pass_hits: Array[TileHitAction] = []
 
 # ==============================================================================
 #  A board swapped out from under a pass (#661)
@@ -64,7 +67,7 @@ var effect_pass_subjects: Dictionary[int, bool] = {}
 # would eject on the dying board. SquadManager.clear_all_squads drops it with the squads (#1358).
 func abandon_pass() -> void:
 	executing_plan = null
-	effect_pass_subjects.clear()
+	effect_pass_hits = []
 	_downed_pending.clear()
 
 
@@ -1086,8 +1089,7 @@ func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
 	# The SAME list the loop walks, published so the health readouts are up for it. Raised for the
 	# WHOLE phase rather than one unit at a time, matching how a plan raises a bar over everyone it
 	# will touch -- so the units still to come are already readable when the camera reaches them.
-	for hit in hits:
-		effect_pass_subjects[hit.actor.get_instance_id()] = true
+	effect_pass_hits = hits
 	var board := _board_now()
 	for hit in hits:
 		await game.camera_controller.pan_to(hit.actor, Pacing.ENVIRONMENT_PAN)
@@ -1103,7 +1105,7 @@ func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
 		await Pacing.beat(self, Pacing.ENVIRONMENT_HOLD)
 		if _board_gone(board):
 			return
-	effect_pass_subjects.clear()
+	effect_pass_hits = []
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	_process_downed_pending()
 

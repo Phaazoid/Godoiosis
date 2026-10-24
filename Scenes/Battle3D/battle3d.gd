@@ -280,6 +280,7 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	_unit_mirror.end_of_turn_source = _end_of_turn_forecast
 	_unit_mirror.home_yaw_source = _rig.home_yaw_degrees
 	# Whether a cell's ground is water, for the damp blot (#358): the AUTHORED kind, frozen or not.
 	_unit_mirror.water_at = func(cell: Vector2i) -> bool:
@@ -2158,7 +2159,12 @@ func _hovered_unit() -> Unit:
 # re-derive mid-pass, so the last resolve IS the executing plan — but the preference stays: it costs
 # nothing and it does not lean on that gate holding. One function still answers "which plan"; it
 # just knows a live pass outranks a stale resolve.
+#
+# ...and that the END OF TURN outranks both (#1428): orders still queued when the turn ends are shed
+# at the hand-off and never run, so while that pass plays there is no plan to preview at all.
 func _previewed_plan() -> ResolvedPlan:
+	if not game.order_executor.effect_pass_hits.is_empty():
+		return null
 	var executing: ResolvedPlan = game.order_executor.executing_plan
 	if executing != null:
 		return executing
@@ -2185,10 +2191,26 @@ func _gas_outline_board() -> BoardContext:
 
 
 # ...and who its end-of-turn effect pass is about (#534). A separate question from the plan because
-# that phase has none -- see OrderExecutor.effect_pass_subjects.
+# that phase has none -- read off the rows it is walking (OrderExecutor.effect_pass_hits).
 func _effect_pass_subjects() -> Dictionary[int, bool]:
-	var subjects: Dictionary[int, bool] = game.order_executor.effect_pass_subjects
+	var subjects: Dictionary[int, bool] = {}
+	for hit: TileHitAction in game.order_executor.effect_pass_hits:
+		if is_instance_valid(hit.actor):
+			subjects[hit.actor.get_instance_id()] = true
 	return subjects
+
+
+# What the end of the active side's turn will do, for the health bars (#1428). While that pass plays,
+# the list it is walking, HELD: re-asked live once a burn lands, a unit still in the fire would show a
+# second burn -- #354's rule, one phase along. Otherwise the side's forecast with the previewed plan
+# played (TurnBoundary.forecast): the plan's rows for whom it speaks for, the live board's for the rest.
+func _end_of_turn_forecast() -> Array[TileHitAction]:
+	var running: Array[TileHitAction] = game.order_executor.effect_pass_hits
+	if not running.is_empty():
+		return running
+	var turns: TurnManager = game.turn_manager
+	return TurnBoundary.forecast(game._all_units(), game.terrain_states, game.gas_field,
+			game.scenario_manager.current_weather, turns.active_faction(), _previewed_plan())
 
 
 func _cancel() -> void:

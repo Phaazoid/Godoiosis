@@ -319,8 +319,7 @@ static func _intent_for(attack: AttackAction, plan: ResolvedPlan, saved: Diction
 	var outcome: ResolvedOutcome = attack.resolved
 	if outcome.skipped or outcome.whiffed:
 		return null   # never thrown, or thrown at a body the plan already killed (#1350)
-	var after: int = LethalityRules.displayed_hp(outcome.target_hp_after,
-			LethalityRules.lifecycle_for(outcome.lethality))
+	var after: int = outcome.displayed_hp_after()
 	return ThreatIntent.make(attack.actor, victim,
 			saved.get(attack.actor, attack.actor.movement.cell),
 			victim.movement.cell,   # the snapshot cell: where the plan puts them when it lands

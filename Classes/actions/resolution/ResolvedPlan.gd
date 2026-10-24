@@ -16,6 +16,10 @@ var cell_effects: Array[ResolvedCellEffect] = []
 # everything above, because that is when it happens. Its own list for the reason watch_shots is:
 # nothing walking `attacks` may treat a tile's damage as an attack.
 var tile_hits: Array[TileHitAction] = []
+# WHO that forecast spoke for (#1428), row or no row: a member who walked out of the fire is answered
+# "nothing", which is a different answer from never having been asked. TurnBoundary.forecast reads it
+# to know whose end of turn the plan settles and whose the live board still does.
+var end_of_turn_subjects: Array[Unit] = []
 
 # Who the pass's own terrain dropped into the water (#922), in the order they went under. Its own list
 # for tile_hits' reason, and each is stamped with its MOMENT, which is when both execution twins play it.
