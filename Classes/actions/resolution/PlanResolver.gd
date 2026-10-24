@@ -1502,21 +1502,25 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 # LethalityRules.predict — no second copy of the ladder to keep in sync (Law #2). This class
 # adds only what the rest of the pass threads: the projected cell and the element states.
 #
-# STAT MODIFIERS ARE DELIBERATELY NOT THREADED (#112, verified 2026-07-29). It looks like the
-# obvious next field beside `states`, and it isn't — yet:
+# STATS AND GEAR ARE NOT THREADED (#112; corrected #1455, 2026-10-24). A body change mid-pass (today
+# only a lost limb's strip, Unit._settle_stat_change) is invisible to every later read in the pass:
 #
-#   * Every stat-derived number (base damage, DEF mitigation) is computed ONCE here at plan time
-#     and frozen onto the ResolvedOutcome; AttackAction.execute is pure playback (R3).
-#   * The one thing execution DOES recompute — LethalityRules.predict, via Unit.take_damage — reads
-#     hp/lifecycle/limbs and no effective stat at all.
+#   * Every stat-derived number (base damage, DEF mitigation) is computed ONCE here and frozen onto
+#     the ResolvedOutcome; AttackAction.execute is pure playback (R3). A later hit on the maimed
+#     unit uses its pre-pass DEF, and its own counter its pre-sever STR, in preview and execution
+#     alike: a fidelity gap, not a Law #2 break.
+#   * Execution DOES re-read two gear-derived facts live, which this hypo does not mirror: max HP
+#     (every Unit.set_current_hp clamp) and the Crisis kit (Unit.take_damage -> situation_for ->
+#     has_live_ability). So a strip mid-pass is a LATENT Law #2 break in three cases: a later heal
+#     on the maimed unit (clamped at the old max here, the new one live), a would-be-down when the
+#     stripped piece granted Crisis, and the end-of-turn burn when it granted fire Insulation
+#     (TurnBoundary reads the live unit). No shipped gear strips on a sever.
 #
-# So a stat change landing mid-pass (today only a lost limb's forced unequip, Unit._settle_stat_change)
-# cannot make preview and execution disagree. It is un-modelled identically by both halves — a
-# fidelity gap, not a Law #2 break. Both bullets are pinned by tests/law/test_resolution_laws.gd.
-#
-# Threading becomes OWED the moment a QUEUED ACTION applies an effect — a transmutation buffing an
-# ally, a tonic — because then one order's stat change has to reach a later order's damage in the
-# same plan. That is issue #113, and this comment is the first item on its checklist.
+# The severing hit itself is safe: take_damage lands the damage before the limb goes (#1455), and
+# the re-clamp after it cannot bite while both limb thresholds are at least the max HP a strip can
+# take (4, the CON band's span). Threading all of it is #1480 (a planned copy of each unit, not more
+# fields here). A QUEUED action applying an effect (a transmutation buffing an ally, a tonic) needs
+# the same, and is #113.
 class _Hypo extends LethalityRules.Situation:
 	var position: Vector2i
 	var states: Array[Elemental.State] = []

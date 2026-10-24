@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #1377 (2026-10-21).**
+**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24.**
 
 ## Core stance
 
@@ -140,22 +140,37 @@ DEF row already uses for terrain cover: **this number will move on its own.** So
 even when they cancel out, because a +2 tonic against a −2 armour tax nets zero *right now* and
 costs 2 the moment it lapses.
 
-#### Mid-pass changes are not modelled *(verified 2026-07-29)*
+#### Mid-pass changes are not modelled *(verified 2026-07-29; corrected 2026-10-24, [#1455](https://github.com/Phaazoid/Godoiosis/issues/1455))*
 
-`PlanResolver._Hypo` threads position and element states through a resolution pass; it deliberately
-does **not** thread stat modifiers. Every stat-derived number is computed once at plan time and
-frozen (`AttackAction.execute` is pure playback, R3), and the one thing execution recomputes —
-`LethalityRules.predict` and `severs` — reads no effective stat at all. So a stat change landing
-mid-pass (today only a lost limb's forced unequip) cannot make preview and execution disagree; it is
-un-modelled identically by both. **Since [#1174](https://github.com/Phaazoid/Godoiosis/issues/1174) that limb can go from a STANDING unit with
-orders still queued** — a watch shot mid-walk, then its swing — and the swing still lands its
-previewed number, because it was frozen at plan time; the lost limb's settle can strip armour or a
-rune but never a weapon, and max HP cannot move with a limb. `tests/flow/test_limb_loss_mid_pass.gd`
-drives that sequence end to end. **That stops being true the moment a queued ACTION applies an effect** — a
-transmutation buffing an ally — because then one order's stat change has to reach a later order's
-damage. Pinned by `tests/law/test_resolution_laws.gd`; owed by
-[#113](https://github.com/Phaazoid/Godoiosis/issues/113) (parked until a buff transmutation is
-wanted).
+`PlanResolver._Hypo` threads position, element states, HP, lifecycle and the limb rotation through a
+resolution pass; it does **not** thread stats or gear. Today the only body change that lands
+mid-pass is a lost limb's settle: a limb carries STR or DEX, so losing one can strip armour gated
+on them (and a CON piece takes max HP with it), a rune the aura tax leaves dry, or a severed
+prosthetic's mods. It never strips a weapon. **Since [#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)
+that limb can go from a STANDING unit with orders still queued**: a watch shot mid-walk, then its
+swing. `tests/flow/test_limb_loss_mid_pass.gd` drives that sequence end to end.
+
+- **The severing hit lands on the body it was struck at.** `Unit.take_damage` lands the damage first
+  and takes the limb after (dev ruling, #1455: *"They keep their bonuses until after the hit that
+  would remove them finishes."*). Before #1455 the strip ran first, so a CON piece's max HP was gone
+  before the hit landed and the unit could die on a blow the preview said it survived.
+- **Every stat-derived number is frozen at plan time** (`AttackAction.execute` is pure playback,
+  R3). A later hit on the maimed unit uses its pre-pass DEF, and its own swing or counter its
+  pre-sever STR, in preview and execution alike: a fidelity gap, not a Law #2 break. Pinned by
+  `tests/law/test_resolution_laws.gd`.
+- **Execution re-reads two gear-derived facts live:** max HP, in every HP clamp, and the kit Crisis
+  comes from. So a strip is a **latent Law #2 break** for a later read in the same pass: a heal on
+  the maimed unit (the preview clamps at the old max, execution at the new one), a would-be-down
+  when the stripped piece granted Crisis (it previews as Crisis and executes as a plain down), and
+  the end-of-turn burn when it granted fire Insulation (`TurnBoundary` reads the live unit). No
+  shipped gear strips on a sever, so none of these can happen today.
+
+All of it is owed by [#1480](https://github.com/Phaazoid/Godoiosis/issues/1480): the resolver reads
+and mutates a planned copy of each unit rather than mirroring the live one field by field. A queued
+ACTION that applies an effect (a transmutation buffing an ally) needs the same thing, so one order's
+stat change can reach a later order's damage; that is
+[#113](https://github.com/Phaazoid/Godoiosis/issues/113), parked until a buff transmutation is
+wanted.
 
 A stat can also never **gate** what gets queued, and that is structural rather than unbuilt
 *(2026-07-29)*. No `actor_block_reason` override reads an effective stat, and `SquadPlanValidator`

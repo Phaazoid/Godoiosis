@@ -60,12 +60,12 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	assert_int(previewed).is_equal(10)
 	assert_int(target.get_current_hp()).is_equal(start_hp - previewed)
 
-# R3 under a MID-PASS stat change (#112). This pair is why PlanResolver._Hypo does NOT thread stat
-# modifiers: everything stat-derived is computed once at plan time and frozen, and the one thing
-# execution recomputes reads no stats at all. So an effect that lands mid-pass cannot make the
-# preview lie — it simply isn't modelled, identically, by both halves.
+# R3 under a MID-PASS stat change (#112). This pair pins the half of PlanResolver._Hypo's doctrine
+# that holds: stat-derived damage is computed once at plan time and frozen, and the lethality RUNG
+# reads no effective stat. The other half does not hold: execution re-reads max HP and the Crisis
+# kit live, so a mid-pass strip is a latent Law #2 break (see the _Hypo comment; owed by #1480).
 #
-# If either of these ever fails, that reasoning has stopped holding and the threading is owed.
+# If either of these ever fails, even the frozen half has stopped holding.
 
 func test_a_stat_change_after_resolve_cannot_move_executed_damage() -> void:
 	# The attacker gets a large STR buff BETWEEN resolve and execute. Execution is pure playback
