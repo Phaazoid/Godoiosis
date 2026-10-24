@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1478 (2026-10-23).**
+**Canon checked through #1478 (2026-10-23); #1458 (where the load-time shouts live) folded in 2026-10-24.**
 
 ## What a mission is
 
@@ -471,7 +471,7 @@ No id, no lookup, nothing to dangle. *Which person is this* is a real question a
 
 **The setup guard needs one clause that is not decoration.** `lose_conditions_missing_setup` asks *and the condition has not already fired* as well as *is anybody flagged* — because once the VIP is dead there is genuinely nobody flagged on the board, so the naive predicate flips to "nothing to fire on" at the exact instant the condition **fired**, and the HUD reports a broken board for the one thing that worked.
 
-**And its SHOUT moved out of `set_lose_conditions`** into `MissionController.report_missing_setup()`, called where `apply_scenario` already re-pushes the HUD. `set_lose_conditions` runs mid-load *(it no longer runs outside tests: the load assigns the lists through `MissionState.apply_scenario`)*, before a single unit has spawned, so a board-dependent condition judged there is judged against an empty board — a perfectly good escort mission would have `push_error`'d on every load, for ever. Same write-point trap [#134](https://github.com/Phaazoid/Godoiosis/issues/134) hit and the same fix `EXTRACT` needed.
+**And its SHOUT is `MissionController.report_missing_setup()`**, which `ScenarioManager.apply_scenario` calls where it already re-pushes the HUD, once the board is built. The lists themselves are assigned mid-load (`MissionState.apply_scenario`), before a single unit has spawned, so a board-dependent condition judged there is judged against an empty board — a perfectly good escort mission would have `push_error`'d on every load, for ever. That is why the shout moved out of `set_lose_conditions`, which ran mid-load then and runs only in tests now. Same write-point trap [#134](https://github.com/Phaazoid/Godoiosis/issues/134) hit and the same fix `EXTRACT` needed.
 
 **The HUD names the unit** (fork D): `Protect — Elara`, off `MissionController.protected_units(board)`. "Protect" alone on a board with twelve units says nothing about which one you are being graded on.
 
@@ -481,7 +481,7 @@ An objective ticked with no matching zone painted can never be met — the missi
 
 - **Authoring time.** The dev Scenario tab's objective checkboxes render a live warning naming every declared-but-unpainted objective. This is the one that matters; it is cheaper than finding out mid-playtest.
 - **On demand.** Scenario ▸ Properties ▸ **Check board** ([#390](https://github.com/Phaazoid/Godoiosis/issues/390)) reports it alongside the board's other authoring faults, and CI runs the same pass over every shipped mission.
-- **Load time.** `MissionController.set_objectives` `push_error`s once per missing objective. *(As built, the load's shout is `MissionController.apply_scenario` → `_shout_missing_geometry()`; `set_objectives` has no production caller.)*
+- **Load time.** `MissionController.apply_scenario` `push_error`s once per missing objective (`_shout_missing_geometry()`). `set_objectives`, which only tests call, shouts the same way.
 
 At runtime the unpainted objective reads **PENDING, not NONE** — deliberately. The map really is unwinnable, and silently dropping the objective would quietly convert a broken map into a *different, playable* one, which is a far worse failure than a loud one.
 
@@ -576,7 +576,7 @@ The practical effect: **dev sandbox boards stay inert.** Spawn five enemies in t
 
 "Surviving" means **not dead**, so a downed unit *inside* an extraction zone is extracted exactly like an active one — alive and in the zone means they get out. What blocks the objective is a living unit *outside* the zone, and a downed one out there cannot walk in on its own: someone has to reach them with `RescueAction`, which revives to ACTIVE at whatever HP the body has.
 
-**Zero surviving players reads PENDING, not MET (2026-08-12)** — the `counts.y == 0` twin of capture's unpainted-geometry guard. Without it `0 == 0` counted as everyone-extracted, which ticked Extract on the HUD during load (`set_objectives` refreshes the HUD before units spawn *(that early refresh is `MissionController.apply_scenario`'s now)*; `apply_scenario` now re-pushes the HUD once the board is fully built). For `evaluate()` the guard never decides anything — DEFEAT is checked first.
+**Zero surviving players reads PENDING, not MET (2026-08-12)** — the `counts.y == 0` twin of capture's unpainted-geometry guard. Without it `0 == 0` counted as everyone-extracted, which ticked Extract on the HUD during load (`MissionController.apply_scenario` refreshes the HUD mid-load, before units spawn; `ScenarioManager.apply_scenario` re-pushes it once the board is fully built). For `evaluate()` the guard never decides anything — DEFEAT is checked first.
 
 That is the whole design of the rescue-under-pressure mission. Counting only ACTIVE units would let you leave a body behind and still win (fork C: **surviving**, not starting).
 
