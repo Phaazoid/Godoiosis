@@ -191,6 +191,15 @@ func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
 	board.deposits = effects.duplicate()
 	return board
 
+# This board holding only these units -- the board a loader sees partway through its spawns, which
+# is what BoardLint asks the spawn rule against (#1432).
+func with_units(unit_list: Array[Unit]) -> BoardContext:
+	var board := BoardContext.new(grid, unit_list, squad_manager, terrain_states, zones, heights, gas, mission)
+	board.weather = weather
+	board.atmosphere = atmosphere
+	board.deposits = deposits.duplicate()
+	return board
+
 # Is the prop standing on this cell ALIGHT (#272's prop_lit column)? Sibling of terrain_kind_at,
 # and null-safe on the GRID as well as the tile, because a stub board carries no TileMapLayer.
 func prop_lit_at(cell: Vector2i) -> bool:

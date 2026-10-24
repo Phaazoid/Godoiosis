@@ -252,18 +252,15 @@ func _handle_brush_keys(event: InputEvent) -> void:
 # above are: project.godot is the one file concurrent PRs reliably collide on. Both redo spellings,
 # because both are muscle memory and the branch costs a line.
 #
-# Gated on DEV_MODE but deliberately NOT on brush_armed(): you untick the brush, then think better
-# of the last stroke, and a history reachable only while the checkbox is ticked would be shut
-# exactly then. Outside dev mode the keys do nothing at all -- there is no authoring to undo, and
-# rewinding the board mid-battle would take the fire a played round deposited with it.
+# Gated on DEV_MODE (inside undo_board/redo_board, history_block_reason) but deliberately NOT on
+# brush_armed(): you untick the brush, then think better of the last stroke, and a history reachable
+# only while the checkbox is ticked would be shut exactly then.
 #
 # The dev-tools window forwards here (DevOverlay._input) after excluding a focused LineEdit/TextEdit,
 # so Ctrl+Z while typing a scenario name stays that field's own text undo, which is right.
 func _handle_undo_keys(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo or not key.ctrl_pressed:
-		return
-	if game == null or game.game_state != game.GameState.DEV_MODE:
 		return
 	match key.physical_keycode:
 		KEY_Z:
@@ -304,12 +301,9 @@ func resolve_pending(cell: Vector2i) -> void:
 	_pending_unit = null
 	if not is_instance_valid(unit):
 		return
-	if game.grid.get_cell_tile_data(cell) == null:   # clicked off the map
-		return
-	var board: BoardContext = game._board()
-	if not board.is_walkable(cell):                  # #109: the same answer spawn_unit gives, so
-		return                                       # dev-move and dev-duplicate can't disagree
-	if game.get_unit_at_cell(cell) != null:          # occupied (incl. the unit's own cell) -> no-op
+	# The cursor's own rule (#1432): spawn's, plus the plan's destinations. The unit's own cell is
+	# occupied, so a Move onto it is a no-op.
+	if not RulesService.can_place_at(game._board(), cell):
 		return
 	match action:
 		PendingAction.MOVE:
@@ -433,10 +427,23 @@ func _commit_step() -> void:
 	if history.commit(game.scenario_manager.capture_board()):
 		history_changed.emit()
 
+# WHY the history may not move right now -- "" means it may. Asked INSIDE the two doors below, so the
+# keys and the Tile Brush's buttons share it (#1432: the buttons skipped the keys' gate). Outside dev
+# mode there is no authoring to undo, and rewinding the board mid-battle would take the fire a played
+# round deposited with it.
+func history_block_reason() -> String:
+	if game == null or game.game_state != game.GameState.DEV_MODE:
+		return "Only in dev mode (F1): an undo mid-battle would take back what a played round left on the board."
+	return ""
+
 func undo_board() -> bool:
+	if history_block_reason() != "":
+		return false
 	return _restore_step(history.undo())
 
 func redo_board() -> bool:
+	if history_block_reason() != "":
+		return false
 	return _restore_step(history.redo())
 
 # Everything a paint or an erase refreshes at its own site, because an undo can put back anything

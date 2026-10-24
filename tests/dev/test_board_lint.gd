@@ -141,6 +141,59 @@ func test_a_unit_on_an_erased_cell_reads_as_off_the_map() -> void:
 	_assert_reports(BoardLint.Severity.BLOCKS, "off the map")
 
 
+func _dropped(authored: bool) -> bool:
+	for finding: Dictionary in BoardLint.check(game, authored):
+		if finding["rule"] == BoardLint.Rule.PLACEMENT:
+			return true
+	return false
+
+
+# A cast unit (spawned from a character file), downed where nothing may stand. Painted rock rather
+# than deep water: the exemption is is_body against is_walkable, whatever the ground is.
+func _downed_cast_unit_on_rock(x: int) -> Unit:
+	var unit := _spawn(Team.Faction.PLAYER, x)
+	unit.unit_data_source = unit.unit_data   # what UnitFactory stamps for a file-backed UnitData (#177)
+	unit.force_down()
+	game.order_executor._process_downed_pending()
+	game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, ROCK_ATLAS)
+	return unit
+
+
+func test_a_downed_cast_unit_saved_by_reference_is_dropped_from_ground_nothing_stands_on() -> void:
+	# The loader exempts a BODY by its ENTRY (spawns_as_body: state saved AND downed), and an authored
+	# save writes a cast unit as a reference with no state -- it reloads standing, and spawn refuses
+	# the rock. The lint used to ask unit.is_downed(), which kept the exemption and said nothing (#1432).
+	var unit := _downed_cast_unit_on_rock(2)
+	assert_bool(unit.is_downed()).override_failure_message("fixture: the unit is not down").is_true()
+
+	assert_bool(_dropped(true)).override_failure_message(
+		"an authored save drops this unit on load, and the lint said nothing").is_true()
+	assert_bool(_dropped(false)).override_failure_message(
+		"a snapshot save keeps the body exemption, and the lint still reported a drop").is_false()
+	unit.dev_edited = true   # an edited cast unit is board-local: it snapshots in either mode
+	assert_bool(_dropped(true)).override_failure_message(
+		"a dev-edited unit saves as a snapshot, and the lint still reported a drop").is_false()
+
+
+func test_the_check_button_judges_the_save_mode_the_header_will_use() -> void:
+	# The save mode is a PASSED fact, so the wire from the header's Authored box is its own question.
+	var tool: ScenarioTool = game.dev_overlay.scenario_tool
+	var header: ScenarioHeader = game.dev_overlay.scenario_header
+	_downed_cast_unit_on_rock(2)
+
+	header.authored_save = false
+	_check_button(tool).emit_signal("pressed")
+	await await_idle_frame()
+	assert_bool(_report_says(tool, "DROPPED")).override_failure_message(
+		"Authored unticked, and the report still predicts a reference save").is_false()
+
+	header.authored_save = true
+	_check_button(tool).emit_signal("pressed")
+	await await_idle_frame()
+	assert_bool(_report_says(tool, "DROPPED")).override_failure_message(
+		"Authored ticked, and the report missed the drop: %s" % str(_report_lines(tool))).is_true()
+
+
 func test_a_dropped_leader_names_the_squad_it_takes_with_it() -> void:
 	# The leaderless-squad consequence (#390 fork): apply_scenario's "saved without a leader ->
 	# leave them as solos" branch is reachable ONLY through a dropped leader, so it is this finding
@@ -337,6 +390,35 @@ func test_the_check_button_fills_the_report_panel() -> void:
 
 	assert_bool(_report_says(tool, "CAPTURE")).override_failure_message(
 		"the report panel does not mention the fault: %s" % str(_report_lines(tool))).is_true()
+
+
+func test_the_check_tooltip_names_every_rule_in_its_real_tier() -> void:
+	# The hand-written tooltip filed the AI-less ENEMY under BLOCKS and denied the dialog checks
+	# (#1432). Read off the real button, unwrapped, one tier section at a time.
+	var tip := _check_button(game.dev_overlay.scenario_tool).tooltip_text
+	var blocks := ""
+	var degrades := ""
+	for section: String in tip.split("\n\n"):
+		var flat := section.replace("\n", " ")
+		if flat.begins_with("Blocks play:"):
+			blocks = flat
+		elif flat.begins_with("Wrong but plays:"):
+			degrades = flat
+	assert_str(blocks).override_failure_message("no 'Blocks play' section in: %s" % tip).is_not_empty()
+	assert_str(degrades).override_failure_message("no 'Wrong but plays' section in: %s" % tip).is_not_empty()
+
+	for rule: BoardLint.Rule in BoardLint.Rule.values():
+		assert_bool(BoardLint.RULES.has(rule)).override_failure_message(
+			"BoardLint.Rule.%s has no RULES row" % BoardLint.Rule.keys()[rule]).is_true()
+		var row: Dictionary = BoardLint.RULES[rule]
+		var names: String = row["names"]
+		var blocking: bool = row["severity"] == BoardLint.Severity.BLOCKS
+		assert_bool(blocks.contains(names)).override_failure_message(
+			"'%s' is %s, but the tooltip's Blocks section says otherwise" % [
+				names, "BLOCKS" if blocking else "DEGRADES"]).is_equal(blocking)
+		assert_bool(degrades.contains(names)).override_failure_message(
+			"'%s' is %s, but the tooltip's Wrong-but-plays section says otherwise" % [
+				names, "BLOCKS" if blocking else "DEGRADES"]).is_equal(not blocking)
 
 
 func test_the_report_says_so_when_it_finds_nothing() -> void:

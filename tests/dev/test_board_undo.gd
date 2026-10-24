@@ -334,6 +334,52 @@ func test_the_undo_keys_are_inert_outside_dev_mode() -> void:
 
 # ---- the panel's own row ----
 
+func test_the_undo_buttons_are_inert_outside_dev_mode() -> void:
+	# The keys' gate, which the buttons used to skip (#1432): F1 out of dev mode with the window
+	# still open, click Undo, and the board rewound mid-battle. Pressed even though greyed, because a
+	# greyed button is the row's half of the gate and this asserts the doors' half.
+	var cell := Vector2i(4, 8)
+	_paint_stroke([cell] as Array[Vector2i])
+	game.game_state = game.GameState.IDLE
+
+	_brush._undo_button.pressed.emit()
+
+	assert_bool(_has_ground(cell)).override_failure_message(
+		"the Undo button rewound the board outside dev mode").is_true()
+	assert_bool(_dc.history.can_undo()).override_failure_message(
+		"a refused undo still moved the history").is_true()
+
+	game.game_state = game.GameState.DEV_MODE
+	_dc.undo_board()
+	game.game_state = game.GameState.IDLE
+	_brush._redo_button.pressed.emit()
+
+	assert_bool(_has_ground(cell)).override_failure_message(
+		"the Redo button replayed an edit outside dev mode").is_false()
+
+
+func test_the_undo_row_greys_outside_dev_mode_and_says_why() -> void:
+	# game_state announces nothing, so the row polls the gate; driven through the page's own _process.
+	game.dev_overlay.show_beside()
+	_paint_stroke([Vector2i(6, 1)] as Array[Vector2i])
+	assert_bool(_brush._undo_button.disabled).override_failure_message(
+		"fixture: nothing to undo, so the greying below proves nothing").is_false()
+
+	game.game_state = game.GameState.IDLE
+	_brush._process(0.0)
+
+	assert_bool(_brush._undo_button.disabled).override_failure_message(
+		"the Undo button stayed live outside dev mode").is_true()
+	assert_str(_brush._undo_button.tooltip_text).override_failure_message(
+		"a greyed Undo does not say why").is_equal(_dc.history_block_reason())
+
+	game.game_state = game.GameState.DEV_MODE
+	_brush._process(0.0)
+
+	assert_bool(_brush._undo_button.disabled).override_failure_message(
+		"back in dev mode, and Undo stayed greyed").is_false()
+	assert_str(_brush._undo_button.tooltip_text).is_equal(TileBrushTool.UNDO_TIP)
+
 func test_the_undo_row_greys_until_there_is_something_to_undo() -> void:
 	assert_bool(_brush._undo_button.disabled).is_true()
 	assert_bool(_brush._redo_button.disabled).is_true()
