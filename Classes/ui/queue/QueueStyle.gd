@@ -73,6 +73,10 @@ enum Role {
 	EVENT_TINT,
 	RAIL_NEUTRAL,
 	EMPHASIS_TEXT,
+	VIP_INK,
+	VIP_OUTLINE,
+	VIP_FILL,
+	FRAME_VIP_TEXT,
 }
 
 # --- SLATE: the authored set, and DEFAULT's fall-through ------------------------------------------
@@ -174,6 +178,19 @@ const READOUT_BENCHED := Color(0.831, 0.341, 0.290)
 # marks your gear and what marks an enemy are two questions, so retuning one must not move the other.
 const EMPHASIS_TEXT := Color(1.0, 0.541, 0.478)
 
+# THE VIP MARK (#1456): a roster unit the mission is lost without, whom the player may not leave
+# behind. GOLD IN BOTH PALETTES (dev, 2026-10-24, picked from drawn candidates), EMPHASIS_TEXT's
+# argument: one meaning, one colour. Gold alone sits too close to parchment's cream, so there every
+# gold mark on paper wears a black OUTLINE -- VIP_OUTLINE, which slate leaves fully transparent, so
+# one piece of drawing code serves both palettes and slate draws exactly the gold it was shown.
+# VIP_FILL is the name pill's wash. FRAME_VIP_TEXT is the gold on the dark FRAME (the contract, the
+# HUD corner panel), dark in both palettes, so it needs no outline; a role of its own all the same,
+# because the frame and the paper are #814's two grounds.
+const VIP_INK := Color(0.97, 0.77, 0.27)
+const VIP_OUTLINE := Color(0, 0, 0, 0)
+const VIP_FILL := Color(0.97, 0.77, 0.27, 0.2)
+const FRAME_VIP_TEXT := Color(0.97, 0.77, 0.27)
+
 # What the WORLD did, not what an element did -- "Fell 2!", "Drowning!", "Into the void!",
 # "Insulated!". These wore ElementPalette.NEUTRAL until the dev read them off the screen
 # (2026-09-03): that value is the RAIL's off state, a structural grey chosen to disappear, and text
@@ -247,6 +264,12 @@ const PALETTES := {
 		# slate's sits a hair over it -- promoting either to text is the round-4 bug.
 		Role.RAIL_NEUTRAL: Color(0.910, 0.855, 0.773),
 		Role.EMPHASIS_TEXT: Color(0.659, 0.204, 0.165),
+		# Slate's gold, unadapted (dev, 2026-10-24): the black outline is what lifts it off the paper,
+		# where the adapted ochre read as one more brown.
+		Role.VIP_INK: Color(0.97, 0.77, 0.27),
+		Role.VIP_OUTLINE: Color(0.04, 0.03, 0.03),
+		Role.VIP_FILL: Color(0.97, 0.77, 0.27, 0.35),   # a 0.2 wash vanishes into cream
+		Role.FRAME_VIP_TEXT: Color(0.97, 0.77, 0.27),
 	},
 }
 
@@ -361,6 +384,10 @@ static func _authored(role: Role) -> Color:
 		Role.EVENT_TINT: return EVENT_TINT
 		Role.RAIL_NEUTRAL: return ElementPalette.NEUTRAL
 		Role.EMPHASIS_TEXT: return EMPHASIS_TEXT
+		Role.VIP_INK: return VIP_INK
+		Role.VIP_OUTLINE: return VIP_OUTLINE
+		Role.VIP_FILL: return VIP_FILL
+		Role.FRAME_VIP_TEXT: return FRAME_VIP_TEXT
 	push_error("QueueStyle: no authored colour for role %d" % role)
 	return Color.MAGENTA
 
@@ -398,6 +425,28 @@ static func section_box(accented: bool = false) -> StyleBoxFlat:
 		var border: Color = ink(Role.READOUT_ALLY) if accented else ink(Role.SECTION_BORDER)
 		var box := _flat(ink(Role.SECTION_BG), border, 2 if accented else 1, 6)
 		box.set_content_margin_all(1.0)   # the border alone: the header strip spans the card
+		return box)
+
+
+# A roster VIP's card (#1456): section_box's card, its border gold and one step heavier than the
+# deployed green, so the grid names the VIP before anything on the card is read. Same content margin,
+# so a card does not resize when it becomes one. On parchment the band is outlined by VipStar.
+static func vip_section_box() -> StyleBoxFlat:
+	return _cached("section_vip", func() -> StyleBoxFlat:
+		var box := _flat(ink(Role.SECTION_BG), ink(Role.VIP_INK), VIP_FRAME_BAND, 6)
+		box.set_content_margin_all(1.0)
+		return box)
+
+
+# The name pill's box: tint_box's shape in the VIP wash. Cached, unlike tint_box, because its colour
+# is a role rather than a knob.
+static func vip_pill_box() -> StyleBoxFlat:
+	return _cached("vip_pill", func() -> StyleBoxFlat:
+		var box := _flat(ink(Role.VIP_FILL), ink(Role.VIP_INK), 1, 4)
+		box.content_margin_left = 4.0
+		box.content_margin_right = 5.0
+		box.content_margin_top = 1.0
+		box.content_margin_bottom = 1.0
 		return box)
 
 
@@ -502,10 +551,18 @@ static func refusal_box() -> StyleBoxFlat:
 		return box)
 
 
-# The pre-mission deploy toggle's three states (#978). A unit is COMING, STAYING, or cannot be placed
-# at all -- and the third is the button's own `disabled`, so both of _deploy_block_reason's answers
-# reach it without anyone asking a second question.
-enum Deployment { PLACED, BENCHED, BLOCKED }
+# The pre-mission deploy toggle's states (#978). A unit is COMING, STAYING, or cannot be placed at
+# all -- and the third is the button's own `disabled`, so both of _deploy_block_reason's answers
+# reach it without anyone asking a second question. REQUIRED (#1456) is the fourth: coming, and not
+# the player's to send back -- a roster VIP. Disabled too, but in gold rather than grey, because it is
+# not a refusal of anything the player asked for.
+enum Deployment { PLACED, BENCHED, BLOCKED, REQUIRED }
+
+# How thick the VIP's gold band is, per surface (#1456). The black outline VipStar draws on either side
+# of it on parchment is one pixel; these are the gold between.
+const VIP_FRAME_BAND := 3   # the card
+const VIP_TOGGLE_BAND := 2  # the Required toggle
+const VIP_RING_BAND := 2    # the Deployed force portrait
 
 
 # That toggle's outline. Border-only and transparent inside, for section_box's reason one node up: the
@@ -516,7 +573,8 @@ enum Deployment { PLACED, BENCHED, BLOCKED }
 static func deploy_box(state: Deployment, hovered: bool) -> StyleBoxFlat:
 	return _cached("deploy_%d_%s" % [state, hovered], func() -> StyleBoxFlat:
 		var border := deploy_border(state)
-		var box := _flat(Color(0, 0, 0, 0), border.lightened(0.25) if hovered else border, 1, 4)
+		var width := VIP_TOGGLE_BAND if state == Deployment.REQUIRED else 1
+		var box := _flat(Color(0, 0, 0, 0), border.lightened(0.25) if hovered else border, width, 4)
 		box.content_margin_left = 8.0
 		box.content_margin_right = 8.0
 		box.content_margin_top = 3.0
@@ -528,6 +586,7 @@ static func deploy_border(state: Deployment) -> Color:
 	match state:
 		Deployment.PLACED: return ink(Role.READOUT_ALLY)
 		Deployment.BENCHED: return ink(Role.READOUT_BENCHED)
+		Deployment.REQUIRED: return ink(Role.VIP_INK)
 	return ink(Role.ROW_BORDER)
 
 
@@ -539,6 +598,7 @@ static func deploy_ink(state: Deployment) -> Color:
 	match state:
 		Deployment.PLACED: return ink(Role.READOUT_ALLY)
 		Deployment.BENCHED: return ink(Role.READOUT_BENCHED)
+		Deployment.REQUIRED: return ink(Role.VIP_INK)   # outlined on parchment: see VIP_OUTLINE
 	return ink(Role.HEADER_TEXT)
 
 

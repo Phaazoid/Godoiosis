@@ -426,7 +426,7 @@ func confirm_and_commit() -> void:
 	# the Begin Mission card behind it. The player has not seen the loadout yet either way.
 	if _briefing:
 		return
-	if deployed_roster_count() == 0:
+	if commit_block_reason() != "":
 		commit_deployment()   # refuses, and speaks
 		return
 	var sure: bool = await ConfirmCard.ask(game,
@@ -484,6 +484,19 @@ func can_deploy_another() -> bool:
 # Why one more cannot be placed, or "" -- the card's refusal, answered by the phase.
 func deploy_block_reason() -> String:
 	return _phase.deploy_block_reason()
+
+# Why this unit cannot go back to the reserve, or "" (#1456): the ring's and the card's refusal.
+func undeploy_block_reason(unit: Unit) -> String:
+	return _phase.undeploy_block_reason(unit)
+
+# A roster VIP, whom the screen marks and places first (#1456).
+func is_forced(unit: Unit) -> bool:
+	return _phase.is_forced(unit)
+
+# Why Begin cannot be pressed yet, or "" -- what commit_deployment refuses with, for the screen's
+# button to grey on before it is pressed.
+func commit_block_reason() -> String:
+	return _phase.commit_block_reason()
 
 # The pre-mission phase's DRAW (#737), stood up by PreMissionPhase with this game as its host.
 # Returns how many stood up; the rest wait in game.reserve_root until clear_board frees them.
@@ -693,7 +706,20 @@ func report_missing_setup() -> void:
 
 # Asked of the live board; MissionState takes the board as a parameter, since it holds no game.
 func lose_conditions_missing_setup() -> Array[MissionRules.LoseCondition]:
-	return mission.lose_conditions_missing_setup(game._board())
+	return mission.lose_conditions_missing_setup(game._board(), not roster_forced_entries().is_empty())
+
+# The VIPs this board's roster sends (#1456), whether or not a draw has run: the protect setup guard
+# and Check board ask it of a board loaded without one. A missing roster is its own BLOCKS finding,
+# so it is checked for before resolve, which would push_error from inside a lint.
+func roster_forced_entries() -> Array[ScenarioUnitEntry]:
+	var forced: Array[ScenarioUnitEntry] = []
+	var roster_name: String = game.scenario_manager.current_roster
+	if roster_name == "" or not ResourceLoader.exists(RosterCatalog.roster_path(roster_name)):
+		return forced
+	var roster := RosterCatalog.resolve(roster_name)
+	if roster != null:
+		forced = PreMission.forced_entries(roster.offered_entries())
+	return forced
 
 # Called from game._on_round_completed; the count is the state's, the HUD refresh is the game's.
 func advance_round() -> void:

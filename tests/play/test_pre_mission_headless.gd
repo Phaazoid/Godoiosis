@@ -181,6 +181,28 @@ func test_begin_is_refused_with_nobody_standing_and_then_opens_the_battle() -> v
 	assert_str(str(moves.get("error", ""))).not_contains("has not begun")
 
 
+# #1456: a roster VIP may not go back to the reserve, and the mission does not begin without them, in
+# the phase's own words on this host too. The flag is set on a drawn unit here (the phase reads it off
+# the live unit), so no shipped roster has to carry a VIP.
+func test_a_vip_stays_deployed_and_begin_waits_for_them() -> void:
+	var vip: Unit = _deployed()[0]
+	vip.must_survive = true
+	var reason: String = _sess._phase.undeploy_block_reason(vip)
+	assert_str(reason).override_failure_message("precondition: the phase does not call this unit a VIP") \
+		.is_not_empty()
+	var refused: Dictionary = _sess.undeploy(_sess.handle_for(vip))
+	assert_bool(refused.ok).is_false()
+	assert_str(str(refused.error)).is_equal(reason)
+	assert_bool(_sess.is_deployed(vip)).is_true()
+
+	_sess.undeploy_unit(vip)   # the raw host door: no player verb can do this
+	var held: Dictionary = _sess.begin()
+	assert_bool(held.ok).is_false()
+	assert_str(str(held.error)).is_equal(_sess._phase.commit_block_reason())
+	assert_str(str(held.error)).contains(vip.get_unit_name())
+	assert_bool(_sess.is_deploying()).is_true()
+
+
 # ==============================================================================
 # The loadout screen's writes (#46 slice 2a): gear, jobs and mods, each through the door the screen
 # calls. Every piece moved is authored HERE (a bare Item), and the jobs and mods are whatever the

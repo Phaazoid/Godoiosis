@@ -64,6 +64,8 @@ static var URGENT_COLOR := Color(1, 0.55, 0.3)
 const EMBLEM_SIZE := 16
 const EMBLEM_GAP := 4
 const ROW_PAD := 3
+const VIP_STAR := 13       # the Protect row's star (#1456)
+const VIP_STAR_GAP := 4
 const HOVER_BG := Color(1, 1, 1, 0.13)
 const HOVER_BORDER := Color(1, 1, 1, 0.45)
 
@@ -354,7 +356,9 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, mission: Miss
 	label.add_theme_font_size_override("font_size", 13)
 	# Declared with nothing to fire on -- the objectives' unpainted-geometry row, same doctrine: the
 	# mission is broken and the row must say so rather than vanish.
-	if mission.lose_conditions_missing_setup(board).has(condition):
+	# roster_protects false (#1456): this row describes the board AS IT STANDS. In play the draw has
+	# placed a roster VIP before anyone reads it; on a dev-tools load with no draw, "not set" is true.
+	if mission.lose_conditions_missing_setup(board, false).has(condition):
 		label.text = "%s — not set" % _lose_title(condition)
 		label.modulate = UNWINNABLE_COLOR
 		return label
@@ -371,7 +375,7 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, mission: Miss
 			for unit in mission.protected_units(board):
 				names.append(unit.get_unit_name())
 			label.text = "Protect — %s" % ", ".join(names)
-			label.modulate = PENDING_COLOR
+			_wear_vip_star(label)
 			return label
 		MissionRules.LoseCondition.POINT_LOST:
 			# NAMED, not counted (#571): a defended point is a place on the board, and "Defend — 1
@@ -383,6 +387,22 @@ static func _build_lose_row(condition: MissionRules.LoseCondition, mission: Miss
 	label.text = _lose_title(condition)
 	label.modulate = PENDING_COLOR
 	return label
+
+# The Protect row wears the VIP mark (#1456), the same star and gold the pre-mission card gives the unit
+# it names, so the contract and the card point at one another. In FRAME_VIP_TEXT: this panel and the
+# contract are dark in both palettes. The star is a CHILD in the label's own left margin, so the text
+# -- which the Play API prints -- is exactly what it was.
+static func _wear_vip_star(label: Label) -> void:
+	label.modulate = Color.WHITE
+	var gold := QueueStyle.ink(QueueStyle.Role.FRAME_VIP_TEXT)
+	label.add_theme_color_override("font_color", gold)
+	var room := StyleBoxEmpty.new()
+	room.content_margin_left = VIP_STAR + VIP_STAR_GAP
+	label.add_theme_stylebox_override("normal", room)
+	var star := VipStar.make(gold, Color(0, 0, 0, 0), VIP_STAR)
+	star.size = Vector2(VIP_STAR, VIP_STAR)
+	label.add_child(star)
+	star.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT, Control.PRESET_MODE_KEEP_SIZE)
 
 static func _lose_title(condition: MissionRules.LoseCondition) -> String:
 	return String(MissionRules.LoseCondition.keys()[condition]).capitalize()

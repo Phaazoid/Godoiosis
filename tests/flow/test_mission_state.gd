@@ -88,7 +88,7 @@ func test_a_protected_death_latches_and_an_unprotected_one_does_not() -> void:
 	var without_vip: Array[Unit] = [_player, _enemy]
 	assert_int(_state.evaluate(_board(without_vip))).is_equal(MissionRules.Outcome.DEFEAT)
 	assert_int(_state.failed_by).is_equal(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
-	assert_array(_state.lose_conditions_missing_setup(_board(without_vip))) \
+	assert_array(_state.lose_conditions_missing_setup(_board(without_vip), false)) \
 		.override_failure_message("the condition that just fired reported itself as never set up") \
 		.is_empty()
 
@@ -118,3 +118,16 @@ func test_reset_is_a_blank_slate() -> void:
 	assert_array(_state.captured_zones).is_empty()
 	assert_array(_state.objectives).is_empty()
 	assert_int(_state.rounds_elapsed).is_equal(0)
+
+
+# #1456: a board whose ROSTER sends the VIP has its protect subject coming even before any draw, which
+# is how the dev tools and CI's mission sweep load it. The caller says so; nobody is on the board yet.
+func test_a_roster_vip_sets_up_the_protect_condition_before_anyone_is_drawn() -> void:
+	var conds: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.PROTECTED_UNIT_LOST]
+	_state.lose_conditions.assign(conds)
+	var nobody_flagged: Array[Unit] = [_player, _enemy]
+	assert_array(_state.lose_conditions_missing_setup(_board(nobody_flagged), false)) \
+		.contains([MissionRules.LoseCondition.PROTECTED_UNIT_LOST])
+	assert_array(_state.lose_conditions_missing_setup(_board(nobody_flagged), true)) \
+		.override_failure_message("a roster VIP did not count as the protect condition's subject") \
+		.is_empty()

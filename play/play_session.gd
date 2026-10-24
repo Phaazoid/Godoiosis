@@ -587,6 +587,9 @@ func undeploy(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s is not part of the roster" % handle}
 	if not is_deployed(unit):
 		return {"ok": false, "error": "%s is already in reserve" % handle}
+	var reason := _phase.undeploy_block_reason(unit)
+	if reason != "":
+		return {"ok": false, "error": reason}
 	undeploy_unit(unit)
 	return {"ok": true, "summary": "%s back to the reserve" % handle}
 

@@ -178,6 +178,50 @@ func test_a_hover_puts_the_numbers_back_in_an_ink_that_can_still_be_read() -> vo
 		"a hover left the card unreadable:\n  %s" % "\n  ".join(found)).is_empty()
 
 
+# THE VIP MARKS (#1456): gold in both palettes, outlined in black on parchment, where gold alone sits
+# too close to the cream to read. A drawn unit is flagged mid-phase (is_forced reads the live unit, so
+# no roster file has to carry a VIP) and the screen is measured with every mark up: the pill, the
+# Required toggle (disabled, so its disabled ink) and the gold name on the Deployed force strip.
+func test_a_vips_marks_can_be_read_in_both_palettes() -> void:
+	var roster := _a_roster()
+	if roster == "":
+		push_warning("no rosters are shipped, so the screens cannot be exercised")
+		return
+
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		PlayerSettings.set_choice(PlayerSettings.Setting.QUEUE_PALETTE, palette)
+		QueueStyle._cache.clear()
+
+		mc.begin_mission(_author(roster, 2))
+		await await_idle_frame()
+		var screen := _screen()
+		assert_object(screen).is_not_null()
+		var vip: Unit = null
+		for unit: Unit in mc.roster_units():
+			if game.is_deployed(unit):
+				vip = unit
+				break
+		assert_object(vip).override_failure_message("precondition: the draw stood nobody").is_not_null()
+		vip.must_survive = true
+		screen.refresh()
+		await await_idle_frame()
+
+		var card: PreMissionCard = null
+		for node in PC.walk(screen):
+			if node is PreMissionCard and (node as PreMissionCard).unit == vip:
+				card = node
+		assert_bool(card._vip_pill.visible).is_true()
+		assert_bool(card._deploy_button.disabled).override_failure_message(
+			"precondition: the VIP's toggle is not the disabled Required state").is_true()
+
+		var found: Array[String] = PC.findings(screen, SCREEN_BASE, "palette %d / VIP" % palette)
+		assert_array(found).override_failure_message(
+			"a VIP mark cannot be read:\n  %s" % "\n  ".join(found)).is_empty()
+
+		sm.clear_board()
+		await await_idle_frame()
+
+
 func _a_stashed_weapon() -> WeaponInstance:
 	for item: Item in mc.loadout().stash:
 		var weapon := item as WeaponInstance
