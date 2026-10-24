@@ -31,10 +31,8 @@ static func sources_at(cell: Vector2i, board: BoardContext) -> Array[Elemental.E
 	if board == null:
 		return found
 	var kind := board.terrain_kind_at(cell)
-	# WATER: the tile, unless it has frozen over -- ice is a floor, not a well. The same
-	# state-aware read is_walkable makes of the same cell, and the reason this asks the board
-	# rather than the tile alone.
-	if kind == Terrain.Kind.WATER and not board.has_tile_state(cell, Terrain.TileState.FROZEN):
+	# WATER: open water (BoardContext.is_open_water) -- ice is a floor, not a well.
+	if board.is_open_water(cell):
 		found.append(Elemental.Element.WATER)
 	# EARTH: rock. Walls and boulders are ROCK tiles already, so "press your back to the wall"
 	# comes free from REACH rather than needing a prop rule. Cliff faces are NOT here yet.

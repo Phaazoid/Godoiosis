@@ -100,18 +100,15 @@ static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 #   Waterwalk -- the holder "stands on the surface instead" (Glossary's WATER_TILE entry). Asked of
 #                the ABILITY, not through can_traverse, which answers this for deep water and not
 #                for shallow -- shallow is walkable to everyone.
-#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read the ground AS IT STANDS WHEN THE UNIT
-#                ARRIVES: cell effects apply after the whole attack phase (OrderExecutor), so a lake
-#                THIS pass froze is still water when this pass's shove lands in it, and a walk or a
-#                shove reads the live store. drowns_in reads live for the same reason. The one caller
-#                asking AT the deposits' moment -- a unit the melt sinks (#922) -- is handed the
-#                landed board instead, which is the same rule, not an exception to it.
+#   FROZEN    -- ice is dry ground (dev, 2026-09-10): the cell half, BoardContext.is_open_water
+#                (#1444). Read the ground AS IT STANDS WHEN THE UNIT ARRIVES: cell effects apply
+#                after the whole attack phase (OrderExecutor), so a lake THIS pass froze is still
+#                water when this pass's shove lands in it, and a walk or a shove reads the live
+#                store. drowns_in reads live for the same reason. The one caller asking AT the
+#                deposits' moment -- a unit the melt sinks (#922) -- is handed the landed board
+#                instead, which is the same rule, not an exception to it.
 static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
-	if board.terrain_kind_at(cell) != Terrain.Kind.WATER:
-		return false
-	if board.has_tile_state(cell, Terrain.TileState.FROZEN):
-		return false
-	return not unit.has_live_ability(Abilities.Id.WATERWALK)
+	return board.is_open_water(cell) and not unit.has_live_ability(Abilities.Id.WATERWALK)
 
 # What standing here costs THIS unit at end of turn (#892). Terrain.occupant_damage answers the
 # cell-only form; this is the per-unit layer over it, exactly as can_traverse is over is_walkable --

@@ -87,6 +87,15 @@ func move_cost_at(cell: Vector2i) -> int:
 		return 0
 	return int(data.get_custom_data("move_cost"))
 
+# Is this cell water a body is IN rather than ON (#1444): the authored WATER kind, unless it has
+# FROZEN over -- ice is dry ground (dev, 2026-09-10). THE cell answer for the four readers that ask
+# it: a shock's current (Conduction.conducts), a water source (Materia.sources_at), what a carving
+# draws (CellSubstances) and a soak (RulesService.wets_in), each keeping its own unit half on top.
+# Depth is not asked: shallow and deep are both open water, and standing on it is is_walkable's.
+func is_open_water(cell: Vector2i) -> bool:
+	return terrain_kind_at(cell) == Terrain.Kind.WATER \
+		and not has_tile_state(cell, Terrain.TileState.FROZEN)
+
 # Which unit ends up here once the plan resolves — the inverse of Unit.get_projected_destination,
 # derived from it (#105). Reads THIS board's own unit list, so the rules never resolve a cell
 # against a different roster than the one they were handed.
