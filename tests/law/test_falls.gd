@@ -176,7 +176,7 @@ func test_a_drop_at_the_landing_deals_scaled_fall_damage() -> void:
 	var flat := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	var control := _resolve(flat)
-	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(4, s.d))
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(4, (s.d as Unit).state))
 	assert_int(outcome.damage).is_equal(control.damage + outcome.fall_damage)
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
 
@@ -209,7 +209,7 @@ func test_a_heavier_band_raises_fall_damage() -> void:
 	# The scaling property, never the numbers: loading the faller into a heavier band raises the
 	# same drop's cost, and the resolver reads the loaded unit.
 	var laden := _resolve(s).fall_damage
-	assert_int(laden).is_equal(FallRules.damage_for(4, s.d))
+	assert_int(laden).is_equal(FallRules.damage_for(4, (s.d as Unit).state))
 	assert_bool(laden > unladen).is_true()
 
 
@@ -220,7 +220,7 @@ func test_mass_within_a_band_costs_nothing_extra() -> void:
 	var near := H.spawn_unit(self, ENEMY, Vector2i(1, 0), {Stats.Stat.BLD: Stats.WEIGHT_BAND_1 - 1}, false)
 	assert_int(Stats.weight_band(near.get_weight())).override_failure_message(
 		"the near-band unit is already in band 1, so this case measures nothing").is_equal(0)
-	assert_int(FallRules.damage_for(4, near)).is_equal(FallRules.damage_for(4, empty))
+	assert_int(FallRules.damage_for(4, near.state)).is_equal(FallRules.damage_for(4, empty.state))
 
 
 # A HALF level is free (#427 ruling, dev 2026-08-23: "no fall damage for a half level fall") --
@@ -315,7 +315,7 @@ func test_a_longer_flight_overflies_the_ramp_and_falls() -> void:
 	var s := _setup(heights, 2, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
-	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(2, s.d))
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(2, (s.d as Unit).state))
 	# No tumble here, so flight runs the whole path: the drop happens on its last cell.
 	assert_int(outcome.knockback_landing_index).is_equal(outcome.knockback_path.size() - 1)
 
@@ -345,7 +345,7 @@ func test_the_tumble_plummets_past_a_lip() -> void:
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()  # falls the drop, not stopped
-	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(4, s.d))
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(4, (s.d as Unit).state))
 	assert_int(outcome.fall_levels).is_equal(2)
 
 

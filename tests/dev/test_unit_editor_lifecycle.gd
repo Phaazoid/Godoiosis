@@ -76,7 +76,7 @@ func _press(label: String) -> void:
 # What the LADDER would do to this unit for an exactly-lethal hit. The Down button must diverge from
 # it on the limb and on Crisis -- these cases assert that divergence, so they need the baseline.
 func _ladder_verdict(unit: Unit) -> ResolvedOutcome.Lethality:
-	return LethalityRules.predict(LethalityRules.situation_for(unit), unit.get_current_hp())
+	return LethalityRules.predict(unit.state, unit.get_current_hp())
 
 
 # ==============================================================================
@@ -138,7 +138,7 @@ func test_down_never_takes_a_limb() -> void:
 	var inst: UnitInstance = unit.unit_instance
 	unit.set_current_hp(LethalityRules.LIMB_LOSS_DAMAGE)
 	assert_int(_ladder_verdict(unit)).is_equal(ResolvedOutcome.Lethality.DOWNED)
-	assert_bool(LethalityRules.severs(LethalityRules.situation_for(unit), unit.get_current_hp(),
+	assert_bool(LethalityRules.severs(unit.state, unit.get_current_hp(),
 			ResolvedOutcome.Lethality.DOWNED)) \
 		.override_failure_message("fixture: the ladder would not take a limb here either").is_true()
 	_editor.edit_unit(unit)
@@ -156,7 +156,7 @@ func test_down_never_triggers_crisis_on_an_armed_unit() -> void:
 	var unit := _spawn(Vector2i(1, 0))
 	var inst: UnitInstance = unit.unit_instance
 	inst.jobs.append("berserker")
-	assert_bool(LethalityRules.crisis_armed_for(unit)).is_true()
+	assert_bool(LethalityRules.crisis_armed_for(unit.state)).is_true()
 	assert_int(_ladder_verdict(unit)).is_equal(ResolvedOutcome.Lethality.CRISIS)
 	_editor.edit_unit(unit)
 

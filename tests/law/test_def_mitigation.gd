@@ -181,7 +181,7 @@ func test_def_breakdown_itemizes_armor_and_cover() -> void:
 	# case genuinely cross-checks the breakdown rather than echoing get_effective_def back at
 	# itself -- and no literal rides CON_DEF_FACTOR (playtest-tunable, 2026-08-10 sweep).
 	var armor_term: int = Stats.armor_def(4, target.get_effective_stat(Stats.Stat.CON))
-	var def := RulesService.def_breakdown(target, Vector2i(1, 0), board)
+	var def := RulesService.def_breakdown(target.state, Vector2i(1, 0), board)
 	assert_int(def["armor"]).is_equal(armor_term)
 	assert_int(def["cover"]).is_equal(Terrain.COVER_DEF)
 	assert_int(def["total"]).is_equal(armor_term + Terrain.COVER_DEF)
@@ -192,7 +192,7 @@ func test_def_breakdown_without_a_board_is_armor_only() -> void:
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.CON: 5})
 	target.worn_armor = _make_armor(4)
 
-	var def := RulesService.def_breakdown(target, Vector2i(1, 0), null)
+	var def := RulesService.def_breakdown(target.state, Vector2i(1, 0), null)
 	assert_int(def["cover"]).is_equal(0)
 	assert_int(def["total"]).is_equal(Stats.armor_def(4, target.get_effective_stat(Stats.Stat.CON)))
 
@@ -209,7 +209,7 @@ func test_def_breakdown_total_is_what_the_resolver_subtracts() -> void:
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board)
 
-	var shown := RulesService.def_breakdown(target, Vector2i(1, 0), board)
+	var shown := RulesService.def_breakdown(target.state, Vector2i(1, 0), board)
 	assert_int(attack.resolved.damage).is_equal(10 - shown["total"])
 
 
@@ -237,7 +237,7 @@ func test_an_uncovered_kind_zeroes_the_armor_term_and_not_cover() -> void:
 	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board)
 
 	assert_int(attack.resolved.damage).is_equal(10 - Terrain.COVER_DEF)
-	var against := RulesService.def_against(target, Vector2i(1, 0), board, AttackData.Kind.BLUNT)
+	var against := RulesService.def_against(target.state, Vector2i(1, 0), board, AttackData.Kind.BLUNT)
 	assert_int(against["armor"]).is_equal(0)
 	assert_int(against["cover"]).is_equal(Terrain.COVER_DEF)
 	assert_int(against["total"]).is_equal(Terrain.COVER_DEF)

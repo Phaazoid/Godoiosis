@@ -75,13 +75,13 @@ func test_burrowing_raises_the_diggers_def_by_the_cover_term() -> void:
 	var sess = s.sess
 	var digger: Unit = s.digger
 
-	var before := RulesService.def_breakdown(digger, digger.movement.cell, sess._board())
+	var before := RulesService.def_breakdown(digger.state, digger.movement.cell, sess._board())
 	assert_int(before["cover"]).is_equal(0)
 
 	sess.burrow(sess.handle_for(digger))
 	sess.execute()
 
-	var after := RulesService.def_breakdown(digger, digger.movement.cell, sess._board())
+	var after := RulesService.def_breakdown(digger.state, digger.movement.cell, sess._board())
 	assert_int(after["cover"]).is_equal(Terrain.COVER_DEF)
 	assert_int(after["total"] - before["total"]).is_equal(Terrain.COVER_DEF)
 
@@ -94,7 +94,7 @@ func test_cover_shelters_whoever_stands_there_not_just_the_digger() -> void:
 	sess.execute()
 
 	var squatter: Unit = BoardBuilder.spawn(s.board, _data("Squatter", PLAYER), Vector2i(1, 1))
-	var def := RulesService.def_breakdown(squatter, Vector2i(1, 1), sess._board())
+	var def := RulesService.def_breakdown(squatter.state, Vector2i(1, 1), sess._board())
 	assert_int(def["cover"]).is_equal(Terrain.COVER_DEF)
 
 

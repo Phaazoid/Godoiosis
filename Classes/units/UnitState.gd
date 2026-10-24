@@ -72,6 +72,61 @@ func _init(p_unit: Unit) -> void:
 static func of(u: Unit) -> UnitState:
 	return u.state if u != null else null
 
+# A resolve pass's copy of this state (#1480): the body a pass writes to, so the live one stays
+# untouched (R2). It owns everything a pass can change (the instance, the element and effect lists, the
+# ladder fields, each carried weapon with its battle state) and shares what is authored (armour, vials,
+# runes, templates, mods, each StatEffect). Every link to a carried weapon (the inventory, the hand, a
+# fitted prosthetic) names its twin, so one object stays one object and _mod_sources' dedupe holds.
+func copy() -> UnitState:
+	var carried: Array[Item] = inventory.duplicate()
+	carried.append(equipped_weapon)
+	if instance != null:
+		for slot in instance.limbs:
+			carried.append(instance.limbs[slot].prosthetic_item)
+	var twins: Dictionary[WeaponInstance, WeaponInstance] = {}
+	for item in carried:
+		var weapon := item as WeaponInstance
+		# A template-less instance (a fixture's bare WeaponInstance.new()) has no family to copy into,
+		# and is shared.
+		if weapon == null or weapon.template == null or twins.has(weapon):
+			continue
+		var twin := weapon.copy_for_grant() as WeaponInstance
+		if twin == null:
+			continue   # an unmapped family: make() has already said so
+		twin.apply_battle_state(weapon.capture_battle_state())
+		twins[weapon] = twin
+	var c := UnitState.new(unit)
+	c.instance = instance.copy(twins) if instance != null else null
+	for item in inventory:
+		c.inventory.append(_twin_of(item, twins))
+	c.equipped_weapon = _twin_of(equipped_weapon, twins) as EquippableData
+	c.worn_armor = worn_armor
+	c.attunement = attunement
+	c.element_states = element_states.duplicate()
+	c.stat_effects = stat_effects.duplicate()
+	c.lifecycle_state = lifecycle_state
+	c.wounded = wounded
+	c.in_crisis = in_crisis
+	c.crisis_surge_pending = crisis_surge_pending
+	c.downed_turns_remaining = downed_turns_remaining
+	return c
+
+static func _twin_of(item: Item, twins: Dictionary[WeaponInstance, WeaponInstance]) -> Item:
+	var weapon := item as WeaponInstance
+	return twins[weapon] if weapon != null and twins.has(weapon) else item
+
+# Take the next limb in the rotation (#1174) and settle what it strips: the ONE sever spelling, run by
+# Unit.take_damage on the live body and by the resolver on its copy. The slot taken, or -1 for none.
+func lose_next_limb() -> int:
+	if instance == null:
+		return -1
+	var slot := instance.next_maim_slot()
+	if slot == -1:
+		return -1
+	instance.sever_next_limb()
+	settle()
+	return slot
+
 # Everything that has to settle after a stat moves, minus the readout signal (Unit._settle_stat_change
 # emits that after calling this).
 #

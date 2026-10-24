@@ -62,8 +62,8 @@ func test_a_unit_standing_in_fire_burns_at_its_own_factions_end_of_turn() -> voi
 	var states: TerrainStateManager = s.board.terrain_states
 	_light(states, hero.movement.cell)
 	_light(states, foe.movement.cell)
-	var hero_damage := RulesService.occupant_damage_for(hero, states.states_at(hero.movement.cell))
-	var foe_damage := RulesService.occupant_damage_for(foe, states.states_at(foe.movement.cell))
+	var hero_damage := RulesService.occupant_damage_for(hero.state, states.states_at(hero.movement.cell))
+	var foe_damage := RulesService.occupant_damage_for(foe.state, states.states_at(foe.movement.cell))
 	var hero_hp := hero.get_current_hp()
 	var foe_hp := foe.get_current_hp()
 	assert_int(hero_damage).override_failure_message("fixture: fire on this ground charges nothing") \
@@ -105,7 +105,7 @@ func test_a_unit_standing_in_steam_is_scalded_and_told_so() -> void:
 	var hero: Unit = s.hero
 	var gas: GasField = s.board.gas_field
 	gas.set_level(hero.movement.cell, Gas.Kind.STEAM, Gas.MAX_LEVEL)
-	var scald := RulesService.gas_damage_for(hero, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(hero.state, Gas.Kind.STEAM, Gas.MAX_LEVEL)
 	var hero_hp := hero.get_current_hp()
 	assert_int(scald).override_failure_message("fixture: thick steam scalds nobody").is_greater(0)
 	assert_int(hero_hp).override_failure_message("fixture: the scald would down the hero").is_greater(scald)
@@ -131,7 +131,7 @@ func test_a_burn_that_ends_the_mission_does_not_hand_off() -> void:
 	var hero: Unit = s.hero
 	var states: TerrainStateManager = s.board.terrain_states
 	_light(states, hero.movement.cell)
-	var damage := RulesService.occupant_damage_for(hero, states.states_at(hero.movement.cell))
+	var damage := RulesService.occupant_damage_for(hero.state, states.states_at(hero.movement.cell))
 	assert_int(damage).override_failure_message("fixture: fire on this ground charges nothing").is_greater(0)
 	hero.take_damage(hero.get_current_hp() - damage)   # one burn's worth left
 	assert_bool(hero.is_active()).override_failure_message("fixture: the hero is already down").is_true()
@@ -167,7 +167,7 @@ func test_an_ai_faction_burns_at_the_end_of_its_own_turn() -> void:
 	foe.squad.archetype = AIArchetype.Type.HOLD   # holds its ground, so it is still in the fire when its turn ends
 	var lit := foe.movement.cell
 	_light(states, lit)
-	var damage := RulesService.occupant_damage_for(foe, states.states_at(lit))
+	var damage := RulesService.occupant_damage_for(foe.state, states.states_at(lit))
 	var foe_hp := foe.get_current_hp()
 	assert_int(damage).override_failure_message("fixture: fire on this ground charges nothing").is_greater(0)
 	assert_int(foe_hp).override_failure_message("fixture: the burn would down the foe").is_greater(damage)
@@ -299,7 +299,7 @@ func test_a_faction_with_nobody_to_command_is_passed_over_without_its_burn() -> 
 	var states: TerrainStateManager = b.terrain_states
 	_light(states, body.movement.cell)
 	assert_bool(body.is_downed()).override_failure_message("fixture: the body is not down").is_true()
-	assert_int(RulesService.occupant_damage_for(body, states.states_at(body.movement.cell))) \
+	assert_int(RulesService.occupant_damage_for(body.state, states.states_at(body.movement.cell))) \
 			.override_failure_message("fixture: fire charges the body nothing, so a burn would not show") \
 			.is_greater(0)
 	var hp := body.get_current_hp()

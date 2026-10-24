@@ -170,7 +170,7 @@ func _refresh_stats():
 		armor_coverage = unit.worn_armor.coverage_text()
 	# One shared breakdown (the resolver sums the same call). Yellow = a temporary source is
 	# contributing — terrain you're standing on, not gear you own.
-	var def := RulesService.def_breakdown(unit, unit.movement.cell, board)
+	var def := RulesService.def_breakdown(unit.state, unit.movement.cell, board)
 	var def_color: Color = TERRAIN_BUFF_COLOR if def["cover"] > 0 else NO_TINT
 	_add_stat("DEF", str(def["total"]), Glossary.Term.DEF, def_tooltip(
 		armor_name, armor_power, unit.get_effective_stat(Stats.Stat.CON),

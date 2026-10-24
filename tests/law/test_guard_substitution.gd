@@ -193,7 +193,7 @@ func test_the_lethality_rung_is_read_against_the_blocker() -> void:
 
 	assert_that(atk.resolved.lethality).is_not_equal(ResolvedOutcome.Lethality.NONE)
 	# And the ward, on the identical hit, would have shrugged it off.
-	assert_that(LethalityRules.predict(LethalityRules.situation_for(ward), atk.resolved.damage)) \
+	assert_that(LethalityRules.predict(ward.state, atk.resolved.damage)) \
 		.is_equal(ResolvedOutcome.Lethality.NONE)
 
 

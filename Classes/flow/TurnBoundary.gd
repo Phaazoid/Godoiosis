@@ -28,8 +28,8 @@ static func tile_hits(units: Array[Unit], states: TerrainStateManager, gas: GasF
 		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
 			continue
 		var packed := gas.packed_at(unit.movement.cell) if gas != null else 0
-		hits.append_array(TileHitAction.end_of_turn(unit, unit.element_states, packed, weather,
-				states.states_at(unit.movement.cell), LethalityRules.situation_for(unit)))
+		hits.append_array(TileHitAction.end_of_turn(unit.state, packed, weather,
+				states.states_at(unit.movement.cell)))
 	return hits
 
 

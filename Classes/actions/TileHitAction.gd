@@ -13,60 +13,58 @@ var weather := -1   # the Weather.Kind soaking, or -1
 var resolved: ResolvedOutcome = null
 
 
-# `situation` is whose HP/lifecycle the rung is predicted against — the pass's threaded
-# hypothetical at plan time, the live unit at execution.
-static func make(unit: Unit, tile_state: Terrain.TileState, damage: int,
-		situation: LethalityRules.Situation) -> TileHitAction:
+# `body` is what the rung is predicted against (end_of_turn hands it the copy its rows thread). It is
+# not written; the actor is its unit.
+static func make(body: UnitState, tile_state: Terrain.TileState, damage: int) -> TileHitAction:
 	var hit := TileHitAction.new()
-	hit.actor = unit
+	hit.actor = body.unit
 	hit.action_type = BaseAction.ActionType.TILE_HIT
 	hit.state = tile_state
 	var outcome := ResolvedOutcome.new()
 	outcome.base_damage = damage
 	outcome.damage = damage
-	outcome.hp_before = situation.hp
+	outcome.hp_before = body.get_current_hp()
 	# The rung FIRST: what a burn leaves behind is the rung's answer, not a subtraction (#1002).
 	# Spelling it here is how a burn that downed a unit previewed 3->0 where the attack path said 1,
 	# and how one that triggered Crisis previewed 0 against an execution that stands them up at 5.
-	outcome.lethality = LethalityRules.predict(situation, damage)
-	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, situation.hp, damage)
+	outcome.lethality = LethalityRules.predict(body, damage)
+	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, outcome.hp_before, damage)
 	hit.resolved = outcome
 	return hit
 
 
 # The gas over this unit's cell (`packed`, Gas.with_level's form): one row per kind that hurts it or
 # gives it a state. The damage is RulesService.gas_damage_for (steam's scald, #1331); the state is the
-# rules' own from its authored level up, unless `held` already has it or holds one that keeps it off.
+# rules' own from its authored level up, unless the body already has it or holds one that keeps it off.
 # Idempotent like a wade's soak: a row says what CHANGED, so an already-wet unit grows a row only for
 # the damage. A gas whose state is held only WHILE STANDING in it (smoke, #1335) gives nothing to keep.
-# A row with damage is predicted against `situation`, which is advanced past it, so whatever comes
-# next is predicted against the HP this one leaves.
-static func gas_hits(unit: Unit, held: Array[Elemental.State], packed: int,
-		situation: LethalityRules.Situation) -> Array[TileHitAction]:
+# A row with damage is predicted against `body`, which is advanced past it, so whatever comes next is
+# predicted against the HP this one leaves. Its states are not written: a row says what it adds.
+static func gas_hits(body: UnitState, packed: int) -> Array[TileHitAction]:
+	var held := body.element_states
 	var hits: Array[TileHitAction] = []
 	for kind: Gas.Kind in Gas.kinds_in(packed):
 		var rules := GasRules.for_kind(kind)
 		if rules == null:
 			continue
 		var level := Gas.level_in(packed, kind)
-		var damage := RulesService.gas_damage_for(unit, kind, level)
+		var damage := RulesService.gas_damage_for(body, kind, level)
 		var gains := rules.state != Elemental.State.NONE and not rules.while_standing \
 				and level >= rules.state_from and not held.has(rules.state) \
 				and not Elemental.is_blocked(held, rules.state)
 		if damage <= 0 and not gains:
 			continue
-		var hit := make_gas(unit, kind, rules.state if gains else Elemental.State.NONE, damage, situation)
+		var hit := make_gas(body, kind, rules.state if gains else Elemental.State.NONE, damage)
 		hits.append(hit)
 		if damage > 0:
-			LethalityRules.land_rung(situation, hit.resolved.lethality, damage)
+			LethalityRules.land_rung(body, hit.resolved.lethality, damage)
 	return hits
 
 
 # A gas row: the scald through make() when there is one, so it reads HP and names its rung, and the
 # state it gives. A body the scald kills gains nothing.
-static func make_gas(unit: Unit, kind: Gas.Kind, gained: Elemental.State, damage: int,
-		situation: LethalityRules.Situation) -> TileHitAction:
-	var hit := make(unit, Terrain.TileState.NONE, damage, situation) if damage > 0 else _soak(unit, gained)
+static func make_gas(body: UnitState, kind: Gas.Kind, gained: Elemental.State, damage: int) -> TileHitAction:
+	var hit := make(body, Terrain.TileState.NONE, damage) if damage > 0 else _soak(body.unit, gained)
 	if damage > 0 and gained != Elemental.State.NONE \
 			and hit.resolved.lethality != ResolvedOutcome.Lethality.KILLED:
 		hit.resolved.states_added.append(gained)
@@ -79,35 +77,35 @@ static func make_gas(unit: Unit, kind: Gas.Kind, gained: Elemental.State, damage
 # forecast (PlanResolver.resolve_tile_hits) and the pass (TurnBoundary.tile_hits) both call (#1331):
 # a scald and a burn are two damage rows on one unit, and the burn must be predicted against the HP
 # the scald leaves, so the threading lives here rather than in each caller. A body a row kills takes
-# nothing more. `situation` is not written.
-static func end_of_turn(unit: Unit, held: Array[Elemental.State], packed: int, sky: Weather.Kind,
-		ground: Array[Terrain.TileState], situation: LethalityRules.Situation) -> Array[TileHitAction]:
-	var now := situation.copy()
-	var hits := soaks(unit, held, packed, sky, now)
-	if now.lifecycle == Unit.LifecycleState.DEAD:
+# nothing more. `body` is not written: the rows thread a copy of it, made only when a row can land
+# damage, because the health bars ask this every frame (TurnBoundary.forecast).
+static func end_of_turn(body: UnitState, packed: int, sky: Weather.Kind,
+		ground: Array[Terrain.TileState]) -> Array[TileHitAction]:
+	var burn := RulesService.occupant_damage_for(body, ground)
+	var now := body.copy() if packed != 0 or burn > 0 else body
+	var hits := soaks(now, packed, sky)
+	if now.lifecycle_state == Unit.LifecycleState.DEAD:
 		return hits
-	var damage := RulesService.occupant_damage_for(unit, ground)
-	if damage > 0:
-		hits.append(make(unit, Terrain.burning_state(ground), damage, now))
+	if burn > 0:
+		hits.append(make(now, Terrain.burning_state(ground), burn))
 	return hits
 
 
 # Everything that soaks or scalds this unit at its end of turn, in the order the pass plays it: the
 # gas over its cell, then the weather over the board (#1260). The weather is asked with what the gas
-# rows already add, so a unit in steam in the rain gets one Wet row rather than two. `situation` is
+# rows already add, so a unit in steam in the rain gets one Wet row rather than two. `body` is
 # advanced past every scald.
-static func soaks(unit: Unit, held: Array[Elemental.State], packed: int,
-		sky: Weather.Kind, situation: LethalityRules.Situation) -> Array[TileHitAction]:
-	var hits := gas_hits(unit, held, packed, situation)
-	if situation.lifecycle == Unit.LifecycleState.DEAD:
+static func soaks(body: UnitState, packed: int, sky: Weather.Kind) -> Array[TileHitAction]:
+	var hits := gas_hits(body, packed)
+	if body.lifecycle_state == Unit.LifecycleState.DEAD:
 		return hits   # the scald killed it: the rain soaks no body
-	var after: Array[Elemental.State] = held.duplicate()
+	var after: Array[Elemental.State] = body.element_states.duplicate()
 	for hit in hits:
 		after.append_array(hit.resolved.states_added)
 	var rules := WeatherRules.for_kind(sky)
 	if rules != null and rules.state != Elemental.State.NONE \
 			and not after.has(rules.state) and not Elemental.is_blocked(after, rules.state):
-		var hit := _soak(unit, rules.state)
+		var hit := _soak(body.unit, rules.state)
 		hit.weather = sky
 		hits.append(hit)
 	return hits

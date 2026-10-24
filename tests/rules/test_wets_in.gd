@@ -51,15 +51,15 @@ func _waterwalker() -> Unit:
 
 
 func test_wading_shallow_water_soaks() -> void:
-	assert_bool(RulesService.wets_in(SHALLOW, _walker(), _board())).is_true()
+	assert_bool(RulesService.wets_in(SHALLOW, _walker().state, _board())).is_true()
 
 # The load-bearing half: depth is walkability and wetness does not read it, so the cell a unit CANNOT
 # stand on soaks exactly like the one it can. A drowning body comes up wet.
 func test_deep_water_soaks_too() -> void:
-	assert_bool(RulesService.wets_in(DEEP, _walker(), _board())).is_true()
+	assert_bool(RulesService.wets_in(DEEP, _walker().state, _board())).is_true()
 
 func test_dry_ground_does_not_soak() -> void:
-	assert_bool(RulesService.wets_in(DRY, _walker(), _board())).is_false()
+	assert_bool(RulesService.wets_in(DRY, _walker().state, _board())).is_false()
 
 # Ice is dry ground (dev, 2026-09-10) -- and asserted over BOTH depths, because FROZEN is the one
 # exemption that has to beat the kind rather than the walkability: the shallow cell is already
@@ -67,8 +67,8 @@ func test_dry_ground_does_not_soak() -> void:
 func test_frozen_water_does_not_soak_at_either_depth() -> void:
 	var frozen: Array[Vector2i] = [SHALLOW, DEEP]
 	var board := _board(frozen)
-	assert_bool(RulesService.wets_in(SHALLOW, _walker(), board)).is_false()
-	assert_bool(RulesService.wets_in(DEEP, _walker(), board)).is_false()
+	assert_bool(RulesService.wets_in(SHALLOW, _walker().state, board)).is_false()
+	assert_bool(RulesService.wets_in(DEEP, _walker().state, board)).is_false()
 
 # Waterwalk "stands on the surface instead" (the Glossary's own promise), so it crosses both depths
 # dry. Deep is the case can_traverse would already have answered; SHALLOW is the one that pins the
@@ -76,11 +76,11 @@ func test_frozen_water_does_not_soak_at_either_depth() -> void:
 func test_a_waterwalker_stays_dry_at_either_depth() -> void:
 	var board := _board()
 	var walker := _waterwalker()
-	assert_bool(RulesService.wets_in(DEEP, walker, board)).is_false()
-	assert_bool(RulesService.wets_in(SHALLOW, walker, board)).is_false()
+	assert_bool(RulesService.wets_in(DEEP, walker.state, board)).is_false()
+	assert_bool(RulesService.wets_in(SHALLOW, walker.state, board)).is_false()
 
 # ...and the pairing that makes the case above mean something: the SAME cells soak an ordinary unit.
 func test_the_waterwalk_exemption_is_the_abilitys_and_not_the_cells() -> void:
 	var board := _board()
-	assert_bool(RulesService.wets_in(SHALLOW, _walker(), board)).is_true()
-	assert_bool(RulesService.wets_in(DEEP, _walker(), board)).is_true()
+	assert_bool(RulesService.wets_in(SHALLOW, _walker().state, board)).is_true()
+	assert_bool(RulesService.wets_in(DEEP, _walker().state, board)).is_true()

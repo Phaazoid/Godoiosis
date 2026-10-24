@@ -135,7 +135,7 @@ func _flood(start: Array[Vector2i]) -> Dictionary:
 	var seen := {}
 	var frontier: Array[Vector2i] = []
 	for cell: Vector2i in start:
-		if RulesService.can_traverse(cell, probe, board):
+		if RulesService.can_traverse(cell, probe.state, board):
 			seen[cell] = true
 			frontier.append(cell)
 	while frontier.size() > 0:

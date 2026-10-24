@@ -447,7 +447,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes, stabilise := true) -> bool:
 	match PlanResolver.projected_lifecycle(other, hypo):
 		Unit.LifecycleState.ACTIVE:
-			return PlanResolver.projected_hp(other, hypo) < other.get_max_hp()
+			return PlanResolver.projected_hp(other, hypo) < PlanResolver.state_of(other, hypo).get_max_hp()
 		Unit.LifecycleState.DOWNED:
 			return stabilise and other.is_downed() and other.downed_turns_remaining >= 0 \
 					and (stakes == null or not stakes.rescuable.has(other))
@@ -545,8 +545,8 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 		if effect == null:
 			continue
 		var deposits: Array[ResolvedCellEffect] = [effect]
-		if RulesService.drowns_in(cell, standing, board.with_deposits(deposits)) \
-				and not RulesService.drowns_in(cell, standing, board):
+		if RulesService.drowns_in(cell, standing.state, board.with_deposits(deposits)) \
+				and not RulesService.drowns_in(cell, standing.state, board):
 			return true
 	return false
 
@@ -1101,7 +1101,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 # Waterwalker crosses is a lane worth watching that `BoardContext.is_walkable` would have refused.
 static func _lane_can_be_entered(lane: Array[Vector2i], enemy: Unit, board: BoardContext) -> bool:
 	for cell in lane:
-		if RulesService.can_traverse(cell, enemy, board):
+		if RulesService.can_traverse(cell, enemy.state, board):
 			return true
 	return false
 
@@ -1559,9 +1559,9 @@ static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) 
 # resolver's own trigger). The cell a unit already stands on trips nothing -- a watch fires on ENTRY.
 static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch]) -> bool:
 	if board.terrain_states != null \
-			and RulesService.occupant_damage_for(unit, board.terrain_states.states_at(cell)) > 0:
+			and RulesService.occupant_damage_for(unit.state, board.terrain_states.states_at(cell)) > 0:
 		return true
-	if board.gas != null and RulesService.gas_damage_at(unit, board.gas.packed_at(cell)) > 0:
+	if board.gas != null and RulesService.gas_damage_at(unit.state, board.gas.packed_at(cell)) > 0:
 		return true
 	if cell == unit.movement.cell:
 		return false
@@ -2056,7 +2056,7 @@ static func _standable_attack_cells(unit: Unit, goal: Vector2i, aiming: AttackDa
 	for cell in Reach.get_all_attack_cells_from(unit, goal, aiming):
 		if not Reach.vertical_aim_ok(aiming, cell, goal, board):
 			continue   # a ledge above the weapon's tolerance is not a firing position (#258)
-		if not RulesService.can_traverse(cell, unit, board):
+		if not RulesService.can_traverse(cell, unit.state, board):
 			continue   # a wall/off-map neighbour of goal is not a firing position either
 		if RulesService.is_standable_for(unit, board.unit_at_cell(cell)):
 			cells[cell] = true

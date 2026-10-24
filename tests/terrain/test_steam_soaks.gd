@@ -181,7 +181,7 @@ func test_the_queue_forecasts_exactly_the_soak_the_pass_applies() -> void:
 		return
 	assert_array(soaks[0].resolved.states_added).contains_exactly([rules.state])
 	# The row prints an HP arrow exactly when the same level also scalds (#1331).
-	var scalds := RulesService.gas_damage_for(unit, STEAM, rules.state_from) > 0
+	var scalds := RulesService.gas_damage_for(unit.state, STEAM, rules.state_from) > 0
 	assert_bool(soaks[0].resolved.reads_hp).override_failure_message(
 			"the soak row's HP arrow disagrees with whether this level scalds").is_equal(scalds)
 
@@ -198,7 +198,7 @@ func test_a_unit_already_holding_the_state_is_only_scalded() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
 	unit.add_element_state(rules.state)
 	_steam(CELL, Gas.MAX_LEVEL)
-	var scald := RulesService.gas_damage_for(unit, STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(unit.state, STEAM, Gas.MAX_LEVEL)
 
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
 	var live := _live_hits()
@@ -235,7 +235,7 @@ func test_steam_over_fire_soaks_first_and_still_burns() -> void:
 
 	assert_bool(unit.element_states.has(rules.state)).is_true()
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE
-			- RulesService.gas_damage_for(unit, STEAM, Gas.MAX_LEVEL))
+			- RulesService.gas_damage_for(unit.state, STEAM, Gas.MAX_LEVEL))
 
 
 # ==============================================================================
@@ -244,7 +244,7 @@ func test_steam_over_fire_soaks_first_and_still_burns() -> void:
 
 func test_steam_scalds_by_its_authored_damage_when_the_units_turn_ends() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
-	var scald := RulesService.gas_damage_for(unit, STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(unit.state, STEAM, Gas.MAX_LEVEL)
 	assert_int(scald).override_failure_message("fixture: thick steam scalds nobody").is_greater(0)
 	_steam(CELL, Gas.MAX_LEVEL)
 	var hp_before: int = unit.get_current_hp()
@@ -340,7 +340,7 @@ func test_a_downed_body_in_steam_is_forecast_dead_and_dies() -> void:
 # Read without the thread, the burn would preview HP -> HP - burn and the pass would down the unit.
 func test_a_burn_after_a_scald_is_forecast_on_the_hp_the_scald_leaves() -> void:
 	var unit := _spawn(CELL, Team.Faction.PLAYER)
-	var scald := RulesService.gas_damage_for(unit, STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(unit.state, STEAM, Gas.MAX_LEVEL)
 	var burn := Terrain.BURNING_TILE_DAMAGE
 	assert_int(scald).override_failure_message("fixture: thick steam scalds nobody").is_greater(0)
 	unit.set_current_hp(maxi(scald, burn) + 1)

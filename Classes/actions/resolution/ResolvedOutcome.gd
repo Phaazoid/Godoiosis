@@ -115,8 +115,8 @@ enum Lethality { NONE, DOWNED, KILLED, CRISIS }
 var lethality: Lethality = Lethality.NONE
 
 # The limb slot this hit TAKES (#1174), or -1. Beside the rung rather than a rung of its own, because
-# a standing hit can take one too: LethalityRules.severs decides it, the resolver pops the slot off
-# its threaded limb_order, and execution takes the same slot by the same rotation.
+# a standing hit can take one too: LethalityRules.severs decides it, the resolver takes the slot off
+# its copy of the body (UnitState.lose_next_limb), and execution takes the same slot by the same rotation.
 var severed_limb: int = -1
 
 # How much of `damage` is NOT a blow (#1174), so can never take a limb: the drowning top-up, or all of

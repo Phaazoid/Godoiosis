@@ -161,6 +161,7 @@ func copy_for_grant() -> Item:
 	w.display_name = display_name
 	w.icon = icon
 	w.description = description
+	w.weight = weight
 	w.limb_kind = limb_kind
 	w.spaces = []
 	for fitted: Array in spaces:

@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24.**
+**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24; #1480 stage 3 (the pass threads a copy of each target) folded in 2026-10-24.**
 
 ## Core stance
 
@@ -140,12 +140,10 @@ DEF row already uses for terrain cover: **this number will move on its own.** So
 even when they cancel out, because a +2 tonic against a −2 armour tax nets zero *right now* and
 costs 2 the moment it lapses.
 
-#### Mid-pass changes are not modelled *(verified 2026-07-29; corrected 2026-10-24, [#1455](https://github.com/Phaazoid/Godoiosis/issues/1455))*
+#### Mid-pass changes: the target is threaded, the actor is not yet *(verified 2026-07-29; corrected 2026-10-24, [#1455](https://github.com/Phaazoid/Godoiosis/issues/1455); the target side threaded 2026-10-24, [#1480](https://github.com/Phaazoid/Godoiosis/issues/1480) stage 3)*
 
-`PlanResolver._Hypo` threads position, element states, HP, lifecycle and the limb rotation through a
-resolution pass; it does **not** thread stats or gear. Today the only body change that lands
-mid-pass is a lost limb's settle: a limb carries STR or DEX, so losing one can strip armour gated
-on them (and a CON piece takes max HP with it), a rune the aura tax leaves dry, or a severed
+Today the only body change that lands mid-pass is a lost limb's settle: a limb carries STR or DEX,
+so losing one can strip armour gated on them (and a CON piece takes max HP with it), a rune the aura tax leaves dry, or a severed
 prosthetic's mods. It never strips a weapon. **Since [#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)
 that limb can go from a STANDING unit with orders still queued**: a watch shot mid-walk, then its
 swing. `tests/flow/test_limb_loss_mid_pass.gd` drives that sequence end to end.
@@ -154,21 +152,23 @@ swing. `tests/flow/test_limb_loss_mid_pass.gd` drives that sequence end to end.
   and takes the limb after (dev ruling, #1455: *"They keep their bonuses until after the hit that
   would remove them finishes."*). Before #1455 the strip ran first, so a CON piece's max HP was gone
   before the hit landed and the unit could die on a blow the preview said it survived.
-- **Every stat-derived number is frozen at plan time** (`AttackAction.execute` is pure playback,
-  R3). A later hit on the maimed unit uses its pre-pass DEF, and its own swing or counter its
-  pre-sever STR, in preview and execution alike: a fidelity gap, not a Law #2 break. Pinned by
-  `tests/law/test_resolution_laws.gd`.
-- **Execution re-reads two gear-derived facts live:** max HP, in every HP clamp, and the kit Crisis
-  comes from. So a strip is a **latent Law #2 break** for a later read in the same pass: a heal on
-  the maimed unit (the preview clamps at the old max, execution at the new one), a would-be-down
-  when the stripped piece granted Crisis (it previews as Crisis and executes as a plain down), and
-  the end-of-turn burn when it granted fire Insulation (`TurnBoundary` reads the live unit). No
-  shipped gear strips on a sever, so none of these can happen today.
+- **The pass threads a planned COPY of every body it hits** (`UnitState.copy()`, #1480 stage 3).
+  `PlanResolver._Hypo` makes the copy on the first write, and `PlanResolver.state_of(unit, hypo)`
+  reads it, or the live body for a unit the pass has not touched. The severing hit runs the same
+  `UnitState.lose_next_limb()` on the copy that execution runs live, so every later read of that
+  TARGET in the pass sees the strip: a second hit meets the stripped DEF, a heal clamps at the
+  stripped max HP, a would-be-down asks the stripped kit for Crisis, and the end-of-turn burn asks
+  the stripped Insulation. So does the severing hit's own re-clamp, when a stripped CON piece takes
+  max HP below what the hit left. `tests/law/test_strip_threads_through_the_pass.gd` pins all five.
+- **The ACTOR side is not threaded yet.** Every stat-derived number is frozen at plan time
+  (`AttackAction.execute` is pure playback, R3), and the pass computes an order's damage from the
+  live attacker. So a maimed unit's own swing or counter later in the pass uses its pre-sever STR,
+  in preview and execution alike: a fidelity gap, not a Law #2 break. That half, and the
+  supercharge tank (still `_Hypo.charges`), are #1480 stage 4. No shipped gear strips on a sever,
+  so none of this can happen today.
 
-All of it is owed by [#1480](https://github.com/Phaazoid/Godoiosis/issues/1480): the resolver reads
-and mutates a planned copy of each unit rather than mirroring the live one field by field. A queued
-ACTION that applies an effect (a transmutation buffing an ally) needs the same thing, so one order's
-stat change can reach a later order's damage; that is
+A queued ACTION that applies an effect (a transmutation buffing an ally) needs the same thing on the
+actor side, so one order's stat change can reach a later order's damage; that is
 [#113](https://github.com/Phaazoid/Godoiosis/issues/113), parked until a buff transmutation is
 wanted.
 

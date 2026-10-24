@@ -64,7 +64,10 @@ static func command_block_reason(unit: Unit, active_faction: Team.Faction) -> St
 #
 # Deliberately says NOTHING about occupancy. An enemy body blocks a MOVE (movement_cost adds that
 # below) but is not a terrain fact and moves every turn — a connectivity field must see through it.
-static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
+#
+# Takes the BODY (#1480), like every rule here that reads one: a pass hands its copy, so a shove after
+# a strip asks the kit the body has then. A caller holding a Unit passes `unit.state`.
+static func can_traverse(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
 	if board.is_walkable(cell):
 		return true
 	# Waterwalk (Movement, docs/design/jobs.md "The ability chassis"): ignores water's
@@ -73,7 +76,7 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 	# the cell is ALREADY impassable, so the JobCatalog lookup stays off the hot path for ordinary
 	# ground (it used to be computed for every cell — see docs/performance.md).
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
-		and unit.has_live_ability(Abilities.Id.WATERWALK)
+		and body.has_live_ability(Abilities.Id.WATERWALK)
 
 # Does this cell DROWN this unit — water it cannot stand on (#116)? One answer for all three sites a
 # shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends --
@@ -87,9 +90,9 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 # one comparison settles four cases — deep water takes an ordinary unit, a Waterwalker stands on it,
 # a FROZEN cell catches the shove (can_traverse already reads tile state, #109), and shallow water
 # is walkable, so nothing happens at all.
-static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
+static func drowns_in(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
-		and not can_traverse(cell, unit, board)
+		and not can_traverse(cell, body, board)
 
 # Does OCCUPYING this cell SOAK this unit? drowns_in's sibling, and a different question: that one
 # asks whether the water is over your head, this one only whether you are in it. Shallow and deep
@@ -107,8 +110,8 @@ static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 #                store. drowns_in reads live for the same reason. The one caller asking AT the
 #                deposits' moment -- a unit the melt sinks (#922) -- is handed the landed board
 #                instead, which is the same rule, not an exception to it.
-static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
-	return board.is_open_water(cell) and not unit.has_live_ability(Abilities.Id.WATERWALK)
+static func wets_in(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
+	return board.is_open_water(cell) and not body.has_live_ability(Abilities.Id.WATERWALK)
 
 # What standing here costs THIS unit at end of turn (#892). Terrain.occupant_damage answers the
 # cell-only form; this is the per-unit layer over it, exactly as can_traverse is over is_walkable --
@@ -124,8 +127,8 @@ static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 # queue refresh -- can_traverse's hot-path lesson. It is also the FIRST reading in the
 # TileState -> Element direction (TerrainReaction bridges the other way), which Terrain.gd's header
 # calls out as the two vocabularies staying apart until something explicitly crosses them.
-static func occupant_damage_for(unit: Unit, states: Array[Terrain.TileState]) -> int:
-	if Terrain.is_burning(states) and unit.is_immune_to(Elemental.Element.FIRE):
+static func occupant_damage_for(body: UnitState, states: Array[Terrain.TileState]) -> int:
+	if Terrain.is_burning(states) and body.is_immune_to(Elemental.Element.FIRE):
 		return 0
 	return Terrain.occupant_damage(states)
 
@@ -133,20 +136,20 @@ static func occupant_damage_for(unit: Unit, states: Array[Terrain.TileState]) ->
 # the rules file's damage at that level, zero for a unit insulated against its damage_element. The
 # forecast, the pass (both through TileHitAction.gas_hits) and the AI's hazard read ask this one rule.
 # The authored number is read first, so a gas that deals nothing never asks the unit.
-static func gas_damage_for(unit: Unit, kind: Gas.Kind, level: int) -> int:
+static func gas_damage_for(body: UnitState, kind: Gas.Kind, level: int) -> int:
 	var rules := GasRules.for_kind(kind)
 	if rules == null:
 		return 0
 	var damage := int(rules.damage.get(level, 0))
-	if damage <= 0 or unit.is_immune_to(rules.damage_element):
+	if damage <= 0 or body.is_immune_to(rules.damage_element):
 		return 0
 	return damage
 
 # Every gas on one cell (`packed`, Gas.with_level's form), summed -- what AITactics._is_hazard asks.
-static func gas_damage_at(unit: Unit, packed: int) -> int:
+static func gas_damage_at(body: UnitState, packed: int) -> int:
 	var total := 0
 	for kind: Gas.Kind in Gas.kinds_in(packed):
-		total += gas_damage_for(unit, kind, Gas.level_in(packed, kind))
+		total += gas_damage_for(body, kind, Gas.level_in(packed, kind))
 	return total
 
 # May this unit step FROM one cell TO an orthogonally adjacent one (#257)? The EDGE question, and
@@ -160,7 +163,7 @@ static func gas_damage_at(unit: Unit, packed: int) -> int:
 # A ramp's own elevation is its LOW side, so the climb happens LEAVING it and the descent happens
 # ENTERING it -- which is why the two height clauses look at opposite cells.
 static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardContext) -> bool:
-	if not can_traverse(to, unit, board):
+	if not can_traverse(to, unit.state, board):
 		return false
 	return height_step_ok(from, to, board)
 
@@ -580,13 +583,13 @@ static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 # which is what every caller outside a pass means.
 static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext, hypo: Dictionary = {}) -> Array[Vector2i]:
 	var from := PlanResolver.projected_position(body, hypo)
-	if can_traverse(from, body, board):
+	if can_traverse(from, body.state, board):
 		return [from] as Array[Vector2i]
 	var origin := PlanResolver.projected_position(rescuer, hypo)
 	var landings: Array[Vector2i] = []
 	for dir in NEIGHBOURS:
 		var cell: Vector2i = origin + dir
-		if not can_traverse(cell, body, board) or not height_step_ok(origin, cell, board):
+		if not can_traverse(cell, body.state, board) or not height_step_ok(origin, cell, board):
 			continue
 		var occupant := PlanResolver._unit_threaded_at(cell, board, hypo)
 		if occupant == null or occupant == body:
@@ -600,7 +603,7 @@ static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext, hypo
 # to ask even when there is a single legal bank (2026-08-26), because a step that appears and
 # disappears reads as a bug, and a one-wide jetty is exactly where it would vanish.
 static func rescue_needs_a_pick(body: Unit, board: BoardContext) -> bool:
-	return not can_traverse(body.get_projected_destination(), body, board)
+	return not can_traverse(body.get_projected_destination(), body.state, board)
 
 # Who `unit` could become the bodyguard of right now (#414) — same shape as adjacent_downed_allies
 # above, projected on BOTH sides for the same reason (#126): Guard arms after the move phase, so it meets
@@ -625,8 +628,8 @@ static func guard_candidates(unit: Unit, board: BoardContext) -> Array[Unit]:
 # resolver sums it to mitigate damage, the inspect panel shows it — so the readout can never claim
 # a different number than the one actually subtracted (Law #2's spirit applied to a stat readout).
 # A future DEF source (a Guard ability, a buff) gets added HERE and both sites pick it up free.
-static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Dictionary[String, int]:
-	var armor := unit.get_effective_def()
+static func def_breakdown(body: UnitState, cell: Vector2i, board: BoardContext) -> Dictionary[String, int]:
+	var armor := body.get_effective_def()
 	var cover := 0
 	if board != null:
 		cover = board.cover_def_at(cell)
@@ -638,9 +641,9 @@ static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Di
 # panel's standing readout and the number the resolver subtracts are still one composition -- the
 # kind gate is the only thing this adds, and it lives here so the queue row can explain a subtraction
 # without restating it. Cover is kind-blind: a wall stops a fireball as well as a bullet.
-static func def_against(unit: Unit, cell: Vector2i, board: BoardContext, kind: AttackData.Kind) -> Dictionary[String, int]:
-	var def := def_breakdown(unit, cell, board)
-	if unit.worn_armor != null and not unit.worn_armor.covers(kind):
+static func def_against(body: UnitState, cell: Vector2i, board: BoardContext, kind: AttackData.Kind) -> Dictionary[String, int]:
+	var def := def_breakdown(body, cell, board)
+	if body.worn_armor != null and not body.worn_armor.covers(kind):
 		def["armor"] = 0
 		def["total"] = def["cover"]
 	return def

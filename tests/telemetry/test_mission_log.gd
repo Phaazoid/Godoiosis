@@ -463,7 +463,7 @@ func test_a_steam_soak_is_recorded_as_turn_effects() -> void:
 	assert_str(str(row.get("gas"))).is_equal(Gas.Kind.keys()[Gas.Kind.STEAM])
 	assert_array(row.get("states", []) as Array).contains_exactly([Elemental.State.keys()[rules.state]])
 	assert_int(int(row.get("damage", -1))).is_equal(
-			RulesService.gas_damage_for(hero, Gas.Kind.STEAM, Gas.MAX_LEVEL))
+			RulesService.gas_damage_for(hero.state, Gas.Kind.STEAM, Gas.MAX_LEVEL))
 
 
 func test_a_capture_is_recorded() -> void:
