@@ -243,7 +243,12 @@ func breaching_unit(board: BoardContext) -> Unit:
 
 # Declared lose conditions with no usable parameter -- objectives_missing_geometry's twin, and the
 # same doctrine: the mission really is broken, so say so loudly rather than dropping the clause.
-func lose_conditions_missing_setup(board: BoardContext) -> Array[MissionRules.LoseCondition]:
+#
+# `roster_protects` (#1456): the board's ROSTER sends a VIP, so a board loaded without a draw (the dev
+# tools' Load, F2, CI's mission sweep) still has its protect subject coming. Required, so every caller
+# states its stance: MissionController passes the roster's answer, the HUD row false (see there).
+func lose_conditions_missing_setup(board: BoardContext,
+		roster_protects: bool) -> Array[MissionRules.LoseCondition]:
 	var missing: Array[MissionRules.LoseCondition] = []
 	if lose_conditions.has(MissionRules.LoseCondition.ROUND_LIMIT) and round_limit <= 0:
 		missing.append(MissionRules.LoseCondition.ROUND_LIMIT)
@@ -257,7 +262,7 @@ func lose_conditions_missing_setup(board: BoardContext) -> Array[MissionRules.Lo
 	# "not set" at the exact moment the condition FIRED -- reporting a broken board for the one
 	# thing that worked.
 	if lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST) and not protected_lost \
-			and protected_units(board).is_empty():
+			and not roster_protects and protected_units(board).is_empty():
 		missing.append(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
 	return missing
 

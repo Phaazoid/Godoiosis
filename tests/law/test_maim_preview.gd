@@ -37,6 +37,25 @@ func _sturdy(cell: Vector2i, hp := 200) -> Unit:
 	return target
 
 
+# A target in a plate gated on the stat its NEXT limb carries, granting the one point of CON that lifts
+# it into the top max-HP band, at full HP. So the blow that takes that limb strips the plate and drops
+# max HP. Built here because no shipped piece strips on a sever (#1455); DEF-less, so _hit stays exact.
+func _plated(cell: Vector2i, mhp: int) -> Unit:
+	var target := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.MHP: mhp, Stats.Stat.STR: 6,
+			Stats.Stat.DEX: 6, Stats.Stat.CON: Stats.BAND_MID_MAX}, false)
+	var slot: int = target.unit_instance.maim_order()[0]
+	var arm := slot == UnitInstance.LimbSlot.ARM_L or slot == UnitInstance.LimbSlot.ARM_R
+	var carried: Stats.Stat = Stats.Stat.STR if arm else Stats.Stat.DEX
+	var plate := ArmorData.new()
+	plate.stat_minimums = {carried: target.get_body_stat(carried)}
+	plate.stat_modifiers = {Stats.Stat.CON: 1}
+	target.add_item(plate)
+	assert_bool(target.wear_armor(target.inventory.find(plate))) \
+		.override_failure_message("fixture: the plate would not go on").is_true()
+	target.set_current_hp(target.get_max_hp())
+	return target
+
+
 func _resolve(attacks: Array[AttackAction]) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
 	plan.attacks = attacks
@@ -98,6 +117,47 @@ func test_a_limb_sized_down_takes_the_limb_and_downs() -> void:
 
 	assert_bool(target.is_downed()).is_true()
 	assert_int(target.unit_instance.limbs[first].state).is_equal(UnitInstance.LimbState.EMPTY)
+
+
+# ==============================================================================
+#  The body the blow lands on (#1455)
+# ==============================================================================
+
+# The plate the lost limb strips holds through the blow that takes it, so execution lands the HP the
+# queue previewed rather than re-clamping under the stripped max HP first.
+func test_a_severing_blow_lands_under_the_max_hp_it_was_struck_at() -> void:
+	var target := _plated(Vector2i(1, 0), 200)
+	var max_struck_at := target.get_max_hp()
+	var atk := _hit(_attacker_dealing(LethalityRules.LIMB_LOSS_DAMAGE, Vector2i(0, 0)), target)
+	assert_int(atk.resolved.severed_limb) \
+		.override_failure_message("fixture: the blow took no limb").is_not_equal(-1)
+
+	await atk.execute()
+
+	assert_object(target.worn_armor) \
+		.override_failure_message("fixture: the lost limb did not strip the plate").is_null()
+	assert_int(target.get_max_hp()) \
+		.override_failure_message("fixture: the strip moved no max HP; nothing to test").is_less(max_struck_at)
+	assert_int(target.get_current_hp()) \
+		.override_failure_message("execution landed the blow under the stripped max HP, not the previewed one") \
+		.is_equal(atk.resolved.target_hp_after)
+
+
+# The blow the preview says leaves 1 HP leaves 1 HP. Stripping first re-clamped the unit under the
+# plate's max HP before the blow landed, and the same blow killed it.
+func test_a_severing_blow_the_preview_survives_is_survived() -> void:
+	var target := _plated(Vector2i(1, 0), LethalityRules.LIMB_LOSS_DAMAGE * 2)
+	var atk := _hit(_attacker_dealing(target.get_current_hp() - 1, Vector2i(0, 0)), target)
+	assert_that(atk.resolved.lethality).is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_int(atk.resolved.severed_limb) \
+		.override_failure_message("fixture: the blow took no limb").is_not_equal(-1)
+
+	await atk.execute()
+
+	assert_bool(is_instance_valid(target) and target.is_active()) \
+		.override_failure_message("a blow the preview survived took the unit off its feet").is_true()
+	if is_instance_valid(target):
+		assert_int(target.get_current_hp()).is_equal(1)
 
 
 # ==============================================================================

@@ -37,9 +37,10 @@ enum Severity { BLOCKS, DEGRADES }
 
 # Every kind of finding this lint can file, in the order check() runs them.
 enum Rule {
-	OBJECTIVE_UNPAINTED, LOSE_CONDITION_UNSET, ENEMY_NOT_AI, PLACEMENT, COHESION, FITTING,
-	LOOK_PRESET_MISSING, ROSTER_MISSING, AI_PROFILE_MISSING, DEPLOYMENT_UNPAINTED, DEPLOYMENT_CAP,
-	BRIEFING_UNREACHABLE, BEAT_NO_TIMELINE, BEAT_EMPTY_TIMELINE, TUTORIAL_NAME, REPAIRED_CONTENT,
+	OBJECTIVE_UNPAINTED, LOSE_CONDITION_UNSET, PROTECTED_UNDECLARED, ENEMY_NOT_AI, PLACEMENT,
+	COHESION, FITTING, LOOK_PRESET_MISSING, ROSTER_MISSING, AI_PROFILE_MISSING, DEPLOYMENT_UNPAINTED,
+	DEPLOYMENT_CAP, PROTECTED_NO_ROOM, BRIEFING_UNREACHABLE, BEAT_NO_TIMELINE, BEAT_EMPTY_TIMELINE,
+	TUTORIAL_NAME, REPAIRED_CONTENT,
 }
 
 # Each rule's tier and what it names, the ONE statement of both (#1432): _add files a finding at its
@@ -49,6 +50,8 @@ const RULES := {
 		"names": "an objective with no zone painted for it"},
 	Rule.LOSE_CONDITION_UNSET: {"severity": Severity.BLOCKS,
 		"names": "a lose condition with nothing set for it (lost at once)"},
+	Rule.PROTECTED_UNDECLARED: {"severity": Severity.DEGRADES,
+		"names": "a unit flagged Must survive on a board with no Protect lose condition (losing it loses nothing)"},
 	Rule.ENEMY_NOT_AI: {"severity": Severity.DEGRADES,
 		"names": "ENEMY units the computer is not playing (you play both sides)"},
 	Rule.PLACEMENT: {"severity": Severity.BLOCKS,
@@ -67,6 +70,8 @@ const RULES := {
 		"names": "a roster with no Deployment zone painted"},
 	Rule.DEPLOYMENT_CAP: {"severity": Severity.DEGRADES,
 		"names": "a deployment cap larger than the Deployment zone"},
+	Rule.PROTECTED_NO_ROOM: {"severity": Severity.BLOCKS,
+		"names": "more roster VIPs than can deploy (Begin is refused for ever)"},
 	Rule.BRIEFING_UNREACHABLE: {"severity": Severity.DEGRADES,
 		"names": "a briefing on a board that opens no pre-mission screen"},
 	Rule.BEAT_NO_TIMELINE: {"severity": Severity.DEGRADES,
@@ -98,6 +103,7 @@ static func check(game, authored := true) -> Array[Dictionary]:
 
 	_check_objectives(game, found)
 	_check_lose_conditions(game, found)
+	_check_protected_declared(game, board, found)
 	_check_ai_factions(game, board, found)
 	_check_placement(game, board, found, authored)
 	_check_cohesion(game, found)
@@ -161,6 +167,29 @@ static func _check_lose_conditions(game, found: Array[Dictionary]) -> void:
 		_add(found, Rule.LOSE_CONDITION_UNSET,
 			"Lose condition %s is declared but nothing is set for it -- this mission would be lost immediately."
 				% MissionRules.LoseCondition.keys()[condition])
+
+
+# The other way round (#1456): a unit flagged Must survive on a board that never declares the
+# condition. DEGRADES, not BLOCKS: the board plays, and a roster VIP is still forced to deploy -- a
+# must-deploy unit that is not game-over is something the dev may want. And rosters are SHARED
+# between boards, so a VIP flagged for one board is forced onto every other board naming that roster;
+# this is what says so. Board-placed units and the roster's VIPs alike, deduped by name, since a
+# drawn roster VIP is both.
+static func _check_protected_declared(game, board: BoardContext, found: Array[Dictionary]) -> void:
+	var mission: MissionController = game.mission_controller
+	if mission.mission.lose_conditions.has(MissionRules.LoseCondition.PROTECTED_UNIT_LOST):
+		return
+	var names: Array[String] = []
+	for unit in board.units:
+		if is_instance_valid(unit) and unit.must_survive and not names.has(unit.get_unit_name()):
+			names.append(unit.get_unit_name())
+	for entry: ScenarioUnitEntry in mission.roster_forced_entries():
+		if not names.has(entry.unit_data.display_name):
+			names.append(entry.unit_data.display_name)
+	for unit_name in names:
+		_add(found, Rule.PROTECTED_UNDECLARED,
+			("%s is flagged Must survive, but this board declares no PROTECTED_UNIT_LOST -- losing "
+			+ "them loses nothing.") % unit_name)
 
 
 # #150, the first rule this file owned. Commanding is gated on faction == active faction, so a
@@ -353,6 +382,20 @@ static func _check_deployment(game, found: Array[Dictionary]) -> void:
 		_add(found, Rule.DEPLOYMENT_CAP,
 			("This board lets %d units deploy into a zone of %d cells -- only %d of them can "
 			+ "actually stand there.") % [cap, cells.size(), cells.size()])
+	# #1456: every roster VIP must deploy, so more of them than the room is a phase Begin never
+	# leaves -- and on a board with no pre-mission screen, a VIP who never stands. Room is the cap
+	# and the zone, the measure above.
+	var room := cells.size() if cap <= 0 else mini(cap, cells.size())
+	var mission: MissionController = game.mission_controller
+	var forced := mission.roster_forced_entries()
+	if forced.size() > room:
+		var names: Array[String] = []
+		for entry: ScenarioUnitEntry in forced:
+			names.append(entry.unit_data.display_name)
+		_add(found, Rule.PROTECTED_NO_ROOM,
+			("Roster '%s' sends %d VIPs (%s), but only %d units can deploy here -- every VIP must, so "
+			+ "the mission could never begin.") % [scenario_manager.current_roster, forced.size(),
+				", ".join(names), room])
 
 
 # #397, the two checks deferred from #390. Both read the SAME stores the director reads

@@ -52,6 +52,7 @@ const REGION_GAP := 12
 # reproduces the (-4, -11) that used to be spelled out here, and test_aura_ring pins that it still does.
 const RING := 28
 const RING_WINDOW := 24
+const RING_STAR := 12   # a VIP's star on the ring's shoulder, with its disc (#1456)
 
 # A squad block's heading label, found by NODE rather than by its wording. The strip test has to
 # find the title to check it draws in full, and it used to find it by matching the word the title
@@ -438,6 +439,7 @@ func _refresh_cards() -> void:
 
 
 # A-Z by name, roster order breaking a tie -- sort_custom is not stable, so the order has to be total.
+# A roster VIP is not sorted here: _settle_order, which always follows, lifts them to the front.
 func _default_order() -> Array[PreMissionCard]:
 	var roster: Array[Unit] = _controller.roster_units()
 	var order: Array[PreMissionCard] = []
@@ -456,15 +458,22 @@ func _default_order() -> Array[PreMissionCard]:
 # the same way when the screen comes back.
 #
 # The cards MOVE, never rebuild, so each keeps its own state through the shuffle.
+#
+# A roster VIP comes before either group (#1456): locked to the first slots, as the dev ruled, and
+# kept there through every toggle and Reset order.
 func _settle_order(slide: bool) -> void:
+	var vips: Array[PreMissionCard] = []
 	var placed: Array[PreMissionCard] = []
 	var waiting: Array[PreMissionCard] = []
 	for card in _cards:
-		if _controller.game.is_deployed(card.unit):
+		if _controller.is_forced(card.unit):
+			vips.append(card)
+		elif _controller.game.is_deployed(card.unit):
 			placed.append(card)
 		else:
 			waiting.append(card)
-	_cards = placed
+	_cards = vips
+	_cards.append_array(placed)
 	_cards.append_array(waiting)
 
 	var moved := false
@@ -574,18 +583,25 @@ func _refresh_stash() -> void:
 	_refresh_hint()
 
 
+# A VIP's squad leads the strip (#1456), the card grid's own rule; the rest keep board order.
 func _refresh_squads() -> void:
 	for child in _squads_row.get_children():
 		_squads_row.remove_child(child)
 		child.free()
+	var leading: Array[Squad] = []
 	var seen: Array[Squad] = []
 	for unit: Unit in _controller.game.units_root.get_children():
 		if unit.get_faction() != Team.Faction.PLAYER or unit.squad == null:
 			continue
-		if seen.has(unit.squad):
-			continue
-		seen.append(unit.squad)
-		_squads_row.add_child(_squad_block(unit.squad))
+		if not seen.has(unit.squad):
+			seen.append(unit.squad)
+		if _controller.is_forced(unit) and not leading.has(unit.squad):
+			leading.append(unit.squad)
+	for squad: Squad in seen:
+		if not leading.has(squad):
+			leading.append(squad)
+	for squad: Squad in leading:
+		_squads_row.add_child(_squad_block(squad))
 
 
 func _squad_block(squad: Squad) -> Control:
@@ -643,6 +659,13 @@ func _ring(member: Unit, squad: Squad) -> Control:
 	box.corner_radius_top_right = RING
 	box.corner_radius_bottom_left = RING
 	box.corner_radius_bottom_right = RING
+	# A roster VIP's ring is gold rather than its squad's hue (#1456), outlined on parchment.
+	var vip := _controller.is_forced(member)
+	if vip:
+		box.border_color = QueueStyle.ink(QueueStyle.Role.VIP_INK)
+		box.set_border_width_all(QueueStyle.VIP_RING_BAND)
+		ring.draw.connect(func() -> void:
+			VipStar.draw_band_outline(ring, Rect2(Vector2.ZERO, ring.size), QueueStyle.VIP_RING_BAND, RING))
 	ring.add_theme_stylebox_override("panel", box)
 	slot.add_child(ring)
 
@@ -650,6 +673,8 @@ func _ring(member: Unit, squad: Squad) -> Control:
 	window.custom_minimum_size = Vector2(RING_WINDOW, RING_WINDOW)
 	window.clip_contents = true
 	ring.add_child(window)
+	if vip:
+		ring.add_child(_ring_star())
 
 	var sprite := TextureRect.new()
 	sprite.texture = member.unit_data.map_sprite
@@ -662,9 +687,29 @@ func _ring(member: Unit, squad: Squad) -> Control:
 	name_label.text = member.get_unit_name()
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 9)
-	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(
+			QueueStyle.Role.VIP_INK if vip else QueueStyle.Role.HEADER_TEXT))
+	if vip:
+		name_label.add_theme_constant_override("outline_size", PreMissionCard.VIP_TEXT_OUTLINE)
+		name_label.add_theme_color_override("font_outline_color", QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE))
 	slot.add_child(name_label)
 	return slot
+
+
+# The VIP star on a force portrait's top-right shoulder, on a disc of the strip's own paper. Held by a
+# plain Control the ring lays over its window, since the ring would lay the star out too.
+func _ring_star() -> Control:
+	var shoulder := Control.new()
+	shoulder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var paper := QueueStyle.ink(QueueStyle.Role.SECTION_BG)
+	paper.a = 1.0
+	var star := VipStar.make(QueueStyle.ink(QueueStyle.Role.VIP_INK),
+			QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE), RING_STAR, paper)
+	star.size = Vector2(RING_STAR, RING_STAR)
+	shoulder.add_child(star)
+	shoulder.resized.connect(func() -> void:
+		star.position = Vector2(shoulder.size.x - RING_STAR * 0.5 - 1.0, 3.0 - RING_STAR * 0.5))
+	return shoulder
 
 
 # The SAME briefing the corner HUD draws during the battle -- MissionStatusPanel.briefing_rows is the
@@ -689,16 +734,19 @@ func _refresh_counts() -> void:
 	# Begin carries its own refusal. commit_deployment's banner is a TurnBanner, which is a plain
 	# child of Game while this screen sits on a CanvasLayer -- so under the menu that banner cannot
 	# be seen at all, and a silent dead button is exactly what #739 refused to ship on the board.
-	_begin_button.disabled = placed == 0
+	# The phase's own sentence (#1456), so the button and the commit cannot disagree about why.
+	var refusal := _controller.commit_block_reason()
+	_begin_button.disabled = refusal != ""
 	_begin_button.tooltip_text = UiText.wrap(
-		"Place at least one unit — a mission cannot start with no one to command."
-		if placed == 0 else "Start the mission with the force you have placed.")
+		refusal if refusal != "" else "Start the mission with the force you have placed.")
 
 
 # --- actions -------------------------------------------------------------------------------------
 
 func _on_deploy_toggled(unit: Unit) -> void:
 	if _controller.game.is_deployed(unit):
+		if _controller.undeploy_block_reason(unit) != "":
+			return   # a roster VIP (#1456): the card's Required toggle is disabled; this is the belt
 		_controller.game.undeploy_unit(unit)
 	else:
 		var open_cells: Array[Vector2i] = _controller.open_deployment_cells()

@@ -43,8 +43,9 @@ enum Term {
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
 	# Lifecycle
 	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
-	# Missions (one per player-facing ZoneManager.Kind, #1105)
-	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE,
+	# Missions (one per player-facing ZoneManager.Kind, #1105, then the VIP the pre-mission screen
+	# marks, #1456)
+	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE, VIP,
 }
 
 enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE, MISSIONS }
@@ -649,5 +650,11 @@ static func _build_entries() -> Dictionary:
 		"short": "If an enemy stands anywhere in here, the mission is lost.",
 		"long": "The mission fails when a hostile unit ends up on any tile of a defended point. "
 			+ "Keep them out."}
+	e[Term.VIP] = {"category": Category.MISSIONS, "title": "VIP",
+		"short": "A VIP must survive: if they fall, the mission is lost. A VIP on your roster always "
+			+ "deploys.",
+		"long": "A unit this mission says must survive. If a VIP dies, the mission is lost. A VIP "
+			+ "from your roster is always part of your force: they start on the board, and cannot be "
+			+ "sent back to the reserve."}
 
 	return e

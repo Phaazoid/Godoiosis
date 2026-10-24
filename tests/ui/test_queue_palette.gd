@@ -266,6 +266,37 @@ func test_the_frame_roles_read_on_the_frame_in_both_palettes() -> void:
 				.is_greater(CONTRAST_FLOOR)
 
 
+# THE VIP MARK (#1456): one gold in both palettes (dev, 2026-10-24). Slate draws it bare, so its
+# outline must draw nothing; parchment reads it against a black OUTLINE, the only thing that lifts it
+# off the cream. The frame's gold sits on the dark frame in both palettes and needs no outline.
+func test_the_vip_gold_is_one_colour_and_reads_in_both_palettes() -> void:
+	_pick(PlayerSettings.QueuePalette.DEFAULT)
+	var gold := QueueStyle.ink(QueueStyle.Role.VIP_INK)
+	assert_float(QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE).a).override_failure_message(
+		"slate draws an outline round the VIP gold -- it was shown with none").is_equal(0.0)
+	for ground_role: QueueStyle.Role in [QueueStyle.Role.SECTION_BG, QueueStyle.Role.ROW_BG]:
+		assert_float(_contrast(gold, QueueStyle.ink(ground_role))).override_failure_message(
+			"the VIP gold cannot be read on slate's %s" % QueueStyle.Role.keys()[ground_role]) \
+			.is_greater(CONTRAST_FLOOR)
+
+	_pick(PlayerSettings.QueuePalette.PARCHMENT)
+	assert_object(QueueStyle.ink(QueueStyle.Role.VIP_INK)).override_failure_message(
+		"parchment's VIP gold is not slate's -- one meaning, one colour").is_equal(gold)
+	var outline := QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE)
+	assert_float(outline.a).override_failure_message(
+		"parchment's VIP outline is see-through, and gold alone cannot be read on the cream").is_equal(1.0)
+	assert_float(_contrast(gold, outline)).override_failure_message(
+		"the VIP gold cannot be read against its own outline").is_greater(CONTRAST_FLOOR)
+
+	for palette: int in [PlayerSettings.QueuePalette.DEFAULT, PlayerSettings.QueuePalette.PARCHMENT]:
+		_pick(palette)
+		var ink := QueueStyle.ink(QueueStyle.Role.FRAME_VIP_TEXT)
+		var ground := QueueStyle.ink(QueueStyle.Role.PANEL_BG)
+		assert_float(_contrast(ink, ground)).override_failure_message(
+			"FRAME_VIP_TEXT cannot be read on the frame in palette %d -- %.2f against %.2f"
+			% [palette, _luma(ink), _luma(ground)]).is_greater(CONTRAST_FLOOR)
+
+
 # A header must stay QUIETER than the count beside it. Without this the frame's two muted roles could
 # both be fixed by making them white, which reads and passes and throws the hierarchy away.
 func test_the_frames_muted_ink_stays_under_its_title_in_both_palettes() -> void:
