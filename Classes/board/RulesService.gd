@@ -226,6 +226,14 @@ static func blocks_passage(mover: Unit, occupant: Unit) -> bool:
 static func is_standable_for(mover: Unit, occupant: Unit) -> bool:
 	return occupant == null or mover.squad.get_members().has(occupant)
 
+# Where compute_move_range centres a unit's cohesion leash when the caller names no cell: its leader's
+# PROJECTED destination. A leader walks no leash, so its own cell stands in, unread. One spelling so a
+# caller keyed on it (game.move_mode_range_for) cannot drift from what the search reads.
+static func leash_centre(unit: Unit) -> Vector2i:
+	if unit.is_leader():
+		return unit.movement.cell
+	return unit.squad.get_leader().get_projected_destination()
+
 static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null,
 		leash: Dictionary = {}) -> Dictionary:
 	var start := unit.movement.cell
@@ -267,13 +275,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 	var reachable := {}
 	var squad_unreachable := {}
 
-	var leader_pos: Vector2i
-	if leader_cell != null:
-		leader_pos = leader_cell
-	elif not unit.is_leader():
-		leader_pos = unit.squad.get_leader().get_projected_destination()
-	else:
-		leader_pos = unit.movement.cell   # unused for leaders (filter below is gated on not is_leader)
+	var leader_pos: Vector2i = leader_cell if leader_cell != null else leash_centre(unit)
 
 	# One cohesion field for the whole filter loop (#151) -- bounded at COH, so cheaper than the
 	# search above it. Leaders skip it entirely; the filter below is gated on not is_leader. `leash` is

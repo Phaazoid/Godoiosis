@@ -172,6 +172,22 @@ If a future caller needs the *whole* field, give it an unbounded call rather tha
 - Pinned by `test_a_group_move_hover_draws_what_the_solver_and_the_bubble_find_unaided`. Walking the
   fields round the wrong cell, or never writing the range, turns it red.
 
+**Move's hover keeps its range too, but KEYED (2026-10-24, the last entry below).**
+- `game.move_mode_range` is the selected unit's `compute_move_range` from `enter_move_mode`. The hover
+  reads it through `game.move_mode_range_for(unit)`, which searches again whenever
+  `[unit, RulesService.leash_centre(unit)]` differs from the key it was searched for.
+- **Why a key, when Group Move's copy has none:** a member's leash hangs off its leader's PROJECTED
+  cell, which is a plan fact, not a board fact. Until #1487 the hover's own preview moved it between
+  hovers (2 of 6 hover starts on a board where a squadmate's queued shot shoves the leader). Nothing
+  moves it while Move is up now, so in play the re-search never fires. The key is the guard, not the
+  mechanism.
+- **The key covers the centre and nothing else.** The unit's cell, MOV, terrain and the other units'
+  cells are read live, and none of them moves while the mode is up. A new `compute_move_range` input
+  that can move mid-mode belongs in the key.
+- The click still searches fresh, because it authors the order.
+- Pinned by `test_a_move_hover_follows_the_leaders_projected_cell_when_it_moves`. Reading the copy
+  without the key turns it red.
+
 **Pinned by:** `tests/squad/test_group_move_batching.gd` (batched == unbatched, flag cleared,
 orders still validated, exactly one repaint per group move, single orders unaffected) and the BFS
 bound tests in `tests/ai/test_ai_control.gd`.
@@ -867,3 +883,41 @@ each, interleaved:
 - **About 5 ms off every hovered tile**: the refresh, less the validate that replaced it.
 - **The refresh's cost is drawing, not resolving.** `resolve_plan` is 0.4–0.6 ms of its 6.0–8.6 ms
   on this board.
+
+---
+
+## 2026-10-24 — the Move hover keeps its range
+
+The Move hover searched the selected unit's move range on every hovered cell, although
+`enter_move_mode` had searched it already. It now reads `game.move_mode_range_for(unit)`, which keeps
+that search and searches again only when the unit's leash centre moves (*Invariants* above). It is
+the single-move twin of #1477's `group_move_range`, with a key that #1477's copy does not need.
+
+**Why a key: the first check said no.** Before building, a scratch probe asked whether anything the
+search reads could move while Move is up.
+- **The board:** a leader walks to (2,0), and a squadmate's queued shot (`hits_allies`, knockback 1)
+  lands there and shoves him on to (2,-1). A member then opens Move.
+- **What it caught:** after the member hovered (2,0), the next hover's search was clamped round
+  (2,0), not (2,-1), for one tile. The cause was the hover's preview verdicts leaking into the
+  refresh's resolve, which #1487 fixed (the previous entry).
+- **On `main` after #1487:** the same board shows 0 of 6 hover starts moved, against 2 of 6 before. A
+  leader's own Move showed 0 of 81 either way.
+
+Measured with a scratch probe, never committed.
+- **Board:** Castle Assault's 5-member player squad.
+- **The two cases:** the leader with nothing queued, then a member with the squad's group move queued
+  first (#1487's setup).
+- **Hovers:** `update_hover_visuals` over every cell of the range × 8 rounds.
+- **Runs:** four per tree, interleaved between `main` (`5ea678eb`) and the branch.
+
+| | `main` | Branch |
+|---|---|---|
+| Leader Move hover, median per cell (31 cells) | 3.72–4.30 ms | **2.28–2.77 ms** |
+| Member Move hover, median per cell (26 cells) | 3.74–4.19 ms | **2.31–2.49 ms** |
+| Member Move hover, legal tiles only (12 cells) | 7.68–8.40 ms | 6.44–6.87 ms |
+
+- **About 1.4 ms off every hovered cell,** the one search the hover no longer makes. A refused tile is
+  cheaper than a legal one, which is why the all-cells median sits below the legal-tile one.
+- **No answer changed:** at every hover of every branch run, the range the hover read equals a fresh
+  `compute_move_range`, key for key (1,824 hovers). It searched again 0 times, as expected now that
+  #1487 holds the centre still.

@@ -443,7 +443,9 @@ func _add_payloads(rows: Array[AttackAction], aim_cells: Array[Vector2i],
 func _hover_choosing_move(cell: Vector2i) -> void:
 	var unit: Unit = game.selected_unit
 	game.overlay_manager.clear_hover_move_path()
-	var moverange: Dictionary = game.compute_move_range(unit)
+	# The range enter_move_mode searched, searched again only if the leash centre moved: per hovered cell
+	# the search cost about 1.4 ms of a 16.7 ms frame (docs/performance.md, 2026-10-24).
+	var moverange: Dictionary = game.move_mode_range_for(unit)
 
 	if unit.has_squad():
 		_draw_move_lines(unit, cell, moverange)
