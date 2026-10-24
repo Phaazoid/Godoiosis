@@ -56,7 +56,7 @@ func test_the_four_readers_agree_with_is_open_water() -> void:
 			"Conduction.conducts": Conduction.conducts(cell, board, no_wet),
 			"Materia.sources_at": Materia.sources_at(cell, board).has(Elemental.Element.WATER),
 			"CellSubstances.available_near": CellSubstances.available_near(cell, board, null, catalog).has(water_id),
-			"RulesService.wets_in": RulesService.wets_in(cell, asker, board),
+			"RulesService.wets_in": RulesService.wets_in(cell, asker.state, board),
 		}
 		for reader: String in answers:
 			assert_bool(bool(answers[reader]) == open).override_failure_message(

@@ -267,7 +267,7 @@ func test_a_leader_fights_from_safe_ground_over_scalding_steam() -> void:
 	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
 	var target := _spawn(board, PLAYER, Vector2i(6, 2), {Stats.Stat.MHP: 40})
 	(board.gas_field as GasField).set_level(Vector2i(5, 2), Gas.Kind.STEAM, Gas.MAX_LEVEL)
-	assert_int(RulesService.gas_damage_for(leader, Gas.Kind.STEAM, Gas.MAX_LEVEL)).override_failure_message(
+	assert_int(RulesService.gas_damage_for(leader.state, Gas.Kind.STEAM, Gas.MAX_LEVEL)).override_failure_message(
 			"fixture: thick steam scalds nobody, so nothing here is a hazard").is_greater(0)
 
 	_plan(leader.squad, board)

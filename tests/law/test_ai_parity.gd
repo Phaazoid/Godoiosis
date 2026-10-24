@@ -93,7 +93,7 @@ func test_a_tile_states_hazard_row_agrees_with_the_rule() -> void:
 						% label.call(state))
 			continue
 		var states: Array[Terrain.TileState] = [state]
-		var harms: bool = RulesService.occupant_damage_for(unit, states) > 0
+		var harms: bool = RulesService.occupant_damage_for(unit.state, states) > 0
 		if harms != bool(stance["harms"]):
 			wrong.append("%s is declared %s, and standing on it %s"
 					% [label.call(state), "a hazard" if stance["harms"] else "harmless",
@@ -116,7 +116,7 @@ func test_a_gas_that_harms_is_declared_a_hazard() -> void:
 	var wrong: Array[String] = []
 	for kind: Variant in axis["members"]:
 		var stance: Dictionary = (axis["rows"] as Dictionary).get(kind, {}).get("ai", {})
-		var harms: bool = RulesService.gas_damage_for(unit, kind, Gas.MAX_LEVEL) > 0
+		var harms: bool = RulesService.gas_damage_for(unit.state, kind, Gas.MAX_LEVEL) > 0
 		if stance.get("harms", false) and not harms:
 			wrong.append("%s is declared a hazard, and standing in it does no damage" % label.call(kind))
 		elif harms and not stance.get("harms", false) and stance.get("stance", -1) != Ledger.Stance.GAP:

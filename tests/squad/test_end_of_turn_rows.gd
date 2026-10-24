@@ -323,7 +323,7 @@ func test_a_unit_the_plan_never_reaches_takes_the_live_row() -> void:
 	assert_int(rows.size()).override_failure_message(
 			"a unit in old fire the plan never touches burns at End Turn with no forecast").is_equal(1)
 	if rows.size() == 1:
-		assert_int(rows[0].resolved.damage).is_equal(RulesService.occupant_damage_for(bystander,
+		assert_int(rows[0].resolved.damage).is_equal(RulesService.occupant_damage_for(bystander.state,
 				_states.states_at(bystander.movement.cell)))
 		assert_int(rows[0].resolved.hp_before).is_equal(bystander.get_current_hp())
 	assert_array(_rows_for(hits, enemy)).override_failure_message(
@@ -404,7 +404,7 @@ func test_a_steam_row_lands_in_the_end_of_turn_section_with_its_state_and_any_sc
 	var rules := GasRules.for_kind(Gas.Kind.STEAM)
 	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
 	_gas.set_level(FIRE, Gas.Kind.STEAM, Gas.MAX_LEVEL)
-	var scald := RulesService.gas_damage_for(stander, Gas.Kind.STEAM, Gas.MAX_LEVEL)
+	var scald := RulesService.gas_damage_for(stander.state, Gas.Kind.STEAM, Gas.MAX_LEVEL)
 	var plan := _sm.resolve_plan(stander.squad, _board([stander]))
 
 	var entries := ActionQueueDisplayEntry.build_for(stander.squad, plan)

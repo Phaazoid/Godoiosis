@@ -93,7 +93,7 @@ func test_a_ford_soaks_even_though_the_walk_ends_dry() -> void:
 	var plan := ResolvedPlan.new()
 	_resolve_walk(move, _board(units, river), plan)
 
-	assert_bool(RulesService.wets_in(move.destination, mover, _board(units, river))).is_false()
+	assert_bool(RulesService.wets_in(move.destination, mover.state, _board(units, river))).is_false()
 	assert_bool(move.resolved.states_added.has(Elemental.State.WET)).is_true()
 
 func test_a_walk_that_never_touches_water_stamps_nothing() -> void:

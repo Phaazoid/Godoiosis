@@ -72,10 +72,10 @@ func test_can_traverse_is_the_per_unit_terrain_answer() -> void:
 	var context := _rules_board(board, plain)
 
 	assert_bool(context.is_walkable(Vector2i(1, 0))).is_false()          # the cell says no
-	assert_bool(RulesService.can_traverse(Vector2i(1, 0), plain, context)).is_false()
-	assert_bool(RulesService.can_traverse(Vector2i(1, 0), walker, context)).is_true()
+	assert_bool(RulesService.can_traverse(Vector2i(1, 0), plain.state, context)).is_false()
+	assert_bool(RulesService.can_traverse(Vector2i(1, 0), walker.state, context)).is_true()
 	# Ordinary ground is unaffected either way.
-	assert_bool(RulesService.can_traverse(Vector2i(2, 0), plain, context)).is_true()
+	assert_bool(RulesService.can_traverse(Vector2i(2, 0), plain.state, context)).is_true()
 
 
 func test_can_traverse_ignores_occupancy() -> void:
@@ -87,7 +87,7 @@ func test_can_traverse_ignores_occupancy() -> void:
 	var units: Array[Unit] = [mover, blocker]
 	var context := BoardContext.new(board.grid, units, board.squad_manager)
 
-	assert_bool(RulesService.can_traverse(Vector2i(1, 0), mover, context)).is_true()
+	assert_bool(RulesService.can_traverse(Vector2i(1, 0), mover.state, context)).is_true()
 	assert_int(RulesService.movement_cost(Vector2i(0, 0), Vector2i(1, 0),mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
 
 

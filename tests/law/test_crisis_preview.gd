@@ -97,8 +97,8 @@ func test_a_tile_burn_that_fires_the_gambit_previews_the_revive_hp() -> void:
 	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 10})
 	_arm(target)
 
-	var hit := TileHitAction.make(target, Terrain.TileState.BURNING,
-			target.get_current_hp(), LethalityRules.situation_for(target))
+	var hit := TileHitAction.make(target.state, Terrain.TileState.BURNING,
+			target.get_current_hp())
 
 	assert_that(hit.resolved.lethality).override_failure_message(
 			"the burn did not fire the gambit, so this case is not about the Crisis rung") \

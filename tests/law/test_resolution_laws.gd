@@ -60,12 +60,12 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	assert_int(previewed).is_equal(10)
 	assert_int(target.get_current_hp()).is_equal(start_hp - previewed)
 
-# R3 under a MID-PASS stat change (#112). This pair pins the half of PlanResolver._Hypo's doctrine
-# that holds: stat-derived damage is computed once at plan time and frozen, and the lethality RUNG
-# reads no effective stat. The other half does not hold: execution re-reads max HP and the Crisis
-# kit live, so a mid-pass strip is a latent Law #2 break (see the _Hypo comment; owed by #1480).
+# R3 under a stat change between resolve and execute (#112): stat-derived damage is computed once at
+# plan time and frozen, and the lethality RUNG reads no effective stat. A change the PASS makes (a lost
+# limb's strip) is threaded through the pass's copy of the body instead (#1480), and pinned in
+# tests/law/test_strip_threads_through_the_pass.gd.
 #
-# If either of these ever fails, even the frozen half has stopped holding.
+# If either of these ever fails, the frozen half has stopped holding.
 
 func test_a_stat_change_after_resolve_cannot_move_executed_damage() -> void:
 	# The attacker gets a large STR buff BETWEEN resolve and execute. Execution is pure playback
@@ -86,14 +86,15 @@ func test_a_stat_change_after_resolve_cannot_move_executed_damage() -> void:
 	assert_int(target.get_current_hp()).is_equal(start_hp - previewed)
 
 func test_the_lethality_ladder_reads_no_stats() -> void:
-	# LethalityRules.Situation carries hp/will/lifecycle/limbs and deliberately no effective stat —
-	# which is the whole reason a mid-pass buff can't change which RUNG a frozen hit lands on, even
-	# though Unit.take_damage re-predicts live. A +CON effect moves max HP; the rung must not move.
+	# The ladder reads HP, lifecycle, the wound, the limbs and the Crisis kit off the body, and
+	# deliberately no effective stat — which is the whole reason a buff can't change which RUNG a
+	# frozen hit lands on, even though Unit.take_damage re-predicts live. A +CON effect moves max HP;
+	# the rung must not move.
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
 	var lethal: int = target.get_current_hp()
-	var before := LethalityRules.predict(LethalityRules.situation_for(target), lethal)
+	var before := LethalityRules.predict(target.state, lethal)
 
 	target.apply_stat_effect(StatEffect.make("Buff", {Stats.Stat.CON: 5}))
 	assert_int(target.get_max_hp()).is_equal(22)   # the buff really did move a derived readout
 
-	assert_int(LethalityRules.predict(LethalityRules.situation_for(target), lethal)).is_equal(before)
+	assert_int(LethalityRules.predict(target.state, lethal)).is_equal(before)

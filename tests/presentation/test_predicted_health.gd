@@ -417,8 +417,8 @@ func test_the_effect_pass_raises_a_readout_over_the_units_it_is_about_to_hit() -
 
 	# A SOAK row, which moves no HP (#1428): the END OF TURN forecast raises a bar only over a row that
 	# reads HP, so this keeps the case about the pass's own reason, `marked`, and nothing else.
-	var rows: Array[TileHitAction] = [TileHitAction.make_gas(burning, Gas.Kind.STEAM,
-			Elemental.State.WET, 0, LethalityRules.situation_for(burning))]
+	var rows: Array[TileHitAction] = [TileHitAction.make_gas(burning.state, Gas.Kind.STEAM,
+			Elemental.State.WET, 0)]
 	game.order_executor.effect_pass_hits = rows
 	await _settle()
 	assert_array(_shown_bars()).override_failure_message(
