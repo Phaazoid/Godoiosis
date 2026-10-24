@@ -87,9 +87,9 @@ func _queued_guard(unit: Unit) -> GuardAction:
 
 # A DUD AIM MUST NEVER BE QUEUED, and nothing downstream would catch one. A hint that yields no
 # cardinal direction makes a self-anchored AttackPattern answer with no cells; from there the failure is silent
-# all the way down -- the resolver arms nothing, Unit.arm_watch refuses an empty footprint, and no
-# queue gate inspects an OverwatchAction at all. The unit would have spent its main action on air
-# behind a legal-looking row, so the assertion is on the FOOTPRINT, never on the row.
+# all the way down -- the resolver arms nothing and Unit.arm_watch refuses an empty footprint (the
+# queue's aim gate, #1433, is a second line, not this one). The unit would have spent its main action
+# on air behind a legal-looking row, so the assertion is on the FOOTPRINT, never on the row.
 func test_a_queued_watch_always_has_a_real_footprint() -> void:
 	var board := _board_of()
 	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
@@ -550,3 +550,192 @@ func test_a_guard_refuses_once_its_squadmate_fells_the_only_threat() -> void:
 	assert_bool(AITactics.queue_main_action(guard, ctx, board.squad_manager, GUARD_ONLY)).override_failure_message(
 			"the guard warded an ally whose only threat the squad's own plan fells").is_false()
 	assert_object(_queued_guard(guard)).is_null()
+
+
+# --- #1433: every watch, the aim gate, and Guard's threat model ------------------------------------
+
+# A Carbine fitted with the Line Sniper mod carries two watches: Overwatch, which needs a round in the
+# magazine, and Line Snipe, which does not. Here both are the template's extras rather than a mod's
+# grant, because the walk is what is measured and the fixture should read no authored content.
+func _carbine_with_two_watches(shots: int) -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	var needs_a_round := WeaponAttackData.new()
+	needs_a_round.display_name = "Overwatch"
+	needs_a_round.power = 3
+	needs_a_round.can_overwatch = true
+	needs_a_round.requires_readiness = true
+	P.line(needs_a_round, 1)
+	var free := WeaponAttackData.new()
+	free.display_name = "Line Snipe"
+	free.power = 5
+	free.can_overwatch = true
+	P.line(free, 3)
+	var extras: Array[WeaponAttackData] = [needs_a_round, free]
+	template.extra_attacks = extras
+	var carbine := WeaponInstance.make(template) as CarbineWeaponInstance
+	carbine.shots_remaining = shots
+	return carbine
+
+
+# EVERY WATCH, BEST FIRST. The ring lists one row per watch attack (MainActionMenu._overwatch_rows), so
+# a dry Carbine still offers Line Snipe. The builder used to take only the first watch, find it
+# blocked and give up.
+func test_a_dry_carbine_arms_the_watch_that_needs_no_round() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _carbine_with_two_watches(0)
+	_spawn(board, ENEMY, Vector2i(4, 0))
+	var watches := watcher.overwatch_attacks()
+	assert_int(watches.size()).override_failure_message("fixture: the carbine lists two watches").is_equal(2)
+	assert_str(AttackAction.fire_block_reason(watcher, watches[0])).override_failure_message(
+			"fixture is vacuous: an empty magazine does not block the first watch").is_not_empty()
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)) \
+		.override_failure_message("a dry Carbine declined the watch the player's ring offers it").is_true()
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_str(watch.fired_attack.display_name).is_equal("Line Snipe")
+
+
+# ...and with a round in the magazine the ring's FIRST watch wins: best first is the ring's order.
+func test_a_loaded_carbine_arms_its_first_watch() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _carbine_with_two_watches(CarbineWeaponInstance.MAGAZINE_SIZE)
+	_spawn(board, ENEMY, Vector2i(4, 0))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)).is_true()
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_str(watch.fired_attack.display_name).is_equal("Overwatch")
+
+
+# A POINT watch that may not land closer than two cells. Latent for shipped content, where every watch
+# is self-anchored, so the attack is authored here to be the case.
+func _point_watch_weapon() -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Lob Watch"
+	watch.power = 3
+	watch.can_overwatch = true
+	P.point(watch, 3, 2)
+	var extras: Array[WeaponAttackData] = [watch]
+	template.extra_attacks = extras
+	return WeaponInstance.make(template)
+
+
+# AN AIM THE PLAYER COULD NEVER DECLARE IS NEVER QUEUED. The builder aims one step out, which for this
+# watch is inside the ring's hole: Reach.can_aim_at, the click's own gate, refuses it.
+func test_a_point_watch_is_never_aimed_inside_its_minimum_range() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _point_watch_weapon()
+	_spawn(board, ENEMY, Vector2i(4, 0))
+	var ctx := _context(board)
+	var attack: AttackData = watcher.overwatch_attacks()[0]
+	assert_bool(Reach.can_aim_at(watcher, Vector2i(4, 4), Vector2i(4, 3), attack, ctx)).override_failure_message(
+			"fixture is vacuous: the step out is a declarable aim").is_false()
+
+	AITactics.queue_main_action(watcher, ctx, board.squad_manager, WATCH_ONLY)
+	var watch := _queued_watch(watcher)
+	if watch == null:
+		return
+	assert_bool(Reach.can_aim_at(watcher, watcher.movement.cell, watch.target_cell, watch.fired_attack, ctx)) \
+		.override_failure_message("the AI queued a watch at %s, an aim the player could never declare" % str(watch.target_cell)) \
+		.is_true()
+
+
+# ...AND THE QUEUE REFUSES ONE, WHOEVER AUTHORS IT. The aim gate is a rule about the order, so the
+# chokepoint asks it as well as the click, the hover and the Play API. The aim two cells out is taken,
+# so the refusal is the range rather than a broken fixture.
+func test_the_queue_refuses_a_watch_it_could_never_declare() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _point_watch_weapon()
+	var attack: AttackData = watcher.overwatch_attacks()[0]
+	var inside := OverwatchAction.new()
+	inside.init(watcher, Vector2i(4, 3), attack)
+	assert_str(board.squad_manager.try_queue_action(watcher.squad, inside)).override_failure_message(
+			"the queue took a watch aimed inside its minimum range").is_not_empty()
+	var outside := OverwatchAction.new()
+	outside.init(watcher, Vector2i(4, 2), attack)
+	assert_str(board.squad_manager.try_queue_action(watcher.squad, outside)).is_empty()
+
+
+# GUARD COUNTS WHAT THE DANGER FIELD COUNTS. Exposure used to be a narrower threat model of its own:
+# the enemy's DEFAULT attack, from inside its own cohesion leash. The same AI's danger field
+# (ThreatField) draws every selectable attack and the follower's whole walk. In each case below the
+# old model counted zero and the guard refused, while the field marked the ally's cell as hit.
+
+# The foe's sword cannot reach the ally across the gap at (4, 6); its lob can, from (4, 7).
+func test_a_guard_counts_a_threat_through_a_secondary_attack() -> void:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(4, 3, 1, 3))    # guard and ally
+	BB.paint_rect(board.grid, Rect2i(4, 7, 1, 3))    # the foe's side of the gap
+	var guard: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	var ally: Unit = _spawn(board, PLAYER, Vector2i(4, 5))
+	board.squad_manager.join_squad(ally, guard.squad)
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(4, 8))
+	var lob := WeaponAttackData.new()
+	lob.display_name = "Lob"
+	lob.power = 3
+	P.point(lob, 2, 2)
+	var extras: Array[WeaponAttackData] = [lob]
+	(foe.equipped_weapon as WeaponInstance).template.extra_attacks = extras
+	var ctx := _context(board)
+	assert_bool(AITactics._standable_attack_cells(foe, ally.movement.cell, foe.get_fired_attack(), ctx).is_empty()) \
+		.override_failure_message("fixture is vacuous: the foe's default attack reaches the ally").is_true()
+
+	assert_bool(AITactics.queue_main_action(guard, ctx, board.squad_manager, GUARD_ONLY)) \
+		.override_failure_message("the guard refused, though the foe's second attack reaches the ally").is_true()
+	var ward := _queued_guard(guard)
+	assert_object(ward).is_not_null()
+	if ward == null:
+		return
+	assert_object(ward.target).is_same(ally)
+
+
+# The foe is a FOLLOWER at its leash's edge. It can stand beside the ally only on cells its leash files
+# as unreachable, which on the enemy's own turn it walks once its leader has moved (ThreatField slice 4).
+func test_a_guard_counts_a_follower_reaching_past_its_leash() -> void:
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	BB.paint_rect(board.grid, Rect2i(0, 0, 24, 1))
+	var leader: Unit = _spawn(board, ENEMY, Vector2i(0, 0))
+	var follower: Unit = _spawn(board, ENEMY, Vector2i(4, 0))
+	board.squad_manager.join_squad(follower, leader.squad)
+	var walk: Dictionary = RulesService.compute_move_range(follower, _context(board))
+	var past := -1
+	for cell: Vector2i in (walk["squad_unreachable"] as Dictionary):
+		past = maxi(past, cell.x)
+	assert_int(past).override_failure_message(
+			"fixture is vacuous: the follower's walk never spills past its leash").is_greater(4)
+	var ally: Unit = _spawn(board, PLAYER, Vector2i(past + 1, 0))
+	var guard: Unit = _spawn(board, PLAYER, Vector2i(past + 2, 0))
+	board.squad_manager.join_squad(ally, guard.squad)
+	var ctx := _context(board)
+	for foe: Unit in [leader, follower]:
+		var reachable: Dictionary = RulesService.compute_move_range(foe, ctx)["reachable"]
+		for cell: Vector2i in AITactics._standable_attack_cells(foe, ally.movement.cell, foe.get_fired_attack(), ctx):
+			assert_bool(reachable.has(cell) or cell == foe.movement.cell).override_failure_message(
+					"fixture is vacuous: %s reaches the ally inside its leash, from %s" % [foe.get_unit_name(), str(cell)]
+					).is_false()
+
+	assert_bool(AITactics.queue_main_action(guard, ctx, board.squad_manager, GUARD_ONLY)) \
+		.override_failure_message("the guard refused, though the follower walks up to the ally next turn").is_true()
+	var ward := _queued_guard(guard)
+	assert_object(ward).is_not_null()
+	if ward == null:
+		return
+	assert_object(ward.target).is_same(ally)
