@@ -415,7 +415,11 @@ func test_the_effect_pass_raises_a_readout_over_the_units_it_is_about_to_hit() -
 			"precondition: with the setting off and nothing queued, nobody should wear a bar") \
 		.is_empty()
 
-	game.order_executor.effect_pass_subjects[burning.get_instance_id()] = true
+	# A SOAK row, which moves no HP (#1428): the END OF TURN forecast raises a bar only over a row that
+	# reads HP, so this keeps the case about the pass's own reason, `marked`, and nothing else.
+	var rows: Array[TileHitAction] = [TileHitAction.make_gas(burning, Gas.Kind.STEAM,
+			Elemental.State.WET, 0, LethalityRules.situation_for(burning))]
+	game.order_executor.effect_pass_hits = rows
 	await _settle()
 	assert_array(_shown_bars()).override_failure_message(
 			"the effect pass raised no readout -- or raised one over a unit it is not about") \
@@ -425,7 +429,7 @@ func test_the_effect_pass_raises_a_readout_over_the_units_it_is_about_to_hit() -
 		.is_false()
 
 	# ...and the pass ending puts it away again, or it would outlive the phase that raised it.
-	game.order_executor.effect_pass_subjects.clear()
+	game.order_executor.effect_pass_hits.clear()
 	await _settle()
 	assert_array(_shown_bars()).override_failure_message(
 			"the readout stayed up after the effect pass ended").is_empty()
@@ -564,3 +568,218 @@ func test_the_forecast_is_what_the_click_queues() -> void:
 	# Law #2 at the one place this ticket can break it: the preview is the plan the click makes.
 	assert_int(_predicted(victim)).is_equal(forecast)
 	assert_int(_grid_predicts(_unit_mirror.bar_for(victim), false)).is_equal(forecast)
+
+
+# --- ...AND ON TO THE END OF THE TURN (#1428) ---------------------------------------------------
+#
+# Fire's burn and, since #1331, steam's scald land when a unit's OWN side's turn ends. The bar now
+# runs its prediction on to there, in the same amber (dev, 2026-10-23: "Damage reads as damage, no
+# matter the source"), for every unit of the side whose turn it is, queued or not. Every expected
+# number is a ROW's -- TurnBoundary.tile_hits (what End Turn runs) or the plan's END OF TURN -- read
+# through the one display door, never a damage figure typed here.
+
+func _ignite(cell: Vector2i) -> void:
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.BURNING])
+	game.terrain_states.apply(effect)
+
+
+# The thinnest level steam scalds at, read off its rules file (authored content), or NONE.
+func _scalding_level() -> int:
+	var rules := GasRules.for_kind(Gas.Kind.STEAM)
+	for level in range(Gas.Level.THIN, Gas.MAX_LEVEL + 1):
+		if rules != null and int(rules.damage.get(level, 0)) > 0:
+			return level
+	return Gas.Level.NONE
+
+
+# What End Turn will run for the player's side, as the pass derives it.
+func _live_rows() -> Array[TileHitAction]:
+	return TurnBoundary.tile_hits(game._all_units(), game.terrain_states, game.gas_field,
+			game.scenario_manager.current_weather, PLAYER)
+
+
+func _rows_of(rows: Array[TileHitAction], unit: Unit) -> Array[TileHitAction]:
+	var mine: Array[TileHitAction] = []
+	for hit in rows:
+		if hit.actor == unit:
+			mine.append(hit)
+	return mine
+
+
+# The queue panel's END OF TURN readout: the LAST "->" label, since that section closes the panel.
+func _queue_end_of_turn_after() -> int:
+	var labels: Array[Label] = []
+	_collect_delta_labels(game.squad_action_queue_control, labels)
+	assert_bool(labels.is_empty()).override_failure_message(
+			"the queue panel drew no HP delta, so it cannot be compared with anything").is_false()
+	if labels.is_empty():
+		return -1
+	return int(labels[-1].text.split("->")[1])
+
+
+func _collect_delta_labels(node: Node, into: Array[Label]) -> void:
+	var label := node as Label
+	if label != null and label.visible and label.text.contains("->"):
+		into.append(label)
+	for child in node.get_children():
+		_collect_delta_labels(child, into)
+
+
+func test_a_unit_standing_in_fire_wears_its_burn_with_nothing_queued() -> void:
+	var stander := _spawn(PLAYER, Vector2i(2, 2), false)
+	_ignite(stander.movement.cell)
+	var enemy := _spawn(ENEMY, Vector2i(5, 2), false)
+	_ignite(enemy.movement.cell)
+	await _settle()
+
+	var rows := _rows_of(_live_rows(), stander)
+	var after := TileHitAction.shown_hp_after(rows)
+	assert_bool(after >= 0 and after < stander.get_current_hp()).override_failure_message(
+			"fixture: the fire under the stander does not burn it, so the bar proves nothing").is_true()
+	assert_object(_plan()).override_failure_message(
+			"precondition: a plan is previewed, so this is not the nothing-queued case").is_null()
+
+	var bar := _unit_mirror.bar_for(stander)
+	assert_bool(bar.visible).override_failure_message(
+			"a unit standing in fire wears no bar until its turn ends").is_true()
+	assert_int(_grid_predicts(bar, false)).is_equal(after)
+	assert_bool(_unit_mirror.bar_for(enemy).visible).override_failure_message(
+			"an enemy's burn, which lands at the end of ITS turn, was drawn on the player's").is_false()
+
+
+# Steam over fire is TWO damage rows, the burn predicted on the HP the scald leaves (#1331). The bar
+# draws to the last of them, which already carries the first.
+func test_a_scald_and_a_burn_on_one_cell_draw_to_where_the_last_row_leaves_it() -> void:
+	var level := _scalding_level()
+	assert_int(level).override_failure_message(
+			"fixture: steam scalds at no level, so there is no scald to stack").is_not_equal(Gas.Level.NONE)
+	var stander := _spawn(PLAYER, Vector2i(2, 2), false)
+	_ignite(stander.movement.cell)
+	game.gas_field.set_level(stander.movement.cell, Gas.Kind.STEAM, level)
+	await _settle()
+
+	var rows := _rows_of(_live_rows(), stander)
+	var hurting := 0
+	for hit in rows:
+		if hit.resolved.reads_hp:
+			hurting += 1
+	assert_int(hurting).override_failure_message(
+			"fixture: the cell did not both scald and burn").is_equal(2)
+	assert_int(_grid_predicts(_unit_mirror.bar_for(stander), false)) \
+		.is_equal(TileHitAction.shown_hp_after(rows))
+
+
+# A queued hit and the burn after it are ONE span on the bar, and it ends where the queue's END OF
+# TURN row says. A squadmate's friendly fire on an ally standing in fire: the plan threads the hit,
+# and the burn is predicted from what it leaves.
+func test_a_queued_hit_and_the_burn_after_it_are_one_span_ending_where_the_queue_says() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	attacker.equipped_weapon.template.main_attack.hits_allies = true
+	var ally := _spawn(PLAYER, Vector2i(3, 2), false)
+	_ignite(ally.movement.cell)
+	_aim_at(attacker, ally.movement.cell)
+	await _settle()
+
+	var plan := _plan()
+	assert_object(plan).override_failure_message("the friendly-fire aim queued nothing").is_not_null()
+	if plan == null:
+		return
+	assert_bool(PlanResolver.projected_hp(ally, plan.hypo) < ally.get_current_hp()) \
+		.override_failure_message("fixture: the queued hit did not land on the ally").is_true()
+	var after := TileHitAction.shown_hp_after(_rows_of(plan.tile_hits, ally))
+	assert_bool(after >= 0 and after < PlanResolver.projected_hp(ally, plan.hypo)) \
+		.override_failure_message("fixture: the plan forecasts no burn after the hit").is_true()
+
+	var bar := _unit_mirror.bar_for(ally)
+	assert_int(_grid_predicts(bar, false)).is_equal(after)
+	assert_int(bar.doomed_block_count()).is_equal(ally.get_current_hp() - after)
+	assert_int(_queue_end_of_turn_after()).override_failure_message(
+			"the bar and the queue's END OF TURN row predict different HP").is_equal(after)
+
+
+# Where a unit ENDS UP is the plan's to say once a move is queued: walk it off the fire and the burn
+# goes, though the live board still has it standing in the flames.
+func test_a_queued_move_out_of_the_fire_takes_the_burn_away() -> void:
+	var walker := _spawn(PLAYER, Vector2i(2, 2), false)
+	_ignite(walker.movement.cell)
+	await _settle()
+	assert_int(_unit_mirror.bar_for(walker).doomed_block_count()).override_failure_message(
+			"precondition: the burn was never drawn, so its going proves nothing").is_greater(0)
+
+	game.enter_move_mode(walker)
+	game.selected_unit = walker
+	game._on_left_click(Vector2i(2, 3))   # the documented dispatcher idiom: queue the move
+	await _settle()
+
+	assert_that(walker.get_projected_destination()).override_failure_message(
+			"fixture: the move was not queued").is_equal(Vector2i(2, 3))
+	var bar := _unit_mirror.bar_for(walker)
+	assert_bool(bar.visible and bar.doomed_block_count() > 0).override_failure_message(
+			"the bar still burns a unit its queued move takes out of the fire").is_false()
+
+
+# #1425's case: a downed body holds 1 HP, so a body lying in scalding steam dies at the end of its
+# side's turn, and nothing in the queue says so (#1353 gives old steam no row). The bar does.
+func test_a_downed_body_in_scalding_steam_shows_its_death_and_raises_the_alarm() -> void:
+	var level := _scalding_level()
+	assert_int(level).override_failure_message("fixture: steam scalds at no level").is_not_equal(Gas.Level.NONE)
+	var body := _spawn(PLAYER, Vector2i(2, 2), false)
+	body.force_down()
+	game.gas_field.set_level(body.movement.cell, Gas.Kind.STEAM, level)
+	await _settle()
+
+	var rows := _rows_of(_live_rows(), body)
+	assert_bool(TileHitAction.names_a_rung(rows)).override_failure_message(
+			"fixture: the scald does not finish the body").is_true()
+	var bar := _unit_mirror.bar_for(body)
+	assert_bool(bar.visible).is_true()
+	assert_int(_grid_predicts(bar, false)).is_equal(TileHitAction.shown_hp_after(rows))
+	assert_bool(bar.alarm_running()).override_failure_message(
+			"a body the end of turn kills raised no alarm").is_true()
+
+
+# While the end-of-turn pass PLAYS, the bars hold the list it is walking -- #354's rule one phase
+# along. Re-asked live once a burn lands, a unit still standing in the fire would show a SECOND burn.
+# The pass is stubbed the way the #534 case above stubs it: publish its list, land a row by hand.
+func test_the_end_of_turn_pass_holds_its_own_forecast_while_it_lands() -> void:
+	var stander := _spawn(PLAYER, Vector2i(2, 2), false)
+	_ignite(stander.movement.cell)
+	var rows := _live_rows()
+	var after := TileHitAction.shown_hp_after(_rows_of(rows, stander))
+	assert_bool(after >= 0).override_failure_message("fixture: nothing burns the stander").is_true()
+	game.order_executor.effect_pass_hits = rows
+	await _settle()
+
+	_rows_of(rows, stander)[0].execute()   # the pass's own step: the burn lands
+	await _settle()
+
+	var bar := _unit_mirror.bar_for(stander)
+	assert_int(stander.get_current_hp()).override_failure_message(
+			"fixture: the burn did not land").is_equal(after)
+	assert_int(_grid_predicts(bar, false)).override_failure_message(
+			"mid-pass, the bar re-forecast a burn that has already landed").is_equal(after)
+	game.order_executor.effect_pass_hits.clear()
+
+
+# Orders still queued when the turn ends are shed at the hand-off and never run, so while the
+# end-of-turn pass plays no plan is previewed at all, and its victims' bars carry nothing.
+func test_an_unexecuted_plan_shows_nothing_while_the_end_of_turn_pass_plays() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	var stander := _spawn(PLAYER, Vector2i(6, 2), false)
+	_ignite(stander.movement.cell)
+	_aim_at(attacker, victim.movement.cell)
+	await _settle()
+	assert_bool(_unit_mirror.bar_for(victim).visible).override_failure_message(
+			"precondition: the queued aim put no forecast on its victim").is_true()
+
+	game.order_executor.effect_pass_hits = _live_rows()
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(victim).visible).override_failure_message(
+			"an order that will never run kept its forecast up through the end-of-turn pass").is_false()
+	assert_bool(_unit_mirror.bar_for(stander).visible).override_failure_message(
+			"the pass's own subject lost its bar").is_true()
+	game.order_executor.effect_pass_hits.clear()

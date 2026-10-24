@@ -262,7 +262,10 @@ func test_the_pass_names_every_unit_it_will_hit_before_it_reaches_any_of_them() 
 	# what stops this case passing vacuously if the doomed unit stops dying inside the phase.
 	var probe: Array[bool] = []
 	doomed.unit_died.connect(func(_u: Unit) -> void:
-		probe.append(game.order_executor.effect_pass_subjects.has(later_id)))
+		var named := false
+		for hit: TileHitAction in game.order_executor.effect_pass_hits:
+			named = named or (is_instance_valid(hit.actor) and hit.actor.get_instance_id() == later_id)
+		probe.append(named))
 
 	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
@@ -282,6 +285,6 @@ func test_the_pass_stops_naming_anyone_once_it_ends() -> void:
 
 	await game.order_executor.apply_end_of_turn_tiles(Team.Faction.PLAYER)
 
-	assert_int(game.order_executor.effect_pass_subjects.size()) \
+	assert_int(game.order_executor.effect_pass_hits.size()) \
 		.override_failure_message("the phase left its readouts up after it had finished") \
 		.is_equal(0)

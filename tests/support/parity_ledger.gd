@@ -365,6 +365,9 @@ static func plan_lists() -> Dictionary:
 					"ai": gap("#117", "lingering deposits are not priced, so it never aims a Gust to blow a cloud anywhere (#1332)")},
 			"tile_hits": {"play": covered(SESSION, ".tile_hits"),
 					"ai": gap("#117", "the end-of-turn burn, steam's scald and its soak are not scored (ending on burning ground or in scalding steam is avoided through _is_hazard)")},
+			# Who those rows speak for (#1428): the board's health bars read it, through TurnBoundary.forecast.
+			"end_of_turn_subjects": {"play": never("who tile_hits speaks for, not a consequence: the rows are the answer"),
+					"ai": never("who tile_hits speaks for, not a consequence: the rows are the answer")},
 			"sinks": {"play": covered(SESSION, ".sinks"), "ai": covered(TACTICS, ".sinks")},
 			# A ward's substitution prints on the row it redirects.
 			"guards": {"play": covered(SESSION, "blocked_for"), "ai": never("a ward's substitution is already in the outcomes the score reads")},

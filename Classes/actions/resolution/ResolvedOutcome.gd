@@ -129,6 +129,12 @@ func non_blow() -> int:
 func hp_restored() -> int:
 	return maxi(0, target_hp_after - hp_before)
 
+# What a preview SHOWS this hit leaving its target at: the threaded number through the one display
+# clamp. ONE spelling for every surface that prints it -- the queue row's arrow, the AI's intent and the
+# board's health bar under an END OF TURN row (#1428) -- so no two of them can disagree about a row.
+func displayed_hp_after() -> int:
+	return LethalityRules.displayed_hp(target_hp_after, LethalityRules.lifecycle_for(lethality))
+
 # The target's weight held this hit's whole shove, so it stays on knockback_from (#1186). The board
 # marks that cell; a shove held only in part already draws its shorter trail.
 func held_in_place() -> bool:

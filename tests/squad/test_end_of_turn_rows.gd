@@ -238,6 +238,98 @@ func test_a_body_this_pass_rescues_is_forecast_standing_not_dead() -> void:
 		.is_not_equal(ResolvedOutcome.Lethality.KILLED)
 
 
+# ...and a body lying in ANOTHER squad, which is where a downed unit always is (it is ejected into a
+# solo squad). An ordinary rescue threads nothing into the hypo, so before #1428 this body was never
+# a subject: the queue said nothing, and the board's health bar fell back on the live board, where
+# the body is still down and the burn kills it. The rescue is this plan reaching it.
+func test_a_body_this_pass_rescues_from_its_own_squad_is_spoken_for() -> void:
+	_ignite(FIRE)
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), STOUT, false)
+	var body := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	body.force_down()
+	assert_bool(body.squad == rescuer.squad).override_failure_message(
+			"fixture: the body shares the rescuer's squad, so membership alone would speak for it").is_false()
+	var rescue := RescueAction.new()
+	rescue.init(rescuer, body, body.movement.cell)   # ordinary ground: no haul, nothing threaded
+	rescuer.squad._queue_action(rescue)
+
+	var plan := _sm.resolve_plan(rescuer.squad, _board([rescuer, body]))
+
+	assert_bool(plan.end_of_turn_subjects.has(body)).override_failure_message(
+			"a body this plan rescues is not one its END OF TURN speaks for").is_true()
+	var hit := _hit_for(plan, body)
+	assert_object(hit).override_failure_message("the rescued body got no burn row").is_not_null()
+	if hit == null:
+		return
+	assert_int(hit.resolved.lethality).override_failure_message(
+			"the forecast killed a body this same pass stands back up") \
+		.is_not_equal(ResolvedOutcome.Lethality.KILLED)
+
+
+# ==============================================================================
+#  The side's whole END OF TURN, for the health bars (#1428)
+# ==============================================================================
+
+func _forecast(units_in: Array, plan: ResolvedPlan) -> Array[TileHitAction]:
+	var units: Array[Unit] = []
+	units.assign(units_in)
+	return TurnBoundary.forecast(units, _states, _gas, Weather.Kind.CLEAR, PLAYER, plan)
+
+
+func _rows_for(hits: Array[TileHitAction], unit: Unit) -> Array[TileHitAction]:
+	var rows: Array[TileHitAction] = []
+	for hit in hits:
+		if hit.actor == unit:
+			rows.append(hit)
+	return rows
+
+
+# The plan answers for the units it spoke for, ROW OR NO ROW. A member who walks out of the fire has
+# no row in the plan, and the live board -- where it still stands in the flames -- must not fill that
+# silence with a burn it will not take.
+func test_a_member_who_walks_out_of_the_fire_takes_the_plans_answer_not_the_live_one() -> void:
+	_ignite(FIRE)
+	var walker := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	var units := [walker]
+	assert_int(_rows_for(_forecast(units, null), walker).size()).override_failure_message(
+			"precondition: the live board does not burn the walker where it stands").is_greater(0)
+	walker.squad._queue_action(_walk(walker, FIRE + Vector2i(2, 0)))
+
+	var plan := _sm.resolve_plan(walker.squad, _board(units))
+
+	assert_bool(plan.end_of_turn_subjects.has(walker)).override_failure_message(
+			"precondition: the plan does not speak for its own member").is_true()
+	assert_array(_rows_for(_forecast(units, plan), walker)).override_failure_message(
+			"the forecast burned a member its own plan walks out of the fire").is_empty()
+
+
+# ...and the live board answers for everyone the plan never reaches: a squadmate of nobody here,
+# standing in old fire, burns at End Turn whatever this plan does. The queue says nothing (#1353);
+# the forecast must, and with the pass's own row. An enemy in the same fire is not this turn's.
+func test_a_unit_the_plan_never_reaches_takes_the_live_row() -> void:
+	_ignite(FIRE)
+	var player := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), STOUT, false)
+	var bystander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	var enemy := H.spawn_solo(self, _sm, ENEMY, FIRE + Vector2i(1, 0), STOUT, false)
+	_ignite(enemy.movement.cell)
+	var units := [player, bystander, enemy]
+	var plan := _sm.resolve_plan(player.squad, _board(units))
+	assert_object(_hit_for(plan, bystander)).override_failure_message(
+			"precondition: the plan already speaks for the bystander").is_null()
+
+	var hits := _forecast(units, plan)
+
+	var rows := _rows_for(hits, bystander)
+	assert_int(rows.size()).override_failure_message(
+			"a unit in old fire the plan never touches burns at End Turn with no forecast").is_equal(1)
+	if rows.size() == 1:
+		assert_int(rows[0].resolved.damage).is_equal(RulesService.occupant_damage_for(bystander,
+				_states.states_at(bystander.movement.cell)))
+		assert_int(rows[0].resolved.hp_before).is_equal(bystander.get_current_hp())
+	assert_array(_rows_for(hits, enemy)).override_failure_message(
+			"an enemy's burn was forecast onto this side's turn end").is_empty()
+
+
 # ==============================================================================
 #  Where the row lands
 # ==============================================================================

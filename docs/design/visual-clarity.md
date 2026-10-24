@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1377 (the danger field stops clipping a Sentry's reach to its zone) folded in 2026-10-21; #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09; the #929 follow-up (a HUD surface catches its own clicks) folded in 2026-10-09; #1374 (a zone colour knob recolours every surface wearing it) folded in 2026-10-21; #1430 (the round's smoke split turns a tether red) folded in 2026-10-23.**
+**Canon checked through #1171 (2026-09-29); #1428 (the bar runs on to the END OF TURN) folded in 2026-10-23; #1377 (the danger field stops clipping a Sentry's reach to its zone) folded in 2026-10-21; #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09; the #929 follow-up (a HUD surface catches its own clicks) folded in 2026-10-09; #1374 (a zone colour knob recolours every surface wearing it) folded in 2026-10-21; #1430 (the round's smoke split turns a tether red) folded in 2026-10-23.**
 
 ## Principles
 
@@ -440,7 +440,7 @@ Two halves, because a suspended pass ends one of two ways:
 
 1. **It never resumes** (it waits on a freed unit's tween). `ScenarioManager.clear_board` calls
    `OrderExecutor.abandon_pass()`, which releases what the pass's own end releases: `executing_plan`,
-   `effect_pass_subjects`, `_downed_pending`. The rule is #602's: enumerate the paths that END a pass.
+   `effect_pass_hits` (`effect_pass_subjects` until #1428), `_downed_pending`. The rule is #602's: enumerate the paths that END a pass.
    The walk's leader-handover hold is the one exception ([#1358](https://github.com/Phaazoid/Godoiosis/issues/1358)):
    `SquadManager.clear_all_squads` DROPS it with the squads, because releasing it judges reach and would
    eject members on the board being torn down.
@@ -455,6 +455,52 @@ Two halves, because a suspended pass ends one of two ways:
 and Mission Select after Return to Title. `tests/flow/test_board_swap_mid_pass.gd` pins both halves on a
 real walk, the one suspension a headless run keeps; its resume cases move the generation by hand, because
 a real swap frees the walker and a pass waiting on a freed unit never resumes.
+
+## The bar runs on to the END OF TURN ([#1428](https://github.com/Phaazoid/Godoiosis/issues/1428), BUILT 2026-10-23)
+
+Fire's burn, and since #1331 steam's scald, land when a unit's own side's turn ends. The queue's
+END OF TURN section said so; the bar did not, so a unit standing in fire looked full until the pass
+took the cubes. **Nothing lied, it was silent:** the rows the queue showed were exact, but they exist
+only while a plan is previewed, and they speak only for the units that plan reaches (#1353). A unit
+idling in old fire, or whose squad had already executed, had no row anywhere.
+
+The rulings, dev calls made before building:
+
+- **The whole side whose turn is ending**, queued or not. The units the previewed plan speaks for use
+  its rows; everyone else uses the rows End Turn will actually run. An enemy in fire shows nothing on
+  your turn: its burn lands at the end of its own turn, after it has moved, so a bar would be a claim
+  about what the enemy decides (the intent readout #1069 retired).
+- **The same amber as a queued hit.** *"Damage reads as damage, no matter the source. Keeps things
+  cleaner."* One span, from where the bar stands now to where the end of the turn leaves it. A
+  separate end-of-turn colour was modelled and turned down; `UnitHealthBar` is untouched.
+
+How it is built, and the parts that generalise:
+
+- **`TurnBoundary.forecast` is the one composition the bars read.** It takes the plan's rows for every
+  unit in `ResolvedPlan.end_of_turn_subjects` and `TurnBoundary.tile_hits` (live) for the rest of the
+  side. That is two derivations of one composition, declared: the plan answers for the units it
+  spoke for, row or no row (a member who walks out of the fire is answered "nothing", which is not
+  the same as never asked), and the live board answers for the others, since nothing the plan does
+  reaches them. The queue still lists the plan's rows alone.
+- **The bar computes nothing.** `TileHitAction.shown_hp_after` reads the unit's last row that reads
+  HP. The rows are threaded from where the plan leaves the unit, so that number already carries the
+  plan's hits. `ResolvedOutcome.displayed_hp_after` is the one spelling the queue row, the AI's intent
+  and the bar all print. A soak alone moves no number, so rain alone raises no bar. The alarm is
+  either moment's rung (`TileHitAction.names_a_rung`).
+- **While the end-of-turn pass plays, the bars hold the list it is walking** (`effect_pass_hits`),
+  which is #354's rule one phase along: re-read live once a burn lands, a unit still standing in the
+  fire would show a second burn. For the same reason `game.previewed_plan` answers null during that
+  pass. Orders still queued at End Turn are shed at the hand-off and never run, and until this their
+  damage stayed on the bars through the pass. `game.next_round_board` reads the same answer, so Alt's
+  outline and #1430's red tether also stop folding in those orders' deposits while the pass plays.
+- **A body this plan rescues is one it speaks for**, even from another squad (a downed unit always
+  lies in a solo squad). An ordinary rescue threads nothing into the hypo, so before this the body
+  got no row, and the bar's live fallback would have shown it dying in a fire the rescue stands it
+  up in. The queue gains that row too.
+
+What it does not do: a move only previews once it is queued (the hover preview never resolved into
+the plan, for the queue either), and a forecast is only as good as the next squad's silence: another
+squad acting first changes it, and the bars follow the moment that squad queues.
 
 ## Every bar, if the player says so ([#350](https://github.com/Phaazoid/Godoiosis/issues/350), BUILT 2026-08-19)
 
@@ -472,7 +518,10 @@ end-of-turn effect pass raises a readout over everyone it is about to burn. It i
 as `foretold` — something is about to happen to this unit — reached from the other direction, since
 that phase has no `ResolvedPlan` to be read out of and must not fake one. It matters because it is
 the phase's whole point: `_settle_health_change` skips a hidden bar, so with the preference off the
-pass panned to a unit, damaged it, and showed **nothing at all** — not even the cubes.
+pass panned to a unit, damaged it, and showed **nothing at all** — not even the cubes. *(Since
+[#1428](https://github.com/Phaazoid/Godoiosis/issues/1428) the pass publishes its ROWS,
+`OrderExecutor.effect_pass_hits`, and `marked` is read off them; see* The bar runs on to the END OF
+TURN *below.)*
 
 The rulings, all dev calls, all made before building:
 

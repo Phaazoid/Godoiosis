@@ -135,7 +135,8 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 	if board == null or squad == null:
 		return
 	var revived := _rescued_this_pass(actions, hypo)
-	for unit in _end_of_turn_subjects(plan, squad, hypo, board):
+	plan.end_of_turn_subjects = _end_of_turn_subjects(plan, squad, hypo, board, revived)
+	for unit in plan.end_of_turn_subjects:
 		var situation := projected_situation(unit, hypo)
 		if revived.has(unit):
 			# A queued Rescue stands its target ACTIVE, and the tail runs after everything the hypo
@@ -159,9 +160,11 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 # threads) or one standing where it deposits. The burn takes the whole faction (TurnBoundary.tile_hits),
 # so another squad's unit, acted or not, or a downed ally lying in its own solo squad would otherwise
 # burn for this plan with no row anywhere. One already standing in old fire is not this plan's doing
-# and gets no row from it. Members first, in member order; the rest in board order.
+# and gets no row from it. Members first, in member order; the rest in board order. A body this plan
+# RESCUES is reached too (#1428): an ordinary rescue threads nothing, so without it the body read as
+# untouched and the board's health bar asked the live board, where it is still down and dies.
 static func _end_of_turn_subjects(plan: ResolvedPlan, squad: Squad, hypo: Dictionary,
-		board: BoardContext) -> Array[Unit]:
+		board: BoardContext, revived: Array[Unit]) -> Array[Unit]:
 	var subjects: Array[Unit] = []
 	for member in squad.get_members():
 		if member != null and is_instance_valid(member):
@@ -175,7 +178,7 @@ static func _end_of_turn_subjects(plan: ResolvedPlan, squad: Squad, hypo: Dictio
 	for unit: Unit in board.units:
 		if not is_instance_valid(unit) or unit.get_faction() != faction or subjects.has(unit):
 			continue
-		if hypo.has(unit) or deposited.has(projected_position(unit, hypo)):
+		if hypo.has(unit) or revived.has(unit) or deposited.has(projected_position(unit, hypo)):
 			subjects.append(unit)
 	return subjects
 

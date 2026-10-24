@@ -113,6 +113,26 @@ static func soaks(unit: Unit, held: Array[Elemental.State], packed: int,
 	return hits
 
 
+# What ONE unit's end-of-turn rows leave its HP at, as a preview shows it (#1428): the last row that
+# reads HP, whose threaded number already carries every row before it. -1 when no row touches HP: a
+# soak alone moves no number. The board's health bar reads this rather than adding the rows up.
+static func shown_hp_after(rows: Array[TileHitAction]) -> int:
+	for i in range(rows.size() - 1, -1, -1):
+		var outcome := rows[i].resolved
+		if outcome != null and outcome.reads_hp:
+			return outcome.displayed_hp_after()
+	return -1
+
+
+# ...and whether any of them names a rung, the bar's alarm. Every row is asked, not the last: a scald
+# that drops a unit into Crisis leaves a burn behind it that names nothing.
+static func names_a_rung(rows: Array[TileHitAction]) -> bool:
+	for hit in rows:
+		if hit.resolved != null and hit.resolved.lethality != ResolvedOutcome.Lethality.NONE:
+			return true
+	return false
+
+
 static func _soak(unit: Unit, gained: Elemental.State) -> TileHitAction:
 	var hit := TileHitAction.new()
 	hit.actor = unit

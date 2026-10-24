@@ -280,6 +280,7 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = func() -> ResolvedPlan: return game.previewed_plan()
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	_unit_mirror.end_of_turn_source = _end_of_turn_forecast
 	_unit_mirror.home_yaw_source = _rig.home_yaw_degrees
 	# Whether a cell's ground is water, for the damp blot (#358): the AUTHORED kind, frozen or not.
 	_unit_mirror.water_at = func(cell: Vector2i) -> bool:
@@ -2151,10 +2152,27 @@ func _hovered_unit() -> Unit:
 
 
 # Who the health bars' end-of-turn effect pass is about (#534). A separate question from the previewed
-# plan (game.previewed_plan) because that phase has none -- see OrderExecutor.effect_pass_subjects.
+# plan (game.previewed_plan) because that phase has none -- read off the rows it is walking
+# (OrderExecutor.effect_pass_hits).
 func _effect_pass_subjects() -> Dictionary[int, bool]:
-	var subjects: Dictionary[int, bool] = game.order_executor.effect_pass_subjects
+	var subjects: Dictionary[int, bool] = {}
+	for hit: TileHitAction in game.order_executor.effect_pass_hits:
+		if is_instance_valid(hit.actor):
+			subjects[hit.actor.get_instance_id()] = true
 	return subjects
+
+
+# What the end of the active side's turn will do, for the health bars (#1428). While that pass plays,
+# the list it is walking, HELD: re-asked live once a burn lands, a unit still in the fire would show a
+# second burn -- #354's rule, one phase along. Otherwise the side's forecast with the previewed plan
+# played (TurnBoundary.forecast): the plan's rows for whom it speaks for, the live board's for the rest.
+func _end_of_turn_forecast() -> Array[TileHitAction]:
+	var running: Array[TileHitAction] = game.order_executor.effect_pass_hits
+	if not running.is_empty():
+		return running
+	var turns: TurnManager = game.turn_manager
+	return TurnBoundary.forecast(game._all_units(), game.terrain_states, game.gas_field,
+			game.scenario_manager.current_weather, turns.active_faction(), game.previewed_plan())
 
 
 func _cancel() -> void:

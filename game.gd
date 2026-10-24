@@ -2475,7 +2475,12 @@ func _board() -> BoardContext:
 # plan -- but the preference stays: it costs nothing and does not lean on that gate holding. An aim
 # shows what it WOULD do before the click (#929), read only while the aim is open so a forecast nothing
 # has cleared yet can never outlive it.
+#
+# The END OF TURN outranks all of it (#1428): orders still queued when the turn ends are shed at the
+# hand-off and never run, so while that pass plays there is no plan to preview at all.
 func previewed_plan() -> ResolvedPlan:
+	if order_executor != null and not order_executor.effect_pass_hits.is_empty():
+		return null
 	if order_executor != null and order_executor.executing_plan != null:
 		return order_executor.executing_plan
 	if aim_forecast != null and game_state == GameState.ATTACK_TARGETING:
