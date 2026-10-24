@@ -2,8 +2,8 @@ extends Control
 class_name HoverInfoPanelControl
 
 # The info card, one thing at a time. Since #1105 it is asked for by a CLICK, never by hover (dev,
-# 2026-09-27: "Nothing on hover, at all"), which is why the name no longer describes it -- kept
-# because slice 2 brings hover back as a player setting. Two faces:
+# 2026-09-27: "Nothing on hover, at all"), which is why the name no longer describes it. The hover
+# setting it was kept for (slice 2) was dropped when #1105 closed, so the name is legacy. Two faces:
 #   - the UNIT card, while that unit's ring is up (MainActionMenu shows and clears it);
 #   - the TILE card, a tile's full readout in TileInfoSections: a clicked empty tile, or the tile
 #     an inspected unit stands on, parked beside the Inspect dock and FOLLOWING that unit, since the

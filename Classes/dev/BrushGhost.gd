@@ -12,8 +12,8 @@ class_name BrushGhost
 # `source` is the layer the tile is READ from, never a decoded property of it -- a renderer
 # resolves it with the same call it uses on the real grid (BoardMirror.item_for_cell), so the
 # ghost and the board cannot drift about what a cell looks like. TERRAIN points it at the 2D
-# ghost layer (which holds the brush's pick as a real placed tile); ELEVATION points it at the
-# grid itself, because raising a cell keeps the art it already has.
+# ghost layer (which holds the brush's pick as a real placed tile); a VERTEX preview has none.
+# (ELEVATION, which pointed it at the grid itself, merged into TERRAIN in #340.)
 #
 # `height` is the brush's own rule HEIGHT, in the store's half-level units -- it was called `level`
 # and #427 slice 1 quietly made that a LIE, since the brush started authoring in units while

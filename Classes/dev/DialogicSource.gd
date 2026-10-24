@@ -2,8 +2,9 @@ extends Object
 class_name DialogicSource
 
 # Creating, registering and removing a Dialogic resource from the RUNNING dev overlay (#982) --
-# the half Dialogic's own editor owns and a game process cannot reach. DialogTool is the only
-# caller; nothing here touches the tree, a page or a board.
+# the half Dialogic's own editor owns and a game process cannot reach. DialogTool is the main
+# caller, and BoardLint reads timelines through read_timeline; nothing here touches the tree, a page
+# or a board.
 #
 # REGISTRATION IS OURS BECAUSE DIALOGIC'S IS EDITOR-ONLY: DialogicResourceUtil.set_directory
 # writes project.godot only under Engine.is_editor_hint(), which is false in the running game.

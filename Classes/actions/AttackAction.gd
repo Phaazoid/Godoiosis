@@ -514,7 +514,7 @@ func get_outcome_summary() -> String:
 		parts.append(_slope_token())
 	return "   ".join(parts)
 
-# The queue row's readout of ResolvedOutcome.elevation_delta (#258): the target sat above or below
-# the attacker when this hit was previewed. Wording only -- no rule reads the delta yet.
+# get_outcome_summary's readout of ResolvedOutcome.elevation_delta (#258): the target sat above or
+# below the attacker when this hit was previewed. Wording only -- no rule reads the delta yet.
 func _slope_token() -> String:
 	return "uphill" if resolved.elevation_delta > 0 else "downhill"

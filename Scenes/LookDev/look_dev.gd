@@ -2,9 +2,8 @@
 # toggles, so each layer of the post stack can be judged alone and the relighting trick
 # (same board, four moods) can be demoed live. The permanent lighting/grading playground.
 #
-# NOT a scratch scene, whatever "LookDev" suggests (#393). Five presentation suites fixture
-# on LookDev.tscn -- test_board_overlays, test_board_picker, test_camera_rig, test_look_dev,
-# test_walk_demo -- Battle3D.tscn loads its MeshLibrary, BoardMirror and BoardOverlays read
+# NOT a scratch scene, whatever "LookDev" suggests (#393). Nine presentation suites and a law
+# test fixture on LookDev.tscn (grep tests/ for it), Battle3D.tscn loads its MeshLibrary, BoardMirror and BoardOverlays read
 # textures out of Art/LookDev/, and its camera rig IS the shipping one (CameraRig3D, which
 # lived here until #393). Editing it freely reds the presentation area; deleting it does worse.
 #

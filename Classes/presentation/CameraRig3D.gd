@@ -214,16 +214,15 @@ static func scale_of(setting: PlayerSettings.Setting) -> float:
 # tracking in _process have to keep running under it.
 @export var manual_input_enabled := true: set = _set_manual_input_enabled
 
-# The zoom wheel is gated SEPARATELY from everything else the player can do to the camera (#520,
-# dev 2026-08-26). While a pass or an AI turn plays, playback owns WHERE the camera looks and the
-# player keeps how far out it sits -- so manual_input_enabled goes false and this stays true. A
-# menu takes both, because the surface on screen wants the wheel for itself.
+# The zoom wheel has its own switch (#520), but since #602 round 4 battle3d writes it from
+# manual_input_enabled (dev, 2026-08-29: "we control the camera, fully"): whoever owns where the
+# camera looks owns how far out it sits, so playback and a menu both take the wheel.
 @export var zoom_input_enabled := true
 
-# Where playback frames from: the distance the rig resets to whenever something other than the
-# player takes the camera. Without it you watch a whole enemy turn at whatever zoom you happened
-# to leave the last one at, which is the awkwardness this closes -- the reset is a STARTING point,
-# not a leash, and the wheel is live again immediately after.
+# Where playback frames from: the director's base distance, which battle3d._apply_shot re-applies
+# on every STAGE, SPAN and WIDE shot (#602 round 4). Without it you watch a whole enemy turn at
+# whatever zoom you happened to leave the last one at. The wheel is off under playback, so nothing
+# zooms away from it until the camera is handed back.
 @export var playback_distance := 11.0
 
 # The board's AUTHORED pitch (#586) -- what a mood carries and what R returns to. It moved OFF the
@@ -297,9 +296,9 @@ var _shake_amplitude := 0.0
 var _shake_elapsed := 0.0
 var _sway_elapsed := 0.0
 # How far the director has pushed the camera IN for the beat now playing (#520 diff 2c), in world
-# units of distance. The flourish's shape on the ZOOM axis, and an ADDEND for the same reason: the
-# wheel stays the player's through a pass, so a director may lean on their distance but must never
-# assign over it. Re-solved from the published emphasis every frame, so the mirror's poll is
+# units of distance. The flourish's shape on the ZOOM axis, and an ADDEND so it never assigns over
+# the base distance: _apply_shot's under playback (#602 round 4), the player's again once the view
+# is handed back. Re-solved from the published emphasis every frame, so the mirror's poll is
 # idempotent and there is nothing to unwind when the beat ends.
 var _dolly := 0.0
 # WHICH PACING PROFILE the beat now playing runs under (#647), mirrored from
@@ -356,9 +355,9 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# ABOVE the manual gate, deliberately: zoom is the one thing the player keeps while playback
-	# owns the camera (#520). Its own switch is zoom_input_enabled; wheel_zoom_enabled stays the
-	# separate question of whether the WHEEL is this rig's to read at all (#285 hands it away).
+	# ABOVE the manual gate, on its own switch, zoom_input_enabled (#520) -- though battle3d drives
+	# both from one predicate since #602 round 4, so playback takes the wheel too. wheel_zoom_enabled
+	# stays the separate question of whether the WHEEL is this rig's to read at all (#285 hands it away).
 	var notch := event as InputEventMouseButton
 	if notch != null and notch.pressed and zoom_input_enabled and wheel_zoom_enabled:
 		if notch.button_index == MOUSE_BUTTON_WHEEL_UP:

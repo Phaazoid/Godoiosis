@@ -4,10 +4,11 @@ extends ModalCard
 # The weapon detail card (#732) -- one weapon's mod spaces, what is in them, and the mods it could
 # take, fitted by dragging or by clicking exactly the way the stash moves gear.
 #
-# THE SOURCE IS THE WHOLE AUTHORED CATALOG (dev, 2026-09-06: "Perhaps we start this simple with the
-# whole authored catalog, and file a followup issue for controlling what items/mods are in a
-# scenario"). So fitting is free and unlimited here, and #812 is where scarcity arrives. The one
-# limit that is real today is #732's own: a weapon holds one of any given mod.
+# THE SOURCE WAS THE WHOLE AUTHORED CATALOG at first (dev, 2026-09-06: "Perhaps we start this simple
+# with the whole authored catalog, and file a followup issue for controlling what items/mods are in a
+# scenario"). That follow-up was #812: the source is now the mission's own pool, handed in, and an
+# empty pool offers nothing (#1222). Within the pool fitting is free and unlimited; the one limit is
+# #732's own: a weapon holds one of any given mod.
 #
 # IT CLAIMS THE MODAL LOCK, and that is the point rather than a side effect. game.gd gates both Tab
 # and the commit key on ModalLock.any_open, so while this is up neither can swap the board out from
@@ -38,8 +39,8 @@ const LIST_H := 168
 const ROW_H := 20
 
 var _weapon: WeaponInstance
-# WHICH MODS THIS MISSION OFFERS (#812), handed in by whoever opened the card. Empty = the whole
-# authored catalogue, which is what the Item Editor and any board with no roster want.
+# WHICH MODS THIS MISSION OFFERS (#812), handed in by whoever opened the card (ItemDetail is the
+# one opener). Empty offers nothing (#1222): a board with no roster, and the battle's read-only Inspect.
 var _pool: Array[WeaponModData] = []
 # Null for a weapon nobody is holding -- one sitting in the stash. active_space_count answers
 # UNREDUCED for that, so the card shows the BUILD rather than a weapon whose every mod reads inert.

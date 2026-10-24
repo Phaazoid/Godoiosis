@@ -469,8 +469,9 @@ func _begin_stroke() -> void:
 		return   # the other button was already down: one gesture, already open
 	_stroke_open = true
 	# A dev tool is about to move a board a run may be recording (#53): flag it, so a replay of that
-	# run is known-untrustworthy instead of silently diverging. One stroke covers all four paint
-	# modes plus Resize Map and Clear Tile States, which is why it is the honest hook.
+	# run is known-untrustworthy instead of silently diverging. One stroke covers all five paint
+	# modes plus Resize Map, Clear Tile States, Step Gas and Clear Gas, which is why it is the
+	# honest hook.
 	game.mission_log.note_dev_intervention()
 	history.begin(game.scenario_manager.capture_board())
 

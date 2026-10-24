@@ -28,9 +28,9 @@ const IRON_WILL_DAMAGE_CAP := 6      # playtest-tunable
 # ability id here. What KIT grants is BRACE: bonus DEF applied to the absorbed instance, the single
 # block-quality knob (bleed-through to the ward was dropped, not deferred). Bare Guard blocks at +0.
 # Source-agnostic by construction: it rides the ability union (innate -> jobs -> gear), so a job, a
-# carving, a piece of armour or a fitted weapon mod all grant it through one door. Weapons BECAME
-# an ability source in #74 -- the equipped weapon and every installed prosthetic, via
-# Unit._mod_sources. A rune still is not; that half of #90's "which slots contribute" stays open.
+# piece of armour or a fitted weapon mod all grant it through one door. Weapons BECAME an ability
+# source in #74 -- the equipped weapon and every installed prosthetic, via Unit._mod_sources. A rune
+# grants nothing, ruled rather than pending (#531): its payload is its carvings.
 const BRACE_DEF_BONUS := 3           # playtest-tunable
 const GUARD_BASE_RANGE := 1          # authored on the granting content later; adjacency today
 

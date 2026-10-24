@@ -55,7 +55,7 @@ const LEAVES: Array[Dictionary] = [
 	{"scope": "Scenario", "label": "Properties", "page": "%Scenario",
 		"tip": "What this mission DECLARES — objectives, the look preset it wears, where its camera opens. The header above saves all of it."},
 	{"scope": "Scenario", "label": "Tile Brush", "page": "%Tile Brush",
-		"tip": "Paint the board — Terrain (with its level and ramp rise), Zones, or Tile States (fire/ice/cover); left-drag paints, right-drag erases."},
+		"tip": "Paint the board — Terrain (with its level and ramp rise), Zones, Tile States (fire/ice/cover), Corners (raise or lower the point where tiles meet) or Gas; left-drag paints, right-drag erases."},
 	{"scope": "Scenario", "label": "Spawn", "page": "%Spawn",
 		"tip": "Spawn units — configure here, then hover the board + Space to place."},
 	{"scope": "Scenario", "label": "Unit Editor", "page": "%Unit Editor",

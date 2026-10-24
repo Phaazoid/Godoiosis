@@ -1,8 +1,9 @@
 extends RefCounted
 class_name DirtyCells
 
-# "Which cells changed since somebody last looked?" — the one answer, shared by the two stores the
-# 3D mirror reads (#319): BoardGrid (what tile is painted) and BoardHeights (how tall a cell is).
+# "Which cells changed since somebody last looked?" — the one answer, shared by four stores (#319):
+# BoardGrid (what tile is painted) and BoardHeights (how tall a cell is), whose cell lists the 3D
+# mirror reads, and TerrainStateManager and GasField, which are read only by `version`.
 #
 # It exists because there was no way to ask. BoardMirror.sync re-derived the answer by walking the
 # WHOLE board every frame — TileMapLayer.changed does not fire on set_cell in 4.7, so there was no

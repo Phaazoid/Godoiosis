@@ -8,11 +8,12 @@ class_name MissionLog
 # projection over it; TelemetryStore is the only file that knows a path.
 #
 # WHAT IT LISTENS TO vs WHAT IT IS TOLD. Turn starts, orders queued and cancelled, downs and deaths
-# all ride signals that already exist, connected in _ready. Five things are explicit calls, because
+# all ride signals that already exist, connected in _ready. The rest are explicit calls, because
 # no signal carries them: begin() at MissionController._begin_turn (the one door every arrival
 # takes), record_pass() at OrderExecutor's one resolved pass, record_turn_effects() at its
-# end-of-turn burn (the one damage channel no plan and no signal holds), record_capture(), and
-# seal() at the three named exits.
+# end-of-turn burn (the one damage channel no plan and no signal holds), record_capture(),
+# record_squad_verb() at the ring's leave and disband, note_dev_intervention() at every dev board
+# edit, and seal() at each named exit.
 #
 # THE FIRST turn_start IS WRITTEN BY begin(), not by the signal: TurnManager.turn_started fires
 # only from end_turn, never from start_faction_turn, so a recorder riding the signal alone loses

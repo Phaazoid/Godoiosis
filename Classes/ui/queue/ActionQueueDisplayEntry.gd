@@ -35,8 +35,9 @@ static func divider() -> ActionQueueDisplayEntry:
 	entry.entry_type = EntryType.DIVIDER
 	return entry
 
-# An INDENTED row is a DERIVED one -- an expanded volley's hits, or the watch shot a walk takes
-# (#592). It is not an order anybody gave, so the panel draws it undraggable and with no X.
+# An INDENTED row hangs under the row that set it off -- a payload (#1058), a watch shot (#592), a
+# sinking (#922). The panel draws it undraggable; its X is the action's own is_reorderable
+# (ActionQueueRow), so a payload's X is live while a derived row's is inert.
 static func action_row(action_ref: BaseAction, indent := 0) -> ActionQueueDisplayEntry:
 	var entry := ActionQueueDisplayEntry.new()
 	entry.entry_type = EntryType.ACTION

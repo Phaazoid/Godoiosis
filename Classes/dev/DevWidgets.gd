@@ -1837,10 +1837,6 @@ static func _resources_in(value: Variant) -> Array[Resource]:
 	return out
 
 
-# Removes a saved entry from disk. The catalogs that list these entries (WeaponCatalog,
-# RuneCatalog, TransmutationCatalog, WeaponAttackCatalog, ScenarioManager) all re-scan disk per
-# call rather than caching, so a caller's own dropdown refresh is enough to drop the deleted
-# entry -- no separate cache to invalidate.
 # True when something still names the file at `path`, after saying who. A dangling ext_resource is
 # a hard PARSE error that takes the whole referring file down (#596), so a file in use is refused
 # rather than warned about -- asked before the confirm, so the refusal is the whole answer.
@@ -1854,6 +1850,10 @@ static func refuse_delete_in_use(path: String, status_label: Label = null) -> bo
 		status_label.text = msg
 	return true
 
+# Removes a saved entry from disk. Most catalogs that list these entries (WeaponCatalog,
+# RuneCatalog, TransmutationCatalog, WeaponAttackCatalog, ScenarioManager) re-scan disk per call
+# rather than caching, so a caller's own dropdown refresh is enough to drop the deleted entry. A
+# cached catalog (TerrainReactionCatalog, JobCatalog, ReactionCatalog) needs its caller to refresh().
 static func delete_saved_file(path: String, noun: String, status_label: Label = null) -> bool:
 	if path == "":
 		var msg := "No %s file on disk to delete" % noun

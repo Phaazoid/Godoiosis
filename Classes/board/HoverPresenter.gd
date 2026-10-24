@@ -15,9 +15,10 @@ class_name HoverPresenter
 # game.* call reads as Variant and `:=` cannot infer from it.
 #
 # One branch per GameState, mirroring game.gd's click handlers. The branches are read-only on
-# game state; anything that needs to MUTATE it belongs on the coordinator. The one deliberate
-# exception is CHOOSING_MOVE, which re-validates the squad plan as the mouse sweeps: that live
-# preview IS the feature (CLAUDE.md's Actions bullet), not a leak.
+# game state; anything that needs to MUTATE it belongs on the coordinator. Two deliberate
+# exceptions: CHOOSING_MOVE re-validates the squad plan as the mouse sweeps, since that live
+# preview IS the feature (CLAUDE.md's Actions bullet), not a leak; and aiming writes
+# game.aim_forecast, the hovered aim's plan the health bars read (#929).
 
 signal hovered_cell_changed(cell: Vector2i)
 signal hovered_unit_changed(previous_unit: Unit, new_unit: Unit)

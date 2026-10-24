@@ -251,9 +251,10 @@ const KNOBS: Array[Dictionary] = [
 	# panel group-major it is a choice: this is where a fight OPENS, not how the camera travels.
 	#
 	# UNTAGGED by profile on purpose, so it shows whichever column the Playback page is filtered to --
-	# it is applied ONCE as playback starts, not per beat, so no one profile owns it.
+	# battle3d._apply_shot re-applies it on every STAGE, SPAN or WIDE shot under either profile, so no
+	# one profile owns it.
 	{"group": "Playback framing", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
-		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
+		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Re-applied on every stage, walk and wide shot, and the wheel is off under playback (#602) -- so this is the director's distance for the whole fight, not just where it opens."},
 
 	# --- World (#380, from the Objects tab's Globals; most of it left again in #902) ---
 	# What is left here is world construction NO TILE OWNS. The seven rows that a tile could be

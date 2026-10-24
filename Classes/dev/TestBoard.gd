@@ -1,7 +1,7 @@
 extends Object
 class_name TestBoard
 
-# The hardcoded starting board: five units and one chainsword, spawned by game._ready().
+# The hardcoded sandbox board: five units and one chainsword, spawned by game.spawn_sandbox().
 #
 # Scaffolding from before scenarios existed (Milestone P) that nothing has replaced yet.
 # It lives here rather than in game.gd so the coordinator carries no fixed content of its

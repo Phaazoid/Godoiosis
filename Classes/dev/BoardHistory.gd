@@ -87,6 +87,6 @@ func can_redo() -> bool:
 	return _index < _snapshots.size() - 1
 
 
-# How many presses of undo are left. The panel's row reads this; nothing else depends on it.
+# How many presses of undo are left. No panel reads it today; only the undo suite does.
 func depth() -> int:
 	return _index

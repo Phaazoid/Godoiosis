@@ -1,7 +1,8 @@
 # Paints the look-dev diorama board (#203). @tool so the board is visible in the
 # editor viewport during tuning sessions; the height map below is the one source
 # of board shape, repainted deterministically on every load. Placeholder terrain
-# only -- the real board pipeline is #176 stage 1+, this scene is wired into nothing.
+# only -- the real board pipeline is #176 stage 1+. Not part of the game, but the
+# scene is load-bearing: presentation suites fixture on it (#393, see look_dev.gd).
 @tool
 extends GridMap
 

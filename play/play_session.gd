@@ -1277,7 +1277,8 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 # The plan as the game's queue panel lays it out (#46): ActionQueueDisplayEntry.build_for's sections
 # and nesting -- the watch shots an order sets off under it, a payload under its hit, a sinking under
 # what melted the ice -- one dict per row, units by handle. What the panel hides (a skipped counter or
-# watch shot) is hidden here too; the structured keys above still carry it for code.
+# watch shot) is hidden here too. The `counters` key above still carries a skipped counter for code;
+# no key carries a watch shot.
 func _plan_rows(squad: Squad, plan: ResolvedPlan) -> Array:
 	var rows: Array = []
 	var section := ""
