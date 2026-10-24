@@ -64,7 +64,7 @@ func test_the_default_aim_is_the_replacement() -> void:
 	unit.equipped_weapon = weapon
 	_fit(weapon, 0, _replacer())
 
-	assert_object(weapon.default_attack(unit)).is_same(_swap)
+	assert_object(weapon.default_attack(unit.state)).is_same(_swap)
 
 func test_the_repertoire_carries_the_replacement_and_drops_the_stock_main() -> void:
 	var unit := _wielder()
@@ -72,7 +72,7 @@ func test_the_repertoire_carries_the_replacement_and_drops_the_stock_main() -> v
 	unit.equipped_weapon = weapon
 	_fit(weapon, 0, _replacer())
 
-	var available := weapon.available_attacks(unit)
+	var available := weapon.available_attacks(unit.state)
 	assert_array(available).contains([_swap])
 	assert_array(available).not_contains([_stock])
 	assert_array(available).contains([_extra])	 # a replacement swaps the MAIN, not the stock list
@@ -85,7 +85,7 @@ func test_the_replaced_main_is_offered_exactly_once() -> void:
 
 	# The submenu is what Attack does NOT already fire. Both halves matter: the replacement must
 	# not be listed beside itself, and the stock main it displaced must be gone entirely.
-	var secondaries := weapon.secondary_attacks(unit)
+	var secondaries := weapon.secondary_attacks(unit.state)
 	assert_array(secondaries).contains([_extra])   # non-vacuity: the submenu really has entries
 	assert_array(secondaries).not_contains([_swap])
 	assert_array(secondaries).not_contains([_stock])
@@ -98,8 +98,8 @@ func test_a_replacer_in_a_proficiency_locked_space_does_not_replace() -> void:
 	unit.equipped_weapon = weapon
 	_fit(weapon, 1, _replacer())
 
-	assert_int(weapon.active_space_count(unit)).is_equal(1)	  # the lock is real, not assumed
-	assert_object(weapon.default_attack(unit)).is_same(_stock)
+	assert_int(weapon.active_space_count(unit.state)).is_equal(1)	  # the lock is real, not assumed
+	assert_object(weapon.default_attack(unit.state)).is_same(_stock)
 
 # --- Refusal ---
 

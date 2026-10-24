@@ -87,7 +87,7 @@ func test_one_channelable_carving_of_two_equips() -> void:
 		_carving("Push(F) + Push(F2)"),  # Fire 3: deficit 2 past the wildcard — not
 	]
 	var rune: RuneData = _rune(carvings)
-	assert_int(rune.channelable(u).size()).override_failure_message("premise: exactly one carving channelable").is_equal(1)
+	assert_int(rune.channelable(u.state).size()).override_failure_message("premise: exactly one carving channelable").is_equal(1)
 
 	assert_bool(u.add_item(rune)).is_true()
 	assert_object(u.get_equipped_weapon()).is_same(rune)

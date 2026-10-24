@@ -128,10 +128,10 @@ func test_an_unchannelable_carving_is_still_listed_and_carries_its_reason() -> v
 	var rune := _rune_of([payable, unpayable])                      # payable first: it sets temper
 
 	# Preconditions, or the case passes vacuously on a rune nobody could hold.
-	assert_bool(payable.can_channel(alch, rune.temper)) \
+	assert_bool(payable.can_channel(alch.state, rune.temper)) \
 		.override_failure_message("fixture: the cheap carving must channel or the rune won't equip") \
 		.is_true()
-	assert_bool(unpayable.can_channel(alch, rune.temper)) \
+	assert_bool(unpayable.can_channel(alch.state, rune.temper)) \
 		.override_failure_message("fixture: the expensive carving must NOT channel") \
 		.is_false()
 	alch.add_item(rune)

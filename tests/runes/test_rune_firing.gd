@@ -99,7 +99,7 @@ func test_no_transmutation_uses_the_weapon() -> void:
 	PlanResolver.resolve(plan, no_reactions)
 
 	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
-	assert_int(atk.resolved.damage).is_equal(weapon.base_damage(attacker, weapon.template.main_attack))
+	assert_int(atk.resolved.damage).is_equal(weapon.base_damage(attacker.state, weapon.template.main_attack))
 
 # --- B2: the in-game firing path (auto-select + resolve_plan propagation) ---
 

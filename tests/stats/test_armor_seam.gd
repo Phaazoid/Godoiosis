@@ -61,21 +61,21 @@ func test_heavy_armor_con_gate() -> void:
 	var heavy := _make_armor(12, {Stats.Stat.CON: 7})
 	var weak := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.CON: 5})
 	var strong := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.CON: 8})
-	assert_bool(heavy.can_equip(weak)).is_false()
-	assert_bool(heavy.can_equip(strong)).is_true()
+	assert_bool(heavy.can_equip(weak.state)).is_false()
+	assert_bool(heavy.can_equip(strong.state)).is_true()
 
 func test_ungated_armor_admits_anyone() -> void:
 	var light := _make_armor(3)   # no minimums, no maximums = no gate
 	var frail := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.CON: 0})
-	assert_bool(light.can_equip(frail)).is_true()
+	assert_bool(light.can_equip(frail.state)).is_true()
 
 func test_stat_maximum_is_an_inverted_gate() -> void:
 	var bulky := _make_armor(2)
 	bulky.stat_maximums[Stats.Stat.DEX] = 4
 	var nimble := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.DEX: 5})
 	var slow := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.DEX: 4})
-	assert_bool(bulky.can_equip(nimble)).is_false()
-	assert_bool(bulky.can_equip(slow)).is_true()   # the boundary value passes
+	assert_bool(bulky.can_equip(nimble.state)).is_false()
+	assert_bool(bulky.can_equip(slow.state)).is_true()   # the boundary value passes
 
 func test_minimum_and_maximum_gates_compose() -> void:
 	# A piece can demand a floor on one stat and a ceiling on another at once.
@@ -84,9 +84,9 @@ func test_minimum_and_maximum_gates_compose() -> void:
 	var qualified := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.CON: 7, Stats.Stat.DEX: 3})
 	var too_nimble := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.CON: 7, Stats.Stat.DEX: 6})
 	var too_weak := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(2, 0), {Stats.Stat.CON: 4, Stats.Stat.DEX: 3})
-	assert_bool(braced.can_equip(qualified)).is_true()
-	assert_bool(braced.can_equip(too_nimble)).is_false()
-	assert_bool(braced.can_equip(too_weak)).is_false()
+	assert_bool(braced.can_equip(qualified.state)).is_true()
+	assert_bool(braced.can_equip(too_nimble.state)).is_false()
+	assert_bool(braced.can_equip(too_weak.state)).is_false()
 
 func test_requirement_text_reads_both_directions() -> void:
 	var braced := _make_armor(4, {Stats.Stat.CON: 6})

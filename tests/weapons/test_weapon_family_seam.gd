@@ -123,7 +123,7 @@ func _disturb(weapon: WeaponInstance, family: WeaponData.WeaponType) -> void:
 			# Driven through the REAL door (#97), not by writing `charges`: the injection is the
 			# only verb in this table that reads the wielder, so a direct set would prove the
 			# storage is per-instance while leaving the seam that fetches it untested.
-			weapon.reload(_holder_with_a_matching_vial(weapon))
+			weapon.reload(_holder_with_a_matching_vial(weapon).state)
 
 
 func _is_stateful(family: WeaponData.WeaponType) -> bool:

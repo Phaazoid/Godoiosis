@@ -52,15 +52,15 @@ func test_a_main_attack_mod_bumps_the_main_and_leaves_the_extra_alone() -> void:
 	var extra := _attack("Extra")
 	var weapon := _weapon(main, extra)
 	unit.equipped_weapon = weapon
-	var was_main := weapon.base_damage(unit, main)
-	var was_extra := weapon.base_damage(unit, extra)
+	var was_main := weapon.base_damage(unit.state, main)
+	var was_extra := weapon.base_damage(unit.state, extra)
 
 	var mod := _mod(WeaponModData.AppliesTo.MAIN_ATTACK)
 	mod.power_delta = BUMP
 	_fit(weapon, mod)
 
-	assert_int(weapon.base_damage(unit, main)).is_equal(was_main + BUMP)
-	assert_int(weapon.base_damage(unit, extra)).is_equal(was_extra)
+	assert_int(weapon.base_damage(unit.state, main)).is_equal(was_main + BUMP)
+	assert_int(weapon.base_damage(unit.state, extra)).is_equal(was_extra)
 
 func test_the_default_reaches_every_attack_the_weapon_fires() -> void:
 	var unit := _wielder()
@@ -68,16 +68,16 @@ func test_the_default_reaches_every_attack_the_weapon_fires() -> void:
 	var extra := _attack("Extra")
 	var weapon := _weapon(main, extra)
 	unit.equipped_weapon = weapon
-	var was_main := weapon.base_damage(unit, main)
-	var was_extra := weapon.base_damage(unit, extra)
+	var was_main := weapon.base_damage(unit.state, main)
+	var was_extra := weapon.base_damage(unit.state, extra)
 
 	var mod := WeaponModData.new()	 # deliberately NOT via _mod: an un-authored mod is the case
 	mod.power_delta = BUMP
 	assert_int(mod.applies_to).is_equal(WeaponModData.AppliesTo.EVERY_ATTACK)
 	_fit(weapon, mod)
 
-	assert_int(weapon.base_damage(unit, main)).is_equal(was_main + BUMP)
-	assert_int(weapon.base_damage(unit, extra)).is_equal(was_extra + BUMP)
+	assert_int(weapon.base_damage(unit.state, main)).is_equal(was_main + BUMP)
+	assert_int(weapon.base_damage(unit.state, extra)).is_equal(was_extra + BUMP)
 
 # --- Element ---
 
@@ -92,8 +92,8 @@ func test_a_main_attack_mod_elements_only_the_main() -> void:
 	mod.added_element = Elemental.Element.FIRE
 	_fit(weapon, mod)
 
-	assert_array(weapon.get_elements(unit, main)).contains([Elemental.Element.FIRE])
-	assert_array(weapon.get_elements(unit, extra)).is_empty()
+	assert_array(weapon.get_elements(unit.state, main)).contains([Elemental.Element.FIRE])
+	assert_array(weapon.get_elements(unit.state, extra)).is_empty()
 
 # --- Scaling ---
 
@@ -103,8 +103,8 @@ func test_a_main_attack_mod_shifts_only_the_mains_blend() -> void:
 	var extra := _attack("Extra")
 	var weapon := _weapon(main, extra)
 	unit.equipped_weapon = weapon
-	var was_main := weapon.base_damage(unit, main)
-	var was_extra := weapon.base_damage(unit, extra)
+	var was_main := weapon.base_damage(unit.state, main)
+	var was_extra := weapon.base_damage(unit.state, extra)
 
 	# Half the weight onto the stat this wielder is WORST at, so the shift has to move the number.
 	var mod := _mod(WeaponModData.AppliesTo.MAIN_ATTACK)
@@ -112,8 +112,8 @@ func test_a_main_attack_mod_shifts_only_the_mains_blend() -> void:
 	mod.family = WeaponData.WeaponType.CHAINSWORD
 	_fit(weapon, mod)
 
-	assert_int(weapon.base_damage(unit, main)).is_less(was_main)
-	assert_int(weapon.base_damage(unit, extra)).is_equal(was_extra)
+	assert_int(weapon.base_damage(unit.state, main)).is_less(was_main)
+	assert_int(weapon.base_damage(unit.state, extra)).is_equal(was_extra)
 
 # --- The boundary the selector does NOT cross ---
 
@@ -131,4 +131,4 @@ func test_a_main_attack_mod_still_grants_the_attacks_it_carries() -> void:
 	mod.granted_attacks = carried
 	_fit(weapon, mod)
 
-	assert_array(weapon.available_attacks(unit)).contains([granted])
+	assert_array(weapon.available_attacks(unit.state)).contains([granted])

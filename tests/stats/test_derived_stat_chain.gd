@@ -168,8 +168,8 @@ func test_wear_gates_still_ignore_the_wearers_own_gear() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 5}, false)
 	var gated := ArmorData.new()
 	gated.stat_minimums[Stats.Stat.CON] = 8
-	assert_bool(gated.can_equip(unit)).is_false()
+	assert_bool(gated.can_equip(unit.state)).is_false()
 
 	unit.worn_armor = _armor({Stats.Stat.CON: 5})            # effective CON is now 10...
 	assert_int(unit.get_effective_stat(Stats.Stat.CON)).is_equal(10)
-	assert_bool(gated.can_equip(unit)).is_false()            # ...but the gate still says no
+	assert_bool(gated.can_equip(unit.state)).is_false()            # ...but the gate still says no

@@ -46,13 +46,13 @@ func test_a_mod_can_give_a_shove_to_an_attack_that_had_none() -> void:
 	var swing := _attack(0, false)
 	var weapon := _weapon(swing)
 	hero.equipped_weapon = weapon
-	assert_int(weapon.effective_knockback(hero, swing)).is_equal(0)     # the contrast
+	assert_int(weapon.effective_knockback(hero.state, swing)).is_equal(0)     # the contrast
 
 	var mod := WeaponModData.new()
 	mod.knockback_delta = 1
 	_fit(weapon, 0, mod)
 
-	assert_int(weapon.effective_knockback(hero, swing)).is_equal(1)
+	assert_int(weapon.effective_knockback(hero.state, swing)).is_equal(1)
 
 func test_a_shove_driven_below_zero_is_no_shove_rather_than_a_pull() -> void:
 	var hero := _unit(Team.Faction.PLAYER, Vector2i(0, 0))
@@ -64,7 +64,7 @@ func test_a_shove_driven_below_zero_is_no_shove_rather_than_a_pull() -> void:
 	mod.knockback_delta = -3
 	_fit(weapon, 0, mod)
 
-	assert_int(weapon.effective_knockback(hero, swing)).is_equal(0)
+	assert_int(weapon.effective_knockback(hero.state, swing)).is_equal(0)
 
 func test_a_main_attack_mod_does_not_shove_the_extras() -> void:
 	var hero := _unit(Team.Faction.PLAYER, Vector2i(0, 0))
@@ -78,8 +78,8 @@ func test_a_main_attack_mod_does_not_shove_the_extras() -> void:
 	mod.knockback_delta = 1
 	_fit(weapon, 0, mod)
 
-	assert_int(weapon.effective_knockback(hero, swing)).is_equal(1)
-	assert_int(weapon.effective_knockback(hero, extra)).is_equal(0)
+	assert_int(weapon.effective_knockback(hero.state, swing)).is_equal(1)
+	assert_int(weapon.effective_knockback(hero.state, extra)).is_equal(0)
 
 # --- Ally splash ---
 
@@ -133,11 +133,11 @@ func test_a_mod_can_replace_the_kind_of_the_attacks_it_reaches() -> void:
 	var swing := _attack(0, false)
 	var weapon := _weapon(swing)
 	hero.equipped_weapon = weapon
-	assert_that(weapon.effective_kind(hero, swing)).is_equal(AttackData.Kind.BLUNT)   # the contrast
+	assert_that(weapon.effective_kind(hero.state, swing)).is_equal(AttackData.Kind.BLUNT)   # the contrast
 
 	_fit(weapon, 0, _spike(AttackData.Kind.PIERCE))
 
-	assert_that(weapon.effective_kind(hero, swing)).is_equal(AttackData.Kind.PIERCE)
+	assert_that(weapon.effective_kind(hero.state, swing)).is_equal(AttackData.Kind.PIERCE)
 
 func test_a_main_attack_kind_mod_leaves_the_extras_alone() -> void:
 	var hero := _unit(Team.Faction.PLAYER, Vector2i(0, 0))
@@ -150,8 +150,8 @@ func test_a_main_attack_kind_mod_leaves_the_extras_alone() -> void:
 	mod.applies_to = WeaponModData.AppliesTo.MAIN_ATTACK
 	_fit(weapon, 0, mod)
 
-	assert_that(weapon.effective_kind(hero, swing)).is_equal(AttackData.Kind.SLASH)
-	assert_that(weapon.effective_kind(hero, extra)).is_equal(AttackData.Kind.BLUNT)
+	assert_that(weapon.effective_kind(hero.state, swing)).is_equal(AttackData.Kind.SLASH)
+	assert_that(weapon.effective_kind(hero.state, extra)).is_equal(AttackData.Kind.BLUNT)
 
 func test_a_kind_override_never_makes_a_utility_swing_deliver_a_kind() -> void:
 	# NONE is a rule off the flags, not a stored value -- and the rule has ONE home, so a modded
@@ -163,7 +163,7 @@ func test_a_kind_override_never_makes_a_utility_swing_deliver_a_kind() -> void:
 	hero.equipped_weapon = weapon
 	_fit(weapon, 0, _spike(AttackData.Kind.PIERCE))
 
-	assert_that(weapon.effective_kind(hero, shove)).is_equal(AttackData.Kind.NONE)
+	assert_that(weapon.effective_kind(hero.state, shove)).is_equal(AttackData.Kind.NONE)
 	assert_that(shove.delivered_kind()).is_equal(AttackData.Kind.NONE)
 
 func test_a_heal_delivers_no_kind_whatever_is_authored() -> void:
@@ -194,5 +194,5 @@ func test_the_readout_names_the_composed_kind() -> void:
 	hero.equipped_weapon = weapon
 	_fit(weapon, 0, _spike(AttackData.Kind.PIERCE))
 
-	assert_str(weapon.attack_detail(hero, swing)).contains("pierce")
-	assert_str(weapon.attack_detail(hero, swing)).not_contains("blunt")
+	assert_str(weapon.attack_detail(hero.state, swing)).contains("pierce")
+	assert_str(weapon.attack_detail(hero.state, swing)).not_contains("blunt")

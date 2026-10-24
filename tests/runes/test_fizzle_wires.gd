@@ -131,7 +131,7 @@ func test_the_queue_gate_refuses_a_carving_that_fizzles_and_says_why() -> void:
 	var carving := _tied()
 	var caster := _alchemist(PLAYER, DRY, carving)
 	var foe := _foe(DRY_FOE)
-	var expected := CellSubstances.fizzle_reason(carving, DRY, _board(), caster)
+	var expected := CellSubstances.fizzle_reason(carving, DRY, _board(), caster.state)
 	assert_str(expected).override_failure_message("fixture: the carving must fizzle at DRY").is_not_empty()
 
 	var refusal := _sm.try_queue_action(caster.squad, _aim(caster, carving, foe.movement.cell))
@@ -292,7 +292,7 @@ func test_a_watch_shot_whose_carving_fizzles_lands_nothing() -> void:
 func test_the_queue_gate_refuses_a_watch_that_fizzles_and_says_why() -> void:
 	var carving := _tied(true)
 	var watcher := _alchemist(PLAYER, DRY, carving)
-	var expected := CellSubstances.fizzle_reason(carving, DRY, _board(), watcher)
+	var expected := CellSubstances.fizzle_reason(carving, DRY, _board(), watcher.state)
 	assert_str(expected).override_failure_message("fixture: the carving must fizzle at DRY").is_not_empty()
 
 	var refusal := _sm.try_queue_action(watcher.squad, _watch(watcher, carving, DRY_FOE))

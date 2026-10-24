@@ -129,7 +129,7 @@ func test_a_refused_Use_carries_the_gates_own_words() -> void:
 	var second := _vial()
 	unit.add_item(second)
 
-	var reason: String = second.use_block_reason(unit)
+	var reason: String = second.use_block_reason(unit.state)
 	assert_str(reason).override_failure_message(
 			"fixture: this vial does not actually refuse, so the case pins nothing").is_not_empty()
 

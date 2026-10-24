@@ -438,7 +438,7 @@ func test_a_restored_debuff_does_not_strip_saved_armor() -> void:
 
 	assert_object(loaded.worn_armor).is_not_null()
 	assert_object(loaded.worn_armor).is_same(loaded.inventory[0])
-	assert_bool(loaded.worn_armor.can_equip(loaded)).is_false()   # illegal, and kept anyway
+	assert_bool(loaded.worn_armor.can_equip(loaded.state)).is_false()   # illegal, and kept anyway
 
 
 # ==============================================================================

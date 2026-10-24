@@ -74,8 +74,8 @@ func test_no_kind_answers_the_boolean_differently_from_its_reason() -> void:
 			pass_overrides[stat] = piece.stat_maximums[stat]
 			fail_overrides[stat] = piece.stat_maximums[stat] + 1
 		for wearer: Unit in [_wearer(pass_overrides), _wearer(fail_overrides)]:
-			var reason: String = piece.can_equip_reason(wearer)
-			assert_bool(piece.can_equip(wearer)).override_failure_message(
+			var reason: String = piece.can_equip_reason(wearer.state)
+			assert_bool(piece.can_equip(wearer.state)).override_failure_message(
 				"%s: can_equip and its reason disagree (reason was %s)"
 				% [name, "empty" if reason == "" else "\"%s\"" % reason]).is_equal(reason.is_empty())
 			if reason == "":
@@ -89,8 +89,8 @@ func test_no_kind_answers_the_boolean_differently_from_its_reason() -> void:
 	for name: String in runes:
 		var rune: RuneData = runes[name]
 		for wielder: Unit in [adept, novice]:
-			var reason: String = rune.can_equip_reason(wielder)
-			assert_bool(rune.can_equip(wielder)).override_failure_message(
+			var reason: String = rune.can_equip_reason(wielder.state)
+			assert_bool(rune.can_equip(wielder.state)).override_failure_message(
 				"%s: can_equip and its reason disagree (reason was %s)"
 				% [name, "empty" if reason == "" else "\"%s\"" % reason]).is_equal(reason.is_empty())
 			if reason == "":
@@ -119,7 +119,7 @@ func test_armor_names_every_gate_it_fails_and_how_far_short() -> void:
 	plate.stat_minimums[Stats.Stat.CON] = 8
 	plate.stat_maximums[Stats.Stat.DEX] = 4
 
-	var reason: String = plate.can_equip_reason(_wearer({Stats.Stat.CON: 5, Stats.Stat.DEX: 9}))
+	var reason: String = plate.can_equip_reason(_wearer({Stats.Stat.CON: 5, Stats.Stat.DEX: 9}).state)
 	assert_str(reason).override_failure_message(
 		"the floor is not named: %s" % reason).contains("CON 8+")
 	assert_str(reason).override_failure_message(
@@ -146,19 +146,19 @@ func test_a_runes_refusal_carries_its_carvings_own_sentences() -> void:
 	assert_bool(rune.inscribe(hotter)).is_true()
 
 	var novice := _wearer({})
-	var reason: String = rune.can_equip_reason(novice)
+	var reason: String = rune.can_equip_reason(novice.state)
 	assert_str(reason).override_failure_message("a dead rune said nothing").is_not_empty()
 	assert_str(reason).override_failure_message(
 		"the carving's own sentence did not reach the equip refusal: %s" % reason) \
-		.contains(hot.channel_block_reason(novice, rune.temper))
+		.contains(hot.channel_block_reason(novice.state, rune.temper))
 
 	# One channelable carving is enough, and then there is nothing to say.
 	var adept := _adept()
-	assert_str(rune.can_equip_reason(adept)).override_failure_message(
+	assert_str(rune.can_equip_reason(adept.state)).override_failure_message(
 		"a rune with a live carving still refused").is_empty()
 
 	# A rune with nothing carved on it fails for everyone, and says which kind of nothing.
 	var blank := RuneData.new()
 	blank.size = RuneData.Size.SMALL
-	assert_str(blank.can_equip_reason(adept)).override_failure_message(
+	assert_str(blank.can_equip_reason(adept.state)).override_failure_message(
 		"a blank rune refused silently").is_not_empty()

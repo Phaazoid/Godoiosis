@@ -80,7 +80,7 @@ func test_a_refusal_arrives_in_the_gates_own_words() -> void:
 	var heavy := _plate(999)
 	var refused: Dictionary = _sess.gear("A", "wear", _carry(heavy))
 	assert_bool(refused.ok).override_failure_message("a plate nobody can wear was worn").is_false()
-	assert_str(str(refused.get("error", ""))).is_equal(heavy.can_equip_reason(_hero))
+	assert_str(str(refused.get("error", ""))).is_equal(heavy.can_equip_reason(_hero.state))
 	assert_bool((_sess.gear("A", "polish", 0) as Dictionary).ok).is_false()
 
 

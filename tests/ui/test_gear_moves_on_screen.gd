@@ -379,7 +379,7 @@ func test_holding_gear_over_a_card_previews_what_it_would_do() -> void:
 	wearable.def_power = 3
 	wearable.stat_modifiers[Stats.Stat.DEX] = -2
 	mc.loadout().stash.append(wearable)
-	assert_str(wearable.can_equip_reason(card.unit)).override_failure_message(
+	assert_str(wearable.can_equip_reason(card.unit.state)).override_failure_message(
 		"fixture: the vest refuses this unit, so the preview would show a reason instead").is_empty()
 
 	screen._on_gear_clicked(wearable, null)
@@ -436,7 +436,7 @@ func test_a_piece_the_unit_cannot_use_shows_its_reason_instead_of_numbers() -> v
 	blocked.def_power = 9
 	blocked.stat_minimums[Stats.Stat.CON] = 99
 	mc.loadout().stash.append(blocked)
-	assert_str(blocked.can_equip_reason(card.unit)).override_failure_message(
+	assert_str(blocked.can_equip_reason(card.unit.state)).override_failure_message(
 		"fixture: the slab does not actually refuse anybody").is_not_empty()
 
 	screen._on_gear_clicked(blocked, null)
@@ -448,4 +448,4 @@ func test_a_piece_the_unit_cannot_use_shows_its_reason_instead_of_numbers() -> v
 			"a piece the unit cannot wear still promised it numbers").is_false()
 	assert_str(screen._stash_hint.text).override_failure_message(
 		"the hover said nothing at all: %s" % screen._stash_hint.text
-		).contains(blocked.can_equip_reason(card.unit))
+		).contains(blocked.can_equip_reason(card.unit.state))

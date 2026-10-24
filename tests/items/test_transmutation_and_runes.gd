@@ -40,19 +40,19 @@ func _carving(recipe: String, power: int = 0) -> TransmutationData:
 
 func test_a_single_element_delivery_scales_off_that_aura() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 7 })
-	assert_int(_carving("Push(F2)", 5).base_damage(u)).is_equal(12)   # 5 + 7
+	assert_int(_carving("Push(F2)", 5).base_damage(u.state)).is_equal(12)   # 5 + 7
 
 # Lightning is one substance holding two elements, so the hit scales off both.
 func test_a_multi_element_delivery_sums_its_elements() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.AETHER: 2, Elemental.Element.FIRE: 3 })
-	assert_int(_carving("Push(QF)", 5).base_damage(u)).is_equal(10)   # 5 + 2 + 3
+	assert_int(_carving("Push(QF)", 5).base_damage(u.state)).is_equal(10)   # 5 + 2 + 3
 
 # A Break leaves both halves at the target, so it scales off both.
 func test_a_break_scales_off_both_halves_it_leaves() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 3, Elemental.Element.WATER: 4 })
 	var t: TransmutationData = _carving("Break(F, W)", 5)
 	assert_int(t.tier()).is_equal(2)
-	assert_int(t.base_damage(u)).is_equal(12)   # 5 + 3 + 4
+	assert_int(t.base_damage(u.state)).is_equal(12)   # 5 + 3 + 4
 
 # Flame is two fire atoms and a deeper recipe spends more of them, but the hit still scales off fire ONCE.
 func test_damage_counts_each_delivered_element_once_however_many_atoms() -> void:
@@ -60,7 +60,7 @@ func test_damage_counts_each_delivered_element_once_however_many_atoms() -> void
 	var deep: TransmutationData = _carving("Push(F) + Push(F2)", 5)
 	assert_int(deep.demand_of(Elemental.Element.FIRE)).override_failure_message(
 		"fixture: the recipe should demand more than one fire").is_greater(1)
-	assert_int(deep.base_damage(u)).is_equal(8)   # 5 + 3, not 5 + 3 * 3
+	assert_int(deep.base_damage(u.state)).is_equal(8)   # 5 + 3, not 5 + 3 * 3
 
 # Air the recipe SPENDS (Break(F, A) frees the fire) is not air it DELIVERS (it pushes the flame).
 func test_an_element_the_recipe_only_spends_adds_no_damage() -> void:
@@ -68,7 +68,7 @@ func test_an_element_the_recipe_only_spends_adds_no_damage() -> void:
 	var t: TransmutationData = _carving("Break(F, A) + Push(F2)", 5)
 	assert_int(t.demand_of(Elemental.Element.AIR)).override_failure_message(
 		"fixture: the recipe should spend air").is_greater(0)
-	assert_int(t.base_damage(u)).is_equal(8)   # 5 + 3; the 4 air buys nothing
+	assert_int(t.base_damage(u.state)).is_equal(8)   # 5 + 3; the 4 air buys nothing
 
 # --- materia empowerment (#694): +1 EFFECTIVE aura in a delivered element the caster can draw on ---
 # WHERE that list comes from is Materia's (tests/runes/test_materia_sources.gd); here it is
@@ -77,30 +77,30 @@ func test_an_element_the_recipe_only_spends_adds_no_damage() -> void:
 func test_empowerment_adds_one_per_matching_delivered_element() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 7 })
 	var t: TransmutationData = _carving("Push(F2)", 5)
-	assert_int(t.base_damage(u, [Elemental.Element.FIRE])).is_equal(13)   # 12 + 1
+	assert_int(t.base_damage(u.state, [Elemental.Element.FIRE])).is_equal(13)   # 12 + 1
 
 # Empowerment is +1 aura in an element the hit scales off, so it counts exactly as often as the aura
 # does -- once, however many atoms the recipe spends.
 func test_empowerment_counts_once_per_delivered_element() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 3 })
 	var deep: TransmutationData = _carving("Push(F) + Push(F2)", 5)
-	assert_int(deep.base_damage(u, [Elemental.Element.FIRE])).is_equal(9)   # 8 + 1
+	assert_int(deep.base_damage(u.state, [Elemental.Element.FIRE])).is_equal(9)   # 8 + 1
 
 func test_empowerment_reaches_each_element_of_a_multi_element_delivery() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.AETHER: 2, Elemental.Element.FIRE: 3 })
 	var t: TransmutationData = _carving("Push(QF)", 5)
-	assert_int(t.base_damage(u, [Elemental.Element.AETHER, Elemental.Element.FIRE])).is_equal(12)   # 10 + 1 + 1
+	assert_int(t.base_damage(u.state, [Elemental.Element.AETHER, Elemental.Element.FIRE])).is_equal(12)   # 10 + 1 + 1
 
 func test_empowerment_in_an_element_the_carving_lacks_does_nothing() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 7 })
 	var t: TransmutationData = _carving("Push(F2)", 5)
-	assert_int(t.base_damage(u, [Elemental.Element.WATER])).is_equal(12)   # unchanged
+	assert_int(t.base_damage(u.state, [Elemental.Element.WATER])).is_equal(12)   # unchanged
 
 # A demanded element is not a delivered one, so standing on its source buys nothing either.
 func test_empowerment_in_an_element_the_recipe_only_spends_does_nothing() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 3, Elemental.Element.AIR: 4 })
 	var t: TransmutationData = _carving("Break(F, A) + Push(F2)", 5)
-	assert_int(t.base_damage(u, [Elemental.Element.AIR])).is_equal(t.base_damage(u))
+	assert_int(t.base_damage(u.state, [Elemental.Element.AIR])).is_equal(t.base_damage(u.state))
 
 # Empowerment is SCALING, and a utility carving suppresses scaling entirely (#126) -- which is
 # the structural reason #695's authored form exists: the fallback can never reach one.
@@ -108,7 +108,7 @@ func test_a_damageless_carving_gains_nothing_from_empowerment() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.AIR: 4 })
 	var t: TransmutationData = _carving("Push(A2)", 5)
 	t.deals_no_damage = true
-	assert_int(t.base_damage(u, [Elemental.Element.AIR])).is_equal(0)
+	assert_int(t.base_damage(u.state, [Elemental.Element.AIR])).is_equal(0)
 
 # An element the wielder has NO pool in still gains the point: empowerment is drawn from the
 # ground, not from talent. (Whether the carving may be channelled at all is a different
@@ -116,7 +116,7 @@ func test_a_damageless_carving_gains_nothing_from_empowerment() -> void:
 func test_empowerment_applies_without_a_pool_in_that_element() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 2 })
 	var t: TransmutationData = _carving("Break(F, W)", 5)
-	assert_int(t.base_damage(u, [Elemental.Element.WATER])).is_equal(8)   # 5 + 2 + 0 + 1
+	assert_int(t.base_damage(u.state, [Elemental.Element.WATER])).is_equal(8)   # 5 + 2 + 0 + 1
 
 # --- channeling gate: anchor + wildcards over the DEMAND (dev 2026-08-10, replacing the
 # 2026-07-04 temper/trained-leeway/strain model — repeal record in transmutation-model-proposal.md).
@@ -125,7 +125,7 @@ func test_empowerment_applies_without_a_pool_in_that_element() -> void:
 
 func test_rebecca_no_aura_anywhere_channels_nothing() -> void:
 	var u: Unit = _alchemist({})   # no aura, no affinity
-	assert_bool(_carving("Push(F)").can_channel(u, Elemental.Element.FIRE)).is_false()
+	assert_bool(_carving("Push(F)").can_channel(u.state, Elemental.Element.FIRE)).is_false()
 
 # (The old stray-aura-outside-affinity case left with the ladder's has_any_affinity branch: the
 # anchor reads AURA, and "aura never exists outside affinity" is the SEEDING seam's invariant —
@@ -136,34 +136,34 @@ func test_the_anchor_needs_aura_in_one_of_the_carvings_own_elements() -> void:
 	# Water-5 is real training, but this recipe demands none of it — wildcards never anchor.
 	var u: Unit = _alchemist({ Elemental.Element.WATER: 5 })
 	var pair: TransmutationData = _carving("Break(F, A)")
-	assert_bool(pair.can_channel(u, Elemental.Element.FIRE)).is_false()
+	assert_bool(pair.can_channel(u.state, Elemental.Element.FIRE)).is_false()
 
 func test_a_maim_taxed_pool_at_zero_loses_the_anchor() -> void:
 	# Affinity (the birthright) persists at aura 0; the anchor reads the POINT, so it's gone.
 	var u: Unit = _alchemist({ Elemental.Element.AIR: 0 })
-	assert_bool(_carving("Push(A)").can_channel(u, Elemental.Element.AIR)).is_false()
+	assert_bool(_carving("Push(A)").can_channel(u.state, Elemental.Element.AIR)).is_false()
 
 func test_the_motivating_case_one_shared_element_plus_the_free_wildcard() -> void:
 	# Aldin: aether-1 only, a recipe asking 1 Aether and 1 Air — anchor on aether, deficit 1 <= pool
 	# A's universal +1, on ANY rune (here air-tempered, where his aether gives pool B nothing).
 	var u: Unit = _alchemist({ Elemental.Element.AETHER: 1 })
 	var wind: TransmutationData = _carving("Break(Q, A)")
-	assert_bool(wind.can_channel(u, Elemental.Element.AIR)).is_true()
-	assert_int(wind.total_deficit(u)).is_equal(1)
+	assert_bool(wind.can_channel(u.state, Elemental.Element.AIR)).is_true()
+	assert_int(wind.total_deficit(u.state)).is_equal(1)
 
 func test_a_fully_covered_carving_spends_no_wildcards() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
 	var t: TransmutationData = _carving("Push(F)")
-	assert_bool(t.can_channel(u, Elemental.Element.FIRE)).is_true()
-	assert_int(t.total_deficit(u)).is_equal(0)
+	assert_bool(t.can_channel(u.state, Elemental.Element.FIRE)).is_true()
+	assert_int(t.total_deficit(u.state)).is_equal(0)
 
 func test_the_free_wildcard_covers_one_point_of_depth_too() -> void:
 	# "3-Fire demands true fire-3" is repealed: fire-1 channels a Fire 2 demand via pool A. Depth and
 	# breadth are one currency now — but only one point of it on an unmatched rune.
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
-	assert_bool(_carving("Push(F2)").can_channel(u, Elemental.Element.FIRE)).is_true()
+	assert_bool(_carving("Push(F2)").can_channel(u.state, Elemental.Element.FIRE)).is_true()
 	var athanor: TransmutationData = _carving("Push(F) + Push(F2)")   # demand Fire 3
-	assert_bool(athanor.can_channel(u, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
+	assert_bool(athanor.can_channel(u.state, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
 
 func test_spare_temper_aura_is_the_second_pool() -> void:
 	# Dev's example: Air-3, a recipe asking 1 Fire, 1 Air, 1 Water — on the air rune spare 3-1 = 2
@@ -171,8 +171,8 @@ func test_spare_temper_aura_is_the_second_pool() -> void:
 	# refuses.
 	var u: Unit = _alchemist({ Elemental.Element.AIR: 3 })
 	var triple: TransmutationData = _carving("Break(F, A) + Push(W)")
-	assert_bool(triple.can_channel(u, Elemental.Element.AIR)).is_true()
-	assert_bool(triple.can_channel(u, Elemental.Element.FIRE)).is_false()
+	assert_bool(triple.can_channel(u.state, Elemental.Element.AIR)).is_true()
+	assert_bool(triple.can_channel(u.state, Elemental.Element.FIRE)).is_false()
 
 func test_the_pools_never_stack_and_the_pool_is_the_SPARE() -> void:
 	# Air-2, same triple, air rune: deficit 2, spare = 2-1 = 1, capacity = max(1, 1) = 1 ->
@@ -180,9 +180,9 @@ func test_the_pools_never_stack_and_the_pool_is_the_SPARE() -> void:
 	# channel it, and a full-aura pool (max(1, 2) = 2) would channel it. Falsified against each.
 	var u: Unit = _alchemist({ Elemental.Element.AIR: 2 })
 	var triple: TransmutationData = _carving("Break(F, A) + Push(W)")
-	assert_bool(triple.can_channel(u, Elemental.Element.AIR)).is_false()
-	assert_int(triple.total_deficit(u)).is_equal(2)
-	assert_int(triple.wildcard_capacity(u, Elemental.Element.AIR)).is_equal(1)
+	assert_bool(triple.can_channel(u.state, Elemental.Element.AIR)).is_false()
+	assert_int(triple.total_deficit(u.state)).is_equal(2)
+	assert_int(triple.wildcard_capacity(u.state, Elemental.Element.AIR)).is_equal(1)
 
 func test_isaac_alkahest_breadth_now_carries_one_point_of_depth() -> void:
 	# Universal breadth, trained depth — amended 2026-08-10: pool A hands Isaac +1 depth in
@@ -191,9 +191,9 @@ func test_isaac_alkahest_breadth_now_carries_one_point_of_depth() -> void:
 		Elemental.Element.FIRE: 1, Elemental.Element.WATER: 1, Elemental.Element.EARTH: 1,
 		Elemental.Element.AIR: 1, Elemental.Element.AETHER: 1,
 	})
-	assert_bool(_carving("Push(F2)").can_channel(isaac, Elemental.Element.FIRE)).is_true()
+	assert_bool(_carving("Push(F2)").can_channel(isaac.state, Elemental.Element.FIRE)).is_true()
 	var athanor: TransmutationData = _carving("Push(F) + Push(F2)")
-	assert_bool(athanor.can_channel(isaac, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
+	assert_bool(athanor.can_channel(isaac.state, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
 
 # --- rune capacity, counted in VERBS (Phase 2) ---
 
