@@ -668,3 +668,32 @@ What this means:
 - **If an aim hover ever feels sticky,** measure the restore first. It re-resolves the whole real
   queue only to put published shoves back, and a resolve that published nothing would make it
   unnecessary.
+
+---
+
+## 2026-10-23 — the trailing arrow walks (#1449), and Group Move hover has drifted to a frame
+
+`GroupMoveSolver.plan` now asks how far each MOVING member stands from the leader's start in walking
+distance (`SquadCohesion.hops`), so it can compare it with the destination field the solver already
+builds. That is one more walk per moving member per `plan()`, so per hovered cell.
+
+**The one-cell read stops early, and that is what keeps it cheap.** `hops` is the start field
+walked only until it reaches the member (`path_hops`' `until`). Measured in one process, so both
+numbers share the same machine load, over all 31 followable destinations of Castle Assault's
+5-member squad, 8 rounds, 3 runs:
+
+| Per `plan()` call | Cost |
+|---|---|
+| The `hops` reads it now makes | 0.21–0.22 ms |
+| Full start fields instead (the first draft) | 1.06–1.10 ms |
+| `plan()` itself, same load | 12.1–12.6 ms |
+
+Separate runs could not show this. Other Godot processes on the machine moved `plan()`'s median
+between 10.8 and 17.2 ms from one run to the next, which is why the delta was measured in-process.
+
+**The finding that matters is older than this change: Group Move hover is at the frame budget on
+`main`.** `tools/profile_group_move.gd`'s hover stamp was 15.9–21.3 ms across four runs before
+#1449, and 16.7–17.3 ms across four after. This file recorded ~8.0 ms on 2026-08-04, and `plan()`
+alone was 7.7 ms then against 10.4–13.3 ms now. Nobody has bisected the drift. The profiler's
+`GROUND_TRUTH` no longer matches either, because Castle Assault's squad has moved since 2026-07-26:
+its plan signature was identical before and after #1449, so that mismatch is not a behaviour change.
