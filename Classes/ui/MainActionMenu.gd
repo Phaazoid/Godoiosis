@@ -221,9 +221,10 @@ func category_display(group: int, unit: Unit) -> Dictionary:
 	return CATEGORIES[group]
 
 
-# Two slices with one name is a bug however it arose -- and it arises HERE by construction: a
+# Two slices with one name is a bug however it arose -- and it arises HERE by construction, twice: a
 # rune's default attack is also one of its carvings, so the ATTACK and TRANSMUTATION expanders
-# both offer it. First listing wins, so ACTION_DATA's order decides which.
+# both offer it; and a watch main is also one of the weapon's watches (#1440), so ATTACK and
+# WEAPON_ACTION both offer it. First listing wins, so ACTION_DATA's order decides which.
 func _append_unique(bucket: Array, node: Dictionary) -> void:
 	var node_name := String(node.get("name", ""))
 	for existing: Dictionary in bucket:
@@ -275,11 +276,14 @@ func _attack_leaf(unit: Unit, attack: AttackData) -> Dictionary:
 # #467 round 2): the ring already lists every alternative by name, so a row saying "Attack" was a
 # second door to one of them, and its only virtue -- saving a click -- was spent the moment the
 # ring made you navigate anyway. Note what this makes newly visible: a weapon family whose main
-# attack is unnamed now says so on screen.
+# attack is unnamed now says so on screen. A main that is a watch, by any route, stands its watch
+# (#1440, dev: "If that attack is an overwatch, it should function how an overwatch functions").
 func _default_attack_children(unit: Unit) -> Array:
 	var atk := unit.get_default_attack()
 	if atk == null:
 		return []
+	if unit.attack_can_overwatch(atk):
+		return [_watch_leaf(unit, atk)]
 	return [_attack_leaf(unit, atk)]
 
 
@@ -332,11 +336,17 @@ func _transmutation_children(unit: Unit) -> Array:
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		var row := _entry(atk.display_name, _use_reason(unit, atk),
-			_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, atk))
-		rows.append(_synthetic_leaf(_with_gauge(row, unit, atk),
-			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
+		rows.append(_watch_leaf(unit, atk))
 	return rows
+
+
+# One watch row: _attack_leaf's twin, routed to watch aiming. The Overwatch rows and a watch main
+# (_default_attack_children) both build here.
+func _watch_leaf(unit: Unit, attack: AttackData) -> Dictionary:
+	var row := _entry(attack.display_name, _use_reason(unit, attack),
+		_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, attack))
+	return _synthetic_leaf(_with_gauge(row, unit, attack),
+		func(picking_unit: Unit) -> void: _pick_watch(picking_unit, attack))
 
 
 func _pick_watch(unit: Unit, attack: AttackData) -> void:

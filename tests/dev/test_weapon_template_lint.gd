@@ -61,18 +61,21 @@ func test_a_missing_main_attack_degrades_rather_than_blocks() -> void:
 	assert_int(findings[0]["severity"]).is_equal(WeaponTemplateLint.Severity.DEGRADES)
 
 
-# #590: a can_overwatch attack is watch-ONLY, so a main authored that way leaves the weapon with
-# nothing to attack with -- BLOCKS, the same tier an unset family gets and for the same reason.
-# Deliberately harsher than the missing-main rule above: a family with no main yet is a known
-# intermediate state, while a main that exists and can never fire is finished and wrong.
-func test_a_watch_only_main_blocks() -> void:
+# A watch main is a legal design (#1440, dev 2026-10-23: a watch-only weapon is "a neat power
+# tradeoff"), and so is a main that EMPOWERS into a watch -- one rule for every route. The lint once
+# BLOCKED both; this is the case that stops it coming back.
+func test_a_watch_main_reports_nothing() -> void:
 	var t := _template()
 	t.main_attack.display_name = "Overwatch"
 	t.main_attack.can_overwatch = true
-	var findings := WeaponTemplateLint.check(t)
-	assert_array(findings).is_not_empty()
-	assert_int(findings[0]["severity"]).is_equal(WeaponTemplateLint.Severity.BLOCKS)
-	assert_str(_texts(findings)).contains("Overwatch")
+	assert_array(WeaponTemplateLint.check(t)).is_empty()
+
+	t.main_attack.can_overwatch = false
+	var charged := WeaponAttackData.new()
+	charged.display_name = "Pressurised Watch"
+	charged.can_overwatch = true
+	t.main_attack.empowered_form = charged
+	assert_array(WeaponTemplateLint.check(t)).is_empty()
 
 
 # A capacity below 1 refuses every mod including a size-1 one, leaving a space the fitting UI
@@ -255,33 +258,3 @@ func test_no_shipped_template_pins_the_default_spaces() -> void:
 					and FileAccess.get_file_as_string(template.resource_path).contains("\nmod_spaces = "):
 				pinned.append(key)
 	assert_array(pinned).is_empty()
-
-
-# THE SECOND DOOR onto the same #590 rule, and the one that was open (#810 follow-up): effective_main
-# substitutes the EMPOWERED FORM while a weapon is supercharged, so an empowered form is a main too.
-# Ticking can_overwatch on Chemical_Spitter_Charged.tres passed every lint and left a supercharged
-# Spitter with zero selectable attacks -- disarmed exactly while its tank was full, which reads as a
-# tank bug. Verified by probe before the fix.
-func test_a_watch_only_empowered_form_blocks() -> void:
-	var t := _template()
-	t.main_attack.display_name = "Spray"
-	var charged := WeaponAttackData.new()
-	charged.display_name = "Pressurised Spray"
-	charged.can_overwatch = true
-	t.main_attack.empowered_form = charged
-
-	var findings := WeaponTemplateLint.check(t)
-
-	assert_array(findings).is_not_empty()
-	assert_int(findings[0]["severity"]).is_equal(WeaponTemplateLint.Severity.BLOCKS)
-	assert_str(_texts(findings)).contains("Pressurised Spray")
-
-
-# The negative half: an ordinary empowered form is the whole point of the feature and must not trip.
-func test_an_ordinary_empowered_form_is_fine() -> void:
-	var t := _template()
-	var charged := WeaponAttackData.new()
-	charged.display_name = "Pressurised Spray"
-	t.main_attack.empowered_form = charged
-
-	assert_array(WeaponTemplateLint.check(t)).is_empty()

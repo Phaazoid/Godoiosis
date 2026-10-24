@@ -282,9 +282,9 @@ static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: Bo
 # THE COUNTER, walked on its own (#710 slice 4). It was born to answer the zone clip the pass above
 # used to apply to a Sentry -- a patrol painted almost pure blue, 2 of 30 reach cells -- and #1377
 # deleted that clip, so for a unit whose counter is among its selectable attacks this now adds
-# nothing (measured in tests/ai/test_threat_field.gd rather than assumed). It stays for the counter
-# that view leaves out: a watch-only main is never fireable, yet can_ever_counter does not ask
-# can_overwatch, so it still answers a blow.
+# nothing (measured in tests/ai/test_threat_field.gd rather than assumed). It was kept for the one
+# counter that view left out, a watch main, which never counters since #1440; whether it now adds
+# anything at all is that suite's measurement to make, not yet made.
 #
 # It borrows SquadManager.can_counter's own gates rather than restating them, so a dry weapon and an
 # unauthored AttackData.can_counter both fall out for free.

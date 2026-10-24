@@ -21,18 +21,24 @@ func _data(unit_name: String, fac: Team.Faction) -> UnitData:
 	return UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), unit_name, fac)
 
 
-# A melee weapon whose main can stand watch -- one attack, so the watch and the swing are the same
-# geometry and the fixture needs no submenu.
-func _watch_weapon() -> WeaponInstance:
-	var swing := WeaponAttackData.new()
-	swing.display_name = "Swing"
-	swing.power = 4
-	swing.can_overwatch = true
-	P.point(swing, 1, 1)
+# A melee weapon whose shot and watch share one geometry, so the fixture needs no submenu: a fireable
+# main and a watch extra, the Carbine's shape. Unnamed, `attack` fires the main and `overwatch` takes
+# the watch -- a watch MAIN would refuse the unnamed `attack` (#1440).
+func _swing_weapon() -> WeaponInstance:
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
-	t.main_attack = swing
+	t.main_attack = _swing("Swing", false)
+	t.extra_attacks.assign([_swing("Watch", true)])
 	return WeaponInstance.make(t)
+
+
+func _swing(attack_name: String, watches: bool) -> WeaponAttackData:
+	var a := WeaponAttackData.new()
+	a.display_name = attack_name
+	a.power = 4
+	a.can_overwatch = watches
+	P.point(a, 1, 1)
+	return a
 
 
 func _carbine_dry() -> WeaponInstance:
@@ -55,8 +61,8 @@ func _board() -> Dictionary:
 	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 12, 12))
 	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
 	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(1, 0))
-	hero.add_item(_watch_weapon())
-	foe.add_item(_watch_weapon())
+	hero.add_item(_swing_weapon())
+	foe.add_item(_swing_weapon())
 	for u in [hero, foe]:
 		u.unit_instance.stats[Stats.Stat.MHP] = 200
 		u.set_current_hp(200)
@@ -69,7 +75,7 @@ func test_the_headless_executor_breaks_the_watch_too() -> void:
 	var sess = s.sess
 	var foe: Unit = s.foe
 	foe.arm_watch(foe.movement.cell, Vector2i(1, 1), [Vector2i(1, 1)] as Array[Vector2i],
-			(foe.get_equipped_weapon() as WeaponInstance).template.main_attack)
+			(foe.get_equipped_weapon() as WeaponInstance).template.extra_attacks[0])
 	assert_bool(foe.watch.is_armed()).is_true()
 
 	assert_bool(sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0)).ok).is_true()

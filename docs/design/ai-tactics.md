@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #1461 (2026-10-23).**
+**Canon checked through #1461 (2026-10-23); #1440 (a watch main never counters) folded in 2026-10-23.**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map *(now [`docs/architecture/ai.md`](../architecture/ai.md) → *Archetype AI*; CLAUDE.md keeps only the rule)*) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
@@ -407,7 +407,7 @@ The dev's ruling, from the 2026-10-21 audit review: *"The sentry's zone should o
 
 **What it retired.** The "bait" doctrine: an enemy in reach but outside the zone was pointedly ignored by the fork (`within` in `_engageable_enemies`), by the seek (`_reaches_into`, `_hits_from`) and at the post (#726's fallback-only turn). The lure tests that pinned it (`test_cannot_be_lured_by_enemy_in_reach_but_outside_zone`, `test_a_sentry_never_engages_an_enemy_standing_outside_its_zone`, `test_a_sentry_does_not_seek_a_target_outside_its_zone`) became tests of the new rule. The FOOTING half is exactly what it was.
 
-**The danger field followed, because it was already wrong.** `ThreatField` clipped a Sentry's opening attacks to its zone while the joint attack pass took no zone at all, so once engaged a member could hit a cell V showed as safe: an under-warning, the one direction the field must never err in. Its wire test could not see it, because the Sentry's counter rim masked the clip. The clip is gone. A Sentry's origins stay zone + post, and every attack's reach from them is drawn. `_add_counter_reach` now adds nothing for a unit whose counter is in its fire view, and it stays for one whose counter is not (a watch-only main).
+**The danger field followed, because it was already wrong.** `ThreatField` clipped a Sentry's opening attacks to its zone while the joint attack pass took no zone at all, so once engaged a member could hit a cell V showed as safe: an under-warning, the one direction the field must never err in. Its wire test could not see it, because the Sentry's counter rim masked the clip. The clip is gone. A Sentry's origins stay zone + post, and every attack's reach from them is drawn. `_add_counter_reach` now adds nothing for a unit whose counter is in its fire view, and the one it was kept for, a watch main, never counters since #1440, so whether it adds anything now is unmeasured.
 
 **Declared:** the fork reads the LEADER's default attack, as it always has. A member's longer attack fires at the post and once engaged, never on the walk home.
 
