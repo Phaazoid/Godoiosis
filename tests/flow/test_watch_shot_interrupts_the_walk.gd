@@ -77,7 +77,7 @@ func _queue_walk(unit: Unit, to_x: int) -> MoveAction:
 # whole suite reduces to this list.
 #
 # A hit is the number FALLING, not the signal firing: a stat settle re-emits hp_changed at an
-# unchanged value (Unit.reclamp_hp), and since #1174 a limb-sized blow settles one on the cell it
+# unchanged value (UnitState.reclamp_hp), and since #1174 a limb-sized blow settles one on the cell it
 # struck. `last` is boxed in an Array because a lambda captures a plain local by value.
 func _record_hits(subject: Unit, witness: Unit, into: Array[Vector2i]) -> void:
 	var last: Array[int] = [subject.get_current_hp()]

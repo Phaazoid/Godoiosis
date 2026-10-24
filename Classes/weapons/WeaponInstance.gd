@@ -465,7 +465,7 @@ func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 # right for the Attack Editor and AttackLint and wrong here, where the main is a fact about this
 # INSTANCE. One question each, rather than one function bent to serve both.
 #
-# Reads its OWN fitted mods, deliberately NOT Unit._mod_sources() -- an attack belongs to the
+# Reads its OWN fitted mods, deliberately NOT UnitState._mod_sources() -- an attack belongs to the
 # weapon that fires it, so a prosthetic leg's mod must not add a swing to the carbine in your
 # hands. That is the asymmetry against granted_abilities/stat_modifiers, which describe the
 # WIELDER and therefore union across every contributing weapon.

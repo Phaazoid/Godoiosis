@@ -154,7 +154,7 @@ func test_an_installed_prosthetics_mods_grant_without_being_equipped() -> void:
 func test_a_prosthetic_that_is_also_the_equipped_weapon_pays_out_once() -> void:
 	# add_item auto-equips the first weapon-shaped equippable and a ProstheticWeaponInstance
 	# qualifies, so one object can be BOTH the equipped weapon and a limb fitting. Counted twice,
-	# its mods pay twice -- which is what Unit._mod_sources' dedupe exists to stop.
+	# its mods pay twice -- which is what UnitState._mod_sources' dedupe exists to stop.
 	var unit := _wielder()
 	unit.unit_instance.set_proficiency(WeaponData.WeaponType.PROSTHETIC, 3)
 	var arm := WeaponInstance.make(_template(WeaponData.WeaponType.PROSTHETIC))

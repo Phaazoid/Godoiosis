@@ -144,7 +144,7 @@ func save_block_reason() -> String:
 @export var granted_abilities: Array[AbilityData] = []
 
 # Live stat contribution while its weapon contributes — the wielder's stats, not the weapon's.
-# Read live by Unit._gear_modifier and deliberately NOT applied as a stored StatEffect (#112):
+# Read live by UnitState._gear_modifier and deliberately NOT applied as a stored StatEffect (#112):
 # fitting stores nothing, so unfitting removes the contribution with no bookkeeping and a save
 # round-trip cannot desync it. Only effects with a life of their OWN get stored.
 @export var stat_modifiers: Dictionary[Stats.Stat, int] = {}
