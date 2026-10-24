@@ -19,7 +19,8 @@ class_name SquadCohesion
 # squad-up gates, the ejection sweep), `cells`/`field` draw and iterate (overlays, the solver's
 # dilation). Both read one `field`, so they cannot drift -- pinned by
 # tests/squad/test_squad_cohesion.gd. `hops` is that field read at ONE cell (Group Move's trailing
-# arrow, #1449), the same walk stopped as soon as it gets there.
+# arrow, #1449), the same walk stopped as soon as it gets there. `fields` is every member's at once,
+# for a caller that hands them on rather than have each reader walk its own (Group Move's hover).
 #
 # Cost: the walk is bounded at COH, so a field is ~2*COH^2 cells (~41 at COH 4) -- the depth-bounded
 # shape docs/performance.md measured as cheaper than the compute_move_range call beside it. Callers
@@ -34,6 +35,13 @@ class_name SquadCohesion
 
 static func field(squad: Squad, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
 	return field_of(squad.leader, center, member, board)
+
+# Unit -> field(squad, center, member, board), for every member, the leader included.
+static func fields(squad: Squad, center: Vector2i, board: BoardContext) -> Dictionary:
+	var out := {}
+	for member in squad.get_members():
+		out[member] = field(squad, center, member, board)
+	return out
 
 static func in_range(squad: Squad, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> bool:
 	return field(squad, center, member, board).has(cell)

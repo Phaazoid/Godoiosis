@@ -122,6 +122,11 @@ var leader_followable: Dictionary = {}
 # empty for a followable cell. Built by the same sweep as leader_followable and cleared beside it --
 # what turns a refused tile's tethers red, and what tells a click on one to shake rather than leave.
 var leader_stranding: Dictionary = {}
+# ...and in Group Move, the leader's own compute_move_range that sweep was built from, so the hover
+# need not search again per cell (docs/performance.md, 2026-10-23). A copy: nothing moves while the
+# mode is up, so it is stale exactly when leader_followable is, and the click and the commit still
+# search fresh. Built by enter_group_move_mode, cleared beside them.
+var group_move_range: Dictionary = {}
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(cell: Vector2i) -> void
 # Bumped by every enter_cell_pick_mode. _click_picking_target snapshots it around the callback so a
@@ -1249,7 +1254,8 @@ func enter_group_move_mode(unit: Unit):
 	# The SQUAD's range, not the leader's: what the slowest member cannot follow into cohesion gets
 	# the same grey as a squadmate's own out-of-range tiles. Swept once here — per-SQUAD work, the
 	# same cost for one destination as for forty — and the hover and click read the result.
-	var split := leader_range_split(unit, get_move_range(compute_move_range(unit), unit))
+	group_move_range = compute_move_range(unit)
+	var split := leader_range_split(unit, get_move_range(group_move_range, unit))
 	_cache_leader_split(split)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, split["green"], OverlayManager.ATLAS_COORDS)
 	show_player_reach(unit, unit.movement.cell)   # the leader's own cell; the pointer moves it
@@ -1363,6 +1369,7 @@ func exit_current_mode():
 	selected_unit = null
 	leader_followable = {}
 	leader_stranding = {}
+	group_move_range = {}
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
@@ -2022,12 +2029,14 @@ func _on_unit_died(unit: Unit):
 
 # WHERE A SQUAD MAY STAND round its leader: the UNION of the members' path-bubbles (#151), because
 # cohesion is per-member (a Waterwalker's crosses water) and a drawing of one member's would lie about
-# another's. For a uniform squad the union collapses to one field.
-func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
-	var board := _board()
+# another's. For a uniform squad the union collapses to one field. `fields` is SquadCohesion.fields
+# round `leader_cell` when the caller already walked them (Group Move's hover); empty walks them here.
+func cohesion_bubble(squad: Squad, leader_cell: Vector2i, fields: Dictionary = {}) -> Array[Vector2i]:
+	if fields.is_empty():
+		fields = SquadCohesion.fields(squad, leader_cell, _board())
 	var union := {}
 	for member in squad.get_members():
-		for c in SquadCohesion.field(squad, leader_cell, member, board):
+		for c in fields[member]:
 			union[c] = true
 	var cells: Array[Vector2i] = []
 	cells.assign(union.keys())
@@ -2043,21 +2052,21 @@ func cohesion_bubble(squad: Squad, leader_cell: Vector2i) -> Array[Vector2i]:
 # (a hover ghost, a formation ghost); everybody else stands on get_projected_destination(), which is
 # the anchor OverlayIcon's ring rides. `strained` names the members whose tether the hovered move would
 # break; `candidates` adds a GHOST tether from each unit that could join. A member the round's smoke
-# will split off goes red too (#1430, _member_links).
+# will split off goes red too (#1430, _member_links). `fields` is cohesion_bubble's, passed through.
 #
 # An ENEMY squad's lines wear the enemy colour (#1109) -- whose side, read off its leader here, so
 # no caller has to say.
 #
 # Solo squads are the CALLERS' question: Squad Up draws round a lone unit on purpose.
 func draw_squad_cohesion(squad: Squad, leader_cell: Vector2i, placed: Dictionary = {},
-		strained: Array[Unit] = [], candidates: Array[Unit] = []) -> void:
+		strained: Array[Unit] = [], candidates: Array[Unit] = [], fields: Dictionary = {}) -> void:
 	var ahead := next_round_board()
 	var drawn: Array[Squad] = [squad]
 	var links := _member_links(squad, leader_cell, placed, strained, ahead, _next_round_gas(ahead, drawn))
 	for candidate in candidates:
 		links.append({"from": candidate.get_projected_destination(), "to": leader_cell,
 				"state": SquadLines2D.Strain.GHOST})
-	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell)], links, _board(),
+	overlay_manager.show_squad_lines([cohesion_bubble(squad, leader_cell, fields)], links, _board(),
 			SquadLines2D.is_hostile(squad.get_leader().get_faction()))
 
 # Several squads' standing lines in ONE draw (#1256): an aim can catch more than one squad. One side

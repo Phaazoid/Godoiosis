@@ -159,6 +159,19 @@ cache.
 
 If a future caller needs the *whole* field, give it an unbounded call rather than widening these.
 
+**Group Move's hover is handed what it would otherwise walk again (2026-10-23, the last entry below).**
+- `game.group_move_range` is the leader's range, copied at mode entry from the same search
+  `leader_followable` is built from. It goes stale exactly when that set does, which is never, since
+  nothing moves while `CHOOSING_GROUP_MOVE` is up. The click and the commit still search fresh, and
+  they author the order.
+- The hover walks each member's bubble once (`SquadCohesion.fields`) and hands it to
+  `GroupMoveSolver.plan` (which passes it into `compute_move_range`) and to `draw_squad_cohesion`.
+- **A handed field must be walked round the same centre, on the same board, as the call it is handed
+  to:** nothing re-checks it.
+- **Never keep the fields past one hover:** their centre is the hovered cell.
+- Pinned by `test_a_group_move_hover_draws_what_the_solver_and_the_bubble_find_unaided`. Walking the
+  fields round the wrong cell, or never writing the range, turns it red.
+
 **Pinned by:** `tests/squad/test_group_move_batching.gd` (batched == unbatched, flag cleared,
 orders still validated, exactly one repaint per group move, single orders unaffected) and the BFS
 bound tests in `tests/ai/test_ai_control.gd`.
@@ -806,3 +819,26 @@ is the sum of the medians above, not a built prototype. If more is wanted later,
 the step itself (the table above). The AI's turn, the threat field and mode entry all share it, so it
 is the bigger prize, but it is the rules' hottest path and the likeliest place for a cache to go
 stale. That is a separate decision.
+
+**Built the same day: 4.9 ms off the hover, as the sum predicted.** What changed:
+- The hover now reads the leader's range off `game.group_move_range`, copied at mode entry.
+- It walks each member's bubble once (`SquadCohesion.fields`) and hands it to `plan()` and to the
+  squad lines.
+- `plan()` walks each member's field once even when nothing is handed to it (*Invariants* above).
+
+Measured on `main` (`666967ef`) and the branch, four runs each, interleaved:
+
+| | `main` | Branch |
+|---|---|---|
+| Hover, median per cell (31 followable destinations × 8 rounds) | 13.6–13.9 ms | **8.6–8.9 ms** |
+| `plan()` alone, median | 9.9–10.0 ms | 8.7–9.0 ms |
+| `profile_group_move.gd`'s hover stamp (12-cell mean) | 12.7–18.2 ms | 8.4–9.9 ms |
+| `profile_group_move.gd`'s click | 69–109 ms | 70–86 ms |
+
+- **No formation changed:**
+  - `IDENTICAL -> true` on all eight profiler runs.
+  - All 31 destinations' formations are byte-identical between the two builds.
+  - The hover's handed answers equal the walked ones at all 31 (124 member moves).
+- **`plan()` is about 1.1 ms cheaper for every caller,** because it walks one cohesion field per
+  member where it used to walk two. The click and the AI's seek gain that much. The click's spread is
+  machine noise.
