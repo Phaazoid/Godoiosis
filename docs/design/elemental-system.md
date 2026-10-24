@@ -39,7 +39,7 @@ The load-bearing decision, forced by the code as it stood. Before #28 (2026-06-1
 Numbered for test coverage. Violating any is a bug.
 
 - **E1. Damage is resolved over the whole ordered plan, never per-action in isolation.** The per-action calc that lived in `AttackAction.create()` moved *into* the resolver (#28). Damage is a resolver output, not a constructor output.
-- **E2. The resolver is pure and deterministic.** Same plan + same starting state → identical result, always. It reads a snapshot, returns results, mutates **no** live state (Law #1: zero RNG inside it).
+- **E2. The resolver is pure and deterministic.** Same plan + same starting state → identical result, always. It reads a snapshot, returns results, mutates **no** live state (Law #1: zero RNG inside it). *(Live state means GAME state; the two kinds of scratch a resolve does write, the order stamps and the published projection, are declared under R2 in [resolution-pipeline.md](resolution-pipeline.md) → *Contract — R-invariants*.)*
 - **E3. Preview and execution consume the *same* resolved result.** Execution applies resolved damage + resolved state-deltas; it derives nothing mid-combat (Law #2).
 - **E4. State is threaded as a hypothetical during the pass.** The resolver holds a working copy of every target's states; an earlier action's deltas are visible to later actions *in the same pass*. This is the entire mechanism behind WET-then-SHOCK. Live state changes only at execution, action by action.
 - **E5. Reactions are derived, never stored.** Like counters: recomputed from the plan on every change, never persisted as player orders. The player authors *attacks*; reactions fall out of resolution.
