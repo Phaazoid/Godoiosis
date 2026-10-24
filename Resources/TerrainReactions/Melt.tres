@@ -9,7 +9,8 @@ also_triggered_by = Array[int]([9])
 required_tile_state = 2
 remove_tile_states = Array[int]([2])
 gases = Dictionary[int, int]({
-6: 2
+6: 2,
+7: 2
 })
 equation = "F2 + 2QW -> Q2 + W2 + 2F"
 popup = "Melts!"

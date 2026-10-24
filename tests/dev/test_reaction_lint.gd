@@ -22,10 +22,8 @@ const PENDING := {
 }
 
 const NOT_YET_FOLLOWED := {
-	"res://Resources/TerrainReactions/Melt.tres": "the heat is not released (the essence is, #1324)",
-	"res://Resources/Reactions/fire_chilled_temp_shock.tres": "the heat is not released (the essence is, #1324); the +5 is the temperature change, not chemistry (Phaazoid)",
-	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder (#1270) and the heat are not made; its ozone is the struck cell's Ozone reaction (#1335)",
-	"res://Resources/TerrainReactions/Ozone.tres": "the thunder (#1270) and the heat are not made",
+	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder (#1270) is not made; its ozone and its heat are the struck cell's Ozone reaction (#1335, #1427)",
+	"res://Resources/TerrainReactions/Ozone.tres": "the thunder (#1270) is not made",
 }
 
 
@@ -239,8 +237,9 @@ func test_every_gas_an_equation_makes_is_released_or_on_the_ledger() -> void:
 	assert_array(unlisted).is_empty()
 
 
-# The state half, which honours NO ledger: Temperature Shock stays listed for its heat, so a skip would
-# never check its meltwater. The first reaction that needs an exception adds one.
+# The state half, which honours NO ledger: a listed reaction is skipped by the gas half above, so a skip
+# here would leave whatever it is listed for hiding its states too. The first reaction that needs an
+# exception adds one.
 func test_every_state_an_equation_leaves_on_a_body_is_applied() -> void:
 	var unapplied: Array[String] = []
 	for reaction: Resource in _shipped():

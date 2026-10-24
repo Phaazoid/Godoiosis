@@ -7,7 +7,7 @@ class_name GasRules
 # because a rule and a look have different owners.
 #
 # A kind with no file has no rules: it lies where it was put and never moves (ruling 10). Steam, smoke,
-# frost, essence and ozone have files.
+# frost, essence, ozone and heat haze have files.
 
 const FOLDER := "res://Resources/GasRules/"
 
