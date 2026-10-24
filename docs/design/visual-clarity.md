@@ -3581,11 +3581,12 @@ collide with validity on any row that is both elemental and broken. The allocati
   answers the **pre**-insulation question: a rail read off the authored attack would
   claim a fire hit the target shrugged off. An insulated hit therefore honestly wears no rail.
 - **`ResolvedOutcome.fired_reactions`** replaced `reaction_icons: Array[Texture2D]` (Law #4). The
-  row needs three facts per reaction — its authored word, its art, and the element that triggered
-  it — and the reaction already holds all three, so recording the icon alone made the other two
-  unrecoverable. Three sites in the whole repo, so a swap rather than a second seam. **Its producer
-  had also been dropping any reaction with no `icon`**, which silently muted half the authored
-  catalog; that guard went with it.
+  row needs two facts per reaction — its authored word and the element that triggered it — and the
+  reaction already holds both, so recording the icon alone made them unrecoverable. *(This used to
+  say three, counting the art; the chip shipped text-only and nothing reads a reaction's `icon`,
+  [#1443](https://github.com/Phaazoid/Godoiosis/issues/1443).)* Three sites in the whole repo, so
+  a swap rather than a second seam. **Its producer had also been dropping any reaction with no
+  `icon`**, which silently muted half the authored catalog; that guard went with it.
 
 ### A SETUP is said once
 
