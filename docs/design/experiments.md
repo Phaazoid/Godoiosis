@@ -4,7 +4,7 @@ A lightweight way to build a proposed feature behind a toggle, *feel* it in play
 it on/off without committing to it. Lets us carry several "maybe" systems in the codebase
 at once and decide by playing, not arguing.
 
-**Canon checked through #1176 (2026-10-01); #508's gas mixes folded in 2026-10-02.**
+**Canon checked through #1478 (2026-10-23).**
 
 ## Shape
 
@@ -95,4 +95,4 @@ Leaving a flag in place forever is the failure mode; a stale flag is debt.
 explicitly-set flag -- a bool for a toggle, an option INDEX for a choice. `load_state` answers a
 choice BEFORE the toggle's `bool()` (which would read a saved 2 back as `true`, on every relaunch)
 and drops an index out of range, so a choice that lost an option falls back to its default. Unset flags fall back to their `DEFS` default, so the file only lists
-deviations from default. Human-readable and hand-editable.
+deviations from default *(as built, it lists every flag ever SET, one set back to its default included, until a reset clears it)*. Human-readable and hand-editable.
