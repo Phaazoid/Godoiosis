@@ -101,6 +101,31 @@ func initialize():
 	# unit owns a single item. Every max-HP read after this one comes through Unit (#106).
 	current_hp = get_max_hp(get_effective_stat(Stats.Stat.CON))
 
+# A resolve pass's copy of this body (#1480), built by UnitState.copy. Hand-written because
+# Resource.duplicate skips script vars. `data` is authored and shared; `twins` maps each carried weapon
+# to its copy, so a fitted prosthetic names the copy the inventory holds. No signal is carried, so the
+# copy's hp_changed and died reach nobody.
+func copy(twins: Dictionary[WeaponInstance, WeaponInstance] = {}) -> UnitInstance:
+	var c := UnitInstance.new()
+	c.data = data
+	c.stats = stats.duplicate()
+	c.aura = aura.duplicate()
+	c.affinity = affinity.duplicate()
+	c.is_alkahest_affine = is_alkahest_affine
+	c.current_hp = current_hp
+	c.weapon_proficiency = weapon_proficiency.duplicate()
+	c.jobs = jobs.duplicate()
+	c.permadead = permadead
+	for slot in limbs:
+		var fitting: LimbFitting = limbs[slot]
+		var twin := LimbFitting.new()
+		twin.state = fitting.state
+		twin.prosthetic_stat = fitting.prosthetic_stat
+		var item := fitting.prosthetic_item
+		twin.prosthetic_item = twins[item] if item != null and twins.has(item) else item
+		c.limbs[slot] = twin
+	return c
+
 func add_job(job_id: String) -> bool:
 	if job_id == "" or jobs.has(job_id) or JobCatalog.get_job(job_id) == null:
 		return false
