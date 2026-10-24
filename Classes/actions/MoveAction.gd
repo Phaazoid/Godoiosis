@@ -1,6 +1,11 @@
 extends BaseAction
 class_name MoveAction
 
+# A queued (or resolved) move order: the path a unit walks, or a hold-position filler that walks
+# none. The resolver stamps where the walk really ends (resolved_stop_index), and playback walks it
+# in legs between triggered shots. Its path-arrow sprites live in `preview`, which OverlayManager
+# draws and clears.
+
 var path: Array[Vector2i]
 var destination: Vector2i
 var destination_texture: Texture2D
@@ -208,9 +213,6 @@ func set_preview_z_index(value: int):
 	for sprite in preview:
 		if is_instance_valid(sprite):
 			sprite.z_index = value
-			
-func reset_preview_z_index():
-	set_preview_z_index(ARROW_BASE_Z_INDEX)
-	
+
 func add_preview_sprite(sprite: Sprite2D):
 	preview.append(sprite)

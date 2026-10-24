@@ -360,10 +360,6 @@ static func set_skipping(on: bool) -> void:
 	_skipping = on
 
 
-static func playback_speed() -> float:
-	return _playback_speed
-
-
 # Writes Engine.time_scale only on a change, so a frame that asks for what is already set touches
 # nothing -- including a test runner's own time factor.
 static func set_playback_speed(speed: float) -> void:

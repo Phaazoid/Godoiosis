@@ -441,20 +441,14 @@ func doomed_block_count() -> int:
 	return count
 
 
-# Whether this socket is OCCUPIED, read off the material. The knob-independent twin of
-# block_is_proud, which asks the DEPTH question and cannot answer at all once the recess is dialled
-# to 0 — its two depths become one. Anything about which sockets are full wants this one.
+# Whether this socket is OCCUPIED, read off the material, never off block_depth: once the recess is
+# dialled to 0 a full socket and an empty one stand at one depth. Anything about which sockets are
+# full wants this one.
 func block_is_filled(index: int) -> bool:
 	if index < 0 or index >= _blocks.size():
 		return false
 	var material := _blocks[index].material_override
 	return material == _mat_fill or material == _mat_doomed
-
-
-func block_is_proud(index: int) -> bool:
-	if index < 0 or index >= _blocks.size():
-		return false
-	return _blocks[index].position.z > _proud_z() - _texel() * 0.5
 
 
 # Where a socket sits in WORLD space -- what the debris pool needs to spawn a cube exactly where the
@@ -486,23 +480,6 @@ func stack_size_texels() -> Vector2:
 	var cols: int = mini(safe_max, per_row)
 	var rows: int = ceili(float(safe_max) / float(per_row))
 	return Vector2(float(cols - 1) * pitch + block, float(rows - 1) * pitch + block)
-
-
-# What fraction of the grid is still standing. Derived from the cube counts rather than kept
-# alongside them, so it cannot disagree with what block_count and filled_block_count report.
-func fill_fraction() -> float:
-	var total := block_count()
-	if total <= 0:
-		return 0.0
-	return float(filled_block_count()) / float(total)
-
-
-# How much of the grid the plan is about to take (or give back), rendered.
-func doomed_fraction() -> float:
-	var total := block_count()
-	if total <= 0:
-		return 0.0
-	return float(doomed_block_count()) / float(total)
 
 
 func alarm_running() -> bool:
@@ -554,10 +531,6 @@ func number_glyph_height() -> float:
 
 func downed_count_glyph_height() -> float:
 	return _count.pixel_size * float(FONT_RESOLUTION)
-
-
-func track_texels() -> float:
-	return stack_size_texels().x
 
 
 # Half the grid's drawn width and height, in world units, about its own anchor. The number sits ON

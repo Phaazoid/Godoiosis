@@ -118,10 +118,6 @@ func wear(id: int, sprite: UnitSprite3D, cell: Vector2i, level: Vector4, seed: f
 	wearer.reported = true
 
 
-func wearer_count() -> int:
-	return _wearers.size()
-
-
 func pending_splashes() -> int:
 	return _splashes.size()
 

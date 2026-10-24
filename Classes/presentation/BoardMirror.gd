@@ -675,10 +675,6 @@ func is_column_hidden(cell: Vector2i) -> bool:
 	return _hidden_columns.has(cell)
 
 
-func is_prop_hidden(cell: Vector2i) -> bool:
-	return not _prop_shown(cell)
-
-
 func hidden_counts() -> Vector2i:
 	return Vector2i(_hidden_columns.size(), _hidden_props.size())
 
@@ -2528,11 +2524,7 @@ func drop_lips() -> void:
 	_lips.clear()
 
 
-# How many holes currently wear a lip, and the node on one -- the test seam _props already has.
-func lip_count() -> int:
-	return _lips.size()
-
-
+# The node on a hole's lip -- the test seam _props already has.
 func lip_at(cell: Vector2i) -> Node3D:
 	return _lips.get(cell)
 
@@ -2697,10 +2689,6 @@ var wind_source := Callable()        # -> Vector2, the board's wind, world units
 var _swaying := false
 var _sway_clock := 0.0
 var _sway_materials: Dictionary = {}   # [art RID, is a cap] -> ShaderMaterial
-
-
-func swaying() -> bool:
-	return _swaying
 
 
 # A plant's sway material for its art, or its snow cap's. Static and pure, so tools/sprite_parity

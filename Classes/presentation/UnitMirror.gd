@@ -648,7 +648,6 @@ func head_height(unit: Unit) -> float:
 # moves its glyphs and its outline by different amounts (UnitHealthBar.make_label's note, 2026-08-15).
 var _squad_count: Label3D
 var _squad_count_anchor := Vector3.ZERO
-var _squad_count_side := 0.0
 
 
 # `anchor` is the crown's centre, `side` how far right of it the number's left edge starts.
@@ -658,7 +657,6 @@ func set_squad_count(anchor: Vector3, side: float, text: String, alpha: float) -
 		_squad_count.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y   # the crown's own billboard
 		add_child(_squad_count)
 	_squad_count_anchor = anchor
-	_squad_count_side = side
 	_squad_count.text = text
 	_squad_count.pixel_size = maxf(number_height_cells, 0.001) / float(UnitHealthBar.FONT_RESOLUTION)
 	_squad_count.outline_size = roundi(number_outline_size)
@@ -697,10 +695,6 @@ func squad_count_text() -> String:
 
 func squad_count_anchor() -> Vector3:
 	return _squad_count_anchor
-
-
-func squad_count_side() -> float:
-	return _squad_count_side
 
 
 func squad_count_position() -> Vector3:

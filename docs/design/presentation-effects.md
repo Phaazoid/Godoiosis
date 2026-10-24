@@ -1565,7 +1565,7 @@ sight*, because what it feeds is a rule; it appears here only so the tile's colu
 
 **It is a mask of cardinal edges, not a yaw**, because the pieces an artist draws include corners and a corner reaches *two* directions. Each authored edge becomes a half-length slab from the cell centre out to that edge, so **a straight run is two collinear halves — one wall — and a corner is two perpendicular halves — an L. One rule, no corner special case**, and it falls out that each half wears the matching half of its tile's art, so a straight run reassembles the whole sprite un-squashed.
 
-**The facing is per-TILE, and the payoff is that nothing at runtime holds a yaw**: the meshlib item is already keyed per tile, so the generator bakes each piece's orientation into its own mesh and `BoardMirror` plants a fence with the same `_make_prop_block` it plants a crate with. If a sheet ever needs one generic fence tile placed in both axes, the override belongs in the reader (`GridUtils.wall_edges_at_cell`), not in a second column — at the cost of that zero-runtime property.
+**The facing is per-TILE, and the payoff is that nothing at runtime holds a yaw**: the meshlib item is already keyed per tile, so the generator bakes each piece's orientation into its own mesh and `BoardMirror` plants a fence with the same `_make_prop_block` it plants a crate with. If a sheet ever needs one generic fence tile placed in both axes, the override belongs in the reader (`GridUtils.wall_edges_of`), not in a second column — at the cost of that zero-runtime property.
 
 Two things were **measured** on the way, and both reversed an assumption the issue was filed on:
 

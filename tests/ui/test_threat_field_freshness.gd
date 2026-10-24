@@ -61,8 +61,10 @@ func _spawn_enemy(archetype := AIArchetype.Type.RUSHDOWN) -> Unit:
 	return enemy
 
 
+# The reach the V toggle draws: reach_cells_of with no subjects means every enemy (game.gd).
 func _cells(field: ThreatField) -> Array[Vector2i]:
-	var cells := field.all_cells()
+	var everyone: Array[Unit] = []
+	var cells := field.reach_cells_of(everyone)
 	cells.sort()
 	return cells
 

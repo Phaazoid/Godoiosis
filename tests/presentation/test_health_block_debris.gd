@@ -382,7 +382,7 @@ func test_the_cubes_that_leave_come_off_the_top_of_the_grid() -> void:
 	unit.take_damage(2)
 	await _settle()
 
-	# block_is_FILLED, not block_is_proud: this case is about WHICH sockets emptied, and the depth
+	# block_is_FILLED, not block_depth: this case is about WHICH sockets emptied, and the depth
 	# reading cannot answer that once the recess is dialled to 0 — which is now the default.
 	assert_bool(bar.block_is_filled(0)).override_failure_message(
 			"the bottom of the grid emptied first").is_true()

@@ -36,9 +36,3 @@ var state: CursorState = CursorState.DEFAULT
 func set_state(new_state: CursorState) -> void:
 	state = new_state
 	sprite.texture = CURSOR_TEXTURES[new_state]
-
-func hide_cursor() -> void:
-	sprite.visible = false
-
-func show_cursor() -> void:
-	sprite.visible = true
