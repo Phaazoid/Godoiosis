@@ -140,14 +140,15 @@ on all four runs, which is the part that matters: Castle Assault has no Waterwal
 signature change would have meant ordinary formations moved.
 
 **#151 (path-based cohesion) changed the field's SHAPE, not its cost class — and the costs it added
-are un-measured.** The solver's leader field is now bounded at COH (was COH×2, so it *shrank*);
+went un-measured until 2026-10-23.** The solver's leader field is now bounded at COH (was COH×2, so it *shrank*);
 `SquadPlanValidator._check_leader_range` computes one bounded field per qualifying move per pass
 (new — the Manhattan compare was O(1)); `compute_move_range` adds one bounded field per non-leader
 call; `followable_destinations`' Manhattan dilation became one bounded walk per standable cell.
 Every walk is `max_depth = COH` (~41 cells at COH 4), the shape measured above as inside noise, and
-the full suite's wall clock did not move (60.5s at 1012 cases) — but nobody has profiled a real
-Castle Assault click since the swap. If Group Move hover ever feels sluggish, profile
-`followable_destinations` first (most walks), then the validator's fixed point (most repeated).
+the full suite's wall clock did not move (60.5s at 1012 cases). **Profiled 2026-10-23** (that
+entry, below): `plan()` and the hover did not move, but the `followable_destinations` sweep that
+mode entry runs went from 6.5 to 17–20 ms. The hover never pays the sweep: it reads the mode-entry
+cache.
 
 **`_path_hops`' two stopping rules only skip work whose answer was already discarded.**
 - `max_depth` — the caller only compares the result against a threshold, so a cell beyond the bound
@@ -229,7 +230,8 @@ is back to its 2026-07-26 figure (64.9 ms). Mode entry is unchanged — the swee
 *became* the cache build. Plan signature `IDENTICAL -> true` throughout.
 
 What remains in the ~8.0 ms is `plan()` itself, and it is irreducible: it depends on the hovered
-cell and it IS the formation preview.
+cell and it IS the formation preview. (By 2026-10-23 a third of the hover was repeated work: see
+that entry.)
 
 **Why the cache is safe, and the one thing that would break it:** nothing on the board can move
 while `CHOOSING_GROUP_MOVE` is up — no order is queued, no unit relocates — so the set cannot go
@@ -694,6 +696,113 @@ between 10.8 and 17.2 ms from one run to the next, which is why the delta was me
 **The finding that matters is older than this change: Group Move hover is at the frame budget on
 `main`.** `tools/profile_group_move.gd`'s hover stamp was 15.9–21.3 ms across four runs before
 #1449, and 16.7–17.3 ms across four after. This file recorded ~8.0 ms on 2026-08-04, and `plan()`
-alone was 7.7 ms then against 10.4–13.3 ms now. Nobody has bisected the drift. The profiler's
-`GROUND_TRUTH` no longer matches either, because Castle Assault's squad has moved since 2026-07-26:
-its plan signature was identical before and after #1449, so that mismatch is not a behaviour change.
+alone was 7.7 ms then against 10.4–13.3 ms now. Bisected the same day: see the next entry. The
+profiler's `GROUND_TRUTH` did not match either, because Castle Assault's squad moved on 2026-09-03
+(regenerated in the next entry). Its plan signature was identical before and after #1449, so that
+mismatch was not a behaviour change.
+
+---
+
+## 2026-10-23 — where Group Move hover's time went since August
+
+**One commit made most of the drift: #257 (`can_step`, 2026-08-15), at +3.1 ms per hovered cell.**
+The rest is the hover drawing more since September (+1.9 ms) and a slower step in every walk.
+
+How it was measured: a scratch probe, never committed, that runs unchanged on every commit from
+`0c0f4ef5` (the 2026-08-04 entry) to `main` (`a02e6c83`). Each commit had its own scratch worktree,
+all on Godot 4.7.1, and each was measured on its own Castle Assault with the 5-member player squad.
+A run takes the median over every followable destination × 6 rounds. Each commit got four runs,
+interleaved so machine load fell on all of them alike. A game was running on the machine for most
+of it, so trust the steps between rows over the absolute numbers, which sit about 1 ms above a
+quiet machine.
+
+| Commit | Hover, per cell | `plan()` |
+|---|---|---|
+| `0c0f4ef5` 2026-08-04 (the ~8.0 ms entry above) | 7.3 ms | 6.0 ms |
+| `79dda0fa` 2026-08-15, the parent of #257 | 8.1 ms | 6.3 ms |
+| `1d95eba4` #257 | **11.2 ms** | **9.4 ms** |
+| `17aad8f9` 2026-08-23, before #427 | 11.5 ms | 9.7 ms |
+| `296c7980` 2026-09-21, after the squad moved (below) | 11.3 ms | 9.5 ms |
+| `a6f87623` 2026-10-05 | 13.9 ms | 10.2 ms |
+| `main` `a02e6c83` | **14.4 ms** | **10.4 ms** |
+
+- **#257 is a clean step.** Five back-to-back pairs of `79dda0fa` and `1d95eba4` all put `plan()`
+  +3.0–4.0 ms higher. Every step of every walk now asks the height edge as well as the cell, and a
+  hover is six move-range searches plus about twenty shorter walks. #427 slice 3 later replaced the
+  ramp clauses with the corner edge and kept the same cost.
+- **The hover started drawing, 2026-09-21 to 23:** the leader's reach from the hovered cell (#1066,
+  then #1069), stand-ins and reach lines (#1069), and the squad lines (#1070). `plan()` did not
+  move across that range; the gap between hover and `plan()` went from 1.8 to 3.8 ms.
+- **The step kept getting slower, and the squad's move hid it.** One move-range search costs 24 µs
+  per cell it visits at `0c0f4ef5`, 35 µs after #257 and 45 µs on `main`. The 2026-09-03 Castle
+  Assault update moved the player squad three rows north, into a pocket where a leader search
+  visits 32 cells instead of 39, so that growth does not show in the table. From 2026-09-21 to
+  `main`, `plan()` rose 0.7–1.0 ms across two batches. That is about what #1223's FROZEN read
+  (below) and #1449's `hops` (0.2 ms, the previous entry) cost. It was not bisected further.
+- **Ruled out:** #151 together with the COH 3 → 4 default bump that landed the same day (the bump
+  grew the solver's old 2×COH leash walk, and #151 cut that walk to COH; the pair nets out); the
+  4.6 → 4.7.1 engine upgrade (`0c0f4ef5` run on both engines, and the upgrade commit beside its
+  parent); #1335's smoke-aware leash, by size (one gas read per field); and #1220/#1230's
+  safe routes (`route_to` is 0.01 ms a member here, because no watch is armed, so it walks the range's
+  own tree). The squad's move made each search smaller, so the content changes hid growth rather
+  than adding any.
+
+**Today's hover, piece by piece** (`main` `a02e6c83`, 31 followable destinations × 8 rounds, two
+runs, every piece timed in the same process):
+
+| Piece | Cost |
+|---|---|
+| `plan()` | 10.4–10.5 ms |
+|   the leader's move-range search | 1.5 ms |
+|   each member's search (×4), including its COH field (0.24 ms) | 1.6 ms each |
+|   each member's `follow_cells` (×4), which walks that same COH field again | 0.25 ms each |
+|   each member's distance to its ideal cell (×4) | 0.23 ms each |
+| The hover's own leader move-range search, before `plan()` | 1.5 ms |
+| `draw_squad_cohesion`: five COH fields (four are the ones `plan()` just walked), outline, tethers | 1.5 ms |
+| `show_player_reach`, path arrows, stand-ins, reach lines, cursor | 0.75 ms |
+| **The whole hover** | **14.2–14.4 ms** |
+
+**What one step of a search costs.** `compute_move_range` replicated with one lookup switched off
+at a time, timed interleaved in one process over five searches (one `plan()`'s worth), 31
+destinations × 40 rounds. Every variant returned the identical range on all 155 searches, so none
+of these lookups changes an answer on Castle Assault's start ground:
+
+| Switched off | Saves, of 11.6 ms |
+|---|---|
+| The height edge (`height_step_ok`, #257 then #427) | 2.7 ms (24%) |
+| The linear `unit_at_cell` scan (an index built once per search instead) | 2.7 ms (23%) |
+| #1223's FROZEN read in `move_cost_at`, which also re-reads the tile data | 0.85 ms (7%) |
+| The second `get_used_rect()` per step | 0.3 ms (3%) |
+
+The unit scan is not drift: it cost the same 2.3–2.5 µs a call in August, and it is the
+*Known-and-accepted* cost above. No lookup is slow on its own. A leader search makes 128
+`movement_cost` calls, and each one makes about twenty GDScript function calls.
+
+**Two side findings, one stock-profiler sample per commit, two runs each:**
+- **Mode entry's sweep** (`followable_destinations`, which `enter_group_move_mode` runs once) went
+  from 6.5 ms at `0c0f4ef5` to 17–20 ms at #151, then to 33–37 ms at #257, and is 33–37 ms on `main`
+  over fewer cells. That is two frames, once per entry into Group Move, and never a hover cost.
+- **The click has not drifted:** 81–90 ms on `main` against 84–95 ms for `0c0f4ef5` run beside it.
+  The 65–72 ms recorded on 2026-08-04 came from a quieter machine.
+
+**`GROUND_TRUTH` regenerated.** The old signature named cells for a squad that no longer stands
+there. The dev's Castle Assault update of 2026-09-03 (`53fc2593`) moved the squad, and with it the
+profiler's destination, from (4, 5) to (11, 2). Every commit through 2026-08-23 prints the
+2026-07-26 signature, and every commit from 2026-09-21 to `main` prints the one now in
+`tools/profile_group_move.gd`, so nothing since the move has changed this formation. The
+profiler's `IDENTICAL` line is true again on `main`.
+
+**Recommendation: carry what the hover already knows.** About a third of a hover, 4.9 ms of 14.3,
+re-derives answers that cannot have changed:
+- **The leader's move range, twice:** the hover's own check, then `plan()`'s first line. Nothing
+  moves while `CHOOSING_GROUP_MOVE` is up, which is the invariant `leader_followable` already rests
+  on, and `enter_group_move_mode` computed it. About 3.0 ms.
+- **Each member's COH field, three times:** inside its move-range search, again in `follow_cells`,
+  and again in `draw_squad_cohesion`'s bubble. About 1.9 ms.
+
+Passing these instead of re-walking them is Law #4's *prefer passing over looking up*. It changes no
+rule, so the plan signature can prove it, and it should land the hover around 9–10 ms. That figure
+is the sum of the medians above, not a built prototype. If more is wanted later, the next lever is
+the step itself (the table above). The AI's turn, the threat field and mode entry all share it, so it
+is the bigger prize, but it is the rules' hottest path and the likeliest place for a cache to go
+stale. That is a separate decision.

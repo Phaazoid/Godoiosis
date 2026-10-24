@@ -15,11 +15,13 @@ extends SceneTree
 
 const SCENARIO := "res://Scenarios/Castle Assault.tres"
 
-# Recorded 2026-07-26 on the pre-optimisation code, as the equivalence baseline. Regenerate (and
-# note why) if the scenario's units or terrain ever change.
+# The equivalence baseline. Regenerated 2026-10-23: the 2026-07-26 one went stale when the
+# 2026-09-03 Castle Assault update moved the player squad, and every commit since prints this one
+# (docs/performance.md, 2026-10-23). Regenerate (and note why) if the scenario's units or terrain
+# ever change.
 const GROUND_TRUTH := [
-	"Soldier18|0|(4, 5)|true", "Soldier15|0|(4, 4)|true", "Soldier16|0|(3, 5)|true",
-	"Soldier17|0|(5, 4)|true", "Soldier19|0|(3, 6)|true",
+	"Soldier18|0|(11, 2)|true", "Soldier15|0|(11, 1)|true", "Soldier16|0|(10, 2)|true",
+	"Soldier17|0|(12, 1)|true", "Soldier19|0|(10, 3)|true",
 ]
 
 func _init() -> void:
