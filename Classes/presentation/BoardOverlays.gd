@@ -234,7 +234,7 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# would erase the flame it sits beside, which is how #245 found this rule.
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	# Tiles you could walk to that the SQUAD will not let you take -- a member's past the leader's range,
-	# a leader's that would strand somebody. GREY GRIDLINES since #1070, where they were a mauve wash in
+	# a leader's that would strand somebody. NAVY GRIDLINES since #1070, where they were a mauve wash in
 	# the enemy purple's own family: MOVE's lattice switched off, which is what "walkable, not now" is.
 	# Its cells never meet MOVE's (one tile is one or the other), so sharing sort 0 cannot fight.
 	Layer.INVALID_MOVE: {"color": Color(0.0, 0.1725, 0.2863, 0.851), "sort": 0, "kind": Kind.FILL,
