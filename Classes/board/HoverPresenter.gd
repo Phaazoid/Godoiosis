@@ -479,14 +479,21 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 	game.show_player_reach(unit, cell)
 	game.show_reach_lines_at(cell)
 
-	# Live preview: build the move this click WOULD queue and validate the plan against it, so
-	# the arrow and the queue panel show the real consequence before anything is committed.
+	# Live preview: build the move this click WOULD queue and validate the plan with it in, so the arrows
+	# show what the click would do before anything is committed. The preview stamps its verdicts on the
+	# queued orders themselves, so the last resolve's go back before this returns: at once for a refused
+	# candidate, whose click queues nothing and so turns no other order red (one-way validity), and after
+	# the squad's arrows have drawn a legal one's knock-on. Nothing re-resolves: a hover cannot change the
+	# queue, and a resolve read off the preview's verdicts published a plan the squad never made.
 	var path: Array[Vector2i] = game.route_to(unit, moverange, cell)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
 
 	var squad = unit.squad
 	game.squad_manager.validate_squad_plan_preview(squad, move)
+	var legal := move.is_valid
+	if not legal:
+		_restore_queued_verdicts(squad)
 	game.overlay_manager.show_hover_move_path(move)
 	# ...and the body that would stand there (#1069). After show_hover_move_path, which clears the
 	# whole hover store: drawn before it, the ghost would be swept away by the arrows. The typed
@@ -500,8 +507,14 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 
 	game.overlay_manager.redraw_planned_paths()
 	game.overlay_manager.redraw_projected_units()
-	game.refresh_action_queue(squad)
+	if legal:
+		_restore_queued_verdicts(squad)
 	_set_cursor_for_preview(cell, true)
+
+# The verdicts the last resolve stamped, put back over a preview's: the queue gate's own cleanup after a
+# refusal, with the cached plan so the plan-armed reds (a whiff, a Guard out of range) come back too.
+func _restore_queued_verdicts(squad: Squad) -> void:
+	game.squad_manager.validate_squad_plan(squad, game.squad_manager.resolved_plan_for(squad))
 
 # ==============================================================================
 #  Queue-panel row hover
