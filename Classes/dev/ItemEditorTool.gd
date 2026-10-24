@@ -149,8 +149,9 @@ func _on_load_pressed():
 	populate()
 
 # Load hands out a COPY so editing is not editing the catalog's live object. An equippable says how
-# to copy itself (WeaponInstance's keeps its template shared); a mod is plain data with no such
-# rule, so it deep-copies.
+# to copy itself (WeaponInstance's keeps its template shared). A mod is no equippable, and its own
+# copy_for_grant answers with ITSELF (a shared definition, #732), which would hand out the live
+# object -- so it deep-copies.
 #
 # A TEMPLATE is the exception and is handed out LIVE (#486). Copying one would fork it off every
 # weapon built on it -- the whole point of the template model -- and it would also let this panel
@@ -162,8 +163,9 @@ func _editable_copy(entry: Resource) -> Resource:
 	var equippable := entry as EquippableData
 	return equippable.copy_for_grant() if equippable != null else entry.duplicate(true)
 
-# display_name is declared separately on Item and on WeaponModData -- two content roots that agree
-# on the name but share no base (CLAUDE.md), so a Resource-typed field cannot reach it statically.
+# display_name lives on Item, and WeaponModData extends Item since #732, so the Item cast alone
+# would cover a mod (the mod branch predates that). current_item is a Resource, which cannot reach
+# it statically.
 func _edited_name() -> String:
 	var mod := current_item as WeaponModData
 	if mod != null:

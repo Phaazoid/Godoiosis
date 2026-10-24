@@ -124,7 +124,7 @@ func offered_mods() -> Array[WeaponModData]:
 
 
 # The jobs the picker may offer, BEFORE the union with whatever the unit already holds -- which is a
-# rule about that unit rather than about the mission and stays on the card.
+# rule about that unit rather than about the mission and lives in Loadout.offered_jobs_for.
 func offered_jobs() -> Array[String]:
 	if not offers_every_job:
 		return available_jobs

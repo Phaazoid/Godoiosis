@@ -6,9 +6,9 @@ class_name MissionRules
 # both hosts (through the MissionState each holds, #46) and the tests all ask ONE question and
 # cannot drift into three.
 #
-# Slice 1 has exactly one objective and it is authored nowhere: wipe every hostile faction,
-# lose if the player has nobody left standing. Authored objectives (slices 3-4) enter as extra
-# clauses HERE, with a MissionData handed in beside the board -- never as a second evaluator.
+# A board that declares nothing is a plain rout: wipe every hostile faction, lose if the player has
+# nobody left standing. Authored objectives (slices 3-4) and lose conditions enter as extra clauses
+# HERE, composed by MissionState and handed in beside the board -- never as a second evaluator.
 
 enum Outcome { ONGOING, VICTORY, DEFEAT }
 

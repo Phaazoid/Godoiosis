@@ -66,7 +66,7 @@ func init(p_scenario_manager: ScenarioManager, p_game) -> void:
 		+ "OFF (snapshot mode): everything saves as an exact mid-battle snapshot, cast included —\n"
 		+ "the save replays this precise moment forever and stops following character-file edits.\n"
 		+ "Use for save-and-resume of a fight in progress.\n\n"
-		+ "Bug reports (F3) ignore this and always snapshot.")
+		+ "Bug reports (F3, and the instant Shift+F3) ignore this and always snapshot.")
 	game.zone_manager.zones_changed.connect(mark_modified)
 	# A board can arrive from OUTSIDE the header's own Load -- Mission Select, F2, the boot screen.
 	# A load's restore_board bumps every store's counter, so without re-stamping here every external

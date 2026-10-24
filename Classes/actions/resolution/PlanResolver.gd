@@ -1003,8 +1003,8 @@ static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hy
 	# The brace bonus (#414): extra DEF the blocker brings to a hit it ABSORBED, on top of its own
 	# armour and cover, and only ever on a substituted instance -- which is why it is added here and
 	# not inside def_breakdown, whose sum is also the inspect panel's standing DEF readout. Stamped
-	# on the outcome in the same breath it is applied, so the queue row can never name a different
-	# number than the one subtracted.
+	# on the outcome in the same breath it is applied, so a readout of it can never name a different
+	# number than the one subtracted (only AttackAction.get_outcome_summary reads it, uncalled).
 	if action.blocked_for != null:
 		outcome.brace_bonus = target.get_brace_bonus()
 	return def["total"] + outcome.brace_bonus
@@ -1498,7 +1498,7 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 	return hypo[unit]
 
 # Per-unit threaded hypothetical (R4). Everything the lethality ladder reads lives on the
-# LethalityRules.Situation base, so a hypo IS a situation and _predict_lethality is just
+# LethalityRules.Situation base, so a hypo IS a situation and the resolver hands it straight to
 # LethalityRules.predict — no second copy of the ladder to keep in sync (Law #2). This class
 # adds only what the rest of the pass threads: the projected cell and the element states.
 #

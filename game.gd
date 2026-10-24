@@ -393,9 +393,9 @@ func _wire_signals() -> void:
 # exempt from the modal freeze and hears both OS windows. A dev key added back here would silently die
 # whenever a card is up or the dev-tools window has focus.
 func _input(event: InputEvent) -> void:
-	# The modal check is belt-and-braces since #131: a modal pauses the tree, and a paused node
-	# receives no input at all, so this handler is already silent while one is up. Kept because it
-	# states the intent at the gate rather than relying on a consequence of the pause.
+	# The modal check is belt-and-braces since #131: a modal disables the Game subtree (ModalLock), and
+	# a disabled node receives no input at all, so this handler is already silent while one is up. Kept
+	# because it states the intent at the gate rather than relying on a consequence of the freeze.
 	if event.is_action_pressed("ui_cancel") and not ModalLock.any_open(get_tree()):
 		# ONE RULE (#723, dev 2026-09-07): Esc opens the pause menu whenever a board exists, and at
 		# the title screen it does nothing. It used to fork on _board_locked_for_player() and open a
@@ -680,8 +680,8 @@ func _pop_last_gesture() -> void:
 			_on_queue_cancel_requested(action)
 
 # The newest gesture when it is one unit's OWN move -- the only shape right-click re-plans instead
-# of undoing. A formation stays one decision and pops whole: "as if you hit Move again" has no
-# meaning for it, since Group Move is itself hidden once a move is queued (#417).
+# of undoing. A formation stays one decision and pops whole; re-planning one is the ring's Group
+# Move, which spends the queued formation itself (#461, begin_group_move_planning).
 func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
 	if gesture.size() != 1:
 		return null
@@ -1143,9 +1143,9 @@ func can_control(unit: Unit) -> bool:
 # layer means by "where this unit acts from" (#124/#126), so a queued move is followed rather than
 # second-guessed here.
 #
-# SNAP, not glide (dev call 2026-08-22). Two reasons beyond the feel: the 3D rig has no position
-# smoothing to glide WITH, and center_on_position's lock_manual_input would refuse the player's own
-# camera on the way in — the wrong answer for someone who just gave an order.
+# The 3D host GLIDES there (battle3d._center_rig_on, since #520). The flat camera still SNAPS (dev
+# call 2026-08-22): center_on_position's lock_manual_input would refuse the player's own camera on
+# the way in — the wrong answer for someone who just gave an order.
 func focus_view_on(unit: Unit) -> void:
 	if unit == null or not is_instance_valid(unit):
 		return
@@ -1371,9 +1371,10 @@ func exit_current_mode():
 		refresh_action_queue(squad_manager.active_squad)
 
 # Aiming is over — committed or cancelled — so the pick dies with the mode it belonged to. Since
-# #102 nothing outside aiming reads it (a queued order carries its own stamped fired_attack), so
-# this can no longer change how anything resolves; it just stops a spent pick from surviving into
-# next turn's menu gates and overlays.
+# #102 no queued order reads it (each carries its own stamped fired_attack). One reader outside
+# aiming remains: a RUNE counters with its live pick (RuneData.counter_attack), so clearing this
+# changes what a rune answers with -- expected, per the dev (2026-10-21). Otherwise it stops a
+# spent pick from surviving into next turn's menu gates and overlays.
 func _clear_aiming_pick() -> void:
 	if selected_unit != null:
 		selected_unit.active_attack = null
@@ -1596,9 +1597,9 @@ func refresh_action_queue(squad: Squad):
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
 
 # The mission-status HUD (#134). Called from MissionController's write points (check, capture,
-# set_objectives, set_lose_conditions, advance_round, apply_scenario, reset) plus the dev Scenario
-# tab's live objective toggle — the refresh_action_queue pattern, not a signal. A board that declares
-# nothing (sandbox, cleared) hides the panel.
+# advance_round, apply_scenario, reset, and the test-only set_objectives/set_lose_conditions) plus
+# the dev Scenario tab's live objective toggle — the refresh_action_queue pattern, not a signal. A
+# board that declares nothing (sandbox, cleared) hides the panel.
 #
 # The gate asks about lose conditions too (#101): a mission may author a clock and NO objectives, and
 # hiding its countdown is exactly the unplayable case the clock's own fork ruled against.

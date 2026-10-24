@@ -60,7 +60,7 @@ func _build(can_restart: bool, can_load: bool, game_node: Node, mid_pass: bool) 
 		var restart_text: String = "Reset Loadout" if game_node.mission_controller.is_deploying() \
 				else "Restart Mission"
 		_refuse_while(_add_button(row, restart_text, func(): chosen.emit(Choice.RESTART)),
-			mid_pass, "Not while the enemy is moving -- wait for the pass to finish.")
+			mid_pass, "Not while orders are playing out -- wait for them to finish.")
 
 	# Save rides Restart's gate (#144): missions only, for now -- a sandbox save would have no
 	# origin mission for Restart to return to. Campaign-scope saving is its own future issue.
@@ -81,7 +81,7 @@ func _build(can_restart: bool, can_load: bool, game_node: Node, mid_pass: bool) 
 		# slot taken then would resume a finished mission as one still being fought.
 		_refuse_while(save_button, game_node.mission_controller.is_over(), SAVE_REFUSED_OVER)
 		_refuse_while(save_button, mid_pass,
-			"Not while the enemy is moving -- the pass would be saved half-played.")
+			"Not while orders are playing out -- the save would catch them half-done.")
 
 	# Greyed rather than hidden when there is nothing to load: the row teaches that saving exists,
 	# and a menu can only grey what it can explain (#166).
@@ -90,12 +90,12 @@ func _build(can_restart: bool, can_load: bool, game_node: Node, mid_pass: bool) 
 		load_button.disabled = true
 		load_button.tooltip_text = UiText.wrap("No saved games yet")
 	_refuse_while(load_button, mid_pass,
-		"Not while the enemy is moving -- wait for the pass to finish.")
+		"Not while orders are playing out -- wait for them to finish.")
 
 	# Always offered, unlike Restart: a Sandbox board has no file to reload but the way out of it
 	# is the same. Before this the only route back to the title was finishing a mission.
 	_refuse_while(_add_button(row, "Return to Title", func(): chosen.emit(Choice.TITLE)),
-		mid_pass, "Not while the enemy is moving -- wait for the pass to finish.")
+		mid_pass, "Not while orders are playing out -- wait for them to finish.")
 
 	# The reference page (#135) — reachable mid-battle, because mid-battle is when a stranger
 	# first meets a term they don't know.

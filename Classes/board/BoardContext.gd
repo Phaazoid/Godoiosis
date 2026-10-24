@@ -29,9 +29,10 @@ var deposits: Array[ResolvedCellEffect] = []
 var mission: MissionState
 
 # A unit whose death has RESOLVED is not on this board, and the filter lives HERE rather than in
-# any one builder because there are three of them -- game.gd's _board(), play/board_builder.gd and
-# tests/support/squad_fixtures.gd -- and a rule in one is a rule the other two disagree with, which
-# is the two-implementations shape that hid #714 in the first place.
+# any one builder because there are several -- game.gd's _board(), play/board_builder.gd,
+# play/play_session.gd and tests/support/squad_fixtures.gd, plus with_deposits/with_units below --
+# and a rule in one is a rule the others disagree with, which is the two-implementations shape that
+# hid #714 in the first place.
 #
 # It asks the DOMAIN fact, not the engine's: Unit.die() sets lifecycle DEAD and only then calls
 # queue_free(), so between a death and the next frame the node is still a valid child of units_root.

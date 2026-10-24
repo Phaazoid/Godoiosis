@@ -174,8 +174,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# Three literals the mirror overwrites from the 2D every poll (#710), ATTACK's shape: the
 	# authored value is OverlayManager's static (or ThreatLines2D's), which a const table cannot name.
 	Layer.ZONE_HIGHLIGHT: {"color": Color(1, 1, 1, 0.45), "sort": -6, "kind": Kind.FILL},
-	# The PLAYER's reach (#1066): where the hovered or selected unit could hit from anywhere in the
-	# blue above. Red, UNDER the blue, so it survives as the halo past the move envelope -- the same
+	# The PLAYER's reach (#1066): where the hovered or selected unit could hit from ONE origin
+	# (#1069). Red, UNDER the blue, so it survives as the halo past the move envelope -- the same
 	# relationship the enemy's own two tones had before this slice collapsed them.
 	Layer.REACH: {"color": Color(1, 0.15, 0.1, 0.38), "sort": -1, "kind": Kind.FILL},
 	# ...and the ENEMY's whole field under both of yours: move and reach together, ONE unbroken

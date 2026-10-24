@@ -100,8 +100,8 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 		return ResolvedOutcome.Lethality.NONE
 	if s.lifecycle == Unit.LifecycleState.DOWNED:
 		# A hit that deals nothing cannot finish a body (#126) — that is what makes a 0-damage shove
-		# REPOSITION a downed unit instead of executing it (PlanResolver._resolve_knockback skips a
-		# KILLED target). Amends the 0-damage rider (stats.md): a 0-damage hit still COUNTS as a hit
+		# REPOSITION a downed unit instead of executing it (PlanResolver._resolve_one shoves no target
+		# the hit alone would kill). Amends the 0-damage rider (stats.md): a 0-damage hit still COUNTS as a hit
 		# — states, deposits and on-hit effects all still fire — it just no longer finishes.
 		# Keyed on the damage number, not on the attack, because both callers already hold it and
 		# neither holds the attack: Unit.take_damage(0) reaches the same answer with no new argument.

@@ -638,7 +638,8 @@ func _shout_missing_geometry() -> void:
 	for objective in objectives_missing_geometry():
 		push_error("Mission objective %s is declared but no matching zone is painted — this mission cannot be won." % MissionRules.Objective.keys()[objective])
 
-# The Scenario tab shows this live while authoring; set_objectives and apply_scenario shout it on load.
+# The Scenario tab shows this live while authoring; apply_scenario shouts it on load, and the
+# test-only set_objectives when a suite sets the list directly.
 func objectives_missing_geometry() -> Array[MissionRules.Objective]:
 	return mission.objectives_missing_geometry()
 
@@ -681,7 +682,7 @@ func set_lose_conditions(list: Array[MissionRules.LoseCondition], limit: int) ->
 	game.refresh_mission_status()
 
 # The shout, MOVED OUT of set_lose_conditions above (#572) rather than duplicated. It used to fire
-# there, which is mid-load -- before a single unit has spawned -- and a board-dependent condition
+# there, which then ran mid-load -- before a single unit has spawned -- and a board-dependent condition
 # judged then is judged against an empty board: a perfectly good PROTECTED_UNIT_LOST would have
 # reported itself broken on every load, for ever. ScenarioManager.apply_scenario calls this at the
 # point it already re-pushes the HUD, which is the one moment the board has finished mutating (the

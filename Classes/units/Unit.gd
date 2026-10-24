@@ -731,9 +731,9 @@ func _def_for(armor: ArmorData, con: int) -> int:
 
 # THE composition point for "what is this unit immune to" — the role RulesService.def_breakdown
 # plays for DEF. Any UNIT-level immunity readout (a status icon, an inspect row) asks HERE and
-# never re-derives from whatever gear happens to be worn. The body still reads worn_armor
-# directly; #90b moves it onto the ability kit, at which point immunity stops being an
-# armor-specific channel at all — it arrives as an ability, from whatever source granted it.
+# never re-derives from whatever gear happens to be worn. The body reads the ability union
+# (has_live_ability), so immunity is no armor-specific channel: it arrives as an ability, from
+# whatever source granted it.
 func is_immune_to(element: Elemental.Element) -> bool:
 	if not Abilities.INSULATION.has(element):
 		return false

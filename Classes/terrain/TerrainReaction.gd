@@ -4,7 +4,8 @@ class_name TerrainReaction
 # A data rule for the MAP, parallel to ElementalReaction for units (docs/design/terrain.md +
 # elemental-interactions.md "attack the map"). When an attack carrying `incoming_element` lands
 # on a cell of `required_kind` (and/or already holding `required_tile_state`), it changes the
-# tile's states. Authored as .tres later; injected directly in tests for now.
+# tile's states. Authored as .tres in Resources/TerrainReactions/, read through the cached
+# TerrainReactionCatalog.
 #
 # NONE on either gate = "don't care": required_kind NONE matches any tile; required_tile_state
 # NONE needs no pre-existing state (the setup half — e.g. WATER -> WET tile).

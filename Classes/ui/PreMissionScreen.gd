@@ -723,7 +723,7 @@ func _on_reset_order() -> void:
 func _on_detail_requested(item: Item, owner_unit: Unit) -> void:
 	# The mission's own mod pool (#812), off the Loadout rather than the Roster: deploy_roster drops
 	# the resolved resource once it has built the phase's gear, so this is the only thing still
-	# holding the answer by the time a card opens. Empty = every authored mod, which is every board
+	# holding the answer by the time a card opens. Empty offers nothing (#1222), which is every board
 	# that names no roster.
 	ItemDetail.open(_controller.game, item, owner_unit,
 			_controller.loadout().available_mods, _redraw)

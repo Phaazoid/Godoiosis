@@ -26,7 +26,8 @@ class_name UiLayers
 # --- CanvasLayer.layer: the order BETWEEN layers ---------------------------------------------------
 # The order is forced, not chosen: the Prolog's UNIT_SELECTED line plays while the wheel is open, so
 # the wheel must sit over the dialogue or the dialogue's full-rect catcher eats its first click.
-const LAYER_HUD := 0            # UILayer (Game.tscn): the always-on panels; TurnBanner shares it
+const LAYER_HUD := 0            # UILayer (Game.tscn): the always-on panels
+# TurnBanner sets no layer, so it sits on LAYER_DIALOGUE's number: CanvasLayer's default of 1.
 const LAYER_DIALOGUE := 1       # Dialogic's layout, set by ScenarioDirector._start
 const LAYER_ACTION_MENU := 20   # the unit's radial action menu -- over the HUD and the dialogue
 const LAYER_CARDS := 100        # game.card_layer: every ModalCard, over everything above

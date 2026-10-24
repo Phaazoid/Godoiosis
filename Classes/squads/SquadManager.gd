@@ -28,7 +28,7 @@ var active_squad: Squad = null: set = _set_active_squad
 var batching := false
 # The threat preview runs the REAL archetypes and rolls their orders back (#710 plan tier), so for
 # its duration the queue doors must not DRAW and game.gd's squad handlers must not repaint. Set and
-# cleared only by AIController.preview_faction_turn. Nothing is drawn, so nothing needs cleaning up.
+# cleared only by AIController.preview_turn. Nothing is drawn, so nothing needs cleaning up.
 var previewing := false
 
 # Allocates BaseAction.batch_id -- the durable half of `batching`, so a LIFO undo (#228) can tell

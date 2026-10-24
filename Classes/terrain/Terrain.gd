@@ -1,6 +1,9 @@
 class_name Terrain
 extends Object
 
+# The terrain vocabulary: tile kinds and states, ramp rises, and the four-corner height shape rules
+# (#427). Static and pure; BoardGrid holds the painted tile, BoardHeights the corners.
+
 const BURNING_TILE_DAMAGE := 5
 const COVER_DEF := 2   # flat DEF a Cover tile grants its occupant (#84 Burrow) — a tuning dial
 const FROZEN_MOVE_COST := 1   # what entering a FROZEN cell costs, whatever the tile authors (#1223)
@@ -272,8 +275,9 @@ static func corner_mask(corners: Vector4i) -> int:
 # - a climb over UNITS_PER_LEVEL breaks the 45 degree cap ("steepness cap at 45 is good").
 # - the two OPPOSITE-pair masks are saddles ("no saddles"). Refused GROUND, not a legal form.
 #
-# Nothing can author an illegal shape today -- corners_of_ramp is still the only writer, and the
-# brush only speaks cardinal -- so this is deliberately a PREDICATE rather than a lint tier. A check
+# Nothing can author an illegal shape today -- corners_of_ramp composes only legal ones, the corner
+# tool (#427 slice 4) clamps through corner_toward, which asks this, and only load_corner_dict writes
+# raw, restoring a saved file -- so this is deliberately a PREDICATE rather than a lint tier. A check
 # wired to a surface nothing can reach is a check that cannot fire (#390); the tier arrives with the
 # tool that can break it.
 static func is_legal_corners(corners: Vector4i) -> bool:

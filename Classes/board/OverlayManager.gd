@@ -165,8 +165,9 @@ const ZONE_PATROL_MODULATE := Color(1, 0.5, 0, 0.35)
 const ZONE_DEFEND_MODULATE := Color(1, 0.82, 0.25, 0.45)
 # A static var since #710: the leash reveal made it a play colour, so GameKnobs may write it.
 static var ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
-# YOUR unit's attack reach (#1066): every cell it could hit from anywhere in its move envelope.
-# Red, and it draws UNDER your blue, so what shows is the halo past where you may stand.
+# YOUR unit's attack reach (#1066): every cell it could hit from ONE origin (#1069), the one
+# game.show_player_reach names. Red, and it draws UNDER your blue, so what shows is the halo past
+# where you may stand.
 static var REACH_MODULATE := Color(1.0, 0.15, 0.1, 1.0)
 # ...and the ENEMY's whole field, move and reach together, under both of yours. One unbroken reddish
 # purple on the dev's Fire Emblem ruling (#1066) -- it replaced a red/blue pair that asked the player
@@ -848,8 +849,8 @@ func _redraw_queued_strikes() -> void:
 			draw_cells(queued_footprint_overlay, footprint, ATLAS_COORDS)
 
 
-# YOUR unit's attack reach (#1066): every cell it could hit from anywhere in the move envelope the
-# blue layer is drawing. Its own door rather than a second argument to show_overlay, because it is
+# YOUR unit's attack reach (#1066): every cell it could hit from the one origin its caller names
+# (#1069, game.show_player_reach). Its own door rather than a second argument to show_overlay, because it is
 # replaced wholesale on every hover change and MOVE is not.
 func show_reach(cells: Array[Vector2i]) -> void:
 	if reach_overlay == null:

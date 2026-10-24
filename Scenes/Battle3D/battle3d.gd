@@ -1919,9 +1919,9 @@ func _center_on_pointer() -> void:
 # evaluates continuously — one authority, two entry points BoardSpace already ships (#273 / #259),
 # and it is the seam UnitMirror places the sprite with, so the camera looks where the unit IS.
 #
-# surface_point carries the STAGED offset while _aim_over does not, so a call here while the board
-# is torn out would lift the rig twice -- once through the point and once through the rig's own lift
-# channel. Unreachable rather than guarded here: every caller is refused while playback owns the
+# BoardSpace.surface_point, NEVER BoardMirror's: the mirror's twin adds the STAGED offset, and the
+# rig already lifts through its own lift channel, so the mirror's point would lift it twice while the
+# board is torn out. That cannot arise here anyway: every caller is refused while playback owns the
 # board (SPACE by _unhandled_input's lock check, an order commit by there being no pass running to
 # commit during, an objectives-panel row by game.look_at_next_zone asking the lock itself -- that
 # panel stays up through the pass, #955 part 3), and playback is the only thing that stages anything.

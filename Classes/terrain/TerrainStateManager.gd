@@ -100,7 +100,7 @@ func _has_ground(cell: Vector2i) -> bool:
 # they would on any other removal. Returns whether anything went, so a caller can skip its redraw.
 #
 # A SWEEP rather than a per-cell clear because there is more than one way to take ground away: the
-# brush erases one cell, and resize_map calls grid.clear() and repaints a whole new rectangle. A
+# brush erases one cell, and resize_map calls grid.reset() and repaints a whole new rectangle. A
 # targeted clear has to be remembered correctly at each site; this only has to be called.
 func prune_groundless() -> bool:
 	var doomed: Array[Vector2i] = []

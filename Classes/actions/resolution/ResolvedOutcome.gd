@@ -40,8 +40,9 @@ var knockback_landing_index: int = 0
 # shortened or stopped outright; a fully held one draws no trail, and held_in_place() marks it instead.
 var knockback_held: int = 0
 # The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
-# and the attack did not pierce DEF. Already folded into the mitigation; recorded so the queue row
-# can name it without re-deriving (Law #2's spirit applied to a readout).
+# and the attack did not pierce DEF. Already folded into the mitigation; recorded so a readout can
+# name it without re-deriving (Law #2's spirit applied to a readout). Its one reader is
+# AttackAction.get_outcome_summary, which no live surface calls.
 # The vial this hit BURNED (#697), or null. Set by the resolver only when the caster's attunement
 # actually changed the damage -- standing on a matching source pays instead, and then nothing is
 # spent. Recorded rather than re-derived so the queue row can name it and execute() can spend it
@@ -179,7 +180,8 @@ var hp_before: int = 0   # target's HP going into this hit; recorded by the reso
 var reads_hp: bool = true
 
 # Target height minus attacker height at resolve time (#258) — the wire a future height-damage rule
-# attaches to; no behaviour reads it in v1 beyond the queue row's uphill/downhill token. FROZEN like
+# attaches to; nothing reads it in v1 beyond get_outcome_summary's uphill/downhill token, which no
+# live surface calls. FROZEN like
 # fired_attack: stamped from origin_cell + the threaded hypo position, never re-derived later, since
 # a shove earlier in the pass can change the target's level (Law #2). 0 with no board.
 var elevation_delta: int = 0

@@ -427,12 +427,12 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	turn_manager.set_active_faction(scenario.active_faction)
 	game.refresh_end_turn_button()   # a resumed save can load straight into an already-spent faction (#189)
 	# The board has finished mutating -- re-push the mission HUD (#134's write-point set was missing
-	# this one). set_objectives refreshed it mid-load, BEFORE units spawned, so extraction read its
-	# progress off an empty board and the stale answer sat until the first turn event.
+	# this one). MissionController.apply_scenario refreshes it mid-load, BEFORE units spawn, so
+	# extraction read its progress off an empty board and the stale answer sat until the first turn event.
 	game.refresh_mission_status()
-	# ...and only NOW can a board-dependent lose condition be judged (#572). set_lose_conditions
-	# shouts the rest mid-load, which is before a single unit has spawned -- so a PROTECTED_UNIT_LOST
-	# declared on a perfectly good board would report itself broken every single load.
+	# ...and only NOW can a board-dependent lose condition be judged (#572). apply_scenario sets the
+	# conditions mid-load, which is before a single unit has spawned -- so a PROTECTED_UNIT_LOST judged
+	# there, on a perfectly good board, would report itself broken every single load.
 	game.mission_controller.report_missing_setup()
 	board_loaded.emit()
 

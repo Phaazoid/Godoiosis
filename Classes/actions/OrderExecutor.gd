@@ -7,8 +7,8 @@ class_name OrderExecutor
 # back-ref to the Game coordinator (same pattern as DevController/AIController/MainActionMenu)
 # for the managers and panels it drives.
 #
-# Every plan resolves through execute_orders() -- the queue panel's Execute button, the action
-# menu's Execute Orders entry, and AIController all land here. That single path is what keeps
+# Every plan resolves through execute_orders() -- the queue panel's Execute button, AIController
+# and ReplayDriver all land here. That single path is what keeps
 # Law #2 honest (the queue previewed exactly this pass) and Law #3 cheap (the AI has no side
 # channel to add).
 #

@@ -11,14 +11,15 @@ class_name ThreatField
 # watcher could arm, since a watch armed over somebody fires on the spot (#1003) and a watch attack
 # is never in the fire view (#590); and where a SHOCK hit's current runs, through water and through
 # anyone wet -- counting whoever the viewer's own PENDING plan will soak (dev, 2026-10-03).
-# Declared, not drawn: a placed blast's splash and a payload's landing (#1207, on no shipped enemy);
-# a wet unit HOVERING a dry cell (per cell, not per unit -- queue the move and it is drawn); and a
-# soaking the enemy's own turn deals before its shock.
+# A placed blast's splash and a payload's landing ARE drawn, dilated as an upper bound (_add_splash,
+# #1207). Declared, not drawn: a wet unit HOVERING a dry cell (per cell, not per unit -- queue the
+# move and it is drawn); and a soaking the enemy's own turn deals before its shock.
 #
-# WHICH BOARD it is built on is the CALLER's decision and both callers pick the same one: the
-# projected board, every unit stood on its get_projected_destination(). for_viewer opens that
-# snapshot for the danger view's two hosts (game.threat_field() and the Play API's `ranges`, #46),
-# AIController.preview_turn holds one open across its whole planning pass. The two tiers answering
+# WHICH BOARD it is built on is the CALLER's decision. The danger view's two hosts (game.threat_field()
+# and the Play API's `ranges`, #46) and AIController.preview_turn pick the same one: the projected
+# board, every unit stood on its get_projected_destination(). for_viewer opens that snapshot for the
+# two hosts, and preview_turn holds one open across its whole planning pass. The AI's own reads in
+# AITactics build on whatever board their decision already stands on. The two tiers answering
 # about different boards is what let a threat LINE name a victim these tones said was out of reach
 # (slice 4).
 

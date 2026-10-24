@@ -526,6 +526,8 @@ func _beat_row(beat: DialogBeat, index: int) -> HBoxContainer:
 	var timeline := OptionButton.new()
 	timeline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	timeline.add_item("(no timeline)", 0)
+	# ONE reader, DialogicSource's -- the registry is also what the timeline editor above writes,
+	# and a second spelling here would disagree with it the moment one of them learns something.
 	var directory := DialogicSource.directory("dtl")
 	var names: Array = directory.keys()
 	names.sort()
@@ -650,7 +652,3 @@ func _remove_button(on_pressed: Callable) -> Button:
 		+ "at stake, and it asks.")
 	button.pressed.connect(on_pressed)
 	return button
-
-
-# ONE reader, DialogicSource's -- the registry is also what the timeline editor above writes,
-# and a second spelling here would disagree with it the moment one of them learns something.

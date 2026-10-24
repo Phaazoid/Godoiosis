@@ -20,7 +20,7 @@ enum Profile { BOARD, CINEMATIC }
 # --- the pass beats (#118) -------------------------------------------------------------------
 
 static var AI_SQUAD_PAN := 0.7     # camera glide from squad to squad -- CameraController.pan_to
-static var AI_PLAN_READ := 0.6     # AI squad's plan is drawn; hold before it resolves -- AIController
+static var AI_PLAN_READ := 0.6     # AI squad's plan is drawn; hold before it resolves -- OrderExecutor (#987)
 static var AI_ACTION := 0.45       # BOARD base beat on an AI pass -- an unread plan
 static var PLAYER_ACTION := 0.3    # BOARD base beat on the player's own Execute (#519)
 static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.start_faction_turn
