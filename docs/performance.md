@@ -842,3 +842,28 @@ Measured on `main` (`666967ef`) and the branch, four runs each, interleaved:
 - **`plan()` is about 1.1 ms cheaper for every caller,** because it walks one cohesion field per
   member where it used to walk two. The click and the AI's seek gain that much. The click's spread is
   machine noise.
+
+---
+
+## 2026-10-24 — the member Move hover stops re-resolving
+
+The Move hover called `refresh_action_queue` on every legal tile, after its preview. That call was a
+bug: the resolve read the preview's verdicts off the queued orders (`docs/architecture/board.md` →
+*The board/ folder*). It was also most of the hover's cost, a resolve plus every plan layer redrawn
+to repaint what was already on screen. It is gone, and the hover pays one `validate_squad_plan`
+instead, to put the queued verdicts back.
+
+Measured with a scratch probe, never committed: Castle Assault's 5-member player squad with a group
+move queued (5 orders), a member's Move open, `update_hover_visuals` over 12 reachable cells × 5 rounds,
+warmed. The branch's base (`8b14e37a`) against the fix, swapping only `HoverPresenter.gd`, four runs
+each, interleaved:
+
+| | Base | Fix |
+|---|---|---|
+| Member Move hover, per reachable cell | 13.1–16.2 ms | **9.2–10.2 ms** |
+| `refresh_action_queue` alone (what the hover dropped) | 6.0–8.6 ms | |
+| `validate_squad_plan` with the cached plan (what it added) | 0.96–1.35 ms | |
+
+- **About 5 ms off every hovered tile**: the refresh, less the validate that replaced it.
+- **The refresh's cost is drawing, not resolving.** `resolve_plan` is 0.4–0.6 ms of its 6.0–8.6 ms
+  on this board.
