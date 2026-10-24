@@ -56,6 +56,7 @@ The summary is **not** a third file: it is the last line of the log, and it is a
 | 2026-09-09 | **A run may be refused at the client only when it is structurally EMPTY.** Anything merely thin is sent and stamped. Refines FLAG-NEVER-EXCLUDE rather than repealing it. Settled by [#851](https://github.com/Phaazoid/Godoiosis/issues/851) — see *Where the line between refusing and flagging fell* below. |
 | 2026-09-09 | **A run whose board lost a reference is SEEDED and marked untrusted, not refused.** The replay harness is the tool you would reach for to investigate such a run, so refusing removes the only instrument. Settled by [#871](https://github.com/Phaazoid/Godoiosis/issues/871). |
 | 2026-09-20 | **A player may NAME themselves, opt-in, and the name rides both pipes.** Freeform, skippable, default empty -- so the record stays anonymous unless somebody chose otherwise. Settled by [#1049](https://github.com/Phaazoid/Godoiosis/issues/1049). |
+| 2026-10-24 | **[#841](https://github.com/Phaazoid/Godoiosis/issues/841) is closed for good**, asked in the canon sweep: *"This version of the game is just for collecting data."* |
 
 ### Who a run is from (#1049, 2026-09-20)
 
@@ -179,6 +180,6 @@ Stated rather than discovered later:
 
 ## Open gates
 
-- ~~**[#841](https://github.com/Phaazoid/Godoiosis/issues/841) — restore a data-sharing setting before any build goes wider than hand-delivered.** The no-opt-out ruling is scoped to *"the early version of my game"*, handed out in person with the terms said out loud first. It stopped being theoretical the day slice 5 merged: until then the notice described data sitting on the player's own disk, and now it describes data leaving their machine.~~ *(Closed by the dev 2026-09-18, with no comment on the thread. `Classes/ui/TelemetryNotice.gd`'s header records the close as "never having been open in the sense it claimed".)*
+- ~~**[#841](https://github.com/Phaazoid/Godoiosis/issues/841) — restore a data-sharing setting before any build goes wider than hand-delivered.** The no-opt-out ruling is scoped to *"the early version of my game"*, handed out in person with the terms said out loud first. It stopped being theoretical the day slice 5 merged: until then the notice described data sitting on the player's own disk, and now it describes data leaving their machine.~~ *(Closed by the dev 2026-09-18, and closed for good: see the 2026-10-24 row under *The dev's rulings*.)*
 - **[#856](https://github.com/Phaazoid/Godoiosis/issues/856)** — the polish umbrella, including the P0 that keeps the dev's own test runs out of the numbers ([#851](https://github.com/Phaazoid/Godoiosis/issues/851)). *(#851 shipped 2026-09-09. #856's open children are [#854](https://github.com/Phaazoid/Godoiosis/issues/854), the dashboards, and [#1160](https://github.com/Phaazoid/Godoiosis/issues/1160), replay step back.)*
 - **[#209](https://github.com/Phaazoid/Godoiosis/issues/209)** — Theater mode, the player-facing descendant of the replay viewer. Deliberately separate: this one is a diff tool for a developer, that one is a camera for a player.
