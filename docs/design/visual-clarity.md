@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1377 (the danger field stops clipping a Sentry's reach to its zone) folded in 2026-10-21; #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09; the #929 follow-up (a HUD surface catches its own clicks) folded in 2026-10-09; #1374 (a zone colour knob recolours every surface wearing it) folded in 2026-10-21.**
+**Canon checked through #1171 (2026-09-29); #1377 (the danger field stops clipping a Sentry's reach to its zone) folded in 2026-10-21; #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09; the #929 follow-up (a HUD surface catches its own clicks) folded in 2026-10-09; #1374 (a zone colour knob recolours every surface wearing it) folded in 2026-10-21; #1430 (the round's smoke split turns a tether red) folded in 2026-10-23.**
 
 ## Principles
 
@@ -389,7 +389,7 @@ Two things that generalise past this ticket:
 2. **The previewed plan and the last resolve are different questions while a pass is running.** A
    kill mid-pass fired `unit_died` → `game._on_unit_died` → `refresh_action_queue` → `resolve_plan`,
    re-resolving a queue whose earlier attacks had already landed. `OrderExecutor.executing_plan` is
-   the plan being played out, and `battle3d._previewed_plan` prefers it. *(This paragraph used to end
+   the plan being played out, and `game.previewed_plan` (battle3d's until #1430) prefers it. *(This paragraph used to end
    by calling that re-resolve a live Law #2 break in EXECUTION as well. It was not — see the next
    section, which closed the re-resolve at its source. The preference stays as belt-and-braces.)*
 
@@ -4391,7 +4391,7 @@ Both are orange, dashed, with the dashes slowly moving, so they read as one syst
 
 - SOLID for a member.
 - GHOST for a unit that could join. Squad Up draws one from every candidate; Join Squad draws one from the joiner to every leader it could join.
-- STRAIN, red, for the tether a hovered move would break: a member past its leader's range, or each member a leader's destination would strand.
+- STRAIN, red, for the tether a hovered move would break: a member past its leader's range, or each member a leader's destination would strand. *(Since [#1430](https://github.com/Phaazoid/Godoiosis/issues/1430), 2026-10-23, also a member the round's smoke will split off at the next turn start, on either side's lines, in the same red by the dev's call: `SplitForecast.round_leavers`, on the board Alt's outline rules on.)*
 
 **Tethers connect what the board is DRAWING.** Each end is the unit's projected cell, or its hover or formation ghost while a move is previewed, which is the anchor `OverlayIcon`'s ring rides. The range centres on the leader's drawn cell, so it follows the hovered destination in both move modes. Group Move's range now follows too; before this it stayed at the leader's own cell.
 

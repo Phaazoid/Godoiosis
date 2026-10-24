@@ -17,7 +17,8 @@ extends Node2D
 #
 # THREE STATES, one layer each in the diorama because a layer is one material: SOLID for a member,
 # GHOST for a unit that COULD join (Squad Up's candidates, Join Squad's squads), STRAIN for the
-# tether a hovered move would break -- the one that SHAKES when that move is clicked anyway.
+# tether a hovered move would break -- the one that SHAKES when that move is clicked anyway -- or that
+# the round's smoke will break at the next turn start (#1430, the same red by the dev's call).
 #
 # The arrowhead is the reach mark's SHAPE, not its knobs: ARROW_LENGTH and ARROW_WIDTH_SCALE are the
 # tethers' own, and the diorama draws it on the see-through twin of the reach cone's shader, so a
@@ -725,8 +726,9 @@ static func tether_color(hostile_side: bool) -> Color:
 	return ENEMY_TETHER_COLOR if hostile_side else TETHER_COLOR
 
 
-# A tether state's colour. GHOST and STRAIN ignore the side: an enemy never draws either, and the
-# strain red means "breaking" whoever's tether it is.
+# A tether state's colour. GHOST and STRAIN ignore the side: an enemy never draws a ghost, and the
+# strain red means "breaking" whoever's tether it is -- an enemy's too, when the round's smoke will split
+# it (#1430).
 static func color_of(state: int, hostile_side := false) -> Color:
 	match state:
 		Strain.GHOST:

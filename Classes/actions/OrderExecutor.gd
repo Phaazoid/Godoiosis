@@ -37,7 +37,7 @@ signal volley_struck(attack: AttackAction)
 var _downed_pending: Array[Unit] = []
 
 # The plan THIS pass is playing out, non-null only while one is running. Two readers, both outside:
-# battle3d._previewed_plan prefers it over the last resolve (#354), and game.refresh_action_queue
+# game.previewed_plan prefers it over the last resolve (#354), and game.refresh_action_queue
 # reads it as "a pass is running, refuse to re-derive" (#361). That refusal is what now KEEPS
 # SquadManager._last_resolved_plan stable across a pass -- before it, a kill mid-pass fired
 # unit_died -> game._on_unit_died -> refresh_action_queue -> resolve_plan, re-resolving a queue whose
