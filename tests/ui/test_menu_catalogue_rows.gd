@@ -360,6 +360,37 @@ func test_a_watch_attack_gets_one_reachable_row_and_no_fire_row() -> void:
 			"the row aimed no attack -- clicking Overwatch is what chooses it").is_same(watch)
 
 
+# A watch MAIN (#1440, dev: "If that attack is an overwatch, it should function how an overwatch
+# functions"). The main lists twice by construction -- the Attack expander and the weapon's watch rows
+# -- and _append_unique keeps the first, the Attack row. So the row count is not the tell, as above:
+# the verb the surviving row opens is.
+func test_a_watch_main_gets_one_row_and_it_stands_a_watch() -> void:
+	var watcher := _spawn(Vector2i(2, 0))
+	var weapon := H.make_weapon(4)
+	weapon.template.main_attack.display_name = "Line Watch"
+	weapon.template.main_attack.can_overwatch = true
+	watcher.equipped_weapon = weapon
+
+	await _enter_attack_ring(watcher)
+	var controller := _controller()
+	var named := 0
+	for row: Dictionary in controller.level_nodes():
+		if String(row.get("name", "")) == "Line Watch":
+			named += 1
+	assert_int(named).override_failure_message("the kit slice should hold the main exactly once").is_equal(1)
+
+	_aim_and_click(controller, "Line Watch")
+	await await_idle_frame()
+	var state: int = game.game_state
+	var targeting: int = game.GameState.ATTACK_TARGETING
+	assert_int(state).override_failure_message("picking the watch main opened no targeting").is_equal(targeting)
+	var intent: int = game.aim_intent
+	var watching: int = game.AimIntent.WATCH
+	assert_int(intent).override_failure_message(
+			"the watch main opened an ordinary shot's aim -- it fires a watch as a shot").is_equal(watching)
+	assert_object(watcher.active_attack).is_same(weapon.template.main_attack)
+
+
 # ==============================================================================
 #  #1045: a weapon's live count on its attack rows
 # ==============================================================================

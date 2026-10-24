@@ -70,9 +70,8 @@ func test_bare_weapon_with_nothing_extra_has_no_weapon_actions() -> void:
 # rule as the other two: a watchable attack the unit could fire RIGHT NOW opens the row, one it
 # cannot does not open it alone. Both halves, because the fireability filter IS the rule.
 #
-# The watchable attack is an EXTRA, never the main: since #590 a can_overwatch attack is watch-ONLY,
-# so a main authored that way leaves the weapon nothing to attack with and WeaponTemplateLint
-# refuses it. Authoring the invalid shape here would pin it as legal.
+# The watchable attack is an EXTRA beside a fireable main, the shape the Carbine ships. A watch MAIN
+# (#1440) is the ring's own case, in tests/ui/test_menu_catalogue_rows.gd.
 func test_a_watchable_attack_opens_the_weapon_row_only_when_it_can_fire() -> void:
 	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	var template := WeaponData.new()

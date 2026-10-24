@@ -1476,11 +1476,12 @@ func attack_can_overwatch(attack: AttackData) -> bool:
 # never the live selection — see that method's header for why. Since #84 the counter attack must
 # also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
 # Stab requires_readiness) can't counter with an attack the menu already refuses. A counter that
-# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal or a
-# map-only attack never counters (AttackData.can_ever_counter, #1135).
+# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal, a
+# map-only attack or a watch never counters (AttackData.can_ever_counter, #1135, #1440), and the watch
+# is asked composed, so a mod that makes the main a watch is one more route to the same rule.
 func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
-	return atk != null and atk.can_ever_counter() and is_attack_fireable(atk)
+	return atk != null and atk.can_ever_counter(attack_can_overwatch(atk)) and is_attack_fireable(atk)
 
 # Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
 # can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers

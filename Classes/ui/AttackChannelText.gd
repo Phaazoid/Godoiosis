@@ -65,8 +65,8 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 		out.append("Pierces guard")
 	# can_counter defaults TRUE, so the line is the EXCEPTION -- saying "can counter" on nearly every
 	# attack in the game would be noise wearing the shape of information. Asked through the rule, so a
-	# heal or a map-only attack says so whatever its box holds (#1135).
-	if not attack.can_ever_counter():
+	# heal, a map-only attack or a watch says so whatever its box holds (#1135, #1440).
+	if not attack.can_ever_counter(can_overwatch):
 		out.append("Never counters")
 
 	out.append_array(_height_lines(attack))
