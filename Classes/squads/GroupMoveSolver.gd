@@ -18,9 +18,14 @@ class_name GroupMoveSolver
 #
 # `direct` (#1230): Unit -> true for a unit whose AI profile does not route around watches, so its
 # walk is the shortest path. Only the AI passes it; every player route stays the safe one.
+#
+# `leader_reach` and `fields` are answers the caller already holds, so plan() does not search again:
+# the leader's compute_move_range, and SquadCohesion.fields round `leader_destination` on this same
+# board. Empty means not passed. Only Group Move's hover passes them (docs/performance.md, 2026-10-23).
 
 static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null,
-		pinned: Dictionary = {}, hazards: Dictionary = {}, direct: Dictionary = {}) -> Array[MoveAction]:
+		pinned: Dictionary = {}, hazards: Dictionary = {}, direct: Dictionary = {},
+		leader_reach: Dictionary = {}, fields: Dictionary = {}) -> Array[MoveAction]:
 	var moves: Array[MoveAction] = []
 	var leader := squad.get_leader()
 	var leader_start := leader.movement.cell
@@ -29,7 +34,8 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 	if stays and pinned.is_empty():
 		return moves
 
-	var leader_reach := RulesService.compute_move_range(leader, board)
+	if leader_reach.is_empty():
+		leader_reach = RulesService.compute_move_range(leader, board)
 	# Both player callers check this first, but an unreachable goal makes route_to walk a
 	# came_from that has no entry for it — a cascade of engine errors and a null destination.
 	if not stays and not leader_reach.reachable.has(leader_destination):
@@ -56,10 +62,13 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		# field the validator refuses against, so the solver can no longer place a member the
 		# validator then rejects. Per-member (#115): one shared field rejected a Waterwalker's own
 		# near-shore water cells. This retires the old `COH * 2` path-leash-as-preference and its
-		# drop-the-leash retry: with cohesion itself path-based, the preference IS the rule.
-		var reach := RulesService.compute_move_range(member, board, leader_destination)
+		# drop-the-leash retry: with cohesion itself path-based, the preference IS the rule. Walked once
+		# and handed to the range's clamp, the candidates and is_trailing.
+		var leash: Dictionary = fields.get(member, {})
+		if leash.is_empty():
+			leash = SquadCohesion.field(squad, leader_destination, member, board)
+		var reach := RulesService.compute_move_range(member, board, leader_destination, leash)
 		var here: Vector2i = member.movement.cell
-		var leash := SquadCohesion.field(squad, leader_destination, member, board)
 
 		var options := follow_cells(squad, member, leader_destination, board, allowed_cells, reach, leash)
 		if options.is_empty():
@@ -212,10 +221,11 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 # holds its center, so empty means "not passed").
 static func follow_cells(squad: Squad, member: Unit, leader_destination: Vector2i, board: BoardContext,
 		allowed_cells = null, reach: Dictionary = {}, leader_field: Dictionary = {}) -> Dictionary:
-	if reach.is_empty():
-		reach = RulesService.compute_move_range(member, board, leader_destination)
+	# The field first, so the range's clamp reads it rather than walking its own.
 	if leader_field.is_empty():
 		leader_field = SquadCohesion.field(squad, leader_destination, member, board)
+	if reach.is_empty():
+		reach = RulesService.compute_move_range(member, board, leader_destination, leader_field)
 	return _candidate_cells(reach, member.movement.cell, leader_field, allowed_cells)
 
 # Every cell this member may legally end on -> its move cost. Staying put counts at cost 0 when it

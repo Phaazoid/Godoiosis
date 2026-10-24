@@ -435,6 +435,54 @@ func test_a_group_moves_stranding_tile_clears_the_red_the_last_tile_drew() -> vo
 			"a stranding tile left the last tile's attack range standing").is_empty()
 
 
+# Group Move's hover hands the solver and the lines what it already holds (docs/performance.md,
+# 2026-10-23): the leader's range from the mode's entry, and each member's bubble walked once round the
+# hovered tile. Handed or walked, the board must show what plan() and cohesion_bubble find unaided.
+func test_a_group_move_hover_draws_what_the_solver_and_the_bubble_find_unaided() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_FAST, "cell": Vector2i(-1, 0)},
+		{"dex": DEX_SLOW, "cell": Vector2i(0, 2)}])
+	var leader: Unit = board.leader
+	game.selected_unit = leader
+	game.enter_group_move_mode(leader)
+	var cell := GridUtils.NO_CELL
+	var unaided: Array[MoveAction] = []
+	for candidate: Vector2i in game.leader_followable:
+		var moves := GroupMoveSolver.plan(leader.squad, candidate, game._board())
+		if moves.size() > 1:   # the leader and at least one member
+			cell = candidate
+			unaided = moves
+			break
+	assert_that(cell).override_failure_message(
+			"fixture is vacuous: no followable tile moves a member, so no bubble reaches the solver") \
+		.is_not_equal(GridUtils.NO_CELL)
+
+	game.hover_presenter.update_hover_visuals(cell)
+	assert_array(_placements(_om().hover_move_previews)).override_failure_message(
+			"the hover drew a different formation from the one plan() finds unaided") \
+		.is_equal(_placements(unaided))
+	var walked := OverlayManager.outline_segments(game.cohesion_bubble(leader.squad, cell), game._board())
+	assert_array(_strokes(_om().squad_outline)).override_failure_message(
+			"the stroke round the leader's ghost is not the bubble walked round that tile") \
+		.is_equal(_strokes(walked))
+
+
+# A formation as values, so two solves compare by what they place rather than by object identity.
+func _placements(moves: Array[MoveAction]) -> Array:
+	var out := []
+	for move in moves:
+		out.append([move.actor, move.path, move.is_trailing])
+	return out
+
+
+# An outline as sorted text, so two strokes round the same cells compare equal in any order.
+func _strokes(segments: Array[PackedVector3Array]) -> Array:
+	var out := []
+	for segment in segments:
+		out.append(str(segment))
+	out.sort()
+	return out
+
+
 # Off the whole range the red goes back to the unit's own tile -- what Move painted when it opened --
 # where it used to stay wherever the last legal tile had put it.
 func test_hovering_off_the_range_puts_the_red_back_where_move_opened_it() -> void:

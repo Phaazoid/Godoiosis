@@ -226,7 +226,8 @@ static func blocks_passage(mover: Unit, occupant: Unit) -> bool:
 static func is_standable_for(mover: Unit, occupant: Unit) -> bool:
 	return occupant == null or mover.squad.get_members().has(occupant)
 
-static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null) -> Dictionary:
+static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null,
+		leash: Dictionary = {}) -> Dictionary:
 	var start := unit.movement.cell
 	var max_cost := unit.get_mov()
 
@@ -275,9 +276,11 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 		leader_pos = unit.movement.cell   # unused for leaders (filter below is gated on not is_leader)
 
 	# One cohesion field for the whole filter loop (#151) -- bounded at COH, so cheaper than the
-	# search above it. Leaders skip it entirely; the filter below is gated on not is_leader.
-	var coh_field := {}
-	if not unit.is_leader():
+	# search above it. Leaders skip it entirely; the filter below is gated on not is_leader. `leash` is
+	# that field when the caller already walked it round `leader_cell` for its own use (GroupMoveSolver);
+	# a field always holds its center, so empty means not passed.
+	var coh_field := leash
+	if coh_field.is_empty() and not unit.is_leader():
 		coh_field = SquadCohesion.field(unit.squad, leader_pos, unit, board)
 
 	for cell in cost_so_far.keys():

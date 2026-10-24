@@ -238,12 +238,18 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		_set_cursor_for_preview(cell, false)
 		return
 
-	# Reads what enter_group_move_mode computed: per hovered cell it cost 6.8 ms of a 16.7 ms frame
-	# (docs/performance.md). Same two questions, same order, as game._click_choosing_group_move.
-	var moverange: Dictionary = game.compute_move_range(leader)
-	var followable: bool = moverange.reachable.keys().has(cell) and game.leader_followable.has(cell)
+	# Reads what enter_group_move_mode computed, the sweep and the range it swept: per hovered cell the
+	# sweep cost 6.8 ms of a 16.7 ms frame and the range 1.5 ms a search (docs/performance.md). Same
+	# two questions as game._click_choosing_group_move, followable first: a state set without the
+	# mode's door has both caches empty, and reads as nowhere.
+	var moverange: Dictionary = game.group_move_range
+	var followable: bool = game.leader_followable.has(cell) and moverange.reachable.has(cell)
 	if followable:
-		var formation := GroupMoveSolver.plan(leader.squad, cell, game._board())
+		# Each member's bubble round the leader's ghost, walked once for the solver and the lines both.
+		var board: BoardContext = game._board()
+		var fields := SquadCohesion.fields(leader.squad, cell, board)
+		var formation := GroupMoveSolver.plan(leader.squad, cell, board, null, {}, {}, {},
+				moverange, fields)
 		game.overlay_manager.show_hover_move_paths(formation)
 		# ...and a stand-in for every member the formation places, not just the leader: what the
 		# player is choosing here is where the whole squad lands.
@@ -258,7 +264,8 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 		var placed := {}
 		for move: MoveAction in formation:
 			placed[move.actor] = move.destination
-		game.draw_squad_cohesion(leader.squad, cell, placed)
+		var none: Array[Unit] = []   # typed: a bare [] through the untyped `game` ref fails at runtime
+		game.draw_squad_cohesion(leader.squad, cell, placed, none, none, fields)
 	elif game.leader_stranding.has(cell):
 		_draw_stranding(leader, cell, moverange)
 	else:
