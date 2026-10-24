@@ -1468,10 +1468,10 @@ func execute() -> Dictionary:
 			if action.action_type != type:
 				continue
 			# R7 liveness (#1005) -- MIRRORS execute_orders' own collection filter. Both twins read
-			# the resolver's stamp rather than asking the board, which is what keeps them one
-			# answer; the went_downed wire bug is what a hand-copied twin with its own opinion
-			# costs (will-and-death.md).
-			if action.resolved_actor_felled:
+			# the resolver's stamp through is_inert() rather than asking the board, which is what
+			# keeps them one answer; the went_downed wire bug is what a hand-copied twin with its
+			# own opinion costs (will-and-death.md).
+			if action.is_inert():
 				continue
 			action.execute()
 			events.append(_side_line(action))
