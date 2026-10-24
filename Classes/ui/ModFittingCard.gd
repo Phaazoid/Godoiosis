@@ -286,7 +286,7 @@ func _redraw() -> void:
 # rather than an order. Rebuilt whole because a fitted mod can add to it or replace its main -- the
 # selection is kept by IDENTITY, so a mod that swapped the main lands the picker on the new one.
 func _refresh_attacks() -> void:
-	var attacks := _weapon.available_attacks(_wielder)
+	var attacks := _weapon.available_attacks(UnitState.of(_wielder))
 	_picker.clear()
 	# FALLING BACK TO INDEX 0 IS THE FALLBACK, and it is the only one there can be: available_attacks
 	# leads with effective_main, so an attack the fitting just took away lands the picker on whatever
@@ -321,7 +321,7 @@ func _refresh_readout() -> void:
 	_plate.show_attack(_attack)
 	# attack_detail asks the WIELDER's stats, so a weapon nobody holds has no number to show rather
 	# than a number computed against nobody.
-	_damage.text = _weapon.attack_detail(_wielder, _attack) if _wielder != null and _attack != null else ""
+	_damage.text = _weapon.attack_detail(_wielder.state, _attack) if _wielder != null and _attack != null else ""
 	_damage.visible = _damage.text != ""
 	_range.text = AttackChannelText.range_text(_attack)
 	_refresh_channels()
@@ -367,13 +367,14 @@ func _channel_lines() -> Array[String]:
 
 	# COMPOSED, never authored -- effective_* folds in the fitted mods, and reading the @export would
 	# be #1017 one layer down: a Recoil Lug that moved no line is a picker that looks dead again.
-	var elements := _weapon.get_elements(_wielder, weapon_attack) if weapon_attack != null \
+	var body := UnitState.of(_wielder)
+	var elements := _weapon.get_elements(body, weapon_attack) if weapon_attack != null \
 		else ([] as Array[Elemental.Element])
 	lines.append_array(AttackChannelText.lines(_attack,
-		_weapon.effective_knockback(_wielder, _attack),
+		_weapon.effective_knockback(body, _attack),
 		elements,
-		_weapon.effective_can_overwatch(_wielder, _attack),
-		_weapon.effective_hits_allies(_wielder, _attack)))
+		_weapon.effective_can_overwatch(body, _attack),
+		_weapon.effective_hits_allies(body, _attack)))
 
 	# What the SUPERCHARGE buys (#97), in the queue's tank chip's word -- a source is a carving's (#695).
 	if weapon_attack != null and weapon_attack.empowered_form != null:
@@ -401,7 +402,7 @@ func _readiness_lines(attack: WeaponAttackData) -> Array[String]:
 func _proficiency_text(family: String) -> String:
 	if _wielder == null:
 		return "No carrier, so no proficiency applies"
-	var active := _weapon.active_space_count(_wielder)
+	var active := _weapon.active_space_count(_wielder.state)
 	if active >= _weapon.space_count():
 		return "%s proficiency: every space" % family
 	return "%s proficiency: spaces 1-%d of %d" % [family, active, _weapon.space_count()]
@@ -435,7 +436,7 @@ func _space_block(index: int) -> Control:
 	pad.add_child(column)
 
 	var head := HBoxContainer.new()
-	var active: bool = _wielder == null or index < _weapon.active_space_count(_wielder)
+	var active: bool = _wielder == null or index < _weapon.active_space_count(_wielder.state)
 	var title := Label.new()
 	title.text = "Space %d  ·  needs %s %d" % [
 		index + 1, WeaponData.WeaponType.keys()[_weapon.template.weapon_type].capitalize(), index + 1]

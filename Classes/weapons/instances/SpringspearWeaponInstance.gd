@@ -11,12 +11,12 @@ var ready := true
 func is_attack_fireable(attack: WeaponAttackData) -> bool:
 	return ready or not attack.requires_readiness
 
-func reload_block_reason(_wielder: Unit) -> String:
+func reload_block_reason(_wielder: UnitState) -> String:
 	if ready:
 		return "The spring is already wound."
 	return ""
 
-func reload(_wielder: Unit) -> void:
+func reload(_wielder: UnitState) -> void:
 	ready = true
 
 func has_reload_verb() -> bool:

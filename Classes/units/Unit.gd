@@ -952,7 +952,7 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 	if weapon.equip_slot() != Item.EquipSlot.WEAPON:
 		return false   # armor fills its OWN slot -- wear_armor() is the door (Item.equip_slot, #1453)
 
-	if not weapon.can_equip(self):
+	if not weapon.can_equip(state):
 		return false   # a rune with nothing channelable is carryable, never wieldable (#157)
 
 	equipped_weapon = weapon
@@ -998,7 +998,7 @@ func wear_armor(index: int) -> bool:
 	if item == null or item.equip_slot() != Item.EquipSlot.ARMOR:
 		return false
 	var armor := item as ArmorData
-	if not armor.can_equip(self):
+	if not armor.can_equip(state):
 		return false
 	worn_armor = armor
 	_settle_stat_change()
@@ -1054,7 +1054,7 @@ func use_vial(index: int) -> String:
 	var vial := inventory[index] as VialData
 	if vial == null:
 		return "That is not a vial."
-	var refusal := vial.use_block_reason(self)
+	var refusal := vial.use_block_reason(state)
 	if refusal != "":
 		return refusal
 	attunement = vial
@@ -1074,13 +1074,13 @@ func get_fired_attack() -> AttackData:
 		return active_attack
 	if equipped_weapon == null:
 		return null
-	return equipped_weapon.default_attack(self)
+	return equipped_weapon.default_attack(state)
 
 # The full menu of attacks this unit could choose to fire — the pick-menu at attack entry.
 func get_selectable_attacks() -> Array[AttackData]:
 	if equipped_weapon == null:
 		return []
-	return equipped_weapon.selectable_attacks(self)
+	return equipped_weapon.selectable_attacks(state)
 
 # One attack this unit could aim right now, and the carried equippable it fires from (#929).
 class AimOption:
@@ -1106,7 +1106,7 @@ func aim_options(watch: bool, board: BoardContext = null) -> Array[AimOption]:
 			var attacks: Array[AttackData] = overwatch_attacks() if watch else get_selectable_attacks()
 			for attack: AttackData in attacks:
 				if AttackAction.fire_block_reason(self, attack) == "" \
-						and CellSubstances.fizzle_reason(attack, origin, board, self) == "":
+						and CellSubstances.fizzle_reason(attack, origin, board, state) == "":
 					options.append(AimOption.new(source, attack)))
 	return options
 
@@ -1146,7 +1146,7 @@ func with_weapon_in_hand(source: EquippableData, work: Callable) -> Variant:
 func get_weapon_secondary_attacks() -> Array[AttackData]:
 	if equipped_weapon == null:
 		return []
-	return equipped_weapon.secondary_attacks(self)
+	return equipped_weapon.secondary_attacks(state)
 
 # Which of this unit's attacks may be declared as a WATCH (#413) -- normally exactly one, since a
 # weapon carries one Overwatch action rather than a menu of them (dev, 2026-08-26). ONE answer, two
@@ -1158,7 +1158,7 @@ func get_weapon_secondary_attacks() -> Array[AttackData]:
 func overwatch_attacks() -> Array[AttackData]:
 	if equipped_weapon == null:
 		return []
-	return equipped_weapon.watch_attacks(self)
+	return equipped_weapon.watch_attacks(state)
 
 # An attack picked by NAME, the way a recorded run and the Play API name one (#615). Each searches
 # the view its verb fires from: a watch attack is never in the fire view (#590), so a watch looked
@@ -1203,7 +1203,7 @@ func has_weapon_actions() -> bool:
 func get_transmutation_choices() -> Array[AttackData]:
 	if equipped_weapon == null:
 		return []
-	return equipped_weapon.choice_attacks(self)
+	return equipped_weapon.choice_attacks(state)
 
 # Does the category have anything ACTIONABLE right now? Exactly has_weapon_actions()'s rule and
 # exactly its loop: a carving you can't pay for still LISTS (greyed) inside the submenu, but it
@@ -1223,7 +1223,7 @@ func has_transmutations() -> bool:
 func get_counter_attack() -> AttackData:
 	if equipped_weapon == null:
 		return null
-	return equipped_weapon.counter_attack(self)
+	return equipped_weapon.counter_attack(state, active_attack)
 
 # This attack's shove and ally-splash as the EQUIPPED SOURCE reports them (#529) -- a fitted mod
 # may edit either. Thin delegators, the get_counter_attack shape: they live here because the two
@@ -1232,19 +1232,19 @@ func get_counter_attack() -> AttackData:
 func get_attack_knockback(attack: AttackData) -> int:
 	if equipped_weapon == null:
 		return attack.knockback if attack != null else 0
-	return equipped_weapon.effective_knockback(self, attack)
+	return equipped_weapon.effective_knockback(state, attack)
 
 func attack_hits_allies(attack: AttackData) -> bool:
 	if equipped_weapon == null:
 		return attack != null and attack.hits_allies
-	return equipped_weapon.effective_hits_allies(self, attack)
+	return equipped_weapon.effective_hits_allies(state, attack)
 
 # Whether this attack may be declared as a standing watch (#413) -- same delegation, same reason:
 # the menu holds a Unit, and the answer is the equipped source's to give once a mod may edit it.
 func attack_can_overwatch(attack: AttackData) -> bool:
 	if equipped_weapon == null:
 		return attack != null and attack.can_overwatch
-	return equipped_weapon.effective_can_overwatch(self, attack)
+	return equipped_weapon.effective_can_overwatch(state, attack)
 
 # Does this unit's CURRENT attack source permit a counter? #30/#72: reads get_counter_attack(),
 # never the live selection — see that method's header for why. Since #84 the counter attack must
@@ -1271,21 +1271,21 @@ func attack_block_reason(attack: AttackData) -> String:
 		return ""
 	if equipped_weapon == null:
 		return "%s has nothing in hand to fire %s with." % [get_unit_name(), attack.display_name]
-	if not equipped_weapon.carries(self, attack):
+	if not equipped_weapon.carries(state, attack):
 		return "%s doesn't have %s." % [equipped_weapon.shown_name(), attack.display_name]
-	return equipped_weapon.attack_block_reason(self, attack)
+	return equipped_weapon.attack_block_reason(state, attack)
 
 # What this attack does for this unit, for hover readouts. Same delegation, different question.
 func attack_detail(attack: AttackData) -> String:
 	if attack == null or equipped_weapon == null:
 		return ""
-	return equipped_weapon.attack_detail(self, attack)
+	return equipped_weapon.attack_detail(state, attack)
 
 # The live count this attack's menu row prints (#1045). Same delegation; null = nothing to print.
 func attack_gauge(attack: AttackData) -> WeaponGauge:
 	if attack == null or equipped_weapon == null:
 		return null
-	return equipped_weapon.attack_gauge(self, attack)
+	return equipped_weapon.attack_gauge(state, attack)
 
 # Readiness seam (#73), widened to aura by #166 — and DERIVED from the reason above rather than
 # re-asking, so a greyed menu row and a refused order can never disagree about what is fireable.
@@ -1312,7 +1312,7 @@ func can_fire_default_attack() -> bool:
 func get_default_attack() -> AttackData:
 	if equipped_weapon == null:
 		return null
-	return equipped_weapon.default_attack(self)
+	return equipped_weapon.default_attack(state)
 
 # --- The equipped thing's self-abilities ---
 # Each is asked of the EQUIPPABLE, which answers for its own kind — same pattern as the attack
@@ -1327,14 +1327,14 @@ func get_default_attack() -> AttackData:
 func reload_block_reason() -> String:
 	if equipped_weapon == null:
 		return "Nothing is equipped."
-	return equipped_weapon.reload_block_reason(self)
+	return equipped_weapon.reload_block_reason(state)
 
 func can_reload_weapon() -> bool:
-	return equipped_weapon != null and equipped_weapon.can_reload(self)
+	return equipped_weapon != null and equipped_weapon.can_reload(state)
 
 func reload_weapon() -> void:
 	if equipped_weapon != null:
-		equipped_weapon.reload(self)
+		equipped_weapon.reload(state)
 
 func reload_label() -> String:
 	return equipped_weapon.reload_label() if equipped_weapon != null else "Reload"

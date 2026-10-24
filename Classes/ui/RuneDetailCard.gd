@@ -328,7 +328,7 @@ func _refresh_readout() -> void:
 	_ring.set_carving(_carving)
 	# attack_detail scales off the WIELDER's aura, so a rune nobody holds shows no number rather than
 	# a number computed against nobody.
-	_damage.text = _rune.attack_detail(_wielder, _carving) \
+	_damage.text = _rune.attack_detail(_wielder.state, _carving) \
 		if _wielder != null and _carving != null else ""
 	_damage.visible = _damage.text != ""
 	_range.text = AttackChannelText.range_text(_carving)
@@ -370,10 +370,10 @@ func _refresh_aura() -> void:
 		_aura.text = ""
 		_aura.visible = false
 		return
-	var refusal := _carving.channel_block_reason(_wielder, _rune.temper)
+	var refusal := _carving.channel_block_reason(_wielder.state, _rune.temper)
 	var role: QueueStyle.Role = QueueStyle.Role.FRAME_REFUSED_TEXT if refusal != "" \
 		else QueueStyle.Role.FRAME_TEXT
-	_aura.text = _carving.aura_text(_wielder, _rune.temper)
+	_aura.text = _carving.aura_text(_wielder.state, _rune.temper)
 	_aura.add_theme_color_override("font_color", QueueStyle.ink(role))
 	_aura.visible = true
 
@@ -399,11 +399,11 @@ func _refresh_carvings() -> void:
 # THE TINT REPLACED A "!" LABEL. That mark said *refused* and nothing else, and with the whole row
 # carrying validity it would have been the same fact twice, on the one axis the border already owns.
 func _carving_row(carving: TransmutationData) -> Control:
-	var state := carving.channel_state(_wielder, _rune.temper)
+	var state := carving.channel_state(UnitState.of(_wielder), _rune.temper)
 	var reason := _block_reason(carving)
 	var row := PanelContainer.new()
 	row.add_theme_stylebox_override("panel", QueueStyle.channel_box(_box_state(state), false))
-	var tip := "%s\n%s" % [carving.demand_text(), _rune.attack_detail(_wielder, carving)] \
+	var tip := "%s\n%s" % [carving.demand_text(), _rune.attack_detail(_wielder.state, carving)] \
 		if _wielder != null else carving.demand_text()
 	if reason != "":
 		tip += "\n%s" % reason
@@ -441,7 +441,7 @@ func _carving_row(carving: TransmutationData) -> Control:
 	# rows are a name and its recipe alone.
 	if _wielder != null:
 		var detail := Label.new()
-		detail.text = carving.effect_text(_wielder)
+		detail.text = carving.effect_text(_wielder.state)
 		detail.clip_text = true
 		detail.add_theme_font_size_override("font_size", 9)
 		detail.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
@@ -523,7 +523,7 @@ func _cost_bar(element: Elemental.Element, alpha: float, outlined: bool) -> Cont
 func _block_reason(carving: TransmutationData) -> String:
 	if _wielder == null:
 		return ""
-	return _rune.attack_block_reason(_wielder, carving)
+	return _rune.attack_block_reason(_wielder.state, carving)
 
 
 # What this rune has room for and what it is locked to -- the two facts no carving can answer. The

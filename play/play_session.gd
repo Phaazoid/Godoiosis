@@ -317,7 +317,7 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	var board := _board()
 	# A carving that fizzles from here has no aim the queue would take (SquadManager's fizzle gate), so
 	# say why up front rather than listing cells every one of which would be refused.
-	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, unit)
+	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, unit.state)
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't fire %s from %s: %s" % [handle, _attack_label(aiming), str(origin), fizzle]}
 	# Armed for the loop's declare(), whose stamp the whiff policy reads -- queue_attack's arming.
@@ -356,7 +356,7 @@ func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Diction
 	var board := _board()
 	# A watch whose carving fizzles from here is refused at the queue (SquadManager's fizzle gate), so
 	# it has no spot to offer -- legal_targets' rule for a fire pick, one verb over.
-	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, unit)
+	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, unit.state)
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't watch with %s from %s: %s" % [handle, _attack_label(watch), str(origin), fizzle]}
 	var out: Array[Dictionary] = []

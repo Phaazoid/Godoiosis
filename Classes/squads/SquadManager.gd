@@ -520,7 +520,7 @@ func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	var reason := CellSubstances.fizzle_reason(attack, origin, board_source.call(), action.actor)
+	var reason := CellSubstances.fizzle_reason(attack, origin, board_source.call(), action.actor.state)
 	if reason == "":
 		return true
 	action.add_validation_error(reason)
@@ -726,7 +726,7 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# A counter whose carving FIZZLES where the counter-er stands lands nothing, so it answers nobody
 	# (#1354). The resolve skips one (PlanResolver.resolve_counters) and ThreatField draws no reach for
 	# one, so this is what keeps the AI's exchange scoring from counting it.
-	if CellSubstances.fizzle_reason(countering_unit.get_counter_attack(), counter_cell, board, countering_unit) != "":
+	if CellSubstances.fizzle_reason(countering_unit.get_counter_attack(), counter_cell, board, countering_unit.state) != "":
 		return false
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --

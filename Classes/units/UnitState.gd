@@ -11,7 +11,8 @@ class_name UnitState
 # It never emits: what a host does about a change (the stats_changed readout) stays on Unit.
 
 # The Unit this state belongs to. IDENTITY only (faction, name, squad, board cell): a body question
-# is answered from the fields below. Content still takes a Unit, so the moved rules hand it this.
+# is answered from the fields below. Content (items/, weapons/, alchemy/) is handed the state, never
+# the Unit (#1480 stage 2).
 var unit: Unit
 
 # The persistent body: everything that outlives a battle (HP, stats, limbs, aura, jobs, proficiency).
@@ -66,6 +67,11 @@ var downed_turns_remaining: int = -1
 func _init(p_unit: Unit) -> void:
 	unit = p_unit
 
+# A unit's state, or null for no unit: what a caller holding a maybe-absent unit hands content (a
+# stash weapon nobody carries).
+static func of(u: Unit) -> UnitState:
+	return u.state if u != null else null
+
 # Everything that has to settle after a stat moves, minus the readout signal (Unit._settle_stat_change
 # emits that after calling this).
 #
@@ -99,9 +105,9 @@ func _enforce_gear_gates() -> void:
 # collapsed one layer down. One judgement, so the warning and the strip can never name different pieces.
 func gear_failing_gates() -> Array[EquippableData]:
 	var failing: Array[EquippableData] = []
-	if worn_armor != null and not worn_armor.can_equip(unit):
+	if worn_armor != null and not worn_armor.can_equip(self):
 		failing.append(worn_armor)
-	if equipped_weapon != null and not equipped_weapon.can_equip(unit):
+	if equipped_weapon != null and not equipped_weapon.can_equip(self):
 		failing.append(equipped_weapon)
 	return failing
 
@@ -178,7 +184,7 @@ func _mod_sources_holding(in_hand: EquippableData) -> Array[WeaponInstance]:
 #
 # A fitted mod contributes HERE, at the gear stage, never at the limb stage a prosthetic's own
 # built_in_stat feeds. Forced rather than chosen: the walk is proficiency-gated and
-# active_space_count needs a Unit, while UnitInstance.limb_stat(slot) has no wielder to ask.
+# active_space_count needs a wielder, while UnitInstance.limb_stat(slot) has no wielder to ask.
 # The doctrine agrees -- built_in_stat is what the prosthetic IS, a mod is what is bolted to it.
 func _gear_modifier(stat: Stats.Stat) -> int:
 	return _gear_modifier_for(stat, worn_armor, _mod_sources())
@@ -201,7 +207,7 @@ func _gear_terms_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponIn
 	if armor != null and armor.stat_modifiers.get(stat, 0) != 0:
 		terms.append([armor, armor.stat_modifiers[stat]])
 	for weapon in weapons:
-		for mod in weapon.active_modules(unit):
+		for mod in weapon.active_modules(self):
 			if mod.stat_modifiers.get(stat, 0) != 0:
 				terms.append([mod, mod.stat_modifiers[stat]])
 	return terms
@@ -330,7 +336,7 @@ func get_live_abilities() -> Array[AbilityData]:
 	# The weapon half (#74) -- which slots contribute is _mod_sources' one answer, and the merge is
 	# add_live exactly as above, so a mod and a worn piece granting the same id dedupe by id.
 	for weapon in _mod_sources():
-		for mod in weapon.active_modules(unit):
+		for mod in weapon.active_modules(self):
 			AbilityData.add_live(live, mod.granted_abilities)
 	# A RUNE grants nothing, and that is RULED rather than pending (#531, dev 2026-08-26): a rune's
 	# payload is its carvings. equipped_weapon is typed EquippableData, so a RuneData sitting there

@@ -82,7 +82,7 @@ func damage_elements() -> Array[Elemental.Element]:
 #
 # `air` is the board's atmosphere bonus (#1324, Atmosphere.bonus_of), passed for empowered's reason.
 # It is added after the damageless guard, so a utility carving stays at 0, and floored there.
-func base_damage(wielder: Unit, empowered: Array[Elemental.Element] = [], air := 0) -> int:
+func base_damage(wielder: UnitState, empowered: Array[Elemental.Element] = [], air := 0) -> int:
 	if deals_no_damage:
 		return 0
 	var scaling := 0
@@ -109,14 +109,14 @@ func base_damage(wielder: Unit, empowered: Array[Elemental.Element] = [], air :=
 # preserved in the "strain as a job ability" issue if it ever returns as a job passive.
 
 # Summed aura shortfall across ALL the carving's elements — what wildcards must cover.
-func total_deficit(wielder: Unit) -> int:
+func total_deficit(wielder: UnitState) -> int:
 	var deficit := 0
 	for e in distinct_elements():
 		deficit += maxi(0, demand_of(e) - wielder.get_element_aura(e))
 	return deficit
 
 # max(pool A, pool B): the universal +1, or spare temper aura on a matching rune — never both.
-func wildcard_capacity(wielder: Unit, temper: Elemental.Element) -> int:
+func wildcard_capacity(wielder: UnitState, temper: Elemental.Element) -> int:
 	var spare := wielder.get_element_aura(temper) - demand_of(temper)
 	return maxi(1, spare)
 
@@ -127,7 +127,7 @@ func wildcard_capacity(wielder: Unit, temper: Elemental.Element) -> int:
 #
 # Every refusal branch builds its string only on the way out, so the success path — the one that
 # runs inside queue-time gating and the AI's candidate probe — allocates nothing.
-func channel_block_reason(wielder: Unit, temper: Elemental.Element) -> String:
+func channel_block_reason(wielder: UnitState, temper: Elemental.Element) -> String:
 	var anchored := false
 	for e in distinct_elements():
 		if wielder.get_element_aura(e) >= 1:
@@ -141,7 +141,7 @@ func channel_block_reason(wielder: Unit, temper: Elemental.Element) -> String:
 		return "Needs %d wildcard%s (have %d)" % [deficit, "" if deficit == 1 else "s", capacity]
 	return ""
 
-func can_channel(wielder: Unit, temper: Elemental.Element) -> bool:
+func can_channel(wielder: UnitState, temper: Elemental.Element) -> bool:
 	return channel_block_reason(wielder, temper).is_empty()
 
 
@@ -152,7 +152,7 @@ func can_channel(wielder: Unit, temper: Elemental.Element) -> bool:
 # the ladder comes back empty, which is can_channel's own derivation one line up: worded
 # independently, a refusal and its explanation are two answers to one question and drift the first
 # time either is edited (Law #4; #166's whole reason for the ladder existing).
-func aura_text(wielder: Unit, temper: Elemental.Element) -> String:
+func aura_text(wielder: UnitState, temper: Elemental.Element) -> String:
 	var refusal := channel_block_reason(wielder, temper)
 	if refusal != "":
 		return refusal
@@ -182,7 +182,7 @@ func aura_text(wielder: Unit, temper: Elemental.Element) -> String:
 enum Channel { CLEAR, WILDCARD, REFUSED }
 
 
-func channel_state(wielder: Unit, temper: Elemental.Element) -> Channel:
+func channel_state(wielder: UnitState, temper: Elemental.Element) -> Channel:
 	if wielder == null:
 		return Channel.CLEAR
 	if channel_block_reason(wielder, temper) != "":
@@ -210,13 +210,13 @@ func demand_text() -> String:
 # bars, the wildcards as the row's own tint -- and printing them again underneath would be the same
 # fact twice on one row. Extracted rather than re-spelled, so "Damage 11, Blunt (unit)" exists once
 # and the hover readout below and the row cannot word it two ways.
-func effect_text(wielder: Unit) -> String:
+func effect_text(wielder: UnitState) -> String:
 	return "%s %s" % [hit_text(base_damage(wielder), delivered_kind()), targets_text()]
 
 # What this carving DOES for this wielder, for the menu's hover readout (#166) — the carving's
 # answer to the role ArmorData.mechanical_text plays for a worn piece. Itemized per wielder because
 # both numbers depend on them: damage scales off their aura, wildcards off their gaps.
-func mechanical_text(wielder: Unit, _temper: Elemental.Element) -> String:
+func mechanical_text(wielder: UnitState, _temper: Elemental.Element) -> String:
 	var parts: Array[String] = [recipe, effect_text(wielder)]
 	var deficit := total_deficit(wielder)
 	if deficit > 0:

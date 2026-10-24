@@ -41,8 +41,8 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 		if unit != null:
 			# The headline view is the weapon's MAIN attack, asked for explicitly -- base_damage
 			# no longer defaults to it, because null there means "no attack" now (#102).
-			var main_atk: WeaponAttackData = weapon.default_attack(unit) as WeaponAttackData
-			lines.append("Damage %d" % weapon.base_damage(unit, main_atk))
+			var main_atk: WeaponAttackData = weapon.default_attack(unit.state) as WeaponAttackData
+			lines.append("Damage %d" % weapon.base_damage(unit.state, main_atk))
 		var status: String = weapon.status_text()
 		if status != "":
 			lines.append(status)
@@ -51,7 +51,7 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 	var armor := item as ArmorData
 	if armor != null:
 		# Itemizes DEF for THIS wearer and drops that term for nobody, gate and grants included.
-		var mech: String = armor.mechanical_text(unit)
+		var mech: String = armor.mechanical_text(UnitState.of(unit))
 		if mech != "":
 			lines.append(mech)
 		return lines
@@ -73,10 +73,10 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 			# named and left at that.
 			if unit == null:
 				continue
-			var detail: String = rune.attack_detail(unit, t)
+			var detail: String = rune.attack_detail(unit.state, t)
 			if detail != "":
 				lines.append(detail)
-			var reason: String = rune.attack_block_reason(unit, t)
+			var reason: String = rune.attack_block_reason(unit.state, t)
 			if reason != "":
 				lines.append(reason)
 		return lines

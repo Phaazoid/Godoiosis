@@ -53,10 +53,10 @@ func test_a_counter_fires_the_replacement() -> void:
 	var unit := _wielder()
 	var weapon := _weapon()
 	unit.equipped_weapon = weapon
-	assert_object(weapon.counter_attack(unit)).is_same(_stock)	 # precondition, and the contrast
+	assert_object(weapon.counter_attack(unit.state, null)).is_same(_stock)	 # precondition, and the contrast
 
 	_fit(weapon, 0, _replacer())
-	assert_object(weapon.counter_attack(unit)).is_same(_swap)
+	assert_object(weapon.counter_attack(unit.state, null)).is_same(_swap)
 
 func test_the_default_aim_is_the_replacement() -> void:
 	var unit := _wielder()

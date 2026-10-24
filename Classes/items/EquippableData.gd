@@ -36,12 +36,12 @@ enum TargetMode { UNIT, MAP, BOTH }
 #
 # Deliberately NOT the two-handed wield lock — that is a firing question (Unit.can_wield_equipped),
 # and #776 owns saying so.
-func can_equip_reason(_wielder: Unit) -> String:
+func can_equip_reason(_wielder: UnitState) -> String:
 	return ""
 
 # Enforced at the equip doors and re-enforced at UnitState._enforce_gear_gates, so "no" here also means
 # "comes off when it becomes no".
-func can_equip(wielder: Unit) -> bool:
+func can_equip(wielder: UnitState) -> bool:
 	return can_equip_reason(wielder).is_empty()
 
 # The hand, which every equippable fills unless its kind says otherwise (ArmorData). See Item.equip_slot.
@@ -53,27 +53,28 @@ func equip_slot() -> Item.EquipSlot:
 
 # Everything the wielder could choose to fire right now — the attack pick-menu's contents. A
 # watch-only attack is never here; the overwatch fork below is what keeps the two views apart.
-func selectable_attacks(_wielder: Unit) -> Array[AttackData]:
+func selectable_attacks(_wielder: UnitState) -> Array[AttackData]:
 	return []
 
 # What fires when the player hasn't picked anything specific.
-func default_attack(_wielder: Unit) -> AttackData:
+func default_attack(_wielder: UnitState) -> AttackData:
 	return null
 
 # What a COUNTER fires. Separate from default_attack because the two kinds genuinely diverge on
-# whether a live pick counts — see each override.
-func counter_attack(wielder: Unit) -> AttackData:
+# whether a live pick counts — see each override. The pick (Unit.active_attack) is PASSED: it lives
+# on the Unit, not the body this is asked of (#1480).
+func counter_attack(wielder: UnitState, _live_pick: AttackData) -> AttackData:
 	return default_attack(wielder)
 
 # Non-default attacks, surfaced under the Weapon Action submenu. Weapons only.
-func secondary_attacks(_wielder: Unit) -> Array[AttackData]:
+func secondary_attacks(_wielder: UnitState) -> Array[AttackData]:
 	return []
 
 # Attacks this source offers as a flat menu of EQUALS — the Transmutation category (#88). A rune
 # has no authored main_attack: its carvings are interchangeable, so all of them belong in one
 # picker. A weapon does have an authored main, so its extras go under Weapon Action instead and
 # this stays empty. Exactly the split secondary_attacks() makes, from the other side.
-func choice_attacks(_wielder: Unit) -> Array[AttackData]:
+func choice_attacks(_wielder: UnitState) -> Array[AttackData]:
 	return []
 
 # --- The overwatch fork (#590) ---
@@ -90,19 +91,19 @@ func choice_attacks(_wielder: Unit) -> Array[AttackData]:
 
 # Everything this source carries, fireable or watch-only -- the ONE list the views come off. A
 # weapon's is its available attacks (main + extras + mod grants), a rune's is every carving.
-func repertoire(_wielder: Unit) -> Array[AttackData]:
+func repertoire(_wielder: UnitState) -> Array[AttackData]:
 	return []
 
 # Is this attack one this source throws at all (#1283)? Asked by Unit.attack_block_reason before the
 # economy, so a queued order or an armed watch stamped off ANOTHER weapon is refused rather than
 # fired through this one's numbers. A projection of the repertoire, never a second list.
-func carries(wielder: Unit, attack: AttackData) -> bool:
+func carries(wielder: UnitState, attack: AttackData) -> bool:
 	return repertoire(wielder).has(attack)
 
 # The watch view. Unit.overwatch_attacks is its only caller, so the menu's Overwatch rows and the
 # kit-slice gate reach it through one door and can never disagree. Reads the FULL repertoire, not
 # the affordable subset -- #166's law, an unusable row lists and greys with its own reason.
-func watch_attacks(wielder: Unit) -> Array[AttackData]:
+func watch_attacks(wielder: UnitState) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	for attack: AttackData in repertoire(wielder):
 		if effective_can_overwatch(wielder, attack):
@@ -113,7 +114,7 @@ func watch_attacks(wielder: Unit) -> Array[AttackData]:
 # the Weapon Action rows, the Transmutation rows, the AI's candidate list. Takes the list rather
 # than deriving it, because each of those answers a different question first (channelable,
 # non-main, affordable) and only the overwatch clause is shared between them.
-func fireable_only(wielder: Unit, attacks: Array[AttackData]) -> Array[AttackData]:
+func fireable_only(wielder: UnitState, attacks: Array[AttackData]) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	for attack: AttackData in attacks:
 		if not effective_can_overwatch(wielder, attack):
@@ -128,13 +129,13 @@ func fireable_only(wielder: Unit, attacks: Array[AttackData]) -> Array[AttackDat
 #
 # The default is the attack's own authored value, so a rune carving and a bare fist need neither
 # override and armor needs no opinion at all.
-func effective_knockback(_wielder: Unit, attack: AttackData) -> int:
+func effective_knockback(_wielder: UnitState, attack: AttackData) -> int:
 	return attack.knockback if attack != null else 0
 
-func effective_hits_allies(_wielder: Unit, attack: AttackData) -> bool:
+func effective_hits_allies(_wielder: UnitState, attack: AttackData) -> bool:
 	return attack != null and attack.hits_allies
 
-func effective_can_overwatch(_wielder: Unit, attack: AttackData) -> bool:
+func effective_can_overwatch(_wielder: UnitState, attack: AttackData) -> bool:
 	return attack != null and attack.can_overwatch
 
 # --- Explaining an attack (#166) ---
@@ -145,18 +146,18 @@ func effective_can_overwatch(_wielder: Unit, attack: AttackData) -> bool:
 
 # "" = fireable. Unit.is_attack_fireable is DERIVED from this, so the refusal and its explanation
 # are one answer — never a boolean here and a reason string somewhere else (Law #4).
-func attack_block_reason(_wielder: Unit, _attack: AttackData) -> String:
+func attack_block_reason(_wielder: UnitState, _attack: AttackData) -> String:
 	return ""
 
 # What this attack does for this wielder, for the hover readout. Per-kind because the payload
 # number is (a carving scales off aura, a weapon attack off its weapon — #72).
-func attack_detail(_wielder: Unit, _attack: AttackData) -> String:
+func attack_detail(_wielder: UnitState, _attack: AttackData) -> String:
 	return ""
 
 # The live count a menu row prints beside this attack's name (#1045) -- rounds, charge, a tank, rev
 # turns left. null = the row shows nothing. Asked of the SOURCE for the reason the two above are:
 # only it knows which of its attacks its economy touches.
-func attack_gauge(_wielder: Unit, _attack: AttackData) -> WeaponGauge:
+func attack_gauge(_wielder: UnitState, _attack: AttackData) -> WeaponGauge:
 	return null
 
 # --- Weapon-verb surface (#73/#84, promoted here from WeaponInstance 2026-07-27) ---
@@ -178,13 +179,13 @@ func attack_gauge(_wielder: Unit, _attack: AttackData) -> WeaponGauge:
 # refusal wearing the wrong reason.
 
 # "" = may rearm. The one rule; can_reload is derived from it and never disagrees.
-func reload_block_reason(_wielder: Unit) -> String:
+func reload_block_reason(_wielder: UnitState) -> String:
 	return "This cannot be reloaded."
 
-func can_reload(wielder: Unit) -> bool:
+func can_reload(wielder: UnitState) -> bool:
 	return reload_block_reason(wielder) == ""
 
-func reload(_wielder: Unit) -> void:
+func reload(_wielder: UnitState) -> void:
 	pass
 
 # What the Weapon Action menu CALLS this rearm. The ORDER is always ActionType.RELOAD — only the

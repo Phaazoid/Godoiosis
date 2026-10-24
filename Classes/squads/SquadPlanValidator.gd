@@ -211,7 +211,7 @@ static func _revalidate_watch_material(actions: Array[BaseAction], board: BoardC
 		var watch := action as OverwatchAction
 		if watch == null or watch.resolved_footprint.is_empty():
 			continue
-		if CellSubstances.fizzle_reason(watch.fired_attack, watch.resolved_anchor, board, watch.actor) != "":
+		if CellSubstances.fizzle_reason(watch.fired_attack, watch.resolved_anchor, board, watch.actor.state) != "":
 			watch.add_validation_error("Fizzles where they'll be standing")
 
 # The gate that ADMITTED a stored aim or watch, asked again (#1283): the dock can swap the weapon in
