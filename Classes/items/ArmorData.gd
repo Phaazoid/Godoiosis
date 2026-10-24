@@ -44,7 +44,7 @@ func coverage_text() -> String:
 @export var granted_abilities: Array[AbilityData] = []
 
 # Live stat contribution while worn (stats.md "gear carries stat-cost tradeoffs"). Negative
-# values are the classic armor tax. Read live off the worn piece by Unit._gear_modifier --
+# values are the classic armor tax. Read live off the worn piece by UnitState._gear_modifier --
 # deliberately NOT applied as a stored StatEffect (#112). Wearing a piece stores nothing, so
 # taking it off removes the contribution with no bookkeeping and a save round-trip cannot desync
 # it. Only effects with a life of their OWN (a timed tonic, the Crisis surge) get stored.
@@ -61,7 +61,7 @@ func can_equip_reason(wearer: Unit) -> String:
 	#   * A piece's own -DEX can't unlock a DEX-ceiling piece, so equip legality never depends on
 	#     what you happen to have on, or on the order you put it on in.
 	#   * Because NO gate reads gear, stripping one piece can never change another piece's answer.
-	#     That is precisely what keeps Unit._enforce_gear_gates to a SINGLE pass with no cascade
+	#     That is precisely what keeps UnitState._enforce_gear_gates to a SINGLE pass with no cascade
 	#     and no termination question. Do not "simplify" this into get_effective_stat.
 	#
 	# A tonic that raises CON DOES let you wear the heavy plate — and when it lapses, the plate

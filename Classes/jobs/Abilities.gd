@@ -29,7 +29,7 @@ const IRON_WILL_DAMAGE_CAP := 6      # playtest-tunable
 # block-quality knob (bleed-through to the ward was dropped, not deferred). Bare Guard blocks at +0.
 # Source-agnostic by construction: it rides the ability union (innate -> jobs -> gear), so a job, a
 # piece of armour or a fitted weapon mod all grant it through one door. Weapons BECAME an ability
-# source in #74 -- the equipped weapon and every installed prosthetic, via Unit._mod_sources. A rune
+# source in #74 -- the equipped weapon and every installed prosthetic, via UnitState._mod_sources. A rune
 # grants nothing, ruled rather than pending (#531): its payload is its carvings.
 const BRACE_DEF_BONUS := 3           # playtest-tunable
 const GUARD_BASE_RANGE := 1          # authored on the granting content later; adjacency today

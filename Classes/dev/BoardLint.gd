@@ -247,7 +247,7 @@ static func _check_cohesion(game, found: Array[Dictionary]) -> void:
 # which is the surface that matters because 113 of the repo's 127 WeaponInstances are scenario-
 # embedded and reach CI but no panel.
 #
-# Walks the WHOLE inventory rather than Unit._mod_sources(), which covers the equipped weapon plus
+# Walks the WHOLE inventory rather than UnitState._mod_sources(), which covers the equipped weapon plus
 # installed prosthetics and would silently skip a stashed one -- a weapon nobody is holding is exactly
 # where a stranded mod survives longest.
 static func _check_fittings(board: BoardContext, found: Array[Dictionary]) -> void:

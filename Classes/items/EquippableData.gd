@@ -32,14 +32,14 @@ enum TargetMode { UNIT, MAP, BOTH }
 # separate places, which is the state this replaced; tests/items/test_equip_reason.gd refuses it.
 #
 # Build the sentence only on the way OUT, the way channel_block_reason does: can_equip runs inside
-# Unit._enforce_gear_gates on every stat settle, so the success path must allocate nothing.
+# UnitState._enforce_gear_gates on every stat settle, so the success path must allocate nothing.
 #
 # Deliberately NOT the two-handed wield lock — that is a firing question (Unit.can_wield_equipped),
 # and #776 owns saying so.
 func can_equip_reason(_wielder: Unit) -> String:
 	return ""
 
-# Enforced at the equip doors and re-enforced at Unit._enforce_gear_gates, so "no" here also means
+# Enforced at the equip doors and re-enforced at UnitState._enforce_gear_gates, so "no" here also means
 # "comes off when it becomes no".
 func can_equip(wielder: Unit) -> bool:
 	return can_equip_reason(wielder).is_empty()

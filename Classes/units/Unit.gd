@@ -4,6 +4,7 @@ class_name Unit
 #This is a container for everything that is a unit on the map.  These only exist during combat. 
 #It owns a MovementComponent (board position + walk animation) and UnitVisuals, delegates attack
 #geometry to the static Reach, and references a UnitInstance for everything that outlives a battle.
+#Its battle state and the body rules that read it live on `state`, a UnitState it forwards to (#1480).
 
 #Core stats
 @onready var movement: MovementComponent = $MovementComponent
@@ -21,7 +22,49 @@ const BASE_SPRITE_INDEX = 4
 
 const DOWNED_TURNS := 3     # turns a downed unit survives unrescued; Glossary interpolates it
 
-var unit_instance: UnitInstance
+# The live battle state and the body rules that read it (#1480). Built in _init, so it exists before
+# _ready and on a Unit that never enters the tree.
+var state: UnitState
+
+# Forwarded, not copied (MissionController's shape, #46): each hands back the state's own value, so
+# an in-place write (`inventory[i] = x`, `element_states.append`) lands in the one store.
+var unit_instance: UnitInstance:
+	get: return state.instance
+	set(value): state.instance = value
+var inventory: Array[Item]:
+	get: return state.inventory
+	set(value): state.inventory = value
+var equipped_weapon: EquippableData:
+	get: return state.equipped_weapon
+	set(value): state.equipped_weapon = value
+var worn_armor: ArmorData:
+	get: return state.worn_armor
+	set(value): state.worn_armor = value
+var attunement: VialData:
+	get: return state.attunement
+	set(value): state.attunement = value
+var element_states: Array[Elemental.State]:
+	get: return state.element_states
+	set(value): state.element_states = value
+var stat_effects: Array[StatEffect]:
+	get: return state.stat_effects
+	set(value): state.stat_effects = value
+var lifecycle_state: LifecycleState:
+	get: return state.lifecycle_state
+	set(value): state.lifecycle_state = value
+var wounded: bool:
+	get: return state.wounded
+	set(value): state.wounded = value
+var in_crisis: bool:
+	get: return state.in_crisis
+	set(value): state.in_crisis = value
+var crisis_surge_pending: bool:
+	get: return state.crisis_surge_pending
+	set(value): state.crisis_surge_pending = value
+var downed_turns_remaining: int:
+	get: return state.downed_turns_remaining
+	set(value): state.downed_turns_remaining = value
+
 # Provenance (#177): the standalone character FILE this unit was spawned from, when there is one.
 # Set by UnitFactory (null for form-built or scenario-embedded UnitData). Authored saves read it
 # so a cast member serializes as a reference to its file, never as an inline copy.
@@ -53,40 +96,19 @@ var ai_profile := ""
 # an AI unit regrouping tries it first. Battle-scoped and never saved -- after a load a stray simply
 # joins the nearest squad. Untyped and checked with is_instance_valid, because the squad may be freed.
 var left_squad = null
-var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
 var pending_cell : Vector2i
 var active_attack: AttackData = null   # the specific attack picked to fire this aim — a carving or a weapon attack (#30 C, generalized #72); null = auto
-var equipped_weapon: EquippableData = null
-var worn_armor: ArmorData = null   # DEF seam (#55), real content since #89. Carried in `inventory`
-								   # like a weapon but filling its OWN slot — set only via
-								   # wear_armor(), the one place the wear gate lives.
-# The burned vial this unit is currently attuned to (#697), or null. ONE at a time: a second Use
-# replaces the first, which is why this is a slot and not a list. Set by the inventory panel's Use
-# verb; cleared by AttackAction.execute when a cast actually draws on it, never at plan time —
-# the readiness precedent, and the whole reason cancelling a plan costs nothing.
-var attunement: VialData = null
 
 var _projected_knockback_cell: Vector2i
 var _has_projected_knockback := false
 var _projected_rescue_cell: Vector2i
 var _has_projected_rescue := false
 
-# Battle-scoped elemental states (boolean — you have it or you don't). These live on
-# the transient Unit, NOT UnitInstance: they reset each mission, so the per-battle node
-# owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
-# threads a COPY of this set forward as a hypothetical; live mutation is execution-only.
-var element_states: Array[Elemental.State] = []
-
-# --- Temporary stat effects (#112) — THE seam for temporary stats ---
-# Battle-scoped, so they live here on the transient Unit, which is why UnitInstance.stat_modifiers
-# no longer exists. Deliberately NOT captured by ScenarioUnitEntry, same as element_states.
-var stat_effects: Array[StatEffect] = []
-
-# The Guard this unit currently has ARMED (#414) — null when it is guarding nobody. Battle-scoped
-# like the states above; unlike them it IS captured by ScenarioUnitEntry, because a save taken
-# between a pass and the enemy phase is exactly when a live Guard is the whole point.
+# The Guard this unit currently has ARMED (#414) — null when it is guarding nobody. Battle-scoped,
+# and captured by ScenarioUnitEntry, because a save taken between a pass and the enemy phase is
+# exactly when a live Guard is the whole point.
 # Written only through the four doors below.
 var guard: GuardWard = null
 
@@ -100,37 +122,19 @@ var watch: Watch = null
 # (#113); answering it in a listener would put Law #2 one race away from breaking.
 signal stats_changed
 
-# --- Lifecycle (docs/design/will-and-death.md) ---
-# State is battle-scoped: it resets each mission, like element_states, so it lives on the
-# transient Unit. (Limb loss is the PERSISTENT half and lives on UnitInstance -- different sides of
-# the persistence seam.)
+# --- Lifecycle (docs/design/will-and-death.md) --- The state itself is battle-scoped and lives on
+# `state` (UnitState.lifecycle_state); the type is named here, where every reader already finds it.
 enum LifecycleState { ACTIVE, DOWNED, DEAD }
-var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 
 # Which rung a would-be-fatal hit lands on is decided by LethalityRules.predict(), NOT here —
 # the resolver has to ask the same question at plan time (Law #2), so the ladder and its tuning
 # (OVERKILL_CEILING, the limb thresholds) live in one shared place. Unit owns only what happens
 # NEXT: take_damage carries the named rung out, and takes the limb.
 
-# Went down this battle (#1174): a smaller blow takes a limb from now on, and the Crisis gambit is
-# spent. Battle-scoped like the downed clock; a rescue or a heal does not clear it. Losing a limb
-# while STANDING does not wound -- only a down does.
-var wounded := false
-
-# --- Crisis Mode (will-and-death.md; an equipped ability since #158). An UNWOUNDED unit holding
-# the Crisis ability answers a would-be-down by standing straight back up surged — deterministic,
-# previewed, no prompt (the gambit's acceptance happened at loadout). There is no safety net (a
-# would-be-down is death) for the rest of the battle. The arming read and the gambit's tuning live
-# with the ability roster (Abilities.CRISIS_*); the battle-scoped STATE lives here on the transient
-# Unit. ---
-var in_crisis: bool = false              # afflicted (skull icon, die-on-down) for the battle
-var crisis_surge_pending: bool = false   # apply the surge at this unit's next turn start
-
-# Turns remaining before a downed unit dies without rescue. Starts at 3 when
-# the unit goes down, ticks once per player-turn start, dies at 0. -1 = not counting.
-var downed_turns_remaining: int = -1
-
 signal downed_countdown_changed(turns_remaining: int)
+
+func _init() -> void:
+	state = UnitState.new(self)
 
 func setup(grid : TileMapLayer, cell: Vector2i):
 	pending_grid = grid
@@ -347,18 +351,6 @@ func remove_item(index: int):
 		worn_armor = null
 	inventory[index] = null
 
-# Re-settle HP against a max that just moved: a stat change never RAISES current HP, it only
-# pulls it down if the new max is below it. Its ONLY caller is _settle_stat_change, so that
-# "who re-clamps HP?" has exactly one answer no matter what moved the stat — gear, an expiring
-# effect, or a maim.
-#
-# Cannot kill, and doesn't need a floor to say so: max HP never drops below 1, and a living unit
-# is never below 1, so the clamp can't reach the <=0 that emits died(). That invariant is
-# currently a content constraint rather than an enforced one — if it ever needs teeth, it belongs
-# on get_max_hp (the derivation), not as a floor at every write site.
-func reclamp_hp() -> void:
-	set_current_hp(get_current_hp())
-
 func apply_stat_effect(effect: StatEffect) -> void:
 	if effect == null:
 		return
@@ -399,215 +391,100 @@ func tick_stat_effects() -> void:
 # its effect, whatever the cause.
 func _sync_paired_states() -> void:
 	var kept: Array[Elemental.State] = []
-	for state in element_states:
-		if Elemental.paired_stat_mods(state).is_empty() or has_stat_effect_from(Elemental.state_effect_source(state)):
-			kept.append(state)
+	for held in element_states:
+		if Elemental.paired_stat_mods(held).is_empty() or has_stat_effect_from(Elemental.state_effect_source(held)):
+			kept.append(held)
 	if kept.size() != element_states.size():
 		element_states = kept
 
 # Everything that has to settle after a stat moves, wherever it moved from. Every mutator ends
-# here, so "what happens when a stat changes?" has one answer and one place to extend.
-#
-# ORDER IS LOAD-BEARING: gates run FIRST (they can strip armour, which moves CON, which moves max
-# HP), then HP re-clamps against the settled max. It cannot loop, because gates read get_body_stat
-# and so are blind to the gear this may remove.
+# here, so "what happens when a stat changes?" has one answer and one place to extend: the state
+# settles (gates, then the HP re-clamp -- UnitState.settle), then the readout hears about it.
 func _settle_stat_change() -> void:
-	_enforce_gear_gates()
-	reclamp_hp()
+	state.settle()
 	stats_changed.emit()
-
-# Gear you no longer qualify for comes OFF (#112). It stays in inventory — you're carrying it, just
-# not wearing it. Triggered by a buff lapsing, a debuff, or a maim. Two parallel clauses that can't
-# cascade: armor's gate reads body stats, a rune's reads aura+affinity (#157) — neither reads gear.
-func _enforce_gear_gates() -> void:
-	_strip_gear(_gear_failing_gates())
-
-# The same JUDGEMENT with no nulling — "what would come off, standing as this unit stands right now".
-# Split out of the enforce above for #742: the job picker asks it of a HYPOTHETICAL body (see
-# with_jobs) rather than growing a second reading of the same gates, which is the drift #744 collapsed
-# one layer down. One judgement, so the warning and the strip can never name different pieces.
-func _gear_failing_gates() -> Array[EquippableData]:
-	var failing: Array[EquippableData] = []
-	if worn_armor != null and not worn_armor.can_equip(self):
-		failing.append(worn_armor)
-	if equipped_weapon != null and not equipped_weapon.can_equip(self):
-		failing.append(equipped_weapon)
-	return failing
-
-# What is actually ON this unit right now, in _gear_failing_gates' own order. The pair those gates
-# judge, and the pair a job preview diffs — see gear_lost_under_jobs.
-func _worn_gear() -> Array[EquippableData]:
-	var worn: Array[EquippableData] = []
-	if worn_armor != null:
-		worn.append(worn_armor)
-	if equipped_weapon != null:
-		worn.append(equipped_weapon)
-	return worn
-
-# ...and the nulling with no judgement. An INSTALLED PROSTHETIC that stops being wieldable leaves the
-# equip slot and stays a limb — _mod_sources reads the fitting, not the slot — so there is deliberately
-# nothing here that touches unit_instance.limbs.
-func _strip_gear(pieces: Array[EquippableData]) -> void:
-	for piece: EquippableData in pieces:
-		if piece == worn_armor:
-			worn_armor = null
-		elif piece == equipped_weapon:
-			equipped_weapon = null
 
 func _on_instance_died():
 	die()
 
-# The BODY: base → limb → jobs → temporary effects. Everything EXCEPT gear.
-#
-# This is what wear gates judge against (ArmorData.can_equip). Excluding gear is load-bearing in
-# two directions: legality never depends on what you have on, and forced unequip can never cascade.
+# --- Body questions (#1480) -----------------------------------------------------------------------
+# Answered by `state`, which holds the stat chain, the gear walk and the HP door; forwarded so that
+# readers still ask the Unit.
+
 func get_body_stat(stat: Stats.Stat) -> int:
-	return unit_instance.get_effective_stat(stat) + _effect_modifier(stat)
+	return state.get_body_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
-	return get_body_stat(stat) + _gear_modifier(stat)
+	return state.get_effective_stat(stat)
 
-# The stored half of the temporary stage. Additive across sources (dev, 2026-07-28) — a source
-# that imposed a CAP rather than a delta is unsupported and would need its own decision.
-func _effect_modifier(stat: Stats.Stat) -> int:
-	var total := 0
-	for effect in stat_effects:
-		total += effect.get_modifier(stat)
-	return total
-
-# THE answer to "whose fitted mods contribute to this unit?" (#74) -- read by _gear_modifier and
-# get_live_abilities, never re-derived, so the two can never disagree about which weapons count.
-#
-# The equipped weapon, plus every INSTALLED PROSTHETIC: a prosthetic is a limb, so its fitted
-# components ride the body that carries them whether or not it is the thing being swung. An idle
-# inventory weapon contributes nothing, the same way get_effective_def reads the worn piece rather
-# than everything carried.
-#
-# DEDUPED, and that is load-bearing rather than defensive: add_item auto-equips the first
-# weapon-shaped equippable and a ProstheticWeaponInstance qualifies, so one prosthetic arm can be
-# the equipped weapon AND a limb fitting at once. Counted twice, its mods pay out twice.
-func _mod_sources() -> Array[WeaponInstance]:
-	return _mod_sources_holding(equipped_weapon)
-
-# The same answer with `in_hand` held instead (#1453): the preview's substitution, so a candidate
-# displaces exactly what equipping it would, and every fitted limb stays a source whatever is held.
-func _mod_sources_holding(in_hand: EquippableData) -> Array[WeaponInstance]:
-	var sources: Array[WeaponInstance] = []
-	var held := in_hand as WeaponInstance
-	if held != null:
-		sources.append(held)
-	for slot: UnitInstance.LimbSlot in unit_instance.limbs:
-		var fitting: UnitInstance.LimbFitting = unit_instance.limbs[slot]
-		if fitting.state != UnitInstance.LimbState.PROSTHETIC:
-			continue
-		var prosthetic := fitting.prosthetic_item
-		if prosthetic != null and not sources.has(prosthetic):
-			sources.append(prosthetic)
-	return sources
-
-# The "-> gear" tail of the effective-stat chain (stats.md). Derived live from what's worn,
-# the same way get_effective_def reads worn_armor live -- no stored mirror to keep in sync.
-#
-# A fitted mod contributes HERE, at the gear stage, never at the limb stage a prosthetic's own
-# built_in_stat feeds. Forced rather than chosen: the walk is proficiency-gated and
-# active_space_count needs a Unit, while UnitInstance.limb_stat(slot) has no wielder to ask.
-# The doctrine agrees -- built_in_stat is what the prosthetic IS, a mod is what is bolted to it.
-func _gear_modifier(stat: Stats.Stat) -> int:
-	return _gear_modifier_for(stat, worn_armor, _mod_sources())
-
-# The walk itself, with the gear handed IN so a hypothetical set can use it (#745). Live and preview
-# share this one function: a preview computed by a second walk drifts from the real number the first
-# time either side gains a stage, and a number the player is shown before deciding has to be the
-# number they get.
-func _gear_modifier_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> int:
-	var total := 0
-	for term: Array in _gear_terms_for(stat, armor, weapons):
-		total += term[1]
-	return total
-
-# The walk's terms one source at a time, [source Item, delta], skipping a source that moves nothing.
-# The sum above is built FROM this, so a readout that itemizes the gear stage (#1410) and the number
-# it explains are one walk and cannot disagree.
-func _gear_terms_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> Array[Array]:
-	var terms: Array[Array] = []
-	if armor != null and armor.stat_modifiers.get(stat, 0) != 0:
-		terms.append([armor, armor.stat_modifiers[stat]])
-	for weapon in weapons:
-		for mod in weapon.active_modules(self):
-			if mod.stat_modifiers.get(stat, 0) != 0:
-				terms.append([mod, mod.stat_modifiers[stat]])
-	return terms
-
-# The live gear's terms: the worn piece, then every mod _mod_sources says contributes.
 func gear_terms(stat: Stats.Stat) -> Array[Array]:
-	return _gear_terms_for(stat, worn_armor, _mod_sources())
+	return state.gear_terms(stat)
 
 func get_current_hp() -> int:
-	return unit_instance.get_current_hp()
+	return state.get_current_hp()
+
+func set_current_hp(value: int) -> void:
+	state.set_current_hp(value)
+
+func get_max_hp() -> int:
+	return state.get_max_hp()
 
 func get_mov() -> int:
-	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX), get_weight())
+	return state.get_mov()
 
-# The body plus everything carried (#120). BLD is read EFFECTIVE so a job or a temporary effect can
-# move it; armor and the equipped weapon both live in `inventory`, so one sweep covers the gear.
-# CON is never a term (retracted 2026-07-27), and gear's mass is Item.weight alone --
-# tests/law/test_gear_has_one_mass.gd refuses a piece that names BLD in its stat_modifiers.
 func get_weight() -> int:
-	return get_effective_stat(Stats.Stat.BLD) + get_carried_weight()
+	return state.get_weight()
 
-# The gear half of get_weight, for a readout that shows the two apart. A rule asks get_weight.
 func get_carried_weight() -> int:
-	return Item.total_weight(inventory)
+	return state.get_carried_weight()
 
-# --- preview-at-decision (#745) ---------------------------------------------------------------
-#
-# "What would these numbers BE if this unit had that." Every one of the three below is the live
-# function with the gear substituted, going through the SAME walk -- see _gear_modifier_for.
-#
-# INCOMING says which question is being asked, and the two have different answers for weight alone:
-# an item coming from the stash or another unit ADDS its mass, while one already carried and merely
-# equipped moves nothing. The stat and DEF answers do not fork -- an idle inventory weapon
-# contributes neither, so where the thing came from cannot change them.
-#
-# NOT GATED HERE. can_equip_reason (#744) decides whether the player is shown these at all, and that
-# is a surface's decision: previewing a piece a unit cannot wear is a lie, but the arithmetic is the
-# same arithmetic and a model that refused to do it would only push the refusal somewhere worse.
+func get_effective_ldr() -> int:
+	return state.get_effective_ldr()
+
+func get_effective_def() -> int:
+	return state.get_effective_def()
+
 func previewed_stat(stat: Stats.Stat, candidate: Item) -> int:
-	var gear := _candidate_gear(candidate)
-	return get_body_stat(stat) + _gear_modifier_for(stat, gear[0], gear[1])
-
+	return state.previewed_stat(stat, candidate)
 
 func previewed_def(candidate: Item) -> int:
-	var gear := _candidate_gear(candidate)
-	return _def_for(gear[0], previewed_stat(Stats.Stat.CON, candidate))
-
+	return state.previewed_def(candidate)
 
 func previewed_weight(candidate: Item, incoming: bool) -> int:
-	if candidate == null or not incoming:
-		return get_weight()
-	return get_weight() + candidate.get_effective_weight()
+	return state.previewed_weight(candidate, incoming)
 
-
-# MOV reads both of the answers above (#1176): a piece can move DEX through its modifiers AND add mass,
-# so each goes through its own preview rather than this re-deriving either.
 func previewed_mov(candidate: Item, incoming: bool) -> int:
-	return unit_instance.get_mov(previewed_stat(Stats.Stat.DEX, candidate), previewed_weight(candidate, incoming))
+	return state.previewed_mov(candidate, incoming)
 
+func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
+	return state.get_weapon_proficiency(family)
 
-# The substitution itself: [armor, weapons] with the candidate in whichever slot it fills
-# (Item.equip_slot, #1453). A hand candidate displaces the EQUIPPED one -- a unit swings one thing --
-# while prosthetics stay, because a fitted limb contributes whatever else is in hand. A carried kind
-# fills no slot and displaces nothing.
-func _candidate_gear(candidate: Item) -> Array:
-	var armor := worn_armor
-	var weapons := _mod_sources()
-	var slot: Item.EquipSlot = candidate.equip_slot() if candidate != null else Item.EquipSlot.NONE
-	match slot:
-		Item.EquipSlot.ARMOR:
-			armor = candidate as ArmorData
-		Item.EquipSlot.WEAPON:
-			weapons = _mod_sources_holding(candidate as EquippableData)
-	return [armor, weapons]
+func is_immune_to(element: Elemental.Element) -> bool:
+	return state.is_immune_to(element)
+
+func get_live_abilities() -> Array[AbilityData]:
+	return state.get_live_abilities()
+
+func has_live_ability(id: Abilities.Id) -> bool:
+	return state.has_live_ability(id)
+
+func get_brace_bonus() -> int:
+	return state.get_brace_bonus()
+
+func get_element_aura(element: Elemental.Element) -> int:
+	return state.get_element_aura(element)
+
+func has_affinity(element: Elemental.Element) -> bool:
+	return state.has_affinity(element)
+
+func affinity_order() -> Array[Elemental.Element]:
+	return state.affinity_order()
+
+func has_any_affinity() -> bool:
+	return state.has_any_affinity()
+
+func attunement_elements() -> Array[Elemental.Element]:
+	return state.attunement_elements()
 
 
 # --- Changing a job (#742) ------------------------------------------------------------------------
@@ -659,7 +536,7 @@ func with_jobs(job_ids: Array[String], question: Callable) -> Variant:
 	var held_armor := worn_armor
 	var held_weapon := equipped_weapon
 	unit_instance.jobs = job_ids.duplicate()
-	_strip_gear(_gear_failing_gates())
+	state.strip_gear(state.gear_failing_gates())
 	var answer: Variant = question.call()
 	unit_instance.jobs = held_jobs
 	worn_armor = held_armor
@@ -671,12 +548,12 @@ func with_jobs(job_ids: Array[String], question: Callable) -> Variant:
 # again, and therefore the one consequence of a pick worth warning about before the click.
 #
 # A DIFF OF THE SAME FUNCTION UNDER BOTH BODIES, not a second reading of the gates: asking
-# _gear_failing_gates inside the swap answers "nothing", because with_jobs has already taken those
-# pieces off by then. Both sides come from _worn_gear, so the two halves cannot drift.
+# gear_failing_gates inside the swap answers "nothing", because with_jobs has already taken those
+# pieces off by then. Both sides come from worn_gear, so the two halves cannot drift.
 func gear_lost_under_jobs(job_ids: Array[String]) -> Array[EquippableData]:
-	var kept: Array[EquippableData] = with_jobs(job_ids, _worn_gear)
+	var kept: Array[EquippableData] = with_jobs(job_ids, state.worn_gear)
 	var lost: Array[EquippableData] = []
-	for piece: EquippableData in _worn_gear():
+	for piece: EquippableData in state.worn_gear():
 		if not kept.has(piece):
 			lost.append(piece)
 	return lost
@@ -698,72 +575,6 @@ func previewed_abilities_for_jobs(job_ids: Array[String]) -> Array[AbilityData]:
 	var live: Array[AbilityData] = with_jobs(job_ids, get_live_abilities)
 	return live
 
-
-func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
-	return unit_instance.get_proficiency(family)
-
-func get_max_hp() -> int:
-	return unit_instance.get_max_hp(get_effective_stat(Stats.Stat.CON))
-
-# The one door for WRITING hp. UnitInstance can't derive its own ceiling (gear and temporary
-# effects both live here), so this is where the two halves meet: outside code asks the Unit, it
-# never reaches through into the instance and rebuilds the answer.
-func set_current_hp(value: int) -> void:
-	unit_instance.set_current_hp(value, get_max_hp())
-
-func get_effective_ldr() -> int:
-	# Lives here, not on UnitInstance (#106): both terms are FINISHED effective stats, and the
-	# chain's gear stage is only reachable from this layer. LDR is not cosmetic — it drives
-	# Squad.max_size(), so a gear-less reading silently caps how many units a leader can field.
-	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
-
-func get_effective_def() -> int:
-	return _def_for(worn_armor, get_effective_stat(Stats.Stat.CON))
-
-# DEF is a SECOND walk, not a term in the first, and that is what makes a preview of it easy to get
-# wrong: a candidate plate moves its own def_power AND the CON the scaling reads, through its
-# stat_modifiers. Judging the new plate against the old plate's CON is the bug this shape prevents.
-func _def_for(armor: ArmorData, con: int) -> int:
-	# DEF is gear-only (stats.md); the CON math lives with the stat doctrine in Stats.
-	if armor == null:
-		return 0
-	return Stats.armor_def(armor.def_power, con, armor.flat_def)
-
-# THE composition point for "what is this unit immune to" — the role RulesService.def_breakdown
-# plays for DEF. Any UNIT-level immunity readout (a status icon, an inspect row) asks HERE and
-# never re-derives from whatever gear happens to be worn. The body reads the ability union
-# (has_live_ability), so immunity is no armor-specific channel: it arrives as an ability, from
-# whatever source granted it.
-func is_immune_to(element: Elemental.Element) -> bool:
-	if not Abilities.INSULATION.has(element):
-		return false
-	return has_live_ability(Abilities.INSULATION[element])
-
-# What this unit can do RIGHT NOW: everything persistent (innate ∪ jobs) ∪ gear, deduped
-# by id, earlier sources winning ties. THE answer — UnitInstance's version is the persistent
-# inner layer. Derived live off what's worn, never stored, which is also what makes a wear-gate
-# strip correct for free: drop the armor and its grants leave with it, no invalidation needed.
-func get_live_abilities() -> Array[AbilityData]:
-	var live: Array[AbilityData] = []
-	AbilityData.add_live(live, unit_instance.get_live_abilities())
-	if worn_armor != null:
-		AbilityData.add_live(live, worn_armor.granted_abilities)
-	# The weapon half (#74) -- which slots contribute is _mod_sources' one answer, and the merge is
-	# add_live exactly as above, so a mod and a worn piece granting the same id dedupe by id.
-	for weapon in _mod_sources():
-		for mod in weapon.active_modules(self):
-			AbilityData.add_live(live, mod.granted_abilities)
-	# A RUNE grants nothing, and that is RULED rather than pending (#531, dev 2026-08-26): a rune's
-	# payload is its carvings. equipped_weapon is typed EquippableData, so a RuneData sitting there
-	# falls out of _mod_sources' cast on purpose -- do not "fix" that, and do not add a fourth arm.
-	return live
-
-func has_live_ability(id: Abilities.Id) -> bool:
-	for ability in get_live_abilities():
-		if ability.id == id:
-			return true
-	return false
-
 # --- Guard (#414, docs/design/standing-reactions.md) ---
 # The four doors on the armed ward. Everything that reads WHETHER a Guard covers a given hit goes
 # through PlanResolver; these only own the state's life.
@@ -773,14 +584,6 @@ func has_live_ability(id: Abilities.Id) -> bool:
 # later, the base constant today.
 func get_guard_range() -> int:
 	return Abilities.GUARD_BASE_RANGE
-
-# The bonus DEF this unit brings to a hit it ABSORBS (the doc's brace bonus). Bare Guard blocks at
-# +0; kit raises it. Deliberately NOT part of RulesService.def_breakdown: this applies to one
-# substituted instance, not to the unit's standing DEF, and the inspect panel must never show it as
-# though a Guard were walking around tougher (Iron Will's cap sits outside the breakdown for the
-# same reason).
-func get_brace_bonus() -> int:
-	return Abilities.BRACE_DEF_BONUS if has_live_ability(Abilities.Id.BRACE) else 0
 
 # `spent` is not a defaulted convenience: a Guard that absorbed a hit during its OWN pass (your
 # splash landing after its queue slot) must arm already-used, and GuardAction.execute is the only
@@ -858,26 +661,26 @@ func is_standing_watch() -> bool:
 # purpose — a restore replays the RESULT, and both sides round-trip verbatim.
 # `turns` overrides the state's default clock (0 = default); only paired states read it.
 # An exclusive state (#1092) is refused while its winner is held, and strips its loser on arrival.
-func add_element_state(state: Elemental.State, turns: int = 0) -> void:
-	if state == Elemental.State.NONE or Elemental.is_blocked(element_states, state):
+func add_element_state(element_state: Elemental.State, turns: int = 0) -> void:
+	if element_state == Elemental.State.NONE or Elemental.is_blocked(element_states, element_state):
 		return
-	for beaten in Elemental.overridden_by(state):
+	for beaten in Elemental.overridden_by(element_state):
 		remove_element_state(beaten)
-	if not element_states.has(state):
-		element_states.append(state)
-	_apply_paired_effect(state, turns)
+	if not element_states.has(element_state):
+		element_states.append(element_state)
+	_apply_paired_effect(element_state, turns)
 
-func remove_element_state(state: Elemental.State) -> void:
-	element_states.erase(state)
-	if not Elemental.paired_stat_mods(state).is_empty():
-		remove_stat_effects_from(Elemental.state_effect_source(state))
+func remove_element_state(element_state: Elemental.State) -> void:
+	element_states.erase(element_state)
+	if not Elemental.paired_stat_mods(element_state).is_empty():
+		remove_stat_effects_from(Elemental.state_effect_source(element_state))
 
-func _apply_paired_effect(state: Elemental.State, turns: int) -> void:
-	var mods := Elemental.paired_stat_mods(state)
+func _apply_paired_effect(element_state: Elemental.State, turns: int) -> void:
+	var mods := Elemental.paired_stat_mods(element_state)
 	if mods.is_empty():
 		return
-	var source := Elemental.state_effect_source(state)
-	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(state, StatEffect.PERMANENT)
+	var source := Elemental.state_effect_source(element_state)
+	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(element_state, StatEffect.PERMANENT)
 	# A re-application refreshes, never stacks: one effect, whichever clock runs longer.
 	for effect in stat_effects:
 		if effect.source_name == source and effect.turns_remaining > requested:
@@ -1242,36 +1045,6 @@ func advance_crisis_surge():
 		mods[stat] = Abilities.CRISIS_SURGE
 	apply_stat_effect(StatEffect.make(Abilities.CRISIS_SURGE_SOURCE, mods, Abilities.CRISIS_SURGE_TURNS))
 
-func get_element_aura(element: Elemental.Element) -> int:
-	if unit_instance == null:
-		return 0
-	return unit_instance.get_element_aura(element)
-
-# Can this unit EVER grow aura in this element -- its own field, never "aura >= 1" (UnitInstance's
-# note: the limb tax empties a pool while the growth right survives). Delegated for the same reason
-# the accessor above is: a surface reaching unit_instance directly is the duplicate seam #930's
-# readout would otherwise open, and both of its surfaces ask this question.
-func has_affinity(element: Elemental.Element) -> bool:
-	return unit_instance != null and unit_instance.has_affinity(element)
-
-# The affinity set IN RANK ORDER, [0] first. A COPY: the stored array is the unit's own, and a menu
-# holding the live one could reorder a genetic fact by accident.
-func affinity_order() -> Array[Elemental.Element]:
-	if unit_instance == null:
-		var none: Array[Elemental.Element] = []
-		return none
-	return unit_instance.affinity.duplicate()
-
-# What a burned vial empowers this unit in (#697) — [] when nothing is attuned. Deliberately NOT
-# folded into get_element_aura above: that accessor must stay blind to materia, because the anchor,
-# the channel deficit, both wildcard pools and the equip gate all read it, and making it aware would
-# leak empowerment into every one of those gates at once. Empowerment is a damage-time term only.
-func attunement_elements() -> Array[Elemental.Element]:
-	if attunement == null:
-		var none: Array[Elemental.Element] = []
-		return none
-	return attunement.granted_elements()
-
 # Attune to a vial, spending it out of inventory. Returns "" on success, or the refusal — the
 # reason is asked first and the act is this same call's second half, so nothing can act on a
 # judgement made a frame ago (Loadout.move's shape).
@@ -1287,9 +1060,6 @@ func use_vial(index: int) -> String:
 	attunement = vial
 	inventory[index] = null   # burned: the item is gone, the charge is what remains
 	return ""
-
-func has_any_affinity() -> bool:
-	return unit_instance != null and unit_instance.has_any_affinity()
 
 # --- What this unit fires ---
 # Each question is asked of the EQUIPPABLE, which answers for its own kind (EquippableData's
@@ -1594,10 +1364,10 @@ func can_burrow_weapon() -> bool:
 # Replays the RESULT, never the EVENT: the normal entry points (_go_downed, apply_stat_effect)
 # have side effects a restore must not repeat (squad ejection, countdown reseed).
 
-func restore_lifecycle(state: LifecycleState, turns_remaining: int) -> void:
-	lifecycle_state = state
+func restore_lifecycle(lifecycle: LifecycleState, turns_remaining: int) -> void:
+	lifecycle_state = lifecycle
 	downed_turns_remaining = turns_remaining
-	_show_downed_sprite(state == LifecycleState.DOWNED)
+	_show_downed_sprite(lifecycle == LifecycleState.DOWNED)
 
 func restore_stat_effects(effects: Array[StatEffect]) -> void:
 	stat_effects.clear()
