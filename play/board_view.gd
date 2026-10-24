@@ -479,7 +479,7 @@ static func _kit_row(session, label: String, item: Item, owner: Unit, mods: Dict
 			row += "  ! " + reason
 	# The attack line only for what is equipped: _weapon_str reads the WIELDER's live attack views,
 	# which belong to the equipped weapon whatever weapon is passed.
-	if equippable != null and not equippable is ArmorData:
+	if item.equip_slot() == Item.EquipSlot.WEAPON:
 		row += "  " + _weapon_str(equippable, owner if owner != null and item == owner.get_equipped_weapon() else null)
 	var weapon := item as WeaponInstance
 	if weapon != null and weapon.space_count() > 0:

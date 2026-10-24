@@ -43,19 +43,17 @@ static func block_reason(unit: Unit, verb: Verb, index: int) -> String:
 		return "There is nothing in that slot."
 	match verb:
 		Verb.EQUIP:
-			var equippable := item as EquippableData
-			if equippable == null or equippable is ArmorData:
+			if item.equip_slot() != Item.EquipSlot.WEAPON:
 				return "%s is not something to equip." % item.shown_name()
 			if item == unit.get_equipped_weapon():
 				return "%s is already equipped." % item.shown_name()
-			return equippable.can_equip_reason(unit)
+			return (item as EquippableData).can_equip_reason(unit)
 		Verb.WEAR:
-			var armor := item as ArmorData
-			if armor == null:
+			if item.equip_slot() != Item.EquipSlot.ARMOR:
 				return "%s is not armour." % item.shown_name()
 			if item == unit.worn_armor:
 				return "%s is already worn." % item.shown_name()
-			return armor.can_equip_reason(unit)
+			return (item as ArmorData).can_equip_reason(unit)
 		Verb.USE:
 			var vial := item as VialData
 			if vial == null:

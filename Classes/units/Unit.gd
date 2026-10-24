@@ -301,12 +301,10 @@ func add_item(item: Item) -> bool:
 		return false
 	inventory[inventory.find(null)] = item
 
-	# Auto-equip the first WEAPON-shaped equippable only. ArmorData is an EquippableData too, but it
-	# fills a different slot -- auto-equipping it here would "arm" a unit with a vest and shadow the
-	# real weapon they pick up next. Armor is never auto-worn: the wear gate makes silent auto-wear
-	# ambiguous, so wearing is always an explicit act. Routed through the one gated door (#157): a
-	# dead rune lands carried, not equipped.
-	if equipped_weapon == null and item is EquippableData and not item is ArmorData:
+	# Auto-equip into an empty HAND only (Item.equip_slot, #1453). Armor is never auto-worn: the wear
+	# gate makes silent auto-wear ambiguous, so wearing is always an explicit act. Routed through the
+	# one gated door (#157): a dead rune lands carried, not equipped.
+	if equipped_weapon == null and item != null and item.equip_slot() == Item.EquipSlot.WEAPON:
 		set_equipped_weapon(item)
 	return true
 
@@ -489,8 +487,13 @@ func _effect_modifier(stat: Stats.Stat) -> int:
 # weapon-shaped equippable and a ProstheticWeaponInstance qualifies, so one prosthetic arm can be
 # the equipped weapon AND a limb fitting at once. Counted twice, its mods pay out twice.
 func _mod_sources() -> Array[WeaponInstance]:
+	return _mod_sources_holding(equipped_weapon)
+
+# The same answer with `in_hand` held instead (#1453): the preview's substitution, so a candidate
+# displaces exactly what equipping it would, and every fitted limb stays a source whatever is held.
+func _mod_sources_holding(in_hand: EquippableData) -> Array[WeaponInstance]:
 	var sources: Array[WeaponInstance] = []
-	var held := equipped_weapon as WeaponInstance
+	var held := in_hand as WeaponInstance
 	if held != null:
 		sources.append(held)
 	for slot: UnitInstance.LimbSlot in unit_instance.limbs:
@@ -591,22 +594,19 @@ func previewed_mov(candidate: Item, incoming: bool) -> int:
 	return unit_instance.get_mov(previewed_stat(Stats.Stat.DEX, candidate), previewed_weight(candidate, incoming))
 
 
-# The substitution itself: [armor, weapons] with the candidate in whichever slot it fills. A weapon
-# displaces the EQUIPPED one rather than joining the list -- a unit swings one thing -- while
-# prosthetics stay, because a fitted limb contributes whatever else is in hand.
+# The substitution itself: [armor, weapons] with the candidate in whichever slot it fills
+# (Item.equip_slot, #1453). A hand candidate displaces the EQUIPPED one -- a unit swings one thing --
+# while prosthetics stay, because a fitted limb contributes whatever else is in hand. A carried kind
+# fills no slot and displaces nothing.
 func _candidate_gear(candidate: Item) -> Array:
 	var armor := worn_armor
-	var weapons: Array[WeaponInstance] = _mod_sources()
-	var as_armor := candidate as ArmorData
-	if as_armor != null:
-		armor = as_armor
-	else:
-		var as_weapon := candidate as WeaponInstance
-		var held := equipped_weapon as WeaponInstance
-		if held != null:
-			weapons.erase(held)
-		if as_weapon != null and not weapons.has(as_weapon):
-			weapons.append(as_weapon)
+	var weapons := _mod_sources()
+	var slot: Item.EquipSlot = candidate.equip_slot() if candidate != null else Item.EquipSlot.NONE
+	match slot:
+		Item.EquipSlot.ARMOR:
+			armor = candidate as ArmorData
+		Item.EquipSlot.WEAPON:
+			weapons = _mod_sources_holding(candidate as EquippableData)
 	return [armor, weapons]
 
 
@@ -1143,8 +1143,8 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 	if not inventory.has(weapon):
 		return false
 
-	if weapon is ArmorData:
-		return false   # armor fills its OWN slot -- wear_armor() is the door, same as the other two
+	if weapon.equip_slot() != Item.EquipSlot.WEAPON:
+		return false   # armor fills its OWN slot -- wear_armor() is the door (Item.equip_slot, #1453)
 
 	if not weapon.can_equip(self):
 		return false   # a rune with nothing channelable is carryable, never wieldable (#157)
@@ -1188,9 +1188,10 @@ func wear_armor(index: int) -> bool:
 	# The ONE chokepoint where armor gets worn, so the wear gate has exactly one place to live.
 	if index < 0 or index >= inventory.size():
 		return false
-	var armor := inventory[index] as ArmorData
-	if armor == null:
+	var item := inventory[index]
+	if item == null or item.equip_slot() != Item.EquipSlot.ARMOR:
 		return false
+	var armor := item as ArmorData
 	if not armor.can_equip(self):
 		return false
 	worn_armor = armor
