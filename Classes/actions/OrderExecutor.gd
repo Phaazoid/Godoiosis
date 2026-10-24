@@ -151,9 +151,10 @@ func execute_orders(unit):
 			# R7 liveness (#1005): the pass felled this order's actor before the tail runs, so the
 			# verb does not happen. Dropped at COLLECTION rather than inside the tail loop below so
 			# it never reaches the camera either -- a coda beat pans to the body a rescue lifts, and
-			# there is no lift to pan to. The verdict is the resolver's (resolved_actor_felled),
-			# read here and never re-derived: the preview and both execution twins share one answer.
-			if action.resolved_actor_felled:
+			# there is no lift to pan to. The verdict is the resolver's stamp, asked through
+			# is_inert() and never re-derived: the preview, both execution twins and BeatSheet.read
+			# (#1454) share one answer.
+			if action.is_inert():
 				continue
 			if not side_channel.has(action.action_type):
 				side_channel[action.action_type] = []
