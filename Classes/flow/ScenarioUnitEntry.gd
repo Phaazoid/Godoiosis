@@ -101,10 +101,12 @@ class_name ScenarioUnitEntry
 # leader's squad name, AI archetype, zone and post. The ONE writer for both loaders (#46): the headless one never
 # copied these, so every saved Sentry rushed and no escort could be lost. Outside the #177 fork,
 # since a VIP or a sentry is usually cast. Called right after the spawn, which made the solo squad.
+# A THIRD caller since #1456, the pre-mission draw, hands it a RESERVE unit, which has no squad yet:
+# the unit's half still lands, the squad's has nothing to land on.
 func apply_placement(unit: Unit) -> void:
 	unit.must_survive = must_survive
 	unit.ai_profile = ai_profile
-	if squad_id == -1 or not is_leader:
+	if squad_id == -1 or not is_leader or unit.squad == null:
 		return
 	unit.squad.squad_name = squad_name
 	unit.squad.archetype = squad_archetype

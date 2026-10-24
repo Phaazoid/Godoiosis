@@ -26,6 +26,7 @@ const ROW_WIDTH := 12                  # wider than COH (4), so the cohesion cas
 
 var _main: Node
 var game: Node2D
+var _vip_roster: Roster
 
 
 func before_test() -> void:
@@ -46,6 +47,7 @@ func before_test() -> void:
 func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
+	_vip_roster = null   # the last reference: the cache lets the scratch path go with it
 
 
 # --- helpers -------------------------------------------------------------------------------------
@@ -358,6 +360,82 @@ func test_the_cap_is_measured_against_the_deduped_zone_and_not_a_sum() -> void:
 	game.scenario_manager.current_deployment_cap = 4
 
 	_assert_reports(BoardLint.Severity.DEGRADES, "only 3 of them can actually stand there")
+
+
+# --- a roster VIP (#1456) ---
+#
+# The roster is authored in memory and claimed into the cache under a scratch name, so the lint
+# resolves it through RosterCatalog as it would a file; nothing is written to Roster/.
+
+const VIP_ROSTER := "__vip_roster_lint_1456"
+
+
+func _name_a_vip_roster(vips: int, others := 1) -> void:
+	_vip_roster = Roster.new()
+	for i in others + vips:
+		var data := H.make_unit_data({}, Team.Faction.PLAYER)
+		data.display_name = "Rostered%d" % i
+		var entry := ScenarioUnitEntry.new()
+		entry.unit_data = data
+		entry.state_saved = false
+		entry.must_survive = i >= others
+		_vip_roster.entries.append(entry)
+	_vip_roster.take_over_path(RosterCatalog.roster_path(VIP_ROSTER))
+	game.scenario_manager.current_roster = VIP_ROSTER
+
+
+func _paint_landing(cells: int) -> void:
+	for x in range(cells):
+		game.zone_manager.paint_cell("landing", ZoneManager.Kind.DEPLOYMENT, Vector2i(x, 0))
+
+
+func _declare_protect() -> void:
+	var conds: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.PROTECTED_UNIT_LOST]
+	game.mission_controller.set_lose_conditions(conds, 0)
+
+
+# Check board loads a board WITHOUT the draw, so nobody on it is flagged: the roster's VIP has to count
+# as the protect condition's subject, or a good roster-VIP mission blocks and CI's mission sweep reds.
+func test_a_roster_vip_is_the_protect_conditions_subject_before_any_draw() -> void:
+	_spawn(Team.Faction.PLAYER, 5)
+	_name_a_vip_roster(1)
+	_paint_landing(3)
+	_declare_protect()
+	_assert_silent(BoardLint.Severity.BLOCKS, "PROTECTED_UNIT_LOST")
+
+	_vip_roster.entries[1].must_survive = false   # non-vacuous: the same board with no VIP blocks
+	_assert_reports(BoardLint.Severity.BLOCKS, "PROTECTED_UNIT_LOST")
+
+
+# The other way round: a Must survive flag on a board that never declares the condition. It plays, so
+# it only DEGRADES, and it names a board unit and a roster VIP alike.
+func test_a_vip_on_a_board_that_declares_no_protect_condition_degrades() -> void:
+	var placed := _spawn(Team.Faction.PLAYER, 5)
+	placed.must_survive = true
+	_name_a_vip_roster(1)
+	_paint_landing(3)
+
+	_assert_reports(BoardLint.Severity.DEGRADES, "%s is flagged Must survive" % placed.get_unit_name())
+	_assert_reports(BoardLint.Severity.DEGRADES, "Rostered1 is flagged Must survive")
+	_assert_silent(BoardLint.Severity.BLOCKS, "Must survive")
+
+	_declare_protect()
+	_assert_silent(BoardLint.Severity.DEGRADES, "Must survive")
+
+
+# Every roster VIP must deploy, so more of them than the room is a phase Begin never leaves. The room
+# is the cap and the zone together.
+func test_more_roster_vips_than_can_deploy_blocks() -> void:
+	_spawn(Team.Faction.PLAYER, 5)
+	_name_a_vip_roster(3)
+	_declare_protect()
+	_paint_landing(2)
+	_assert_reports(BoardLint.Severity.BLOCKS, "every VIP must")
+
+	_paint_landing(3)   # the zone holds all three...
+	_assert_silent(BoardLint.Severity.BLOCKS, "every VIP must")
+	game.scenario_manager.current_deployment_cap = 2   # ...but the cap does not
+	_assert_reports(BoardLint.Severity.BLOCKS, "every VIP must")
 
 
 func test_findings_that_block_play_are_listed_first() -> void:

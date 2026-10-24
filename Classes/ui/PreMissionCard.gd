@@ -37,6 +37,10 @@ class_name PreMissionCard
 # unit holding none draws no picker -- so this column's minimum can fall BELOW that constant, which is
 # a bound the law does not care about, and nothing else in here reads the picker's existence except
 # _refresh_job's early-out.
+#
+# A ROSTER VIP WEARS FOUR MARKS (#1456, the dev's "ship all of it"): a gold frame, a star seal on the
+# portrait, a "VIP" pill on the name line, and a toggle that reads Required and cannot be pressed. All
+# four ask one question, the phase's is_forced, which is also what refuses the Undeploy.
 
 signal deploy_toggled(unit: Unit)
 # A row was clicked -- the item under the cursor, or null for an empty slot. The screen holds the
@@ -76,6 +80,16 @@ const JOB_PICKER_MIN_W := 84
 const CHIP_MAX_W := JOB_PICKER_MIN_W
 const NO_JOB_LABEL := "— none —"
 
+# The VIP marks' geometry (#1456), as drawn in the mocks the dev picked from.
+const VIP_SEAL := 17            # the portrait seal's disc
+const VIP_SEAL_OVERHANG := 2.5  # how far it sits out past the portrait's corner
+const VIP_PILL_STAR := 10
+const VIP_PILL_GAP := 8         # between the name and its pill
+const VIP_TEXT_OUTLINE := 2     # the gold words' outline on parchment (transparent on slate)
+const VIP_TOGGLE_OUTLINE := 3   # ...one heavier on the toggle, whose word is a size larger
+const VIP_TEXT := "VIP"         # PLACEHOLDER, like every line a player reads
+const REQUIRED_TEXT := "✓ Required"
+
 # Every stat, in Stats.Stat declaration order, in two columns. Read off the enum rather than listed
 # here, so a new stat appears without an edit -- #120's BLD did, as the ninth.
 const STAT_COLUMNS := 2
@@ -102,6 +116,12 @@ var _items_column: VBoxContainer
 var _stat_values: Dictionary[Stats.Stat, Label] = {}
 var _previewing := false
 var _derived_label: Label
+# The VIP marks (#1456), built on every card and shown on a roster VIP's, since the flag can be ticked
+# in the dev tools while the screen is up.
+var _name_label: Label
+var _vip_seal: VipStar
+var _vip_pill: PanelContainer
+var _deploy_required := false
 
 
 # The move callables are arguments rather than fields set afterwards, and that is not style: _build
@@ -171,6 +191,15 @@ func _build_unit_half() -> Control:
 	# (dev, 2026-09-12), and this is the one placement of the five drawn that does not spend it.
 	_aura_ring = AuraRing.for_portrait(unit, unit.unit_data.map_sprite, SPRITE)
 	identity.add_child(_aura_ring)
+	# The VIP seal rides the portrait's top-left corner (#1456), on a disc of the card's own paper so
+	# it reads over the sprite and the aura ticks alike.
+	var paper := QueueStyle.ink(QueueStyle.Role.SECTION_BG)
+	paper.a = 1.0
+	_vip_seal = VipStar.make(QueueStyle.ink(QueueStyle.Role.VIP_INK),
+			QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE), VIP_SEAL, paper)
+	_vip_seal.position = Vector2(-VIP_SEAL_OVERHANG, -VIP_SEAL_OVERHANG)
+	_vip_seal.size = Vector2(VIP_SEAL, VIP_SEAL)
+	_aura_ring.add_child(_vip_seal)
 
 	# Beside the sprite: what shape they are in, what they do, and what that grants them.
 	var meta := VBoxContainer.new()
@@ -212,6 +241,15 @@ func _build_unit_half() -> Control:
 	# and TITLE_TEXT is the role that stays light for the dark frame -- the same cream, exactly (#814).
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	left.add_child(name_label)
+	_name_label = name_label
+
+	# The VIP pill rides the NAME LINE (#1456): on a row of its own it grew a card with a job picker
+	# 11px, past BAND_HEIGHT's two whole rows. A CHILD of the name rather than a sibling, because a
+	# sibling would need the name's width and clip_text exists to deny it: the pill is seated just past
+	# the text (_seat_vip_pill) and the name clips short of the pill.
+	_vip_pill = _build_vip_pill()
+	name_label.add_child(_vip_pill)
+	name_label.resized.connect(_seat_vip_pill)
 
 	# Pushed to the bottom of the column, so the card's spare room sits between the kit readout and
 	# the numbers rather than under everything.
@@ -394,12 +432,12 @@ func _build_foot() -> Control:
 
 	_deploy_button = Button.new()
 	_deploy_button.add_theme_font_size_override("font_size", 11)
-	# GODOT DRAWS font_disabled_color, NEVER font_color, ON A DISABLED BUTTON -- so the blocked
-	# state's ink has to land here or the grey is invisible. It is also the one of the three that
-	# cannot change while the card is up, which is why it is said once rather than every refresh.
-	_deploy_button.add_theme_color_override("font_disabled_color",
-			QueueStyle.deploy_ink(QueueStyle.Deployment.BLOCKED))
 	_deploy_button.pressed.connect(func() -> void: deploy_toggled.emit(unit))
+	# The Required state's gold band is the box's own border; its parchment outline is drawn over it.
+	_deploy_button.draw.connect(func() -> void:
+		if _deploy_required:
+			VipStar.draw_band_outline(_deploy_button, Rect2(Vector2.ZERO, _deploy_button.size),
+					QueueStyle.VIP_TOGGLE_BAND, 4))
 	foot.add_child(_deploy_button)
 	return foot
 
@@ -412,6 +450,7 @@ func refresh() -> void:
 	if not is_instance_valid(unit):
 		return
 	_refresh_frame()
+	_refresh_vip()
 	_aura_ring.refresh()   # refresh(), not set_unit(): the unit never changes, and a hover must survive
 	_refresh_limbs()
 	_refresh_job()
@@ -540,8 +579,15 @@ func _refresh_foot() -> void:
 		+ "DEF is the effective value, armour included.")
 
 	var deployed: bool = _controller.game.is_deployed(unit)   # game is untyped: no inference
-	_deploy_button.text = "✓ Deployed" if deployed else "Deploy"
-	var blocked := _deploy_block_reason() if not deployed else ""
+	# A deployed roster VIP is REQUIRED (#1456): the phase refuses to send them back, in the words
+	# the ring's greyed row uses. One in reserve -- a replay with no room -- is an ordinary Deploy.
+	var required := _controller.undeploy_block_reason(unit) if deployed else ""
+	_deploy_required = required != ""
+	if _deploy_required:
+		_deploy_button.text = REQUIRED_TEXT
+	else:
+		_deploy_button.text = "✓ Deployed" if deployed else "Deploy"
+	var blocked := required if _deploy_required else (_deploy_block_reason() if not deployed else "")
 	_deploy_button.disabled = blocked != ""
 	_deploy_button.tooltip_text = UiText.wrap(blocked if blocked != "" else Glossary.short(
 		Glossary.Term.UNDEPLOY if deployed else Glossary.Term.DEPLOY))
@@ -556,9 +602,15 @@ func _refresh_foot() -> void:
 # so the outline would vanish the moment the pointer touched it. font_hover_color is not optional
 # either: unset it falls through to a near-white that parchment's cream card cannot carry, which is
 # #814's own bug -- and test_pre_mission_contrast reads that slot for exactly this reason.
+#
+# GODOT DRAWS font_disabled_color, NEVER font_color, ON A DISABLED BUTTON -- so a disabled state's ink
+# has to land there or it is invisible. Two states are disabled since #1456, grey BLOCKED and gold
+# REQUIRED, so it is said every refresh rather than once at build.
 func _refresh_deploy_chrome(deployed: bool, blocked: bool) -> void:
 	var state: QueueStyle.Deployment = QueueStyle.Deployment.BENCHED
-	if blocked:
+	if _deploy_required:
+		state = QueueStyle.Deployment.REQUIRED
+	elif blocked:
 		state = QueueStyle.Deployment.BLOCKED
 	elif deployed:
 		state = QueueStyle.Deployment.PLACED
@@ -568,6 +620,13 @@ func _refresh_deploy_chrome(deployed: bool, blocked: bool) -> void:
 	var tint := QueueStyle.deploy_ink(state)
 	for slot: String in ["font_color", "font_hover_color", "font_pressed_color"]:
 		_deploy_button.add_theme_color_override(slot, tint)
+	_deploy_button.add_theme_color_override("font_disabled_color", tint if _deploy_required
+			else QueueStyle.deploy_ink(QueueStyle.Deployment.BLOCKED))
+	# The gold word wears the VIP outline, transparent on slate (QueueStyle.VIP_OUTLINE).
+	_deploy_button.add_theme_constant_override("outline_size", VIP_TOGGLE_OUTLINE if _deploy_required else 0)
+	_deploy_button.add_theme_color_override("font_outline_color",
+			QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE))
+	_deploy_button.queue_redraw()
 
 
 # Why this unit cannot be placed right now -- "" when it can. Both halves are real and neither
@@ -576,9 +635,74 @@ func _refresh_deploy_chrome(deployed: bool, blocked: bool) -> void:
 # reads at a glance rather than by checking six toggles. The same question the toggle's own label
 # asks, through the same door -- a second spelling here is a card that could disagree with its own
 # button.
+#
+# A roster VIP's card is framed in gold instead (#1456), deployed or not: what it says is that this
+# unit is not the player's to leave behind, which outranks whether it is placed yet.
 func _refresh_frame() -> void:
 	var deployed: bool = _controller.game.is_deployed(unit)
-	add_theme_stylebox_override("panel", QueueStyle.section_box(deployed))
+	add_theme_stylebox_override("panel", QueueStyle.vip_section_box() if _is_vip()
+			else QueueStyle.section_box(deployed))
+	queue_redraw()
+
+
+# The gold band's parchment outline, over the box and under the card's contents. The outside is the
+# dark frame, and clipped besides, so only the inner line is drawn.
+func _draw() -> void:
+	if _is_vip():
+		VipStar.draw_band_outline(self, Rect2(Vector2.ZERO, size), QueueStyle.VIP_FRAME_BAND, 6, false)
+
+
+# The VIP marks' one question (#1456), the phase's own: the grid order and the toggle ask it too.
+func _is_vip() -> bool:
+	return _controller.is_forced(unit)
+
+
+func _refresh_vip() -> void:
+	var vip := _is_vip()
+	_vip_seal.visible = vip
+	_vip_pill.visible = vip
+	# The name clips short of the pill, so a long name never runs under it.
+	var room := StyleBoxEmpty.new()
+	room.content_margin_right = _vip_pill.get_combined_minimum_size().x + VIP_PILL_GAP if vip else 0.0
+	_name_label.add_theme_stylebox_override("normal", room)
+	_seat_vip_pill.call_deferred()
+
+
+# Just past the name's own text, or against the right edge when the name is long enough to clip.
+func _seat_vip_pill() -> void:
+	if not _vip_pill.visible:
+		return
+	_vip_pill.reset_size()
+	var font := _name_label.get_theme_font("font")
+	var text_w := font.get_string_size(_name_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			_name_label.get_theme_font_size("font_size")).x
+	var x := minf(text_w + VIP_PILL_GAP, _name_label.size.x - _vip_pill.size.x)
+	_vip_pill.position = Vector2(maxf(x, 0.0), (_name_label.size.y - _vip_pill.size.y) * 0.5)
+
+
+func _build_vip_pill() -> PanelContainer:
+	var pill := PanelContainer.new()
+	pill.add_theme_stylebox_override("panel", QueueStyle.vip_pill_box())
+	pill.tooltip_text = UiText.wrap(Glossary.short(Glossary.Term.VIP))
+	pill.mouse_filter = Control.MOUSE_FILTER_STOP
+	pill.draw.connect(func() -> void:
+		VipStar.draw_band_outline(pill, Rect2(Vector2.ZERO, pill.size), 1, 4))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 3)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.add_child(row)
+	var star := VipStar.make(QueueStyle.ink(QueueStyle.Role.VIP_INK),
+			QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE), VIP_PILL_STAR)
+	star.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(star)
+	var words := Label.new()
+	words.text = VIP_TEXT
+	words.add_theme_font_size_override("font_size", 10)
+	words.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.VIP_INK))
+	words.add_theme_constant_override("outline_size", VIP_TEXT_OUTLINE)
+	words.add_theme_color_override("font_outline_color", QueueStyle.ink(QueueStyle.Role.VIP_OUTLINE))
+	row.add_child(words)
+	return pill
 
 
 func _deploy_block_reason() -> String:

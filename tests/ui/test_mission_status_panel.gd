@@ -355,6 +355,28 @@ func test_a_clock_with_no_limit_says_so_rather_than_disappearing() -> void:
 	assert_bool(_row_color("Round Limit — not set").is_equal_approx(MissionStatusPanel.UNWINNABLE_COLOR)).is_true()
 
 
+# The Protect row wears the VIP mark (#1456), the star the pre-mission card gives the unit it names. The
+# star is a CHILD in the row's own margin, so the row's TEXT -- which the Play API prints -- is unchanged.
+func test_the_protect_row_wears_the_vip_star_and_keeps_its_words() -> void:
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	vip.must_survive = true
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	var typed: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.PROTECTED_UNIT_LOST]
+	mc.set_lose_conditions(typed, 0)
+	game.refresh_mission_status()
+
+	var text := "Protect — %s" % vip.get_unit_name()
+	assert_array(_row_texts()).contains([text])
+	var row: Label = null
+	for label in _row_labels():
+		if label.text == text:
+			row = label
+	var stars := row.find_children("*", "VipStar", true, false)
+	assert_int(stars.size()).override_failure_message("the Protect row wears no VIP star").is_equal(1)
+	assert_object(row.get_theme_color("font_color")).is_equal(
+		QueueStyle.ink(QueueStyle.Role.FRAME_VIP_TEXT))
+
+
 # ==============================================================================
 #  The air's reading (#1324): what is off Normal, below the briefing
 # ==============================================================================

@@ -128,7 +128,7 @@ func _grid_cards() -> Array[PreMissionCard]:
 
 
 # The order the grid OPENS in, derived from the units' own names rather than any authored order:
-# deployed first, each group A-Z, roster order breaking a tie.
+# a roster VIP first (#1456), then deployed, each group A-Z, roster order breaking a tie.
 func _open_order() -> Array[Unit]:
 	var roster: Array[Unit] = mc.roster_units()
 	var by_name: Array[Unit] = []
@@ -136,15 +136,19 @@ func _open_order() -> Array[Unit]:
 	by_name.sort_custom(func(a: Unit, b: Unit) -> bool:
 		var c: int = a.get_unit_name().naturalnocasecmp_to(b.get_unit_name())
 		return c < 0 if c != 0 else roster.find(a) < roster.find(b))
+	var vips: Array[Unit] = []
 	var placed: Array[Unit] = []
 	var waiting: Array[Unit] = []
 	for unit: Unit in by_name:
-		if game.is_deployed(unit):
+		if mc.is_forced(unit):
+			vips.append(unit)
+		elif game.is_deployed(unit):
 			placed.append(unit)
 		else:
 			waiting.append(unit)
-	placed.append_array(waiting)
-	return placed
+	vips.append_array(placed)
+	vips.append_array(waiting)
+	return vips
 
 
 static func _units_of(cards: Array[PreMissionCard]) -> Array[Unit]:
@@ -532,7 +536,8 @@ func test_begin_is_refused_with_nobody_placed_and_carries_the_reason_itself() ->
 
 	assert_bool(screen._begin_button.disabled).override_failure_message(
 		"Begin is live with nobody placed, and its refusal is invisible under this screen").is_true()
-	assert_str(screen._begin_button.tooltip_text).contains("at least one")
+	# The phase's own refusal (#1456), the sentence commit_deployment would speak, never the button's.
+	assert_str(screen._begin_button.tooltip_text).is_equal(UiText.wrap(mc.commit_block_reason()))
 
 
 # One builder, so the briefing before the battle and the status during it cannot word a condition

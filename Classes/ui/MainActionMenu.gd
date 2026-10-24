@@ -190,7 +190,7 @@ func build_tree(unit: Unit) -> Array:
 			for child: Dictionary in _expanded_children(unit, id):
 				_append_unique(bucket, child)
 		else:
-			_append_unique(bucket, _verb_node(id))
+			_append_unique(bucket, _verb_node(id, _verb_block_reason(unit, id)))
 
 	var ring: Array = []
 	for group: int in CATEGORIES:
@@ -235,11 +235,19 @@ func _append_unique(bucket: Array, node: Dictionary) -> void:
 
 # An ACTION_DATA verb as a leaf. Its id IS the ACTION_DATA id, so on_pressed's match is reached
 # exactly as it was from the dropdown.
-func _verb_node(id: int) -> Dictionary:
+func _verb_node(id: int, blocked_reason := "") -> Dictionary:
 	var entry: Dictionary = ACTION_DATA[id]
-	var node := _entry(entry["name"], "", Glossary.short(entry["term"]))
+	var node := _entry(entry["name"], blocked_reason, Glossary.short(entry["term"]))
 	node["id"] = id
 	return node
+
+
+# Why a plain verb is listed GREYED, or "". populate() leaves out a verb that does not apply; this is
+# for one that applies and is refused, which the row must explain (#1456: Undeploy on a roster VIP).
+func _verb_block_reason(unit: Unit, id: int) -> String:
+	if id == UNDEPLOY:
+		return game.mission_controller.undeploy_block_reason(unit)
+	return ""
 
 
 # A leaf that is not a verb: it gets a negative id and its own Callable, both dropped at the next
@@ -625,7 +633,10 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 				func(cell: Vector2i) -> void: game.mission_controller.reposition(unit, cell), true, true)
 		UNDEPLOY:
 			# #738's board-exit door, reached for the first time by something that is not a test.
-			# The ring only offers it for a drawn unit, so the gate is at _pre_mission_options.
+			# The ring only offers it for a drawn unit, so the gate is at _pre_mission_options. A
+			# roster VIP's row is greyed (#1456); this refusal is the belt.
+			if game.mission_controller.undeploy_block_reason(unit) != "":
+				return
 			game.undeploy_unit(unit)
 		MOVE:
 			# The gesture, not the bare mode: re-planning spends the queued move (#417). One
