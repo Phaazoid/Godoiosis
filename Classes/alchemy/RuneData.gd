@@ -104,7 +104,7 @@ func is_legal() -> bool:
 # nothing -- no ring row, no AI candidate, no counter (#1215).
 
 # FILTERED on purpose, and deliberately no longer the same list as choice_attacks (#166): this is
-# "what could actually fire", the list the AI probes and has_any_fireable_attack scans. The
+# "what could actually fire", the list the AI probes (AITactics, ThreatField). The
 # catalogue the menu draws is choice_attacks. Don't collapse them back together.
 #
 # Both of them drop watch-only carvings (#590) -- a carving authored can_overwatch is declared as

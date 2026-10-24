@@ -152,16 +152,16 @@ func test_two_spears_in_one_inventory_track_readiness_independently() -> void:
 	assert_bool(unit.is_attack_fireable(t1.main_attack)).is_false()    # A is still sprung
 	assert_bool(unit.can_reload_weapon()).is_true()
 
-# --- Unit delegators (what the menu gate actually reads) ---
+# --- Unit delegators (what the AI's candidate gather reads: selectable, then fireable) ---
 
-func test_unit_has_any_fireable_attack_reflects_readiness() -> void:
+func test_unit_fireable_attacks_reflect_readiness() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
 	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
-	assert_bool(unit.has_any_fireable_attack()).is_true()
+	assert_bool(unit.get_selectable_attacks().any(unit.is_attack_fireable)).is_true()
 	spear.consume_readiness_for(t.extra_attacks[0])
-	assert_bool(unit.has_any_fireable_attack()).is_false()   # all-locks: nothing left to fire
+	assert_bool(unit.get_selectable_attacks().any(unit.is_attack_fireable)).is_false()   # all-locks: nothing left to fire
 
 # --- AttackAction.actor_can_perform: the Law #3 queue-time gate (menu-independent) ---
 

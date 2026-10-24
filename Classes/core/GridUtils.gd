@@ -244,10 +244,6 @@ static func wall_edges_of(data: TileData) -> int:
 	return data.get_custom_data("wall_edges")
 
 
-static func wall_edges_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
-	return wall_edges_of(grid.get_cell_tile_data(cell))
-
-
 # Does this hole MERGE its mouth with the holes beside it (#876 slice 2)? False for anything that is
 # not an authored hole, and false for a hole authored without the flag, so an untouched board keeps
 # every ring whole.

@@ -116,12 +116,6 @@ func move_of(unit: Unit) -> Array[Vector2i]:
 	return out
 
 
-func all_cells() -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	out.assign(cells.keys())
-	return out
-
-
 # The union over the units named, or over EVERY enemy when the list is empty -- one function for
 # the toggle's whole-board answer and the pinned/hovered subset, so the two cannot drift.
 func move_cells_of(units: Array[Unit]) -> Array[Vector2i]:

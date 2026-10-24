@@ -48,10 +48,6 @@ var _playing := false
 var _pause_requested := false
 
 
-func is_seeded() -> bool:
-	return _seeded
-
-
 func is_finished() -> bool:
 	return _seeded and _cursor >= run.events.size()
 

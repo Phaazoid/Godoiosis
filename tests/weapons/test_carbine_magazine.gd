@@ -124,7 +124,7 @@ func test_empty_carbine_cannot_fire_its_default_attack() -> void:
 	assert_bool(unit.can_fire_default_attack()).is_true()
 	_fire(unit.get_equipped_weapon() as CarbineWeaponInstance, CarbineWeaponInstance.MAGAZINE_SIZE)
 	assert_bool(unit.can_fire_default_attack()).is_false()
-	assert_bool(unit.has_any_fireable_attack()).is_false()   # no secondary to fall back on
+	assert_bool(unit.get_selectable_attacks().any(unit.is_attack_fireable)).is_false()   # no secondary to fall back on
 
 func test_the_weapon_slice_opens_for_a_reload_verb_whether_or_not_it_can_fire() -> void:
 	# REVERSED by #97 (dev ruling): the slice opens on a family HAVING a rearm, not on the rearm

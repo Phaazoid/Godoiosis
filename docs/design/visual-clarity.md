@@ -826,8 +826,8 @@ five faces.
   empty socket alone. The knob stays — *"I'll have to play around with it"* — it just starts out of
   the way.
 - **An accessor that collapses at a legal knob value is not one a test can lean on.** `block_is_proud`
-  reads DEPTH, so at a recess of 0 it answers true for every socket. Anything asking *which sockets
-  are full* reads the material now.
+  read DEPTH, so at a recess of 0 it answered true for every socket (it had no caller left and went
+  in #1447). Anything asking *which sockets are full* reads the material now (`block_is_filled`).
 - **The march starts at the TOP RIGHT** — *"The top right is the start of the healthbar… when we hit
   the second row, right side again."* Since the grid fills bottom-up and left-to-right, that is the
   burst order simply REVERSED, with no second rule to keep in step.

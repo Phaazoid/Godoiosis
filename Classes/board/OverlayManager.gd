@@ -1130,13 +1130,6 @@ func shake_tethers() -> void:
 		_squad_lines_2d.refresh()
 
 
-func has_strained_tether() -> bool:
-	for entry: Dictionary in squad_tether_chords:
-		if entry["state"] == SquadLines2D.Strain.STRAIN:
-			return true
-	return false
-
-
 # --- The Squad Up count (#1070) -------------------------------------------------------------------
 # Three verbs, and game.gd is the only caller: create_squad SHOWS it on every entry (it is re-entered
 # after each join, so the number follows the picks), the join that closes the pick SETTLES it, and
@@ -2161,11 +2154,7 @@ func _clear_terrain_live() -> void:
 
 func draw_cells(layer: TileMapLayer, cells: Array, atlas_coord: Vector2i):
 	for cell in cells:
-		#if is_valid_cell(cell):
-			layer.set_cell(cell, SOURCE_ID, atlas_coord)
-		
-func is_valid_cell(cell: Vector2i) -> bool:
-	return move_overlay.get_used_rect().has_point(cell)
+		layer.set_cell(cell, SOURCE_ID, atlas_coord)
 
 func draw_path_arrows(move: MoveAction):
 	var tint := _arrow_modulate(move)

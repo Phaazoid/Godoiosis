@@ -18,9 +18,9 @@ var aura: Dictionary[Elemental.Element, int] = {}
 
 # Affinity — genetic, immutable, per-element binary set (audit A3, alchemy-kit.md). Its OWN
 # field, NOT derivable from aura >= 1 — the limb tax can zero a pool while the growth right
-# persists. Order = rank; [0] reads as primary for now (the limb-tax tie-break is the only
-# consumer) — kept isolated so a future twin-primary model only touches that one read, not
-# this storage shape. Empty = the Rebecca rule: this unit can never channel anything.
+# persists. Order = rank, [0] first (Unit.affinity_order hands it to the readouts; the limb-tax
+# tie-break uses element enum order, not this). Empty = the Rebecca rule: this unit can never
+# channel anything.
 var affinity: Array[Elemental.Element] = []
 var is_alkahest_affine: bool = false   # Isaac's hidden sixth — never surfaced as a bar in UI
 
@@ -248,9 +248,6 @@ func has_affinity(element: Elemental.Element) -> bool:
 
 func has_any_affinity() -> bool:
 	return not affinity.is_empty()
-
-func primary_affinity() -> Elemental.Element:
-	return affinity[0] if not affinity.is_empty() else Elemental.Element.NONE
 
 func limb_stat(slot: LimbSlot) -> int:
 	# What this slot contributes: arms carry STR, legs carry DEX; empty = 0.

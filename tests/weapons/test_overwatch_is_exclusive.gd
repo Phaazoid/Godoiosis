@@ -74,7 +74,7 @@ func test_the_fireable_main_survives_the_filter() -> void:
 	assert_array(_names(unit.get_selectable_attacks())).contains(["Shot"])
 	assert_object(unit.get_default_attack()).is_same(
 			(unit.get_equipped_weapon() as WeaponInstance).template.main_attack)
-	assert_bool(unit.has_any_fireable_attack()).is_true()
+	assert_bool(unit.get_selectable_attacks().any(unit.is_attack_fireable)).is_true()
 
 
 # The AI reads get_selectable_attacks() to pick something to FIRE (AITactics), then hands the winner

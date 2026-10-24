@@ -154,11 +154,6 @@ func speed_for(owned: bool, holding: bool) -> float:
 	return speed
 
 
-# How dark the skip fade is, 0..1.
-func fade_level() -> float:
-	return _fade
-
-
 # Back to idle and clear, unskipped at 1x. A suite's teardown.
 func reset() -> void:
 	phase = Phase.IDLE

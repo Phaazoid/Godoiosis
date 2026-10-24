@@ -83,8 +83,6 @@ var hit_facing := Vector2i.ZERO
 # ...and per TILE, the same direction at each of struck_cells, for a tile attack's payloads.
 var struck_facings: Dictionary[Vector2i, Vector2i] = {}
 
-var preview_sprites: Array[Node2D] = []
-
 # THE MOMENT THE BLOW LANDS (#887) -- the first per-attack event this game has ever published.
 #
 # Everything a presentation layer knew about a hit until now came from watching the CONSEQUENCE:
@@ -386,13 +384,6 @@ func get_description() -> String:
 		return "%s -> %s (guarding %s)" % [actor.get_unit_name(), get_target_name(), blocked_for.get_unit_name()]
 	return "%s -> %s" % [actor.get_unit_name(), get_target_name()]
 
-func clear_preview_sprites():
-	for sprite in preview_sprites:
-		if is_instance_valid(sprite):
-			sprite.queue_free()
-
-	preview_sprites.clear()
-
 # The victim. Null for a #47 cell attack, and the base's actor fallback is what covers that:
 # a swing at open ground is framed on the swinger.
 func aimed_at() -> Unit:
@@ -403,9 +394,6 @@ func get_target_name() -> String:
 		return target.get_unit_name()
 
 	return target_name
-
-func add_preview_sprites(sprite: Node2D):
-	preview_sprites.append(sprite)
 
 static func create(attacker: Unit, origin: Vector2i, target: Unit, target_cell: Vector2i) -> AttackAction:
 	var action := AttackAction.new()

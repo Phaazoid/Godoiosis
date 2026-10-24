@@ -1522,12 +1522,6 @@ func attack_gauge(attack: AttackData) -> WeaponGauge:
 func is_attack_fireable(attack: AttackData) -> bool:
 	return attack_block_reason(attack).is_empty()
 
-func has_any_fireable_attack() -> bool:
-	for a in get_selectable_attacks():
-		if is_attack_fireable(a):
-			return true
-	return false
-	
 # Can this unit fire its ONE default attack right now? No longer the action ring's gate (#1409: the
 # ATTACK expander opens on HAVING a main, and an unfireable one lists greyed); no production code
 # asks it, only test fixtures and the readiness suites. Deliberately NOT get_fired_attack(): that
