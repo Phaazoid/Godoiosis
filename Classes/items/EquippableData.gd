@@ -44,6 +44,10 @@ func can_equip_reason(_wielder: Unit) -> String:
 func can_equip(wielder: Unit) -> bool:
 	return can_equip_reason(wielder).is_empty()
 
+# The hand, which every equippable fills unless its kind says otherwise (ArmorData). See Item.equip_slot.
+func equip_slot() -> Item.EquipSlot:
+	return Item.EquipSlot.WEAPON
+
 # --- Attack-source surface ---
 # Every default here is the INERT answer, so a kind that can't fire (armor) needs no override.
 

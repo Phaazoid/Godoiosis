@@ -265,9 +265,9 @@ func apply_unit_state(unit: Unit) -> void:
 	# slot below: re-gating would strip a rune off a unit whose aura drifted after saving.
 	unit.unequip_weapon()
 	if equipped_index >= 0 and equipped_index < unit.inventory.size():
-		var chosen := unit.inventory[equipped_index] as EquippableData
-		if chosen != null and not chosen is ArmorData:
-			unit.equipped_weapon = chosen
+		var chosen := unit.inventory[equipped_index]
+		if chosen != null and chosen.equip_slot() == Item.EquipSlot.WEAPON:
+			unit.equipped_weapon = chosen as EquippableData
 	if worn_armor_index >= 0 and worn_armor_index < unit.inventory.size():
 		unit.worn_armor = unit.inventory[worn_armor_index] as ArmorData
 	else:

@@ -149,7 +149,8 @@ func _show_action_popup(index: int):
 # row offers is this surface's; whether it may happen, and why not, is GearVerbs' (#46), the rule the
 # replay viewer and the headless Play API ask too.
 func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
-	if item is ArmorData:
+	var slot: Item.EquipSlot = (item as Item).equip_slot()
+	if slot == Item.EquipSlot.ARMOR:
 		var wear_btn := Button.new()
 		if item == unit.worn_armor:
 			wear_btn.text = "Remove"
@@ -165,9 +166,8 @@ func _add_loadout_rows(vbox: VBoxContainer, item, index: int) -> void:
 			if refusal == "":
 				wear_btn.pressed.connect(_do_wear.bind(index))
 		vbox.add_child(wear_btn)
-	# Any non-armor equippable: weapons AND runes. Mirrors equip_weapon_from_inventory's
-	# own split — armor is caught above and fills a different slot.
-	elif item is EquippableData:
+	# The hand: weapons AND runes (Item.equip_slot) -- armor is caught above and fills its own slot.
+	elif slot == Item.EquipSlot.WEAPON:
 		var equip_btn := Button.new()
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"

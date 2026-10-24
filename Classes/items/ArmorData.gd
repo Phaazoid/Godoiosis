@@ -15,6 +15,10 @@ extends EquippableData
 # asks. Cover and the brace bonus are kind-blind; only armour carries this.
 @export var covered_kinds: Array[AttackData.Kind] = []
 
+# Armour is an equippable that fills its OWN slot, never the hand. See Item.equip_slot.
+func equip_slot() -> Item.EquipSlot:
+	return Item.EquipSlot.ARMOR
+
 # Does this piece's DEF apply to a hit delivered as `kind`? The one reader of covered_kinds'
 # empty-means-all rule; RulesService.def_against asks it and nothing else does.
 func covers(kind: AttackData.Kind) -> bool:
