@@ -5,7 +5,7 @@ class_name DevController
 # tile-brush paint/erase, and map resize. Holds a back-ref to the Game coordinator for the
 # board primitives it needs. Isolating this keeps the shipping coordinator clean and the dev
 # glue strippable. Also the one home for the dev KEYS (F1/F2/Shift+F3, #154 -- plain F3 became the
-# PLAYER's in #1050) -- see _input.
+# PLAYER's in #1050; F4, F5 and Space's spawn joined in #1446) -- see handle_dev_key.
 
 enum PendingAction { NONE, MOVE, DUPLICATE }
 
@@ -58,7 +58,7 @@ func _on_board_loaded() -> void:
 	history_changed.emit()
 
 func _input(event: InputEvent) -> void:
-	handle_dev_key(event)
+	handle_dev_key(event, get_viewport())
 
 # EVERY dev key, in one PUBLIC entry, because this node can only ever hear HALF of them.
 #
@@ -71,9 +71,21 @@ func _input(event: InputEvent) -> void:
 # DevOverlay._input forwards here rather than reimplementing anything: two windows are two INPUT
 # SOURCES for one set of bindings, never two sets. Idempotent by construction -- only one window has
 # focus, so exactly one caller fires per event.
-func handle_dev_key(event: InputEvent) -> void:
+#
+# `window` is the viewport the event arrived in; both entries pass their own (#1446). It answers the
+# two questions only a window can. Is someone TYPING there: Godot runs _input BEFORE the GUI, so a
+# focused LineEdit/TextEdit shields nothing unasked, and the game window's report note and player
+# name fired H/P/N/K until this asked. And where to spend a key that must reach nothing else. Null
+# for a caller with no window, a test driving the bindings directly.
+func handle_dev_key(event: InputEvent, window: Viewport = null) -> void:
 	if not DevTools.enabled():
 		return
+	if window != null and event is InputEventKey:
+		var focused := window.gui_get_focus_owner()
+		if focused is LineEdit or focused is TextEdit:
+			return   # a SpinBox edits through a LineEdit too, so this covers the level/size fields
+	if _handle_spawn_key(event) and window != null:
+		window.set_input_as_handled()   # the dev window's focused Button takes SPACE as ui_accept
 	if event.is_action_pressed("toggle_dev_overlay"):
 		_toggle_dev_overlay()
 	elif event.is_action_pressed("dev_reset_scenario"):
@@ -91,10 +103,59 @@ func handle_dev_key(event: InputEvent) -> void:
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
 	_handle_pause_key(event)
 	_handle_keyframe_key(event)
+	_handle_view_key(event)
+	_handle_readout_key(event)
 	_handle_selector_key(event)
 	_handle_zoom_animation_key(event)
 	_handle_brush_keys(event)
 	_handle_undo_keys(event)
+
+
+# SPACE spawns while the Spawn page is armed (#1446). It lived in both hosts' _unhandled_input, so it
+# was dead from the dev window, where a spawn is set up, and Space clicked that window's focused
+# button instead. The hosts keep Space's other meaning, the recentre, and stand it down while
+# spawn_armed() is true, so the two stay apart whichever handler hears the press first.
+#
+# True = the press is SPENT. Every edge of the key belongs to the spawn while armed, so the release
+# cannot click a button either; only a fresh press spawns. Refused under a card or a locked board,
+# the gates both hosts asked: a spawn is a board edit, and that is what ModalLock exists to stop.
+func _handle_spawn_key(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key == null or key.keycode != KEY_SPACE or not spawn_armed():
+		return false
+	if ModalLock.any_open(get_tree()) or game._board_locked_for_player():
+		return false
+	if key.pressed and not key.echo:
+		game.dev_overlay.spawn.try_spawn_at(_mouse_cell())
+	return true
+
+
+# F4 swaps the 3D view for the flat 2D game, Shift+F4 for the corner debug view (#1446: from
+# battle3d._unhandled_input, dead from the dev window). The view is the host's, so the key reaches it
+# the way N reaches the recording. It already sat above ModalLock there (#154), and still does.
+func _handle_view_key(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.keycode != KEY_F4:
+		return
+	var overlay: DevOverlay = game.dev_overlay
+	var host: Node3D = null if overlay == null else overlay.host_3d
+	if host == null:
+		return   # a flat Main.tscn launch has no other view to swap to
+	host.call(&"swap_view", key.shift_pressed)
+
+
+# F5 toggles the elevation readout (#257; #1446 moved it from game.gd's _unhandled_input, frozen under
+# a modal and dead from the dev window). It works under a card now, like F4: a readout edits nothing.
+# The readout draws on the FLAT board, so only where that board is the whole view, which
+# board_input_delegated is derived from (battle3d._apply_input_ownership): FLAT_2D, or a bare Main.tscn.
+func _handle_readout_key(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.keycode != KEY_F5:
+		return
+	if game.board_input_delegated or game.height_debug_overlay == null:
+		return
+	var readout: HeightDebugOverlay = game.height_debug_overlay
+	readout.toggle()
 
 
 # P freezes the pass mid-blow and hands the dev the camera (#705), so a shot can be SHOWN rather than
@@ -256,8 +317,8 @@ func _handle_brush_keys(event: InputEvent) -> void:
 # brush_armed(): you untick the brush, then think better of the last stroke, and a history reachable
 # only while the checkbox is ticked would be shut exactly then.
 #
-# The dev-tools window forwards here (DevOverlay._input) after excluding a focused LineEdit/TextEdit,
-# so Ctrl+Z while typing a scenario name stays that field's own text undo, which is right.
+# Both windows reach here through handle_dev_key's focus guard, so Ctrl+Z while typing a scenario
+# name stays that field's own text undo, which is right.
 func _handle_undo_keys(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo or not key.ctrl_pressed:
@@ -359,9 +420,9 @@ func brush_armed() -> bool:
 # Spawn is the overlay's BOOT page, so the page test alone is true before dev mode is ever entered --
 # measured, it made SPACE try to spawn during ordinary play instead of recentring the camera.
 #
-# Here rather than in either handler because there are TWO -- game.gd's flat arm and battle3d's --
-# plus the 3D help line that names the key. brush_armed() above combines the same two kinds of fact
-# for the same reason.
+# Here rather than in either handler because there are THREE readers: the spawn key itself
+# (_handle_spawn_key) and the two hosts' Space arms, which stand their recentre down on it.
+# brush_armed() above combines the same two kinds of fact for the same reason.
 func spawn_armed() -> bool:
 	if game.game_state != game.GameState.DEV_MODE or game.dev_overlay == null:
 		return false

@@ -1230,7 +1230,8 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > `DevController` then combines it with the game state, once per key: `brush_armed()` and its new
 > sibling `spawn_armed()`. **Both halves are load-bearing** — Spawn is the overlay's BOOT page, so
 > the page test alone made SPACE try to spawn during ordinary play. Both SPACE handlers (game.gd's
-> flat arm and battle3d's) read the one predicate. The 3D help line read it too, until #816 deleted
+> flat arm and battle3d's) read the one predicate; since #1446 the spawn itself is `DevController`'s,
+> so the dev window reaches it, and those two arms stand their recentre down on it. The 3D help line read it too, until #816 deleted
 > that line -- its job was to stop the readout promising a key the gate refuses, and the readout is
 > gone rather than the gate.
 >

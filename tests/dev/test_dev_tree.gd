@@ -214,24 +214,24 @@ func test_showing_resolves_the_nested_authoring_pair() -> void:
 
 
 # SPACE spawns from the SPAWN page and nowhere else (dev, 2026-08-23: "when I press space in the
-# brush mode, it spawns a unit"). Driven through game.gd's real input arm rather than by calling
-# the spawner, because the gate is the thing under test -- and the roster count is what a spawn
-# actually costs, so a case asserting only that no error was raised would pass against the bug.
+# brush mode, it spawns a unit"). PUSHED into the game window rather than calling the spawner,
+# because the gate is the thing under test -- and the roster count is what a spawn actually costs,
+# so a case asserting only that no error was raised would pass against the bug. The press reaches
+# DevController.handle_dev_key, where the spawn has lived since #1446 so that both windows hear it.
 #
-# The TARGET cell is authored via pointer_source (the #222 seam the 3D picker feeds), never left
-# to the mouse derivation: headless, the hover cell is f(camera transform, wherever the display
+# The TARGET cell is authored via cell_source (the #231 seam the 3D picker feeds), never left to
+# the mouse derivation: headless, the pointer cell is f(camera transform, wherever the display
 # server puts the mouse), and the not-armed press below is itself a center_on_position -- so an
 # un-authored target sampled a mid-glide camera and forked by ENVIRONMENT, red on CI while green
-# on every local run (2026-08-26). Injecting the seam still drives the presenter's real update;
-# setting last_hovered_cell directly would be reclaimed by its _process one frame later.
+# on every local run (2026-08-26).
 func test_space_spawns_only_from_the_spawn_page() -> void:
 	game.set_dev_mode(true)
 	var target := _spawnable_cell()
-	game.hover_presenter.pointer_source = func() -> Vector2i: return target
+	game.dev_controller.cell_source = func() -> Vector2i: return target
 
 	await _select("Tile Brush")
 	var before: int = game.units_root.get_child_count()
-	game._unhandled_input(_space())
+	game.get_viewport().push_input(_space())
 	await await_idle_frame()
 	var after: int = game.units_root.get_child_count()
 	assert_int(after).override_failure_message(
@@ -242,7 +242,7 @@ func test_space_spawns_only_from_the_spawn_page() -> void:
 	# old single message blamed the gate while the gate was fine and the CELL was refused.
 	assert_bool(game.dev_controller.spawn_armed()).override_failure_message(
 		"the Spawn page is up but the gate is not armed").is_true()
-	game._unhandled_input(_space())
+	game.get_viewport().push_input(_space())
 	await await_idle_frame()
 	var after_on_spawn: int = game.units_root.get_child_count()
 	assert_int(after_on_spawn).override_failure_message(
