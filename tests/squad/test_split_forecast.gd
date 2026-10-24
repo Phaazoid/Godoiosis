@@ -705,3 +705,125 @@ func test_a_mid_walk_handover_is_judged_after_a_later_mid_walk_shove() -> void:
 func _assert_ran(unit: Unit, cell: Vector2i) -> void:
 	assert_that(unit.movement.cell).override_failure_message(
 			"fixture: the pass never ran (%s is not at %s)" % [unit.get_unit_name(), cell]).is_equal(cell)
+
+
+# --- the round's smoke (#1430) -------------------------------------------------------------------
+# SplitForecast.round_leavers: smoke the round's gas step spills onto a leader shortens its leash, and
+# the first contact sweep after it (the next turn start) ejects whoever it no longer reaches. No row to
+# stamp, so the red tether reads it (test_squad_lines_in_play). The agreement cases run the REAL round
+# through game.end_turn and require the forecast to name exactly who squad_member_left reports. The
+# leash change comes off the authored smoke rules, never a literal.
+
+const ROUND_COH := 4
+const LEAD_AT := Vector2i(2, 2)
+const UPWIND := Vector2i(1, 2)   # beside the leader: thick smoke here spills onto it next round
+
+
+# What standing in smoke takes off the leash, failing loudly when the content no longer says so --
+# and that a thick cloud's spill (a level thinner) still blinds, which every case below leans on.
+func _round_drop() -> int:
+	var rules := GasRules.for_kind(Gas.Kind.SMOKE)
+	assert_bool(rules != null and rules.while_standing).override_failure_message(
+			"fixture: smoke no longer blinds whoever stands in it").is_true()
+	assert_int(Gas.Level.THICK - 1).override_failure_message(
+			"fixture: a thick cloud's spill no longer blinds").is_greater_equal(rules.state_from)
+	var drop := int(Elemental.paired_stat_mods(rules.state).get(Stats.Stat.COH, 0))
+	assert_int(drop).override_failure_message("fixture: the blind state no longer shortens COH").is_less(0)
+	return drop
+
+
+# A leader on LEAD_AT with COH ROUND_COH, a member at the far edge of its leash and one inside what is
+# left of it once the smoke has docked it. `faction` owns all three.
+func _round_squad(faction: Team.Faction) -> Dictionary:
+	var shortened := ROUND_COH + _round_drop()
+	assert_int(shortened).override_failure_message("fixture: the smoky leash reaches nothing").is_greater(0)
+	var leader := _spawn(faction, LEAD_AT)
+	leader.unit_instance.stats[Stats.Stat.COH] = ROUND_COH
+	leader.unit_instance.stats[Stats.Stat.LDR] = 8 * Squad.MEMBER_LDR_COST
+	var far := _spawn(faction, LEAD_AT + Vector2i(ROUND_COH, 0))
+	var near := _spawn(faction, LEAD_AT + Vector2i(0, shortened))
+	var members: Array[Unit] = [far, near]
+	_squad(leader, members)
+	return {"leader": leader, "far": far, "near": near}
+
+
+# The forecast as the tether asks it: the board next round is ruled on, its gas, the drawn cells.
+func _round_leavers(leader: Unit) -> Array[Unit]:
+	var board: BoardContext = game.next_round_board()
+	var field: GasField = game.gas_field
+	var at: Dictionary[Unit, Vector2i] = {}
+	for member in leader.squad.members:
+		if member != leader:
+			at[member] = member.get_projected_destination()
+	return SplitForecast.round_leavers(leader.squad, leader.get_projected_destination(), at, board,
+			field.next_round(board))
+
+
+func test_the_rounds_smoke_splits_off_whoever_the_shortened_leash_no_longer_reaches() -> void:
+	var s := _round_squad(PLAYER)
+	game.gas_field.set_level(UPWIND, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var leavers := _round_leavers(s.leader)
+	assert_array(leavers).override_failure_message(
+			"the round's smoke on the leader should split off exactly the far member").contains_exactly([s.far])
+
+
+func test_smoke_that_never_reaches_the_leader_splits_nobody() -> void:
+	var s := _round_squad(PLAYER)
+	game.gas_field.set_level(UPWIND + Vector2i.LEFT, Gas.Kind.SMOKE, Gas.Level.THICK)   # spills short of it
+	assert_array(_round_leavers(s.leader)).override_failure_message(
+			"smoke two tiles off split the squad").is_empty()
+
+
+# A member drawn PAST the leash already (a hovered ghost) is the move's own red, not the round's.
+func test_a_member_already_past_the_leash_is_not_the_rounds() -> void:
+	var s := _round_squad(PLAYER)
+	game.gas_field.set_level(UPWIND, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var leader: Unit = s.leader
+	var board: BoardContext = game.next_round_board()
+	var at: Dictionary[Unit, Vector2i] = {s.far: LEAD_AT + Vector2i(ROUND_COH + 1, 0), s.near: (s.near as Unit).movement.cell}
+	assert_array(SplitForecast.round_leavers(leader.squad, LEAD_AT, at, board, game.gas_field.next_round(board))) \
+		.override_failure_message("a member already out of reach was counted as the round's split").is_empty()
+
+
+# THE AGREEMENT: the forecast, then the real round (one faction on the board, so one end_turn is the
+# round's gas step and the turn start's contact sweep).
+func test_the_round_splits_exactly_who_the_forecast_named() -> void:
+	var s := _round_squad(PLAYER)
+	game.gas_field.set_level(UPWIND, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var leavers := _round_leavers(s.leader)
+	assert_bool(leavers.is_empty()).override_failure_message("fixture: nobody is forecast to leave").is_false()
+	_left = []
+
+	await game.end_turn()
+	await await_idle_frame()
+	assert_array(_sorted(_left)).override_failure_message(
+			"the round split someone other than the forecast named").is_equal(_sorted(_ids_of(leavers)))
+	assert_bool((s.leader as Unit).squad.members.has(s.near)).override_failure_message(
+			"the member inside the shortened leash left too").is_true()
+
+
+# ...and an ENEMY squad's, held still across your turn and theirs: the round comes after theirs, and the
+# sweep that splits them is at YOUR next turn start.
+func test_an_enemy_squad_the_rounds_smoke_reaches_splits_as_foretold() -> void:
+	var s := _round_squad(ENEMY)
+	_spawn(PLAYER, Vector2i(9, 0))
+	game.gas_field.set_level(UPWIND, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var leavers := _round_leavers(s.leader)
+	assert_array(leavers).override_failure_message("fixture: the far enemy is not forecast to leave") \
+		.contains_exactly([s.far])
+	_left = []
+
+	await game.end_turn()   # into their turn: the round has not come yet
+	await await_idle_frame()
+	assert_array(_left).override_failure_message("the split came before the round did").is_empty()
+	await game.end_turn()   # the round, then your turn start
+	await await_idle_frame()
+	assert_array(_sorted(_left)).override_failure_message(
+			"the round split someone other than the forecast named").is_equal(_sorted(_ids_of(leavers)))
+
+
+func _ids_of(units: Array[Unit]) -> Array[int]:
+	var ids: Array[int] = []
+	for unit in units:
+		ids.append(unit.get_instance_id())
+	return ids

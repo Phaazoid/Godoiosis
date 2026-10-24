@@ -185,12 +185,12 @@ func _ready() -> void:
 
 # Is this blow one of ours? Asked by the HOST before it builds a trajectory for us, so an ordinary
 # sword swing costs one element read instead of a sight trace -- and asked again inside strike(), so
-# the node owns the question either way. PlanResolver.elements_of is the one answer to "what does this
-# attack carry", the same one Conduction's own gate asks.
+# the node owns the question either way. PlanResolver.source_elements is the resolver's own reading of
+# the ACTION, a payload's `thrown` included, so a bolt is drawn exactly where the flood arced (#1434).
 static func draws(attack: AttackAction) -> bool:
 	if attack == null:
 		return false
-	return PlanResolver.elements_of(attack.actor, attack.fired_attack).has(Elemental.Element.SHOCK)
+	return PlanResolver.source_elements(attack).has(Elemental.Element.SHOCK)
 
 
 # Play one blast. `sky` is the shot's trajectory in WORLD space, already carrying whatever offset the

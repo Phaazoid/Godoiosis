@@ -293,6 +293,33 @@ func test_an_attack_carrying_no_shock_draws_nothing() -> void:
 	assert_int(_arc.bolts_drawn).is_equal(0)
 
 
+# A PAYLOAD carries its own element in an empty hand (#1058, ruling 42), so the resolver arcs a shock
+# payload whoever threw it -- and the drawing has to agree (#1434). The fixture line is the
+# resolver's own ruling; the case is that the node asks the same question.
+func test_a_shock_payload_from_an_empty_hand_draws_as_the_resolver_rules() -> void:
+	_arc.point_of = _surface_of
+	ArcLightning.strike_delay = 0.0
+	ArcLightning.arc_step_delay = 0.0
+	var thrower: Unit = H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
+	var payload := WeaponAttackData.new()
+	payload.elemental_damage_type = Elemental.Element.SHOCK
+	var drop := AttackAction.create(thrower, Vector2i(0, 4), null, Vector2i(0, 4))
+	drop.fired_attack = payload
+	drop.dropped_by = AttackAction.create(thrower, Vector2i(0, 0), null, Vector2i(0, 4))
+	var links: Array[Conduction.Link] = [_hop(Vector2i(0, 4), Vector2i(1, 4), 1)]
+	drop.arc_links = links
+	assert_bool(PlanResolver.source_elements(drop).has(Elemental.Element.SHOCK)).override_failure_message(
+		"fixture: the resolver no longer rules an empty hand's shock payload a shock").is_true()
+
+	assert_bool(ArcLightning.draws(drop)).override_failure_message(
+		"the resolver arcs this payload and the drawing calls it no shock").is_true()
+	_arc.strike(drop, PackedVector3Array())
+	_arc._process(0.01)
+
+	assert_int(_arc.bolts_drawn).override_failure_message(
+		"the payload's one hop reached %d bolts on the mesh" % _arc.bolts_drawn).is_equal(1)
+
+
 # #217'S FORK, both sides. What strobes is the RE-ROLL, so the safe mode freezes the shape and leaves
 # the strike, the spread and the fade exactly as they were -- the setting's promise is a steady state
 # rather than a missing effect. Pinning either side alone would pin authored content (#449).

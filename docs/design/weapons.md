@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09; its follow-up (the strip catches its clicks, its arrows cycle) folded in 2026-10-09; Deep Alchemy Phase 2 folded in 2026-10-11; #1283's ownership gate folded in 2026-10-14; #1357's carried rev tick folded in 2026-10-21; #1335's gas list folded in 2026-10-22.**
+**Canon checked through #1152 (2026-09-28); #1228's surface trim folded in 2026-10-05; #120's inventory correction folded in 2026-10-01; #1185's spaces default folded in 2026-10-03; #508's attack gas folded in 2026-10-03; #1222's empty mod pool folded in 2026-10-05; #929's attack cycle and aim forecast folded in 2026-10-09; its follow-up (the strip catches its clicks, its arrows cycle) folded in 2026-10-09; Deep Alchemy Phase 2 folded in 2026-10-11; #1283's ownership gate folded in 2026-10-14; #1357's carried rev tick folded in 2026-10-21; #1335's gas list folded in 2026-10-22; #1430's move of the previewed plan into game.gd folded in 2026-10-23.**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -122,7 +122,7 @@ The dev's scratchpad ask (2026-09-12): *"cycle through your available weapons an
 
 - **The aim forecasts before the click.**
   - `SquadManager.preview_aim` resolves the squad's plan with the hovered aim added.
-  - The hover publishes it as `game.aim_forecast`, and `battle3d._previewed_plan` hands that plan to the health bars while the aim is open.
+  - The hover publishes it as `game.aim_forecast`, and `game.previewed_plan` (battle3d's `_previewed_plan` until #1430) hands that plan to the health bars while the aim is open.
   - So a target shows the damage, the HP after and the down/kill alarm the click would queue, plus any counter coming back.
   - A watch forecasts nothing: its shot fires later, the payload preview's own rule.
 - **The cycle is one list: `Unit.aim_options(watch)`.**

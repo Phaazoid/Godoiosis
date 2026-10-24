@@ -11,9 +11,13 @@
 # POLICY (2026-08-01, suite audit): assert what a line MEANS, not how it is worded. Seven cases here
 # used to pin exact strings (`is_equal("Base 4 +1 DEX band")`), so rewording a tooltip failed a test
 # with nothing wrong. Copy is not a contract; the facts a readout must state are.
+#
+# The one exception is _stat_sources (#1410), which reads the panel's unit: those cases stand up a
+# bare, untreed panel, since that method touches no @onready node.
 extends GdUnitTestSuite
 
 const InfoPanel := preload("res://Classes/ui/panels/info_panel.gd")
+const H := preload("res://tests/support/squad_fixtures.gd")
 
 # --- MOV ---
 
@@ -195,3 +199,81 @@ func test_def_tooltip_says_nothing_about_coverage_for_a_piece_that_covers_all() 
 	# "" is what every piece authored before kinds existed answers; the row stays as it was.
 	var tip: String = InfoPanel.def_tooltip("Scrap Plate", 10, 5, 10, 0, 10)
 	assert_str(tip).not_contains("Covers")
+
+
+# --- _stat_sources: one gear line per source (#1410) ---
+#
+# The gear stage is the worn piece PLUS every fitted mod (#74). The old line took the whole gear
+# delta and credited it to the armour, so a mod's bonus wore the armour's name, and vanished when
+# nothing was worn.
+
+func _unit() -> Unit:
+	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	unit.unit_instance.set_proficiency(WeaponData.WeaponType.CHAINSWORD, 3)
+	return unit
+
+
+func _arm_with_mod(unit: Unit, stat: Stats.Stat, delta: int) -> WeaponModData:
+	var template := WeaponData.new()
+	template.display_name = "Test Blade"
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	var weapon := WeaponInstance.make(template)
+	var mod := WeaponModData.new()
+	mod.display_name = "Test Mod"
+	mod.stat_modifiers[stat] = delta
+	assert_bool(weapon.fit(0, mod)).override_failure_message("fixture: the mod did not fit").is_true()
+	unit.add_item(weapon)
+	assert_object(unit.equipped_weapon).override_failure_message(
+		"fixture: the weapon was not equipped, so its mod contributes nothing").is_same(weapon)
+	return mod
+
+
+func _wear_plate(unit: Unit, stat: Stats.Stat, delta: int) -> ArmorData:
+	var plate := ArmorData.new()
+	plate.display_name = "Test Plate"
+	plate.stat_modifiers[stat] = delta
+	assert_bool(unit.add_item(plate) and unit.wear_armor(unit.inventory.find(plate))) \
+		.override_failure_message("fixture: the plate would not go on").is_true()
+	return plate
+
+
+func _sources(unit: Unit, stat: Stats.Stat) -> Array[String]:
+	var panel := InfoPanel.new()
+	panel.unit = unit
+	var lines: Array[String] = panel._stat_sources(stat)
+	panel.free()
+	return lines
+
+
+func _line_naming(lines: Array[String], name: String) -> String:
+	for line in lines:
+		if line.contains(name):
+			return line
+	return ""
+
+
+func test_a_mod_with_no_armour_worn_names_the_mod() -> void:
+	var unit := _unit()
+	var mod := _arm_with_mod(unit, Stats.Stat.STR, 2)
+	var lines := _sources(unit, Stats.Stat.STR)
+	var line := _line_naming(lines, mod.shown_name())
+	assert_str(line).override_failure_message(
+		"the mod moves STR by 2 but no source line names it: %s" % [lines]).is_not_empty()
+	assert_str(line).contains("+2")
+
+
+func test_armour_and_a_mod_each_get_their_own_line() -> void:
+	var unit := _unit()
+	var plate := _wear_plate(unit, Stats.Stat.STR, 3)
+	var mod := _arm_with_mod(unit, Stats.Stat.STR, -1)
+	var lines := _sources(unit, Stats.Stat.STR)
+	assert_int(3 - 1).override_failure_message(
+		"fixture: the two terms must be the whole gear stage").is_equal(
+		unit.get_effective_stat(Stats.Stat.STR) - unit.get_body_stat(Stats.Stat.STR))
+	var plate_line := _line_naming(lines, plate.shown_name())
+	var mod_line := _line_naming(lines, mod.shown_name())
+	assert_str(plate_line).override_failure_message(
+		"the plate's line must carry the plate's own +3, not the gear total: %s" % [lines]).contains("+3")
+	assert_str(mod_line).override_failure_message(
+		"the mod's -1 is missing or credited elsewhere: %s" % [lines]).contains("-1")

@@ -543,8 +543,8 @@ func _refresh_foot() -> void:
 	_deploy_button.text = "✓ Deployed" if deployed else "Deploy"
 	var blocked := _deploy_block_reason() if not deployed else ""
 	_deploy_button.disabled = blocked != ""
-	_deploy_button.tooltip_text = UiText.wrap(blocked) if blocked != "" else (
-		"Take this unit back off the board." if deployed else "Place this unit on the deployment zone.")
+	_deploy_button.tooltip_text = UiText.wrap(blocked if blocked != "" else Glossary.short(
+		Glossary.Term.UNDEPLOY if deployed else Glossary.Term.DEPLOY))
 	_refresh_deploy_chrome(deployed, blocked != "")
 
 

@@ -46,10 +46,11 @@ class_name ElementalReaction
 # pending ledger declares.
 @export_placeholder("F2 + W2 -> 2FW") var equation: String = ""
 
-# Feedback hooks, surfaced in preview + playback.
+# Feedback. `popup` is read: the resolver lifts it onto the outcome. `vfx_tag` and `icon` are
+# authored but read by nothing yet (#1443); TerrainReaction's `icon` is a separate field, and read.
 @export var popup: String = ""        # e.g. "Electrocuted!"
 @export var vfx_tag: String = ""
-@export var icon: Texture2D           # queue/board symbol shown when this reaction FIRES (e.g. the spark)
+@export var icon: Texture2D           # e.g. the spark
 
 
 # A COMBO needs a state already on the target; a NONE-requirement reaction is the SETUP half that

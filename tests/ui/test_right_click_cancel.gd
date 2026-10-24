@@ -78,8 +78,8 @@ func _pick_menu_action(action_id: int, unit: Unit) -> void:
 
 
 # The sandbox cast is authored content and not every unit on it carries a weapon it can actually
-# fire -- and populate() only offers Attack to one that can. Arm it explicitly rather than assuming
-# the board does. Worth knowing WHY this is new: the old version of this suite emitted the ATTACK
+# fire -- and an unfireable main lists GREYED (#1409), a row the real menu will not pick. Arm it
+# explicitly rather than assuming the board does. Worth knowing WHY this is new: the old version of this suite emitted the ATTACK
 # id straight into the controller, so it drove a row the real menu would never have shown it.
 func _arm(unit: Unit) -> void:
 	if unit.can_fire_default_attack():

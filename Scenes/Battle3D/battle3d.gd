@@ -225,7 +225,7 @@ func _ready() -> void:
 	_gas.lights_source = _board_mirror.lights
 	_gas.stands_down = func() -> bool: return view == View.FLAT_2D
 	_gas.overlays = _overlays
-	_gas.board_source = _gas_outline_board   # next round's forecast rules on it, the plan's deposits folded
+	_gas.board_source = func() -> BoardContext: return game.next_round_board()   # the plan's deposits folded (#1430)
 	_gas.wind_source = wind_source
 	add_child(_gas)
 	# The board's weather (#1260), drawn off the RULE store so it cannot look like one weather and
@@ -278,7 +278,7 @@ func _ready() -> void:
 	_unit_mirror.units_root = game.units_root
 	_unit_mirror.heights = game.board_heights
 	_unit_mirror.hovered_unit_source = _hovered_unit
-	_unit_mirror.plan_source = _previewed_plan
+	_unit_mirror.plan_source = func() -> ResolvedPlan: return game.previewed_plan()
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
 	_unit_mirror.end_of_turn_source = _end_of_turn_forecast
 	_unit_mirror.home_yaw_source = _rig.home_yaw_degrees
@@ -890,9 +890,11 @@ func _board_volume() -> AABB:
 	# The bbox itself is BoardPicker's — it derives the same one to bound its walk, and
 	# two copies of "how big is this board" is exactly the seam Law #4 forbids (#231).
 	var rect := _board_rect
+	# max_top is a ROW, half a level tall since #427: read as world units, the box stood twice the
+	# board's height and the opening shot aimed above it (#1435).
 	return AABB(
 		Vector3(rect.position.x, 0.0, rect.position.y),
-		Vector3(rect.size.x, float(BoardPicker.max_top(_tops)), rect.size.y))
+		Vector3(rect.size.x, float(BoardPicker.max_top(_tops)) * BoardSpace.ROW_HEIGHT, rect.size.y))
 
 
 # What a bug report needs to know about the angle it was seen from (#240), pushed at
@@ -948,6 +950,19 @@ func _describe_trace() -> String:
 
 
 # --- Hosting the 2D game (stage 4c) ---------------------------------------------------
+
+# F4's door (DevController._handle_view_key, which both OS windows reach, #1446): to the flat 2D
+# game and back, or with `corner` to the corner debug view and back. Dev-only, and above ModalLock
+# (#154), because the key's handler is.
+func swap_view(corner: bool) -> void:
+	if demo_mode:
+		return
+	if corner:
+		view = View.HD_2D if view == View.CORNER else View.CORNER
+	else:
+		view = View.HD_2D if view == View.FLAT_2D else View.FLAT_2D
+	_apply_hosting()
+
 
 # All of this is RUNTIME, never authored into Main.tscn: the flat 2D game is a
 # shipping target of its own and must open exactly as it always has (#176's
@@ -1613,17 +1628,7 @@ func _apply_shot(cells: Array[Vector2i], span: Array[Vector2i], trained: Unit) -
 func _unhandled_input(event: InputEvent) -> void:
 	if demo_mode:
 		return
-	# The view keys sit ABOVE the freeze gate on purpose — they are dev controls, and
-	# dev controls are a layer above ModalLock (#154). This node lives outside the
-	# frozen subtree, so its callbacks run regardless.
 	var key := event as InputEventKey
-	if DevTools.enabled() and key != null and key.pressed and key.keycode == KEY_F4:
-		if key.shift_pressed:
-			view = View.HD_2D if view == View.CORNER else View.CORNER
-		else:
-			view = View.HD_2D if view == View.FLAT_2D else View.FLAT_2D
-		_apply_hosting()
-		return
 	# In FLAT_2D the flat game owns its own clicks — picking here would double-act,
 	# the mirror image of the bug game.board_input_delegated exists to prevent.
 	# The board lock joins it: while an AI turn, a menu or the end banner is up, the
@@ -1884,16 +1889,13 @@ func _set_readout_plate_alpha(value: float) -> void:
 
 # SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves
 # it (#231). The 3D view is not a reason for a key to mean something different than it does
-# in the flat one; the only difference is where the cell comes from.
+# in the flat one. The spawn half is DevController's since #1446 (so the dev window reaches it, off
+# the same cell_source this host feeds), and this arm only stands the recentre down for it.
 # SPACE spawns only while the SPAWN PAGE is showing (dev, 2026-08-23) — it was gated on DEV_MODE
-# alone, so pressing space while brushing spawned a unit. This is the 3D half of a question asked in
-# TWO places: game.gd's own handler is the 2D one, and both now read DevOverlay.showing rather than
-# each deciding what "the spawn tool is up" means.
+# alone, so pressing space while brushing spawned a unit. spawn_armed() is the one answer.
 func _handle_space() -> void:
 	if game.dev_controller.spawn_armed():
-		if _pointer_cell != BoardSpace.NO_CELL:
-			game.dev_overlay.spawn.try_spawn_at(BoardSpace.flat(_pointer_cell))
-		return
+		return   # armed, SPACE is the dev layer's spawn (DevController.handle_dev_key, #1446)
 	_center_on_pointer()
 
 
@@ -2149,49 +2151,9 @@ func _hovered_unit() -> Unit:
 	return hovered
 
 
-# The plan being previewed, for UnitMirror's predicted readout (#313). resolved_plan_for guards on
-# squad identity, so this is null whenever nothing is being commanded — no active squad, and an AI
-# squad's own resolve (which never matches the player's active squad) — and the ghosts are simply
-# absent rather than showing somebody else's intentions.
-#
-# While a pass is RUNNING that question has a better answer than the last resolve (#354): the plan
-# being executed. #361 closed the divergence at its source — refresh_action_queue now refuses to
-# re-derive mid-pass, so the last resolve IS the executing plan — but the preference stays: it costs
-# nothing and it does not lean on that gate holding. One function still answers "which plan"; it
-# just knows a live pass outranks a stale resolve.
-#
-# ...and that the END OF TURN outranks both (#1428): orders still queued when the turn ends are shed
-# at the hand-off and never run, so while that pass plays there is no plan to preview at all.
-func _previewed_plan() -> ResolvedPlan:
-	if not game.order_executor.effect_pass_hits.is_empty():
-		return null
-	var executing: ResolvedPlan = game.order_executor.executing_plan
-	if executing != null:
-		return executing
-	# An aim shows what it WOULD do before the click (#929), read only while the aim is open so a
-	# forecast nothing has cleared yet can never outlive it.
-	var forecast: ResolvedPlan = game.aim_forecast
-	if forecast != null and game.game_state == game.GameState.ATTACK_TARGETING:
-		return forecast
-	var squads: SquadManager = game.squad_manager
-	return squads.resolved_plan_for(squads.active_squad)
-
-
-# The board next round's gas outline is ruled on (#1332): the live one with the previewed plan's
-# deposits folded in, so a queued push outlines from where it will leave the gas. Never while a pass
-# runs: its deposits land in the live store partway through, and folding them again counts them twice.
-func _gas_outline_board() -> BoardContext:
-	var board: BoardContext = game._board()
-	if game.order_executor.executing_plan != null:
-		return board
-	var plan := _previewed_plan()
-	if plan == null or plan.cell_effects.is_empty():
-		return board
-	return board.with_deposits(plan.cell_effects)
-
-
-# ...and who its end-of-turn effect pass is about (#534). A separate question from the plan because
-# that phase has none -- read off the rows it is walking (OrderExecutor.effect_pass_hits).
+# Who the health bars' end-of-turn effect pass is about (#534). A separate question from the previewed
+# plan (game.previewed_plan) because that phase has none -- read off the rows it is walking
+# (OrderExecutor.effect_pass_hits).
 func _effect_pass_subjects() -> Dictionary[int, bool]:
 	var subjects: Dictionary[int, bool] = {}
 	for hit: TileHitAction in game.order_executor.effect_pass_hits:
@@ -2210,7 +2172,7 @@ func _end_of_turn_forecast() -> Array[TileHitAction]:
 		return running
 	var turns: TurnManager = game.turn_manager
 	return TurnBoundary.forecast(game._all_units(), game.terrain_states, game.gas_field,
-			game.scenario_manager.current_weather, turns.active_faction(), _previewed_plan())
+			game.scenario_manager.current_weather, turns.active_faction(), game.previewed_plan())
 
 
 func _cancel() -> void:

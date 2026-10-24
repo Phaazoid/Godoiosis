@@ -154,6 +154,18 @@ func _kit_picker(slot_index: int) -> OptionButton:
 			return row.get_child(1) as OptionButton
 	return null
 
+func test_the_kit_picker_lists_exactly_the_item_catalog() -> void:
+	# #1414. The Unit Editor's list, read from ItemCatalog rather than borrowed off that tool's node.
+	var tool := _tool()
+	tool._on_new_pressed()
+
+	var picker := _kit_picker(0)
+	assert_object(picker).override_failure_message("the kit section drew no slot picker").is_not_null()
+	var listed: Array = []
+	for i in range(1, picker.item_count):   # option 0 is "(empty)"
+		listed.append(picker.get_item_text(i))
+	assert_array(listed).is_equal(ItemCatalog.by_name().keys())
+
 func test_picking_a_default_weapon_reads_back_as_that_weapon() -> void:
 	# #975. A derived generic is minted fresh on every _item_catalog() call, so the identity compare
 	# this picker used could never match the object the pick had just staged, and every default

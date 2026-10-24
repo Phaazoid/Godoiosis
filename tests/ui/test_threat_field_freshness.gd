@@ -197,6 +197,7 @@ func test_undo_rebuilds_the_field_by_the_next_frame() -> void:
 	await await_idle_frame()
 	var before := _cached()
 
+	game.game_state = game.GameState.DEV_MODE   # the history only moves in dev mode (#1432)
 	assert_bool(dev.undo_board()).override_failure_message("the stroke left nothing to undo").is_true()
 	await await_idle_frame()
 

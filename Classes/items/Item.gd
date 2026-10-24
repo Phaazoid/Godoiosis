@@ -67,3 +67,14 @@ func describe() -> String:
 # rather than joined by a second copy door, which would have been two answers to one question.
 func copy_for_grant() -> Item:
 	return duplicate(true)
+
+
+# THE one answer to "which of a unit's slots does this fill" (#1453). Each kind states its own, and
+# every equip door, verb and preview asks it, never a type test: the weapon slot is "every equippable
+# but armour", and that exception is what went wrong where a second place spelled it. NONE is carried
+# and never slotted (a vial, a conduit). WEAPON implies EquippableData, the hand's type; ARMOR is
+# ArmorData's alone, so `as ArmorData` already answers it.
+enum EquipSlot { NONE, WEAPON, ARMOR }
+
+func equip_slot() -> EquipSlot:
+	return EquipSlot.NONE

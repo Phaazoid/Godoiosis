@@ -142,8 +142,8 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 # readout is HeightDebugOverlay's and a second voice for it is a second thing to keep in step.
 func _hover_dev_mode(cell: Vector2i) -> void:
 	game.hover_info_panel.clear()
-	var board: BoardContext = game._board()
-	if not board.is_walkable(cell) or game.unit_at_pointer(cell) != null:
+	# The rule every dev placement asks (#1432), so the cursor never promises a cell the click refuses.
+	if not RulesService.can_place_at(game._board(), cell):
 		game.cursor_controller.set_state(CursorController.CursorState.INVALID)
 	else:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)

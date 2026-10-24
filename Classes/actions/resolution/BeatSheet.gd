@@ -225,6 +225,11 @@ static func read(squad: Squad, plan: ResolvedPlan, is_ai: bool = false) -> BeatS
 			if move != null and not move.is_hold_position and move.actor != null:
 				walks.append(move)
 		elif BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
+			# A verb whose actor the pass felled never plays (#1005), so it gets no shot (#1454).
+			# is_inert() is the question execute_orders' own collection asks, and the coda loop and
+			# _gather_cells below both follow from this one skip.
+			if action.is_inert():
+				continue
 			if not coda_orders.has(action.action_type):
 				coda_orders[action.action_type] = []
 			coda_orders[action.action_type].append(action)

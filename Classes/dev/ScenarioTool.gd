@@ -188,7 +188,8 @@ func _build_air_row() -> void:
 	DevWidgets.apply_tooltip(_air_row, DevWidgets.wrap_tooltip(
 		"What the air over this board holds, for the whole battle. A carving that draws a substance "
 		+ "from the air hits one harder for each step above Normal and one softer below: Fireball "
-		+ "breaks vital air, Freeze takes vapor and aether, Heal binds aether. A carving fed by a "
+		+ "binds heat, Greater Fireball breaks vital air and binds heat, Freeze takes vapor and "
+		+ "aether, Heal binds aether. A carving fed by a "
 		+ "real source, like Pressure Spray by a river, ignores it. A thin reading never makes a "
 		+ "carving fizzle. Normal and the step size per substance are Atmosphere.NORMAL and STEP. "
 		+ "Saved with the board."))
@@ -554,24 +555,28 @@ func _build_check_section() -> void:
 	button.text = "Check board"
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.pressed.connect(_on_check_pressed)
-	DevWidgets.apply_tooltip(button, DevWidgets.wrap_tooltip(
-		"Asks whether this board is actually PLAYABLE, and lists what it finds.\n\n"
-		+ "Blocks play: an objective with no zone painted for it, ENEMY units the computer is not "
-		+ "playing, a unit standing where spawn would refuse it (painted over after placement, and "
-		+ "dropped on the next load).\n\n"
-		+ "Wrong but plays: a squadmate out of its leader's cohesion range (ejected the first time "
-		+ "that squad acts), a look preset that no longer exists.\n\n"
-		+ "It reads the board IN FRONT OF YOU, never a saved file, and it changes nothing. It says "
-		+ "nothing about dialog beats or tutorial steps, nothing about whether the map is any good, "
-		+ "and nothing about whether your objective can be reached from where the units start."))
+	DevWidgets.apply_tooltip(button, DevWidgets.wrap_tooltip(check_tooltip()))
 	scroll_vbox.add_child(button)
 
 	_report_box = VBoxContainer.new()
 	scroll_vbox.add_child(_report_box)
 
 
+# Built from BoardLint.RULES (#1432): the hand-written list it replaced had a rule in the wrong tier
+# and denied two checks the lint makes.
+static func check_tooltip() -> String:
+	return ("Asks whether this board is actually PLAYABLE, and lists what it finds.\n\n"
+		+ "Blocks play: %s.\n\n" % "; ".join(BoardLint.names_at(BoardLint.Severity.BLOCKS))
+		+ "Wrong but plays: %s.\n\n" % "; ".join(BoardLint.names_at(BoardLint.Severity.DEGRADES))
+		+ "It reads the board IN FRONT OF YOU, never a saved file, and it changes nothing. It says "
+		+ "nothing about whether the map is any good, and nothing about whether your objective can "
+		+ "be reached from where the units start.")
+
+
+# The save mode rides along because what a load makes of a unit depends on it (#1432).
 func _on_check_pressed() -> void:
-	_render_report(BoardLint.check(game))
+	var authored: bool = _header.authored_save if _header != null else true
+	_render_report(BoardLint.check(game, authored))
 
 
 # Read-only BY CONSTRUCTION: nothing on this path calls _mark(). Pressing Check must never make the

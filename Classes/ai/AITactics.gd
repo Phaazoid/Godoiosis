@@ -322,7 +322,11 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 		var queued := false
 		match verb:
 			BaseAction.ActionType.ATTACK:
-				queued = _try_best_attack(unit, board, squad_manager)
+				# The squad's own chooser with this unit as its only chooser (#1445): one member,
+				# priced exactly as the joint pass prices it, lookahead and refusal memory included.
+				var alone: Array[Unit] = [unit]
+				_queue_attacks_jointly(unit.squad, board, squad_manager, alone)
+				queued = unit.has_main_action_queued()
 			BaseAction.ActionType.RESCUE:
 				queued = _try_rescue(unit, board, squad_manager)
 			BaseAction.ActionType.RELOAD:
@@ -340,32 +344,6 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 		if queued:
 			return true
 	return false
-
-# Attack choice (#78, rebuilt #117): probe every selectable+fireable attack, score each aim as its
-# MARGINAL GAIN to the squad's own plan, queue the best. The per-unit door -- one member, deciding
-# alone. The squad walks these jointly instead; see _queue_attacks_jointly.
-static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	if not unit.can_wield_equipped() or unit.squad == null:
-		return false
-	var reactions := ReactionCatalog.get_all()   # hoisted -- a scoring pass resolves many times, and
-	var terrain := TerrainReactionCatalog.get_all()   # each call copies the cached list (#1213)
-	var squad := unit.squad
-	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
-	var alone: Array[Unit] = [unit]
-	var stakes := _stakes_for(squad, board, base_plan)
-	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true,
-			_candidates_by_member(alone, board, base_plan, stakes), stakes)
-	var queued := false
-	if pick != null:
-		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
-		# The board must be back on the real queue before the gate sees it -- see the note at
-		# _queue_attacks_jointly's own restore for what a leftover shove does to the whiff clause.
-		squad_manager.resolve_plan(squad, board, reactions, terrain)
-		queued = squad_manager.queue_action(squad, pick.action)
-	# ...and afterwards, because a hypothetical publishes projections onto units.
-	squad_manager.resolve_plan(squad, board, reactions, terrain)
-	return queued
-
 
 # EVERY member's candidate list, built in one pass over the squad against ONE plan (#709).
 #
@@ -958,40 +936,48 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 # live board is the wrong one: an enemy a squadmate fells is no target, and one a squadmate shoves
 # comes from where it lands. Every unit is stood on its planned cell for the decision (#710's
 # snapshot) and put back before the queue, which must never see a teleported board.
+#
+# EVERY WATCH, BEST FIRST (#1433): the first of watch_attacks_for that yields an aim. A dry Carbine
+# with the Line Sniper mod still arms Line Snipe, as the ring offers it.
 static func _try_overwatch(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	var attack := watch_attack_for(unit)
-	if attack == null:
-		return false
 	var origin := unit.get_projected_destination()   # the fallback walk runs AFTER the group move is queued
-	# A watch whose carving would fizzle here could only ever fire a fizzle: not worth the main action.
-	if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+	var watches: Array[AttackData] = []
+	for watch in watch_attacks_for(unit):
+		# A watch whose carving would fizzle here could only ever fire a fizzle: not worth the main action.
+		if CellSubstances.fizzle_reason(watch, origin, board, unit) == "":
+			watches.append(watch)
+	if watches.is_empty():
 		return false
 	var plan := squad_manager.resolve_plan(unit.squad, board)
 	var saved := AIController.stand_on_projected(squad_manager)
+	var attack: AttackData = null
 	var aim := origin
 	var enemy := nearest_enemy(unit, board, null, true, plan.hypo)
 	if enemy != null:
-		aim = _watch_aim(unit, origin, attack, enemy, board)
+		for watch in watches:
+			aim = _watch_aim(unit, origin, watch, enemy, board)
+			if aim != origin:
+				attack = watch
+				break
 	AIController.restore_cells(saved)
-	if aim == origin:
+	if attack == null:
 		return false   # nobody left to watch for, or no facing covers a cell the enemy can reach -- see _watch_aim
 	var action := OverwatchAction.new()
 	action.init(unit, aim, attack)
 	return squad_manager.queue_action(unit.squad, action)
 
 
-# The attack this unit would watch with right now, or null. One watch per weapon (dev, 2026-08-26),
-# so the first is the deterministic pick; and the menu's own gate, so a dry Carbine cannot watch
-# either -- Overwatch requires readiness. ThreatField asks this too (#1197), so the lanes it draws
-# are the lanes this builder could arm.
-static func watch_attack_for(unit: Unit) -> AttackData:
-	var watchable := unit.overwatch_attacks()
-	if watchable.is_empty():
-		return null
-	var attack: AttackData = watchable[0]
-	if unit.attack_block_reason(attack) != "":
-		return null
-	return attack
+# Every attack this unit could watch with right now, in the order the ring lists them
+# (MainActionMenu._overwatch_rows), which is the order the builder tries them. The ring's own gate
+# (AttackAction.fire_block_reason, which the queue asks too), so a dry Carbine's Overwatch is out --
+# it requires readiness -- while a watch that needs none stays in (#1433). ThreatField asks this too
+# (#1197), so the lanes it draws are the lanes this builder could arm.
+static func watch_attacks_for(unit: Unit) -> Array[AttackData]:
+	var out: Array[AttackData] = []
+	for attack in unit.overwatch_attacks():
+		if AttackAction.fire_block_reason(unit, attack) == "":
+			out.append(attack)
+	return out
 
 
 # The cells each facing's watch would cover from `origin` (dir -> cells), truncation included
@@ -1045,9 +1031,13 @@ static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board:
 #
 # A DUD AIM MUST NEVER BE QUEUED. A self-anchored `Reach.get_attack_cells_from` answers empty
 # for a hint that yields no cardinal direction, and from there the failure is entirely silent -- the resolver
-# arms nothing, `Unit.arm_watch` refuses on an empty footprint, and no queue gate looks at an
-# OverwatchAction at all, so the unit would spend its main action on air behind a legal-looking row.
-# Returning `origin` is this function's way of saying "no facing works", and the caller refuses.
+# arms nothing and `Unit.arm_watch` refuses on an empty footprint, so the unit would spend its main
+# action on air behind a legal-looking row. Returning `origin` is this function's way of saying "no
+# facing works", and the caller refuses.
+#
+# EVERY AIM PASSES Reach.can_aim_at, the click's own gate (#1433), and the queue asks it too. A POINT
+# watch is aimed one step out like any other, so one with a minimum range of 2 is never armed by the AI:
+# declared, not built, as no shipped watch is a point attack.
 #
 # A sealed board falls back to simply facing the enemy, reusing GridUtils' own diagonal tie-break
 # rather than inventing a second. That hatch NARROWED without being touched: it used to open when no
@@ -1074,7 +1064,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	var best_hops := -1
 	var best_covered := 0
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		if not footprints.has(dir):
+		if not footprints.has(dir) or not Reach.can_aim_at(unit, origin, origin + dir, attack, board):
 			continue
 		var lane: Array[Vector2i] = footprints[dir]
 		var hops := -1
@@ -1095,7 +1085,8 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	if best_hops >= 0:
 		return best
 	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)
-	if facing != Vector2i.ZERO and footprints.has(facing):
+	if facing != Vector2i.ZERO and footprints.has(facing) \
+			and Reach.can_aim_at(unit, origin, origin + facing, attack, board):
 		var toward: Array[Vector2i] = footprints[facing]
 		if _lane_can_be_entered(toward, enemy, board):
 			return origin + facing
@@ -1151,33 +1142,24 @@ static func _try_guard(unit: Unit, board: BoardContext, squad_manager: SquadMana
 	return squad_manager.queue_action(unit.squad, action)
 
 
-# How many enemies could reach AND hit each of these allies -- one move-range search per enemy,
-# reused across every candidate, rather than one per pair.
-#
-# DECLARED APPROXIMATION, inherited from the seam this composes: the search honours the enemy's own
-# cohesion leash, so an enemy that could only reach the ally by breaking formation does not count.
-# Occupancy is whatever board the caller stood up -- _try_guard's is the plan's (#1209). The cost is
-# one search per enemy left ACTIVE by `hypo`, paid only once a unit has reached GUARD in the walk --
-# second to last, so after every other verb has declined.
+# How many enemies could attack each of these allies next turn: the viewer's own danger field, the
+# question the dry fall-back and Balanced's safety already ask it (#1433). Exposure used to be a
+# narrower model of its own -- the enemy's default attack, from inside its cohesion leash -- so an ally
+# hit only by a second attack, or by a follower once its leader moves, read as safe here while the
+# field marked it. `hypo` is the pending plan the field reads wetness through, and it still drops an
+# enemy that plan fells. Occupancy is whatever board the caller stood up (_try_guard's is the plan's,
+# #1209). One build per call, paid only once a unit reaches GUARD, last in the walk.
 static func _exposure_counts(allies: Array[Unit], board: BoardContext, faction: Team.Faction,
 		hypo: Dictionary = {}) -> Dictionary:
+	var field := ThreatField.build(board, faction, hypo)
 	var counts := {}
-	for other in board.units:
-		if not PlanResolver.actor_is_live(other, hypo):
-			continue
-		if not Team.is_enemy(faction, other.get_faction()):
-			continue
-		if other.get_selectable_attacks().is_empty():
-			continue   # it can fire nothing, so it threatens nobody (#1215)
-		var walk: Dictionary = RulesService.compute_move_range(other, board)
-		var reachable: Dictionary = walk["reachable"]
-		var aiming := other.get_fired_attack()
-		for ally in allies:
-			var firing := _standable_attack_cells(other, ally.get_projected_destination(), aiming, board)
-			for cell in firing:
-				if cell == other.movement.cell or reachable.has(cell):
-					counts[ally] = int(counts.get(ally, 0)) + 1
-					break
+	for ally in allies:
+		var live := 0
+		for other in field.attackers_of(ally.get_projected_destination()):
+			if PlanResolver.actor_is_live(other, hypo):
+				live += 1
+		if live > 0:
+			counts[ally] = live
 	return counts
 
 
@@ -1807,7 +1789,7 @@ static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan, profile: 
 static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	var priority: Array = AIArchetype.main_action_priority(squad.archetype)
 	if priority.has(BaseAction.ActionType.ATTACK):
-		_queue_attacks_jointly(squad, board, squad_manager)
+		_queue_attacks_jointly(squad, board, squad_manager, squad.get_members())
 	queue_fallback_actions_for_squad(squad, board, squad_manager)
 
 
@@ -1821,12 +1803,18 @@ static func queue_fallback_actions_for_squad(squad: Squad, board: BoardContext, 
 
 
 # The squad's attacks, chosen together. Each ROUND re-resolves the squad's real plan, scores every
-# remaining member's every candidate as a marginal against it, and queues the single best -- so the
-# second member decides knowing what the first just committed to. Repeats until nothing beats (0,0).
+# remaining chooser's every candidate as a marginal against it, and queues the single best -- so the
+# second member decides knowing what the first just committed to. Repeats until no chooser has a
+# candidate left.
+#
+# `choosers` is who may WIN a round: the whole squad from queue_main_actions_for_squad, one unit from
+# queue_main_action's ATTACK arm (#1445). The candidate table always covers every member, so a
+# set-up is priced by its squadmates' follow-ups either way.
 #
 # Ties resolve to the earlier member and then the earlier candidate (Law #1): _beats is strict, so
 # the first to reach a score keeps it, and both loops walk their own declaration order.
-static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
+static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_manager: SquadManager,
+		choosers: Array[Unit]) -> void:
 	var leader := squad.get_leader()
 	if leader == null or not is_instance_valid(leader):
 		return
@@ -1847,7 +1835,7 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		var stakes := _stakes_for(squad, board, base_plan)
 		var by_member := _candidates_by_member(squad.get_members(), board, base_plan, stakes)
 		var best: _Scored = null
-		for member in squad.get_members():
+		for member in choosers:
 			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member, stakes)
 			if pick != null and (best == null or pick.score.beats(best.score)):
 				best = pick

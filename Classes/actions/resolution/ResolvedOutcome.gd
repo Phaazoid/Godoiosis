@@ -14,13 +14,13 @@ var states_removed: Array[Elemental.State] = []
 var state_turns: Dictionary[Elemental.State, int] = {}
 var popups: Array[String] = []
 # The reactions that FIRED this hit, whole (#685 — was `reaction_icons: Array[Texture2D]`). The queue
-# row wants three facts per reaction — its authored word, its art, and the element that triggered it —
-# and the reaction already holds all three, so recording the icon alone made the other two
-# unrecoverable. Producer no longer skips an icon-less reaction: half the authored catalog has a
-# popup and no art, and under that guard those said nothing at all.
+# row wants two facts per reaction — its authored word and the element that triggered it — and the
+# reaction already holds both, so recording the icon alone made them unrecoverable. The chip is text;
+# nothing reads the icon (#1443). Producer no longer skips an icon-less reaction: half the authored
+# catalog has a popup and no art, and under that guard those said nothing at all.
 var fired_reactions: Array[ElementalReaction] = []
 # The elements that actually REACHED the target — post-insulation, so an absorbed hit records none
-# (#685). Recorded rather than derived: `PlanResolver._source_elements` is private and answers the
+# (#685). Recorded rather than derived: `PlanResolver.source_elements` answers the
 # pre-insulation question, so the queue row's element rail would otherwise claim a fire hit that the
 # target shrugged off. Empty on a heal, which short-circuits above the elemental stage.
 var elements: Array[Elemental.Element] = []

@@ -61,10 +61,12 @@ static func next(cells: Dictionary[Vector2i, int], board: BoardContext) -> Dicti
 
 # What a spreading fire gives off where it lands, into `out`: GasField.add_level's add-and-cap with a
 # fresh hold, on a cell that can hold gas (a burning TREE cannot, ruling 6, so its smoke goes nowhere).
+# The fire spreads from the tiles as the board's deposits leave them (#1430): the outline's board
+# carries the previewed plan's, so a tile a queued hit lights spreads in it; the round's carries none.
 static func _add_ignitions(out: Dictionary[Vector2i, int], board: BoardContext) -> void:
 	if board.terrain_states == null:
 		return
-	for cell: Vector2i in board.terrain_states.cells_fire_takes():
+	for cell: Vector2i in board.terrain_states.cells_fire_takes(board.deposits):
 		var fuel := board.terrain_states.fuel_at(cell)
 		if fuel == null or not holds_gas(cell, board):
 			continue

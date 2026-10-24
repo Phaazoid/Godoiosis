@@ -18,7 +18,8 @@ class_name SquadCohesion
 # TWO FORMS, and keeping them consistent is the whole job: `in_range` decides (validator, solver,
 # squad-up gates, the ejection sweep), `cells`/`field` draw and iterate (overlays, the solver's
 # dilation). Both read one `field`, so they cannot drift -- pinned by
-# tests/squad/test_squad_cohesion.gd.
+# tests/squad/test_squad_cohesion.gd. `hops` is that field read at ONE cell (Group Move's trailing
+# arrow, #1449), the same walk stopped as soon as it gets there.
 #
 # Cost: the walk is bounded at COH, so a field is ~2*COH^2 cells (~41 at COH 4) -- the depth-bounded
 # shape docs/performance.md measured as cheaper than the compute_move_range call beside it. Callers
@@ -45,17 +46,27 @@ static func field_of(leader: Unit, center: Vector2i, member: Unit, board: BoardC
 # The walk itself at a GIVEN reach, cell -> path distance. For a caller that walks from somewhere other
 # than the leader's cell (GroupMoveSolver.stranding walks from the member's, path distance being
 # symmetric) and so must compare each distance with reach_at at the leader's end itself.
-static func field_within(reach: int, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
-	return RulesService.path_hops(center, board, member, maxi(reach, 0))
+static func field_within(reach: int, center: Vector2i, member: Unit, board: BoardContext,
+		until: Dictionary = {}) -> Dictionary:
+	return RulesService.path_hops(center, board, member, maxi(reach, 0), until)
 
-# How far this leader's leash reaches when it stands at `center`: its COH, plus the COH change of every
-# state the gas there gives while standing in it (GasRules.states_while_standing) that it does not
-# already HOLD -- a held state is already in its COH, so a smoked leader in smoke is docked once.
+# How far `cell` lies inside `member`'s bubble around `center`, or RulesService.UNREACHABLE outside it.
+static func hops(squad: Squad, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> int:
+	return int(field_within(reach_at(squad.leader, center, board), center, member, board, { cell: true }) \
+		.get(cell, RulesService.UNREACHABLE))
+
+# How far this leader's leash reaches when it stands at `center`: reach_in, with the gas lying there.
 static func reach_at(leader: Unit, center: Vector2i, board: BoardContext) -> int:
+	return reach_in(leader, board.gas_at(center) if board != null else 0)
+
+# How far this leader's leash reaches standing in this gas (Gas.with_level's packed form): its COH, plus
+# the COH change of every state the gas gives while standing in it (GasRules.states_while_standing)
+# that it does not already HOLD -- a held state is already in its COH, so a smoked leader in smoke is
+# docked once. The gas is a parameter so the round's forecast can hand it NEXT round's
+# (SplitForecast.round_leavers, #1430).
+static func reach_in(leader: Unit, packed: int) -> int:
 	var reach := Squad.range_of(leader)
-	if board == null:
-		return reach
-	for state: Elemental.State in GasRules.states_while_standing(board.gas_at(center)):
+	for state: Elemental.State in GasRules.states_while_standing(packed):
 		if not leader.element_states.has(state):
 			reach += int(Elemental.paired_stat_mods(state).get(Stats.Stat.COH, 0))
 	return maxi(reach, 0)   # floored: a negative bound is path_hops' UNBOUNDED, a board-wide leash

@@ -15,6 +15,10 @@ extends EquippableData
 # asks. Cover and the brace bonus are kind-blind; only armour carries this.
 @export var covered_kinds: Array[AttackData.Kind] = []
 
+# Armour is an equippable that fills its OWN slot, never the hand. See Item.equip_slot.
+func equip_slot() -> Item.EquipSlot:
+	return Item.EquipSlot.ARMOR
+
 # Does this piece's DEF apply to a hit delivered as `kind`? The one reader of covered_kinds'
 # empty-means-all rule; RulesService.def_against asks it and nothing else does.
 func covers(kind: AttackData.Kind) -> bool:
@@ -94,14 +98,17 @@ func requirement_text() -> String:
 # less" and "DEX max 5" end up on two surfaces describing the same number.
 static func _gate_text(stat: Stats.Stat, value: int, is_ceiling: bool) -> String:
 	return "%s %d%s" % [Stats.Stat.keys()[stat], value, " or less" if is_ceiling else "+"]
-	
-	# Mechanical readout for the inventory tooltip (#44). Itemized for the unit who'd wear it, since
+
+# Mechanical readout for the inventory tooltip (#44). Itemized for the unit who'd wear it, since
 # the scaled term depends on their CON -- "DEF 6" means nothing without saying 6 for whom.
+#
+# Both numbers are the wearer's PREVIEW with this piece swapped in (#745), never their live CON:
+# that would judge this piece against whatever is already worn (#1410).
 func mechanical_text(wearer: Unit) -> String:
 	var lines: Array[String] = []
 	if wearer != null:
-		var con := wearer.get_effective_stat(Stats.Stat.CON)
-		var total := Stats.armor_def(def_power, con, flat_def)
+		var con := wearer.previewed_stat(Stats.Stat.CON, self)
+		var total := wearer.previewed_def(self)
 		if def_power > 0 and flat_def > 0:
 			lines.append("DEF %d  (%d x CON %d, +%d flat)" % [total, def_power, con, flat_def])
 		elif def_power > 0:

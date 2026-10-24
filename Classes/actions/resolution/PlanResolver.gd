@@ -731,7 +731,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	_break_watch_on(target, plan, outcome)
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
 	outcome.hp_before = target_hypo.hp   # threaded pre-hit HP (R4), not the live board value
-	var incoming := _source_elements(action)
+	var incoming := source_elements(action)
 	var elements := _surviving_elements(incoming, target)
 	outcome.elements = elements.duplicate()   # what REACHED the target — the queue row's element rail
 	if elements.size() < incoming.size():
@@ -1091,7 +1091,7 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 			return WeaponInstance.unwielded_damage(attacker, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 
-# The kind the hit DELIVERS (#424), _source_elements' shape: a carving answers its own authored field,
+# The kind the hit DELIVERS (#424), source_elements' shape: a carving answers its own authored field,
 # a weapon attack answers the wielding weapon (a fitted mod may have replaced it), and a null stamp
 # is bare fists -- BLUNT, the one kind with no resource to author it on.
 static func _source_kind(action: AttackAction) -> AttackData.Kind:
@@ -1104,13 +1104,16 @@ static func _source_kind(action: AttackAction) -> AttackData.Kind:
 		return action.fired_attack.delivered_kind()
 	return AttackData.Kind.BLUNT
 
-static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
+# What elements does this ACTION carry: elements_of with `thrown` read off the action itself. PUBLIC
+# because anything holding an action asks it here, never elements_of off its parts -- ArcLightning
+# did, without `thrown`, and drew nothing for a shock payload the flood had arced through (#1434).
+static func source_elements(action: AttackAction) -> Array[Elemental.Element]:
 	return elements_of(action.actor, action.fired_attack, action.dropped_by != null)
 
 # What elements would this (actor, attack) pair carry? PUBLIC because the conduction arc asks it at
 # sites holding no AttackAction -- a counter derives from (actor, counter_attack), the hover preview
 # and the AI from (attacker, live pick) -- and a second copy of the Transmutation-vs-weapon branch is
-# exactly the duplicate Law #4 refuses. _source_elements above is its one-argument reading.
+# exactly the duplicate Law #4 refuses. source_elements above is its reading of an action.
 #
 # TWO LAYERS SINCE #900, and the fork on kind moved DOWN into the attacks: what an attack AUTHORS is
 # `AttackData.authored_elements`, which the Attack Editor also asks (it has a file and no wielder),
@@ -1551,7 +1554,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	# Three halves with different gates. The ELEMENT reacts with the GROUND only on a map-hitting
 	# attack, and with the AIR over every struck cell whatever Targets says (TerrainReaction.in_the_air,
 	# #1335); the attack's own GAS (#508) lands whatever Targets says too (AttackData.gases' note).
-	var elements := _source_elements(action)
+	var elements := source_elements(action)
 	var ground: Array[Elemental.Element] = []
 	if _source_hits_map(action):
 		ground = elements

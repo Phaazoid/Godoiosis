@@ -245,10 +245,9 @@ func _capture_notes(unit: Unit, entry: ScenarioUnitEntry) -> String:
 
 func _kit_has_weapon(inventory: Array[Item]) -> bool:
 	for item in inventory:
-		# "equippable and NOT armor" -- Unit's own auto-equip test (add_item). Asking only "not
-		# armor" read TRUE for any carried non-gear, which since #697 widened this door includes a
-		# vial: a kit holding one vial and nothing else would have been called armed.
-		if item is EquippableData and not (item is ArmorData):
+		# Fills the hand -- Unit's own auto-equip test (add_item, Item.equip_slot). A carried vial
+		# fills no slot, so a kit holding one vial and nothing else is not armed.
+		if item != null and item.equip_slot() == Item.EquipSlot.WEAPON:
 			return true
 	return false
 
@@ -405,11 +404,9 @@ func _on_job_toggled(id: String, pressed: bool) -> void:
 	else:
 		current.starting_jobs.erase(id)
 
-# The Unit Editor's weapons+armor+runes merge, CALLED rather than copied (Law #4) -- one answer
-# to "what can a dev put in a hand".
+# The Unit Editor's list, from the same one answer to "what can a dev put in a hand" (Law #4).
 func _item_catalog() -> Dictionary:
-	var unit_editor: UnitEditorTool = get_node("%Unit Editor")
-	return unit_editor._item_catalog()
+	return ItemCatalog.by_name()
 
 # The kit: what the character carries into any board, seeded through the gated doors at spawn
 # (#177). Slot picks stage the catalog FILE resource itself -- no copy -- so a save writes an
@@ -465,7 +462,7 @@ func _add_kit_section() -> void:
 			held_label.text = "inline: %s" % slot_item.shown_name()
 			row.add_child(held_label)
 
-		var is_armor := slot_item is ArmorData
+		var is_armor := slot_item != null and slot_item.equip_slot() == Item.EquipSlot.ARMOR
 		var equip_btn := CheckBox.new()
 		if is_armor:
 			equip_btn.text = "Wear"

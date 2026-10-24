@@ -138,9 +138,9 @@ func _apply(unit: Unit) -> void:
 	# settle still strips whatever fails its gate (#112).
 	unit.unequip_weapon()
 	if _equipped_index >= 0:
-		var chosen := _inventory[_equipped_index] as EquippableData
-		if chosen != null and not chosen is ArmorData:
-			unit.equipped_weapon = chosen
+		var chosen := _inventory[_equipped_index]
+		if chosen != null and chosen.equip_slot() == Item.EquipSlot.WEAPON:
+			unit.equipped_weapon = chosen as EquippableData
 	if _armor_index >= 0:
 		unit.worn_armor = _inventory[_armor_index] as ArmorData
 	else:
@@ -428,32 +428,13 @@ func _stage_unit_name(new_name: String) -> void:
 	_unit_name = new_name
 	_touch()
 
-# Weapons, armor, and authored rune variants in one ordered list, so a unit can equip any of
-# them. Built here and reused by both the picker and the pick handler so their indices stay in
-# lockstep. #30 D.
-# Everything a unit can be given, by display name. NOT equippables only since #697 -- a vial is
-# CARRIED and never slotted, and leaving it out made the four authored ones unreachable from any
-# editor. The Equip/Wear checkbox beside each slot already reads `is EquippableData` and greys
-# itself, so a carried non-equippable needs nothing else here. A conduit (#1312) is the second
-# carried kind.
+# Everything a unit can be given, by display name, in one ordered list reused by both the picker
+# and the pick handler so their indices stay in lockstep (#30 D). ItemCatalog's answer since #1414:
+# this was its own walk over the per-kind catalogs, and a kind added to ItemCatalog.SOURCES did not
+# reach it. The Equip/Wear checkbox beside each slot reads Item.equip_slot() and greys itself, so
+# a carried non-equippable (a vial, a conduit) needs nothing else here.
 func _item_catalog() -> Dictionary:
-	var items := {}
-	var weapons := WeaponCatalog.get_editable()
-	for k in weapons:
-		items[k] = weapons[k]
-	var armors := ArmorCatalog.get_editable()
-	for k in armors:
-		items[k] = armors[k]
-	var runes := RuneCatalog.get_editable()
-	for k in runes:
-		items[k] = runes[k]
-	var vials := VialCatalog.get_editable()
-	for k in vials:
-		items[k] = vials[k]
-	var conduits := ConduitCatalog.get_editable()
-	for k in conduits:
-		items[k] = conduits[k]
-	return items
+	return ItemCatalog.by_name()
 
 func _add_inventory_section(into: VBoxContainer):
 	DevWidgets.add_label(into, "Inventory")
@@ -497,10 +478,11 @@ func _add_inventory_section(into: VBoxContainer):
 			held_label.text = "holds: %s" % held_name
 			row.add_child(held_label)
 
-		var is_armor := current_item is ArmorData
+		var slot: Item.EquipSlot = current_item.equip_slot() if current_item != null else Item.EquipSlot.NONE
+		var is_armor := slot == Item.EquipSlot.ARMOR
 		var equip_btn := CheckBox.new()
 		equip_btn.text = "Wear" if is_armor else "Equip"
-		equip_btn.disabled = not (current_item is EquippableData)
+		equip_btn.disabled = slot == Item.EquipSlot.NONE
 		if is_armor:
 			equip_btn.button_pressed = (slot_index == _armor_index)
 			equip_btn.toggled.connect(func(pressed): _toggle_armor(slot_index, pressed))
@@ -584,16 +566,19 @@ func _set_slot(index: int, entry: Resource):
 			_limb_prosthetics.erase(slot)   # the item that filled this limb just changed under it
 
 	# Auto-equip into an empty weapon slot, but never armor -- that has its own Wear checkbox.
-	if _inventory[index] is EquippableData and not (_inventory[index] is ArmorData) and _equipped_index == -1:
+	if _fills_hand(index) and _equipped_index == -1:
 		_equipped_index = index
 	_touch()
 	populate_unit_editor(editing_unit)
 
 func _equip_slot(index: int):
-	if _inventory[index] is EquippableData:
+	if _fills_hand(index):
 		_equipped_index = index
 	_touch()
 	populate_unit_editor(editing_unit)
+
+func _fills_hand(index: int) -> bool:
+	return _inventory[index] != null and _inventory[index].equip_slot() == Item.EquipSlot.WEAPON
 
 func _add_jobs_section(into: VBoxContainer):
 	DevWidgets.add_label(into, "Jobs")

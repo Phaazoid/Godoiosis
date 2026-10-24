@@ -479,7 +479,7 @@ static func _kit_row(session, label: String, item: Item, owner: Unit, mods: Dict
 			row += "  ! " + reason
 	# The attack line only for what is equipped: _weapon_str reads the WIELDER's live attack views,
 	# which belong to the equipped weapon whatever weapon is passed.
-	if equippable != null and not equippable is ArmorData:
+	if item.equip_slot() == Item.EquipSlot.WEAPON:
 		row += "  " + _weapon_str(equippable, owner if owner != null and item == owner.get_equipped_weapon() else null)
 	var weapon := item as WeaponInstance
 	if weapon != null and weapon.space_count() > 0:
@@ -746,17 +746,21 @@ static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	# `attack` verb takes is on the line.
 	var main: WeaponAttackData = inst.effective_main(wielder)
 	var main_power: int = main.power if main != null else 0
+	# A watch main is the `overwatch` verb's, never `attack`'s (#1440), so the line says which.
+	var main_watches := main != null and inst.effective_can_overwatch(wielder, main)
 	# Show the GEOMETRY, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly different
 	# shape (an omnidirectional point attack at range vs a one-cell-deep cleave), which decides reach
 	# AND who can counter. Hiding it once made a correct no-counter look like a bug.
 	var s: String = WeaponData.WeaponType.keys()[w.weapon_type]
 	if main != null and main != w.main_attack:
 		s += " " + main.display_name
+	if main_watches:
+		s += " (watch)"
 	s += " pow%d %s" % [main_power, _pattern_str(main)]
 	# The composed answers, mods included, as the resolver reads them (#1365).
 	for element in inst.get_elements(wielder, main):
 		s += "/" + Elemental.Element.keys()[element]
-	if main != null and main.can_ever_counter():
+	if main != null and main.can_ever_counter(main_watches):
 		s += "/ctr"
 	if main != null and inst.effective_hits_allies(wielder, main):
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
@@ -785,7 +789,7 @@ static func _rune_str(rune: RuneData, wielder: Unit) -> String:
 		return head
 	var parts: Array[String] = []
 	for attack in rune.choice_attacks(wielder):
-		parts.append(_attack_str(rune, wielder, attack, attack.can_ever_counter()))
+		parts.append(_attack_str(rune, wielder, attack, attack.can_ever_counter(rune.effective_can_overwatch(wielder, attack))))
 	if parts.is_empty():
 		return head
 	return head + "  " + "; ".join(parts)

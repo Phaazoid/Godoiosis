@@ -218,6 +218,91 @@ func test_a_leaders_stranding_tile_strains_exactly_the_members_it_strands() -> v
 			"a member who could follow him there went red too").is_equal(SquadLines2D.Strain.SOLID)
 
 
+# --- The round's smoke turns a tether red (#1430) ------------------------------------------------
+# Smoke the round spills onto a leader shortens its leash, and the next turn start ejects whoever it
+# no longer reaches: that member's tether is red wherever the squad's lines stand, through the real
+# doors. SplitForecast.round_leavers is the forecast (test_split_forecast); this is the wire.
+
+const SMOKE_SOURCE := Vector2i(0, -1)   # beside the leader at the origin: thick here spills onto it
+
+
+# A leader whose leash the smoke docks, a member at the leash's far edge and one inside what is left.
+func _smoky_squad() -> Dictionary:
+	var rules := GasRules.for_kind(Gas.Kind.SMOKE)
+	assert_bool(rules != null and rules.while_standing and Gas.Level.THICK - 1 >= rules.state_from) \
+		.override_failure_message("fixture: a thick cloud's spill no longer blinds a leader").is_true()
+	var shortened := FIXTURE_COH + int(Elemental.paired_stat_mods(rules.state).get(Stats.Stat.COH, 0))
+	assert_int(shortened).override_failure_message("fixture: the smoke no longer shortens, or leaves no leash") \
+		.is_between(1, FIXTURE_COH - 1)
+	var board: Dictionary = await _squad(DEX_FAST, [{"dex": DEX_FAST, "cell": Vector2i(0, FIXTURE_COH)},
+		{"dex": DEX_FAST, "cell": Vector2i(shortened, 0)}])
+	return {"leader": board.leader, "far": board.members[0], "near": board.members[1]}
+
+
+func test_the_member_the_rounds_smoke_will_split_off_has_a_red_tether() -> void:
+	var s: Dictionary = await _smoky_squad()
+	game.hover_presenter.update_hover_visuals(Vector2i.ZERO)
+	assert_int(_tether_state_of(s.far)).override_failure_message(
+			"fixture: a tether went red with no smoke on the board").is_equal(SquadLines2D.Strain.SOLID)
+
+	game.gas_field.set_level(SMOKE_SOURCE, Gas.Kind.SMOKE, Gas.Level.THICK)
+	game.hover_presenter.update_hover_visuals(Vector2i.ZERO)
+	assert_int(_tether_state_of(s.far)).override_failure_message(
+			"the member next round's smoke splits off is not red").is_equal(SquadLines2D.Strain.STRAIN)
+	assert_int(_tether_state_of(s.near)).override_failure_message(
+			"a member the shortened leash still reaches went red").is_equal(SquadLines2D.Strain.SOLID)
+
+	# The leader's move a tile out of the spill keeps the squad together, and the hovered ghost says so.
+	var leader: Unit = s.leader
+	game.selected_unit = leader
+	game.enter_move_mode(leader)
+	var clear := Vector2i(0, 1)
+	assert_bool(game.leader_followable.has(clear)).override_failure_message(
+			"fixture: the squad cannot follow its leader to %s" % [clear]).is_true()
+	game.hover_presenter.update_hover_visuals(clear)
+	assert_int(_tether_state_of(s.far)).override_failure_message(
+			"a leader hovered out of the smoke's way still loses the member").is_equal(SquadLines2D.Strain.SOLID)
+
+
+# The previewed plan's own deposits count (game.next_round_board): a queued swing that lays smoke BESIDE
+# the leader turns the tether red on the queue action itself -- the repaint draws after the resolve.
+# ORDERING: the leader queues a harmless swing FIRST, so the smoke is not the queue's first order -- the
+# first also fires actions_became_active, whose redraw comes after the resolve and would hide a
+# _repaint_squad_plan that drew before it.
+func test_a_queued_smoke_swing_beside_the_leader_turns_the_tether_red_at_once() -> void:
+	var s: Dictionary = await _smoky_squad()
+	var near: Unit = s.near
+	var leader: Unit = s.leader
+	for unit: Unit in [near, leader]:
+		unit.equipped_weapon = H.make_weapon(1)   # this fixture's units spawn unarmed
+		var swing := unit.get_fired_attack()
+		swing.targets = EquippableData.TargetMode.MAP
+		swing.max_range = 3
+		swing.deals_no_damage = true
+	near.get_fired_attack().gases = {Gas.Kind.SMOKE: Gas.Level.THICK}
+	game.squad_manager.active_squad = near.squad
+	var first := AttackAction.declare(leader, leader.movement.cell, Vector2i(-2, 0))
+	assert_bool(game.squad_manager.queue_action(leader.squad, first)).override_failure_message(
+			"fixture: the leader's swing never queued (%s)" % [", ".join(first.validation_errors)]).is_true()
+	assert_int(_tether_state_of(s.far)).override_failure_message(
+			"fixture: the queue's first order drew no tether, or a red one").is_equal(SquadLines2D.Strain.SOLID)
+
+	var aim := AttackAction.declare(near, near.movement.cell, SMOKE_SOURCE)
+	assert_bool(game.squad_manager.queue_action(near.squad, aim)).override_failure_message(
+			"fixture: the smoke swing never queued (%s)" % [", ".join(aim.validation_errors)]).is_true()
+	assert_int(_tether_state_of(s.far)).override_failure_message(
+			"queueing smoke the round spills onto the leader did not turn the far tether red").is_equal(
+			SquadLines2D.Strain.STRAIN)
+
+	# ...and cancelling it takes the red away at once, though the cancel is a MEMBER's and the leader's
+	# swing stays queued (dev, 2026-10-23: any cancel in the commanded squad redraws its lines).
+	game.squad_manager.remove_action(near.squad, aim)
+	assert_bool(near.squad.action_queue.has(first)).override_failure_message(
+			"fixture: the cancel emptied the queue, whose own clear would hide a missing redraw").is_true()
+	assert_int(_tether_state_of(s.far)).override_failure_message(
+			"the red outlived the cancelled swing that caused it").is_equal(SquadLines2D.Strain.SOLID)
+
+
 # --- A grey tile says only why it is grey --------------------------------------------------------
 
 # An enemy placed so its field covers tiles a squad's move can reach, and blocks none of them: the

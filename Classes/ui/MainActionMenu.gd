@@ -38,11 +38,13 @@ class_name MainActionMenu
 # is still purely a menu-layer fact: the queued ActionType is unchanged, and resolver, queue panel
 # and AI see nothing.
 #
-# A category is drawn only when it has live children, which is the ring's compaction rule one level
-# up -- and it is also why has_weapon_actions()/has_transmutations() are no
-# longer read as menu gates. populate() still answers the flat "what can this unit do" and the
-# grouping is applied on top of it; the only thing round 2 took out of it is the three verbs above,
-# whose clauses went with their rows.
+# A category is drawn only when it has children, which is the ring's compaction rule one level up.
+# populate() still answers the flat "what can this unit do" and the grouping is applied on top of
+# it; the only thing round 2 took out of it is the three verbs above, whose clauses went with their
+# rows. The kit's three expanders open on different questions there: ATTACK on the kit HAVING a main
+# at all (a dry, sprung or wield-locked one lists greyed, #1409), WEAPON_ACTION and TRANSMUTATION on
+# having something actionable (has_weapon_actions / has_transmutations), so an uncharged Blowback
+# alone does not open the slice.
 #
 # Adding a general verb touches ACTION_DATA (name, term, group); a weapon-specific one touches only
 # _weapon_children -- see CLAUDE.md's new-action checklist.
@@ -219,9 +221,10 @@ func category_display(group: int, unit: Unit) -> Dictionary:
 	return CATEGORIES[group]
 
 
-# Two slices with one name is a bug however it arose -- and it arises HERE by construction: a
+# Two slices with one name is a bug however it arose -- and it arises HERE by construction, twice: a
 # rune's default attack is also one of its carvings, so the ATTACK and TRANSMUTATION expanders
-# both offer it. First listing wins, so ACTION_DATA's order decides which.
+# both offer it; and a watch main is also one of the weapon's watches (#1440), so ATTACK and
+# WEAPON_ACTION both offer it. First listing wins, so ACTION_DATA's order decides which.
 func _append_unique(bucket: Array, node: Dictionary) -> void:
 	var node_name := String(node.get("name", ""))
 	for existing: Dictionary in bucket:
@@ -273,11 +276,14 @@ func _attack_leaf(unit: Unit, attack: AttackData) -> Dictionary:
 # #467 round 2): the ring already lists every alternative by name, so a row saying "Attack" was a
 # second door to one of them, and its only virtue -- saving a click -- was spent the moment the
 # ring made you navigate anyway. Note what this makes newly visible: a weapon family whose main
-# attack is unnamed now says so on screen.
+# attack is unnamed now says so on screen. A main that is a watch, by any route, stands its watch
+# (#1440, dev: "If that attack is an overwatch, it should function how an overwatch functions").
 func _default_attack_children(unit: Unit) -> Array:
 	var atk := unit.get_default_attack()
 	if atk == null:
 		return []
+	if unit.attack_can_overwatch(atk):
+		return [_watch_leaf(unit, atk)]
 	return [_attack_leaf(unit, atk)]
 
 
@@ -330,11 +336,17 @@ func _transmutation_children(unit: Unit) -> Array:
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		var row := _entry(atk.display_name, _use_reason(unit, atk),
-			_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, atk))
-		rows.append(_synthetic_leaf(_with_gauge(row, unit, atk),
-			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
+		rows.append(_watch_leaf(unit, atk))
 	return rows
+
+
+# One watch row: _attack_leaf's twin, routed to watch aiming. The Overwatch rows and a watch main
+# (_default_attack_children) both build here.
+func _watch_leaf(unit: Unit, attack: AttackData) -> Dictionary:
+	var row := _entry(attack.display_name, _use_reason(unit, attack),
+		_with_ally_line(Glossary.short(Glossary.Term.OVERWATCH), unit, attack))
+	return _synthetic_leaf(_with_gauge(row, unit, attack),
+		func(picking_unit: Unit) -> void: _pick_watch(picking_unit, attack))
 
 
 func _pick_watch(unit: Unit, attack: AttackData) -> void:
@@ -369,13 +381,15 @@ func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
 	return _with_gauge(_entry(attack.display_name, _use_reason(unit, attack),
 		_with_ally_line(unit.attack_detail(attack), unit, attack)), unit, attack)
 
-# Why this attack's row is greyed, or "" -- for a fire row and a watch row alike. A carving that would
-# FIZZLE greys (Deep Alchemy Phase 2), judged from where the unit will STAND after its queued moves
-# (get_projected_destination is Unit.projected_cell over its own squad's queue, the origin the queue
-# gate reads) and asked of the same CellSubstances.fizzle_reason, so a row and a refused order cannot
-# disagree. Asked only of an otherwise usable attack: the readiness or channel reason comes first.
+# Why this attack's row is greyed, or "" -- for a fire row and a watch row alike. It starts from the
+# queue gate's own question, AttackAction.fire_block_reason (the two-handed wield lock, then the
+# source's readiness or channel reason), so a greyed row and a refused order are one answer (#1409).
+# A carving that would FIZZLE greys too (Deep Alchemy Phase 2), judged from where the unit will STAND
+# after its queued moves (get_projected_destination is Unit.projected_cell over its own squad's
+# queue, the origin the queue gate reads) and asked of the same CellSubstances.fizzle_reason. Asked
+# only of an otherwise usable attack.
 func _use_reason(unit: Unit, attack: AttackData) -> String:
-	var reason := unit.attack_block_reason(attack)
+	var reason := AttackAction.fire_block_reason(unit, attack)
 	if reason == "":
 		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), game._board(), unit)
 	return reason
@@ -465,7 +479,11 @@ func populate(unit: Unit) -> Array:
 	if _can_group_move(unit):
 		options.append(GROUP_MOVE)
 
-	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped() and unit.can_fire_default_attack():
+	# Opens on the kit HAVING a main, never on being able to fire it (#1409): a dry, sprung or
+	# wield-locked main lists greyed with its reason (_attack_entry). A weapon with no main attack
+	# (the #80 data-rot shape) and a rune with nothing channelable have none, so nothing lists. The
+	# DEFAULT, never get_fired_attack(), which is an aiming cursor left over from a previous aim (#102).
+	if _can_take_main_action(unit) and unit.get_default_attack() != null:
 		options.append(ATTACK)
 
 	# A basic main action everyone has (#414) — no ability gate, no verb lock; what kit grants is the
@@ -564,7 +582,7 @@ func show_deploy_menu(cell: Vector2i, pos: Vector2i) -> void:
 
 	var children: Array = []
 	for unit: Unit in waiting:
-		var node := _entry(unit.get_unit_name(), "", Glossary.short(Glossary.Term.UNDEPLOY))
+		var node := _entry(unit.get_unit_name(), "", Glossary.short(Glossary.Term.DEPLOY))
 		children.append(_synthetic_leaf(node, func(_ignored: Unit): game.deploy_unit(unit, cell)))
 
 	var controller := ActionMenuController.new()

@@ -233,6 +233,7 @@ var home_yaw_source: Callable
 
 # Whether a board cell's ground is WATER, injected by battle3d beside the sources above (#358's damp
 # blot: a Wet unit standing in water leaves no patch on it). Unset reads as dry ground everywhere.
+# The AUTHORED kind, frozen or not: deliberately not BoardContext.is_open_water, which wade_at asks through wets_in.
 var water_at: Callable
 
 # The weather's snow on the units (#1269), injected by battle3d off WeatherMirror like water_at: the

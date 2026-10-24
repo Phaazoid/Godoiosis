@@ -112,14 +112,11 @@ var host_3d: Node3D = null
 # reimplemented: two windows are two input SOURCES for one set of bindings.
 #
 # A text field must win first, or typing a scenario name would toggle the overlay and reset the
-# board. gui_input is consumed by a focused LineEdit before _input ever runs here, so the guard is
-# only needed for the case Godot cannot answer for us.
+# board. Godot runs _input BEFORE the GUI, so a focused LineEdit shields nothing here: the guard is
+# the whole defence, and it lives in the entry so the game window's forward asks it too (#1446). This
+# window hands over its own viewport for that, and for spending a SPACE that spawned.
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey:
-		var focused := get_viewport().gui_get_focus_owner()
-		if focused is LineEdit or focused is TextEdit:
-			return   # a SpinBox edits through a LineEdit too, so this covers the level/size fields
-	game.dev_controller.handle_dev_key(event)
+	game.dev_controller.handle_dev_key(event, get_viewport())
 
 
 func _ready() -> void:

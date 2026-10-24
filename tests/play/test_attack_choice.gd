@@ -385,3 +385,29 @@ func test_the_unit_line_names_every_other_attack() -> void:
 	var text := BoardView.render_overview(_sess)
 	assert_str(text).contains("; Lob pow2").contains("; watch: Watch pow3").not_contains("+3atk")
 	assert_str(text).contains("Burst pow6").contains("(blocked: ")
+
+
+# ==============================================================================
+#  A watch main (#1440)
+# ==============================================================================
+#
+# The ring's Attack row stands a watch main as a watch, so the unnamed verbs follow the ring. `attack`
+# aims at a target and cannot become a watch, so it refuses and names the verb that can.
+
+func test_an_unnamed_attack_refuses_a_watch_main_and_names_overwatch() -> void:
+	_jab.can_overwatch = true
+	var r: Dictionary = _sess.queue_attack("A", Vector2i(1, 0))
+	assert_bool(r.ok).override_failure_message("a watch main was fired as a shot").is_false()
+	assert_str(str(r.get("error", ""))).contains("overwatch")
+	assert_int(_queued(BaseAction.ActionType.ATTACK).size()).is_equal(0)
+
+
+func test_an_unnamed_legal_targets_answers_a_watch_mains_aims() -> void:
+	_jab.can_overwatch = true
+	var offered: Dictionary = _sess.legal_targets("A")
+	assert_bool(offered.ok).override_failure_message(str(offered)).is_true()
+	assert_int(offered.aims.size()).override_failure_message(
+		"nothing was offered, so this case proves nothing").is_greater(0)
+	assert_bool((offered.aims[0] as Dictionary).has("footprint")).override_failure_message(
+		"the aims offered are a shot's, not a watch's: %s" % str(offered.aims[0])).is_true()
+	assert_str(BoardView.render_focus(_sess, "A")).contains("(watch)")

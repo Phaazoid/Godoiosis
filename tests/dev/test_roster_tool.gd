@@ -241,8 +241,11 @@ func test_an_empty_list_offers_nothing_and_the_flag_offers_everything() -> void:
 
 	roster.offers_every_mod = true
 	roster.offers_every_character = true
+	roster.offers_every_item = true
 	assert_int(roster.offered_mods().size()).is_equal(WeaponModCatalog.get_mods().size())
 	assert_int(roster.offered_entries().size()).is_equal(UnitCatalog.get_characters_by_file().size())
+	# ItemCatalog.everything(), whose refusals tests/items/test_item_catalog.gd pins (#1414).
+	assert_int(roster.offered_stash().size()).is_equal(ItemCatalog.everything().size())
 
 
 # Every synthesized entry is a REFERENCE, the same shape the tool authors by hand: a snapshot here

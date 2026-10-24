@@ -132,6 +132,14 @@ func _ring_open() -> bool:
 	return false
 
 
+# The rows the open ring is showing, or [] with none open.
+func _open_ring_rows() -> Array:
+	for child in game.get_children():
+		if child is ActionMenuController and not child.is_queued_for_deletion():
+			return (child as ActionMenuController).level_nodes()
+	return []
+
+
 # The widget frees its controller on the way out, and these cases reach past the widget straight
 # into on_pressed -- so the node is still standing afterwards. Clear it, or the NEXT click's
 # _ring_open answer is the previous open's.
@@ -277,6 +285,32 @@ func test_clicking_an_empty_deployment_cell_brings_in_a_unit_that_was_waiting() 
 		"nobody came in from the reserve").is_equal(on_board + 1)
 	assert_object(game.get_unit_at_cell(FREE_CELL)).is_not_null()
 	assert_int(game.reserve_root.get_child_count()).is_equal(waiting - 1)
+
+
+# #1452: the rows of that ring are units about to be PLACED, so they read Deploy's line. They had
+# borrowed Undeploy's, and told the player every pick would take the unit back off the board.
+func test_the_deploy_rings_rows_say_what_placing_does() -> void:
+	if not await _enter_phase(2):
+		return
+	var lifted: Unit = _drawn()[0]
+	game._on_left_click(lifted.movement.cell)
+	game.main_action_menu.on_pressed(MainActionMenu.UNDEPLOY, lifted)
+	await await_idle_frame()
+	_close_rings()
+	var waiting: int = game.reserve_root.get_child_count()
+	assert_int(waiting).is_greater(0)
+
+	game._on_left_click(FREE_CELL)
+
+	var rows := _open_ring_rows()
+	assert_int(rows.size()).override_failure_message(
+		"the ring should list every waiting unit, and lists %d of %d" % [rows.size(), waiting]) \
+		.is_equal(waiting)
+	var deploy_line := UiText.wrap(Glossary.short(Glossary.Term.DEPLOY))
+	for row: Dictionary in rows:
+		assert_str(String(row.get("tooltip", ""))).override_failure_message(
+			"the row for %s does not read Deploy's line: %s" % [row.get("name", "?"), row.get("tooltip", "")]) \
+			.is_equal(deploy_line)
 
 
 func test_the_cap_refuses_one_more_than_it_allows() -> void:

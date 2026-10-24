@@ -304,12 +304,11 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		return gate
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
-	# A watch attack's name is answered too (#46), through the overwatch verb's own lookup: a watch
-	# attack is never in the fire view (#590), so the fire pick below would call it unknown.
-	if attack_name != "" and unit.fire_attack_named(attack_name) == null:
-		var watch := unit.watch_attack_named(attack_name)
-		if watch != null:
-			return _legal_watch_aims(unit, handle, watch)
+	# A watch is answered too (#46), as the overwatch verb aims it: a watch attack is never in the fire
+	# view (#590), so the fire pick below would refuse it.
+	var watch := _watch_pick(unit, attack_name)
+	if watch != null:
+		return _legal_watch_aims(unit, handle, watch)
 	var pick := _fire_pick(unit, handle, attack_name)
 	if not pick.ok:
 		return pick
@@ -821,10 +820,23 @@ func _fire_pick(unit: Unit, handle: String, attack_name: String) -> Dictionary:
 	elif attack == null:
 		# The ring offers no row here either (#1215); a null pick would resolve as bare fists.
 		return {"ok": false, "error": "%s has nothing it can fire" % handle}
+	elif unit.attack_can_overwatch(attack):
+		# The ring's Attack row stands this as a watch (#1440). An aim at a target cannot, so say which verb does.
+		return {"ok": false, "error": "%s's main, %s, is a watch -- use overwatch" % [handle, _attack_label(attack)]}
 	var reason := unit.attack_block_reason(attack)
 	if reason != "":
 		return {"ok": false, "error": "%s can't fire %s: %s" % [handle, _attack_label(attack), reason]}
 	return {"ok": true, "attack": attack}
+
+# The watch a legal_targets ask means, or null: one named that the fire view lacks, or, unnamed, a
+# main that is a watch (#1440) -- the ring's Attack row, made headlessly.
+static func _watch_pick(unit: Unit, attack_name: String) -> AttackData:
+	if attack_name == "":
+		var main := unit.get_default_attack()
+		return main if main != null and unit.attack_can_overwatch(main) else null
+	if unit.fire_attack_named(attack_name) != null:
+		return null
+	return unit.watch_attack_named(attack_name)
 
 static func _attack_label(attack: AttackData) -> String:
 	return attack.display_name if attack != null else "(unarmed)"
@@ -1456,10 +1468,10 @@ func execute() -> Dictionary:
 			if action.action_type != type:
 				continue
 			# R7 liveness (#1005) -- MIRRORS execute_orders' own collection filter. Both twins read
-			# the resolver's stamp rather than asking the board, which is what keeps them one
-			# answer; the went_downed wire bug is what a hand-copied twin with its own opinion
-			# costs (will-and-death.md).
-			if action.resolved_actor_felled:
+			# the resolver's stamp through is_inert() rather than asking the board, which is what
+			# keeps them one answer; the went_downed wire bug is what a hand-copied twin with its
+			# own opinion costs (will-and-death.md).
+			if action.is_inert():
 				continue
 			action.execute()
 			events.append(_side_line(action))

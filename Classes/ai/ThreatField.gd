@@ -171,9 +171,9 @@ static func leash_of(squad: Squad, board: BoardContext) -> Array[Vector2i]:
 
 
 static func _archetype_of(squad: Squad) -> AIArchetype.Type:
-	if squad == null or squad.archetype == AIArchetype.Type.FACTION_DEFAULT:
+	if squad == null:
 		return AIArchetype.DEFAULT
-	return squad.archetype
+	return AIArchetype.effective(squad.archetype)
 
 
 # The cells this unit may fire FROM. Same envelope the archetype walks: Hold never moves, a Sentry
@@ -282,9 +282,9 @@ static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: Bo
 # THE COUNTER, walked on its own (#710 slice 4). It was born to answer the zone clip the pass above
 # used to apply to a Sentry -- a patrol painted almost pure blue, 2 of 30 reach cells -- and #1377
 # deleted that clip, so for a unit whose counter is among its selectable attacks this now adds
-# nothing (measured in tests/ai/test_threat_field.gd rather than assumed). It stays for the counter
-# that view leaves out: a watch-only main is never fireable, yet can_ever_counter does not ask
-# can_overwatch, so it still answers a blow.
+# nothing (measured in tests/ai/test_threat_field.gd rather than assumed). It was kept for the one
+# counter that view left out, a watch main, which never counters since #1440; whether it now adds
+# anything at all is that suite's measurement to make, not yet made.
 #
 # It borrows SquadManager.can_counter's own gates rather than restating them, so a dry weapon and an
 # unauthored AttackData.can_counter both fall out for free.
@@ -319,21 +319,20 @@ static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[V
 # Asked of the ARCHETYPE'S declared list, so Rushdown (OVERWATCH is NEVER) marks none, and of
 # AITactics' own two doors, so these are the lanes the builder could arm. From EVERY origin: the shot
 # takes anyone in the lane, and a Sentry at its post aims at the nearest enemy wherever that enemy
-# stands.
+# stands. Every watch the builder may try, not only its first (#1433). The lanes skip the builder's
+# aim gate (Reach.can_aim_at), so they can only over-state what it arms.
 static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vector2i], by_attack: Dictionary) -> void:
 	if not AIArchetype.main_action_priority(_archetype_of(unit.squad)).has(BaseAction.ActionType.OVERWATCH):
 		return
-	var attack := AITactics.watch_attack_for(unit)
-	if attack == null:
-		return
-	var out: Dictionary = by_attack.get_or_add(attack, {})
-	for origin in origins:
-		if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
-			continue   # AITactics._try_overwatch arms no watch that would fizzle there
-		var lanes := AITactics.watch_lanes(unit, origin, attack, board)
-		for dir in lanes:
-			for cell: Vector2i in lanes[dir]:
-				out[cell] = true
+	for attack in AITactics.watch_attacks_for(unit):
+		var out: Dictionary = by_attack.get_or_add(attack, {})
+		for origin in origins:
+			if CellSubstances.fizzle_reason(attack, origin, board, unit) != "":
+				continue   # AITactics._try_overwatch arms no watch that would fizzle there
+			var lanes := AITactics.watch_lanes(unit, origin, attack, board)
+			for dir in lanes:
+				for cell: Vector2i in lanes[dir]:
+					out[cell] = true
 
 
 # WHERE A PLACED BLAST AND ITS PAYLOADS LAND (#1207). The ring is where an attack may be AIMED; a

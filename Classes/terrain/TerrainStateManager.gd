@@ -212,13 +212,33 @@ func tick_states() -> void:
 #
 # PUBLIC since #1335: the gas round (GasSpread.next) asks it BEFORE this tick lights anything, so the
 # smoke a spreading fire gives off lands on the cells this tick is about to take.
-func cells_fire_takes() -> Array[Vector2i]:
+#
+# `effects` reads the cells as those deposits will leave them (#1430), projected_states_at's fold: Alt's
+# outline asks with the previewed plan's, so a tile a queued hit lights spreads in it and one a queued
+# douse puts out does not. The tick asks with none.
+func cells_fire_takes(effects: Array[ResolvedCellEffect] = []) -> Array[Vector2i]:
 	var taken: Array[Vector2i] = []
-	for source in burning_cells():
+	for source in _burning_sources(effects):
 		for cell in GridUtils.cells_within_blended_range(source, 1, _spreads_wide(source)):
-			if not taken.has(cell) and _catches_fire(cell):
+			if not taken.has(cell) and _catches_fire(cell, effects):
 				taken.append(cell)
 	return taken
+
+
+# burning_cells() as these deposits leave the store: the live cells and the deposits' own, each once.
+func _burning_sources(effects: Array[ResolvedCellEffect]) -> Array[Vector2i]:
+	if effects.is_empty():
+		return burning_cells()
+	var seen: Dictionary[Vector2i, bool] = {}
+	for cell: Vector2i in _states:
+		seen[cell] = true
+	for effect in effects:
+		seen[effect.cell] = true
+	var result: Array[Vector2i] = []
+	for cell: Vector2i in seen:
+		if Terrain.is_burning(projected_states_at(cell, effects)):
+			result.append(cell)
+	return result
 
 
 # Does the fire standing HERE throw to the corners? Asked of the burning cell's own ground, which is
@@ -241,11 +261,12 @@ func _spreads_wide(cell: Vector2i) -> bool:
 # apply()'s timer reset, and no field would ever go out however much of it had already burnt. Since
 # #891 it is also what drops the ORIGIN out of cells_fire_takes' reach, every source there being a
 # burning cell by construction -- so a fire cannot re-light itself and lose its own clock.
-func _catches_fire(cell: Vector2i) -> bool:
-	if Terrain.is_burning(states_at(cell)) or not _has_ground(cell):
+func _catches_fire(cell: Vector2i, effects: Array[ResolvedCellEffect] = []) -> bool:
+	var states := projected_states_at(cell, effects) if not effects.is_empty() else states_at(cell)
+	if Terrain.is_burning(states) or not _has_ground(cell):
 		return false
 	var fuel := fuel_at(cell)
-	return fuel != null and fuel.admits(states_at(cell))
+	return fuel != null and fuel.admits(states)
 
 
 # A state whose clock has run out. Fire that was consuming FUEL leaves the spent ground behind it;

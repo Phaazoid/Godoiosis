@@ -288,30 +288,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 		if authored and unit.drawn_from_roster:
 			continue
 
-		var entry := ScenarioUnitEntry.new()
-		if authored and unit.unit_data_source != null and not unit.dev_edited:
-			# Reference, not copy: serializes as an ExtResource to the character file, and
-			# state_saved=false tells the loader the spawn's own initialize+kit is the whole answer.
-			# A DEV-EDITED unit falls through to the snapshot branch (dev-ratified, #259 rework):
-			# the edit made it board-local, and a re-reference would silently discard it.
-			entry.unit_data = unit.unit_data_source
-			entry.state_saved = false
-		else:
-			entry.unit_data = unit.unit_data.duplicate(true)
-		entry.cell = unit.movement.cell
-		entry.must_survive = unit.must_survive   # #572: authored, and outside the #177 fork above
-		entry.ai_profile = unit.ai_profile   # #1230: the same, verbatim -- a stale name survives to be linted
-		entry.squad_id = squad_manager.squads.find(unit.squad)
-		entry.is_leader = unit.is_leader()
-		if entry.is_leader:
-			entry.squad_name = unit.squad.squad_name
-			entry.squad_archetype = unit.squad.archetype
-			entry.squad_zone = unit.squad.zone_name
-			entry.squad_has_acted = unit.squad.has_acted   # #87: a spent squad reloads spent
-
-		if entry.state_saved:
-			entry.capture_unit_state(unit)
-
+		var entry := capture_entry(unit, authored)
 		entry_of[unit] = entry
 		scenario.unit_entries.append(entry)
 
@@ -329,6 +306,35 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 		entry.guard_spent = unit.guard.spent
 
 	return scenario
+
+# One unit's entry as capture_scenario writes it, minus the Guard link, which needs every entry.
+# Its own function so BoardLint can ask an entry what the next load makes of the unit
+# (spawns_as_body, #1432) instead of re-deriving the #177 fork.
+func capture_entry(unit: Unit, authored := false) -> ScenarioUnitEntry:
+	var entry := ScenarioUnitEntry.new()
+	if authored and unit.unit_data_source != null and not unit.dev_edited:
+		# Reference, not copy: serializes as an ExtResource to the character file, and
+		# state_saved=false tells the loader the spawn's own initialize+kit is the whole answer.
+		# A DEV-EDITED unit falls through to the snapshot branch (dev-ratified, #259 rework):
+		# the edit made it board-local, and a re-reference would silently discard it.
+		entry.unit_data = unit.unit_data_source
+		entry.state_saved = false
+	else:
+		entry.unit_data = unit.unit_data.duplicate(true)
+	entry.cell = unit.movement.cell
+	entry.must_survive = unit.must_survive   # #572: authored, and outside the #177 fork above
+	entry.ai_profile = unit.ai_profile   # #1230: the same, verbatim -- a stale name survives to be linted
+	entry.squad_id = squad_manager.squads.find(unit.squad)
+	entry.is_leader = unit.is_leader()
+	if entry.is_leader:
+		entry.squad_name = unit.squad.squad_name
+		entry.squad_archetype = unit.squad.archetype
+		entry.squad_zone = unit.squad.zone_name
+		entry.squad_has_acted = unit.squad.has_acted   # #87: a spent squad reloads spent
+
+	if entry.state_saved:
+		entry.capture_unit_state(unit)
+	return entry
 
 func load_scenario(path: String):
 	var scenario: ScenarioData = ContentRepair.load_tolerant(path)
