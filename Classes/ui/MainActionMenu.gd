@@ -582,7 +582,7 @@ func show_deploy_menu(cell: Vector2i, pos: Vector2i) -> void:
 
 	var children: Array = []
 	for unit: Unit in waiting:
-		var node := _entry(unit.get_unit_name(), "", Glossary.short(Glossary.Term.UNDEPLOY))
+		var node := _entry(unit.get_unit_name(), "", Glossary.short(Glossary.Term.DEPLOY))
 		children.append(_synthetic_leaf(node, func(_ignored: Unit): game.deploy_unit(unit, cell)))
 
 	var controller := ActionMenuController.new()

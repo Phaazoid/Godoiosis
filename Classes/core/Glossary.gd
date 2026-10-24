@@ -6,7 +6,8 @@ class_name Glossary
 # the tooltips and the Glossary screen can never drift apart. Read by GlossaryScreen (the page),
 # MainActionMenu (menu-row hover text via ACTION_DATA "term" keys), info_panel (stat rows) and
 # StateIcons (state hovers) and TileReadout (the tile hover card and the Inspect dock's tile mode),
-# and PreMissionScreen and MissionStatusPanel (the air's reading, before and during the battle).
+# and PreMissionScreen and MissionStatusPanel (the air's reading, before and during the battle),
+# and PreMissionCard (its Deploy toggle).
 #
 # Two content rules, both Law #4:
 #   - Numbers are INTERPOLATED from the constants that rule them (DOWNED_TURNS, COVER_DEF, ...),
@@ -34,7 +35,7 @@ enum Term {
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION,
 	GUARD, OVERWATCH, RESCUE, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
-	ACTION, RUNE, SQUAD_ACTIONS, UNDEPLOY, REPOSITION, PLACEMENT,
+	ACTION, RUNE, SQUAD_ACTIONS, DEPLOY, UNDEPLOY, REPOSITION, PLACEMENT,
 	# Elemental -- affinity then aura, in the order a reader needs them: which elements you can touch
 	# at all, then how hard you hit with one (#930 put both on screen for the first time).
 	ELEMENTS, AFFINITY, AURA, WET, CHILLED, SMOKED, REACTIONS, ATMOSPHERE,
@@ -450,6 +451,14 @@ static func _build_entries() -> Dictionary:
 		"short": "Leave the current squad and go solo.",
 		"long": "The unit steps out of its squad into a squad of its own. Its old squad keeps its "
 			+ "plan; the leaver starts fresh."}
+	# Not an ACTION_DATA verb: the deploy ring's unit rows (MainActionMenu.show_deploy_menu) and the
+	# pre-mission card's Deploy toggle both read it, as Undeploy's opposite number (#1452).
+	e[Term.DEPLOY] = {"category": Category.ACTIONS, "title": "Deploy",
+		"short": "Put this unit on the board before the mission starts.",
+		"long": "Only during the pre-mission phase, and only for units the mission's roster offers. "
+			+ "Click an empty cell of the deployment zone and pick who stands there, or press Deploy "
+			+ "on a unit's card to put it on the first free cell. Every unit deployed counts against "
+			+ "the deployment cap."}
 	e[Term.UNDEPLOY] = {"category": Category.ACTIONS, "title": "Undeploy",
 		"short": "Take this unit back off the board before the mission starts.",
 		"long": "Only during the pre-mission phase, and only for units drawn from the mission's "

@@ -489,6 +489,31 @@ func test_a_cards_deploy_button_is_refused_once_the_cap_is_full_and_says_why() -
 	push_warning("the cap left nobody in reserve, so the refusal was not exercised")
 
 
+# #1452: a live toggle's tooltip is the glossary's Deploy or Undeploy line, the words the board's own
+# rings use, rather than two sentences of the card's own.
+func test_a_cards_deploy_toggle_reads_the_glossarys_deploy_and_undeploy_lines() -> void:
+	if not await _enter_phase(2):
+		return
+	var placed: PreMissionCard = null
+	for card in _cards():
+		if game.is_deployed(card.unit):
+			placed = card
+	assert_object(placed).override_failure_message("precondition: nobody was deployed").is_not_null()
+	assert_str(placed._deploy_button.tooltip_text).is_equal(
+		UiText.wrap(Glossary.short(Glossary.Term.UNDEPLOY)))
+
+	await _press_deploy(placed)   # one off, so the cap has room and a waiting card's toggle is live
+	var waiting: PreMissionCard = null
+	for card in _cards():
+		if not game.is_deployed(card.unit):
+			waiting = card
+	assert_object(waiting).override_failure_message("precondition: nobody was waiting").is_not_null()
+	assert_bool(waiting._deploy_button.disabled).override_failure_message(
+		"precondition: the cap has room and this toggle is still refused").is_false()
+	assert_str(waiting._deploy_button.tooltip_text).is_equal(
+		UiText.wrap(Glossary.short(Glossary.Term.DEPLOY)))
+
+
 # --- the contract, and the count that moved onto the force ---
 
 # commit_deployment's refusal speaks through TurnBanner, which is a plain child of Game while this
