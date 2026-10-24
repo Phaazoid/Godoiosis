@@ -4,8 +4,9 @@
 # What that buys, one case each below: focus fire (nobody re-spends on a body the plan already
 # downed), finishing (the second member secures a down the first started), opening a combo (a
 # damageless set-up is priced by the swing behind it), counter awareness (a candidate handing the
-# enemy a lethal reply is refused), the board being left as a REAL resolve left it, and a shove that
-# knocks somebody out of their squad outranking any amount of damage (#761).
+# enemy a lethal reply is refused), the board being left as a REAL resolve left it, a shove that
+# knocks somebody out of their squad outranking any amount of damage (#761), and the per-unit door
+# choosing exactly as the squad's pass does (#1445).
 #
 # Fixture conventions follow tests/ai/test_ai_tactics.gd: the Play API's headless board_builder over
 # real TestTiles terrain, pattern-less weapons so Reach falls back to Manhattan 1 (adjacency IS
@@ -290,6 +291,61 @@ func test_a_squad_that_does_not_set_up_combos_fires_the_shock_first() -> void:
 		return
 	assert_object(ordered[0].actor).override_failure_message(
 			"a squad that does not set up combos still opened with the soak").is_same(pair[1])
+
+
+# --- The per-unit door is the same chooser (#1445) ----------------------------------------------
+
+# queue_main_action's ATTACK arm was a chooser of its own until #1445, one that saw only the unit it
+# was asked about, so a set-up there was never priced by the swing behind it. It is the joint pass
+# with one chooser now. The leader carries the soak and a weak plain swing: alone the swing wins, and
+# only the squadmate's shock behind the soak can make the soak the answer.
+func _soak_or_swing(board: Dictionary) -> Dictionary:
+	var pair := _pair(board)
+	var soaker := _elemental_weapon(Elemental.Element.WATER, 0, true)
+	var swing := WeaponAttackData.new()
+	swing.power = 1
+	var extras: Array[WeaponAttackData] = [swing]
+	soaker.template.extra_attacks = extras
+	pair[0].equipped_weapon = soaker
+	pair[1].equipped_weapon = _elemental_weapon(Elemental.Element.SHOCK, 3)
+	var _foe: Unit = _spawn(board, ENEMY, A_CELL, false)
+	return {"pair": pair, "soak": soaker.template.main_attack, "swing": swing}
+
+
+func _door_pick(board: Dictionary, pair: Array[Unit]) -> AttackAction:
+	var attack_only: Array = [BaseAction.ActionType.ATTACK]
+	assert_bool(AITactics.queue_main_action(pair[0], _context(board), board.squad_manager, attack_only)).is_true()
+	var ordered := _attacks_in_order(pair[0].squad)
+	assert_int(ordered.size()).override_failure_message(
+			"the door queued for more than the unit it was asked about: %s" % str(_attack_aims(pair[0].squad))) \
+		.is_equal(1)
+	return ordered[0] if ordered.size() == 1 else null
+
+
+func test_the_per_unit_door_prices_a_set_up_by_the_squadmate_behind_it() -> void:
+	var board: Dictionary = _build_board()
+	var s := _soak_or_swing(board)
+	var aim := _door_pick(board, s.pair)
+	if aim == null:
+		return
+	assert_object(aim.fired_attack).override_failure_message(
+			"the door took the plain swing: it priced the soak alone, blind to the shock behind it") \
+		.is_same(s.soak)
+
+
+# The control: with combos off the same door takes the swing, so the shock is what decided above.
+func test_without_combos_the_per_unit_door_takes_the_plain_swing() -> void:
+	var plain := AIProfile.new()
+	plain.sets_up_combos = false
+	AIProfiles.use_fixtures({"": plain})
+	var board: Dictionary = _build_board()
+	var s := _soak_or_swing(board)
+	var aim := _door_pick(board, s.pair)
+	if aim == null:
+		return
+	assert_object(aim.fired_attack).override_failure_message(
+			"fixture: the swing must win when nothing prices the soak, or the case above measures nothing") \
+		.is_same(s.swing)
 
 
 # --- Law #1: the tie-break is declared, not incidental -------------------------------------------

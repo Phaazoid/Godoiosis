@@ -322,7 +322,11 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 		var queued := false
 		match verb:
 			BaseAction.ActionType.ATTACK:
-				queued = _try_best_attack(unit, board, squad_manager)
+				# The squad's own chooser with this unit as its only chooser (#1445): one member,
+				# priced exactly as the joint pass prices it, lookahead and refusal memory included.
+				var alone: Array[Unit] = [unit]
+				_queue_attacks_jointly(unit.squad, board, squad_manager, alone)
+				queued = unit.has_main_action_queued()
 			BaseAction.ActionType.RESCUE:
 				queued = _try_rescue(unit, board, squad_manager)
 			BaseAction.ActionType.RELOAD:
@@ -340,32 +344,6 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 		if queued:
 			return true
 	return false
-
-# Attack choice (#78, rebuilt #117): probe every selectable+fireable attack, score each aim as its
-# MARGINAL GAIN to the squad's own plan, queue the best. The per-unit door -- one member, deciding
-# alone. The squad walks these jointly instead; see _queue_attacks_jointly.
-static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	if not unit.can_wield_equipped() or unit.squad == null:
-		return false
-	var reactions := ReactionCatalog.get_all()   # hoisted -- a scoring pass resolves many times, and
-	var terrain := TerrainReactionCatalog.get_all()   # each call copies the cached list (#1213)
-	var squad := unit.squad
-	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
-	var alone: Array[Unit] = [unit]
-	var stakes := _stakes_for(squad, board, base_plan)
-	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true,
-			_candidates_by_member(alone, board, base_plan, stakes), stakes)
-	var queued := false
-	if pick != null:
-		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
-		# The board must be back on the real queue before the gate sees it -- see the note at
-		# _queue_attacks_jointly's own restore for what a leftover shove does to the whiff clause.
-		squad_manager.resolve_plan(squad, board, reactions, terrain)
-		queued = squad_manager.queue_action(squad, pick.action)
-	# ...and afterwards, because a hypothetical publishes projections onto units.
-	squad_manager.resolve_plan(squad, board, reactions, terrain)
-	return queued
-
 
 # EVERY member's candidate list, built in one pass over the squad against ONE plan (#709).
 #
@@ -1811,7 +1789,7 @@ static func _fate_can_pay(candidate: AttackAction, plan: ResolvedPlan, profile: 
 static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	var priority: Array = AIArchetype.main_action_priority(squad.archetype)
 	if priority.has(BaseAction.ActionType.ATTACK):
-		_queue_attacks_jointly(squad, board, squad_manager)
+		_queue_attacks_jointly(squad, board, squad_manager, squad.get_members())
 	queue_fallback_actions_for_squad(squad, board, squad_manager)
 
 
@@ -1825,12 +1803,18 @@ static func queue_fallback_actions_for_squad(squad: Squad, board: BoardContext, 
 
 
 # The squad's attacks, chosen together. Each ROUND re-resolves the squad's real plan, scores every
-# remaining member's every candidate as a marginal against it, and queues the single best -- so the
-# second member decides knowing what the first just committed to. Repeats until nothing beats (0,0).
+# remaining chooser's every candidate as a marginal against it, and queues the single best -- so the
+# second member decides knowing what the first just committed to. Repeats until no chooser has a
+# candidate left.
+#
+# `choosers` is who may WIN a round: the whole squad from queue_main_actions_for_squad, one unit from
+# queue_main_action's ATTACK arm (#1445). The candidate table always covers every member, so a
+# set-up is priced by its squadmates' follow-ups either way.
 #
 # Ties resolve to the earlier member and then the earlier candidate (Law #1): _beats is strict, so
 # the first to reach a score keeps it, and both loops walk their own declaration order.
-static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
+static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_manager: SquadManager,
+		choosers: Array[Unit]) -> void:
 	var leader := squad.get_leader()
 	if leader == null or not is_instance_valid(leader):
 		return
@@ -1851,7 +1835,7 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		var stakes := _stakes_for(squad, board, base_plan)
 		var by_member := _candidates_by_member(squad.get_members(), board, base_plan, stakes)
 		var best: _Scored = null
-		for member in squad.get_members():
+		for member in choosers:
 			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member, stakes)
 			if pick != null and (best == null or pick.score.beats(best.score)):
 				best = pick
