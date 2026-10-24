@@ -19,12 +19,12 @@ static var FALL_DAMAGE_PER_LEVEL := 2
 # damage"): +1 per level per weight BAND (#120, dev 2026-10-01). The band rather than the raw number
 # because every unit carries a body weight, so a raw term would raise every fall in the game; band 0
 # is an ordinary body, which therefore falls exactly as it did before BLD existed.
-static func damage_for(units: int, unit: Unit) -> int:
+static func damage_for(units: int, body: UnitState) -> int:
 	if units <= 0:
 		return 0
 	@warning_ignore("integer_division")
 	var levels := units / Terrain.UNITS_PER_LEVEL
 	if levels <= 0:
 		return 0
-	var weight := 0 if unit == null else unit.get_weight()
+	var weight := 0 if body == null else body.get_weight()
 	return levels * (FALL_DAMAGE_PER_LEVEL + Stats.weight_band(weight))

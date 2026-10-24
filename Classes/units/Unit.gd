@@ -716,12 +716,11 @@ func take_damage(damage: int, non_blow := 0):
 	# cannot disagree — Law #2); this function is the only thing that CARRIES them out. Raw HP math
 	# stays on UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
 	# `non_blow` is the part of `damage` that is not a blow (#1174): the drowning top-up, or the whole
-	# of a tile burn or a sinking. Both are judged on the PRE-hit situation, read once.
+	# of a tile burn or a sinking. Both are judged on the PRE-hit body, before anything below moves it.
 	# The limb goes AFTER the damage lands (#1455): the hit lands on the body it was struck at, so gear
 	# the lost limb strips (and the max HP it carried) holds through that hit, as the preview assumes.
-	var s := LethalityRules.situation_for(self)
-	var rung := LethalityRules.predict(s, damage)
-	var takes_limb := LethalityRules.severs(s, damage - non_blow, rung)   # never on KILLED, so never a freed unit
+	var rung := LethalityRules.predict(state, damage)
+	var takes_limb := LethalityRules.severs(state, damage - non_blow, rung)   # never on KILLED, so never a freed unit
 	match rung:
 		ResolvedOutcome.Lethality.NONE:
 			if lifecycle_state != LifecycleState.DEAD:
@@ -741,8 +740,8 @@ func take_damage(damage: int, non_blow := 0):
 		ResolvedOutcome.Lethality.DOWNED:
 			_go_downed()
 	if takes_limb:
-		unit_instance.sever_next_limb()
-		_settle_stat_change()                # a lost limb moves STR/DEX, which can drop the wearer under a gate
+		state.lose_next_limb()               # a lost limb moves STR/DEX, which can drop the wearer under a gate
+		stats_changed.emit()
 
 func heal(amount: int) -> void:
 	# take_damage's sibling: same HP door, no lethality check, clamp handles overheal.

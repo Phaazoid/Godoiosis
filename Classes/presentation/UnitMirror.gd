@@ -834,7 +834,7 @@ static func fall_depth(unit: Unit, heights: BoardHeights) -> float:
 func wade_at(unit: Unit, cell: Vector2i) -> float:
 	if _frame_board == null or unit == null:
 		return 0.0
-	return BoardSpace.WATER_WADE_DEPTH if RulesService.wets_in(cell, unit, _frame_board) else 0.0
+	return BoardSpace.WATER_WADE_DEPTH if RulesService.wets_in(cell, unit.state, _frame_board) else 0.0
 
 
 # The sink a unit is drawn with, eased over WATER_STEP_TIME on the SCALED delta so a hitstop freezes

@@ -321,11 +321,11 @@ statement about level, and does not conflict.
 
 ## Movement
 
-`RulesService.movement_cost(cell, unit, board)` (with a `from` since #257) and `can_traverse(cell, unit, board)` are **cell**
+`RulesService.movement_cost(cell, unit, board)` (with a `from` since #257) and `can_traverse(cell, body, board)` are **cell**
 questions. Every verticality movement rule is an **edge** question — *from where?* — so the rules
 engine grows one:
 
-- **`can_stand(cell)`** — unchanged, the existing cell-scoped answer. *(No function by that name exists; the cell-scoped answer is `can_traverse(cell, unit, board)`, over `BoardContext.is_walkable`.)*
+- **`can_stand(cell)`** — unchanged, the existing cell-scoped answer. *(No function by that name exists; the cell-scoped answer is `can_traverse(cell, body, board)`, over `BoardContext.is_walkable`.)*
 - **`can_step(from, to)`** — new. Same height → ordinary terrain rules. Different height → legal only
   if one of the two cells is a ramp whose axis matches the step direction and whose high/low sides
   line up. **Ramps connect exactly their own CLIMB** (±1 level until #427 slice 2 made steepness

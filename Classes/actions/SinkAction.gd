@@ -22,24 +22,25 @@ var cause: AttackAction = null
 var resolved: ResolvedOutcome = null
 
 
-# `situation` is the unit as the pass has it at `moment`. `wets` is RulesService.wets_in on the ground
-# the deposits leave, less #1092's Chilled exclusion -- asked by the caller, which holds that board.
-static func make(unit: Unit, situation: LethalityRules.Situation, at: Vector2i, melted_by: AttackAction,
+# `body` is the unit's body as the pass has it at `moment`, read and not written; the actor is its unit.
+# `wets` is RulesService.wets_in on the ground the deposits leave, less #1092's Chilled exclusion --
+# asked by the caller, which holds that board.
+static func make(body: UnitState, at: Vector2i, melted_by: AttackAction,
 		when: Moment, wets: bool) -> SinkAction:
 	var sink := SinkAction.new()
-	sink.actor = unit
+	sink.actor = body.unit
 	sink.action_type = BaseAction.ActionType.SINK
 	sink.moment = when
 	sink.cell = at
 	sink.cause = melted_by
 	var outcome := ResolvedOutcome.new()
-	outcome.hp_before = situation.hp
+	outcome.hp_before = body.get_current_hp()
 	# The water takes everything (PlanResolver._resolve_one's drowning, #116). drown_damage is what the
 	# queue row's Drowned badge reads, so the two doors into the water wear one badge.
-	outcome.drown_damage = maxi(0, situation.hp)
+	outcome.drown_damage = maxi(0, outcome.hp_before)
 	outcome.damage = outcome.drown_damage
-	outcome.lethality = LethalityRules.predict(situation, outcome.damage)
-	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, situation.hp, outcome.damage)
+	outcome.lethality = LethalityRules.predict(body, outcome.damage)
+	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, outcome.hp_before, outcome.damage)
 	outcome.popups.append(PlanResolver.DROWNING_POPUP)
 	if wets:
 		outcome.states_added.append(Elemental.State.WET)
