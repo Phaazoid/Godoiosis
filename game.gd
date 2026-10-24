@@ -1863,8 +1863,10 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 	overlay_manager.redraw_projected_units()
 	refresh_action_queue(squad)
 	# has_squadmates too (#1070): every solo unit is its own leader, so this used to draw a cohesion
-	# range round a lone unit whenever it cancelled an order.
-	if unit.is_leader() and squad.has_squadmates():
+	# range round a lone unit whenever it cancelled an order. ANY member of the commanded squad since
+	# #1430 (dev, 2026-10-23), as _repaint_squad_plan draws on any queued order: a tether the plan's
+	# smoke turned red must go back the moment the order that laid it is cancelled.
+	if (unit.is_leader() or squad_manager.active_squad == squad) and squad.has_squadmates():
 		draw_squad_cohesion(squad, squad.leader.get_projected_destination())
 	overlay_manager.redraw_squad_unit_icons(squad)
 
