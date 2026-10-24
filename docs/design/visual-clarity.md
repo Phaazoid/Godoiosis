@@ -1530,7 +1530,7 @@ board* is a play call, not a design one, and would cost `ACTION_DATA` a new fact
 
 The mechanism belongs to the camera contract, not to the menu — see
 [`presentation-effects.md`](presentation-effects.md) → *The camera comes BACK when an order is
-committed*, which holds why the `ai_locked` mirror was the wrong place to reach for, why it snaps
+committed*, which holds why the `ai_locked` mirror *(`playback_locked` since #520)* was the wrong place to reach for, why it snaps
 rather than glides, and the pointer-poll fix that rode along.
 
 What the ring owes it is exactly one call, and **where** that call sits is the whole of the menu's
@@ -3809,7 +3809,7 @@ work with the cream background."*
 | a chrome colour | **a role** — *the text that reads against the card* | **AUTHORED** — near-white on slate INVERTS to near-black on cream |
 
 An inversion has nothing to derive from, which is why the 22 chrome roles are a table and the seven
-elements are a function.
+elements are a function *(34 roles and nine elements today)*.
 
 **It also corrects a line this project had written down as the cost of palettes.** `CLAUDE.md` says a
 palette *"leaves the knob tuning a set nobody is looking at"* — true of `OverlayManager.AIM_PALETTES`,
