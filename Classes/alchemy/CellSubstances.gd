@@ -89,10 +89,12 @@ static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContex
 # Everything here is a real source, so all of it is PLENTY.
 static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext) -> void:
 	var kind := board.terrain_kind_at(cell)
-	# Ice is a floor, not a well (Materia's rule): frozen water offers its ice, through the tile state
-	# below, and not its water.
-	if not (kind == Terrain.Kind.WATER and board.has_tile_state(cell, Terrain.TileState.FROZEN)):
+	# Water is offered only as OPEN water (BoardContext.is_open_water): ice is a floor, not a well, so
+	# frozen water offers its ice, through the tile state below, and not its water.
+	if kind != Terrain.Kind.WATER:
 		_add(found, SubstanceMap.of_kind(kind), PLENTY)
+	if board.is_open_water(cell):
+		_add(found, SubstanceMap.of_kind(Terrain.Kind.WATER), PLENTY)
 	if ON_DIRT.has(kind):
 		_add(found, SubstanceMap.of_kind(Terrain.Kind.DIRT), PLENTY)
 	for state: Terrain.TileState in board.tile_states_at(cell):

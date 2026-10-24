@@ -20,14 +20,13 @@ const SHOCK_ARC_RANGE := 3
 
 # Does the current pass through this cell?
 #
-# Water conducts unless it is FROZEN -- ice is dry ground, so a lake somebody iced over is the
-# counterplay to this whole mechanic (dev, 2026-09-10). A WET unit conducts wherever it stands, ice
-# included: the tile's state says what the GROUND does, never what a soaked body does.
+# Open water conducts (BoardContext.is_open_water), so a lake somebody iced over is the counterplay
+# to this whole mechanic (dev, 2026-09-10). A WET unit conducts wherever it stands, ice included: the
+# tile's state says what the GROUND does, never what a soaked body does.
 static func conducts(cell: Vector2i, board: BoardContext, wet: Dictionary[Vector2i, bool]) -> bool:
 	if wet.has(cell):
 		return true
-	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
-		and not board.has_tile_state(cell, Terrain.TileState.FROZEN)
+	return board.is_open_water(cell)
 
 
 # Which cells a WET unit occupies -- the half of the conductor set that is not terrain.
