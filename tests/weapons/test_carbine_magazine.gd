@@ -3,8 +3,9 @@
 # spends it on the MAIN and has no secondary at all, so an empty magazine leaves the weapon with
 # nothing to fire until a Reload main action. That difference is what this suite pins — the shared
 # seam (is_attack_fireable / consume_readiness_for / can_reload / reload) is unchanged, only the
-# family's reading of it. Also covers the two gates the empty state newly reaches: the Attack menu
-# entry (Unit.can_fire_default_attack) and countering (Unit.attack_source_can_counter).
+# family's reading of it. Also covers the two questions the empty state newly reaches: firing the
+# default attack (Unit.can_fire_default_attack; the ring lists that row greyed, #1409) and countering
+# (Unit.attack_source_can_counter).
 extends GdUnitTestSuite
 
 const P := preload("res://tests/support/shape_fixtures.gd")
@@ -116,8 +117,8 @@ func _armed_unit(ranged: bool = false, faction: Team.Faction = PLAYER, cell: Vec
 	return unit
 
 func test_empty_carbine_cannot_fire_its_default_attack() -> void:
-	# Attack always fires the DEFAULT attack since the 2026-07-24 menu refactor, so the menu entry
-	# has to gate on that one attack — otherwise the player opens targeting for an order
+	# Attack always fires the DEFAULT attack since the 2026-07-24 menu refactor, so the menu row
+	# has to grey on that one attack (#1409) — otherwise the player opens targeting for an order
 	# AttackAction.actor_can_perform will then refuse (Law #3).
 	var unit := _armed_unit()
 	assert_bool(unit.can_fire_default_attack()).is_true()

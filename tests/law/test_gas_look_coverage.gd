@@ -51,6 +51,18 @@ func test_every_per_kind_shader_array_holds_every_kind() -> void:
 				% [path, uniform, int(found.get(uniform, 0)), Gas.Kind.size(), need]).is_greater_equal(need)
 
 
+# The cap under the arrays (#1427): GasMirror's cells texture carries a cell's kinds as one byte of flags
+# (Gas.kind_mask into an RGBA8 channel), so a ninth kind would wrap silently, and widening the arrays
+# above would not help. Every kind present at once must still fit the byte.
+func test_every_kind_fits_the_cells_texture_byte() -> void:
+	var all := 0
+	for kind: Gas.Kind in Gas.Kind.values():
+		all = Gas.with_level(all, kind, Gas.Level.THIN)
+	assert_int(Gas.kind_mask(all)).override_failure_message(
+		"%d gas kinds need a %d-bit kind mask, and GasMirror's cells texture packs it in one byte: widen that packing (and the shaders that read it) before adding a kind"
+			% [Gas.Kind.size(), Gas.Kind.size()]).is_less_equal(0xFF)
+
+
 func test_every_drawing_fits_the_shared_canvas() -> void:
 	for kind: Gas.Kind in Gas.Kind.values():
 		var look := GasLook.for_kind(kind)

@@ -138,11 +138,14 @@ func test_the_note_appears_when_the_watch_was_armed_through_the_real_path() -> v
 	var watch_attack := WeaponAttackData.new()
 	watch_attack.display_name = "Overwatch"
 	watch_attack.can_overwatch = true
+	# The aim is two cells out, so the watch needs the range to declare it (the queue asks can_aim_at).
+	watch_attack.max_range = 2
 	var weapon := watcher.get_equipped_weapon() as WeaponInstance
 	weapon.template.extra_attacks = [watch_attack]
 	watcher.active_attack = watch_attack
 
-	game.queue_overwatch(watcher, WATCHED[0])
+	assert_bool(game.queue_overwatch(watcher, WATCHED[0])).override_failure_message(
+			"the queue refused the watch -- its aim is not declarable from the watcher").is_true()
 	await game.order_executor.execute_orders(watcher)
 	assert_object(watcher.watch).override_failure_message(
 			"the real declare->execute path armed no watch").is_not_null()

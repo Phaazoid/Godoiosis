@@ -86,7 +86,9 @@ list its verb fires from — `Unit.fire_attack_named` / `Unit.watch_attack_named
 replay viewer uses — so a watch-only attack cannot be fired and a fire attack cannot stand watch
 (#590). The pick is armed for that one command and cleared after, the way the menu's aiming mode
 clears it, so a later unnamed `attack` fires the default again. An attack that cannot fire right now
-is refused in `attack_block_reason`'s words, the reason the menu greys its row with. The preview and
+is refused in `attack_block_reason`'s words, the reason the menu greys its row with. On a unit whose main is a watch
+(#1440), an unnamed `attack` refuses and points to `overwatch`, and an unnamed `legal_targets`
+answers the watch's aims, as the ring's Attack row would; the unit line marks that main `(watch)`. The preview and
 `legal_targets` name the attack they answer for.
 
 ```bash

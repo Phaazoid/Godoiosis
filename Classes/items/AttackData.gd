@@ -219,13 +219,14 @@ func hits_units() -> bool:
 	return targets == EquippableData.TargetMode.UNIT or targets == EquippableData.TargetMode.BOTH
 
 # May this attack ever answer a hit? A counter strikes back at a UNIT, so an attack that touches none
-# has nothing to answer with (#1135), and a heal is never a counter (#148 repealed, dev 2026-09-28).
-# Unit.attack_source_can_counter reads it; hidden_fields hides the can_counter box when it is moot.
-func can_ever_counter() -> bool:
-	return can_counter and not _counter_is_moot()
+# has nothing to answer with (#1135), a heal is never a counter (#148 repealed, dev 2026-09-28), and
+# neither is a watch (#1440). Whether it IS a watch is the caller's composed answer, mods included
+# (Unit.attack_can_overwatch); hidden_fields passes the authored flag, which is what the editor edits.
+func can_ever_counter(is_watch: bool) -> bool:
+	return can_counter and not _counter_is_moot(is_watch)
 
-func _counter_is_moot() -> bool:
-	return heals or not hits_units()
+func _counter_is_moot(is_watch: bool) -> bool:
+	return heals or not hits_units() or is_watch
 
 # The attacks this one's chain fires, one per LEVEL below it -- its payload, that payload's payload,
 # and so on to the end. The resolver walks it level by level and the editor's fan-out readout reads
@@ -401,8 +402,8 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #                           delivered. deliver() is that rule's one home.
 #   payload_turns        -- read only when THIS attack has no shape (a shaped one always turns its
 #                           payloads onward) and the payload HAS one (a single cell has no facing).
-#   can_counter          -- read only through can_ever_counter, which a heal or a map-only attack
-#                           answers false whatever the box says.
+#   can_counter          -- read only through can_ever_counter, which a heal, a map-only attack or
+#                           a watch answers false whatever the box says.
 # `scaling_blend` is named from here though only WeaponAttackData has it: the RULE is this class's
 # (deals_no_damage suppresses scaling, per its own comment), and a name matching no row is ignored.
 #
@@ -422,7 +423,7 @@ func hidden_fields() -> PackedStringArray:
 		hidden.append("damage_kind")
 	if attack_shape != null or payload == null or payload.attack_shape == null:
 		hidden.append("payload_turns")
-	if _counter_is_moot():
+	if _counter_is_moot(can_overwatch):
 		hidden.append("can_counter")
 	# ...and the look section is absent unless this attack carries an element that HAS one (#900).
 	# Its heading goes with it: a section drawn as a bare title over nothing is worse than no
@@ -469,5 +470,5 @@ static func property_tips() -> Dictionary:
 		"payload": "Another attack this one DROPS where it hits, which then goes off as a whole attack of its own: its own damage, element, shove and shape, with the thrower still the attacker.\nA unit attack drops one per unit it hits (a miss drops nothing). A tile attack drops one per tile it strikes, whether anyone is there or not.\nOn a unit it goes off where they LAND, after this hit's shove. A payload may carry a payload of its own, to any depth, but never back round to an attack already in the chain.",
 		"payload_turns": "Which way the payload's shape faces. On, it faces the way this attack was going. Off, it lands as drawn, top of the grid to board north.\nOnly asked of an attack with no shape of its own: a shaped attack always turns its payloads the way it was travelling.",
 		"gases": "The GAS this attack leaves on every tile it strikes, and how thick: thin, medium or thick per gas, added to what is already there and capped at thick. None leaves none of that gas.\nIt lands whatever Targets says, on empty tiles and occupied ones alike, but never where gas cannot be -- no ground, a hole, or a tile a unit could not stand on that is not water.",
-		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
+		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it never counters and the AI never fires it. As a weapon's main, its Attack row stands the watch. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

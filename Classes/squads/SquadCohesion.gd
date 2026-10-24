@@ -18,7 +18,8 @@ class_name SquadCohesion
 # TWO FORMS, and keeping them consistent is the whole job: `in_range` decides (validator, solver,
 # squad-up gates, the ejection sweep), `cells`/`field` draw and iterate (overlays, the solver's
 # dilation). Both read one `field`, so they cannot drift -- pinned by
-# tests/squad/test_squad_cohesion.gd.
+# tests/squad/test_squad_cohesion.gd. `hops` is that field read at ONE cell (Group Move's trailing
+# arrow, #1449), the same walk stopped as soon as it gets there.
 #
 # Cost: the walk is bounded at COH, so a field is ~2*COH^2 cells (~41 at COH 4) -- the depth-bounded
 # shape docs/performance.md measured as cheaper than the compute_move_range call beside it. Callers
@@ -45,8 +46,14 @@ static func field_of(leader: Unit, center: Vector2i, member: Unit, board: BoardC
 # The walk itself at a GIVEN reach, cell -> path distance. For a caller that walks from somewhere other
 # than the leader's cell (GroupMoveSolver.stranding walks from the member's, path distance being
 # symmetric) and so must compare each distance with reach_at at the leader's end itself.
-static func field_within(reach: int, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
-	return RulesService.path_hops(center, board, member, maxi(reach, 0))
+static func field_within(reach: int, center: Vector2i, member: Unit, board: BoardContext,
+		until: Dictionary = {}) -> Dictionary:
+	return RulesService.path_hops(center, board, member, maxi(reach, 0), until)
+
+# How far `cell` lies inside `member`'s bubble around `center`, or RulesService.UNREACHABLE outside it.
+static func hops(squad: Squad, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> int:
+	return int(field_within(reach_at(squad.leader, center, board), center, member, board, { cell: true }) \
+		.get(cell, RulesService.UNREACHABLE))
 
 # How far this leader's leash reaches when it stands at `center`: reach_in, with the gas lying there.
 static func reach_at(leader: Unit, center: Vector2i, board: BoardContext) -> int:

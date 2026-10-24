@@ -127,6 +127,21 @@ func test_every_offered_item_draws_a_row_in_the_inventory_picker() -> void:
 				"'%s' is offered by the catalog and no row draws it" % name).is_true()
 
 
+# #1414. The picker's rows ARE ItemCatalog's, in its order: the editor kept a walk of its own, and a
+# kind added to ItemCatalog.SOURCES reached the rosters and not this dropdown.
+func test_the_inventory_picker_lists_exactly_the_item_catalog() -> void:
+	var tool_node: UnitEditorTool = auto_free(UnitEditorTool.new())
+	tool_node._inventory.resize(Unit.MAX_INVENTORY_SIZE)
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	tool_node._add_inventory_section(box)
+
+	var picker := _first_option_button(box)
+	var listed: Array = []
+	for i in range(1, picker.item_count):   # option 0 is "(empty)"
+		listed.append(picker.get_item_text(i))
+	assert_array(listed).is_equal(ItemCatalog.by_name().keys())
+
+
 func _first_option_button(node: Node) -> OptionButton:
 	for child in node.get_children():
 		if child is OptionButton:

@@ -68,7 +68,9 @@ resources were always better placed to state.
 Worth knowing at both ends: a weapon attack with **no weapon in hand** carries nothing, which is the
 bare-fists reading the resolver has always taken and is deliberately not its authored element — except
 a PAYLOAD (`elements_of(…, thrown)`, #1058), which delivers its own authored element with or without a
-weapon; and
+weapon. Anything holding the `AttackAction` asks `PlanResolver.source_elements(action)`, which reads
+`thrown` off `dropped_by`, never `elements_of` off the action's parts: `ArcLightning` did, and drew no
+bolt for a shock payload the flood had arced through (#1434); and
 an attack that gains an element only from a **mod** authors nothing, so it can carry no per-attack
 look (`presentation-effects.md` → *An ATTACK may author what its element looks like*).
 

@@ -14,11 +14,28 @@ const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, 
 # May a unit be PLACED here? spawn_unit's gate, and the pre-mission phase's on both hosts (#46):
 # on the map, somewhere a unit may stand (unless it is a body, #116), and nobody already there.
 static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) -> bool:
+	return spawn_block_reason(board, cell, is_body) == ""
+
+# WHY can_spawn_at refuses -- "" means it does not. Its own function so BoardLint can say which
+# clause a unit fails without re-asking any of them (#1432).
+#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
+static func spawn_block_reason(board: BoardContext, cell: Vector2i, is_body := false) -> String:
 	if board.grid.get_cell_tile_data(cell) == null:
-		return false
+		return "That cell is off the map."
 	if not is_body and not board.is_walkable(cell):
-		return false
-	return board.unit_at_cell(cell) == null
+		return "Nothing may stand on that cell."
+	if board.unit_at_cell(cell) != null:
+		return "Another unit already stands there."
+	return ""
+
+# May a unit be placed here WHILE A PLAN IS QUEUED (#1432)? can_spawn_at, and no queued plan ends a
+# unit here either: the cell is taken if someone stands on it now OR will once the plan runs. The dev
+# tools place mid-battle, and both halves are real there -- a unit dropped on a queued destination
+# breaks that move, and one dropped on the cell its unit plans to leave blocks it. A load or a
+# deployment has no plan, so there this is can_spawn_at exactly. The dev cursor and every dev
+# placement ask it, so the cursor cannot promise a cell the click refuses.
+static func can_place_at(board: BoardContext, cell: Vector2i) -> bool:
+	return can_spawn_at(board, cell) and board.projected_unit_at_cell(cell) == null
 
 # WHY this unit may not act at all -- "" means it is standing. Downed and dead units can't be
 # commanded (will-and-death.md). Its own question because the order chokepoint asks it without the
@@ -83,18 +100,15 @@ static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
 #   Waterwalk -- the holder "stands on the surface instead" (Glossary's WATER_TILE entry). Asked of
 #                the ABILITY, not through can_traverse, which answers this for deep water and not
 #                for shallow -- shallow is walkable to everyone.
-#   FROZEN    -- ice is dry ground (dev, 2026-09-10). Read the ground AS IT STANDS WHEN THE UNIT
-#                ARRIVES: cell effects apply after the whole attack phase (OrderExecutor), so a lake
-#                THIS pass froze is still water when this pass's shove lands in it, and a walk or a
-#                shove reads the live store. drowns_in reads live for the same reason. The one caller
-#                asking AT the deposits' moment -- a unit the melt sinks (#922) -- is handed the
-#                landed board instead, which is the same rule, not an exception to it.
+#   FROZEN    -- ice is dry ground (dev, 2026-09-10): the cell half, BoardContext.is_open_water
+#                (#1444). Read the ground AS IT STANDS WHEN THE UNIT ARRIVES: cell effects apply
+#                after the whole attack phase (OrderExecutor), so a lake THIS pass froze is still
+#                water when this pass's shove lands in it, and a walk or a shove reads the live
+#                store. drowns_in reads live for the same reason. The one caller asking AT the
+#                deposits' moment -- a unit the melt sinks (#922) -- is handed the landed board
+#                instead, which is the same rule, not an exception to it.
 static func wets_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
-	if board.terrain_kind_at(cell) != Terrain.Kind.WATER:
-		return false
-	if board.has_tile_state(cell, Terrain.TileState.FROZEN):
-		return false
-	return not unit.has_live_ability(Abilities.Id.WATERWALK)
+	return board.is_open_water(cell) and not unit.has_live_ability(Abilities.Id.WATERWALK)
 
 # What standing here costs THIS unit at end of turn (#892). Terrain.occupant_damage answers the
 # cell-only form; this is the per-unit layer over it, exactly as can_traverse is over is_walkable --

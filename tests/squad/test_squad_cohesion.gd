@@ -36,6 +36,9 @@ const DEX_FAST := 10    # MOV 6
 # Case 1 board or make an out-of-range order legal. It did exactly that when the default went 3 -> 4
 # (2026-08-06), and the same fixtures had been one point away from silent all along.
 const FIXTURE_COH := 3
+# The leash the trailing-past-a-wall boards (#1449) set instead: long enough for a member to walk
+# round a three-cell wall and still be in the squad.
+const WALL_COH := 6
 
 var _main: Node
 var game: Node2D
@@ -149,6 +152,70 @@ func test_a_member_that_keeps_up_is_not_marked_as_trailing() -> void:
 	assert_object(member_move).is_not_null()
 	assert_bool(member_move.is_trailing) \
 		.override_failure_message("a member that kept formation was marked as trailing").is_false()
+
+
+# Trailing is measured in WALKING distance, the cohesion metric, never grid steps (#1449). Each wall
+# board below is built so the two metrics disagree about the one move the solver makes, and
+# _group_move_past_a_wall checks that premise. Falsified by restoring the Manhattan compare: both flip.
+func _group_move_past_a_wall(member_dex: int, member_offset: Vector2i, walls: Array[Vector2i],
+		destination: Vector2i, walk_closer: bool) -> MoveAction:
+	var board: Dictionary = await _squad(5, member_dex, member_offset)
+	board.leader.unit_instance.stats[Stats.Stat.COH] = WALL_COH
+	for cell in walls:
+		game.grid.erase_cell(cell)
+	_group_move_to(board.leader, destination)
+
+	assert_bool(game.squad_manager.squad_has_invalid_actions(board.squad)) \
+		.override_failure_message("the group move was refused").is_false()
+	var member_move := _move_for(board.member)
+	assert_object(member_move).override_failure_message("the member was given no order").is_not_null()
+	var end := member_move.get_destination()
+	var walk_was := _walk(member_offset, Vector2i.ZERO, board.member)
+	var walk_now := _walk(end, destination, board.member)
+	var grid_was := GridUtils.manhattan_distance(member_offset, Vector2i.ZERO)
+	var grid_now := GridUtils.manhattan_distance(end, destination)
+	var premise := (walk_now < walk_was and grid_now > grid_was) if walk_closer \
+		else (walk_now > walk_was and grid_now <= grid_was)
+	assert_bool(premise).override_failure_message("fixture: the metrics agree about the move to %s (walk %d -> %d, grid %d -> %d)"
+		% [end, walk_was, walk_now, grid_was, grid_now]).is_true()
+	return member_move
+
+func _walk(from: Vector2i, to: Vector2i, member: Unit) -> int:
+	return RulesService.path_hops(from, game._board(), member, -1, { to: true }) \
+		.get(to, RulesService.UNREACHABLE)
+
+# Behind a three-cell wall: two grid steps from the leader but six walking. The member ends three grid
+# steps away but only three walking, so it closed the gap.
+func test_a_member_that_closes_the_walk_is_not_trailing_however_far_by_grid() -> void:
+	var walls: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)]
+	var member_move: MoveAction = await _group_move_past_a_wall(DEX_SLOW, Vector2i(2, 0), walls, Vector2i(0, -4), true)
+	assert_bool(member_move.is_trailing) \
+		.override_failure_message("a member that closed the walking gap was marked as trailing").is_false()
+
+# The mirror: two steps from the leader on open ground, and it keeps its grid offset, but a single
+# wall cell now stands between them, so the walk grew from two to four.
+func test_a_member_that_keeps_its_grid_offset_behind_a_wall_is_trailing() -> void:
+	var walls: Array[Vector2i] = [Vector2i(-1, -4)]
+	var member_move: MoveAction = await _group_move_past_a_wall(5, Vector2i(-2, 0), walls, Vector2i(0, -4), false)
+	assert_bool(member_move.is_trailing) \
+		.override_failure_message("a member that fell behind by walking was not marked").is_true()
+
+# A member already outside the bubble where the leader starts is out of contact, not falling behind:
+# the solver reads it as not trailing rather than measuring from a distance the field never reached.
+func test_a_member_out_of_contact_at_the_start_is_not_trailing() -> void:
+	var board: Dictionary = await _squad(5, 5, Vector2i(0, 7))
+	var start_walk := _walk(Vector2i(0, 7), Vector2i.ZERO, board.member)
+	assert_int(start_walk).override_failure_message("fixture: the member starts in contact") \
+		.is_greater(board.squad.get_max_squad_range())
+
+	var moves := GroupMoveSolver.plan(board.squad, Vector2i(0, 3), game._board())
+	var member_move: MoveAction = null
+	for move in moves:
+		if move.actor == board.member:
+			member_move = move
+	assert_object(member_move).override_failure_message("the member was given no order").is_not_null()
+	assert_bool(member_move.is_trailing) \
+		.override_failure_message("a member out of contact at the start was marked as trailing").is_false()
 
 
 # ------------------------------------------------------------------------------
@@ -388,6 +455,7 @@ func test_the_drawn_bubble_and_the_enforced_bubble_are_the_same_set() -> void:
 	var drawn := {}
 	for cell in SquadCohesion.cells(squad, leader_cell, member, game._board()):
 		drawn[cell] = true
+	var field := SquadCohesion.field(squad, leader_cell, member, game._board())
 
 	# Sweep a window comfortably wider than the bubble, so both an omission and an over-draw fail.
 	var reach := squad.get_max_squad_range()
@@ -400,6 +468,10 @@ func test_the_drawn_bubble_and_the_enforced_bubble_are_the_same_set() -> void:
 			assert_bool(drawn.has(cell)) \
 				.override_failure_message("drawn/enforced disagree at %s" % cell) \
 				.is_equal(SquadCohesion.in_range(squad, leader_cell, member, cell, game._board()))
+			# The one-cell read (#1449) stops its walk early; it must still answer what the field does.
+			assert_int(SquadCohesion.hops(squad, leader_cell, member, cell, game._board())) \
+				.override_failure_message("hops and the field disagree at %s" % cell) \
+				.is_equal(int(field.get(cell, RulesService.UNREACHABLE)))
 	assert_int(checked).is_greater(reach * reach)   # the sweep really covered the bubble and past it
 
 

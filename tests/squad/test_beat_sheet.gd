@@ -1010,3 +1010,85 @@ func test_an_arm_fired_shot_puts_its_ground_on_stage() -> void:
 			"the arm-fired shot's ground is not on stage, so it fires standing on a hole") \
 		.contains([watcher.movement.cell, squatter.movement.cell])
 	_break_shots(plan)
+
+
+# --- a verb whose actor the pass felled (#1454) ---------------------------------------------------
+#
+# execute_orders drops a side-channel order at collection once the pass has felled its actor (#1005),
+# so the sheet must too, or battle zoom lifts the stage for a rescue nobody performs and holds on it.
+# Felled by a REAL mid-walk watch shot, never force_down(): the stamp is the pass's own verdict, and
+# a hand-downed rescuer would reach it by setting state rather than through the resolve.
+
+# A rescuer who walks into a watch on the way to a downed body. `bloodied` leaves them one hit from
+# going down; otherwise the same shot lands and they stand. Returns [plan, rescuer, body, rescue].
+func _resolve_a_rescue_through_a_watch(bloodied: bool) -> Array:
+	var watcher := _watcher_over(Vector2i(2, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
+	if bloodied:
+		rescuer.take_damage(rescuer.get_current_hp() - 1)
+	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 1))
+	body.force_down()
+	var path: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+	var move := MoveAction.new()
+	move.init(rescuer, path, null)
+	rescuer.squad._queue_action(move)
+	var rescue := _rescue(rescuer, body)
+	rescuer.squad._queue_action(rescue)
+
+	var plan := _sm.resolve_plan(rescuer.squad, _board_with([watcher, rescuer, body]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the walk crossed no watch -- the fixture is not exercising the rule").is_equal(1)
+	return [plan, rescuer, body, rescue]
+
+
+func test_a_rescuer_the_pass_felled_gets_no_coda_and_stages_nothing() -> void:
+	var resolved := _resolve_a_rescue_through_a_watch(true)
+	var plan: ResolvedPlan = resolved[0]
+	var rescuer: Unit = resolved[1]
+	var body: Unit = resolved[2]
+	var rescue: RescueAction = resolved[3]
+	assert_int(PlanResolver.projected_lifecycle(rescuer, plan.hypo)).override_failure_message(
+			"the watch shot did not fell the rescuer -- fixture, not mechanic") \
+		.is_not_equal(Unit.LifecycleState.ACTIVE)
+	assert_bool(rescue.is_inert()).override_failure_message(
+			"the resolver never stamped the felled rescuer's order (#1005), so the sheet is not under test") \
+		.is_true()
+
+	var sheet := BeatSheet.read(rescuer.squad, plan)
+	assert_int(sheet.codas(BaseAction.ActionType.RESCUE).size()).override_failure_message(
+			"a rescue the pass never plays still earned a coda -- the camera holds on a body nobody lifts") \
+		.is_equal(0)
+	assert_bool(sheet.cells.has(body.get_projected_destination()) \
+			or sheet.cells.has(rescuer.get_projected_destination())).override_failure_message(
+			"the unplayed rescue still staged its ground: %s" % [sheet.cells]) \
+		.is_false()
+	# The rescue was this pass's only main action -- a walk stages nothing, and a mid-walk shot plays
+	# on the board -- so an empty set is _shows_a_fight's half of the bug: no tear-out at all.
+	assert_array(sheet.cells).override_failure_message(
+			"nothing that plays is a main action, yet ground reached the stage: %s" % [sheet.cells]) \
+		.is_empty()
+	_break_shots(plan)
+
+
+# The control: the same pass with a rescuer who survives the shot still plays the rescue, so its coda
+# and its ground stay. Over-reaching the skip (by the pass, or by the shot) reds this.
+func test_a_rescuer_who_survives_the_watch_keeps_its_coda_and_its_stage() -> void:
+	var resolved := _resolve_a_rescue_through_a_watch(false)
+	var plan: ResolvedPlan = resolved[0]
+	var rescuer: Unit = resolved[1]
+	var body: Unit = resolved[2]
+	var rescue: RescueAction = resolved[3]
+	assert_int(PlanResolver.projected_lifecycle(rescuer, plan.hypo)).override_failure_message(
+			"the watch shot felled a healthy rescuer -- the control proves nothing") \
+		.is_equal(Unit.LifecycleState.ACTIVE)
+	assert_bool(rescue.is_inert()).is_false()
+
+	var sheet := BeatSheet.read(rescuer.squad, plan)
+	var codas := sheet.codas(BaseAction.ActionType.RESCUE)
+	assert_int(codas.size()).override_failure_message(
+			"a live rescuer lost its coda -- the skip reaches past felled actors").is_equal(1)
+	assert_object(codas[0].subject()).is_same(body)
+	assert_array(sheet.cells).override_failure_message(
+			"a live rescue stopped staging the ground the body is lifted from") \
+		.contains([body.get_projected_destination()])
+	_break_shots(plan)

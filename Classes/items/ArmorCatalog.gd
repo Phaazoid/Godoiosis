@@ -9,6 +9,6 @@ const VARIANT_DIR := "res://Resources/Armor/"
 static func get_variants() -> Dictionary:
 	return ResourceCatalog.by_name(VARIANT_DIR, ArmorData)
 
-# Authored armor -- for the unit editor's equip list (mirrors WeaponCatalog/RuneCatalog.get_editable).
+# Authored armor by name. The editors' list is ItemCatalog.by_name, which walks this folder itself.
 static func get_editable() -> Dictionary:
 	return get_variants()

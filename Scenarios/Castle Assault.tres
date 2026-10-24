@@ -13,6 +13,7 @@
 [ext_resource type="Resource" uid="uid://cedpdcssc3i8a" path="res://Resources/TransmutationData/Zap Cannon.tres" id="8_gscw2"]
 [ext_resource type="Texture2D" uid="uid://c6r5capep2p0x" path="res://Art/Units/MapSprites/Warlock_Moving.png" id="8_l5o8g"]
 [ext_resource type="Resource" uid="uid://df4pvueay4oiy" path="res://Resources/TransmutationData/Fireball.tres" id="9_4ji6m"]
+[ext_resource type="Resource" uid="uid://dn3qgvwa0d7r3" path="res://Resources/TransmutationData/Greater Fireball.tres" id="9_8jbv5"]
 [ext_resource type="Texture2D" uid="uid://dhug452laj63b" path="res://Art/Units/MapSprites/Black Knight_B.png" id="9_sclll"]
 [ext_resource type="Texture2D" uid="uid://bu5m2fk2c8n68" path="res://Art/Units/MapSprites/Warlock.png" id="10_05mom"]
 [ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="10_jydfm"]
@@ -47,7 +48,7 @@ distance = 13.401895
 [sub_resource type="Resource" id="Resource_d0hyj"]
 script = ExtResource("28_8jbv5")
 size = 2
-inscriptions = Array[ExtResource("25_facq7")]([ExtResource("8_gscw2"), ExtResource("9_4ji6m")])
+inscriptions = Array[ExtResource("25_facq7")]([ExtResource("8_gscw2"), ExtResource("9_8jbv5")])
 temper = 1
 display_name = "Lightning Tome"
 weight = 2

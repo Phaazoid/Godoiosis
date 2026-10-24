@@ -210,7 +210,7 @@ func _seed_starting_kit(source: UnitData) -> void:
 			# variant .tres instead.
 			push_warning("%s: starting item '%s' is a base-class WeaponInstance for a subclassed family" % [get_unit_name(), granted.display_name])
 		if not add_item(granted):
-			push_warning("%s: inventory full — starting item '%s' dropped" % [get_unit_name(), authored.display_name])
+			push_warning("%s: starting item '%s' dropped — %s" % [get_unit_name(), authored.display_name, add_block_reason(granted)])
 			continue
 		slot_for_kit_index[i] = inventory.find(granted)
 
@@ -286,8 +286,8 @@ func add_block_reason(item: Item) -> String:
 	# the row tooltip all get the same sentence -- and it names the door that does work instead of only
 	# saying no.
 	#
-	# #812 owns the two seeding doors that never ask this at all: UnitData.starting_inventory and
-	# ScenarioUnitEntry.inventory are both Array[Item] and reach add_item directly.
+	# The two seeding doors, UnitData.starting_inventory and ScenarioUnitEntry.inventory, are both
+	# Array[Item] and reach it through add_item (#1412): an authored mod there is dropped with a warning.
 	if item is WeaponModData:
 		return "A mod is fitted to a weapon, not carried — open the weapon's spaces to fit it."
 	for slot: Item in inventory:
@@ -296,21 +296,19 @@ func add_block_reason(item: Item) -> String:
 	return "%s is carrying %d of %d." % [get_unit_name(), MAX_INVENTORY_SIZE, MAX_INVENTORY_SIZE]
 
 func add_item(item: Item) -> bool:
-	for i in range(inventory.size()):
-		if inventory[i] == null:
-			inventory[i] = item
+	# Derived, the shape remove_item has (#1412): it ran its own free-slot loop and took a loose mod.
+	if add_block_reason(item) != "":
+		return false
+	inventory[inventory.find(null)] = item
 
-			# Auto-equip the first WEAPON-shaped equippable only. ArmorData is an EquippableData
-			# too, but it fills a different slot -- auto-equipping it here would "arm" a unit with
-			# a vest and shadow the real weapon they pick up next. Armor is never auto-worn: the
-			# wear gate makes silent auto-wear ambiguous, so wearing is always an explicit act.
-			# Routed through the one gated door (#157): a dead rune lands carried, not equipped.
-			if equipped_weapon == null and item is EquippableData and not item is ArmorData:
-				set_equipped_weapon(item)
-
-			return true
-
-	return false
+	# Auto-equip the first WEAPON-shaped equippable only. ArmorData is an EquippableData too, but it
+	# fills a different slot -- auto-equipping it here would "arm" a unit with a vest and shadow the
+	# real weapon they pick up next. Armor is never auto-worn: the wear gate makes silent auto-wear
+	# ambiguous, so wearing is always an explicit act. Routed through the one gated door (#157): a
+	# dead rune lands carried, not equipped.
+	if equipped_weapon == null and item is EquippableData and not item is ArmorData:
+		set_equipped_weapon(item)
+	return true
 
 func get_map_sprite_texture() -> Texture2D:
 	if map_sprite == null:
@@ -520,12 +518,26 @@ func _gear_modifier(stat: Stats.Stat) -> int:
 # number they get.
 func _gear_modifier_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> int:
 	var total := 0
-	if armor != null:
-		total += armor.stat_modifiers.get(stat, 0)
+	for term: Array in _gear_terms_for(stat, armor, weapons):
+		total += term[1]
+	return total
+
+# The walk's terms one source at a time, [source Item, delta], skipping a source that moves nothing.
+# The sum above is built FROM this, so a readout that itemizes the gear stage (#1410) and the number
+# it explains are one walk and cannot disagree.
+func _gear_terms_for(stat: Stats.Stat, armor: ArmorData, weapons: Array[WeaponInstance]) -> Array[Array]:
+	var terms: Array[Array] = []
+	if armor != null and armor.stat_modifiers.get(stat, 0) != 0:
+		terms.append([armor, armor.stat_modifiers[stat]])
 	for weapon in weapons:
 		for mod in weapon.active_modules(self):
-			total += mod.stat_modifiers.get(stat, 0)
-	return total
+			if mod.stat_modifiers.get(stat, 0) != 0:
+				terms.append([mod, mod.stat_modifiers[stat]])
+	return terms
+
+# The live gear's terms: the worn piece, then every mod _mod_sources says contributes.
+func gear_terms(stat: Stats.Stat) -> Array[Array]:
+	return _gear_terms_for(stat, worn_armor, _mod_sources())
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
@@ -1464,11 +1476,12 @@ func attack_can_overwatch(attack: AttackData) -> bool:
 # never the live selection — see that method's header for why. Since #84 the counter attack must
 # also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
 # Stab requires_readiness) can't counter with an attack the menu already refuses. A counter that
-# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal or a
-# map-only attack never counters (AttackData.can_ever_counter, #1135).
+# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal, a
+# map-only attack or a watch never counters (AttackData.can_ever_counter, #1135, #1440), and the watch
+# is asked composed, so a mod that makes the main a watch is one more route to the same rule.
 func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
-	return atk != null and atk.can_ever_counter() and is_attack_fireable(atk)
+	return atk != null and atk.can_ever_counter(attack_can_overwatch(atk)) and is_attack_fireable(atk)
 
 # Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
 # can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers
@@ -1514,11 +1527,11 @@ func has_any_fireable_attack() -> bool:
 			return true
 	return false
 	
-# Can the ATTACK entry offer anything? It gates on the ONE default attack, which the action ring
-# then lists by its own name (#467 — there is no generic "Attack" row any more). Deliberately NOT
-# get_fired_attack(): that returns a live active_attack, i.e. an aiming cursor left over from a
-# previous aim, so the gate would judge the entry by an attack it will never fire (#102).
-# A weapon with NO main attack (the #80 data-rot shape) fires nothing, so the entry closes:
+# Can this unit fire its ONE default attack right now? No longer the action ring's gate (#1409: the
+# ATTACK expander opens on HAVING a main, and an unfireable one lists greyed); no production code
+# asks it, only test fixtures and the readiness suites. Deliberately NOT get_fired_attack(): that
+# returns a live active_attack, an aiming cursor left over from a previous aim (#102).
+# A weapon with NO main attack (the #80 data-rot shape) fires nothing, so this answers false:
 # is_attack_fireable(null) answers true (null isn't a WeaponAttackData), which is the right
 # answer to "is this gated?" and the wrong one to "is there anything here?".
 func can_fire_default_attack() -> bool:

@@ -731,6 +731,7 @@ func test_an_undo_mid_run_marks_the_run_dev_touched() -> void:
 	game.dev_controller.resize_map(9, 3, GRASS_SOURCE, GRASS_ATLAS)
 	mc._begin_turn()
 	var run := mission_log.run_id()
+	game.game_state = game.GameState.DEV_MODE   # the history only moves in dev mode (#1432)
 	assert_bool(game.dev_controller.undo_board()).override_failure_message(
 		"fixture: there was no step to undo").is_true()
 	mission_log.seal(MissionLog.Ending.ABANDONED)

@@ -11,7 +11,3 @@ const VARIANT_DIR := "res://Resources/Vials/"
 
 static func get_variants() -> Dictionary:
 	return ResourceCatalog.by_name(VARIANT_DIR, VialData)
-
-# Authored vials -- for the editors' item list (mirrors WeaponCatalog/ArmorCatalog/RuneCatalog).
-static func get_editable() -> Dictionary:
-	return get_variants()

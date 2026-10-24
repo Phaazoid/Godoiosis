@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-22. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-23. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day; Air blowing gas (#1332) the same day; Temperature Shock's meltwater (#1423) the same day; steam's scald (#1331) the same day; the outline spreading a queued fire and the round's smoke split (#1430) folded in 2026-10-23.**
+**Canon checked through #1315 (2026-10-11); fizzle folded in 2026-10-11; heat folded in 2026-10-12; carving references (#1313) folded in 2026-10-12; conduits (#1312) folded in 2026-10-12; the atmosphere reading (#1324) folded in 2026-10-16, its slices 2 and 3 the same day; source amounts (#1328) folded in 2026-10-18; Dried Off's steam (#1329) folded in 2026-10-19; the weather moving the reading (#1324 slice 4) folded in 2026-10-19; gases moving the air where they lie (#1324 slice 5) folded in 2026-10-21; smoke (#1335) folded in 2026-10-22; ozone (#1335) the same day; Air blowing gas (#1332) the same day; Temperature Shock's meltwater (#1423) the same day; steam's scald (#1331) the same day; Fireball's two forms (#1333) folded in 2026-10-23; heat haze (#1427) the same day; the outline spreading a queued fire and the round's smoke split (#1430) the same day.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -601,7 +601,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **Every cell has an ambient baseline**: inert air, vital air, a trace of vapor and a trace of aether, and the ground's own substance. A real source (a river, a fire, a vial) empowers a cast.
 - **Aether is the heavens, not cold.** Ice is `QW`, water with heaven bound into it, and cold is not a substance. A Freeze hit carries free aether, which binds the first water it meets: a frozen tile and a wet unit freeze their own water, a dry unit takes frost out of the air's vapor. Chilled is frost on the body, which is also why Chilled beats Wet.
 - **Melting is heat.** Flame decays to heat (`F`), and the heat melts the ice.
-- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting. *(Its meltwater wets the unit since #1423, 2026-10-22.)*
+- **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting. *(Its meltwater wets the unit since #1423, 2026-10-22, and its heat lands as heat haze since #1427, 2026-10-23. The reaction left the NOT_YET_FOLLOWED ledger then, so this line is the +5's one record.)*
 - **Electrocution's water conducts and is not used up**, so a shock no longer dries a wet unit (2026-10-11, c3potheds@ and Phaazoid@). How a unit dries off is a balance question for later.
 - **Plants store phlogiston as vital air.** Dry fuel doubles its flame, which is why tall grass spreads further; green plants burn off their water as steam. Burning gives off exactly one ash per inert air, which is where smoke's `AE + A2` comes from.
 - **Thunder is lightning in air**, its own natural reaction (`2QF + 2A2 -> 2QA + FA2 + F`, ozone `FA2` as the byproduct), which Electrocute's equation carries.
@@ -632,7 +632,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Damage = power + aura in each element of the delivered substance, once each.** Fireball's flame scales off fire once, as a one-sigil carving did. Vial and terrain empowerment add +1 per matching delivered element. The AuraRing halo and the rune card's spare marks count delivered elements only: spare aura in an element a carving only spends is not damage.
 - **Heat warms and never ignites** (Phaazoid@ and c3potheds@, 2026-10-12). A lone `F` is free heat, its own hit element `Elemental.Element.HEAT` (`SubstanceMap.ELEMENTS[HEAT]` is `atom_fire`). A reaction answers to its primary `incoming_element` and to every element in `also_triggered_by`, asked through `fires_for` (one rule, `Elemental.triggered`), and still fires once per hit however many of them the hit carries. Quick Dry, Temperature Shock, Boils and Melt list HEAT; no ignition does (`tests/law/test_heat_never_ignites.gd`), and `TerrainReactionCatalog.fuel_for_kind` reads the primary alone, so heat lights nothing. The equation and `ReactionLint` explain the primary; heat's triggers are the "flame decays to heat" lore above. A heat hit scales off Fire aura, damage reading the atoms delivered. Heat Insulation (`INSULATED_HEAT`) strips it, one ability per element, and the Asbestos Shroud grants it beside Fire Insulation. The Glossary words a reaction's triggers together ("Fire or Heat"), and the queue's combo chip wears whichever element set it off.
 - **Verbs never move geometry.** Shape, range, shove, power and states stay authored on `AttackData`. Push, Spread and Focus never moved anything before either.
-- **Basics come TIED or ANYWHERE.** A tied basic is one verb on a small rune and needs its material present (`Push(A2)`, `Push(E2)`, `Bind(Q, Q)`). An anywhere basic sits on a medium rune and makes its material from the air (`Break(F, A) + Push(F2)`). **A Push with no material FIZZLES** (Phaazoid@). Materia supplies ARGUMENTS, never verbs. A tool may carry built-in verbs and a fitted materia source; that source's name is open ("focus" is the verb's).
+- **Basics come TIED or ANYWHERE.** A tied basic is one verb on a small rune and needs its material present (`Push(A2)`, `Push(E2)`, `Bind(Q, Q)`). An anywhere basic sits on a medium rune and makes its material from the air (`Break(F, A) + Push(F2)`; *Fireball's since #1333 is `Bind(F, F) + Push(F2)`, flame bound from the air's own heat*). **A Push with no material FIZZLES** (Phaazoid@). Materia supplies ARGUMENTS, never verbs. A tool may carry built-in verbs and a fitted materia source; that source's name is open ("focus" is the verb's).
 
 **Shipped recipes:**
 
@@ -643,7 +643,8 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 | Heal | `Bind(Q, Q)` | 1 | Aether 2 | essence (AETHER) |
 | Blow Dry | `Break(F, A) + Push(F)` | 2 | Fire 2, Air 1 | heat (HEAT) since 2026-10-12: dries, melts and boils, and lights no grass |
 | Splash | `Break(A, W) + Push(W2)` | 2 | Water 3, Air 1 | water (WATER) |
-| Fireball | `Break(F, A) + Push(F2)` | 2 | Fire 3, Air 1 | flame (FIRE) |
+| Fireball | `Bind(F, F) + Push(F2)` | 2 | Fire 4 | flame (FIRE); was `Break(F, A) + Push(F2)`, Fire 3, Air 1, until #1333 |
+| Greater Fireball | `Break(F, A) + Bind(F, F) + Push(F2)` | 3 | Fire 5, Air 1 | flame (FIRE); since #1333, on the Lightning Tome |
 | Freeze | `Break(A, W) + Bind(Q, W)` | 2 | Water 2, Air 1, Aether 1 | ice (ICE): frost from the air |
 | Pressure Spray | `Focus(3W2) + Push(3W2)` | 2 | Water 4 | water (WATER); tied to water: open water, or a wet unit, within reach |
 | Zap | `Extract(2QF) + Push(2QF)` | 2 | Aether 2, Fire 2 | lightning (SHOCK); needs a carried yellow diamond, a conduit (#1312), so it fizzles for anyone without one |
@@ -675,7 +676,8 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   `Atmosphere.SUBSTANCES` is the one list, replacing `CellSubstances.AMBIENT`. A missing key reads Normal, so an empty reading is a Normal board. `ScenarioData.atmosphere` stores it, `ScenarioManager.current_atmosphere` is the live store, and `BoardContext.atmosphere` carries it to the resolver. It is set by `game._board()` and by both of the Play API's boards.
 - **Heat is in the air everywhere.** Free fire is the one atom found in nature, the heat of the sun (c3potheds@'s theory of matter above). So a lone `Push(F)` is a small heat hit anywhere, and flame giving off heat (`GIVES_OFF`) is gone: it said nothing once heat was everywhere. The player-facing name for `atom_fire` is now "Heat".
 - **Concentration moves damage, never presence.** A carving moves **±1 per step** away from Normal for each substance it **draws from the air**: a need that is ambient and that no earlier step of its recipe made (`CarvingRecipe.drawn_from`). What the shipped carvings draw:
-  - Fireball: vital air
+  - Fireball: vital air *(heat since #1333)*
+  - Greater Fireball (#1333): vital air and heat
   - Zap Cannon: vital air and aether (its heat comes from its own Break)
   - Freeze: vapor and aether
   - Heal: aether, so an aether-rich map heals more
@@ -735,7 +737,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - `CellSubstances.available_near` now answers how much of each substance is present. `CellSubstances.fizzle_reason` is still the one predicate every caller asks. The Glossary's Transmutation page says the air holds only a little of anything.
 - **Not built:**
   - A vial as a source. A vial is not present for casts at all, and something consumed never gates a cast.
-  - A fire supplying heat. Flame has lent no heat since #1324, so `Push(3F)` fizzles even beside a fire.
+  - A fire supplying heat. Flame has lent no heat since #1324, so `Push(3F)` fizzles even beside a fire. *(Heat haze does, since #1427: it is a real gas, so `Push(3F)` holds beside one.)*
   - A lint refusing an unnumbered carving that needs a source.
 
 **Built 2026-10-19: Dried Off releases its steam ([#1329](https://github.com/Phaazoid/Godoiosis/issues/1329)).** First line off the NOT_YET_FOLLOWED ledger. Rulings by Phaazoid@ in a Claude session (2026-10-19), approving a plan:
@@ -790,10 +792,10 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   | Essence (new, the 7th kind; `essence`, Q2) | aether +5% | Melt and Temperature Shock release it **medium** on the thawed cell, as their equation `F2 + 2QW -> Q2 + W2 + 2F` says |
   | Frost (look-only until now; `frost`, `QW + A2`) | aether −5%, vapor −5% | Freeze leaves it **thin** on every tile it strikes: its recipe `Break(A, W) + Bind(Q, W)` locks the air's vapor and aether into ice |
 
-  So a Heal cast from medium essence heals +2 (codev's "ice-pack healing"), and one cast from thin frost heals 1 less; a Freeze cast from its own frost hits 2 softer. Melting ice gives back the aether freezing took. Giving frost a rules file also made it spread and fade, which brushed frost never did. Melt's and Temperature Shock's `2F` heat stays unreleased on the ledger: no shipped carving draws heat, and folding it into essence would make one gas stand for two products.
+  So a Heal cast from medium essence heals +2 (codev's "ice-pack healing"), and one cast from thin frost heals 1 less; a Freeze cast from its own frost hits 2 softer. Melting ice gives back the aether freezing took. Giving frost a rules file also made it spread and fade, which brushed frost never did. Melt's and Temperature Shock's `2F` heat stays unreleased on the ledger: no shipped carving draws heat, and folding it into essence would make one gas stand for two products. *(Both Fireballs draw heat since #1333, and the heat is released since #1427, 2026-10-23, as a gas of its own, heat haze: below.)*
 - **Read on the tile card**, its first gas line: an **Air** section, its own page since the card shows one section at a time (the T key or its tab row turns it, visual-clarity.md), with one row per gas and its level ("Essence, medium: elemental aether +10%"), then each substance where the cell differs from the board ("Elemental aether 20%, +2"). `Atmosphere.differs` is the one answer to which substances a cell has moved, which the Play API's board view prints too ("air: elemental aether 20% +2"). The corner HUD and the pre-mission Conditions stay board-wide. The Glossary's Atmosphere page says the air is read where the caster stands and lists every gas's nudge, composed from the files.
 - **The AI** prices it through the resolve, and `AITactics._group_key` gained the origin's air steps: two cells whose air differs no longer share a seek group. It never walks into a gas for its air (damage alone moves nobody, #760).
-- **The renderer holds eight kinds.** The cells texture packs a cell's kinds in one byte, so `gas_puff.gdshader` and `gas_floor.gdshader` size their per-kind arrays to eight, and `tests/law/test_gas_look_coverage.gd` reds an array shorter than the kind count. Essence is the 7th; the smoke/ozone design ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)) renames Thunder to Ozone rather than spending the 8th, and reuses `GasRules.air` for ozone's heat.
+- **The renderer holds eight kinds.** The cells texture packs a cell's kinds in one byte, so `gas_puff.gdshader` and `gas_floor.gdshader` size their per-kind arrays to eight, and `tests/law/test_gas_look_coverage.gd` reds an array shorter than the kind count. Essence is the 7th; the smoke/ozone design ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)) renames Thunder to Ozone rather than spending the 8th, and reuses `GasRules.air` for ozone's heat. *(Heat haze took the 8th and last, #1427.)*
 - **Amended:** #508 ruling 22's "`Melt.tres` releases no gas" (2026-10-07, below). Melt still makes water, not steam, and a second fire hit still boils it; it now also releases essence.
 
 **Built 2026-10-22: smoke ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335)).** Rulings by Phaazoid@ in Claude sessions (2026-10-18/19, the issue body; amended 2026-10-22 approving the plan):
@@ -822,13 +824,13 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - It fires on every cell the hit struck and **every cell its current ran through**: both ends of each link the volley stamped (`AttackAction.arc_links`, `PlanResolver._current_cells`), never re-derived at playback.
   - Only the air half rides the current. The ground's reactions and an attack's own gas stay on the cells it struck.
 - **Thin ozone on each.** Thin never spreads, so ozone stays where the shock landed and fades after its hold (`GasRules/OZONE.tres`, `hold_rounds` 2). Repeated shocks thicken a cell, and medium ozone spills like any gas.
-- **Ozone lowers the heat where the alchemist stands**: `GasRules.air` `{"atom_fire": -10}` per level, one heat step per level, read through `BoardContext.air_at` at the caster's cell like every air gas.
+- **Ozone lowers the heat where the alchemist stands**: `GasRules.air` `{"atom_fire": -10}` per level, one heat step per level, read through `BoardContext.air_at` at the caster's cell like every air gas. *(Since #1427 every shock also leaves thin heat haze on the same cells, +10 a level, so a shock cell reads Normal heat for the strike's own round and −1 once the haze has faded: below.)*
   - It moves damage only, never presence: a tile still catches and a fire still spreads in ozone (the 2026-10-14 ruling).
-  - No shipped carving draws heat from the air yet (Blow Dry makes its own), so nothing's numbers move until Fireball's heat form ([#1333](https://github.com/Phaazoid/Godoiosis/issues/1333)).
+  - No shipped carving draws heat from the air yet (Blow Dry makes its own), so nothing's numbers move until Fireball's heat form ([#1333](https://github.com/Phaazoid/Godoiosis/issues/1333)). *(Built 2026-10-23: ozone lowers both Fireballs, below.)*
   - The tile card and the Glossary's Atmosphere page compose the line from the file.
 - **Ozone took THUNDER's gas slot by RENAME:** `Gas.Kind.THUNDER` is `OZONE` (the same int), `SubstanceMap.GASES` maps it to `ozone` (`FA2`), and `GasLooks/THUNDER.tres` is `OZONE.tres`. Its glow and pixel lightning are kept as the charge a strike leaves, a first-pass look. The renderer's 8th and last slot stays free; the `thunder` substance (`QA`) stays for the equations.
 - **Electrocute's ozone is the struck cell's Ozone reaction,** not a second release from the unit reaction.
-- **Ledger:** Electrocute now reads "the thunder (#1270) and the heat are not made", and Ozone.tres gets the same line. The reaction's `+ F` heat stays unreleased (dev, 2026-10-19), decided together with Melt's heat, since a heat gas would take the renderer's last slot.
+- **Ledger:** Electrocute now reads "the thunder (#1270) and the heat are not made", and Ozone.tres gets the same line. The reaction's `+ F` heat stays unreleased (dev, 2026-10-19), decided together with Melt's heat, since a heat gas would take the renderer's last slot. *(Decided 2026-10-23, #1427: it lands as thin heat haze, and both lines keep only the thunder.)*
 - **Thunder, the clap on every shock strike, is [#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)'s** (dev, 2026-10-22). Nothing in this build plays it.
 - **The AI needs nothing new:** it prices ozone through the resolve (`ResolvedOutcome.air_steps`), and its seek key already reads the origin's air.
 
@@ -870,6 +872,81 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **The AI avoids ending in scalding steam** while a safe cell offers the same: `AITactics._is_hazard` asks `RulesService.gas_damage_at`, beside the burn. It still scores no end-of-turn row in the resolve (#117).
 - **Declared:** the board's health bar shows no end-of-turn damage, fire's or steam's. The rows never write the plan's hypo, so the END OF TURN row and the Play API are the forecast.
 
+**Built 2026-10-23: Fireball's two forms ([#1333](https://github.com/Phaazoid/Godoiosis/issues/1333)).** Phaazoid@ ruled on 2026-10-19 that a simpler Fireball pulling loose heat should be the basic form. c3potheds@ wrote both recipes (Discord, 2026-10-23), and Phaazoid@ ruled to build both the same night. He approved [the plan](https://github.com/Phaazoid/Godoiosis/issues/1333#issuecomment-6375330073) in a Claude session the same day, taking every recommendation:
+- **Fireball is `Bind(F, F) + Push(F2)`:** it binds two loose heats into flame and pushes it. Flame decaying into heat is the natural direction, so making flame takes a Bind.
+  - Fire 4.
+  - No material, so it never fizzles: heat is in every cell's air.
+  - It draws heat, so snow and ozone weaken it and rich heat strengthens it. Vital air no longer moves it.
+  - One edit to the library file reached every rune that holds it (#1313).
+- **Greater Fireball is `Break(F, A) + Bind(F, F) + Push(F2)`,** a second library carving.
+  - It breaks heat out of vital air and binds it with the air's own heat.
+  - Three verbs, so it needs a large rune. Fire 5, Air 1.
+  - Power 7, Fireball's 5 plus two: at Normal air the two forms differ only by their authored power, and the air makes them diverge.
+  - It draws vital air and heat, so it out-hits the basic wherever vital air is at least 10%, codev's "strict upgrade". No weather or gas moves vital air.
+  - The Lightning Tome holds it in Fireball's place (Zap Cannon 3 + Greater Fireball 3 fills the tome's 6). Its one carrier is Castle Assault's enemy Soldier5. No player unit can channel it yet: Celest, the deepest, is Fire 3.
+- **A step draws what it needs beyond what earlier steps made** (`CarvingRecipe.drawn_from`). Greater Fireball's Bind binds two heats and its Break freed one, so the air gives the other. A Break frees one of each argument, so breaking flame frees both heats a Bind then needs.
+  - Before, a need any earlier step had made was never drawn, which left Greater Fireball reading vital air alone.
+  - No other library carving changed: Blow Dry's Push needs the one heat its Break freed, and Zap Cannon's Bind the same.
+  - Fizzle does not count: `Bind(F, F)` needs only heat present, and the air's one is enough.
+- **Damage**, for a Fire 3 caster:
+
+  | Air where the caster stands | Fireball | Greater Fireball |
+  |---|---|---|
+  | Normal | 8 | 10 |
+  | Light Snow, thin ozone | 7 | 9 |
+  | Snow, Blizzard, medium or thick ozone | 6 | 8 |
+  | Heat 40% | 10 | 12 |
+  | Vital air 30% | 8 | 12 |
+
+  Heat floors at 0%, so on a Normal board a blizzard reads the same −2 as snow.
+- **Aura sweep:** only the Isaacs in Prolog and the verticality fixture went from channelling Fireball (Fire 2, with a wildcard) to refused. Both rose from Fire 2 to 3 inside their affinity, and their Fireball deals one more. Every other carrier still channels it: Celest, Castle Assault's soldiers, the Kindlers, Ashwright, Kilnmaster. The Kindlers (Fire 3, Air 1) now lean on the rune's wildcard, which spends nothing.
+- **Readouts:**
+  - The queue row names the air's share ("Thin heat: −2").
+  - The Play API prints "air: heat −2".
+  - The Scenario tab's air tooltip says which carving draws what.
+  - The Glossary still names no carving's recipe (#75).
+- **The AI** prices it through the resolve; its seek key already reads the origin's air.
+- **Not built:**
+  - Zap Cannon is unchanged. c3potheds@'s basic spark, `Bind(Q, F) + Push(QF)`, is unruled. It would be a medium anywhere carving drawing aether and heat, with today's Zap Cannon as its upgrade.
+  - His limiting-ingredient idea, where extra heat without extra aether makes heat rather than lightning, is an idea only: no rule caps a product by its scarcer input.
+  - Heat can fall two steps below Normal and rise eight above it. Whether typical temperature needs a retune for the progression is codev's balance question.
+
+**Built 2026-10-23: released heat lands as a heat haze ([#1427](https://github.com/Phaazoid/Godoiosis/issues/1427)).** Phaazoid@ ruled on 2026-10-23 that the free heat three equations make lands as a heat gas ([on #1335](https://github.com/Phaazoid/Godoiosis/issues/1335#issuecomment-6357154577)). c3potheds@ agreed that heat is another kind of gas, and left how fast it fades to feel. Phaazoid@ approved every recommendation of the plan in a Claude session the same day ([the plan](https://github.com/Phaazoid/Godoiosis/issues/1427#issuecomment-6375338024)):
+- **Heat haze is the eighth `Gas.Kind`**: `HEAT_HAZE`, shown as "Heat Haze".
+  - It is free heat: `SubstanceMap.GASES` maps it to `atom_fire`.
+  - Its rules, `GasRules/HEAT_HAZE.tres`, move the air and nothing else, so it reaches a carving through `BoardContext.air_at` like every air gas.
+- **Who releases it, and at what level.** The equation's count is the level:
+
+  | Reaction | Heat made | Haze left |
+  |---|---|---|
+  | Melt (fire or heat on ice) | `2F` | medium, on the thawed tile |
+  | Temperature Shock (fire or heat on a Chilled unit) | `2F` | medium, on the unit's cell |
+  | Ozone (every shock hit, in the air) | `F` | thin, on every cell it struck and along its current |
+
+  Medium spills a thin cross onto its four sides at the round tick, and thin never spreads. Two releases on one cell stack: a melt under a Chilled unit leaves thick.
+- **+10% heat a level**, one `Atmosphere.STEP` and ozone's mirror. A carving that draws heat and is cast from inside it gets thin +1, medium +2 and thick +3. The tile card reads "Heat Haze, medium: heat +20%", then "Heat 40%, +2".
+- **It holds one round a level** (`hold_rounds` 1, where every other gas holds 2), because heat leaves fast. A melt's haze is medium until the round ends, then a thin cross for one round, then gone.
+- **On a shock cell it cancels ozone at first.** Thin ozone (−10) and thin haze (+10) are summed before steps, so the strike's own round reads Normal heat: the strike's heat. Once the haze fades at the round's end, ozone's −1 shows for its second round. Ozone's −10 is unchanged. The timing is the knob: `hold_rounds` on either file, or ozone's `air`.
+- **Damage only, never presence** (the 2026-10-14 ruling). It gives no state, deals no damage and holds no one, and a gas triggers no reaction, so it lights no grass, dries no unit and melts no ice. `tests/items/test_atmosphere.gd` holds any gas made of an ambient substance to raising that substance and touching nobody.
+  - *Declared:* as a real gas it is a real source (#1328), so a carving that needs more than one heat (`Push(3F)`) holds beside it, which a fire still does not allow. No shipped carving needs more than one.
+- **It moves both Fireballs**, which draw heat since [#1333](https://github.com/Phaazoid/Godoiosis/issues/1333) (above).
+  - For a Fire 3 caster, Fireball deals 8 at Normal: 9 cast from thin haze, 10 from medium, 11 from thick. Greater Fireball deals two more in each.
+  - On a freshly shocked cell, ozone and haze cancel: Fireball deals its Normal 8 for the strike's round, then the thin-ozone 7 once the haze has faded.
+  - Blow Dry makes its own heat, so the haze does not move it.
+- **An Air hit:** a Gust blows it along the shove (#1332). A hit that shoves nobody, or has no room to move it, clears it. A cleared cell reads the board's own air again (Phaazoid@ on Discord, 2026-10-23).
+- **Ledger:**
+  - Melt and Temperature Shock come off NOT_YET_FOLLOWED; Temperature Shock's +5 note survives in the rulings above.
+  - Electrocute and Ozone keep only the thunder (#1270).
+  - The gas sweep now checks all three releases against their equations.
+- **The renderer's eighth and last slot is spent.**
+  - No shader changed, since the per-kind arrays were already eight wide.
+  - `tests/law/test_gas_look_coverage.gd` now reds a kind count past the cells texture's one-byte mask.
+  - The look is a first pass: [presentation-effects.md](presentation-effects.md) → *Gas*.
+- **The AI** prices it through the resolve, and its seek key reads the origin's air (parity row `air`). It never walks into a gas for its air (#760).
+- **Not built:**
+  - Heat dissolving into liquids or solids: `Extract` heat from a hot object, `Infuse` it to boil water. c3potheds@ floated it, and it is not ruled. His limiting-ingredient idea is in Fireball's block above.
+  - A refractive shimmer: the look is puffs and a volume like every gas. Filed as [#1460](https://github.com/Phaazoid/Godoiosis/issues/1460).
+
 **Built 2026-10-23: the previews of a queued fire's spread and of the round's smoke split ([#1430](https://github.com/Phaazoid/Godoiosis/issues/1430)).** Two Law #2 gaps #1335 and #1332 had declared, closed by a plan Phaazoid@ approved in a Claude session (2026-10-23), with his rulings that the warning is the red tether and the red is the stranding move's own:
 - **Alt's outline spreads a fire a queued hit lights.** `TerrainStateManager.cells_fire_takes(effects)` reads the tiles as the deposits leave them (`projected_states_at`, `apply()`'s fold), and `GasSpread` asks it with the board's deposits. The outline's board carries the previewed plan's, so every tile the queued fire takes next round outlines its ground's gases, and a fire a queued douse puts out outlines none. The round's board carries none, so the round is unchanged.
 - **The round's smoke split shows before it happens.** Smoke the round spills onto a leader shortens its leash, and the first contact sweep after it (`TurnBoundary.start_turn` → `enforce_contact`, the next turn start) ejects whoever it no longer reaches. `SplitForecast.round_leavers` names them: in range on the board this plan leaves, out of range once `GasField.next_round` has moved the gas, read through `SquadCohesion.reach_in` (the reach rule with the gas passed in) and `field_within`.
@@ -879,8 +956,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Declared:** the forecast's premise is the outline's, this plan landed and nobody moving after it, so a later squad's orders, the other side's turn and a COH effect lapsing at the turn start are not foreseen. The Play API prints no next-round leash, as it prints no outline. The AI does not price a round's split (#117).
 
 **Next:**
-- **Heat as a released product** (Melt's and Temperature Shock's `2F`, ozone's `F`), decided together.
-- **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte.
+- **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
 - **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)) and the smoke carving ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).
 
 **Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy, which ground grass sits on (#1315). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
@@ -892,4 +968,4 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - whether gas spread must conserve matter (deferred)
 - light and shadow
 
-**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. *(Since #1324 slice 5, 2026-10-21, it releases essence, which is not steam; the boiling rule is unchanged.)* **Still open:** Whether gas spread must conserve matter is deferred.
+**Built 2026-10-07:** ice melts to water, not steam (Phaazoid, 2026-10-06, #508 ruling 22). `Melt.tres` releases no gas; a second fire hit on the open water boils it. *(Since #1324 slice 5, 2026-10-21, it releases essence, and since #1427, 2026-10-23, heat haze. Neither is steam, and the boiling rule is unchanged.)* **Still open:** Whether gas spread must conserve matter is deferred.

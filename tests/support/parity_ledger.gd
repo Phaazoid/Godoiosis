@@ -416,6 +416,7 @@ static func gases() -> Dictionary:
 			K.OZONE: {"ai": air},
 			K.SULFUR: {"ai": inert()},
 			K.ESSENCE: {"ai": air},
+			K.HEAT_HAZE: {"ai": air},
 		},
 	}
 

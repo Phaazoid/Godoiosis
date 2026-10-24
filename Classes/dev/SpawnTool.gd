@@ -163,6 +163,9 @@ func build_unit_data():
 		selected_sprite["downed"])
 
 func try_spawn_at(cell: Vector2i) -> void:
+	# The dev cursor's rule (#1432), asked before spawn_unit's own: a queued move may end on this cell.
+	if not RulesService.can_place_at(game._board(), cell):
+		return
 	if selected_character != null:
 		# The FILE resource, un-copied: UnitFactory copies it and stamps unit_data_source (#177).
 		# The character's own starting kit seeds in _ready — the form's weapon pick doesn't apply.

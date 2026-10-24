@@ -8,8 +8,7 @@
 # and build_tree's duplicate guard ate the watch row. A rule read by more than one surface has to be
 # justified at every surface, so each case names the surface it speaks for.
 #
-# Nothing here asserts what shipped content contains -- the Carbine's own watch rides
-# test_weapon_template_lint.gd's sweep, which fails any template whose main cannot fire.
+# Nothing here asserts what shipped content contains.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -160,3 +159,62 @@ func test_a_watch_carving_leaves_the_transmutation_list() -> void:
 			"a watch carving still lists as something to channel").not_contains([carving])
 	assert_array(unit.overwatch_attacks()).override_failure_message(
 			"a watch carving is watchable by nobody").contains([carving])
+
+
+# ==============================================================================
+#  No watch ever counters (#1440)
+# ==============================================================================
+#
+# A main may be a watch now, and a weapon counters with its main, so the counter gate is where the
+# rule lands. Every route to a watch main gets a case; the first is what keeps the rest honest.
+
+# Non-vacuity: the fixture's ordinary main DOES counter, so the cases below cannot pass by a gate
+# that refuses everything.
+func test_an_ordinary_main_counters() -> void:
+	assert_bool(_armed_unit().attack_source_can_counter()).is_true()
+
+
+func test_an_authored_watch_main_never_counters() -> void:
+	var unit := _armed_unit()
+	(unit.get_equipped_weapon() as WeaponInstance).template.main_attack.can_overwatch = true
+	assert_bool(unit.attack_source_can_counter()).override_failure_message(
+			"a watch main answered a blow").is_false()
+
+
+# The composed answer, not the authored flag: a mod's ON is one more route to a watch main.
+func test_a_main_made_a_watch_by_a_mod_never_counters() -> void:
+	var unit := _armed_unit()
+	var mod := WeaponModData.new()
+	mod.display_name = "Watch Governor"
+	mod.applies_to = WeaponModData.AppliesTo.MAIN_ATTACK
+	mod.can_overwatch_override = WeaponModData.Override.ON
+	assert_bool((unit.get_equipped_weapon() as WeaponInstance).fit(0, mod)).override_failure_message(
+			"the fixture never fitted the mod").is_true()
+	assert_bool(unit.attack_can_overwatch(unit.get_default_attack())).override_failure_message(
+			"the ON never reached the main -- the fixture is not exercising the rule").is_true()
+	assert_bool(unit.attack_source_can_counter()).override_failure_message(
+			"a main a mod made a watch answered a blow").is_false()
+
+
+# A rune counters with its live pick, and picking a watch carving sets that pick.
+func test_a_rune_whose_live_pick_is_a_watch_never_counters() -> void:
+	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
+	var rune := RuneData.new()
+	var carving := TransmutationData.new()
+	carving.display_name = "Warding Sight"
+	# Carved in aether, which every cell's air holds and this unit's aura pays, so it channels.
+	carving.power = 3
+	carving.recipe = "Push(Q)"
+	carving.targets = EquippableData.TargetMode.UNIT
+	rune.size = RuneData.Size.MEDIUM
+	assert_bool(rune.inscribe(carving)).is_true()
+	unit.unit_instance.aura = { Elemental.Element.AETHER: 1 }
+	unit.unit_instance.affinity = [Elemental.Element.AETHER]
+	unit.equipped_weapon = rune
+	unit.active_attack = carving
+	assert_bool(unit.attack_source_can_counter()).override_failure_message(
+			"the carving cannot counter even as a shot -- the fixture is not exercising the rule").is_true()
+
+	carving.can_overwatch = true
+	assert_bool(unit.attack_source_can_counter()).override_failure_message(
+			"a rune counted a watch carving as its counter").is_false()

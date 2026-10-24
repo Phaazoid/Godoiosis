@@ -18,6 +18,8 @@ var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var _game: Node2D
 var _gas: GasMirror
+# The sprite density as the board set it: a STATIC, so a case that moves it moves it for the process.
+var _density := 0.0
 
 
 func before() -> void:
@@ -29,9 +31,11 @@ func before_test() -> void:
 	_scene = _board.scene
 	_game = _board.game
 	_gas = _scene.get_node("GasMirror") as GasMirror
+	_density = UnitSprite3D.texels_per_unit
 
 
 func after_test() -> void:
+	UnitSprite3D.texels_per_unit = _density
 	Input.action_release(GasMirror.FLOOR_ACTION)
 	BoardSpace.clear_staging()
 	await _board.check(self)
@@ -314,6 +318,28 @@ func test_every_gas_node_stays_off_the_ground_layer() -> void:
 	# The damp blot's decal paints the ground layer (#358); anything else on it is darkened.
 	for node: GeometryInstance3D in [_gas.floor_node(), _gas.puff_node()]:
 		assert_int(node.layers).is_equal(BoardOverlays.WORLD_RENDER_LAYER)
+
+
+# The puffs and the floor draw at the sprites' own density, #250's dial (#1434), never a copy of it.
+# The dial is written once, at UnitMirror._ready, before battle3d builds the mirror -- so a mirror
+# built under a moved dial is what a relaunch at that setting draws. Halved rather than named, so the
+# case still moves it whatever the board's dial already says.
+func test_the_puffs_and_the_floor_follow_the_sprite_density() -> void:
+	var moved := _density * 0.5
+	UnitSprite3D.texels_per_unit = moved
+	var mirror: GasMirror = auto_free(GasMirror.new())
+	add_child(mirror)
+	var quad := mirror.puff_node().multimesh.mesh as QuadMesh
+	var puffs := mirror.puff_node().material_override as ShaderMaterial
+	var fog_floor := mirror.floor_node().material_override as ShaderMaterial
+
+	assert_vector(quad.size).override_failure_message(
+		"a puff's quad is %s at %.0f texels a unit" % [quad.size, moved]).is_equal_approx(
+		Vector2(GasPuffArt.LAYER_SIZE) / moved, Vector2(0.0001, 0.0001))
+	assert_float(float(puffs.get_shader_parameter("pixel_size"))).override_failure_message(
+		"the puffs snap to a grid the sprites do not").is_equal_approx(1.0 / moved, 0.00001)
+	assert_float(float(fog_floor.get_shader_parameter("art_pixels"))).override_failure_message(
+		"the fog floor's pixels are not the puffs'").is_equal_approx(moved, 0.0001)
 
 
 # Holding the floor key also draws NEXT round (#508): the floor's shader in outline-only mode, built

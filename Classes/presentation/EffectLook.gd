@@ -46,9 +46,8 @@ static func is_lookable(element: Elemental.Element) -> bool:
 # The four readers, typed rather than one Variant accessor: warnings-as-errors refuses an untyped
 # read into a typed local, and an effect's every value is one of these four kinds.
 #
-# NULL-TOLERANT ON PURPOSE. The effects hold a look that is never null (an empty one means "inherit
-# everything"), but a static helper handed one from a test or a half-built strike must degrade to
-# the default rather than crash mid-frame.
+# Instance methods, so CALLERS MUST PASS A LOOK: a null one errors. "No look" is an empty one
+# (inherit everything), and ArcLightning.look_of is where a missing look becomes that (#1443).
 func num(key: String, fallback: float) -> float:
 	return float(overrides[key]) if overrides.has(key) else fallback
 

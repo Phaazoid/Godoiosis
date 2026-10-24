@@ -3577,15 +3577,16 @@ collide with validity on any row that is both elemental and broken. The allocati
 ### What the row reads, and why two facts became recorded rather than derived
 
 - **`ResolvedOutcome.elements`** — the *surviving* elements, stamped where `_surviving_elements`
-  already computes them. Recorded rather than derived because `PlanResolver._source_elements` is
-  private and answers the **pre**-insulation question: a rail read off the authored attack would
+  already computes them. Recorded rather than derived because `PlanResolver.source_elements`
+  answers the **pre**-insulation question: a rail read off the authored attack would
   claim a fire hit the target shrugged off. An insulated hit therefore honestly wears no rail.
 - **`ResolvedOutcome.fired_reactions`** replaced `reaction_icons: Array[Texture2D]` (Law #4). The
-  row needs three facts per reaction — its authored word, its art, and the element that triggered
-  it — and the reaction already holds all three, so recording the icon alone made the other two
-  unrecoverable. Three sites in the whole repo, so a swap rather than a second seam. **Its producer
-  had also been dropping any reaction with no `icon`**, which silently muted half the authored
-  catalog; that guard went with it.
+  row needs two facts per reaction — its authored word and the element that triggered it — and the
+  reaction already holds both, so recording the icon alone made them unrecoverable. *(This used to
+  say three, counting the art; the chip shipped text-only and nothing reads a reaction's `icon`,
+  [#1443](https://github.com/Phaazoid/Godoiosis/issues/1443).)* Three sites in the whole repo, so
+  a swap rather than a second seam. **Its producer had also been dropping any reaction with no
+  `icon`**, which silently muted half the authored catalog; that guard went with it.
 
 ### A SETUP is said once
 
@@ -4011,7 +4012,7 @@ A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks
 So the prediction reach (`ThreatField._threat_of`) now has four parts:
 1. **Fire, accumulated by attack.** Keyed by attack because the current depends on the element of the attack that made the hit.
 2. **The counter rim**, as above.
-3. **`_add_watch_reach`.** The union of every lane `AITactics.watch_lanes` could set from every origin, asked only of an archetype whose declared priority list has OVERWATCH (Rushdown's is NEVER), and only of a watch attack `AITactics.watch_attack_for` says is ready.
+3. **`_add_watch_reach`.** The union of every lane `AITactics.watch_lanes` could set from every origin, asked only of an archetype whose declared priority list has OVERWATCH (Rushdown's is NEVER), and only of the watch attacks `AITactics.watch_attacks_for` says are ready (every one since [#1433](https://github.com/Phaazoid/Godoiosis/issues/1433), not only the first).
    - These are the builder's own two doors, so the drawn lanes are the lanes it could set.
    - **They are not zone-clipped:** the shot takes anyone in the lane, and a Sentry at its post aims at the nearest enemy wherever that enemy stands.
 4. **`_add_arc`.** `Conduction.arc_cells`, seeded with each attack's own cells.

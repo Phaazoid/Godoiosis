@@ -389,8 +389,9 @@ func _wire_signals() -> void:
 #  Input
 # ==============================================================================
 
-# Dev keys (F1/F2/F3) are NOT here -- they live on DevController, which is exempt from the modal
-# freeze. A dev key added back here would silently die whenever a card is up.
+# Dev keys (F1/F2/Shift+F3, F5, Space's spawn) are NOT here -- they live on DevController, which is
+# exempt from the modal freeze and hears both OS windows. A dev key added back here would silently die
+# whenever a card is up or the dev-tools window has focus.
 func _input(event: InputEvent) -> void:
 	# The modal check is belt-and-braces since #131: a modal pauses the tree, and a paused node
 	# receives no input at all, so this handler is already silent while one is up. Kept because it
@@ -415,9 +416,8 @@ func _input(event: InputEvent) -> void:
 
 	# The phase's one exit (#739). It lives HERE rather than in _unhandled_input beside the board
 	# keys, and that is not a preference: a 3D host sets board_input_delegated, and _unhandled_input
-	# returns on it before reaching anything below -- which is why F5 is documented as flat-2D-only
-	# and Esc, up there, is not. Its own action rather than ui_accept, which is Enter AND Space, and
-	# Space is the camera recentre.
+	# returns on it before reaching anything below. Its own action rather than ui_accept, which is
+	# Enter AND Space, and Space is the camera recentre.
 	if event.is_action_pressed("commit_deployment") and not ModalLock.any_open(get_tree()):
 		mission_controller.confirm_and_commit()   # #774: the key asks too, or it walks around the card
 	# The board preview and back (#740). Here beside commit for the same reason: _unhandled_input
@@ -491,17 +491,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_RIGHT and game_state != GameState.DEV_MODE:
 			_on_right_click()
 
-	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_SPACE:
-		if dev_controller.spawn_armed():
-			dev_overlay.spawn.try_spawn_at(hover_presenter.last_hovered_cell)
-		else:
-			camera_controller.center_on_position(get_global_mouse_position())
-
-	# Elevation readout (#257) — throwaway until the real 2D height render lands. Gated like
-	# Battle3D's F4 so it cannot reach a shipped build.
-	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_F5 \
-			and DevTools.enabled() and height_debug_overlay != null:
-		height_debug_overlay.toggle()
+	# Armed, SPACE is the dev layer's spawn (DevController.handle_dev_key, #1446), which both windows
+	# reach; this arm keeps only the recentre.
+	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_SPACE \
+			and not dev_controller.spawn_armed():
+		camera_controller.center_on_position(get_global_mouse_position())
 
 # Esc during play. MENU locks the board while the card is up; the prior state is restored on
 # Resume so an in-progress aim survives the pause.
@@ -1896,15 +1890,14 @@ func spawn_sandbox() -> void:
 # has to know before it has a unit to build -- and a hand-rolled copy of it there would be a second
 # answer to a question this one has already had three of (#109).
 #
-# Three clauses, in the order spawn_unit has always asked them and BoardLint._check_placement
-# borrows: off the map, nothing may stand there, someone already does. The middle one is
-# BoardContext.is_walkable, the ONE walkability answer (#109) -- the inline `walkable` custom-data
-# read it replaced could not see tile state, so dev-mode refused a FROZEN water tile that movement,
-# pathing and knockback all treat as solid ground. Occupancy stays SEPARATE from that: is_walkable
-# answers "may a unit stand here", never "is someone already standing here".
+# Three clauses, in the order spawn_unit has always asked them (RulesService.spawn_block_reason,
+# which BoardLint._check_placement asks too): off the map, nothing may stand there, someone already
+# does. The middle one is BoardContext.is_walkable, the ONE walkability answer (#109) -- the inline
+# `walkable` custom-data read it replaced could not see tile state, so dev-mode refused a FROZEN water
+# tile that movement, pathing and knockback all treat as solid ground. Occupancy stays SEPARATE from
+# that: is_walkable answers "may a unit stand here", never "is someone already standing here".
 #
 # `is_body` is the #116 exception: a drowning unit legitimately lies where nothing may stand.
-#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
 func can_spawn_at(pos: Vector2i, is_body := false) -> bool:
 	return RulesService.can_spawn_at(_board(), pos, is_body)   # one rule for both hosts (#46)
 

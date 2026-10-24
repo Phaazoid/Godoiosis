@@ -212,8 +212,7 @@ static func carriers_of(attack: AttackData) -> Array[Dictionary]:
 # things that fire something else:
 #   - the EMPOWERED FORM of a MAIN only. WeaponInstance.effective_main empowers the base main and
 #     never an extra or a grant, so a form hung on one of those reads as the orphan it is. Restated
-#     here as WeaponTemplateLint._check_main_is_fireable does: effective_main needs an instance and a
-#     wielder, and a lint has neither.
+#     here because effective_main needs an instance and a wielder, and a lint has neither.
 #   - the PAYLOAD CHAIN, every level, as PlanResolver.drop_payloads walks it for whatever fired.
 # Not ResourceCatalog.users_of, which asks which FILES name a path: an orphan's payload is named
 # without ever being fired.

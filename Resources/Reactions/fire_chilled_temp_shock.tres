@@ -12,7 +12,8 @@ damage_bonus = 5
 add_states = Array[int]([1])
 remove_states = Array[int]([2])
 gases = Dictionary[int, int]({
-6: 2
+6: 2,
+7: 2
 })
 equation = "F2 + 2QW -> Q2 + W2 + 2F"
 popup = "Temperature Shock!"

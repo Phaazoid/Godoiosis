@@ -46,6 +46,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 	var candidates := {}   # Unit -> {cell: move cost}
 	var to_target := {}    # Unit -> {cell: hops from its ideal offset cell}
 	var reaches := {}      # Unit -> its compute_move_range result, kept for came_from
+	var leashes := {}      # Unit -> its cohesion field at the leader's destination, kept for is_trailing
 
 	for member in squad.get_members():
 		if member == leader:
@@ -58,13 +59,15 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		# drop-the-leash retry: with cohesion itself path-based, the preference IS the rule.
 		var reach := RulesService.compute_move_range(member, board, leader_destination)
 		var here: Vector2i = member.movement.cell
+		var leash := SquadCohesion.field(squad, leader_destination, member, board)
 
-		var options := follow_cells(squad, member, leader_destination, board, allowed_cells, reach)
+		var options := follow_cells(squad, member, leader_destination, board, allowed_cells, reach, leash)
 		if options.is_empty():
 			continue
 		followers.append(member)
 		candidates[member] = options
 		reaches[member] = reach
+		leashes[member] = leash
 		# Distance to this member's ideal offset cell, walked AFTER the candidates so it can stop
 		# as soon as it has covered them.
 		to_target[member] = RulesService.path_hops(here + displacement, board, member, -1, options)
@@ -111,8 +114,10 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		member_move.init(member, RulesService.route_to(member, reaches[member], best, board,
 				not direct.has(member)),
 			GridUtils.get_terrain_icon_at_cell(board.grid, best))
-		member_move.is_trailing = GridUtils.manhattan_distance(best, leader_destination) \
-			> GridUtils.manhattan_distance(here, leader_start)
+		# Trailing is measured in cohesion's own walking distance (#1449), never grid steps. A member
+		# outside the bubble at the leader's start reads UNREACHABLE: out of contact, not trailing.
+		member_move.is_trailing = int(leashes[member][best]) \
+			> SquadCohesion.hops(squad, leader_start, member, here, board)
 		moves.append(member_move)
 
 	return moves
@@ -203,12 +208,14 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 
 # Where `member` may end if its leader ends on `leader_destination` -> move cost: reach, cohesion
 # field and allow-list together. plan()'s question, public for the AI's seek (#760) so the two ask it
-# once. `reach` is plan()'s own compute_move_range result when it already holds one.
+# once. `reach` and `leader_field` are plan()'s own results when it already holds them (a field always
+# holds its center, so empty means "not passed").
 static func follow_cells(squad: Squad, member: Unit, leader_destination: Vector2i, board: BoardContext,
-		allowed_cells = null, reach: Dictionary = {}) -> Dictionary:
+		allowed_cells = null, reach: Dictionary = {}, leader_field: Dictionary = {}) -> Dictionary:
 	if reach.is_empty():
 		reach = RulesService.compute_move_range(member, board, leader_destination)
-	var leader_field := SquadCohesion.field(squad, leader_destination, member, board)
+	if leader_field.is_empty():
+		leader_field = SquadCohesion.field(squad, leader_destination, member, board)
 	return _candidate_cells(reach, member.movement.cell, leader_field, allowed_cells)
 
 # Every cell this member may legally end on -> its move cost. Staying put counts at cost 0 when it
