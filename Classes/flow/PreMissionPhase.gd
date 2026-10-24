@@ -64,7 +64,7 @@ func draw(roster_name: String, staged: PreMissionSnapshot = null) -> int:
 			push_warning("Pre-mission: no staged cell is open any more -- drawing the mission's own")
 	if deployed == 0:
 		deployed = _stand_authored(entries, unit_of_entry)
-	return deployed
+	return deployed + _stand_forced()
 
 
 # The DEPLOYMENT cells a unit could actually be put on, right now -- the draw asks it once and every
@@ -143,9 +143,33 @@ func deploy_block_reason() -> String:
 	return ""
 
 
-# Why the phase cannot end yet, or "" (#739): a mission cannot start with no force.
+# Is this a unit the player may not leave behind (#1456)? A ROSTER unit flagged must_survive: the
+# draw put the flag on it from its entry (PreMission.forced_entries), and it is read off the UNIT so
+# that ticking it in the dev tools mid-phase locks the unit at once. An authored unit is the board's,
+# never the player's to place, so it is never forced. The screen's VIP marks ask this too.
+func is_forced(unit: Unit) -> bool:
+	return is_instance_valid(unit) and unit.drawn_from_roster and unit.must_survive
+
+
+# Why this unit cannot go back to the reserve, or "" -- deploy_block_reason's twin, in the same words
+# on both hosts. Every PLAYER door asks it (the ring, the card, the Play API); the hosts' raw
+# undeploy_unit does not, as their deploy_unit ignores the cap.
+func undeploy_block_reason(unit: Unit) -> String:
+	if not is_forced(unit):
+		return ""
+	var who := unit.get_unit_name()
+	return "%s must stay deployed: the mission is lost if %s falls." % [who, who]
+
+
+# Why the phase cannot end yet, or "" (#739): a mission cannot start with no force, nor without a
+# unit it is lost without (#1456).
 func commit_block_reason() -> String:
-	return "Deploy someone first" if deployed_count() == 0 else ""
+	if deployed_count() == 0:
+		return "Deploy someone first"
+	for unit: Unit in units:
+		if is_forced(unit) and not _host.is_deployed(unit):
+			return "Deploy %s first" % unit.get_unit_name()
+	return ""
 
 
 # The capture (#763), taken at the commit. EVERY DRAWN UNIT gets a row, standing or waiting, because
@@ -215,6 +239,9 @@ func _draw_reserve(roster: Roster, entries: Array[ScenarioUnitEntry]) -> Diction
 		unit.drawn_from_roster = true
 		if entry.state_saved:
 			entry.apply_unit_state(unit)   # the snapshot half of #177's fork, same as the loader's
+		# Outside the fork, as on both loaders: a roster VIP is usually a cast reference (#1456). At
+		# EVERY draw, so the roster stays the authority and a restart's snapshot never has to carry it.
+		entry.apply_placement(unit)
 		unit_of_entry[entry] = unit
 		units.append(unit)   # entry order, and it must survive every later reparent
 	return unit_of_entry
@@ -234,6 +261,23 @@ func _stand_authored(entries: Array[ScenarioUnitEntry], unit_of_entry: Dictionar
 		unit_of_entry.erase(entry)
 		deployed += 1
 	return deployed
+
+
+# The forced units' guarantee (#1456), after EITHER ending. The authored walk already chose them
+# first, so this stands someone only when a replay's committed cell has been taken since: the VIP goes
+# to the first open cell, the one a Deploy click would pick. With no room under the cap or in the
+# zone, they wait, and commit_block_reason says so.
+func _stand_forced() -> int:
+	var stood := 0
+	for unit: Unit in units:
+		if not is_forced(unit) or _host.is_deployed(unit):
+			continue
+		var open_cells := open_deployment_cells()
+		if open_cells.is_empty() or not can_deploy_another():
+			break
+		if _host.deploy_unit(unit, open_cells[0]):
+			stood += 1
+	return stood
 
 
 # ...and the OTHER ending (#763). PLACEMENT FIRST, AND NOTHING ELSE UNTIL IT HAS SUCCEEDED: nobody

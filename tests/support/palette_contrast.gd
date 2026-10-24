@@ -96,13 +96,28 @@ static func _ground_for(node: Control, base: Color, box_name: String) -> Color:
 #
 # A RichTextLabel draws in `default_color` rather than `font_color` (the dock's squad box, #1105).
 # Its bbcode spans carry their own colours and are not walked -- the caller's cases name those.
+#
+# A DISABLED button draws neither: it is its disabled ink over its disabled box, and only that state is
+# on screen (#1456, the VIP's Required toggle, whose gold was otherwise never measured).
 static func _ink_states(node: Control) -> Array:
 	if node is Button:
+		if (node as Button).disabled:
+			return [["font_disabled_color", node.get_theme_color("font_disabled_color"), "disabled"]]
 		return [["font_color", node.get_theme_color("font_color"), "normal"],
 				["font_hover_color", node.get_theme_color("font_hover_color"), "hover"]]
 	if node is RichTextLabel:
 		return [["default_color", node.get_theme_color("default_color"), ""]]
 	return [["font_color", node.get_theme_color("font_color"), ""]]
+
+
+# AN OUTLINED GLYPH IS READ AGAINST ITS OUTLINE (#1456). Gold on parchment's cream is too close to
+# read alone, so the VIP marks wear a black outline there, and the ink's edge is then the outline, not
+# the paper. A transparent outline (slate's) draws nothing and falls through to the ground.
+static func _edge_for(node: Control, ground: Color) -> Color:
+	if node.get_theme_constant("outline_size") <= 0:
+		return ground
+	var outline := node.get_theme_color("font_outline_color")
+	return ground if outline.a <= 0.0 else over(outline, ground)
 
 
 static func _readable_text(node: Control) -> String:
@@ -134,7 +149,7 @@ static func findings(root: Node, base: Color, label: String) -> Array[String]:
 			continue   # a spacer, or an empty inventory slot's placeholder
 		for pair: Array in _ink_states(control):
 			var ink: Color = pair[1]
-			var ground := _ground_for(control, base, pair[2])
+			var ground := _edge_for(control, _ground_for(control, base, pair[2]))
 			var gap := contrast(ink, ground)
 			if gap > CONTRAST_FLOOR:
 				continue

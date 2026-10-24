@@ -119,3 +119,50 @@ func test_the_walk_does_not_reorder_the_caller_s_own_cell_array() -> void:
 	var cells: Array[Vector2i] = [Vector2i(5, 5), Vector2i(0, 0)]
 	PreMission.deployment_plan(_entries(2), cells, PreMission.NO_CAP)
 	assert_array(cells).is_equal([Vector2i(5, 5), Vector2i(0, 0)])
+
+
+# --- a forced entry, a roster VIP (#1456) ---
+
+func _forced(entry: ScenarioUnitEntry) -> ScenarioUnitEntry:
+	entry.must_survive = true
+	return entry
+
+
+# The dev's ruling, "If the VIP comes from the roster, they should be forced to be selected": a VIP
+# LAST in the file is chosen before the line-up fills, and the cap counts them like anyone (the
+# plan's answer 2). Once chosen, everybody goes back to ENTRY order for the cells, so the VIP takes
+# the cell the displaced entry would have stood on rather than shifting the whole line by one.
+func test_a_forced_entry_is_chosen_first_but_stands_in_entry_order() -> void:
+	var list: Array[ScenarioUnitEntry] = [_entry("Ana"), _entry("Bram"), _entry("Cole"),
+		_forced(_entry("Torv"))]
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	var plan: Array[Dictionary] = PreMission.deployment_plan(list, cells, 3)
+
+	assert_array(_names_of(plan)).is_equal(["Ana", "Bram", "Torv"])
+	assert_array(_cells_of(plan)).is_equal([Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)])
+
+
+# Without a VIP the walk is exactly what it was: entry order, first come first placed.
+func test_with_no_forced_entry_the_walk_is_unchanged() -> void:
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	assert_array(_names_of(PreMission.deployment_plan(_entries(4), cells, 2))) \
+		.is_equal(["Unit0", "Unit1"])
+
+
+# More VIPs than room is the BLOCKS lint's case (PROTECTED_NO_ROOM): the walk still never exceeds the
+# cap or the zone, it fills the room with VIPs in entry order and leaves the rest.
+func test_forced_entries_beyond_the_room_are_left_out_in_entry_order() -> void:
+	var list: Array[ScenarioUnitEntry] = [_entry("Ana"), _forced(_entry("Bo")),
+		_forced(_entry("Cy")), _forced(_entry("Di"))]
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+	var plan: Array[Dictionary] = PreMission.deployment_plan(list, cells, 2)
+
+	assert_array(_names_of(plan)).is_equal(["Bo", "Cy"])
+
+
+func test_forced_entries_names_the_flagged_entries_and_skips_empty_ones() -> void:
+	var list: Array[ScenarioUnitEntry] = [_entry("Ana"), _forced(ScenarioUnitEntry.new()),
+		_forced(_entry("Bo"))]
+	var forced := PreMission.forced_entries(list)
+	assert_int(forced.size()).is_equal(1)
+	assert_str(forced[0].unit_data.display_name).is_equal("Bo")
