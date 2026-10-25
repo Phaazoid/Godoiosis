@@ -249,10 +249,10 @@ static func sweep_payload(actor: Unit, origin_cell: Vector2i, attack: AttackData
 static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
 		board: BoardContext, hypo: Dictionary, facing: Vector2i, occupant_at: Callable, thrown: bool) -> Sweep:
 	if attack != null and attack.is_single_target_swing():
-		var paths := Reach.get_paths_from(actor, origin_cell, target_cell, attack, board, facing)
+		var paths := Reach.get_paths_from(origin_cell, target_cell, attack, board, facing)
 		return sweep_paths(actor, attack, paths, board, hypo, occupant_at,
 				Reach.travel_facings(origin_cell, target_cell, attack, _tiles_of(paths), facing), thrown)
-	var footprint := Reach.get_affected_cells_from(actor, origin_cell, target_cell, attack, board, facing)
+	var footprint := Reach.get_affected_cells_from(origin_cell, target_cell, attack, board, facing)
 	var facings := Reach.travel_facings(origin_cell, target_cell, attack, footprint, facing)
 	var result := _sweep_area(actor, attack, footprint, facings, board, hypo, occupant_at, thrown)
 	var landed: Dictionary[Vector2i, Array] = {}

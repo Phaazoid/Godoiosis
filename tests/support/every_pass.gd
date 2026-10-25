@@ -71,8 +71,8 @@ static func _aim_with(game: Node, unit: Unit, label: String, around: Callable, r
 static func _declare_at_a_foe(unit: Unit, option: Unit.AimOption, board: BoardContext) -> AttackAction:
 	var origin := unit.get_projected_destination()
 	return unit.with_weapon_in_hand(option.source, func() -> AttackAction:
-		for cell in Reach.get_all_attack_cells_from(unit, origin, option.attack):
-			if not Reach.can_aim_at(unit, origin, cell, option.attack, board):
+		for cell in Reach.get_all_attack_cells_from(origin, option.attack):
+			if not Reach.can_aim_at(origin, cell, option.attack, board):
 				continue
 			var foe := board.projected_unit_at_cell(cell)
 			if foe == null or not RulesService.can_target(unit, foe):

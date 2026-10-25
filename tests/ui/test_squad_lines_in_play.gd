@@ -924,7 +924,7 @@ func test_aiming_at_an_enemy_member_draws_its_squad_and_bare_ground_takes_it_dow
 	_open_aim(hero)
 
 	await _point_at(theirs.members[0].movement.cell)
-	assert_bool(Reach.can_aim_at(hero, hero.movement.cell, theirs.members[0].movement.cell,
+	assert_bool(Reach.can_aim_at(hero.movement.cell, theirs.members[0].movement.cell,
 			hero.get_fired_attack(), game._board())).override_failure_message(
 			"fixture: the member is in reach, so this case cannot tell the pointer from the hit").is_false()
 	assert_int(_om().squad_tether_chords.size()).override_failure_message(

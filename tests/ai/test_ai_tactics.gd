@@ -158,7 +158,7 @@ func test_best_attack_destination_moves_into_range() -> void:
 	# (4,0) is the only reachable cell in Manhattan-1 reach of (5,0): the enemy blocks the
 	# corridor, so (6,0) is unreachable, and (5,0) itself is occupied.
 	assert_that(dest).is_equal(Vector2i(4, 0))
-	assert_bool(Reach.get_all_attack_cells_from(leader, dest, leader.get_fired_attack()).has(enemy.movement.cell)).is_true()
+	assert_bool(Reach.get_all_attack_cells_from(dest, leader.get_fired_attack()).has(enemy.movement.cell)).is_true()
 
 
 func test_best_attack_destination_closes_distance_when_out_of_reach() -> void:
@@ -244,7 +244,7 @@ func test_rushdown_closes_the_whole_distance_over_multiple_turns() -> void:
 		leader.movement.set_cell(dest)
 		if dest.x > 5:
 			crossed = true
-		if Reach.get_all_attack_cells_from(leader, dest, leader.get_fired_attack()).has(enemy.movement.cell):
+		if Reach.get_all_attack_cells_from(dest, leader.get_fired_attack()).has(enemy.movement.cell):
 			reached = true
 			break
 
@@ -296,7 +296,7 @@ func test_rushdown_routes_around_a_downed_body_blocking_the_nearest_attack_cell(
 			stalled = true   # the reported bug (#127): a turn that decides to go nowhere, forever
 			break
 		leader.movement.set_cell(dest)
-		if Reach.get_all_attack_cells_from(leader, dest, leader.get_fired_attack()).has(enemy.movement.cell):
+		if Reach.get_all_attack_cells_from(dest, leader.get_fired_attack()).has(enemy.movement.cell):
 			reached = true
 			break
 

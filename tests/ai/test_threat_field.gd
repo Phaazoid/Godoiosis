@@ -247,7 +247,7 @@ func test_the_counter_rim_adds_nothing_to_a_rushdown() -> void:
 	var opens := {}
 	for origin: Vector2i in field.move_of(rusher):
 		for attack: AttackData in rusher.get_selectable_attacks():
-			for cell: Vector2i in Reach.get_all_attack_cells_from(rusher, origin, attack):
+			for cell: Vector2i in Reach.get_all_attack_cells_from(origin, attack):
 				opens[cell] = true
 	assert_array(_sorted(field.reach_of(rusher))).override_failure_message(
 			"the counter rim widened an archetype that has no leash to widen past"
@@ -870,7 +870,7 @@ func test_open_ground_traces_each_reached_cell_once() -> void:
 	var attack: AttackData = gunner.get_counter_attack()
 	var old_walk := 0
 	for origin: Vector2i in field.move_of(gunner):
-		old_walk += 2 * Reach.get_all_attack_cells_from(gunner, origin, attack).size()   # opening + rim
+		old_walk += 2 * Reach.get_all_attack_cells_from(origin, attack).size()   # opening + rim
 	assert_int(old_walk).override_failure_message(
 			"fixture is vacuous: the old walk traced no more than the cells it reached").is_greater(reached)
 	assert_int(field.traces).override_failure_message(
@@ -887,7 +887,7 @@ func test_the_counter_rim_retraces_nothing_the_opening_pass_did() -> void:
 	var counter: AttackData = gunner.get_counter_attack()
 	assert_array(gunner.get_selectable_attacks()).override_failure_message(
 			"fixture is vacuous: the rim walks a different attack from the opening pass").contains([counter])
-	var ring := Reach.get_all_attack_cells_from(gunner, gunner.movement.cell, counter)
+	var ring := Reach.get_all_attack_cells_from(gunner.movement.cell, counter)
 	var field := ThreatField.build(_context(board), PLAYER)
 	assert_int(field.reach_of(gunner).size()).override_failure_message(
 			"fixture is vacuous: the column refused nothing, so the rim had nothing to re-ask").is_less(ring.size())

@@ -964,7 +964,7 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 		# the attack's vertical tolerance (#258) -- the board carries the elevations. One predicate
 		# since #756, because a directional aim is no longer unconditional: a facing whose spread
 		# the terrain truncates to nothing is a dud order, and the hover draws the same answer.
-		if Reach.can_aim_at(attacker, origin, cell, aiming, _board()):
+		if Reach.can_aim_at(origin, cell, aiming, _board()):
 			_commit_aim(attacker, origin, cell)
 	exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 
@@ -1307,8 +1307,8 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE, source: E
 	overlay_manager.set_aim_colors(aiming, intent == AimIntent.WATCH)
 	var reach_origin := unit.get_projected_destination()
 	overlay_manager.show_attack_reach(
-		Reach.get_all_attack_cells_from(unit, reach_origin, aiming),
-		Reach.blocked_cells_from(unit, reach_origin, aiming, _board()))
+		Reach.get_all_attack_cells_from(reach_origin, aiming),
+		Reach.blocked_cells_from(reach_origin, aiming, _board()))
 
 # Generic "pick one highlighted unit" mode (rescue, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays

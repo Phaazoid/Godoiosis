@@ -181,7 +181,7 @@ static func make_manager(suite: GdUnitTestSuite, heights: BoardHeights = null) -
 # what an area aim struck, its whole footprint off the order's own attack. Production never needs it:
 # every site that builds a volley stamps Conduction.Sweep.struck itself.
 static func stamp_struck(action: AttackAction, board: BoardContext) -> AttackAction:
-	action.struck_cells = Reach.get_affected_cells_from(action.actor, action.origin_cell,
+	action.struck_cells = Reach.get_affected_cells_from(action.origin_cell,
 			action.target_cell, action.fired_attack, board)
 	return action
 

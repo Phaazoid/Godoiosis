@@ -92,7 +92,7 @@ func test_the_gate_and_the_trace_never_disagree() -> void:
 	for wall_height in [0, 2, 4, 6, 8]:
 		var board := _wall_board(wall_height)
 		var shot := _shot(4)
-		var hit: bool = Reach.can_hit_cell_from(null, Vector2i(0, 0), Vector2i(2, 0), shot, board)
+		var hit: bool = Reach.can_hit_cell_from(Vector2i(0, 0), Vector2i(2, 0), shot, board)
 		var clear: bool = not Reach.sight_trace(shot, Vector2i(0, 0), Vector2i(2, 0), board).blocked
 		assert_bool(hit == clear) \
 			.override_failure_message("gate and trace disagree at wall height %d" % wall_height) \
@@ -199,7 +199,7 @@ func test_the_red_overlay_paints_the_cell_behind_a_wall() -> void:
 	# The preview derives from the same gate, so it can no longer tell the player a through-the-wall
 	# shot is legal. The open direction is the control: this must be a WALL verdict, not a blanket
 	# one.
-	var blocked := Reach.blocked_cells_from(null, Vector2i(0, 0), _shot(0),
+	var blocked := Reach.blocked_cells_from(Vector2i(0, 0), _shot(0),
 		_prop_board(Terrain.UNITS_PER_LEVEL))
 	assert_bool(blocked.has(Vector2i(2, 0))).override_failure_message(
 		"the cell behind the wall still previews as legal").is_true()

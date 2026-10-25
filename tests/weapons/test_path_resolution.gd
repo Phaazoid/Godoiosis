@@ -51,7 +51,7 @@ func _swing(paths: Array[Array], max_range := 0) -> WeaponAttackData:
 
 
 func _walk(attack: AttackData, target: Vector2i, board: BoardContext, origin := ORIGIN) -> Array[Array]:
-	return Reach.get_paths_from(null, origin, target, attack, board)
+	return Reach.get_paths_from(origin, target, attack, board)
 
 
 # A unit holding `attack` as its main, so the sweep reads that attack's element off it.
@@ -91,7 +91,7 @@ func test_a_straight_path_walks_exactly_what_the_painted_line_truncates_to() -> 
 				painted.up_tolerance = 2
 				var drawn := _swing([_straight(length)] as Array[Array])
 				drawn.up_tolerance = 2
-				var lane := Reach.get_affected_cells_from(null, ORIGIN, ORIGIN + dir, painted, board)
+				var lane := Reach.get_affected_cells_from(ORIGIN, ORIGIN + dir, painted, board)
 				var walked := _walk(drawn, ORIGIN + dir, board)
 				var got: Array[Vector2i] = []
 				if not walked.is_empty():
@@ -140,7 +140,7 @@ func test_swing_off_walks_no_paths_and_covers_every_tile() -> void:
 	swing.swing = false
 	var board := _board({Vector2i(0, -2): WALL})
 	assert_array(_walk(swing, UP_AIM, board)).is_empty()
-	assert_array(Reach.get_affected_cells_from(null, ORIGIN, UP_AIM, swing, board)) \
+	assert_array(Reach.get_affected_cells_from(ORIGIN, UP_AIM, swing, board)) \
 		.contains_exactly_in_any_order(_straight(3))
 
 
@@ -153,7 +153,7 @@ func test_a_null_board_walks_every_tile() -> void:
 # used to take it literally, and a revisit must not become a second deposit.
 func test_the_footprint_lists_a_revisited_tile_once() -> void:
 	var swing := _swing([_path([Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -1)])] as Array[Array])
-	var cells := Reach.get_affected_cells_from(null, ORIGIN, UP_AIM, swing, _board())
+	var cells := Reach.get_affected_cells_from(ORIGIN, UP_AIM, swing, _board())
 	assert_array(cells).contains_exactly_in_any_order([Vector2i(0, -1), Vector2i(0, -2)])
 
 

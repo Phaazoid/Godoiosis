@@ -256,7 +256,7 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 				continue
 			var out: Dictionary = by_attack.get_or_add(attack, {})
 			var known := memo.at(attack, origin)
-			for cell in Reach.get_all_attack_cells_from(unit, origin, attack):
+			for cell in Reach.get_all_attack_cells_from(origin, attack):
 				if out.has(cell):
 					continue
 				if not Reach.is_directional_attack(attack) and not memo.aim_ok(known, attack, origin, cell, board):
@@ -298,7 +298,7 @@ static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[V
 		if _fizzles(unit, counter, origin, board, fizzled):
 			continue   # a counter that would fizzle there lands nothing (PlanResolver.resolve_counters)
 		var known := memo.at(counter, origin)
-		for cell in Reach.get_all_attack_cells_from(unit, origin, counter):
+		for cell in Reach.get_all_attack_cells_from(origin, counter):
 			if out.has(cell):
 				continue
 			if not Reach.is_directional_attack(counter) and not memo.aim_ok(known, counter, origin, cell, board):

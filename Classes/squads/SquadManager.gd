@@ -548,7 +548,7 @@ func _candidate_watch_declarable(squad: Squad, action: BaseAction) -> bool:
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	if Reach.can_aim_at(action.actor, origin, watch.target_cell, watch.fired_attack, board_source.call()):
+	if Reach.can_aim_at(origin, watch.target_cell, watch.fired_attack, board_source.call()):
 		return true
 	watch.add_validation_error("Can't aim a watch there")
 	return false
@@ -739,7 +739,7 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# counter from a reach attack's range and then swing a range-1 main (#102). The board carries
 	# the elevations: a target above this unit's up_tolerance draws no counter (#258's counter
 	# denial). Required, may be null = flat -- an optional would silently read flat forever.
-	return Reach.can_hit_cell_from(countering_unit, counter_cell, aimed_from, counter_attack, board)
+	return Reach.can_hit_cell_from(counter_cell, aimed_from, counter_attack, board)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext,
 		hypo: Dictionary) -> Unit:

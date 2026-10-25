@@ -345,13 +345,13 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 		# trace -- valid or blocked, the player sees the line the gate judged. Melee draws none
 		# (visually obvious anytime -- dev); a directional aim has no single line.
 		if Reach.draws_sight_trace(aiming) \
-				and Reach.get_attack_cells_from(attacker, origin, cell, aiming).has(cell):
+				and Reach.get_attack_cells_from(origin, cell, aiming).has(cell):
 			game.overlay_manager.show_sight_trace(Reach.sight_trace(aiming, origin, cell, board))
 			trace_shown = true
 		# Directional: a facing whose spread the terrain leaves standing (#756 -- it was any non-zero
 		# facing before truncation). Point: the hovered cell itself must be in range AND within
 		# vertical tolerance (#258). One predicate, the same one the click commits through.
-		var aimable := Reach.can_aim_at(attacker, origin, cell, aiming, board)
+		var aimable := Reach.can_aim_at(origin, cell, aiming, board)
 		if aimable and game.aim_intent == game.AimIntent.WATCH:
 			# A WATCH shows what the order it queues will arm (#1355): the resolver's footprint rule asked
 			# of a probe, as the Play API asks it, so the hover and the queued ghost are one answer. The

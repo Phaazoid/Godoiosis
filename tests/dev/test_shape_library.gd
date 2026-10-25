@@ -185,7 +185,7 @@ func test_picking_none_leaves_the_attack_shapeless_rather_than_empty() -> void:
 	_picker().item_selected.emit(_row(AttackEditorTool.NO_SHAPE_KEY))
 	assert_object(_editor.current.attack_shape).is_null()
 	assert_object(_editor._shape.staged).is_null()
-	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(1, 0), _editor.current, null)) \
+	assert_array(Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(1, 0), _editor.current, null)) \
 		.contains_exactly([Vector2i(1, 0)])
 
 
