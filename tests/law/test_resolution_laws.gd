@@ -61,11 +61,16 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	assert_int(target.get_current_hp()).is_equal(start_hp - previewed)
 
 # R3 under a stat change between resolve and execute (#112): stat-derived damage is computed once at
-# plan time and frozen, and the lethality RUNG reads no effective stat. A change the PASS makes (a lost
-# limb's strip) is threaded through the pass's copy of the body instead (#1480), and pinned in
-# tests/law/test_strip_threads_through_the_pass.gd.
+# plan time and frozen, and the lethality RUNG reads no effective stat.
 #
-# If either of these ever fails, the frozen half has stopped holding.
+# These two once stood guard for a thread that did not exist: _Hypo carried no stat modifiers, so a
+# change the pass made could only reach a later hit if nothing read it. That thread is built (#1480).
+# The pass's copy is the whole body, its stat effects included, and every change the pass makes lands
+# on it through the live body's own doors: a lost limb's strip (test_strip_threads_through_the_pass)
+# and a paired state's effect (test_paired_states_thread_through_the_pass). An effect a QUEUED order
+# applies would land the same way; the order that applies one is #113's payload.
+#
+# So these now pin only the frozen half: a change made AFTER the pass reaches nothing it stamped.
 
 func test_a_stat_change_after_resolve_cannot_move_executed_damage() -> void:
 	# The attacker gets a large STR buff BETWEEN resolve and execute. Execution is pure playback

@@ -222,7 +222,8 @@ func pending_deposits() -> Array[Dictionary]:
 # The threaded hypothetical the pass resolved through (Unit -> PlanResolver._Hypo), kept on the
 # plan instead of dying as a resolver local (#124): "what state does this pass LEAVE a unit in?"
 # is a question the resolver already answered, and re-deriving it from outcomes would be a second
-# ladder. Read through PlanResolver.projected_hp / projected_lifecycle, never written after the pass.
+# ladder. Read through PlanResolver.projected_hp / projected_lifecycle, and the whole planned body
+# through PlanResolver.state_of (#1480 stage 5); never written after the pass.
 var hypo: Dictionary = {}
 
 
