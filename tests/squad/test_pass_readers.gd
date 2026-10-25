@@ -1,4 +1,4 @@
-# What a pass's own readers see (#1349, #1353). Inside one resolve, "where is this unit now?" has
+# What a pass's own readers see (#1349, #1353, #1500). Inside one resolve, "where is this unit now?" has
 # two answers: the pass's threaded one (PlanResolver.projected_position) and the PUBLISHED projection
 # (get_projected_destination), which lets a walk beat a shove the pass landed after it and never holds
 # a counter's shove. Every reader inside the pass must take the first. Each case here queues through
@@ -34,13 +34,13 @@ func _spawn(b: Dictionary, unit_name: String, fac: Team.Faction, cell: Vector2i)
 	return unit
 
 
-# One attack, range 1, that throws whatever it hits a tile on -- squadmates included, the way the
-# Air and Wind runes' Gust does. Built here, so no authored attack is pinned.
-func _arm_shover(unit: Unit) -> void:
+# One attack, range 1, that throws whatever it hits `knockback` tiles on -- squadmates included, the
+# way the Air and Wind runes' Gust does. Built here, so no authored attack is pinned.
+func _arm_shover(unit: Unit, knockback := 1) -> void:
 	var shove := WeaponAttackData.new()
 	shove.display_name = "Shove"
 	shove.power = 1
-	shove.knockback = 1
+	shove.knockback = knockback
 	shove.hits_allies = true
 	P.point(shove, 1, 1)
 	var t := WeaponData.new()
@@ -273,3 +273,127 @@ func test_a_bystander_this_plan_throws_into_fire_gets_this_squads_row() -> void:
 	var burn := _burn_for(sess, bystander)
 	assert_object(burn).is_not_null()
 	assert_int(forecast.resolved.damage).is_equal(burn.resolved.damage)
+
+
+# ==============================================================================
+#  #1500 -- a shove's flight and tumble meet bodies where the pass has them
+# ==============================================================================
+#
+# Moves resolve as a block ahead of the attacks (R6), so by the time a shove lands every walk in the
+# plan has happened. A body in the way is a body where the pass has it: a squadmate that walked out of
+# the flight path has left, and one that walked into it is there.
+
+# The hit on `unit`, shoved or not: a flight stopped before its first step applies no shove, and that
+# is one of the answers these cases tell apart.
+func _hit_on(plan: ResolvedPlan, unit: Unit) -> AttackAction:
+	for atk in plan.attacks:
+		if atk.target == unit and atk.resolved != null:
+			return atk
+	return null
+
+
+# The mover joins the pusher's squad and walks; then the pusher shoves the foe. Both through the Play
+# API's doors, the walk queued first.
+func _walk_then_shove(b: Dictionary, pusher: Unit, mover: Unit, walk_to: Vector2i, foe: Unit):
+	b.squad_manager.join_squad(mover, pusher.squad)
+	var sess = PlaySession.new(b)
+	var walk: Dictionary = sess.queue_move(sess.handle_for(mover), walk_to)
+	assert_bool(walk.ok).override_failure_message("fixture: the walk was refused: %s" % str(walk)).is_true()
+	var shot: Dictionary = sess.queue_attack(sess.handle_for(pusher), foe.movement.cell)
+	assert_bool(shot.ok).override_failure_message("fixture: the shove was refused: %s" % str(shot)).is_true()
+	return sess
+
+
+func _hit_after_resolve(sess, foe: Unit) -> AttackAction:
+	var plan: ResolvedPlan = sess.squad_manager.resolve_plan(sess.squad_manager.active_squad, sess._board())
+	var hit := _hit_on(plan, foe)
+	assert_object(hit).override_failure_message("fixture: the shove never reached the foe").is_not_null()
+	return hit
+
+
+# A squadmate walks OUT of the cell beside the foe, and the shove throws the foe that way. The cell is
+# empty by the time the shove lands, so the flight runs its full two tiles through it.
+func test_a_shove_flies_through_a_cell_a_squadmate_walked_out_of() -> void:
+	var b := _board("WalkedOutRoot")
+	var pusher := _spawn(b, "Pusher", PLAYER, Vector2i(2, 6))
+	var foe := _spawn(b, "Foe", ENEMY, Vector2i(2, 5))
+	var mover := _spawn(b, "Mover", PLAYER, Vector2i(2, 4))   # in the flight path, until it walks
+	_arm_shover(pusher, 2)
+	var sess = _walk_then_shove(b, pusher, mover, Vector2i(3, 4), foe)
+
+	var hit := _hit_after_resolve(sess, foe)
+	assert_bool(hit.resolved.knockback_applied).override_failure_message(
+			"the shove stopped dead against the cell the mover walked out of").is_true()
+	var landed: Vector2i = hit.resolved.knockback_to
+	assert_that(landed).override_failure_message(
+			"the flight stopped short of an empty cell, at %s" % str(landed)).is_equal(Vector2i(2, 3))
+
+	assert_bool(sess.execute().ok).is_true()
+	assert_that(foe.movement.cell).is_equal(landed)
+
+
+# A squadmate walks INTO the flight path. The flight halts short of it, rather than flying through
+# the cell the squadmate is standing in by then.
+func test_a_shove_halts_short_of_a_squadmate_that_walked_into_its_path() -> void:
+	var b := _board("WalkedInRoot")
+	var pusher := _spawn(b, "Pusher", PLAYER, Vector2i(2, 6))
+	var foe := _spawn(b, "Foe", ENEMY, Vector2i(2, 5))
+	var mover := _spawn(b, "Mover", PLAYER, Vector2i(3, 3))
+	_arm_shover(pusher, 3)
+	var walked_to := Vector2i(2, 3)   # the flight's second cell
+	var sess = _walk_then_shove(b, pusher, mover, walked_to, foe)
+
+	var hit := _hit_after_resolve(sess, foe)
+	var landed: Vector2i = hit.resolved.knockback_to
+	assert_that(landed).override_failure_message(
+			"the flight did not halt short of the mover, landing at %s" % str(landed)).is_equal(Vector2i(2, 4))
+
+	assert_bool(sess.execute().ok).is_true()
+	assert_that(foe.movement.cell).is_equal(landed)
+	assert_that(mover.movement.cell).is_equal(walked_to)
+
+
+# The same walk onto the flight's LAST cell: the shove would land the foe on the mover. Nothing else in
+# the plan refuses that, so the flight's own occupancy is the only thing between it and two bodies on
+# one tile.
+func test_a_shove_never_lands_on_a_squadmate_that_walked_onto_its_landing() -> void:
+	var b := _board("WalkedOntoRoot")
+	var pusher := _spawn(b, "Pusher", PLAYER, Vector2i(2, 6))
+	var foe := _spawn(b, "Foe", ENEMY, Vector2i(2, 5))
+	var mover := _spawn(b, "Mover", PLAYER, Vector2i(3, 3))
+	_arm_shover(pusher, 2)
+	var walked_to := Vector2i(2, 3)   # where the flight would end
+	var sess = _walk_then_shove(b, pusher, mover, walked_to, foe)
+
+	var hit := _hit_after_resolve(sess, foe)
+	var landed: Vector2i = hit.resolved.knockback_to
+	assert_that(landed).override_failure_message(
+			"the shove landed the foe at %s, on the mover's cell or past it" % str(landed)).is_equal(Vector2i(2, 4))
+	var res: Dictionary = sess.preview()
+	assert_bool(res.ok).override_failure_message("preview refused: %s" % str(res)).is_true()
+
+	assert_bool(sess.execute().ok).is_true()
+	assert_that(foe.movement.cell).override_failure_message(
+			"after execute the foe and the mover share a tile").is_not_equal(mover.movement.cell)
+	assert_that(foe.movement.cell).is_equal(landed)
+
+
+# The tumble asks the same question: a squadmate that walked out of the cell at the foot of a ramp has
+# left it, so a foe shoved onto the ramp slides down into it. test_falls.gd's perpendicular-ramp board.
+func test_a_tumble_slides_into_a_cell_a_squadmate_walked_out_of() -> void:
+	var b := _board("TumbleWalkedOutRoot")
+	(b.board_heights as BoardHeights).set_cell(Vector2i(3, 3), 0, Terrain.RampRise.NORTH)   # downhill is south
+	var pusher := _spawn(b, "Pusher", PLAYER, Vector2i(1, 3))
+	var foe := _spawn(b, "Foe", ENEMY, Vector2i(2, 3))
+	var mover := _spawn(b, "Mover", PLAYER, Vector2i(3, 4))   # at the foot of the ramp, until it walks
+	_arm_shover(pusher, 1)
+	var sess = _walk_then_shove(b, pusher, mover, Vector2i(2, 4), foe)
+
+	var hit := _hit_after_resolve(sess, foe)
+	assert_bool(hit.resolved.knockback_applied).override_failure_message("fixture: the shove did not land").is_true()
+	var landed: Vector2i = hit.resolved.knockback_to
+	assert_that(landed).override_failure_message(
+			"the tumble stopped at %s, short of the cell the mover walked out of" % str(landed)).is_equal(Vector2i(3, 4))
+
+	assert_bool(sess.execute().ok).is_true()
+	assert_that(foe.movement.cell).is_equal(landed)
