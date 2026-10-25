@@ -330,6 +330,7 @@ static func outcome_fields() -> Dictionary:
 			"kind": {"play": gap("#46", "the queue row's damage-kind line is not printed"), "ai": never(IN_DAMAGE)},
 			"mitigation": {"play": gap("#46", "the queue row's 'DEF n subtracted' line is not printed"),
 					"ai": never(IN_DAMAGE)},
+			"worn_armor": {"play": gap("#46", "the queue row's armour line is not printed"), "ai": never(IN_DAMAGE)},
 			"fall_damage": {"play": never("folded into the damage; the fall prints as 'falls N'"), "ai": never(IN_DAMAGE)},
 			"fall_levels": {"play": covered(SESSION, ".fall_levels"), "ai": never(IN_DAMAGE)},
 			"insulated": {"play": covered(SESSION, ".insulated"), "ai": never(IN_DAMAGE)},
