@@ -77,12 +77,14 @@ static func make_gas(body: UnitState, kind: Gas.Kind, gained: Elemental.State, d
 # forecast (PlanResolver.resolve_tile_hits) and the pass (TurnBoundary.tile_hits) both call (#1331):
 # a scald and a burn are two damage rows on one unit, and the burn must be predicted against the HP
 # the scald leaves, so the threading lives here rather than in each caller. A body a row kills takes
-# nothing more. `body` is not written: the rows thread a copy of it, made only when a row can land
-# damage, because the health bars ask this every frame (TurnBoundary.forecast).
+# nothing more. `body` is not written: the rows thread a copy of it, made only when a row may WRITE,
+# which is a scald (gas_hits lands its rung before the next row reads HP), because the health bars ask
+# this every frame (TurnBoundary.forecast). A burn alone, or a gas that only soaks, reads and copies
+# nothing. The check is the authored scald (GasRules.scalds), so an insulated unit copies for nothing.
 static func end_of_turn(body: UnitState, packed: int, sky: Weather.Kind,
 		ground: Array[Terrain.TileState]) -> Array[TileHitAction]:
 	var burn := RulesService.occupant_damage_for(body, ground)
-	var now := body.copy() if packed != 0 or burn > 0 else body
+	var now := body.copy() if GasRules.scalds(packed) else body
 	var hits := soaks(now, packed, sky)
 	if now.lifecycle_state == Unit.LifecycleState.DEAD:
 		return hits

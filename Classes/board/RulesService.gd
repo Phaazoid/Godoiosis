@@ -135,13 +135,10 @@ static func occupant_damage_for(body: UnitState, states: Array[Terrain.TileState
 # The gas's twin (#1331): what standing in this kind at this level costs this unit at its end of turn --
 # the rules file's damage at that level, zero for a unit insulated against its damage_element. The
 # forecast, the pass (both through TileHitAction.gas_hits) and the AI's hazard read ask this one rule.
-# The authored number is read first, so a gas that deals nothing never asks the unit.
+# The authored number (GasRules.scald_at) is read first, so a gas that deals nothing never asks the unit.
 static func gas_damage_for(body: UnitState, kind: Gas.Kind, level: int) -> int:
-	var rules := GasRules.for_kind(kind)
-	if rules == null:
-		return 0
-	var damage := int(rules.damage.get(level, 0))
-	if damage <= 0 or body.is_immune_to(rules.damage_element):
+	var damage := GasRules.scald_at(kind, level)
+	if damage <= 0 or body.is_immune_to(GasRules.for_kind(kind).damage_element):
 		return 0
 	return damage
 
