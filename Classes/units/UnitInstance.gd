@@ -303,7 +303,7 @@ func next_maim_slot() -> int:
 	return order[0] if not order.is_empty() else -1
 
 # Every slot a run of limb losses would take, in order: natural limbs by the rotation, then
-# prosthetics. The resolver threads it so two big hits in one pass take two limbs (#1174).
+# prosthetics. Each sever takes its head, so two big hits in one pass take two limbs (#1174).
 func maim_order() -> Array[int]:
 	var order: Array[int] = []
 	for slot in MAIM_ROTATION:

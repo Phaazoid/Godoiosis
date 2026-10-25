@@ -31,7 +31,7 @@ const FOLDER := "res://Resources/GasRules/"
 # What a unit standing in this gas when its OWN side's turn ends takes, by level (#1331, steam's scald):
 # a level not named deals nothing, so thin steam stays harmless. A tile hit like fire's burn, not a
 # blow: no reaction answers it, DEF never sees it and no limb goes. Lands at the end of the turn even
-# for a while_standing gas, since damage needs a moment. RulesService.gas_damage_for is its one reader.
+# for a while_standing gas, since damage needs a moment. scald_at is its one reader.
 @export var damage: Dictionary[Gas.Level, int] = {}
 # The insulation that stops that damage (Unit.is_immune_to). NONE: nothing does.
 @export var damage_element := Elemental.Element.NONE
@@ -82,13 +82,27 @@ static func standing_text(kind: Gas.Kind, level: int) -> String:
 	return said if parts.is_empty() else "%s: %s" % [said, ", ".join(parts)]
 
 
-# What standing in this kind at this level costs at the end of the turn, as the tile card says it
-# ("3 damage at end of turn"); empty when it costs nothing.
-static func scald_text(kind: Gas.Kind, level: int) -> String:
+# What standing in this kind at this level costs at the end of the turn, as authored: 0 for a level
+# `damage` does not name or a kind with no rules. Before insulation, which is RulesService.gas_damage_for.
+static func scald_at(kind: Gas.Kind, level: int) -> int:
 	var rules := for_kind(kind)
-	if rules == null:
-		return ""
-	var amount := int(rules.damage.get(level, 0))
+	return int(rules.damage.get(level, 0)) if rules != null else 0
+
+
+# Whether any gas on this cell (`packed`, Gas.with_level's form) scalds at its level, before insulation:
+# true whenever RulesService.gas_damage_at is above 0, and also for a unit insulated against it.
+static func scalds(packed: int) -> bool:
+	if packed == 0:
+		return false
+	for kind: Gas.Kind in Gas.kinds_in(packed):
+		if scald_at(kind, Gas.level_in(packed, kind)) > 0:
+			return true
+	return false
+
+
+# ...as the tile card says it ("3 damage at end of turn"); empty when it costs nothing.
+static func scald_text(kind: Gas.Kind, level: int) -> String:
+	var amount := scald_at(kind, level)
 	return "%d damage at end of turn" % amount if amount > 0 else ""
 
 
