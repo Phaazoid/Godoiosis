@@ -134,7 +134,7 @@ The dev's scratchpad ask (2026-09-12): *"cycle through your available weapons an
 - **A preview writes nothing.**
   - The resolver reads the weapon in hand in about eight places: damage, armour-piercing, kind, elements, a tank charge, shove, ally splash, and mod stat bonuses. So another weapon's attack is previewed with that weapon in hand.
   - `Unit.with_weapon_in_hand(source, work)` swaps it in through `set_equipped_weapon` for one synchronous computation, then puts the held one back.
-  - The hover's sweep and the forecast's hypothetical run inside it. `preview_aim`'s restoring `resolve_plan` deliberately runs outside, or the cache would keep a plan resolved with a weapon nobody holds.
+  - The hover's sweep and `aim_options` run inside it. The forecast's hypothetical does not since [#1480](https://github.com/Phaazoid/Godoiosis/issues/1480) stage 4: the pass's COPY of the actor holds the source (`PlanResolver.hold_in_hand`, through `UnitState.equip`, the gate `set_equipped_weapon` forwards to), so the live hand never moves for it. `preview_aim`'s restoring `resolve_plan` holds nothing, or the cache would keep a plan resolved with a weapon nobody holds.
   - Between frames the unit always holds what was equipped, so a save, a bug report or an Update taken mid-aim records no swap the player never made.
   - The visible cost, declared: the dock shows the held weapon until the click.
 - **The click equips it for real.**
