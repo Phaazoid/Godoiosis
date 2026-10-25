@@ -543,8 +543,9 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 	return group
 
 
-# Who stands on `cell` against THIS pass's threaded positions -- the occupancy a watch shot's gather
-# is handed (Conduction.sweep_paths, #1057). First unit wins, like every other cell-first lookup. An
+# Who stands on `cell` against THIS pass's threaded positions -- THE occupancy read inside a pass: the
+# one a watch shot's gather is handed (Conduction.sweep_paths, #1057), and the body a shove's flight and
+# tumble stop short of (#1500). First unit wins, like every other cell-first lookup. An
 # empty hypo reads the projection (Unit.projected_unit_at's answer), so a caller ahead of any resolve
 # asks the same question.
 static func unit_threaded_at(cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
@@ -1245,8 +1246,8 @@ static func _knockback_landing(action: AttackAction, body: UnitState, target_hyp
 			continue   # airborne: a hole cannot catch you mid-flight
 		if board.elevation_at(next) > flight_height:
 			break   # you cannot be pushed uphill -- high ground braces you (#259)
-		if board.unit_at_cell(next) != null:
-			break   # a body in the way halts the flight short of it, water or not
+		if unit_threaded_at(next, board, hypo) != null:
+			break   # a body in the way, where the pass has it (#1500), halts the flight short of it, water or not
 		# WATER CATCHES rather than braces (#116) — the whole of the water half. The flight enters
 		# the first cell this unit cannot stand on and stops IN it, where it used to stop dry on the
 		# bank; "water stops the shove" is still true, one cell later. Deliberately NOT the void's
@@ -1297,7 +1298,7 @@ static func _knockback_landing(action: AttackAction, body: UnitState, target_hyp
 		return landing
 	# "When a unit lands, if they land on a slope, they tumble down that too" (dev, 2026-08-20).
 	if Terrain.climb_of_corners(corners) > 0:
-		_tumble(landing, body, board, dir)
+		_tumble(landing, body, board, dir, hypo)
 	return landing
 
 
@@ -1317,14 +1318,15 @@ static func _knockback_landing(action: AttackAction, body: UnitState, target_hyp
 # direction the unit was shoved. We can eyeball it from there." So a cardinal ramp keeps sliding down
 # its OWN slope exactly as before, and a form that has no cardinal downhill carries on the way the
 # shove was already going -- provisional, and the one thing in this slice meant to be judged by eye.
-static func _tumble(landing: _Landing, body: UnitState, board: BoardContext, shove_dir: Vector2i) -> void:
+static func _tumble(landing: _Landing, body: UnitState, board: BoardContext, shove_dir: Vector2i,
+		hypo: Dictionary) -> void:
 	var cell := landing.cell
 	while true:
 		var rise := board.ramp_rise_at(cell)
 		var down := shove_dir if rise == Terrain.RampRise.NONE else -Terrain.rise_direction(rise)
 		var next: Vector2i = cell + down
-		if board.unit_at_cell(next) != null:
-			break
+		if unit_threaded_at(next, board, hypo) != null:
+			break   # the flight's own occupancy question (#1500)
 		# A slope that runs out over a hole DROPS INTO IT (#969) -- the flight's own rule applied to
 		# the slide, so the two halves of one shove cannot disagree about what a hole does. It was
 		# the last member of #259's conservative package still unreversed: the lip went with

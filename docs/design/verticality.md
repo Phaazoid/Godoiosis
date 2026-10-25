@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #1415 (2026-10-22).**
+**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -1010,6 +1010,11 @@ word.
 > A shove that steps onto a descending ramp keeps descending while the next cell is another ramp
 > continuing down, and ends on the first flat or level cell it can legally enter. A wall, a rise, or
 > an occupied cell stops it where it stands. No fall damage.
+
+*[An occupied cell, for the tumble and the flight alike, is one a unit stands in **where the pass has
+it at that moment** ([#1500](https://github.com/Phaazoid/Godoiosis/issues/1500), 2026-10-25). Moves
+resolve before attacks, so a squadmate that walked out of the path has left it, and one that walked
+into it is there: `PlanResolver.unit_threaded_at`, never the live board.]*
 
 ```
 shove →
