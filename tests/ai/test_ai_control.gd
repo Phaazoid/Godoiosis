@@ -200,8 +200,8 @@ func test_depth_bounded_field_agrees_with_the_full_walk() -> void:
 	var source := Vector2i(0, 0)
 
 	var walker: Unit = board.leader
-	var full: Dictionary = RulesService.path_hops(source, context, walker)
-	var bounded: Dictionary = RulesService.path_hops(source, context, walker, 3)
+	var full: Dictionary = RulesService.path_hops(source, context, walker.state)
+	var bounded: Dictionary = RulesService.path_hops(source, context, walker.state, 3)
 
 	assert_int(bounded.size()).is_less(full.size())   # it really did stop early
 	for cell in bounded:
@@ -218,10 +218,10 @@ func test_until_bounded_field_covers_every_requested_cell() -> void:
 	var context := _context(board)
 	var source := Vector2i(0, 0)
 	var walker: Unit = board.leader
-	var full: Dictionary = RulesService.path_hops(source, context, walker)
+	var full: Dictionary = RulesService.path_hops(source, context, walker.state)
 
 	var wanted := { Vector2i(2, 0): true, Vector2i(1, 1): true }
-	var bounded: Dictionary = RulesService.path_hops(source, context, walker, -1, wanted)
+	var bounded: Dictionary = RulesService.path_hops(source, context, walker.state, -1, wanted)
 
 	for cell in wanted:
 		assert_bool(bounded.has(cell)).is_true()
@@ -237,10 +237,10 @@ func test_until_falls_back_to_the_full_walk_when_a_cell_is_unreachable() -> void
 
 	var walker: Unit = board.leader
 	var wanted := { Vector2i(99, 99): true }
-	var bounded: Dictionary = RulesService.path_hops(source, context, walker, -1, wanted)
+	var bounded: Dictionary = RulesService.path_hops(source, context, walker.state, -1, wanted)
 
 	assert_bool(bounded.has(Vector2i(99, 99))).is_false()
-	assert_int(bounded.size()).is_equal(RulesService.path_hops(source, context, walker).size())
+	assert_int(bounded.size()).is_equal(RulesService.path_hops(source, context, walker.state).size())
 
 
 # --- #115: the cohesion field is per-unit, not per-cell ---
@@ -259,8 +259,8 @@ func test_hop_field_crosses_water_only_for_a_waterwalker() -> void:
 	var walker: Unit = board.member
 	walker.unit_instance.add_job("scout")
 
-	var plain_field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, plain)
-	var walker_field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, walker)
+	var plain_field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, plain.state)
+	var walker_field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, walker.state)
 
 	assert_bool(plain_field.has(Vector2i(4, 0))).is_false()    # the water itself
 	assert_bool(plain_field.has(Vector2i(6, 0))).is_false()    # and everything behind it
@@ -276,7 +276,7 @@ func test_an_enemy_body_does_not_sever_the_cohesion_field() -> void:
 	BB.spawn(board, H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(4, 0))   # hostile to the ENEMY squad
 	var context := _context(board)
 
-	var field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, board.leader)
+	var field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, board.leader.state)
 
 	assert_bool(field.has(Vector2i(4, 0))).is_true()
 	assert_bool(field.has(Vector2i(6, 0))).is_true()

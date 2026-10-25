@@ -139,7 +139,7 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, allowed) -> D
 
 	# ONE walk for every candidate cell at once, _approach_distances' own trick: the `until` set is
 	# the union, so the search stops as soon as they all have a distance.
-	var field := RulesService.path_hops(leader.movement.cell, board, leader, -1, wanted, true)
+	var field := RulesService.path_hops(leader.movement.cell, board, leader.state, -1, wanted, true)
 	var out := {}
 	for enemy: Unit in per_enemy:
 		var best := _Engagement.new()
@@ -262,7 +262,7 @@ static func _approach_firing(from_unit: Unit, board: BoardContext) -> Dictionary
 	if wanted.is_empty():
 		return {}
 
-	var field := RulesService.path_hops(from_unit.movement.cell, board, from_unit, -1, wanted, true)
+	var field := RulesService.path_hops(from_unit.movement.cell, board, from_unit.state, -1, wanted, true)
 	var result := {}
 	for unit in per_enemy:
 		var best := RulesService.UNREACHABLE
@@ -1059,7 +1059,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	if footprints.is_empty():
 		return origin
 
-	var field := RulesService.path_hops(enemy.movement.cell, board, enemy, -1, wanted, false)
+	var field := RulesService.path_hops(enemy.movement.cell, board, enemy.state, -1, wanted, false)
 	var best := origin
 	var best_hops := -1
 	var best_covered := 0
@@ -1255,7 +1255,7 @@ static func regroup_target(stray: Unit, squad_manager: SquadManager, board: Boar
 	var leaders := {}
 	for squad in eligible:
 		leaders[squad.get_leader().movement.cell] = true
-	var hops := RulesService.path_hops(stray.movement.cell, board, stray, -1, leaders)
+	var hops := RulesService.path_hops(stray.movement.cell, board, stray.state, -1, leaders)
 	var best: Squad = null
 	var best_hops := RulesService.UNREACHABLE
 	for squad in eligible:
@@ -2027,7 +2027,7 @@ static func _nearest_standable_attack_cell(unit: Unit, goal: Vector2i, aiming: A
 	if candidates.is_empty():
 		return goal
 
-	var route := RulesService.path_hops(unit.movement.cell, board, unit, -1, candidates, true)
+	var route := RulesService.path_hops(unit.movement.cell, board, unit.state, -1, candidates, true)
 	var best := goal
 	var best_hops := RulesService.UNREACHABLE
 	for cell in candidates:
@@ -2098,7 +2098,7 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	# caller here is asking "how much closer does this cell get me", so the estimate has to describe
 	# the route the unit will really walk. Sentry's walk home has the same shape (an enemy holding a
 	# corridor), which is why this is unconditional rather than keyed off route_target.
-	var route := RulesService.path_hops(hop_target, board, unit, -1, wanted, true)
+	var route := RulesService.path_hops(hop_target, board, unit.state, -1, wanted, true)
 	var watches := _hostile_watches(unit.get_faction(), board)
 	# Balanced's tie-break (#1220): how many enemies could attack the cell next turn, from the
 	# viewer's own danger field. Zero for everyone else, so it never speaks for them.

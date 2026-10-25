@@ -158,7 +158,7 @@ func test_a_handover_held_through_a_walk_judges_reach_where_the_walkers_end() ->
 # death instead of the walk's end drops a member who should have stayed.
 func test_a_held_handover_still_ejects_by_range_before_capacity() -> void:
 	var units := _held_handover_squad([Vector2i(0, 6), Vector2i(4, 0), Vector2i(5, 1)], Vector2i(5, 0))
-	assert_int(Squad.capacity_of(units[1])).override_failure_message(
+	assert_int(Squad.capacity_of(units[1].state)).override_failure_message(
 			"fixture: the heir must hold exactly the three left once the stranded member goes").is_equal(3)
 	var stranded := units[2]
 	var newest := units[4]

@@ -56,7 +56,7 @@ static func _nearest_cargo_cell(leader: Unit, cells: Array[Vector2i], board: Boa
 	var wanted: Dictionary = {}
 	for cell in cells:
 		wanted[cell] = true
-	var route := RulesService.path_hops(leader.movement.cell, board, leader, -1, wanted, true)
+	var route := RulesService.path_hops(leader.movement.cell, board, leader.state, -1, wanted, true)
 	var best: Vector2i = cells[0]
 	var best_hops: int = RulesService.UNREACHABLE
 	var best_dist: int = GridUtils.manhattan_distance(leader.movement.cell, best)

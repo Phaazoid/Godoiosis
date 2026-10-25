@@ -181,7 +181,7 @@ func _group_move_past_a_wall(member_dex: int, member_offset: Vector2i, walls: Ar
 	return member_move
 
 func _walk(from: Vector2i, to: Vector2i, member: Unit) -> int:
-	return RulesService.path_hops(from, game._board(), member, -1, { to: true }) \
+	return RulesService.path_hops(from, game._board(), member.state, -1, { to: true }) \
 		.get(to, RulesService.UNREACHABLE)
 
 # Behind a three-cell wall: two grid steps from the leader but six walking. The member ends three grid
@@ -771,21 +771,21 @@ func test_smoke_where_the_leader_stands_shortens_its_leash_and_nowhere_else() ->
 	var drop := _smoke_drop()
 
 	game.gas_field.set_level(member.movement.cell, Gas.Kind.SMOKE, Gas.Level.THICK)
-	assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).override_failure_message(
+	assert_int(SquadCohesion.reach_at(leader.state, Vector2i.ZERO, game._board())).override_failure_message(
 			"smoke on a MEMBER shortened the leash -- only the leader's sight is read").is_equal(reach)
 
 	if _smoke_level() > Gas.Level.THIN:
 		game.gas_field.set_level(Vector2i.ZERO, Gas.Kind.SMOKE, _smoke_level() - 1)
-		assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).override_failure_message(
+		assert_int(SquadCohesion.reach_at(leader.state, Vector2i.ZERO, game._board())).override_failure_message(
 				"smoke thinner than its authored level blinded the leader").is_equal(reach)
 	game.gas_field.set_level(Vector2i.ZERO, Gas.Kind.SMOKE, _smoke_level())
-	assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).is_equal(maxi(reach + drop, 0))
+	assert_int(SquadCohesion.reach_at(leader.state, Vector2i.ZERO, game._board())).is_equal(maxi(reach + drop, 0))
 	assert_bool(SquadCohesion.in_range(setup.squad, Vector2i.ZERO, member, Vector2i(0, reach), game._board())) \
 		.override_failure_message("the leash edge did not move with the smoke").is_false()
 
 	# A leader already HOLDING the state (a hit gave it) is docked once, not twice.
 	leader.add_element_state(Elemental.State.SMOKED)
-	assert_int(SquadCohesion.reach_at(leader, Vector2i.ZERO, game._board())).override_failure_message(
+	assert_int(SquadCohesion.reach_at(leader.state, Vector2i.ZERO, game._board())).override_failure_message(
 			"a smoked leader standing in smoke was docked twice").is_equal(maxi(reach + drop, 0))
 
 

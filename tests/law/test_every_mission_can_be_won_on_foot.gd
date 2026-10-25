@@ -144,7 +144,7 @@ func _flood(start: Array[Vector2i]) -> Dictionary:
 			var next: Vector2i = at + d
 			if seen.has(next) or not rect.has_point(next):
 				continue
-			if not RulesService.can_step(at, next, probe, board):
+			if not RulesService.can_step(at, next, probe.state, board):
 				continue
 			seen[next] = true
 			frontier.append(next)

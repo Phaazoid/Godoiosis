@@ -27,6 +27,14 @@ class_name SplitForecast
 # WHERE EVERYONE STANDS at a given blow is rebuilt from the outcomes, not snapshotted: once the walk
 # is over only a knockback moves a unit, and each outcome records its own knockback_from/to.
 #
+# WHAT BODY EACH HAS is rebuilt beside it (#1499), and the shared rules are handed it: the leader's
+# COH and states, a successor's LDR, a member's traversal. A unit has its live body until the last
+# blow that moves one of its stats (a limb taken, a state with a paired effect), and the pass's copy
+# (PlanResolver.state_of) from that blow on. One no blow changes that way has the copy throughout:
+# what the walk or a carried weapon changed is on it before any blow. So by pass end every body is the
+# one the settle reads. Exact unless one unit's stats move at two blows of one pass: between them it
+# has its live body, so a break they cause goes on the later blow.
+#
 # THE GROUND it stands on is the live one too: a pass's terrain deposits (ice frozen, ice melted) land
 # in one batch after the attack volley (OrderExecutor._apply_cell_effects), so the walk and the volley
 # settle on the board as it was, and everything after on BoardContext.with_deposits.
@@ -62,9 +70,14 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 			outcome.splits.clear()
 			outcome.relinks.clear()
 
+	var changes := _stat_changes(blows)
 	var bands: Dictionary[Unit, _Band] = {}
 	var all_bands: Array[_Band] = []
 	_seed_bands(hits, bands, all_bands)
+	# A blow that moves a stat can move a squad's range or its successor without moving anyone: an arm
+	# taken with the piece that lengthened the leader's leash.
+	for unit in changes:
+		_seed_band(unit, bands, all_bands)
 	# A pass that changes the ground can move ANY squad's range, hit or not: ice melting between two
 	# members strands one without a blow landing on either.
 	if not plan.cell_effects.is_empty():
@@ -78,6 +91,8 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var deposits_land := walk_ends + plan.attack_playback().size()
 	var start := _start_positions(blows, bands, plan.hypo)
 	var pos: Dictionary[Unit, Vector2i] = start.duplicate()
+	var start_bodies := _start_bodies(bands, changes, plan.hypo)
+	var body: Dictionary[Unit, UnitState] = start_bodies.duplicate()
 	var dead: Dictionary[Unit, bool] = {}
 	var downs: Array[BaseAction] = []
 	var downed: Dictionary[Unit, bool] = {}
@@ -85,9 +100,9 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var sunk := false
 	for i in blows.size():
 		if i == walk_ends:
-			_hand_over_held(held, bands, pos, board)
+			_hand_over_held(held, bands, pos, body, board)
 		if i == deposits_land:
-			_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, landed, dead, downed, downs)
+			_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, landed, dead, downed, downs)
 			sunk = true
 		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
@@ -96,27 +111,29 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 			continue
 		if outcome.knockback_applied and not outcome.removed:
 			pos[victim] = outcome.knockback_to
+		if changes.get(victim, -1) == i:
+			body[victim] = PlanResolver.state_of(victim, plan.hypo)
 		var ground := board if i < deposits_land else landed
 		match LethalityRules.lifecycle_for(outcome.lethality):
 			Unit.LifecycleState.DEAD:
 				if not dead.has(victim):
 					dead[victim] = true
-					_leave(victim, outcome, bands, pos, ground, SquadManager.LeaveCause.DEATH, held,
+					_leave(victim, outcome, bands, pos, body, ground, SquadManager.LeaveCause.DEATH, held,
 							i < walk_ends)
 			Unit.LifecycleState.DOWNED:
 				if not downed.has(victim):
 					downed[victim] = true
 					downs.append(blow)
-	_hand_over_held(held, bands, pos, board)   # a pass that is nothing but its walk
+	_hand_over_held(held, bands, pos, body, board)   # a pass that is nothing but its walk
 	if not sunk:   # nothing played after the volley, so the loop never reached the deposits' moment
-		_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, landed, dead, downed, downs)
-	_sink(plan.sinks_at(SinkAction.Moment.PASS_END), bands, pos, landed, dead, downed, downs)
+		_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, landed, dead, downed, downs)
+	_sink(plan.sinks_at(SinkAction.Moment.PASS_END), bands, pos, body, landed, dead, downed, downs)
 
 	# A body finished off later in the pass is never ejected -- and needs no check here: its death
 	# already took it out of its copied squad, so _leave finds nothing to do.
-	_settle_downs(downs, bands, pos, landed)
-	_sweep_contact(blows, all_bands, start, pos, board, plan.cell_effects, landed)
-	_settle_burns(plan.tile_hits, bands, pos, landed)
+	_settle_downs(downs, bands, pos, body, landed)
+	_sweep_contact(blows, all_bands, start, pos, start_bodies, body, changes, board, plan.cell_effects, landed)
+	_settle_burns(plan.tile_hits, bands, pos, body, landed)
 
 
 # The pass's blows in the order they PLAY -- ResolvedPlan's own partitions, the ones OrderExecutor
@@ -165,14 +182,14 @@ static func round_leavers(squad: Squad, leader_cell: Vector2i, at: Dictionary[Un
 	if squad == null or not squad.has_squadmates():
 		return leavers
 	var leader := squad.leader
-	var now := SquadCohesion.reach_in(leader, board.gas_at(leader_cell))
-	var then := SquadCohesion.reach_in(leader, next.get(leader_cell, 0))
+	var now := SquadCohesion.reach_in(leader.state, board.gas_at(leader_cell))
+	var then := SquadCohesion.reach_in(leader.state, next.get(leader_cell, 0))
 	if then >= now:
 		return leavers
 	for member: Unit in at:
 		if member == leader or not squad.members.has(member):
 			continue
-		var hops: int = SquadCohesion.field_within(now, leader_cell, member, board).get(at[member], -1)
+		var hops: int = SquadCohesion.field_within(now, leader_cell, member.state, board).get(at[member], -1)
 		if hops > then:
 			leavers.append(member)
 	return leavers
@@ -188,8 +205,35 @@ static func _victim(hit: BaseAction) -> Unit:
 	return blow.target if blow != null else hit.actor
 
 
-# A copy of every squad the pass can change -- one whose member is shoved, downed or killed. The copy
-# keeps member ORDER, which the successor tie-break and the newest-first overflow both read.
+# Unit -> the index in `blows` of the last landed blow that moves one of its stats.
+static func _stat_changes(blows: Array[AttackAction]) -> Dictionary[Unit, int]:
+	var changes: Dictionary[Unit, int] = {}
+	for i in blows.size():
+		var outcome := blows[i].resolved_outcome()
+		var victim := blows[i].target
+		if _landed(outcome) and victim != null and is_instance_valid(victim) and _moves_stats(outcome):
+			changes[victim] = i
+	return changes
+
+
+# Does this hit move a stat on its target's body: a limb taken (#1174), or a state with a paired
+# effect added or removed (Elemental.paired_stat_mods)? A piece the wearer falls under the gate of
+# comes off with it, and everything it gave.
+static func _moves_stats(outcome: ResolvedOutcome) -> bool:
+	if outcome.severed_limb != -1:
+		return true
+	for state in outcome.states_added:
+		if not Elemental.paired_stat_mods(state).is_empty():
+			return true
+	for state in outcome.states_removed:
+		if not Elemental.paired_stat_mods(state).is_empty():
+			return true
+	return false
+
+
+# A copy of every squad the pass can change -- one whose member is shoved, downed or killed (stamp
+# adds one whose member has a stat moved, and every squad when the ground changes). The copy keeps
+# member ORDER, which the successor tie-break and the newest-first overflow both read.
 static func _seed_bands(hits: Array[BaseAction], bands: Dictionary[Unit, _Band],
 		all_bands: Array[_Band]) -> void:
 	for hit in hits:
@@ -231,13 +275,30 @@ static func _start_positions(blows: Array[AttackAction], bands: Dictionary[Unit,
 	return start
 
 
+# The body each copied unit has when the blows begin: its live one if a blow will move its stats,
+# else the one the pass leaves it with.
+static func _start_bodies(bands: Dictionary[Unit, _Band], changes: Dictionary[Unit, int],
+		hypo: Dictionary) -> Dictionary[Unit, UnitState]:
+	var bodies: Dictionary[Unit, UnitState] = {}
+	for unit in bands:
+		bodies[unit] = unit.state if changes.has(unit) else PlanResolver.state_of(unit, hypo)
+	return bodies
+
+
+static func _bodies_of(members: Array[Unit], body: Dictionary[Unit, UnitState]) -> Array[UnitState]:
+	var bodies: Array[UnitState] = []
+	for member in members:
+		bodies.append(body[member])
+	return bodies
+
+
 # A unit leaves its copied squad, and a leader's leaving hands over -- the successor's range and
 # capacity ejections are stamped on the SAME blow. A death is never counted as a split. A handover
 # DURING THE WALK (`walking`) names its successor now and waits for the walk to end for the rest,
 # in `held`.
 static func _leave(unit: Unit, outcome: ResolvedOutcome, bands: Dictionary[Unit, _Band],
-		pos: Dictionary[Unit, Vector2i], board: BoardContext, cause: SquadManager.LeaveCause,
-		held: Array[_Handover] = [], walking := false) -> void:
+		pos: Dictionary[Unit, Vector2i], body: Dictionary[Unit, UnitState], board: BoardContext,
+		cause: SquadManager.LeaveCause, held: Array[_Handover] = [], walking := false) -> void:
 	var band: _Band = bands.get(unit)
 	if band == null:
 		return
@@ -256,11 +317,11 @@ static func _leave(unit: Unit, outcome: ResolvedOutcome, bands: Dictionary[Unit,
 	handover.old_leader = unit
 	handover.cause = cause
 	handover.stayed = band.members.duplicate()
-	band.leader = SquadManager.successor_among(band.members)
+	band.leader = SquadManager.successor_among(_bodies_of(band.members, body))
 	if walking:
 		held.append(handover)
 	else:
-		_hand_over(handover, bands, pos, board)
+		_hand_over(handover, bands, pos, body, board)
 
 
 # The rest of a handover: what the successor can hold, where everyone stands NOW.
@@ -269,13 +330,13 @@ static func _leave(unit: Unit, outcome: ResolvedOutcome, bands: Dictionary[Unit,
 # to a leaving leader ends, a member ejected by the handover ending on its OWN cause (FORCED) and the
 # rest on the leader's, and the survivors' links to the successor begin.
 static func _hand_over(handover: _Handover, bands: Dictionary[Unit, _Band],
-		pos: Dictionary[Unit, Vector2i], board: BoardContext) -> void:
+		pos: Dictionary[Unit, Vector2i], body: Dictionary[Unit, UnitState], board: BoardContext) -> void:
 	var band := handover.band
 	var outcome := handover.outcome
 	for member in band.members.duplicate():
-		if not SquadCohesion.in_range_of(band.leader, pos[band.leader], member, pos[member], board):
+		if not SquadCohesion.in_range_of(body[band.leader], pos[band.leader], body[member], pos[member], board):
 			_eject(member, band, bands, outcome)
-	for member in SquadManager.capacity_overflow(band.members, band.leader):
+	for member in SquadManager.capacity_overflow(band.members, body[band.leader]):
 		_eject(member, band, bands, outcome)
 	for member in handover.stayed:
 		var ejected := not band.members.has(member)
@@ -288,10 +349,10 @@ static func _hand_over(handover: _Handover, bands: Dictionary[Unit, _Band],
 
 # The walk is over: every handover it held judges reach where the walkers now stand.
 static func _hand_over_held(held: Array[_Handover], bands: Dictionary[Unit, _Band],
-		pos: Dictionary[Unit, Vector2i], board: BoardContext) -> void:
+		pos: Dictionary[Unit, Vector2i], body: Dictionary[Unit, UnitState], board: BoardContext) -> void:
 	for handover in held:
 		if not handover.band.members.is_empty():
-			_hand_over(handover, bands, pos, board)
+			_hand_over(handover, bands, pos, body, board)
 	held.clear()
 
 
@@ -315,17 +376,17 @@ static func _relink(outcome: ResolvedOutcome, member: Unit, leader: Unit, ends: 
 
 
 static func _settle_downs(downs: Array[BaseAction], bands: Dictionary[Unit, _Band],
-		pos: Dictionary[Unit, Vector2i], board: BoardContext) -> void:
+		pos: Dictionary[Unit, Vector2i], body: Dictionary[Unit, UnitState], board: BoardContext) -> void:
 	for hit in downs:
-		_leave(_victim(hit), hit.resolved_outcome(), bands, pos, board, SquadManager.LeaveCause.DOWNED)
+		_leave(_victim(hit), hit.resolved_outcome(), bands, pos, body, board, SquadManager.LeaveCause.DOWNED)
 
 
 # The pass's own terrain dropping units into the water (#922), at the moment they go under: the burn's
 # two halves -- a death leaves at once, a down waits for the settle with the rest, in the order it went
 # down. The ground is the landed one, since the deposits are what took the floor away.
 static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos: Dictionary[Unit, Vector2i],
-		ground: BoardContext, dead: Dictionary[Unit, bool], downed: Dictionary[Unit, bool],
-		downs: Array[BaseAction]) -> void:
+		body: Dictionary[Unit, UnitState], ground: BoardContext, dead: Dictionary[Unit, bool],
+		downed: Dictionary[Unit, bool], downs: Array[BaseAction]) -> void:
 	for sink in sinks:
 		var outcome := sink.resolved_outcome()
 		var victim := sink.actor
@@ -335,7 +396,7 @@ static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos:
 			Unit.LifecycleState.DEAD:
 				if not dead.has(victim):
 					dead[victim] = true
-					_leave(victim, outcome, bands, pos, ground, SquadManager.LeaveCause.DEATH)
+					_leave(victim, outcome, bands, pos, body, ground, SquadManager.LeaveCause.DEATH)
 			Unit.LifecycleState.DOWNED:
 				if not downed.has(victim):
 					downed[victim] = true
@@ -345,7 +406,7 @@ static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos:
 # END OF TURN, after the pass has settled: a burn death hands over at once, and the burned-down leave
 # once every burn has landed, in the order they burned.
 static func _settle_burns(burns: Array[TileHitAction], bands: Dictionary[Unit, _Band],
-		pos: Dictionary[Unit, Vector2i], board: BoardContext) -> void:
+		pos: Dictionary[Unit, Vector2i], body: Dictionary[Unit, UnitState], board: BoardContext) -> void:
 	var downs: Array[BaseAction] = []
 	for burn in burns:
 		var outcome := burn.resolved_outcome()
@@ -354,26 +415,30 @@ static func _settle_burns(burns: Array[TileHitAction], bands: Dictionary[Unit, _
 			continue
 		match LethalityRules.lifecycle_for(outcome.lethality):
 			Unit.LifecycleState.DEAD:
-				_leave(victim, outcome, bands, pos, board, SquadManager.LeaveCause.DEATH)
+				_leave(victim, outcome, bands, pos, body, board, SquadManager.LeaveCause.DEATH)
 			Unit.LifecycleState.DOWNED:
 				downs.append(burn)
-	_settle_downs(downs, bands, pos, board)
+	_settle_downs(downs, bands, pos, body, board)
 
 
 # The pass-end contact sweep, on the ground the pass leaves. A break is owned by the blow after which
 # the pair STAYED out of range: the last in-range -> out-of-range transition, whether the member or
-# its leader was the one shoved, or the ground between them changed under a blow's own deposits.
+# its leader was the one shoved, the ground between them changed under a blow's own deposits, or a
+# blow moved a stat of either (`changes`, flipping `start_bodies` to `body`, the pass's copies).
 static func _sweep_contact(blows: Array[AttackAction], all_bands: Array[_Band],
-		start: Dictionary[Unit, Vector2i], pos: Dictionary[Unit, Vector2i], board: BoardContext,
-		deposits: Array[ResolvedCellEffect], landed: BoardContext) -> void:
+		start: Dictionary[Unit, Vector2i], pos: Dictionary[Unit, Vector2i],
+		start_bodies: Dictionary[Unit, UnitState], body: Dictionary[Unit, UnitState],
+		changes: Dictionary[Unit, int], board: BoardContext, deposits: Array[ResolvedCellEffect],
+		landed: BoardContext) -> void:
 	for band in all_bands:
 		if band.members.size() <= 1:
 			continue
 		for member in band.members:
-			if member == band.leader \
-					or SquadCohesion.in_range_of(band.leader, pos[band.leader], member, pos[member], landed):
+			if member == band.leader or SquadCohesion.in_range_of(body[band.leader], pos[band.leader],
+					body[member], pos[member], landed):
 				continue
-			var culprit := _breaking_blow(blows, band.leader, member, start, board, deposits)
+			var culprit := _breaking_blow(blows, band.leader, member, start, start_bodies, body, changes,
+					board, deposits)
 			if culprit != null:
 				culprit.resolved_outcome().splits.append(member)
 				_relink(culprit.resolved_outcome(), member, band.leader, true,
@@ -383,15 +448,19 @@ static func _sweep_contact(blows: Array[AttackAction], all_bands: Array[_Band],
 # Replays the pair blow by blow, each blow carrying its own deposits (ResolvedCellEffect.cause) --
 # the causal order, which is what names a row. Who leaves is the sweep's to say, on the full board.
 static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Unit,
-		start: Dictionary[Unit, Vector2i], board: BoardContext,
+		start: Dictionary[Unit, Vector2i], start_bodies: Dictionary[Unit, UnitState],
+		body: Dictionary[Unit, UnitState], changes: Dictionary[Unit, int], board: BoardContext,
 		deposits: Array[ResolvedCellEffect]) -> AttackAction:
 	var at_leader: Vector2i = start[leader]
 	var at_member: Vector2i = start[member]
+	var leader_body: UnitState = start_bodies[leader]
+	var member_body: UnitState = start_bodies[member]
 	var ground := board
 	var made: Array[ResolvedCellEffect] = []
-	var held := SquadCohesion.in_range_of(leader, at_leader, member, at_member, ground)
+	var held := SquadCohesion.in_range_of(leader_body, at_leader, member_body, at_member, ground)
 	var culprit: AttackAction = null
-	for blow in blows:
+	for i in blows.size():
+		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
 		if not _landed(outcome):
 			continue
@@ -403,6 +472,13 @@ static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Uni
 			elif blow.target == member:
 				at_member = outcome.knockback_to
 				moved = true
+		var changed := false
+		if changes.get(leader, -1) == i:
+			leader_body = body[leader]
+			changed = true
+		if changes.get(member, -1) == i:
+			member_body = body[member]
+			changed = true
 		var dug := false
 		for effect in deposits:
 			if effect.cause == blow:
@@ -410,9 +486,9 @@ static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Uni
 				dug = true
 		if dug:
 			ground = board.with_deposits(made)
-		if not moved and not dug:
+		if not moved and not dug and not changed:
 			continue
-		var now := SquadCohesion.in_range_of(leader, at_leader, member, at_member, ground)
+		var now := SquadCohesion.in_range_of(leader_body, at_leader, member_body, at_member, ground)
 		if held and not now:
 			culprit = blow
 		elif now:

@@ -32,9 +32,13 @@ class_name SquadCohesion
 # caller gets it for free. The BOARD is a parameter on purpose: terrain state changes mid-battle
 # (FROZEN water melts, smoke drifts), so a field is only ever as fresh as the BoardContext handed in
 # -- build it at query time, never store one.
+#
+# THE BODIES are parameters too (#1499): the leader's COH and states, the member's traversal. The
+# squad-keyed forms are the live callers', and hand `unit.state`; the leader-keyed ones take bodies,
+# so SplitForecast can hand the body a pass leaves -- the one the settle after it will read.
 
 static func field(squad: Squad, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
-	return field_of(squad.leader, center, member, board)
+	return field_of(squad.leader.state, center, member.state, board)
 
 # Unit -> field(squad, center, member, board), for every member, the leader included.
 static func fields(squad: Squad, center: Vector2i, board: BoardContext) -> Dictionary:
@@ -48,23 +52,23 @@ static func in_range(squad: Squad, center: Vector2i, member: Unit, cell: Vector2
 
 # The same two, keyed on a LEADER rather than a squad (#367): SplitForecast asks about a successor
 # the plan has not appointed yet, and a leader is all the range ever read off the squad.
-static func field_of(leader: Unit, center: Vector2i, member: Unit, board: BoardContext) -> Dictionary:
+static func field_of(leader: UnitState, center: Vector2i, member: UnitState, board: BoardContext) -> Dictionary:
 	return field_within(reach_at(leader, center, board), center, member, board)
 
 # The walk itself at a GIVEN reach, cell -> path distance. For a caller that walks from somewhere other
 # than the leader's cell (GroupMoveSolver.stranding walks from the member's, path distance being
 # symmetric) and so must compare each distance with reach_at at the leader's end itself.
-static func field_within(reach: int, center: Vector2i, member: Unit, board: BoardContext,
+static func field_within(reach: int, center: Vector2i, member: UnitState, board: BoardContext,
 		until: Dictionary = {}) -> Dictionary:
 	return RulesService.path_hops(center, board, member, maxi(reach, 0), until)
 
 # How far `cell` lies inside `member`'s bubble around `center`, or RulesService.UNREACHABLE outside it.
 static func hops(squad: Squad, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> int:
-	return int(field_within(reach_at(squad.leader, center, board), center, member, board, { cell: true }) \
-		.get(cell, RulesService.UNREACHABLE))
+	return int(field_within(reach_at(squad.leader.state, center, board), center, member.state, board,
+		{ cell: true }).get(cell, RulesService.UNREACHABLE))
 
 # How far this leader's leash reaches when it stands at `center`: reach_in, with the gas lying there.
-static func reach_at(leader: Unit, center: Vector2i, board: BoardContext) -> int:
+static func reach_at(leader: UnitState, center: Vector2i, board: BoardContext) -> int:
 	return reach_in(leader, board.gas_at(center) if board != null else 0)
 
 # How far this leader's leash reaches standing in this gas (Gas.with_level's packed form): its COH, plus
@@ -72,14 +76,15 @@ static func reach_at(leader: Unit, center: Vector2i, board: BoardContext) -> int
 # that it does not already HOLD -- a held state is already in its COH, so a smoked leader in smoke is
 # docked once. The gas is a parameter so the round's forecast can hand it NEXT round's
 # (SplitForecast.round_leavers, #1430).
-static func reach_in(leader: Unit, packed: int) -> int:
+static func reach_in(leader: UnitState, packed: int) -> int:
 	var reach := Squad.range_of(leader)
 	for state: Elemental.State in GasRules.states_while_standing(packed):
 		if not leader.element_states.has(state):
 			reach += int(Elemental.paired_stat_mods(state).get(Stats.Stat.COH, 0))
 	return maxi(reach, 0)   # floored: a negative bound is path_hops' UNBOUNDED, a board-wide leash
 
-static func in_range_of(leader: Unit, center: Vector2i, member: Unit, cell: Vector2i, board: BoardContext) -> bool:
+static func in_range_of(leader: UnitState, center: Vector2i, member: UnitState, cell: Vector2i,
+		board: BoardContext) -> bool:
 	return field_of(leader, center, member, board).has(cell)
 
 # Every cell in `member`'s bubble, INCLUDING the center -- callers that must exclude it (the
