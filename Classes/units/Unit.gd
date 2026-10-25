@@ -1218,61 +1218,33 @@ func has_transmutations() -> bool:
 
 # What a COUNTER fires — deliberately separate from get_fired_attack(), because the two kinds
 # diverge on whether the live pick counts: a rune counters with whatever it would currently fire
-# (#30 quirk), a weapon ALWAYS counters with main (#72). Each kind states its own answer.
+# (#30 quirk), a weapon ALWAYS counters with main (#72). The rule is the body's
+# (UnitState.counter_attack); the live pick is this node's aim state, so it is handed in here.
 func get_counter_attack() -> AttackData:
-	if equipped_weapon == null:
-		return null
-	return equipped_weapon.counter_attack(state, active_attack)
+	return state.counter_attack(active_attack)
 
-# This attack's shove and ally-splash as the EQUIPPED SOURCE reports them (#529) -- a fitted mod
-# may edit either. Thin delegators, the get_counter_attack shape: they live here because the two
-# readers (PlanResolver's shove, RulesService's victim gather) hold a Unit and no weapon, and
-# re-deriving the equipped source at each would be two answers to one question.
+# This attack's shove and ally-splash as the EQUIPPED SOURCE reports them (#529). The body's rules
+# (UnitState), forwarded for the callers that hold a Unit.
 func get_attack_knockback(attack: AttackData) -> int:
-	if equipped_weapon == null:
-		return attack.knockback if attack != null else 0
-	return equipped_weapon.effective_knockback(state, attack)
+	return state.attack_knockback(attack)
 
 func attack_hits_allies(attack: AttackData) -> bool:
-	if equipped_weapon == null:
-		return attack != null and attack.hits_allies
-	return equipped_weapon.effective_hits_allies(state, attack)
+	return state.attack_hits_allies(attack)
 
-# Whether this attack may be declared as a standing watch (#413) -- same delegation, same reason:
-# the menu holds a Unit, and the answer is the equipped source's to give once a mod may edit it.
+# Whether this attack may be declared as a standing watch (#413).
 func attack_can_overwatch(attack: AttackData) -> bool:
-	if equipped_weapon == null:
-		return attack != null and attack.can_overwatch
-	return equipped_weapon.effective_can_overwatch(state, attack)
+	return state.attack_can_overwatch(attack)
 
-# Does this unit's CURRENT attack source permit a counter? #30/#72: reads get_counter_attack(),
-# never the live selection — see that method's header for why. Since #84 the counter attack must
-# also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
-# Stab requires_readiness) can't counter with an attack the menu already refuses. A counter that
-# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook. A heal, a
-# map-only attack or a watch never counters (AttackData.can_ever_counter, #1135, #1440), and the watch
-# is asked composed, so a mod that makes the main a watch is one more route to the same rule.
+# Does this unit's CURRENT attack source permit a counter? Reads get_counter_attack(), never the
+# live selection; the rule is UnitState.attack_source_can_counter. A counter that DOES land spends
+# whatever its main consumes — AttackAction.execute()'s post-fire hook.
 func attack_source_can_counter() -> bool:
-	var atk := get_counter_attack()
-	return atk != null and atk.can_ever_counter(attack_can_overwatch(atk)) and is_attack_fireable(atk)
+	return state.attack_source_can_counter(active_attack)
 
 # Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
-# can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers
-# aura (#166). A null attack answers "" (bare fists) — see is_attack_fireable below.
-#
-# Before the economy, OWNERSHIP (#1283): an attack the source in hand does not carry is refused, as
-# is any attack at all from an empty hand. Every menu, AI and preview caller already asks about the
-# source's own lists, so this bites only a STAMP that outlived its weapon -- a queued order or an
-# armed watch after the dock swapped what is held. Fired anyway, the resolver would read the new
-# weapon for every number. The wording of both refusals is a placeholder.
+# can. The rule (ownership first, #1283, then the source's economy, #166) is UnitState's.
 func attack_block_reason(attack: AttackData) -> String:
-	if attack == null:
-		return ""
-	if equipped_weapon == null:
-		return "%s has nothing in hand to fire %s with." % [get_unit_name(), attack.display_name]
-	if not equipped_weapon.carries(state, attack):
-		return "%s doesn't have %s." % [equipped_weapon.shown_name(), attack.display_name]
-	return equipped_weapon.attack_block_reason(state, attack)
+	return state.attack_block_reason(attack)
 
 # What this attack does for this unit, for hover readouts. Same delegation, different question.
 func attack_detail(attack: AttackData) -> String:
@@ -1286,13 +1258,12 @@ func attack_gauge(attack: AttackData) -> WeaponGauge:
 		return null
 	return equipped_weapon.attack_gauge(state, attack)
 
-# Readiness seam (#73), widened to aura by #166 — and DERIVED from the reason above rather than
-# re-asking, so a greyed menu row and a refused order can never disagree about what is fireable.
-# Note it now answers false for an unchannelable carving, which it could not before: the rune's
-# list was pre-filtered, so the question never reached here. That makes the queue-time gate
-# (AttackAction.actor_block_reason) refuse one too, which is the correct reading of strict queueing.
+# Readiness seam (#73), widened to aura by #166 — DERIVED from the reason above (UnitState), so a
+# greyed menu row and a refused order can never disagree about what is fireable. It makes the
+# queue-time gate (AttackAction.actor_block_reason) refuse an unchannelable carving too, which is
+# the correct reading of strict queueing.
 func is_attack_fireable(attack: AttackData) -> bool:
-	return attack_block_reason(attack).is_empty()
+	return state.is_attack_fireable(attack)
 
 # Can this unit fire its ONE default attack right now? No longer the action ring's gate (#1409: the
 # ATTACK expander opens on HAVING a main, and an unfireable one lists greyed); no production code

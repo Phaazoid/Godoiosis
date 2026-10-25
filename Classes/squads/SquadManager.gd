@@ -694,6 +694,9 @@ func refused_orders(squad: Squad) -> Array[BaseAction]:
 # `hypo` is the pass the counter is derived inside (#1349): both units are judged where THIS pass has
 # put them, a shove the projection never published included. Required, like `board`: the AI, asking
 # outside any pass, says so with an empty one, which reads the projection.
+#
+# The counter-er is judged on its BODY as the pass has left it (#1480 stage 4): a unit maimed or
+# stripped by the blow it answers counters, or not, with what it has left.
 func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, hypo: Dictionary,
 		target_cell = null) -> bool:
 	if countering_unit == null or target_unit == null:
@@ -705,7 +708,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# AttackData.can_counter, checked below via attack_source_can_counter().
 	if not RulesService.can_target(countering_unit, target_unit):
 		return false
-	if not countering_unit.attack_source_can_counter():
+	var body := PlanResolver.state_of(countering_unit, hypo)
+	if not body.attack_source_can_counter(countering_unit.active_attack):
 		return false
 	# A STANDING WATCH IS YOUR REACTION (#810): the Overwatch was this unit's action, so it does not
 	# also answer a blow. Read live and not threaded — a unit arming a watch is always in the ACTIVE
@@ -726,7 +730,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# A counter whose carving FIZZLES where the counter-er stands lands nothing, so it answers nobody
 	# (#1354). The resolve skips one (PlanResolver.resolve_counters) and ThreatField draws no reach for
 	# one, so this is what keeps the AI's exchange scoring from counting it.
-	if CellSubstances.fizzle_reason(countering_unit.get_counter_attack(), counter_cell, board, countering_unit.state) != "":
+	var counter_attack := body.counter_attack(countering_unit.active_attack)
+	if CellSubstances.fizzle_reason(counter_attack, counter_cell, board, body, hypo) != "":
 		return false
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
@@ -734,7 +739,7 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# counter from a reach attack's range and then swing a range-1 main (#102). The board carries
 	# the elevations: a target above this unit's up_tolerance draws no counter (#258's counter
 	# denial). Required, may be null = flat -- an optional would silently read flat forever.
-	return Reach.can_hit_cell_from(countering_unit, counter_cell, aimed_from, countering_unit.get_counter_attack(), board)
+	return Reach.can_hit_cell_from(countering_unit, counter_cell, aimed_from, counter_attack, board)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext,
 		hypo: Dictionary) -> Unit:
@@ -743,7 +748,8 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], 
 	# First legal taunter in member order wins (deterministic, Law #1); an unreachable taunter
 	# falls through to the default policy below rather than suppressing the counter.
 	for member in attacking_party:
-		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member, board, hypo):
+		if PlanResolver.state_of(member, hypo).has_live_ability(Abilities.Id.TAUNT) \
+				and can_counter(countering_unit, member, board, hypo):
 			return member
 	# Default policy (C3 placeholder): first legal member.
 	for member in attacking_party:
@@ -929,7 +935,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# Standing watches armed in an EARLIER pass (#413) — the enemy-phase case, and the whole point of
 	# the mechanic. Same two-sources-one-list shape the wards above have; watches queued in THIS plan
 	# join at their own slot in the walk below, which is what makes a shove combo sequence-able.
-	for watch in Watch.standing(board.units):
+	for watch in Watch.standing(board.units, hypo):
 		plan.watches.append(watch.copy())
 	var watch_orders: Dictionary = {}   # Watch (this pass's copy) -> the OverwatchAction that armed it
 	# ...and the same watches in QUEUE ORDER, for the arm-fire pass in the tail (#1003). Its own
@@ -1102,13 +1108,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		var c_aim_cell := PlanResolver.projected_position(aim.target, hypo)
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
 		# create_counter_volley stamps below (#102).
-		var c_attack := aim.actor.get_counter_attack()
+		var c_attack := PlanResolver.state_of(aim.actor, hypo).counter_attack(aim.actor.active_attack)
 		# A counter is an attack like any other, so a shock counter arcs (E7 -- counters are in the
 		# chain). Its current reads the hypo the attacks have already resolved into.
 		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo)
 		var c_affected := c_reach.cells
 		var c_victims := c_reach.victims
-		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
+		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_attack, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
 		AttackAction.stamp_sweep(c_volley, c_reach)
 		plan.counters.append_array(c_volley)
 	# Phase 2: counters, now built from post-shove positions.

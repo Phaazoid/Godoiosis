@@ -89,7 +89,7 @@ static func flood(actor: Unit, attack: AttackData, footprint: Array[Vector2i],
 		return found
 	if attack != null and attack.heals:
 		return found   # a heal carries no current, whatever element it is tagged with
-	if not PlanResolver.elements_of(actor, attack, thrown).has(Elemental.Element.SHOCK):
+	if not PlanResolver.elements_of(PlanResolver.body_of(actor, hypo), attack, thrown).has(Elemental.Element.SHOCK):
 		return found
 	var wet := wet_cells(board, hypo)
 	var seen: Dictionary[Vector2i, bool] = {}
@@ -161,7 +161,7 @@ static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i
 # attack hit that unit" and "is this unit in the current" are different questions.
 #
 # Occupancy through the hypo, for the same reason wet_cells reads it: an empty one IS the live board,
-# so this matches gather_attack_victims at the aim sites and PlanResolver._unit_threaded_at at the
+# so this matches gather_attack_victims at the aim sites and PlanResolver.unit_threaded_at at the
 # watch site without a second spelling of "who ends up here" for either.
 static func caught(arc: Array[Vector2i], board: BoardContext, hypo: Dictionary,
 		already: Array[Unit]) -> Array[Unit]:
@@ -239,11 +239,11 @@ static func sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, att
 # A PAYLOAD's sweep (#1058): the same answer, asked of an attack fired from the cell it dropped on --
 # aimed at that cell, facing the way the attack that dropped it was going (Reach.placement_dir) --
 # and gathered against THIS PASS'S threaded positions. A payload goes off mid-pass, as a watch shot
-# does, and the board's published shoves are only the aims' (PlanResolver._unit_threaded_at).
+# does, and the board's published shoves are only the aims' (PlanResolver.unit_threaded_at).
 static func sweep_payload(actor: Unit, origin_cell: Vector2i, attack: AttackData, board: BoardContext,
 		hypo: Dictionary, facing: Vector2i) -> Sweep:
 	return _sweep(actor, origin_cell, origin_cell, attack, board, hypo, facing,
-			PlanResolver._unit_threaded_at.bind(board, hypo), true)
+			PlanResolver.unit_threaded_at.bind(board, hypo), true)
 
 
 static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
@@ -272,7 +272,7 @@ static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, at
 # 2), ties by path index, and a unit two paths reach is in the list twice (ruling 7).
 #
 # `occupant_at` is who stands on a cell; empty means the board's projected answer, which is every
-# aim site's. The watch passes the resolver's threaded positions (PlanResolver._unit_threaded_at).
+# aim site's. The watch passes the resolver's threaded positions (PlanResolver.unit_threaded_at).
 #
 # `arrival` is the way each path's FIRST tile was reached (Reach.travel_facings over the paths'
 # tiles), for the one step a path cannot answer from its own tile before; after that, a path is
@@ -287,7 +287,7 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 		_time(result, _path_steps(paths))
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
-	var hits := RulesService.gather_path_victims(actor, paths, attack, occupancy)
+	var hits := RulesService.gather_path_victims(PlanResolver.body_of(actor, hypo), paths, attack, occupancy)
 	for hit in _step_major(hits):
 		result.victims.append(hit.victim)
 		result.direct.append(true)
@@ -397,7 +397,7 @@ static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector
 	if board == null:
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
-	result.victims = RulesService.gather_attack_victims(actor, footprint, board, attack, occupancy)
+	result.victims = RulesService.gather_attack_victims(PlanResolver.body_of(actor, hypo), footprint, board, attack, occupancy)
 	for victim in result.victims:
 		result.direct.append(true)
 		result.hit_facings.append(_facing_of(victim, footprint, facings, occupancy))

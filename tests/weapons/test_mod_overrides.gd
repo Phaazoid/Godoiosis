@@ -90,15 +90,15 @@ func test_a_mod_can_take_allies_out_of_a_splash() -> void:
 	var swing := _attack(0, true)
 	var weapon := _weapon(swing)
 	hero.equipped_weapon = weapon
-	assert_bool(RulesService.is_attack_victim(hero, ally, swing)) \
+	assert_bool(RulesService.is_attack_victim(hero.state, ally, swing)) \
 		.override_failure_message("fixture: the attack must splash allies to begin with") \
 		.is_true()
 
 	_fit(weapon, 0, _splash(WeaponModData.Override.OFF))
 
-	assert_bool(RulesService.is_attack_victim(hero, ally, swing)).is_false()
+	assert_bool(RulesService.is_attack_victim(hero.state, ally, swing)).is_false()
 	# The enemy is still a victim, so the mod narrowed the splash rather than killing the attack.
-	assert_bool(RulesService.is_attack_victim(hero, foe, swing)).is_true()
+	assert_bool(RulesService.is_attack_victim(hero.state, foe, swing)).is_true()
 
 func test_off_beats_on_whichever_space_each_sits_in() -> void:
 	for off_first in [true, false]:
@@ -112,7 +112,7 @@ func test_off_beats_on_whichever_space_each_sits_in() -> void:
 		_fit(weapon, 0, _splash(WeaponModData.Override.OFF if off_first else WeaponModData.Override.ON))
 		_fit(weapon, 1, _splash(WeaponModData.Override.ON if off_first else WeaponModData.Override.OFF))
 
-		assert_bool(RulesService.is_attack_victim(hero, ally, swing)) \
+		assert_bool(RulesService.is_attack_victim(hero.state, ally, swing)) \
 			.override_failure_message("OFF must win with off_first = %s" % off_first) \
 			.is_false()
 

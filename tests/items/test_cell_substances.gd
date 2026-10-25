@@ -1,8 +1,9 @@
 # Which substances are present for a cast (CellSubstances.available_near) -- the presence half of
 # Deep Alchemy Phase 2's fizzle rule. Canon: docs/design/deep-alchemy.md -> What is built.
 #
-# The board is stubbed, test_materia_sources.gd's fixture one store wider: kinds, lit props and who
-# stands where are authored directly, STATES ride a real TerrainStateManager and gas a real GasField.
+# The board is stubbed, test_materia_sources.gd's fixture one store wider: kinds and lit props are
+# authored directly, who stands where is the board's own units at their own cells (the fizzle reads
+# them where the plan puts them, #1480), STATES ride a real TerrainStateManager and gas a real GasField.
 # Every case hands available_near its own catalog, so nothing here reads an authored substance file
 # (tests/README.md rule 9) -- the ids match SubstanceMap's rows, which is what the code looks up.
 extends GdUnitTestSuite
@@ -17,19 +18,14 @@ const TWO_AWAY := Vector2i(6, 4)
 class _SubstanceBoard extends BoardContext:
 	var kinds: Dictionary
 	var lit: Dictionary
-	var standing: Dictionary   # cell -> Unit
-	func _init(states: TerrainStateManager, gas_field: GasField, k: Dictionary, l: Dictionary, s: Dictionary) -> void:
-		var no_units: Array[Unit] = []
-		super(null, no_units, null, states, null, null, gas_field)
+	func _init(states: TerrainStateManager, gas_field: GasField, k: Dictionary, l: Dictionary, standing: Array[Unit]) -> void:
+		super(null, standing, null, states, null, null, gas_field)
 		kinds = k
 		lit = l
-		standing = s
 	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 		return kinds.get(cell, Terrain.Kind.NONE)
 	func prop_lit_at(cell: Vector2i) -> bool:
 		return lit.get(cell, false)
-	func unit_at_cell(cell: Vector2i) -> Unit:
-		return standing.get(cell) as Unit
 
 
 func _sub(formula: String, name: String = "") -> Substance:
@@ -67,7 +63,7 @@ func _store(cell_states: Dictionary = {}) -> TerrainStateManager:
 
 
 func _board(kinds: Dictionary, cell_states: Dictionary = {}, lit: Dictionary = {},
-		gas: GasField = null, standing: Dictionary = {}) -> _SubstanceBoard:
+		gas: GasField = null, standing: Array[Unit] = []) -> _SubstanceBoard:
 	return _SubstanceBoard.new(_store(cell_states), gas, kinds, lit, standing)
 
 
@@ -192,11 +188,12 @@ func test_a_gas_on_a_neighbour_is_present() -> void:
 func test_a_wet_unit_on_a_neighbour_offers_water() -> void:
 	var wet := H.spawn_unit(self, Team.Faction.ENEMY, NEXT_DOOR)
 	wet.add_element_state(Elemental.State.WET)
-	assert_bool(_present(_board({}, {}, {}, null, { NEXT_DOOR: wet })).has("water")).is_true()
+	var on_board: Array[Unit] = [wet]
+	assert_bool(_present(_board({}, {}, {}, null, on_board)).has("water")).is_true()
 
 
-# The caster counts wherever it CASTS from, which is often a cell it has only queued a move to: the
-# live scan would not find it there.
+# The caster counts wherever it CASTS from: its body is handed in, so the scan of who stands nearby
+# need not find it.
 func test_a_wet_caster_brings_its_own_water() -> void:
 	var caster := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(20, 20))
 	caster.add_element_state(Elemental.State.WET)
@@ -238,8 +235,9 @@ func test_every_real_source_supplies_plenty() -> void:
 	gas.set_level(NEXT_DOOR, Gas.Kind.STEAM, 1)
 	var wet := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(4, 5))
 	wet.add_element_state(Elemental.State.WET)
+	var on_board: Array[Unit] = [wet]
 	var board := _board({ HERE: Terrain.Kind.DIRT, NEXT_DOOR: Terrain.Kind.ROCK },
-			{ Vector2i(3, 4): [Terrain.TileState.BURNING] }, {}, gas, { Vector2i(4, 5): wet })
+			{ Vector2i(3, 4): [Terrain.TileState.BURNING] }, {}, gas, on_board)
 	var supply := _supply(board)
 	for id: String in ["dirt", "salt", "flame", "steam", "water"]:
 		assert_int(supply.get(id, 0)).override_failure_message(

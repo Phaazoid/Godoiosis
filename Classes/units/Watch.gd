@@ -79,10 +79,11 @@ func copy() -> Watch:
 # The watches standing on a board, oldest arm first: the order a resolve searches them in, which is
 # what decides WHICH watch an entry spends (PlanResolver._watch_triggered_by). The live objects, not
 # copies -- a pass copies them itself, a reader asking ahead of a resolve only looks.
-static func standing(units: Array[Unit]) -> Array[Watch]:
+static func standing(units: Array[Unit], hypo: Dictionary = {}) -> Array[Watch]:
 	var out: Array[Watch] = []
 	for unit in units:
-		if unit != null and is_instance_valid(unit) and unit.watch != null and unit.watch.is_armed():
+		if unit != null and is_instance_valid(unit) and unit.watch != null \
+				and unit.watch.armed_for(PlanResolver.state_of(unit, hypo)):
 			out.append(unit.watch)
 	out.sort_custom(func(a: Watch, b: Watch) -> bool: return a.sequence < b.sequence)
 	return out
@@ -124,8 +125,13 @@ func is_intact() -> bool:
 # Says nothing about the ANCHOR, deliberately: that predicate takes a positional fact the caller
 # owns, and the resolver feeds it a threaded cell while a redraw feeds the live one.
 func is_armed() -> bool:
+	return is_intact() and armed_for(watcher.state)
+
+# The same predicate asked of a body handed in: a resolve pass hands the watcher's copy, so a watcher
+# stripped or maimed earlier in the pass is asked with what it has left (#1480).
+func armed_for(body: UnitState) -> bool:
 	return is_intact() and not spent and not cancelled \
-		and watcher.is_attack_fireable(attack)
+		and body != null and body.is_attack_fireable(attack)
 
 
 # THE anchor predicate, and it takes the positional fact rather than reading it (GuardWard.in_range's

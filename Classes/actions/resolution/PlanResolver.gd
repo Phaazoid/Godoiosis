@@ -66,7 +66,7 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 	for atk in group:
 		_resolve_one(atk, plan, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
-			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, plan.cell_effects):
+			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, plan.cell_effects, hypo):
 				plan.cell_effects.append(cell_effect)
 
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
@@ -98,7 +98,7 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		else:
 			_resolve_one(ctr, plan, reactions, hypo, board)
 			if board != null and not ctr.is_secondary_hit:
-				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.cell_effects):
+				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.cell_effects, hypo):
 					plan.cell_effects.append(cell_effect)
 		ordered.append(ctr)
 		if i == derived.size() - 1 or not is_same(derived[i + 1].volley, ctr.volley) or ctr.volley.is_empty():
@@ -413,7 +413,7 @@ static func fire_watch_on_arm(watch: Watch, plan: ResolvedPlan, hypo: Dictionary
 	if board == null or watch == null:
 		return
 	for cell in watch.footprint:
-		var occupant := _unit_threaded_at(cell, board, hypo)
+		var occupant := unit_threaded_at(cell, board, hypo)
 		if occupant == null or not _watch_fires_on(watch, occupant, hypo):
 			continue
 		# at_step -1: an arm-fired shot interrupts no walk, the shove-triggered shape.
@@ -481,7 +481,7 @@ static func watch_fires_at(watch: Watch, entrant: Unit, cell: Vector2i, hypo: Di
 	# throwing a corpse through it), and neither does the watcher's own side.
 	if projected_lifecycle(entrant, hypo) != Unit.LifecycleState.ACTIVE:
 		return false
-	if not watch.is_armed() or not watch.covers(cell):
+	if not watch.armed_for(state_of(watch.watcher, hypo)) or not watch.covers(cell):
 		return false
 	if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
 		return false
@@ -499,11 +499,11 @@ static func watch_fires_at(watch: Watch, entrant: Unit, cell: Vector2i, hypo: Di
 # FIRST FLIP ONLY. A second blow on the same watcher in one pass finds the copy already cancelled
 # and stamps nothing, so no two rows report an ending that happened once. That is why the stamp
 # reads the flip rather than the state.
-static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedOutcome) -> void:
+static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedOutcome, hypo: Dictionary) -> void:
 	if target == null or plan == null:
 		return
 	for watch in plan.watches:
-		if watch.watcher != target or not watch.is_armed():
+		if watch.watcher != target or not watch.armed_for(state_of(target, hypo)):
 			continue
 		watch.cancelled = true
 		if outcome != null:
@@ -524,7 +524,7 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 	var paths := watch.paths()
 	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
 	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo,
-			PlanResolver._unit_threaded_at.bind(board, hypo), arrival)
+			PlanResolver.unit_threaded_at.bind(board, hypo), arrival)
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
@@ -544,8 +544,10 @@ static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext,
 
 
 # Who stands on `cell` against THIS pass's threaded positions -- the occupancy a watch shot's gather
-# is handed (Conduction.sweep_paths, #1057). First unit wins, like every other cell-first lookup.
-static func _unit_threaded_at(cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
+# is handed (Conduction.sweep_paths, #1057). First unit wins, like every other cell-first lookup. An
+# empty hypo reads the projection (Unit.projected_unit_at's answer), so a caller ahead of any resolve
+# asks the same question.
+static func unit_threaded_at(cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
 	for unit: Unit in board.units:
 		if is_instance_valid(unit) and projected_position(unit, hypo) == cell:
 			return unit
@@ -642,8 +644,11 @@ static func _payload_volley(drop: Dictionary, payload: AttackData, board: BoardC
 	var volley: Array[AttackAction] = []
 	if parent is CounterAttackAction:
 		var source := (parent as CounterAttackAction).source_attack
-		for member in CounterAttackAction.create_counter_volley(thrower, cell, reach.victims, source,
-				reach.cells, reach.links, payload):
+		var hit: Array[Unit] = reach.victims.duplicate()
+		if hit.is_empty():
+			hit.append(null)   # a payload always goes off
+		for member in CounterAttackAction.create_counter_volley(thrower, payload, cell, hit, source,
+				reach.cells, reach.links):
 			volley.append(member)
 	elif reach.victims.is_empty():
 		var cell_attack := AttackAction.create(thrower, cell, null, cell)
@@ -730,10 +735,10 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# On the pass's COPY, so a watch broken by an earlier order cannot fire at a later crosser --
 	# Law #2, and the whole reason this lives in the resolve rather than in execute(). The live watch
 	# is marked by execution off the stamp below.
-	_break_watch_on(target, plan, outcome)
+	_break_watch_on(target, plan, outcome, hypo)
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
 	outcome.hp_before = body.get_current_hp()   # threaded pre-hit HP (R4), not the live board value
-	var incoming := source_elements(action)
+	var incoming := source_elements(action, hypo)
 	var elements := _surviving_elements(incoming, body)
 	outcome.elements = elements.duplicate()   # what REACHED the target — the queue row's element rail
 	if elements.size() < incoming.size():
@@ -792,8 +797,8 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# final damage (E8): round(base * mult + bonus), then flat DEF mitigation (#84), never negative.
 	# DEF subtracts AFTER elemental scaling and BEFORE the 0-floor; a revved Chainsword attacker
 	# pierces it entirely. Iron Will (below) stays the last clamp — an absolute cap on damage taken.
-	outcome.kind = _source_kind(action)
-	var mitigation := _mitigation_for(action, body, target_hypo, board, outcome)
+	outcome.kind = _source_kind(action, hypo)
+	var mitigation := _mitigation_for(action, body, target_hypo, board, outcome, hypo)
 	outcome.mitigation = mitigation
 	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
 
@@ -808,13 +813,13 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# names the rung. predict is pure; the second call is the one that counts.
 	var landing: _Landing = null
 	if LethalityRules.predict(body, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
-		outcome.knockback_held = _shove_against(action, body, target_hypo).y
+		outcome.knockback_held = _shove_against(action, body, target_hypo, hypo).y
 		# Where the shove found its target: the launch cell when it lands, and the cell a fully held
 		# shove leaves it on (#1186 marks it there).
 		outcome.knockback_from = target_hypo.position
 		if outcome.knockback_held > 0:
 			outcome.popups.append(HELD_POPUP % outcome.knockback_held)
-		landing = _knockback_landing(action, body, target_hypo, board)
+		landing = _knockback_landing(action, body, target_hypo, board, hypo)
 	if landing != null:
 		# The landing measures in height UNITS; the outcome reports LEVELS, since that is what the
 		# readout and the popup have always meant (#427). A half-level drop reports zero and costs
@@ -1001,8 +1006,10 @@ static func _surviving_elements(elements: Array[Elemental.Element], body: UnitSt
 # Since #424 the armour term also answers to the hit's KIND (RulesService.def_against): a piece that
 # does not cover the kind contributes nothing, cover still does. Reads the kind already stamped on
 # the outcome rather than re-deriving it, so the number and its explanation cannot disagree.
-static func _mitigation_for(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext, outcome: ResolvedOutcome) -> int:
-	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
+static func _mitigation_for(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext,
+		outcome: ResolvedOutcome, hypo: Dictionary) -> int:
+	var actor_body := body_of(action.actor, hypo)
+	var weapon := actor_body.equipped_weapon as WeaponInstance if actor_body != null else null
 	if weapon != null and weapon.ignores_def():
 		return 0   # brace_bonus stays 0: a Chainsword pierces it with the rest of DEF
 	var def := RulesService.def_against(body, target_hypo.position, board, outcome.kind)
@@ -1027,9 +1034,13 @@ static func _mitigation_for(action: AttackAction, body: UnitState, target_hypo: 
 # now the same answer on both sides — STR damage here, adjacency-1 in Reach.
 # A rune fails the WeaponAttackData check -> contributes nothing in melee (its attack rides on
 # fired_attack instead). #30/#72.
+#
+# Every number comes off the actor's body AS THIS PASS HAS LEFT IT (#1480 stage 4), the weapon and
+# the state from the same body, so a unit maimed earlier in its own pass swings with what it has left.
 static func _source_base_damage(action: AttackAction, board: BoardContext = null, hypo: Dictionary = {},
 		outcome: ResolvedOutcome = null) -> int:
 	var attacker := action.actor
+	var body := state_of(attacker, hypo)
 	if action.fired_attack is TransmutationData:
 		var carving := action.fired_attack as TransmutationData
 		# Materia empowerment (#694) is read at the caster's THREADED position, not the frozen
@@ -1045,11 +1056,11 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		var air := Atmosphere.bonus_of(air_steps)
 		if outcome != null and not carving.deals_no_damage:
 			outcome.air_steps = air_steps
-		var charge := attacker.attunement_elements()
+		var charge := body.attunement_elements()
 		# A PAYLOAD burns no vial (#1058): it was never fired, so it spends nothing. Terrain still
 		# empowers it, being where the thrower stands rather than something they would spend.
 		if charge.is_empty() or action.dropped_by != null:
-			return carving.base_damage(attacker.state, terrain, air)
+			return carving.base_damage(body, terrain, air)
 
 		# A burned vial (#697) is NOT positional, so it unions in HERE rather than inside Materia,
 		# beside the terrain answer -- the spot Materia.sources_at's header reserved for it.
@@ -1066,55 +1077,57 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		# Recorded on the outcome rather than re-derived downstream (brace_bonus's precedent): the
 		# queue row names the vial from here and AttackAction.execute spends it from here, so the
 		# preview and the spend cannot disagree (Law #2).
-		var with_charge := carving.base_damage(attacker.state, empowered, air)
-		if outcome != null and with_charge != carving.base_damage(attacker.state, terrain, air):
-			outcome.burned_vial = attacker.attunement
+		var with_charge := carving.base_damage(body, empowered, air)
+		if outcome != null and with_charge != carving.base_damage(body, terrain, air):
+			outcome.burned_vial = body.attunement
 		return with_charge
 	if action.fired_attack is WeaponAttackData:
-		var weapon := attacker.get_equipped_weapon() as WeaponInstance
+		var weapon := body.equipped_weapon as WeaponInstance
 		if weapon != null:
 			# The supercharge spend (#97). The FORM was chosen at declare time and is frozen on the
 			# stamp; what is decided here is only whether this pass still has a charge to pay for
-			# it -- threaded on the hypo, because counters and watch shots all resolve before
-			# anything executes and a live read would let two of them claim one charge.
+			# it -- drawn from the pass's COPY of the tank (#1480 stage 4), because counters and watch
+			# shots all resolve before anything executes and a live read would let two of them claim
+			# one charge. One copy per unit per pass, so they share it.
 			#
 			# Lead volley member only, mirroring the readiness and vial gates: one order spends
 			# once however many victims it reaches.
-			var base := weapon.base_main(attacker.state)
+			var base := weapon.base_main(body)
 			var charged: bool = base != null and base.empowered_form == action.fired_attack
 			# ...and no payload spends a charge either (#1058).
 			if charged and not action.is_secondary_hit and action.dropped_by == null:
-				var hypo_state := _hypo_for(attacker, hypo)
-				if hypo_state.charges > 0:
-					hypo_state.charges -= 1
+				var tank := _hypo_for(attacker, hypo).state.equipped_weapon as WeaponInstance
+				if tank != null and tank.tank_charges() > 0:
+					tank.spend_charge()
 					if outcome != null:
 						outcome.charge_spent = true
-			return weapon.base_damage(attacker.state, action.fired_attack as WeaponAttackData)
+			return weapon.base_damage(body, action.fired_attack as WeaponAttackData)
 		# A payload thrown with no weapon in hand is still a real hit, scaled as if they fired it
 		# (ruling 42). Only a payload: an ordinary order stamped with a weapon attack nobody holds keeps
 		# the bare-fists reading below.
 		if action.dropped_by != null:
-			return WeaponInstance.unwielded_damage(attacker.state, action.fired_attack as WeaponAttackData)
-	return attacker.get_effective_stat(Stats.Stat.STR)
+			return WeaponInstance.unwielded_damage(body, action.fired_attack as WeaponAttackData)
+	return body.get_effective_stat(Stats.Stat.STR)
 
 # The kind the hit DELIVERS (#424), source_elements' shape: a carving answers its own authored field,
 # a weapon attack answers the wielding weapon (a fitted mod may have replaced it), and a null stamp
 # is bare fists -- BLUNT, the one kind with no resource to author it on.
-static func _source_kind(action: AttackAction) -> AttackData.Kind:
+static func _source_kind(action: AttackAction, hypo: Dictionary) -> AttackData.Kind:
 	if action.fired_attack is TransmutationData:
 		return action.fired_attack.delivered_kind()
 	if action.fired_attack is WeaponAttackData:
-		var weapon := action.actor.get_equipped_weapon() as WeaponInstance
+		var body := body_of(action.actor, hypo)
+		var weapon := body.equipped_weapon as WeaponInstance if body != null else null
 		if weapon != null:
-			return weapon.effective_kind(action.actor.state, action.fired_attack)
+			return weapon.effective_kind(body, action.fired_attack)
 		return action.fired_attack.delivered_kind()
 	return AttackData.Kind.BLUNT
 
 # What elements does this ACTION carry: elements_of with `thrown` read off the action itself. PUBLIC
 # because anything holding an action asks it here, never elements_of off its parts -- ArcLightning
 # did, without `thrown`, and drew nothing for a shock payload the flood had arced through (#1434).
-static func source_elements(action: AttackAction) -> Array[Elemental.Element]:
-	return elements_of(action.actor, action.fired_attack, action.dropped_by != null)
+static func source_elements(action: AttackAction, hypo: Dictionary = {}) -> Array[Elemental.Element]:
+	return elements_of(body_of(action.actor, hypo), action.fired_attack, action.dropped_by != null)
 
 # What elements would this (actor, attack) pair carry? PUBLIC because the conduction arc asks it at
 # sites holding no AttackAction -- a counter derives from (actor, counter_attack), the hover preview
@@ -1130,7 +1143,7 @@ static func source_elements(action: AttackAction) -> Array[Elemental.Element]:
 # `thrown` is a PAYLOAD (#1058), the one exception to the bare-fists reading: a payload is a real hit
 # with or without a weapon in hand (ruling 42), so with none it delivers its OWN authored element --
 # a fire payload thrown by a rune-wielder still sets the ground alight.
-static func elements_of(actor: Unit, attack: AttackData, thrown := false) -> Array[Elemental.Element]:
+static func elements_of(body: UnitState, attack: AttackData, thrown := false) -> Array[Elemental.Element]:
 	var none: Array[Elemental.Element] = []
 	if attack == null:
 		return none
@@ -1138,12 +1151,12 @@ static func elements_of(actor: Unit, attack: AttackData, thrown := false) -> Arr
 		# A weapon attack's elements are the WEAPON's answer -- the authored one composed with
 		# whatever fitted mods add. With no weapon in hand nothing is being delivered, which is the
 		# bare-fists reading this has always taken and is deliberately NOT the authored element.
-		if actor == null or not is_instance_valid(actor):
+		if body == null:
 			return attack.authored_elements() if thrown else none
-		var weapon := actor.get_equipped_weapon() as WeaponInstance
+		var weapon := body.equipped_weapon as WeaponInstance
 		if weapon == null:
 			return attack.authored_elements() if thrown else none
-		return weapon.get_elements(actor.state, attack as WeaponAttackData)
+		return weapon.get_elements(body, attack as WeaponAttackData)
 	return attack.authored_elements()
 
 # hits_map() lives on the shared AttackData base, so both kinds answer it directly — and with the
@@ -1151,20 +1164,23 @@ static func elements_of(actor: Unit, attack: AttackData, thrown := false) -> Arr
 static func _source_hits_map(action: AttackAction) -> bool:
 	return action.fired_attack != null and action.fired_attack.hits_map()
 
-static func _source_knockback(action: AttackAction) -> int:
+static func _source_knockback(action: AttackAction, hypo: Dictionary) -> int:
 	if action.fired_attack == null:
 		return 0   # no attack stamped: bare fists, which shove nobody (a counter is stamped, #102)
-	# Asked of the ACTOR, not of the attack: a fitted mod may add tiles to the shove (#529), so
+	# Asked of the ACTOR's body, not of the attack: a fitted mod may add tiles to the shove (#529), so
 	# the authored number on the shared AttackData base is only the starting point.
-	return action.actor.get_attack_knockback(action.fired_attack)
+	var body := body_of(action.actor, hypo)
+	if body == null:
+		return action.fired_attack.knockback
+	return body.attack_knockback(action.fired_attack)
 
 # The shove this hit delivers to THIS target (#120), as [tiles delivered, tiles its weight held]:
 # the attack's knockback, mods included, less the target's weight band, floored at 0. The ONE place
 # weight meets a shove -- the landing walks the first number and the outcome reports the second. Read
 # off the TARGET's body as the pass has left it (#1480), so a Guard's substitution has the blocker's
 # weight answer, and a strip earlier in the pass sheds what it took.
-static func _shove_against(action: AttackAction, body: UnitState, target_hypo: _Hypo) -> Vector2i:
-	var authored := _source_knockback(action)
+static func _shove_against(action: AttackAction, body: UnitState, target_hypo: _Hypo, hypo: Dictionary) -> Vector2i:
+	var authored := _source_knockback(action, hypo)
 	if authored <= 0 or body == null:
 		return Vector2i.ZERO
 	if _shove_direction(action, target_hypo.position) == Vector2i.ZERO:
@@ -1193,8 +1209,9 @@ class _Landing:
 # STARTING elevation; the landing resolves wherever the horizontal travel ends, whether the
 # distance ran out or a blocker halted it early. Pure -- reads the hypo position, mutates nothing;
 # _resolve_one applies the result after the rung is named.
-static func _knockback_landing(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext) -> _Landing:
-	var distance := _shove_against(action, body, target_hypo).x
+static func _knockback_landing(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext,
+		hypo: Dictionary) -> _Landing:
+	var distance := _shove_against(action, body, target_hypo, hypo).x
 	if distance <= 0 or board == null:
 		return null
 	var dir := _shove_direction(action, target_hypo.position)
@@ -1387,10 +1404,11 @@ static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 
 # Does this order's carving fizzle where the PASS has its caster (Deep Alchemy Phase 2)? The threaded
 # position, the way _source_base_damage reads empowerment: a caster shoved off the riverbank casts dry.
-# The board is the plain one -- the pass's own deposits are not present yet, empowerment's limit.
+# Its neighbours are read as the pass has left them too (#1480 stage 4); the GROUND is the plain one
+# -- the pass's own deposits are not present yet, empowerment's limit.
 static func _fizzles(action: AttackAction, board: BoardContext, hypo: Dictionary) -> bool:
 	return CellSubstances.fizzle_reason(action.fired_attack, projected_position(action.actor, hypo),
-			board, action.actor.state) != ""
+			board, state_of(action.actor, hypo), hypo) != ""
 
 # The fizzle's no-op: R7's `skipped` (so every "will not happen" reader -- counters, execution, the
 # beat sheet, the AI's score -- already ignores it), plus why. It read no HP, so the queue prints none.
@@ -1486,8 +1504,6 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.start_hp = unit.get_current_hp()
 		h.start_lifecycle = unit.lifecycle_state
 		h.start_in_crisis = unit.in_crisis
-		var held := unit.get_equipped_weapon() as WeaponInstance
-		h.charges = held.tank_charges() if held != null else 0
 		hypo[unit] = h
 	return hypo[unit]
 
@@ -1500,6 +1516,13 @@ static func state_of(unit: Unit, hypo: Dictionary) -> UnitState:
 		return h.state
 	return _live_state(unit)
 
+# state_of for a unit that may be absent or freed: null then. What a reader holding a maybe-gone actor
+# asks (a counter's, a payload's thrower, Conduction's).
+static func body_of(unit: Unit, hypo: Dictionary) -> UnitState:
+	if unit == null or not is_instance_valid(unit):
+		return null
+	return state_of(unit, hypo)
+
 # The one place a pass reaches a LIVE body: both doors above come through here.
 static func _live_state(unit: Unit) -> UnitState:
 	return unit.state
@@ -1509,11 +1532,11 @@ static func _live_state(unit: Unit) -> UnitState:
 # (#1480), so every read later in the pass -- DEF, max HP, the kit, weight, the ladder -- meets what an
 # earlier hit did to it, a lost limb's strip included, exactly as execution's body will.
 #
-# STILL READ LIVE, owed by #1480 stage 4 (the ACTOR side): the attacker's own body and weapon (base
-# damage, the tank below, Chainsword's ignores_def), a fizzle's neighbour scan (CellSubstances), and a
-# Taunt's pull on who counters. Every stat-derived number is computed once here and frozen onto the
-# ResolvedOutcome; AttackAction.execute is pure playback (R3). A QUEUED action applying an effect (a
-# transmutation buffing an ally, a tonic) is #113.
+# The ACTOR reads its copy too (#1480 stage 4): its base damage, kind, elements and shove, the tank it
+# spends, the DEF it ignores, its counter, a Taunt's pull, its watch's fireability and a carving's fizzle, so a unit
+# maimed earlier in its own pass acts with what it has left. Every stat-derived number is computed
+# once here and frozen onto the ResolvedOutcome; AttackAction.execute is pure playback (R3). A QUEUED
+# action applying an effect (a transmutation buffing an ally, a tonic) is #113.
 class _Hypo:
 	var unit: Unit
 	var position: Vector2i
@@ -1523,12 +1546,6 @@ class _Hypo:
 	var start_hp := 0
 	var start_lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
 	var start_in_crisis := false
-	# The equipped weapon's supercharges left THIS PASS (#97), seeded from the live tank and drawn
-	# down as the pass resolves. It is here rather than read live because reactive fire resolves
-	# before anything executes: a counter and a standing watch in one enemy pass would otherwise
-	# each see the same last charge and each preview a charged shot. A DECLARED second source beside
-	# the copied tank until #1480 stage 4 moves the draw onto it: this one is authoritative.
-	var charges := 0
 	var _copy: UnitState = null
 	# The pass's copy of the body, made on first touch.
 	var state: UnitState:
@@ -1551,10 +1568,11 @@ class _Hypo:
 # THE GAS IS READ AS THE PASS LEAVES IT (#1332): the live field with `prior`, the plan's earlier cell
 # effects, folded in -- exactly what the batch apply will have laid before this hit's own effects land,
 # since both walk plan.cell_effects in append order. So a Gust blows the steam a douse queued ahead of
-# it, and a second Gust moves what the first blew in. Fizzle, empowerment and the air reading still
-# read the board as it stands: they ask what a caster draws on, which is a different question.
+# it, and a second Gust moves what the first blew in. Fizzle, empowerment and the air reading still read
+# the GROUND as it stands: they ask what a caster draws on, which is a different question. The ATTACKER is
+# read as the pass has left it (#1480 stage 4): its elements and its shove come off its copy.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction],
-		prior: Array[ResolvedCellEffect] = []) -> Array[ResolvedCellEffect]:
+		prior: Array[ResolvedCellEffect] = [], hypo: Dictionary = {}) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
@@ -1562,7 +1580,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	# Three halves with different gates. The ELEMENT reacts with the GROUND only on a map-hitting
 	# attack, and with the AIR over every struck cell whatever Targets says (TerrainReaction.in_the_air,
 	# #1335); the attack's own GAS (#508) lands whatever Targets says too (AttackData.gases' note).
-	var elements := source_elements(action)
+	var elements := source_elements(action, hypo)
 	var ground: Array[Elemental.Element] = []
 	if _source_hits_map(action):
 		ground = elements
@@ -1598,7 +1616,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 		if not elements.is_empty():
 			effect = _resolve_air_at(cell, elements, board, terrain_reactions, effect, gas_here)
 		if effect != null and effect.gas_cleared and gas_here != 0:
-			var landing := _gas_landing(action, cell, board)
+			var landing := _gas_landing(action, cell, board, hypo)
 			if landing != cell:
 				blown.append({"to": landing, "gas": gas_here})
 		if leaves_gas and struck.has(cell):
@@ -1639,12 +1657,12 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 # so a wall, a tree, a sheer ledge, a hole or the board's edge stops it -- and rests on the last tile it
 # reached. `cell` itself when it cannot move at all: a hit that shoves nobody, the origin's own tile,
 # or gas pinned against a wall. That gas disperses.
-static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardContext) -> Vector2i:
+static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Vector2i:
 	var dir := _shove_direction(action, cell)
 	if dir == Vector2i.ZERO:
 		return cell
 	var pos := cell
-	for _i in range(_source_knockback(action)):
+	for _i in range(_source_knockback(action, hypo)):
 		if not GasSpread.can_cross(pos, pos + dir, board):
 			break
 		pos += dir

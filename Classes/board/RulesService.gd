@@ -430,7 +430,10 @@ static func _watch_entries(unit: Unit, cells: Dictionary, board: BoardContext) -
 # `occupant_at` is gather_path_victims' parameter, for its reason: empty is the board's projected
 # answer, which every aim site wants, and a PAYLOAD (#1058) passes the resolver's threaded one,
 # since it goes off mid-pass where only the aims' shoves have been published.
-static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, occupant_at := Callable()) -> Array[Unit]:
+#
+# The attacker is its BODY (#1480 stage 4): a resolve hands its copy, so whether allies are victims
+# answers to what the pass has left fitted. Identity (who is hostile, who is self) is `.unit`.
+static func gather_attack_victims(attacker: UnitState, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, occupant_at := Callable()) -> Array[Unit]:
 	var victims: Array[Unit] = []
 	for cell in affected_cells:
 		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
@@ -459,7 +462,7 @@ class PathHit extends RefCounted:
 # Occupancy is a PARAMETER (Unit.projected_cell's axes-as-parameters shape): an aim asks the board's
 # projected answer and a watch shot asks the resolver's threaded one, so one rule has two sources of
 # who is standing where and each caller states its own.
-static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: AttackData,
+static func gather_path_victims(attacker: UnitState, paths: Array[Array], attack: AttackData,
 		occupant_at: Callable) -> Array[PathHit]:
 	var hits: Array[PathHit] = []
 	for path in paths:
@@ -482,14 +485,15 @@ static func gather_path_victims(attacker: Unit, paths: Array[Array], attack: Att
 # state, shove or counter follows either. The one thing that still reaches a unit is a SHOCK's
 # current, which is Conduction.caught's and deliberately tag-blind (dev, 2026-09-28). A null attack
 # is bare fists, which hit units.
-static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData) -> bool:
+static func is_attack_victim(attacker: UnitState, unit: Unit, attack: AttackData) -> bool:
 	if unit == null or not is_instance_valid(unit):
 		return false
 	if attack != null and not attack.hits_units():
 		return false
-	if unit == attacker:
+	var who: Unit = attacker.unit if attacker != null else null
+	if unit == who:
 		return attack != null and attack.hits_self
-	if can_target(attacker, unit):
+	if who != null and can_target(who, unit):
 		return true
 	if attack == null:
 		return false
@@ -580,15 +584,16 @@ static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 # which is what every caller outside a pass means.
 static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext, hypo: Dictionary = {}) -> Array[Vector2i]:
 	var from := PlanResolver.projected_position(body, hypo)
-	if can_traverse(from, body.state, board):
+	var carried := PlanResolver.state_of(body, hypo)
+	if can_traverse(from, carried, board):
 		return [from] as Array[Vector2i]
 	var origin := PlanResolver.projected_position(rescuer, hypo)
 	var landings: Array[Vector2i] = []
 	for dir in NEIGHBOURS:
 		var cell: Vector2i = origin + dir
-		if not can_traverse(cell, body.state, board) or not height_step_ok(origin, cell, board):
+		if not can_traverse(cell, carried, board) or not height_step_ok(origin, cell, board):
 			continue
-		var occupant := PlanResolver._unit_threaded_at(cell, board, hypo)
+		var occupant := PlanResolver.unit_threaded_at(cell, board, hypo)
 		if occupant == null or occupant == body:
 			landings.append(cell)
 	return landings

@@ -457,7 +457,7 @@ static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes, stab
 # Can this aim pay FAR from anybody it could pay on? A payload goes off where the hit lands and a
 # current runs through water; everything else pays only on a body inside its own footprint.
 static func _may_pay_unmarked(unit: Unit, attack: AttackData) -> bool:
-	return attack.payload != null or PlanResolver.elements_of(unit, attack, false).has(Elemental.Element.SHOCK)
+	return attack.payload != null or PlanResolver.elements_of(unit.state, attack, false).has(Elemental.Element.SHOCK)
 
 
 # The cells worth sweeping. A facing for a directional attack; for a point attack the ring, narrowed
@@ -533,7 +533,7 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 			for victim in drop.victims:
 				if is_instance_valid(victim) and Team.is_enemy(unit.get_faction(), victim.get_faction()):
 					return true
-	var elements := PlanResolver.elements_of(unit, attack, false)
+	var elements := PlanResolver.elements_of(unit.state, attack, false)
 	if elements.is_empty() or board.terrain_states == null:
 		return false
 	var terrain := TerrainReactionCatalog.get_all()

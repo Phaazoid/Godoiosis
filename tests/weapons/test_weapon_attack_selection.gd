@@ -114,8 +114,8 @@ func test_gather_victims_splashes_allies_only_when_the_fired_attack_says_so() ->
 
 	# A live pick on the unit must not change either answer — only the attack passed in does.
 	attacker.active_attack = t.extra_attacks[0]
-	assert_array(RulesService.gather_attack_victims(attacker, cells, board, t.main_attack)).is_empty()
-	assert_array(RulesService.gather_attack_victims(attacker, cells, board, t.extra_attacks[0])).contains_exactly([mate])
+	assert_array(RulesService.gather_attack_victims(attacker.state, cells, board, t.main_attack)).is_empty()
+	assert_array(RulesService.gather_attack_victims(attacker.state, cells, board, t.extra_attacks[0])).contains_exactly([mate])
 
 # --- #102: the Attack-menu gate reads the DEFAULT, never the live pick ---
 

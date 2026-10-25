@@ -206,7 +206,7 @@ func test_rune_carving_hits_allies_includes_a_friendly() -> void:
 	alch.equipped_weapon = _make_rune(fireball)
 
 	var units: Array[Unit] = [alch, ally]
-	var victims := RulesService.gather_attack_victims(alch, [Vector2i(0, 1)], _StubBoard.new(_sm.grid, units, _sm, {}), alch.get_fired_attack())
+	var victims := RulesService.gather_attack_victims(alch.state, [Vector2i(0, 1)], _StubBoard.new(_sm.grid, units, _sm, {}), alch.get_fired_attack())
 	assert_array(victims).contains([ally])
 
 

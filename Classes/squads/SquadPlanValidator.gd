@@ -317,7 +317,7 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 			return true     # the current does not check tags -- anybody in it is a casualty
 		if not footprint.has(cell):
 			continue
-		if RulesService.is_attack_victim(aim.actor, unit, aim.fired_attack):
+		if RulesService.is_attack_victim(aim.actor.state, unit, aim.fired_attack):
 			return true
 	return false
 

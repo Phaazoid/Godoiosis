@@ -444,3 +444,53 @@ func attunement_elements() -> Array[Elemental.Element]:
 		var none: Array[Elemental.Element] = []
 		return none
 	return attunement.granted_elements()
+
+# --- The attack source's rules (#1480 stage 4) ---
+# Asked of the body, so a resolve pass asks its copy: an actor maimed or stripped earlier in the pass
+# swings with what it has left. Unit forwards to each under its own name.
+
+# What a COUNTER fires. A rune counters with its live pick (#30), which is aim state on the Unit,
+# so it is handed in; a weapon always counters with its main (#72).
+func counter_attack(live_pick: AttackData) -> AttackData:
+	if equipped_weapon == null:
+		return null
+	return equipped_weapon.counter_attack(self, live_pick)
+
+# This attack's shove and ally-splash as the equipped source reports them: a fitted mod may edit
+# either (#529).
+func attack_knockback(attack: AttackData) -> int:
+	if equipped_weapon == null:
+		return attack.knockback if attack != null else 0
+	return equipped_weapon.effective_knockback(self, attack)
+
+func attack_hits_allies(attack: AttackData) -> bool:
+	if equipped_weapon == null:
+		return attack != null and attack.hits_allies
+	return equipped_weapon.effective_hits_allies(self, attack)
+
+# Whether this attack may stand as a watch (#413).
+func attack_can_overwatch(attack: AttackData) -> bool:
+	if equipped_weapon == null:
+		return attack != null and attack.can_overwatch
+	return equipped_weapon.effective_can_overwatch(self, attack)
+
+# Does the counter this source would fire count at all? It must exist, be a kind that ever counters
+# (a heal, a map-only attack and a watch never do, #1135, #1440), and be fireable (#84).
+func attack_source_can_counter(live_pick: AttackData) -> bool:
+	var atk := counter_attack(live_pick)
+	return atk != null and atk.can_ever_counter(attack_can_overwatch(atk)) and is_attack_fireable(atk)
+
+# Why this body can't fire this attack right now, "" when it can. Ownership first (#1283), then the
+# equipped source's own economy (#166). A null attack is bare fists and answers "".
+func attack_block_reason(attack: AttackData) -> String:
+	if attack == null:
+		return ""
+	if equipped_weapon == null:
+		return "%s has nothing in hand to fire %s with." % [unit.get_unit_name() if unit != null else "", attack.display_name]
+	if not equipped_weapon.carries(self, attack):
+		return "%s doesn't have %s." % [equipped_weapon.shown_name(), attack.display_name]
+	return equipped_weapon.attack_block_reason(self, attack)
+
+# Derived from the reason, so a greyed row and a refused order cannot disagree (#73).
+func is_attack_fireable(attack: AttackData) -> bool:
+	return attack_block_reason(attack).is_empty()
