@@ -173,6 +173,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "The health the queued plan is about to TAKE -- worn by the exact cubes that will go, between where the grid stands now and where the plan leaves it. It has to read as a warning against the fill beside it without reading as damage that has already landed, and the cubes still standing PROUD are what say 'not yet'."},
 	{"group": "Predicted change", "node": "UnitMirror", "prop": "bar_heal_color", "label": "Predicted gain",
 		"tip": "The same span in the other direction: health a queued heal is about to give back, drawn over the missing backing. Wants to be unmistakably not-the-loss-colour, since the shape of the span is identical either way and only the colour says which."},
+	{"group": "Predicted change", "node": "UnitMirror", "prop": "bar_lost_color", "label": "Predicted lost socket",
+		"tip": "The outline of a socket the queued plan takes AWAY: max HP the unit will no longer have, as when the plan strips a piece that gave CON. Drawn as the cube's cage with nothing inside it, so it reads as a frame that cannot be filled rather than as a colour. Black matches every other cage; lighten it if the outline vanishes against a dark board."},
 	# No NOTCH rows: with one cube per point of HP, colouring the exact cubes the plan takes says
 	# where it lands more precisely than a marker beside them could, so #313's notch is gone.
 	{"group": "Predicted change", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",

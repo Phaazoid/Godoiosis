@@ -101,6 +101,7 @@ const TOP_FACE := 4
 # knob drag, not a frame.
 static var _cube_mesh: ArrayMesh
 static var _cage_texture: ImageTexture
+static var _outline_texture: ImageTexture   # the cage with its core cut out: a lost socket's
 static var _cube_key := Vector4i(-1, -1, -1, -1)
 
 var _blocks: Array[MeshInstance3D] = []          # one per point of MAX hp; pooled, hidden not freed
@@ -116,6 +117,9 @@ var _mat_missing: StandardMaterial3D
 # which the recess knob is allowed to set to zero.
 var _mat_doomed: StandardMaterial3D
 var _mat_heal: StandardMaterial3D
+# A socket the plan takes AWAY (#1480 stage 5), not a cube it takes out of one: the max HP the pass's
+# copy no longer has. Drawn as the cage alone, so it reads as a frame with nothing that can fill it.
+var _mat_lost: StandardMaterial3D
 var _label: Label3D
 # #357: the element-state row above the grid. A POOL, grown on demand and hidden rather than freed --
 # the same contract UnitMirror.set_ghosts and BoardOverlays use, for the same reason: the count
@@ -146,7 +150,9 @@ var _maximum := 1
 var _doomed_color := Color(1.0, 0.75, 0.1, 1.0)
 var _heal_color := Color(0.4, 0.9, 1.0, 1.0)
 var _alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
+var _lost_color := Color(0.0, 0.0, 0.0, 1.0)
 var _predicted := 0
+var _planned_max := -1          # the max HP the plan leaves; -1 = the live max
 var _has_prediction := false
 var _number_shown := true
 var _state_textures: Array[Texture2D] = []
@@ -205,6 +211,11 @@ func _init() -> void:
 	_mat_missing = _make_block_material()
 	_mat_doomed = _make_block_material()
 	_mat_heal = _make_block_material()
+	# Scissored rather than blended, so the outline stays in the opaque pass and sorts by depth with
+	# the cubes around it; CULL_DISABLED shows the far edges through the cut-out core.
+	_mat_lost = _make_block_material()
+	_mat_lost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	_mat_lost.alpha_scissor_threshold = 0.5
 	# Text draws in FRONT of the cubes, so its priority sits above the whole grid and _text_z pushes
 	# it clear in Z as well.
 	_label = make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
@@ -235,10 +246,11 @@ func set_style(block: float, border: float, per_row: int, recess: float,
 	_rebuild()
 
 
-func set_prediction_style(doomed: Color, heal: Color, alarm_peak: Color) -> void:
+func set_prediction_style(doomed: Color, heal: Color, alarm_peak: Color, lost: Color) -> void:
 	_doomed_color = doomed
 	_heal_color = heal
 	_alarm_peak_color = alarm_peak
+	_lost_color = lost
 	_rebuild()
 
 
@@ -294,8 +306,11 @@ func play_heal_from(previous: int) -> void:
 
 # What the queued plan leaves this unit at (#313), already run through the display clamp -- this node
 # never sees a raw resolver number. `alarm` raises the pulse for a predicted DOWN or KILL.
-func set_prediction(predicted: int, alarm: bool) -> void:
+# `planned_max` is the max HP the plan leaves (#1480 stage 5): the sockets above it are drawn lost.
+# The grid stays the live max, so a planned max above it (nothing in a pass raises one yet) is moot.
+func set_prediction(predicted: int, alarm: bool, planned_max: int = -1) -> void:
 	_predicted = predicted
+	_planned_max = planned_max
 	_has_prediction = true
 	_rebuild()
 	set_alarm(alarm)
@@ -424,9 +439,17 @@ func block_count() -> int:
 # which would leave a depth reading unable to answer at all.
 func filled_block_count() -> int:
 	var count := 0
+	for i in _blocks.size():
+		if _blocks[i].visible and block_is_filled(i):
+			count += 1
+	return count
+
+
+# The sockets the plan takes away (#1480 stage 5), full or empty.
+func lost_block_count() -> int:
+	var count := 0
 	for block: MeshInstance3D in _blocks:
-		if block.visible and (block.material_override == _mat_fill
-				or block.material_override == _mat_doomed):
+		if block.visible and block.material_override == _mat_lost:
 			count += 1
 	return count
 
@@ -443,11 +466,14 @@ func doomed_block_count() -> int:
 
 # Whether this socket is OCCUPIED, read off the material, never off block_depth: once the recess is
 # dialled to 0 a full socket and an empty one stand at one depth. Anything about which sockets are
-# full wants this one.
+# full wants this one. A LOST socket's material says only that the socket goes, so whether a cube
+# stands in it now is the index against current HP, the rule _material_for fills by.
 func block_is_filled(index: int) -> bool:
 	if index < 0 or index >= _blocks.size():
 		return false
 	var material := _blocks[index].material_override
+	if material == _mat_lost:
+		return index < clampi(_current, 0, maxi(1, _maximum))
 	return material == _mat_fill or material == _mat_doomed
 
 
@@ -575,8 +601,8 @@ func _rebuild() -> void:
 	var signature: Array = [_block, _border, _per_row, _recess, _recess_shrink, _recess_shade, _top_shade,
 			_fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
-			_doomed_color, _heal_color,
-			_current, _maximum, _predicted, _has_prediction,
+			_doomed_color, _heal_color, _lost_color,
+			_current, _maximum, _predicted, _planned_max, _has_prediction,
 			_state_textures, _state_icon_texels, _state_gap_texels, _state_spacing_texels,
 			_downed_turns, _count_gap_texels]
 	if signature == _drawn:
@@ -636,6 +662,9 @@ func _material_for(index: int) -> StandardMaterial3D:
 	var safe_max := maxi(1, _maximum)
 	var shown := clampi(_current, 0, safe_max)
 	if _has_prediction:
+		# A socket the plan takes away outranks whatever stands in it: the cube goes with it.
+		if _planned_max >= 0 and index >= _planned_max:
+			return _mat_lost
 		var predicted := clampi(_predicted, 0, safe_max)
 		# The span between where the grid is now and where the plan leaves it -- the same two bounds
 		# say "this much is coming off" and "this much is coming back", and the colour is what names
@@ -766,6 +795,8 @@ func _paint_materials() -> void:
 	_mat_heal.albedo_color = _heal_color
 	for material: StandardMaterial3D in [_mat_fill, _mat_missing, _mat_doomed, _mat_heal]:
 		material.albedo_texture = _cage_texture
+	_mat_lost.albedo_color = _lost_color
+	_mat_lost.albedo_texture = _outline_texture
 	# The alarm owns the doomed colour while it runs; otherwise the resting one. Reading alarm_color
 	# here rather than skipping the paint keeps one writer either way.
 	_mat_doomed.albedo_color = alarm_color if _alarm != null else _doomed_color
@@ -854,6 +885,7 @@ static func _ensure_cube(block: int, border: int, texel: float, top_shade: float
 		return
 	_cube_key = key
 	_cage_texture = _build_cage_texture(block, border)
+	_outline_texture = _build_outline_texture(block, border)
 	_cube_mesh = _build_cube_mesh(float(block) * texel, top_shade)
 
 
@@ -866,6 +898,18 @@ static func _build_cage_texture(block: int, border: int) -> ImageTexture:
 	var inner: int = side - maxi(border, 0) * 2
 	if inner > 0:
 		image.fill_rect(Rect2i(border, border, inner, inner), Color.WHITE)
+	return ImageTexture.create_from_image(image)
+
+
+# The same frame with its core cut out (#1480 stage 5): white so the lost socket's colour tints it,
+# and alpha 0 inside for the scissor to drop.
+static func _build_outline_texture(block: int, border: int) -> ImageTexture:
+	var side: int = maxi(block, 1)
+	var image := Image.create(side, side, false, Image.FORMAT_RGBA8)
+	image.fill(Color.WHITE)
+	var inner: int = side - maxi(border, 0) * 2
+	if inner > 0:
+		image.fill_rect(Rect2i(border, border, inner, inner), Color(1.0, 1.0, 1.0, 0.0))
 	return ImageTexture.create_from_image(image)
 
 
