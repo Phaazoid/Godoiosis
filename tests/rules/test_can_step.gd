@@ -65,7 +65,7 @@ func test_board_without_heights_reads_perfectly_flat() -> void:
 	var flat := BoardContext.new(board.grid, units, board.squad_manager)
 
 	assert_int(flat.elevation_at(Vector2i(2, 1))).is_equal(0)
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, flat)).is_true()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, flat)).is_true()
 
 
 # --- height changes need a ramp ---
@@ -73,20 +73,20 @@ func test_board_without_heights_reads_perfectly_flat() -> void:
 func test_flat_step_is_legal() -> void:
 	var board := _board()
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_true()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, _context(board, unit))).is_true()
 
 func test_a_climb_without_a_ramp_is_refused() -> void:
 	var board := _board()
 	_heights(board).set_cell(Vector2i(1, 1), 2)   # a bare rise: no ramp anywhere
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, _context(board, unit))).is_false()
 
 func test_a_drop_without_a_ramp_is_refused() -> void:
 	# The mirror clause, and a separate one in the code: descending reads the DESTINATION's ramp.
 	var board := _board()
 	_heights(board).set_cell(Vector2i(0, 1), 2)
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, _context(board, unit))).is_false()
 
 func test_two_levels_is_never_one_step() -> void:
 	# Ramps connect exactly one level. A cliff of five is a staircase of five ramps or unclimbable.
@@ -95,7 +95,7 @@ func test_two_levels_is_never_one_step() -> void:
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
 	heights.set_cell(Vector2i(2, 1), 4)
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, _context(board, unit))).is_false()
 
 
 # --- the HALF level, newly representable (#427) ---
@@ -109,7 +109,7 @@ func test_a_half_level_edge_is_refused_like_any_other_sheer_edge() -> void:
 	var board := _board()
 	_heights(board).set_cell(Vector2i(1, 1), 1)
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, _context(board, unit))).is_false()
 
 func test_a_ramp_does_not_connect_a_half_level_either() -> void:
 	# A ramp is not a licence to cross any gap: this one climbs a full level, so a neighbour half a
@@ -125,7 +125,7 @@ func test_a_ramp_does_not_connect_a_half_level_either() -> void:
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
 	heights.set_cell(Vector2i(2, 1), 1)
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, _context(board, unit))).is_false()
 
 
 # --- the ramp itself ---
@@ -133,17 +133,17 @@ func test_a_ramp_does_not_connect_a_half_level_either() -> void:
 func test_stepping_onto_a_ramp_from_its_low_side() -> void:
 	var board := _ramp_board()
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_true()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, _context(board, unit))).is_true()
 
 func test_ramp_climbs_to_its_high_side() -> void:
 	var board := _ramp_board()
 	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))).is_true()
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, _context(board, unit))).is_true()
 
 func test_ramp_descends_from_its_high_side() -> void:
 	var board := _ramp_board()
 	var unit := _spawn(board, Vector2i(2, 1))
-	assert_bool(RulesService.can_step(Vector2i(2, 1), Vector2i(1, 1), unit, _context(board, unit))).is_true()
+	assert_bool(RulesService.can_step(Vector2i(2, 1), Vector2i(1, 1), unit.state, _context(board, unit))).is_true()
 
 func test_climbing_the_wrong_way_off_a_ramp_is_refused() -> void:
 	# A ramp rising EAST does not also climb WEST. Without this the rise direction would be doing no
@@ -153,7 +153,7 @@ func test_climbing_the_wrong_way_off_a_ramp_is_refused() -> void:
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
 	heights.set_cell(Vector2i(0, 1), 2)   # high ground on the ramp's LOW side
 	var unit := _spawn(board, Vector2i(2, 1))
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(0, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(0, 1), unit.state, _context(board, unit))).is_false()
 
 
 # --- no sideways entry: TWO clauses, tested in both directions ---
@@ -165,12 +165,12 @@ func test_climbing_the_wrong_way_off_a_ramp_is_refused() -> void:
 func test_a_ramp_refuses_sideways_ENTRY() -> void:
 	var board := _ramp_board()
 	var unit := _spawn(board, Vector2i(1, 0))
-	assert_bool(RulesService.can_step(Vector2i(1, 0), Vector2i(1, 1), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(1, 0), Vector2i(1, 1), unit.state, _context(board, unit))).is_false()
 
 func test_a_ramp_refuses_sideways_EXIT() -> void:
 	var board := _ramp_board()
 	var unit := _spawn(board, Vector2i(1, 1))
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(1, 2), unit, _context(board, unit))).is_false()
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(1, 2), unit.state, _context(board, unit))).is_false()
 
 
 func test_walking_ACROSS_a_continuous_slope_is_legal() -> void:
@@ -188,7 +188,7 @@ func test_walking_ACROSS_a_continuous_slope_is_legal() -> void:
 	heights.set_cell(Vector2i(2, 1), 0, Terrain.RampRise.NORTH)
 	var unit := _spawn(board, Vector2i(0, 0))
 
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, _context(board, unit))) \
 		.override_failure_message("two ramps rising the same way do not connect across the slope "
 			+ "they share, so is_on_rise_axis is still refusing it somewhere").is_true()
 
@@ -202,7 +202,7 @@ func test_two_slopes_that_do_NOT_meet_still_refuse() -> void:
 	heights.set_cell(Vector2i(2, 1), Terrain.UNITS_PER_LEVEL, Terrain.RampRise.NORTH)
 	var unit := _spawn(board, Vector2i(0, 0))
 
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, _context(board, unit))) \
 		.override_failure_message("two slopes a level apart connected sideways").is_false()
 
 
@@ -230,11 +230,11 @@ func test_an_outer_corner_connects_on_its_FLAT_sides_only() -> void:
 	var corner := Vector2i(1, 1)
 
 	for entry in [Vector2i(1, 2), Vector2i(2, 1)]:   # from the south, from the east
-		assert_bool(RulesService.can_step(entry, corner, unit, context)).override_failure_message(
+		assert_bool(RulesService.can_step(entry, corner, unit.state, context)).override_failure_message(
 				"an outer corner refused entry from %s, which is one of its LEVEL edges" % entry
 				).is_true()
 	for entry in [Vector2i(1, 0), Vector2i(0, 1)]:   # from the north, from the west
-		assert_bool(RulesService.can_step(entry, corner, unit, context)).override_failure_message(
+		assert_bool(RulesService.can_step(entry, corner, unit.state, context)).override_failure_message(
 				"an outer corner accepted entry from %s, where its own ground rises out of the "
 				% entry + "neighbour's").is_false()
 
@@ -251,12 +251,12 @@ func test_an_inner_corner_connects_on_its_RAISED_sides_to_ground_at_that_height(
 	var corner := Vector2i(1, 1)
 
 	for entry in [Vector2i(1, 0), Vector2i(0, 1)]:
-		assert_bool(RulesService.can_step(entry, corner, unit, context)).override_failure_message(
+		assert_bool(RulesService.can_step(entry, corner, unit.state, context)).override_failure_message(
 				"an inner corner refused the platform at %s, which its own raised edge is level with"
 				% entry).is_true()
 	# ...and the low ground to the south does NOT connect: that edge runs from the raised corner
 	# down to the low one, so it meets nothing flat.
-	assert_bool(RulesService.can_step(Vector2i(1, 2), corner, unit, context)) \
+	assert_bool(RulesService.can_step(Vector2i(1, 2), corner, unit.state, context)) \
 		.override_failure_message("an inner corner's sloped edge accepted flat ground").is_false()
 
 
@@ -271,7 +271,7 @@ func test_a_corner_form_is_not_mistaken_for_flat_ground() -> void:
 	assert_int(_heights(board).ramp_rise_at(Vector2i(1, 1))).override_failure_message(
 			"the fixture is not testing what it claims -- this shape has a cardinal name"
 			).is_equal(Terrain.RampRise.NONE)
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, context)) \
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, context)) \
 		.override_failure_message("a corner form was walked onto as though it were flat ground, so "
 			+ "something is still reading it through RampRise").is_false()
 
@@ -289,9 +289,9 @@ func test_a_staircase_of_ramps_chains() -> void:
 	var unit := _spawn(board, Vector2i(0, 1))
 	var context := _context(board, unit)
 
-	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, context)).is_true()
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, context)).is_true()
-	assert_bool(RulesService.can_step(Vector2i(2, 1), Vector2i(3, 1), unit, context)).is_true()
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit.state, context)).is_true()
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, context)).is_true()
+	assert_bool(RulesService.can_step(Vector2i(2, 1), Vector2i(3, 1), unit.state, context)).is_true()
 
 func test_an_unramped_cliff_severs_the_connectivity_field() -> void:
 	# path_hops is what SquadCohesion.field walks, so this is also the dev's "a 1-block rise blocks
@@ -301,7 +301,7 @@ func test_an_unramped_cliff_severs_the_connectivity_field() -> void:
 	for y in range(0, 3):
 		heights.set_cell(Vector2i(2, y), 2)   # a full-height ridge across the board, no ramps
 	var unit := _spawn(board, Vector2i(0, 1))
-	var field := RulesService.path_hops(Vector2i(0, 1), _context(board, unit), unit)
+	var field := RulesService.path_hops(Vector2i(0, 1), _context(board, unit), unit.state)
 
 	assert_bool(field.has(Vector2i(1, 1))).is_true()    # near side reachable
 	assert_bool(field.has(Vector2i(2, 1))).is_false()   # the ridge itself is unclimbable
@@ -317,7 +317,7 @@ func test_one_ramp_reopens_the_cliff() -> void:
 	heights.set_cell(Vector2i(2, 1), 0, Terrain.RampRise.EAST)
 	heights.set_cell(Vector2i(3, 1), 2)
 	var unit := _spawn(board, Vector2i(0, 1))
-	var field := RulesService.path_hops(Vector2i(0, 1), _context(board, unit), unit)
+	var field := RulesService.path_hops(Vector2i(0, 1), _context(board, unit), unit.state)
 
 	assert_bool(field.has(Vector2i(2, 1))).is_true()
 	assert_bool(field.has(Vector2i(3, 1))).is_true()
@@ -377,11 +377,11 @@ func test_a_half_rise_ramp_connects_a_half_level_and_nothing_else() -> void:
 	heights.set_cell(Vector2i(2, 1), 1)                      # the half level it arrives at
 	var unit := _spawn(board, Vector2i(0, 1))
 	var context := _context(board, unit)
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, context)) \
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, context)) \
 		.override_failure_message("a gentle ramp does not reach the half level it climbs to").is_true()
 
 	heights.set_cell(Vector2i(2, 1), Terrain.UNITS_PER_LEVEL)   # a full level instead
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit.state, _context(board, unit))) \
 		.override_failure_message("a gentle ramp climbed a whole level").is_false()
 
 
@@ -397,7 +397,7 @@ func test_two_gentle_ramps_climb_a_whole_level_between_them() -> void:
 	var context := _context(board, unit)
 	for step in [[Vector2i(0, 1), Vector2i(1, 1)], [Vector2i(1, 1), Vector2i(2, 1)],
 			[Vector2i(2, 1), Vector2i(3, 1)]]:
-		assert_bool(RulesService.can_step(step[0], step[1], unit, context)) \
+		assert_bool(RulesService.can_step(step[0], step[1], unit.state, context)) \
 			.override_failure_message("the gentle staircase breaks at %s -> %s" % [step[0], step[1]]) \
 			.is_true()
 

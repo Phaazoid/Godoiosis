@@ -276,8 +276,11 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 		
 	if squad.leader != unit:
 		return
-	
-	squad.leader = successor_among(squad.members)
+
+	var bodies: Array[UnitState] = []
+	for member in squad.members:
+		bodies.append(member.state)
+	squad.leader = successor_among(bodies)
 	if _handovers_held:
 		if not _held_handovers.has(squad):
 			_held_handovers.append(squad)
@@ -292,7 +295,7 @@ func _check_new_leaders_reach(squad: Squad) -> void:
 		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member, member.movement.cell, board):
 			eject(member, LeaveCause.FORCED)
 
-	for member in capacity_overflow(squad.members, squad.leader):
+	for member in capacity_overflow(squad.members, squad.leader.state):
 		eject(member, LeaveCause.FORCED)
 
 func hold_handovers() -> void:
@@ -308,24 +311,27 @@ func release_handovers() -> void:
 			_check_new_leaders_reach(squad)
 
 # Who takes over a squad whose leader left: the highest effective LDR, the first in member order on a
-# tie. Static so SplitForecast asks the same question of a squad it is only predicting (#367).
-static func successor_among(members: Array[Unit]) -> Unit:
-	var best: Unit = members[0]
-	for member in members:
-		if member.get_effective_ldr() > best.get_effective_ldr():
-			best = member
-	return best
+# tie. Static so SplitForecast asks the same question of a squad it is only predicting (#367). It takes
+# the members' BODIES, in member order (#1499): the live settle hands each `unit.state`, the forecast
+# the body the pass leaves.
+static func successor_among(bodies: Array[UnitState]) -> Unit:
+	var best: UnitState = bodies[0]
+	for body in bodies:
+		if body.get_effective_ldr() > best.get_effective_ldr():
+			best = body
+	return best.unit
 
 # Capacity overflow (#63): the new leader may command less than the old one. Newest-first (join
 # order = member order) until the squad fits -- deterministic, and never the leader. Returned rather
-# than acted on, so the live settle and SplitForecast drop the same members (#367).
-static func capacity_overflow(members: Array[Unit], squad_leader: Unit) -> Array[Unit]:
+# than acted on, so the live settle and SplitForecast drop the same members (#367); the leader comes
+# as a BODY for successor_among's reason.
+static func capacity_overflow(members: Array[Unit], squad_leader: UnitState) -> Array[Unit]:
 	var dropped: Array[Unit] = []
 	var remaining := members.size()
 	for i in range(members.size() - 1, -1, -1):
 		if remaining <= Squad.capacity_of(squad_leader):
 			break
-		if members[i] == squad_leader:
+		if members[i] == squad_leader.unit:
 			continue
 		dropped.append(members[i])
 		remaining -= 1

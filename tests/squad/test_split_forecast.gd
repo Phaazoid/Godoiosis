@@ -278,7 +278,7 @@ func test_a_downed_leader_whose_successor_has_less_capacity_drops_the_newest() -
 	var second := _spawn(ENEMY, Vector2i(6, 2))
 	var newest := _spawn(ENEMY, Vector2i(5, 1))
 	_squad(lead, [first, second, newest])
-	assert_int(Squad.capacity_of(first)).override_failure_message(
+	assert_int(Squad.capacity_of(first.state)).override_failure_message(
 			"fixture: the successor must command fewer than the three left behind").is_less(3)
 	var hero := _spawn(PLAYER, Vector2i(4, 3))
 	_queue(hero, lead.movement.cell)
@@ -298,7 +298,7 @@ func test_a_downed_leaders_handover_relinks_on_the_downing_blow() -> void:
 	var heir := _spawn(ENEMY, Vector2i(5, 2), {Stats.Stat.LDR: 4})
 	var other := _spawn(ENEMY, Vector2i(6, 2))
 	_squad(lead, [heir, other])
-	assert_int(Squad.capacity_of(heir)).override_failure_message(
+	assert_int(Squad.capacity_of(heir.state)).override_failure_message(
 			"fixture: the successor must be able to hold the one left behind").is_greater_equal(2)
 	var hero := _spawn(PLAYER, Vector2i(4, 3))
 	_queue(hero, lead.movement.cell)
@@ -489,7 +489,7 @@ func test_a_walk_a_watch_would_halt_out_of_range_is_refused_rather_than_stranded
 			== Unit.LifecycleState.ACTIVE).override_failure_message(
 			"fixture: the watch shot must shove the walker and leave it standing").is_true()
 	var board: BoardContext = game._board()
-	assert_bool(SquadCohesion.in_range_of(lead, lead.movement.cell, walker, shot.knockback_from, board)) \
+	assert_bool(SquadCohesion.in_range_of(lead.state, lead.movement.cell, walker.state, shot.knockback_from, board)) \
 		.override_failure_message("fixture: the shot must catch the walker out of range").is_false()
 
 	game.refresh_action_queue(lead.squad)
@@ -659,7 +659,7 @@ func test_an_ice_that_freezes_a_way_back_keeps_the_member_the_shove_would_have_l
 	assert_bool(ice.size() == 1 and ice[0].states_added.has(Terrain.TileState.FROZEN)) \
 		.override_failure_message("fixture: the ice does not freeze the new crossing").is_true()
 	var board: BoardContext = game._board()
-	assert_bool(SquadCohesion.in_range_of(lead, lead.movement.cell, member, Vector2i(2, 3), board)) \
+	assert_bool(SquadCohesion.in_range_of(lead.state, lead.movement.cell, member.state, Vector2i(2, 3), board)) \
 		.override_failure_message("fixture: without the ice, the shove must strand the member").is_false()
 
 	var owners := _forecast(shover.squad)

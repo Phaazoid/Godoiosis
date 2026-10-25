@@ -159,8 +159,10 @@ static func gas_damage_at(body: UnitState, packed: int) -> int:
 #
 # A ramp's own elevation is its LOW side, so the climb happens LEAVING it and the descent happens
 # ENTERING it -- which is why the two height clauses look at opposite cells.
-static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardContext) -> bool:
-	if not can_traverse(to, unit.state, board):
+#
+# Takes the BODY, as can_traverse does (#1499): the walk below hands it in, once per walk.
+static func can_step(from: Vector2i, to: Vector2i, body: UnitState, board: BoardContext) -> bool:
+	if not can_traverse(to, body, board):
 		return false
 	return height_step_ok(from, to, board)
 
@@ -199,7 +201,7 @@ static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: Boa
 	# Takes `from` since #257: legality is an EDGE question. Deliberately REQUIRED rather than an
 	# optional defaulting to `cell` -- an optional would give one question two answers depending on
 	# who called, which is the exact drift #102 was built to end.
-	if not can_step(from, cell, unit, board):
+	if not can_step(from, cell, unit.state, board):
 		return CANNOT_WALK_TILE
 	if not board.grid.get_used_rect().has_point(cell):
 		return OUT_OF_MAP_TILE
@@ -650,15 +652,17 @@ static func def_against(body: UnitState, cell: Vector2i, board: BoardContext, ki
 		def["total"] = def["cover"]
 	return def
 
-# Hop-distance (BFS over cells `unit` can traverse) from `source` -> { cell: hops }. Unweighted by
+# Hop-distance (BFS over cells `body` can traverse) from `source` -> { cell: hops }. Unweighted by
 # design: it answers how terrain CONNECTS, not what a move costs. Read it as the counterpart to
 # compute_move_range -- that says where you can stand THIS turn, this says how much of the way is
 # left. Squad cohesion asks it, and so does every AI approach; it lived on GroupMoveSolver as
 # _path_hops until the second caller arrived (Law #4 -- one question, one answer).
 #
-# Takes the unit because traversal is per-unit (#115): a Waterwalker's connected region includes
-# water. Asks can_step and NOT movement_cost -- occupancy blocks a move but is not terrain and
-# moves every turn. Letting an enemy body sever this field would change formations near any enemy,
+# Takes the BODY because traversal is per-unit (#115): a Waterwalker's connected region includes
+# water. A body, not a Unit, since #1499: SplitForecast walks the body a pass leaves, so a member it
+# strips of Waterwalk is judged without it; a caller holding a Unit passes `unit.state`. Asks can_step
+# and NOT movement_cost -- occupancy blocks a move but is not terrain and moves every turn. Letting
+# an enemy body sever this field would change formations near any enemy,
 # and would make a pursuing squad route around the very unit it is chasing.
 #
 # Still UNWEIGHTED after #257, and deliberately so: a ramp climb costs one hop like any other step.
@@ -679,7 +683,7 @@ static func def_against(body: UnitState, cell: Vector2i, board: BoardContext, ki
 # No caller needs the whole field, so both stopping rules exist: `max_depth` past N hops, `until`
 # once every cell in that set has a distance. Both only skip work whose answer was already going to
 # be discarded, so results are unchanged. Why that holds: docs/performance.md -> Invariants.
-static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_depth: int = -1, until: Dictionary = {}, block_on_occupancy: bool = false) -> Dictionary:
+static func path_hops(source: Vector2i, board: BoardContext, body: UnitState, max_depth: int = -1, until: Dictionary = {}, block_on_occupancy: bool = false) -> Dictionary:
 	var dist := { source: 0 }
 
 	var pending := 0
@@ -704,9 +708,9 @@ static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_dep
 				continue
 			if not bounds.has_point(next):
 				continue
-			if not can_step(cell, next, unit, board):
+			if not can_step(cell, next, body, board):
 				continue
-			if block_on_occupancy and blocks_passage(unit, board.unit_at_cell(next)):
+			if block_on_occupancy and blocks_passage(body.unit, board.unit_at_cell(next)):
 				continue
 			dist[next] = d
 			if not until.is_empty() and until.has(next):

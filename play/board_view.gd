@@ -129,7 +129,7 @@ static func _stats_line(unit: Unit, board: BoardContext) -> String:
 	if squad != null:
 		parts.append("squad %d/%d" % [squad.members.size(), squad.max_size()])
 		# Where the leader stands, as every cohesion check reads it: smoke there shortens it (#1335).
-		parts.append("leash %d" % SquadCohesion.reach_at(squad.leader, squad.leader.movement.cell, board))
+		parts.append("leash %d" % SquadCohesion.reach_at(squad.leader.state, squad.leader.movement.cell, board))
 	return "  ".join(parts)
 
 

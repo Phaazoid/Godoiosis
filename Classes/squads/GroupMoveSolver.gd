@@ -79,7 +79,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		leashes[member] = leash
 		# Distance to this member's ideal offset cell, walked AFTER the candidates so it can stop
 		# as soon as it has covered them.
-		to_target[member] = RulesService.path_hops(here + displacement, board, member, -1, options)
+		to_target[member] = RulesService.path_hops(here + displacement, board, member.state, -1, options)
 
 	# MOST CONSTRAINED FIRST: assignment has no backtracking, so a member with two options must pick
 	# before one with twelve or it finds both taken. Member order left 6 of one Castle Assault
@@ -164,7 +164,7 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 	var leash_at := {}   # destination -> leash there
 	var bound := 0
 	for cell in leader_destinations:
-		var leash := SquadCohesion.reach_at(leader, cell, board)
+		var leash := SquadCohesion.reach_at(leader.state, cell, board)
 		leash_at[cell] = leash
 		bound = maxi(bound, leash)
 	var followers: Array[Unit] = []
@@ -190,7 +190,7 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 			# cell satisfies. Path distance over terrain is symmetric, so the field reads the same
 			# from either end -- one bounded walk per standable cell replaces the Manhattan dilation.
 			# The leash is the DESTINATION's, never this cell's (#1335).
-			var field := SquadCohesion.field_within(bound, cell, member, board)
+			var field := SquadCohesion.field_within(bound, cell, member.state, board)
 			for destination in field:
 				if not stranded.has(destination) or cell == destination:
 					continue   # the leader stands on `destination`; no member may take it
