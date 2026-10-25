@@ -31,8 +31,8 @@ var attunement: VialData = null
 
 # Battle-scoped elemental states (boolean — you have it or you don't). These live on the transient
 # side, NOT UnitInstance: they reset each mission (resolution-pipeline.md persistence seam /
-# elemental fork 3). The resolver threads a COPY of this set forward as a hypothetical; live
-# mutation is execution-only.
+# elemental fork 3). Written through add_element_state/remove_element_state below, on the live body
+# by execution and on the pass's copy by the resolver.
 var element_states: Array[Elemental.State] = []
 
 # --- Temporary stat effects (#112) — THE seam for temporary stats ---
@@ -147,6 +147,71 @@ func settle() -> void:
 # on get_max_hp (the derivation), not as a floor at every write site.
 func reclamp_hp() -> void:
 	set_current_hp(get_current_hp())
+
+# --- The effect and element-state doors (#112; one spelling since #1480 stage 5) ---
+# Run by Unit on the live body, which adds the stats_changed readout, and by the resolver on its
+# copy, so a state the pass lands carries its paired effect as playback's will. Each settles what it
+# moved and returns whether a stat moved. None writes an existing StatEffect: the copy shares them (R2).
+
+func apply_stat_effect(effect: StatEffect) -> bool:
+	if effect == null:
+		return false
+	stat_effects.append(effect.instantiate())
+	settle()
+	return true
+
+# Retire by SOURCE, not by delta. False, and nothing settled, when nothing matched.
+func remove_stat_effects_from(source: String) -> bool:
+	var kept: Array[StatEffect] = []
+	for effect in stat_effects:
+		if effect.source_name != source:
+			kept.append(effect)
+	if kept.size() == stat_effects.size():
+		return false
+	stat_effects = kept
+	settle()
+	return true
+
+func has_stat_effect_from(source: String) -> bool:
+	for effect in stat_effects:
+		if effect.source_name == source:
+			return true
+	return false
+
+# The element-state doors own the paired-StatEffect lockstep (Elemental.paired_stat_mods): the
+# marker answers "is it chilled", the effect carries the stat change and the clock. The two
+# restore paths (ScenarioUnitEntry.apply_unit_state, Unit.restore_stat_effects) bypass these doors
+# on purpose — a restore replays the RESULT, and both sides round-trip verbatim.
+# `turns` overrides the state's default clock (0 = default); only paired states read it.
+# An exclusive state (#1092) is refused while its winner is held, and strips its loser on arrival.
+func add_element_state(element_state: Elemental.State, turns: int = 0) -> bool:
+	if element_state == Elemental.State.NONE or Elemental.is_blocked(element_states, element_state):
+		return false
+	var moved := false
+	for beaten in Elemental.overridden_by(element_state):
+		moved = remove_element_state(beaten) or moved
+	if not element_states.has(element_state):
+		element_states.append(element_state)
+	return _apply_paired_effect(element_state, turns) or moved
+
+func remove_element_state(element_state: Elemental.State) -> bool:
+	element_states.erase(element_state)
+	if Elemental.paired_stat_mods(element_state).is_empty():
+		return false
+	return remove_stat_effects_from(Elemental.state_effect_source(element_state))
+
+func _apply_paired_effect(element_state: Elemental.State, turns: int) -> bool:
+	var mods := Elemental.paired_stat_mods(element_state)
+	if mods.is_empty():
+		return false
+	var source := Elemental.state_effect_source(element_state)
+	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(element_state, StatEffect.PERMANENT)
+	# A re-application refreshes, never stacks: one effect, whichever clock runs longer.
+	for effect in stat_effects:
+		if effect.source_name == source and effect.turns_remaining > requested:
+			requested = effect.turns_remaining
+	remove_stat_effects_from(source)
+	return apply_stat_effect(StatEffect.make(source, mods, requested))
 
 # Gear you no longer qualify for comes OFF (#112). It stays in inventory — you're carrying it, just
 # not wearing it. Triggered by a buff lapsing, a debuff, or a maim. Two parallel clauses that can't

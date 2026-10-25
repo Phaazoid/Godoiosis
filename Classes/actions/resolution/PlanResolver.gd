@@ -359,7 +359,7 @@ static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction, step: int) 
 	var held := state_of(mover, hypo).element_states
 	if held.has(Elemental.State.WET) or Elemental.is_blocked(held, Elemental.State.WET):
 		return
-	_hypo_for(mover, hypo).state.element_states.append(Elemental.State.WET)
+	_hypo_for(mover, hypo).state.add_element_state(Elemental.State.WET)
 	if action.resolved == null:
 		action.resolved = ResolvedOutcome.new()
 		action.resolved.reads_hp = false   # a walk hits nobody; the row must not print an HP arrow
@@ -872,9 +872,6 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 				outcome.states_added), Elemental.State.WET):
 		outcome.states_added.append(Elemental.State.WET)
 
-	# --- thread the hypothetical forward (R4) ---
-	body.element_states = _states_after(body.element_states, outcome.states_removed, outcome.states_added)
-
 	# Lethality stage (R7): pick the rung from the now-final damage (fall included) so the queue
 	# previews it (Law #2). Reads pre-hit HP and lifecycle, so it runs BEFORE the subtraction below.
 	# Same call Unit.take_damage makes at execution time — one ladder, two callers.
@@ -894,6 +891,18 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	if takes_limb:
 		outcome.severed_limb = body.lose_next_limb()
 		outcome.target_hp_after = body.get_current_hp()   # the strip's re-clamp, where one bites
+
+	# --- thread the hit's states forward (R4) ---
+	# Through the live body's own doors and in AttackAction.land's order, after the blow: the removes,
+	# then the adds on their clocks. So a paired state lands with its StatEffect (#1480 stage 5), and a
+	# gate it fails strips here as it will in playback, re-clamping the HP the row shows.
+	var moved := false
+	for s in outcome.states_removed:
+		moved = body.remove_element_state(s) or moved
+	for s in outcome.states_added:
+		moved = body.add_element_state(s, outcome.state_turns.get(s, 0)) or moved
+	if moved and outcome.lethality != ResolvedOutcome.Lethality.KILLED:   # a kill keeps the ladder's number
+		outcome.target_hp_after = body.get_current_hp()
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
 	# the hypo so a later hit this pass sees the moved cell (R4). The path is the trail's one
@@ -925,8 +934,8 @@ static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalRe
 	effect.cause = action
 	plan.cell_effects.append(effect)
 
-# The states a unit holds once a hit's removes and then its adds have landed: the thread (R4) and
-# #1092's judge both read it.
+# The states a unit would hold once a hit's removes and then its adds have landed: #1092's judge of
+# what an add is blocked by. The landing itself goes through the body's doors (_resolve_one).
 static func _states_after(held: Array[Elemental.State], removed: Array[Elemental.State],
 		added: Array[Elemental.State]) -> Array[Elemental.State]:
 	var after: Array[Elemental.State] = []
@@ -972,8 +981,7 @@ static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardConte
 		var sinker := _hypo_for(unit, hypo).state
 		LethalityRules.land_rung(sinker, sink.resolved.lethality, sink.resolved.damage)
 		for s in sink.resolved.states_added:
-			if not sinker.element_states.has(s):
-				sinker.element_states.append(s)
+			sinker.add_element_state(s, sink.resolved.state_turns.get(s, 0))   # SinkAction.execute's door
 		plan.sinks.append(sink)
 
 

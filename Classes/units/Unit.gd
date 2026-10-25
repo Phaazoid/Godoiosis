@@ -380,28 +380,18 @@ func remove_item(index: int):
 		worn_armor = null
 	inventory[index] = null
 
+# The effect doors are UnitState's (#1480 stage 5), shared with the pass's copy; the live body adds the
+# readout, and stays silent when nothing moved.
 func apply_stat_effect(effect: StatEffect) -> void:
-	if effect == null:
-		return
-	stat_effects.append(effect.instantiate())
-	_settle_stat_change()
+	if state.apply_stat_effect(effect):
+		stats_changed.emit()
 
-# Retire by SOURCE, not by delta — the whole reason this replaced the old bag.
 func remove_stat_effects_from(source: String) -> void:
-	var kept: Array[StatEffect] = []
-	for effect in stat_effects:
-		if effect.source_name != source:
-			kept.append(effect)
-	if kept.size() == stat_effects.size():
-		return                      # nothing matched: stay silent rather than fire a no-op signal
-	stat_effects = kept
-	_settle_stat_change()
+	if state.remove_stat_effects_from(source):
+		stats_changed.emit()
 
 func has_stat_effect_from(source: String) -> bool:
-	for effect in stat_effects:
-		if effect.source_name == source:
-			return true
-	return false
+	return state.has_stat_effect_from(source)
 
 # One turn of decay, at the OWNING FACTION's turn start (TurnBoundary.turn_start_ticks), so a 3-turn
 # effect covers three of THIS unit's turns rather than three passes of everyone.
@@ -684,38 +674,15 @@ func lapse_watch() -> void:
 func is_standing_watch() -> bool:
 	return watch != null
 
-# The element-state doors own the paired-StatEffect lockstep (Elemental.paired_stat_mods): the
-# marker answers "is it chilled", the effect carries the stat change and the clock. The two
-# restore paths (ScenarioUnitEntry.apply_unit_state, restore_stat_effects) bypass these doors on
-# purpose — a restore replays the RESULT, and both sides round-trip verbatim.
-# `turns` overrides the state's default clock (0 = default); only paired states read it.
-# An exclusive state (#1092) is refused while its winner is held, and strips its loser on arrival.
+# The element-state doors, and the paired-StatEffect lockstep they own, are UnitState's (#1480 stage
+# 5), so the pass's copy lands a state the way this body does.
 func add_element_state(element_state: Elemental.State, turns: int = 0) -> void:
-	if element_state == Elemental.State.NONE or Elemental.is_blocked(element_states, element_state):
-		return
-	for beaten in Elemental.overridden_by(element_state):
-		remove_element_state(beaten)
-	if not element_states.has(element_state):
-		element_states.append(element_state)
-	_apply_paired_effect(element_state, turns)
+	if state.add_element_state(element_state, turns):
+		stats_changed.emit()
 
 func remove_element_state(element_state: Elemental.State) -> void:
-	element_states.erase(element_state)
-	if not Elemental.paired_stat_mods(element_state).is_empty():
-		remove_stat_effects_from(Elemental.state_effect_source(element_state))
-
-func _apply_paired_effect(element_state: Elemental.State, turns: int) -> void:
-	var mods := Elemental.paired_stat_mods(element_state)
-	if mods.is_empty():
-		return
-	var source := Elemental.state_effect_source(element_state)
-	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(element_state, StatEffect.PERMANENT)
-	# A re-application refreshes, never stacks: one effect, whichever clock runs longer.
-	for effect in stat_effects:
-		if effect.source_name == source and effect.turns_remaining > requested:
-			requested = effect.turns_remaining
-	remove_stat_effects_from(source)
-	apply_stat_effect(StatEffect.make(source, mods, requested))
+	if state.remove_element_state(element_state):
+		stats_changed.emit()
 
 func get_faction() -> Team.Faction:
 	return unit_data.faction
