@@ -1051,3 +1051,64 @@ func _ids_of(units: Array[Unit]) -> Array[int]:
 	for unit in units:
 		ids.append(unit.get_instance_id())
 	return ids
+
+
+# --- the round's smoke on the leash the pass leaves (#1504) --------------------------------------
+# The red tether is drawn after the previewed pass, so it judges the bodies that pass leaves: a queued
+# sever that strips the leader's COH piece shortens the leash before the round's smoke docks it. Asked
+# through the tether's own door, since which bodies round_leavers judges is the caller's to hand.
+
+# The members whose tether the squad's lines draw red.
+func _red_tethers(squad: Squad) -> Array[Unit]:
+	game.draw_squad_cohesion(squad, squad.leader.get_projected_destination())
+	var red: Array[Unit] = []
+	for chord: Dictionary in (game.overlay_manager as OverlayManager).squad_tether_chords:
+		if chord["state"] != SquadLines2D.Strain.STRAIN:
+			continue
+		for member: Unit in squad.members:
+			if member != squad.leader and member.get_projected_destination() == chord["from"]:
+				red.append(member)
+	return red
+
+
+func test_the_rounds_tether_judges_the_leash_the_previewed_pass_leaves() -> void:
+	var drop := _round_drop()
+	var stripped := 1 - drop   # the leash the pass leaves; the round's smoke docks it to one
+	var lead := _spawn(ENEMY, LEAD_AT, _tough({Stats.Stat.LDR: 8 * Squad.MEMBER_LDR_COST, Stats.Stat.COH: stripped}))
+	_wear_gated(lead, _sever_moves(lead), {Stats.Stat.COH: -drop})
+	var leash: int = lead.squad.get_max_squad_range()
+	assert_int(leash).override_failure_message("fixture: the piece does not lengthen the leash") \
+		.is_equal(stripped - drop)
+	var gone_at := LEAD_AT + Vector2i(leash, 0)
+	assert_bool(game.grid.get_used_rect().has_point(gone_at)).override_failure_message(
+			"fixture: the board is too narrow for the leash the smoke rules make").is_true()
+	var edge := _spawn(ENEMY, LEAD_AT + Vector2i(stripped, 0))   # kept by the stripped leash, lost once smoked
+	var gone := _spawn(ENEMY, gone_at)                            # past the stripped leash: the pass's own split
+	var held := _spawn(ENEMY, LEAD_AT + Vector2i.DOWN)            # inside what the smoke leaves
+	_squad(lead, [edge, gone, held])
+	game.gas_field.set_level(UPWIND, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var hero := _severer(LEAD_AT + Vector2i.UP, lead)
+	_queue(hero, lead.movement.cell)
+	_assert_severs(hero.squad, lead, hero)
+
+	var red := _red_tethers(lead.squad)
+	assert_bool(red.has(edge)).override_failure_message(
+			"the member the stripped leash keeps and the round's smoke then loses has no red tether").is_true()
+	assert_bool(red.has(gone)).override_failure_message(
+			"the member the stripped leash already lost has a red tether: that split is the pass's own").is_false()
+	assert_bool(red.has(held)).override_failure_message(
+			"the member the smoked, stripped leash still reaches has a red tether").is_false()
+
+	_left = []
+	await game.order_executor.execute_orders(hero)
+	assert_array(_left).override_failure_message(
+			"fixture: the pass did not strip the leash (its own sweep kept the member past it)") \
+		.is_equal(_ids_of([gone]))
+	_left = []
+	await game.end_turn()   # into their turn: the round has not come yet
+	await await_idle_frame()
+	assert_array(_left).override_failure_message("fixture: the split came before the round did").is_empty()
+	await game.end_turn()   # the round, then your turn start
+	await await_idle_frame()
+	assert_array(_sorted(_left)).override_failure_message(
+			"the round split someone other than the red tether named").is_equal(_sorted(_ids_of(red)))
