@@ -846,11 +846,11 @@ func test_a_hit_with_no_kind_still_names_the_air() -> void:
 	var outcome := ResolvedOutcome.new()
 	var id: String = Atmosphere.SUBSTANCES[0]
 	outcome.air_steps[id] = -1
-	var tip := ActionQueueRow.damage_tip(outcome, null)
+	var tip := ActionQueueRow.damage_tip(outcome)
 	assert_str(tip).contains("Thin %s: -1" % SubstanceCatalog.name_of(id).to_lower())
 	assert_str(tip).not_contains("damage")
 	outcome.air_steps.clear()
-	assert_str(ActionQueueRow.damage_tip(outcome, null)).override_failure_message(
+	assert_str(ActionQueueRow.damage_tip(outcome)).override_failure_message(
 		"a hit with no kind and no air should say nothing").is_empty()
 
 

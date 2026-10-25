@@ -66,6 +66,9 @@ var brace_bonus: int = 0
 # second derivation. `kind` is the composed answer (mods included); NONE for a heal or utility hit.
 var kind: AttackData.Kind = AttackData.Kind.NONE
 var mitigation: int = 0
+# The piece the target wore when this hit's DEF was judged (#1480 stage 5): the pass's copy's, so a
+# piece an earlier hit stripped is not named. Null for a heal, or a target wearing nothing.
+var worn_armor: ArmorData = null
 var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
 var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): the flight drop plus
 							# any tumble-then-plummet. The distance fall_damage is derived from and

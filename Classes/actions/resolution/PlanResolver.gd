@@ -1016,6 +1016,7 @@ static func _surviving_elements(elements: Array[Elemental.Element], body: UnitSt
 # the outcome rather than re-deriving it, so the number and its explanation cannot disagree.
 static func _mitigation_for(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext,
 		outcome: ResolvedOutcome, hypo: Dictionary) -> int:
+	outcome.worn_armor = body.worn_armor   # above the pierce: the row names a piece DEF never reached too
 	var actor_body := body_of(action.actor, hypo)
 	var weapon := actor_body.equipped_weapon as WeaponInstance if actor_body != null else null
 	if weapon != null and weapon.ignores_def():

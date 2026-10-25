@@ -270,7 +270,7 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# The number explains itself on hover (#424, Law #2): what kind the hit delivered and what the
 	# target's DEF did with it, read off the outcome's own stamps so this can never name a
 	# subtraction other than the one made.
-	var tip := damage_tip(outcome, subject)
+	var tip := damage_tip(outcome)
 	readout.tooltip_text = tip
 	readout_card.tooltip_text = tip
 	readout.mouse_filter = Control.MOUSE_FILTER_PASS   # the chips' reason, see _chip
@@ -286,14 +286,13 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 # board's air added (#1324). A heal or a utility hit has no kind, so it names only the air, which a
 # heal draws on too. Static and string-only so tests/ui can read it without a scene, the def_tooltip
 # shape.
-static func damage_tip(outcome: ResolvedOutcome, subject: Unit) -> String:
+static func damage_tip(outcome: ResolvedOutcome) -> String:
 	var lines: Array[String] = []
 	if outcome.kind != AttackData.Kind.NONE:
 		var kind := AttackData.kind_name(outcome.kind)
 		lines.append("%s damage" % kind.capitalize())
-		if subject != null and is_instance_valid(subject) and subject.worn_armor != null \
-				and not subject.worn_armor.covers(outcome.kind):
-			lines.append("%s does not cover %s" % [subject.worn_armor.display_name, kind])
+		if outcome.worn_armor != null and not outcome.worn_armor.covers(outcome.kind):
+			lines.append("%s does not cover %s" % [outcome.worn_armor.display_name, kind])
 		if outcome.mitigation > 0:
 			lines.append("DEF %d subtracted" % outcome.mitigation)
 	lines.append_array(_air_lines(outcome.air_steps))
