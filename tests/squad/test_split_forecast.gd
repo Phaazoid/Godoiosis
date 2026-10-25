@@ -971,7 +971,8 @@ func _round_squad(faction: Team.Faction) -> Dictionary:
 	return {"leader": leader, "far": far, "near": near}
 
 
-# The forecast as the tether asks it: the board next round is ruled on, its gas, the drawn cells.
+# The forecast as the tether asks it: the board next round is ruled on, its gas, the drawn cells, the
+# bodies the previewed plan leaves.
 func _round_leavers(leader: Unit) -> Array[Unit]:
 	var board: BoardContext = game.next_round_board()
 	var field: GasField = game.gas_field
@@ -980,7 +981,7 @@ func _round_leavers(leader: Unit) -> Array[Unit]:
 		if member != leader:
 			at[member] = member.get_projected_destination()
 	return SplitForecast.round_leavers(leader.squad, leader.get_projected_destination(), at, board,
-			field.next_round(board))
+			field.next_round(board), game.previewed_plan())
 
 
 func test_the_rounds_smoke_splits_off_whoever_the_shortened_leash_no_longer_reaches() -> void:
@@ -1005,7 +1006,8 @@ func test_a_member_already_past_the_leash_is_not_the_rounds() -> void:
 	var leader: Unit = s.leader
 	var board: BoardContext = game.next_round_board()
 	var at: Dictionary[Unit, Vector2i] = {s.far: LEAD_AT + Vector2i(ROUND_COH + 1, 0), s.near: (s.near as Unit).movement.cell}
-	assert_array(SplitForecast.round_leavers(leader.squad, LEAD_AT, at, board, game.gas_field.next_round(board))) \
+	assert_array(SplitForecast.round_leavers(leader.squad, LEAD_AT, at, board, game.gas_field.next_round(board),
+			game.previewed_plan())) \
 		.override_failure_message("a member already out of reach was counted as the round's split").is_empty()
 
 

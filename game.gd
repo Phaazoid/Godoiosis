@@ -2098,7 +2098,7 @@ func draw_squads_lines(squads: Array[Squad]) -> void:
 # One tether per member to `leader_cell`, from its stand-in in `placed` if it has one. RED for a member
 # in `strained`, and for one the round's gas will split off at the next turn start (#1430,
 # SplitForecast.round_leavers) where the bodies are drawn: `ahead` is next_round_board(), `next` its gas
-# next round.
+# next round, and the bodies are the ones previewed_plan() leaves (#1504).
 func _member_links(squad: Squad, leader_cell: Vector2i, placed: Dictionary, strained: Array[Unit],
 		ahead: BoardContext, next: Dictionary[Vector2i, int]) -> Array[Dictionary]:
 	var at: Dictionary[Unit, Vector2i] = {}
@@ -2106,7 +2106,7 @@ func _member_links(squad: Squad, leader_cell: Vector2i, placed: Dictionary, stra
 		if member != squad.leader:
 			at[member] = placed.get(member, member.get_projected_destination())
 	var red: Array[Unit] = strained.duplicate()
-	red.append_array(SplitForecast.round_leavers(squad, leader_cell, at, ahead, next))
+	red.append_array(SplitForecast.round_leavers(squad, leader_cell, at, ahead, next, previewed_plan()))
 	var links: Array[Dictionary] = []
 	for member: Unit in at:
 		var state := SquadLines2D.Strain.STRAIN if red.has(member) else SquadLines2D.Strain.SOLID
