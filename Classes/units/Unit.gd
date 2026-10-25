@@ -24,7 +24,36 @@ const DOWNED_TURNS := 3     # turns a downed unit survives unrescued; Glossary i
 
 # The live battle state and the body rules that read it (#1480). Built in _init, so it exists before
 # _ready and on a Unit that never enters the tree.
-var state: UnitState
+#
+# SEALED while a resolve pass runs (#1480 stage 4): a pass reads bodies through PlanResolver's doors,
+# which read `_state`, so a read of `state` inside one is a live read past them. It counts on
+# `seal_breaks` and logs once per pass (the backtrace names the reader); the answer is unchanged.
+var _state: UnitState
+var state: UnitState:
+	get:
+		if _sealed > 0:
+			_seal_broken()
+		return _state
+
+# How many resolve passes are open (SquadManager._resolve_actions opens one), and the live reads they
+# met. A static on Unit itself: an own-class static is the cheapest read the getter can make.
+static var _sealed := 0
+static var seal_breaks := 0
+static var _seal_reported := false
+
+static func open_seal() -> void:
+	if _sealed == 0:
+		_seal_reported = false
+	_sealed += 1
+
+static func close_seal() -> void:
+	_sealed = maxi(0, _sealed - 1)
+
+static func _seal_broken() -> void:
+	seal_breaks += 1
+	if not _seal_reported:
+		_seal_reported = true
+		push_error("A resolve pass read a live body past PlanResolver's doors (#1480); the backtrace names the reader.")
 
 # Forwarded, not copied (MissionController's shape, #46): each hands back the state's own value, so
 # an in-place write (`inventory[i] = x`, `element_states.append`) lands in the one store.
@@ -134,7 +163,7 @@ enum LifecycleState { ACTIVE, DOWNED, DEAD }
 signal downed_countdown_changed(turns_remaining: int)
 
 func _init() -> void:
-	state = UnitState.new(self)
+	_state = UnitState.new(self)
 
 func setup(grid : TileMapLayer, cell: Vector2i):
 	pending_grid = grid
@@ -939,23 +968,10 @@ func has_equipped_weapon() -> bool:
 
 # THE door into the weapon slot (#157): equip_weapon_from_inventory and add_item's auto-equip
 # both route through here, so the equip gate has exactly one home. Scenario load deliberately
-# does not — a save is authoritative (ScenarioUnitEntry.apply_unit_state).
+# does not — a save is authoritative (ScenarioUnitEntry.apply_unit_state). The gate itself is the
+# body's (UnitState.equip), so a resolve pass's copy holding a carried weapon asks the same one.
 func set_equipped_weapon(weapon: EquippableData) -> bool:
-	if weapon == null:
-		equipped_weapon = null
-		return true
-
-	if not inventory.has(weapon):
-		return false
-
-	if weapon.equip_slot() != Item.EquipSlot.WEAPON:
-		return false   # armor fills its OWN slot -- wear_armor() is the door (Item.equip_slot, #1453)
-
-	if not weapon.can_equip(state):
-		return false   # a rune with nothing channelable is carryable, never wieldable (#157)
-
-	equipped_weapon = weapon
-	return true
+	return state.equip(weapon)
 
 # Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected. The reason is
 # the rule (#662); can_wield_equipped is derived from it.

@@ -195,7 +195,11 @@ func gas_at(cell: Vector2i) -> int:
 # reads (TerrainStateManager.projected_states_at). Every board the game and the Play API build has
 # none; SplitForecast asks for one, because the pass settles on ground its own attacks changed.
 func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
-	var board := BoardContext.new(grid, units, squad_manager, terrain_states, zones, heights, gas, mission)
+	# This board's own units, already filtered: re-running the filter would read live bodies inside a
+	# resolve pass (Unit.state's seal, #1480 stage 4), and nothing dies live inside one.
+	var none: Array[Unit] = []
+	var board := BoardContext.new(grid, none, squad_manager, terrain_states, zones, heights, gas, mission)
+	board.units = units.duplicate()
 	board.weather = weather
 	board.atmosphere = atmosphere
 	board.deposits = effects.duplicate()

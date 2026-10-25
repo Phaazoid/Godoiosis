@@ -1501,9 +1501,10 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		var h := _Hypo.new()
 		h.unit = unit
 		h.position = unit.get_projected_destination()
-		h.start_hp = unit.get_current_hp()
-		h.start_lifecycle = unit.lifecycle_state
-		h.start_in_crisis = unit.in_crisis
+		var live := _live_state(unit)
+		h.start_hp = live.get_current_hp()
+		h.start_lifecycle = live.lifecycle_state
+		h.start_in_crisis = live.in_crisis
 		hypo[unit] = h
 	return hypo[unit]
 
@@ -1523,9 +1524,24 @@ static func body_of(unit: Unit, hypo: Dictionary) -> UnitState:
 		return null
 	return state_of(unit, hypo)
 
-# The one place a pass reaches a LIVE body: both doors above come through here.
+# The one place a pass reaches a LIVE body: the doors above come through here. It reads `_state`, past
+# Unit.state's seal (#1480 stage 4), which is what makes every other live read inside a pass loud.
 static func _live_state(unit: Unit) -> UnitState:
-	return unit.state
+	return unit._state
+
+# `source`, a weapon `unit` carries, in its hand for this pass (#929's carried-weapon preview): its
+# copy holds its own twin of it, found by inventory index (UnitState.copy keeps the order), through
+# the one equip gate. The live hand never moves. False when the gate refuses.
+static func hold_in_hand(unit: Unit, source: EquippableData, hypo: Dictionary) -> bool:
+	var live := _live_state(unit)
+	if source == null or source == live.equipped_weapon:
+		return true
+	var at := live.inventory.find(source)
+	if at == -1:
+		return false
+	var body := _hypo_for(unit, hypo).state
+	var twin := body.inventory[at] as EquippableData
+	return twin != null and body.equip(twin)
 
 # Per-unit threaded hypothetical (R4): where the pass has put the unit, the body it has left it with,
 # and the baselines a readout compares against. The body is a copy of the unit's whole UnitState

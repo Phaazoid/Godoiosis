@@ -856,8 +856,12 @@ func resolve_plan(squad: Squad, board: BoardContext,
 # hypothetical differs from the real resolve in one thing only -- it never writes the cache.
 func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
-		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
-	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all(),
+		held: Dictionary = {}) -> ResolvedPlan:
+	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions,
+			held)
+	if plan == null:
+		return null
 	SplitForecast.stamp(plan, board)
 	return plan
 
@@ -866,17 +870,21 @@ func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: Bo
 # what the board would show the instant the click queued it -- the forecast the health bars read while
 # aiming, and the payload tiles' only source (#1058 D2b: a sticky bomb goes off where the hit LEAVES its
 # victim, and that landing exists nowhere but a resolve). `source` is the carried weapon the aim fires
-# from when it is not the one in hand: the hypothetical runs with it held (Unit.with_weapon_in_hand).
+# from when it is not the one in hand: the pass's copy of the actor holds it (PlanResolver.hold_in_hand),
+# so the live hand never moves and a save or report taken mid-aim records what is really equipped. Null
+# when it cannot be held.
 #
 # It keeps resolve_hypothetical's contract HERE rather than leaving it to the caller: the pass
-# publishes the candidate's shoves onto the board, so a real resolve_plan follows -- OUTSIDE the hold,
-# or the cache would keep a plan resolved with a weapon nobody is holding -- before anyone reads a
+# publishes the candidate's shoves onto the board, so a real resolve_plan follows before anyone reads a
 # projected position again. A hover asks this on every cell it crosses.
 func preview_aim(squad: Squad, candidate: AttackAction, board: BoardContext,
 		source: EquippableData = null) -> ResolvedPlan:
 	var candidates: Array[BaseAction] = [candidate]
-	var plan: ResolvedPlan = candidate.actor.with_weapon_in_hand(source,
-		func() -> ResolvedPlan: return resolve_hypothetical(squad, candidates, board))
+	var held := {}
+	if source != null:
+		held[candidate.actor] = source
+	var plan := resolve_hypothetical(squad, candidates, board, ReactionCatalog.get_all(),
+			TerrainReactionCatalog.get_all(), held)
 	resolve_plan(squad, board)
 	return plan
 
@@ -906,10 +914,30 @@ static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[At
 # contaminate each other -- but the LAST one leaves its residue on the board, so a caller that runs
 # hypotheticals must finish with a real resolve_plan. Execution is safe by construction: both
 # OrderExecutor and play_session.execute re-resolve before they play anything back.
+#
+# THE SEAL (#1480 stage 4): the pass runs inside Unit.open_seal/close_seal, so a body read past
+# PlanResolver's doors is reported (Unit.seal_breaks). The pass is synchronous, and a script error
+# aborts only _resolve_pass, so the close always runs. Depth-counted, so a nested pass is fine.
+#
+# `held` is unit -> a carried weapon its copy holds for the pass (preview_aim); a refused hold is no
+# plan, before anything is published.
 func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardContext,
-		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction]) -> ResolvedPlan:
+		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
+		held: Dictionary = {}) -> ResolvedPlan:
+	Unit.open_seal()
+	var plan := _resolve_pass(squad, actions, board, reactions, terrain_reactions, held)
+	Unit.close_seal()
+	return plan
+
+
+func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext,
+		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
+		held: Dictionary) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
 	var hypo: Dictionary = plan.hypo   # threaded here, kept on the plan for end-of-pass reads (#124)
+	for unit: Unit in held:
+		if not PlanResolver.hold_in_hand(unit, held[unit], hypo):
+			return null
 
 	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
 	# pass's shove projections before recomputing; a unit's own queued move is untouched. The rescue

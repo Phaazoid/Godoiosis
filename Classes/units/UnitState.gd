@@ -494,3 +494,20 @@ func attack_block_reason(attack: AttackData) -> String:
 # Derived from the reason, so a greyed row and a refused order cannot disagree (#73).
 func is_attack_fireable(attack: AttackData) -> bool:
 	return attack_block_reason(attack).is_empty()
+
+# THE weapon-slot gate (#157): a weapon this body carries, that fills the WEAPON slot (armour has its
+# own, Item.equip_slot, #1453), and that it can wield (a rune with nothing channelable is carried,
+# never wielded). Null empties the hand. Unit.set_equipped_weapon forwards here; a resolve pass's copy
+# holds a carried weapon through it (PlanResolver.hold_in_hand).
+func equip(weapon: EquippableData) -> bool:
+	if weapon == null:
+		equipped_weapon = null
+		return true
+	if not inventory.has(weapon):
+		return false
+	if weapon.equip_slot() != Item.EquipSlot.WEAPON:
+		return false
+	if not weapon.can_equip(self):
+		return false
+	equipped_weapon = weapon
+	return true
