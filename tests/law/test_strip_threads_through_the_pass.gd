@@ -147,6 +147,29 @@ func test_a_heal_after_a_strip_clamps_at_the_stripped_max_hp() -> void:
 		.is_equal(heal.resolved.target_hp_after)
 
 
+# The row of a hit after the strip names no piece the strip took (#1480 stage 5): its armour line is
+# the body the hit was judged against, not the live one.
+func test_the_row_after_a_strip_names_no_stripped_piece() -> void:
+	var target := _target(Vector2i(1, 0), 200)
+	var jacket := ArmorData.new()
+	jacket.display_name = "Fencing Jacket"
+	jacket.covered_kinds = [AttackData.Kind.SLASH]
+	_wear_gated(target, jacket)
+	var first := H.stamped_attack(_attacker_dealing(LethalityRules.LIMB_LOSS_DAMAGE, Vector2i(0, 0)), target)
+	var second := H.stamped_attack(_attacker_dealing(2, Vector2i(2, 0)), target)
+	_resolve([first, second])
+	_assert_severs(first)
+	assert_bool(jacket.covers(second.resolved.kind)) \
+		.override_failure_message("fixture: the jacket covers the hit; the row names it either way").is_false()
+
+	assert_str(ActionQueueRow.damage_tip(first.resolved)) \
+		.override_failure_message("fixture: the severing hit's row does not name the jacket it met") \
+		.contains("Fencing Jacket")
+	assert_str(ActionQueueRow.damage_tip(second.resolved)) \
+		.override_failure_message("the row after the strip named the jacket the strip took") \
+		.not_contains("Fencing Jacket")
+
+
 # The gambit the stripped piece granted is gone for the next would-be-down in the same pass.
 func test_crisis_from_a_stripped_piece_is_not_armed_for_a_later_hit() -> void:
 	var target := _target(Vector2i(1, 0), 200)

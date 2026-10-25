@@ -144,6 +144,9 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # means opposite things in the two directions and the geometry cannot say which.
 @export var bar_doomed_color := Color(1.0, 0.75, 0.1, 1.0)
 @export var bar_heal_color := Color(0.4, 0.9, 1.0, 1.0)
+# A socket the plan takes AWAY (#1480 stage 5): max HP the pass's copy no longer has, drawn as the
+# cage with its core cut out. The outline's colour, defaulting to every other cage's black.
+@export var bar_lost_color := Color(0.0, 0.0, 0.0, 1.0)
 # #313's NOTCH is gone with #314's grid: with one cube per point, colouring the exact cubes the
 # plan takes says it more precisely than a marker beside them, and both would be one fact twice.
 # What the doomed cubes pulse TO when the plan predicts a named rung — a down, a kill, or Crisis.
@@ -963,6 +966,12 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 			PlanResolver.projected_lifecycle(unit, plan.hypo))
 
 
+# The max HP the plan leaves this unit with (#1480 stage 5): its body as the pass's copy has it, so a
+# strip the pass makes shows as the sockets it takes. -1 with no plan (an end-of-turn row alone).
+func _planned_max_hp(unit: Unit, plan: ResolvedPlan) -> int:
+	return PlanResolver.state_of(unit, plan.hypo).get_max_hp() if plan != null else -1
+
+
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
 		plan: ResolvedPlan, marked: bool, turn_end: Array[TileHitAction],
 		bars: PlayerSettings.HealthBars, unhovered_numbers: bool, held: int) -> void:
@@ -1010,7 +1019,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			hp_block_recess_texels, bar_fill_color,
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
-	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)
+	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color, bar_lost_color)
 	bar.set_cube_style(hp_block_recess_shrink, hp_block_recess_shade, hp_block_top_shade)
 	bar.set_pop(block_pop_time, hp_pop_lift_texels, hp_pop_stagger)
 	# The held fall still stands (#480): those cubes have not been knocked out yet.
@@ -1046,7 +1055,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 		var predicted := turn_hp if turn_hp >= 0 else _predicted_hp(unit, plan)
 		var fells := (plan != null and PlanResolver.plan_fells(unit, plan.hypo)) \
 				or TileHitAction.names_a_rung(turn_end)
-		bar.set_prediction(predicted, fells)
+		bar.set_prediction(predicted, fells, _planned_max_hp(unit, plan))
 	else:
 		bar.clear_prediction()
 	bar.position = _bar_anchor(unit, sprite)

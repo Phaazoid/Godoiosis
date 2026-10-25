@@ -55,6 +55,7 @@ const READ_LIVE: Dictionary[String, String] = {
 	"UnitMirror:number_shows_max": PER_DRAW,
 	"UnitMirror:bar_doomed_color": PER_DRAW,
 	"UnitMirror:bar_heal_color": PER_DRAW,
+	"UnitMirror:bar_lost_color": PER_DRAW,
 	"UnitMirror:alarm_peak_color": PER_DRAW,
 	"UnitMirror:state_icon_texels": PER_DRAW,
 	"UnitMirror:state_icon_gap_texels": PER_DRAW,

@@ -259,6 +259,42 @@ func test_a_queued_heal_draws_its_span_above_the_current_health() -> void:
 			"a heal raised the felling alarm").is_false()
 
 
+# The sockets the plan takes AWAY (#1480 stage 5): a blow that severs the limb a CON piece is gated on
+# strips it in the pass's copy, and the grid outlines the max HP that goes with it. The grid is still
+# the live max, since the strip has not happened yet. No shipped piece strips on a sever, so the
+# piece is built here, as tests/law/test_strip_threads_through_the_pass.gd builds it.
+func test_a_strip_the_plan_makes_outlines_the_sockets_it_takes() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2), true, {Stats.Stat.MHP: 60, Stats.Stat.STR: 6,
+			Stats.Stat.DEX: 6, Stats.Stat.CON: Stats.BAND_MID_MAX})
+	var slot: int = victim.unit_instance.maim_order()[0]
+	var arm := slot == UnitInstance.LimbSlot.ARM_L or slot == UnitInstance.LimbSlot.ARM_R
+	var carried: Stats.Stat = Stats.Stat.STR if arm else Stats.Stat.DEX
+	var plate := ArmorData.new()
+	plate.stat_modifiers = {Stats.Stat.CON: 1}
+	plate.stat_minimums = {carried: victim.get_body_stat(carried)}
+	victim.add_item(plate)
+	assert_bool(victim.wear_armor(victim.inventory.find(plate))).override_failure_message(
+			"fixture: the plate would not go on").is_true()
+	victim.set_current_hp(victim.get_max_hp())
+	var weapon := attacker.equipped_weapon as WeaponInstance
+	var main: WeaponAttackData = weapon.template.main_attack
+	main.power += LethalityRules.LIMB_LOSS_DAMAGE - weapon.base_damage(attacker.state, main)
+
+	_aim_at(attacker, victim.movement.cell)
+	await _settle()
+
+	var planned_max := PlanResolver.state_of(victim, _plan().hypo).get_max_hp()
+	assert_int(planned_max).override_failure_message(
+			"fixture: the plan strips no max HP, so there is no socket to outline").is_less(victim.get_max_hp())
+	var bar := _unit_mirror.bar_for(victim)
+	assert_int(bar.block_count()).is_equal(victim.get_max_hp())
+	assert_int(bar.lost_block_count()).override_failure_message(
+			"the grid did not outline the sockets the plan's strip takes") \
+			.is_equal(victim.get_max_hp() - planned_max)
+	assert_int(bar.filled_block_count()).is_equal(victim.get_current_hp())
+
+
 # ------------------------------------------------------------------------------
 #  Law #4: two surfaces, one prediction
 # ------------------------------------------------------------------------------

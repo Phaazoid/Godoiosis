@@ -62,7 +62,7 @@ const BOARD_SCOPED := {
 #   - tuning a CLASS_KNOBS `layer` row writes. The tuning arm derives from `static` rows by name, and
 #     a layer row names its LAYER, not the store behind it, so it is declared here instead.
 const PROCESS_SCOPED := [
-	"_cube_mesh", "_cage_texture", "_cube_key",   # UnitHealthBar: cage geometry, keyed by _cube_key
+	"_cube_mesh", "_cage_texture", "_outline_texture", "_cube_key",   # UnitHealthBar: cage geometry, keyed by _cube_key
 	"_art_top_cache",                             # UnitSprite3D: per-texture art top, keyed by path
 	"_warned_sets",                               # UnitSprite3D: which sets have already warned, keyed by path
 	"_maps_by_texture",                           # StatusArt: per-texture effect map, keyed by the sampled texture's path

@@ -13,10 +13,10 @@ const FIZZLED_POPUP := "Fizzled!"   # a carving whose argument was not present (
 const WHIFFED_POPUP := "Whiffed!"   # a swing at a target this pass already killed (#1350)
 
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
-# ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
-# hypothetical {position, element states, HP, lifecycle, limbs} per unit forward (R4). Per hit:
-# base damage -> elemental -> the rung and the limb. Writes one ResolvedOutcome per action
-# (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
+# ONE pure pass over the ordered plan — attacks, then counters (R7) — threading each unit's
+# position and a copy of its whole body forward (R4, _Hypo). Per hit: base damage -> elemental ->
+# the rung and the limb -> the states. Writes one ResolvedOutcome per action (R8). Reads a
+# snapshot, mutates no live state, contains no RNG (R2).
 
 static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
 	# plan.hypo (Unit -> _Hypo) is shared across both phases so counter liveness sees the attacks,
@@ -359,7 +359,7 @@ static func _soak(mover: Unit, hypo: Dictionary, action: MoveAction, step: int) 
 	var held := state_of(mover, hypo).element_states
 	if held.has(Elemental.State.WET) or Elemental.is_blocked(held, Elemental.State.WET):
 		return
-	_hypo_for(mover, hypo).state.element_states.append(Elemental.State.WET)
+	_hypo_for(mover, hypo).state.add_element_state(Elemental.State.WET)
 	if action.resolved == null:
 		action.resolved = ResolvedOutcome.new()
 		action.resolved.reads_hp = false   # a walk hits nobody; the row must not print an HP arrow
@@ -872,9 +872,6 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 				outcome.states_added), Elemental.State.WET):
 		outcome.states_added.append(Elemental.State.WET)
 
-	# --- thread the hypothetical forward (R4) ---
-	body.element_states = _states_after(body.element_states, outcome.states_removed, outcome.states_added)
-
 	# Lethality stage (R7): pick the rung from the now-final damage (fall included) so the queue
 	# previews it (Law #2). Reads pre-hit HP and lifecycle, so it runs BEFORE the subtraction below.
 	# Same call Unit.take_damage makes at execution time — one ladder, two callers.
@@ -894,6 +891,18 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	if takes_limb:
 		outcome.severed_limb = body.lose_next_limb()
 		outcome.target_hp_after = body.get_current_hp()   # the strip's re-clamp, where one bites
+
+	# --- thread the hit's states forward (R4) ---
+	# Through the live body's own doors and in AttackAction.land's order, after the blow: the removes,
+	# then the adds on their clocks. So a paired state lands with its StatEffect (#1480 stage 5), and a
+	# gate it fails strips here as it will in playback, re-clamping the HP the row shows.
+	var moved := false
+	for s in outcome.states_removed:
+		moved = body.remove_element_state(s) or moved
+	for s in outcome.states_added:
+		moved = body.add_element_state(s, outcome.state_turns.get(s, 0)) or moved
+	if moved and outcome.lethality != ResolvedOutcome.Lethality.KILLED:   # a kill keeps the ladder's number
+		outcome.target_hp_after = body.get_current_hp()
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
 	# the hypo so a later hit this pass sees the moved cell (R4). The path is the trail's one
@@ -925,8 +934,8 @@ static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalRe
 	effect.cause = action
 	plan.cell_effects.append(effect)
 
-# The states a unit holds once a hit's removes and then its adds have landed: the thread (R4) and
-# #1092's judge both read it.
+# The states a unit would hold once a hit's removes and then its adds have landed: #1092's judge of
+# what an add is blocked by. The landing itself goes through the body's doors (_resolve_one).
 static func _states_after(held: Array[Elemental.State], removed: Array[Elemental.State],
 		added: Array[Elemental.State]) -> Array[Elemental.State]:
 	var after: Array[Elemental.State] = []
@@ -972,8 +981,7 @@ static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardConte
 		var sinker := _hypo_for(unit, hypo).state
 		LethalityRules.land_rung(sinker, sink.resolved.lethality, sink.resolved.damage)
 		for s in sink.resolved.states_added:
-			if not sinker.element_states.has(s):
-				sinker.element_states.append(s)
+			sinker.add_element_state(s, sink.resolved.state_turns.get(s, 0))   # SinkAction.execute's door
 		plan.sinks.append(sink)
 
 
@@ -1008,6 +1016,7 @@ static func _surviving_elements(elements: Array[Elemental.Element], body: UnitSt
 # the outcome rather than re-deriving it, so the number and its explanation cannot disagree.
 static func _mitigation_for(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext,
 		outcome: ResolvedOutcome, hypo: Dictionary) -> int:
+	outcome.worn_armor = body.worn_armor   # above the pierce: the row names a piece DEF never reached too
 	var actor_body := body_of(action.actor, hypo)
 	var weapon := actor_body.equipped_weapon as WeaponInstance if actor_body != null else null
 	if weapon != null and weapon.ignores_def():
@@ -1423,9 +1432,10 @@ static func _fizzled_outcome() -> ResolvedOutcome:
 # --- Reading the threaded hypothetical from outside the pass (R4) ---
 # A derivation that runs MID-pass -- SquadManager's reaction targeting, after the attacks have
 # resolved -- must judge a unit by what this pass has already done to it, not by the live board:
-# damage lives only in the hypo until execution. A unit nothing has touched yet has no hypo entry
-# at all, and its live value IS its projected one. Read-only on purpose: unlike _hypo_for, these
-# never seed an entry, so asking a question cannot alter the pass.
+# damage lives only in the hypo until execution. So must a readout drawn AFTER the pass, off the
+# plan's hypo (the health bar's max HP, #1480 stage 5). A unit nothing has touched yet has no hypo
+# entry at all, and its live value IS its projected one. Read-only on purpose: unlike _hypo_for,
+# these never seed an entry, so asking a question cannot alter the pass.
 static func projected_hp(unit: Unit, hypo: Dictionary) -> int:
 	if unit == null or not is_instance_valid(unit):
 		return 0
@@ -1543,16 +1553,20 @@ static func hold_in_hand(unit: Unit, source: EquippableData, hypo: Dictionary) -
 	var twin := body.inventory[at] as EquippableData
 	return twin != null and body.equip(twin)
 
-# Per-unit threaded hypothetical (R4): where the pass has put the unit, the body it has left it with,
-# and the baselines a readout compares against. The body is a copy of the unit's whole UnitState
-# (#1480), so every read later in the pass -- DEF, max HP, the kit, weight, the ladder -- meets what an
-# earlier hit did to it, a lost limb's strip included, exactly as execution's body will.
+# Per-unit threaded hypothetical (R4). THE BODY IS THE COPY (#1480): `state` is a copy of the unit's
+# whole UnitState, written only through the doors the live body uses (the rung, the limb and its strip,
+# the element states with their paired effects, a carried weapon's tank), so every read later in the pass
+# -- DEF, max HP, a stat's blend, the kit, weight, the ladder -- meets the body execution will have.
+# Target and actor alike (stage 4): a unit maimed or chilled earlier in its own pass acts with what it
+# has left. Every number is computed once and frozen onto the ResolvedOutcome; playback is pure (R3).
 #
-# The ACTOR reads its copy too (#1480 stage 4): its base damage, kind, elements and shove, the tank it
-# spends, the DEF it ignores, its counter, a Taunt's pull, its watch's fireability and a carving's fizzle, so a unit
-# maimed earlier in its own pass acts with what it has left. Every stat-derived number is computed
-# once here and frozen onto the ResolvedOutcome; AttackAction.execute is pure playback (R3). A QUEUED
-# action applying an effect (a transmutation buffing an ally, a tonic) is #113.
+# What is NOT body stays beside it: where the pass has put the unit (`position`, the attack prefix
+# plus every shove), and the baselines a readout compares the copy against (`start_*`). Tiles are not
+# here at all: a pass's terrain is deposits on plan.cell_effects (#1498).
+#
+# The copy outlives the pass on ResolvedPlan.hypo, so a readout drawn after it reads the planned body
+# through state_of. An effect a QUEUED order applies (a buffing carving, a tonic) would land on the
+# copy like any other; the order that applies one is #113's payload.
 class _Hypo:
 	var unit: Unit
 	var position: Vector2i

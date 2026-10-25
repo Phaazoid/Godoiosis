@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1478 (2026-10-23); #1458 (where the load-time shouts live) folded in 2026-10-24; #1456 (a roster VIP is forced into the force) folded in 2026-10-24; #1483 (an authoring save drops the fire countdowns) folded in 2026-10-24.**
+**Canon checked through #1478 (2026-10-23); #1458 (where the load-time shouts live) folded in 2026-10-24; #1456 (a roster VIP is forced into the force) folded in 2026-10-24; #1483 (an authoring save drops the fire countdowns) folded in 2026-10-24; #1480 (battle state lives on `UnitState`) folded in 2026-10-25.**
 
 ## What a mission is
 
@@ -618,7 +618,7 @@ The persistence seam has always said battle-scoped state resets each mission —
 
 **Resolved by [#87](https://github.com/Phaazoid/Godoiosis/issues/87) (2026-07-30), and the answer was NOT a flag on the load.** A scenario file *is* its board, so a load restores whatever the file recorded, and an authored mission simply recorded nothing — `reset()` runs first (via `clear_board()`), then `MissionState.apply_scenario()` (reached through `MissionController.apply_scenario`, and called by the headless loader too since #46) writes a mid-battle snapshot's captured zones, `contested` latch and round count (#101) back over the blank slate. `outcome` is deliberately not saved: it is derived from those plus the board, so the next `check()` re-reaches it.
 
-The reset side is **real and exercised since [#737](https://github.com/Phaazoid/Godoiosis/issues/737)** — the roster → board flow above, where units arrive off a mission's roster carrying no battle state *by construction*, because every battle-scoped field lives on the transient `Unit` or on a non-`@export` `WeaponInstance` var. *(Its character-file half is real since [#177](https://github.com/Phaazoid/Godoiosis/issues/177): the cast lives in `Resources/Units/` and an authored mission re-reads those files on every load. What is still future is results carrying **between** missions — and the mission-boundary concept that needs is [#70](https://github.com/Phaazoid/Godoiosis/issues/70)'s debt, not a roster feature.)*
+The reset side is **real and exercised since [#737](https://github.com/Phaazoid/Godoiosis/issues/737)** — the roster → board flow above, where units arrive off a mission's roster carrying no battle state *by construction*, because every battle-scoped field lives on the transient side (`UnitState`) or on a non-`@export` `WeaponInstance` var. *(Its character-file half is real since [#177](https://github.com/Phaazoid/Godoiosis/issues/177): the cast lives in `Resources/Units/` and an authored mission re-reads those files on every load. What is still future is results carrying **between** missions — and the mission-boundary concept that needs is [#70](https://github.com/Phaazoid/Godoiosis/issues/70)'s debt, not a roster feature.)*
 
 `clear_board()` also empties the zone store, which `load_scenario` refills — without that, the Sandbox board inherited the previous mission's zones (and therefore its objectives' geometry).
 
