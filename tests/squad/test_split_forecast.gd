@@ -707,6 +707,230 @@ func _assert_ran(unit: Unit, cell: Vector2i) -> void:
 			"fixture: the pass never ran (%s is not at %s)" % [unit.get_unit_name(), cell]).is_equal(cell)
 
 
+# --- bodies the pass changes (#1499) -------------------------------------------------------------
+# A pass can move a stat the shared rules read: the leader's COH, an heir's LDR, a member's Waterwalk.
+# Every change here is a worn piece coming off -- a sever (or a chill) takes its wearer under the
+# piece's gate -- and the settle after the pass reads the body as the pass left it.
+
+const LEASH := 2   # a leader's own COH; its gated piece gives as much again
+
+
+# Hard to fell, with both limb stats high enough that one lost limb moves one of them.
+func _tough(stats: Dictionary = {}) -> Dictionary:
+	var out := {Stats.Stat.MHP: 4 * LethalityRules.LIMB_LOSS_DAMAGE, Stats.Stat.STR: 6, Stats.Stat.DEX: 6}
+	out.merge(stats, true)
+	return out
+
+
+# The stat `unit`'s next lost limb takes down -- the sever asked of a copy, never named here.
+func _sever_moves(unit: Unit) -> Stats.Stat:
+	var after := unit.state.copy()
+	assert_int(after.lose_next_limb()).override_failure_message("fixture: no limb left to lose").is_not_equal(-1)
+	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
+		if after.get_body_stat(stat) < unit.state.get_body_stat(stat):
+			return stat
+	fail("fixture: the next limb this unit loses moves no stat")
+	return Stats.Stat.STR
+
+
+# The stat a chill takes down, off its paired effect.
+func _chill_moves() -> Stats.Stat:
+	var mods := Elemental.paired_stat_mods(Elemental.State.CHILLED)
+	for stat: Stats.Stat in mods:
+		if mods[stat] < 0:
+			return stat
+	fail("fixture: a chill no longer lowers any stat")
+	return Stats.Stat.DEX
+
+
+# A worn piece giving `mods` (and `abilities`) that stays on only while `gate` holds where it is now.
+func _wear_gated(unit: Unit, gate: Stats.Stat, mods: Dictionary[Stats.Stat, int],
+		abilities: Array[Abilities.Id] = []) -> void:
+	var armor := ArmorData.new()
+	armor.display_name = "Gated Piece"
+	armor.stat_minimums[gate] = unit.state.get_body_stat(gate)
+	armor.stat_modifiers = mods
+	for id in abilities:
+		var ability := AbilityData.new()
+		ability.id = id
+		ability.kind = AbilityData.AbilityKind.PASSIVE
+		armor.granted_abilities.append(ability)
+	assert_bool(unit.add_item(armor)).is_true()
+	assert_bool(unit.wear_armor(unit.inventory.find(armor))).override_failure_message(
+			"fixture: the gated piece will not go on").is_true()
+
+
+# Who owns `unit`'s Split -- the actor of its row, or null when the forecast names none.
+func _owner(owners: Dictionary, unit: Unit) -> Unit:
+	var row := owners.get(unit.get_instance_id()) as BaseAction
+	return row.actor if row != null else null
+
+
+# An attacker whose one blow takes `target`'s next limb.
+func _severer(cell: Vector2i, target: Unit, knockback := 0) -> Unit:
+	return _spawn(PLAYER, cell, {}, LethalityRules.limb_threshold(target.state), knockback)
+
+
+func _assert_severs(squad: Squad, victim: Unit, actor: Unit) -> void:
+	var blow := _blow_on(squad, victim, actor)
+	assert_object(blow).override_failure_message("fixture: no blow reaches the victim").is_not_null()
+	assert_int(blow.resolved_outcome().severed_limb).override_failure_message(
+			"fixture: the blow takes no limb").is_not_equal(-1)
+	assert_int(LethalityRules.lifecycle_for(blow.resolved_outcome().lethality)).override_failure_message(
+			"fixture: the blow must leave its victim standing").is_equal(Unit.LifecycleState.ACTIVE)
+
+
+# A leader whose leash is LEASH twice over while it wears its piece, the piece gated on what a sever
+# takes.
+func _stripped_leader(cell: Vector2i) -> Unit:
+	var lead := _spawn(ENEMY, cell, _tough({Stats.Stat.LDR: 10, Stats.Stat.COH: LEASH}))
+	_wear_gated(lead, _sever_moves(lead), {Stats.Stat.COH: LEASH})
+	assert_int(lead.squad.get_max_squad_range()).override_failure_message(
+			"fixture: the piece does not lengthen the leash").is_equal(2 * LEASH)
+	return lead
+
+
+# Nobody is shoved, downed or killed: the blow only takes the leader's arm, and with it the piece that
+# reached the member. The pass ejects the member at its end, so the forecast must name the blow.
+func test_a_blow_that_strips_the_leaders_leash_splits_on_that_blow() -> void:
+	var lead := _stripped_leader(Vector2i(1, 2))
+	var member := _spawn(ENEMY, Vector2i(1 + 2 * LEASH, 2))
+	_squad(lead, [member])
+	var hero := _severer(Vector2i(1, 3), lead)
+	_queue(hero, lead.movement.cell)
+	_assert_severs(hero.squad, lead, hero)
+
+	var owners := _forecast(hero.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a member the stripped leash no longer reaches has no Split").is_true()
+	assert_object(_owner(owners, member)).override_failure_message(
+			"the Split is not on the blow that stripped the leash").is_same(hero)
+	await _execute(hero)
+	_assert_agrees(owners)
+
+
+# The strip lands first, so the member is still in reach until the shove: the shove owns the Split.
+func test_a_shove_past_the_stripped_leash_splits_on_the_shove() -> void:
+	var lead := _stripped_leader(Vector2i(1, 2))
+	var member := _spawn(ENEMY, Vector2i(1 + LEASH, 2), {Stats.Stat.MHP: 30})
+	_squad(lead, [member])
+	var striker := _severer(Vector2i(1, 3), lead)
+	var shover := _spawn(PLAYER, Vector2i(LEASH, 2), {}, 1, 1)
+	_squad(striker, [shover])
+	_queue(striker, lead.movement.cell)
+	_queue(shover, member.movement.cell)
+	_assert_severs(striker.squad, lead, striker)
+
+	var owners := _forecast(striker.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a shove past the leash the pass left has no Split").is_true()
+	assert_object(_owner(owners, member)).override_failure_message(
+			"the Split is not on the shove that took the member past the stripped leash").is_same(shover)
+	await _execute(striker)
+	_assert_ran(member, Vector2i(2 + LEASH, 2))
+	_assert_agrees(owners)
+
+
+# The shove lands first and the old leash still holds the member; the strip after it is what breaks
+# the link, so the strip owns the Split.
+func test_a_strip_after_the_shove_owns_the_split() -> void:
+	var lead := _stripped_leader(Vector2i(1, 2))
+	var member := _spawn(ENEMY, Vector2i(1 + LEASH, 2), {Stats.Stat.MHP: 30})
+	_squad(lead, [member])
+	var shover := _spawn(PLAYER, Vector2i(LEASH, 2), {}, 1, 1)
+	var striker := _severer(Vector2i(1, 3), lead)
+	_squad(shover, [striker])
+	_queue(shover, member.movement.cell)
+	_queue(striker, lead.movement.cell)
+	_assert_severs(shover.squad, lead, striker)
+
+	var owners := _forecast(shover.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a member the strip leaves out of reach has no Split").is_true()
+	assert_object(_owner(owners, member)).override_failure_message(
+			"the Split is on the shove, but the old leash still held the member there").is_same(striker)
+	await _execute(shover)
+	_assert_ran(member, Vector2i(2 + LEASH, 2))
+	_assert_agrees(owners)
+
+
+# The downed leader hands over at pass end, by then to whoever the pass leaves leading: the heir that
+# out-leads the other only in its piece has lost it.
+func test_a_successor_the_pass_strips_of_its_leadership_is_passed_over() -> void:
+	var lead := _spawn(ENEMY, Vector2i(4, 2), {Stats.Stat.LDR: 10})
+	var heir := _spawn(ENEMY, Vector2i(5, 2), _tough({Stats.Stat.LDR: 0}))
+	_wear_gated(heir, _sever_moves(heir), {Stats.Stat.LDR: 8})
+	var other := _spawn(ENEMY, Vector2i(3, 2), {Stats.Stat.LDR: 4})
+	assert_bool(heir.get_effective_ldr() > other.get_effective_ldr()).override_failure_message(
+			"fixture: the heir must out-lead the other in its piece").is_true()
+	_squad(lead, [heir, other])
+	var downer := _spawn(PLAYER, Vector2i(4, 3))
+	var striker := _severer(Vector2i(6, 2), heir)
+	_squad(downer, [striker])
+	_queue(downer, lead.movement.cell)
+	_make_it_a_down(downer.squad, lead, downer)
+	_queue(striker, heir.movement.cell)
+	_assert_severs(downer.squad, heir, striker)
+	_assert_lifecycle(downer.squad, lead, downer, Unit.LifecycleState.DOWNED)
+
+	var leaders: Array[Unit] = []
+	for link in _blow_on(downer.squad, lead, downer).resolved_outcome().relinks:
+		if not link.ends:
+			leaders.append(link.leader)
+	assert_array(leaders).override_failure_message(
+			"the handover went to the heir the pass strips of its leadership").contains_exactly([other])
+	var owners := _forecast(downer.squad)
+	await _execute(downer)
+	_assert_agrees(owners)
+	assert_object(heir.squad).is_same(other.squad)
+
+
+# Waterwalk from a worn piece is all that carries the member's bubble over the river; the blow takes
+# it, and the member is out of reach.
+func test_a_member_the_pass_strips_of_waterwalk_splits_on_that_blow() -> void:
+	_river(2, [])
+	var lead := _spawn(ENEMY, Vector2i(1, 1), {Stats.Stat.LDR: 10})
+	var walker := _spawn(ENEMY, Vector2i(1, 3), _tough())
+	_wear_gated(walker, _sever_moves(walker), {}, [Abilities.Id.WATERWALK])
+	_squad(lead, [walker])
+	var hero := _severer(Vector2i(1, 4), walker)
+	_queue(hero, walker.movement.cell)
+	_assert_severs(hero.squad, walker, hero)
+
+	var owners := _forecast(hero.squad)
+	assert_bool(owners.has(walker.get_instance_id())).override_failure_message(
+			"a member stranded across the water by losing Waterwalk has no Split").is_true()
+	assert_object(_owner(owners, walker)).is_same(hero)
+	await _execute(hero)
+	_assert_agrees(owners)
+
+
+# A state, not a limb: the chill's paired effect takes the leader under its piece's gate.
+func test_a_chill_that_strips_the_leaders_leash_splits_on_that_blow() -> void:
+	var lead := _spawn(ENEMY, Vector2i(1, 2), _tough({Stats.Stat.LDR: 10, Stats.Stat.COH: LEASH}))
+	_wear_gated(lead, _chill_moves(), {Stats.Stat.COH: LEASH})
+	var member := _spawn(ENEMY, Vector2i(1 + 2 * LEASH, 2))
+	_squad(lead, [member])
+	var hero := _spawn(PLAYER, Vector2i(1, 3))
+	var attack: WeaponAttackData = (hero.get_equipped_weapon() as WeaponInstance).template.main_attack
+	attack.elemental_damage_type = Elemental.Element.ICE
+	_queue(hero, lead.movement.cell)
+	var blow := _blow_on(hero.squad, lead, hero)
+	assert_bool(blow.resolved_outcome().states_added.has(Elemental.State.CHILLED)).override_failure_message(
+			"fixture: an ICE hit no longer chills").is_true()
+	assert_int(blow.resolved_outcome().severed_limb).override_failure_message(
+			"fixture: the chill alone must strip the piece").is_equal(-1)
+	assert_bool(_plan(hero.squad).cell_effects.is_empty()).override_failure_message(
+			"fixture: the ice touches the ground, so every squad is swept anyway").is_true()
+
+	var owners := _forecast(hero.squad)
+	assert_bool(owners.has(member.get_instance_id())).override_failure_message(
+			"a member the chilled leash no longer reaches has no Split").is_true()
+	assert_object(_owner(owners, member)).is_same(hero)
+	await _execute(hero)
+	_assert_agrees(owners)
+
+
 # --- the round's smoke (#1430) -------------------------------------------------------------------
 # SplitForecast.round_leavers: smoke the round's gas step spills onto a leader shortens its leash, and
 # the first contact sweep after it (the next turn start) ejects whoever it no longer reaches. No row to
