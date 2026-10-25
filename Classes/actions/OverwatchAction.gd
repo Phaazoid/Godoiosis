@@ -66,7 +66,7 @@ func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
 # empty is dropped; the other branch is trimmed by get_affected_cells_from itself.
 func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
 	if fired_attack != null and fired_attack.is_single_target_swing():
-		var walked := Reach.get_paths_from(actor, origin, target_cell, fired_attack, board)
+		var walked := Reach.get_paths_from(origin, target_cell, fired_attack, board)
 		if board == null:
 			return walked
 		var kept: Array[Array] = []
@@ -78,7 +78,7 @@ func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
 				kept.append(surfaced)
 		return kept
 	var one: Array[Array] = []
-	var cells := Reach.get_affected_cells_from(actor, origin, target_cell, fired_attack, board)
+	var cells := Reach.get_affected_cells_from(origin, target_cell, fired_attack, board)
 	if not cells.is_empty():
 		one.append(cells)
 	return one

@@ -1,8 +1,8 @@
 extends Object
 class_name Reach
 
-# Weapon-aware attack geometry: given a unit, an origin AND THE ATTACK BEING FIRED, which cells can
-# it select, and which does a given aim actually affect.
+# Weapon-aware attack geometry: given an origin AND THE ATTACK BEING FIRED, which cells can it
+# select, and which does a given aim actually affect.
 #
 # The attack is a PARAMETER, not a lookup (#102). Every query used to read Unit.get_fired_attack()
 # for itself -- the live active_attack pick -- while the queued order carried its own frozen
@@ -17,8 +17,9 @@ class_name Reach
 # Was CombatComponent, a Node on every Unit -- but it held no state (its lone @export, can_counter,
 # was never authored on any unit, so its gate in SquadManager was permanently open and shadowed the
 # real, authored AttackData.can_counter). Every method already began by fetching its owner back.
-# Made static 2026-07-26, matching the RulesService/GridUtils precedent; the Unit is now just the
-# first parameter, and the scene tree carries one fewer node per unit.
+# Made static 2026-07-26, matching the RulesService/GridUtils precedent, and the scene tree carries
+# one fewer node per unit. The Unit stayed a first parameter that no query read, until #1480 stage 4
+# removed it: a future backstrike reads the attacker's FACING, which is already a parameter.
 #
 # A null attack (bare fists, a rune with nothing channelable) falls back to adjacency: selectable =
 # Manhattan range 1, affected = the aimed cell alone. That fallback is load-bearing in the tests --
@@ -63,7 +64,7 @@ class_name Reach
 # implies -- the pointed cell need not be a member, and a hint with no cardinal answers empty (a dud
 # order, refused upstream). Anchored: the range ring, board-blind -- where an aim may be DECLARED is
 # still a pure range question, and it is the FOOTPRINT that reads the terrain (#756, #805).
-static func get_attack_cells_from(_unit: Unit, origin_cell: Vector2i, target_hint_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
+static func get_attack_cells_from(origin_cell: Vector2i, target_hint_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
 	if attack == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
 	if attack.is_directional():
@@ -76,12 +77,12 @@ static func get_attack_cells_from(_unit: Unit, origin_cell: Vector2i, target_hin
 
 # Would an aim at target_cell AFFECT target_cell? A point aim: in reach AND past the vertical gate.
 # A directional aim (#756): the cell survives the truncated spread of the facing it implies.
-static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
+static func can_hit_cell_from(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
 	if is_directional_attack(attack):
-		return get_affected_cells_from(unit, origin_cell, target_cell, attack, board).has(target_cell)
+		return get_affected_cells_from(origin_cell, target_cell, attack, board).has(target_cell)
 	if not vertical_aim_ok(attack, origin_cell, target_cell, board):
 		return false
-	return get_attack_cells_from(unit, origin_cell, target_cell, attack).has(target_cell)
+	return get_attack_cells_from(origin_cell, target_cell, attack).has(target_cell)
 
 # May this aim be DECLARED at all -- the click handler's, the hover's and the headless twin's one
 # gate (#756; three inline copies before it). A directional attack aims a DIRECTION, so the clicked
@@ -91,11 +92,11 @@ static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Ve
 # Either kind is a dud when its footprint holds no SURFACE (#1228): a watch facing off the board's
 # edge, a shot into a hole. For a point aim only the headless API can name such a cell -- a click
 # cannot land on one -- but the rule is one rule, so it is asked here.
-static func can_aim_at(unit: Unit, origin_cell: Vector2i, cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
+static func can_aim_at(origin_cell: Vector2i, cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
 	if is_directional_attack(attack):
-		return not get_affected_cells_from(unit, origin_cell, cell, attack, board).is_empty()
-	return can_hit_cell_from(unit, origin_cell, cell, attack, board) \
-		and not get_affected_cells_from(unit, origin_cell, cell, attack, board).is_empty()
+		return not get_affected_cells_from(origin_cell, cell, attack, board).is_empty()
+	return can_hit_cell_from(origin_cell, cell, attack, board) \
+		and not get_affected_cells_from(origin_cell, cell, attack, board).is_empty()
 
 # The sightline's height above a shooter's feet. A RULE constant, not a knob: it defines what a
 # wall is, and the #218 purpose survives (standing ON a cliff edge still shoots down past it).
@@ -242,13 +243,13 @@ static func _closest_t(p0: Vector2, span: Vector2, point: Vector2) -> float:
 # state. A point aim: the cells past its vertical gate. A directional attack (#756): the union minus
 # every facing's truncated spread, so the hatch shows exactly the cells a spread is cut short of.
 # Empty on a flat board. Presentation only; the gate itself is can_hit_cell_from.
-static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+static func blocked_cells_from(origin_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
 	var blocked: Array[Vector2i] = []
-	var union := get_all_attack_cells_from(unit, origin_cell, attack)
+	var union := get_all_attack_cells_from(origin_cell, attack)
 	if is_directional_attack(attack):
 		var reachable: Dictionary[Vector2i, bool] = {}
 		for dir in GridUtils.CARDINAL_DIRECTIONS:
-			for cell in get_affected_cells_from(unit, origin_cell, origin_cell + dir, attack, board):
+			for cell in get_affected_cells_from(origin_cell, origin_cell + dir, attack, board):
 				reachable[cell] = true
 		for cell in union:
 			# A cell with no surface is no facing's (#1228), but it is not the terrain cutting a
@@ -263,14 +264,14 @@ static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: Attack
 
 # Union over all four facings — what the red targeting overlay draws. An anchored attack's ring does
 # not turn with a facing, so it is asked once.
-static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
+static func get_all_attack_cells_from(origin_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
 	if attack == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
 	if not attack.is_directional():
-		return get_attack_cells_from(unit, origin_cell, origin_cell, attack)
+		return get_attack_cells_from(origin_cell, origin_cell, attack)
 	var cells: Array[Vector2i] = []
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		for cell in get_attack_cells_from(unit, origin_cell, origin_cell + dir, attack):
+		for cell in get_attack_cells_from(origin_cell, origin_cell + dir, attack):
 			if not cells.has(cell):
 				cells.append(cell)
 	return cells
@@ -304,8 +305,8 @@ static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack:
 # a hole are dropped, so nothing reticles, deposits on or drops a payload into the void. The trim runs
 # on the FINISHED list, after the propagation, so a line still crosses a chasm to the far bank and the
 # survivors keep emission order. A null board cannot judge and trims nothing.
-static func get_affected_cells_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
-	var cells := _footprint(_unit, origin_cell, target_cell, attack, board, facing)
+static func get_affected_cells_from(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
+	var cells := _footprint(origin_cell, target_cell, attack, board, facing)
 	return cells if board == null else surfaced(cells, board)
 
 
@@ -319,7 +320,7 @@ static func surfaced(cells: Array[Vector2i], board: BoardContext) -> Array[Vecto
 
 
 # get_affected_cells_from before the surface trim: the four paths above.
-static func _footprint(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
+static func _footprint(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
 	if attack == null:
 		return [target_cell]
 	if attack.is_directional():
@@ -332,7 +333,7 @@ static func _footprint(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i
 		if not attack.swing:
 			return _height_only(swung, origin_cell, attack, board)
 		if attack.is_single_target_swing():
-			return _walked(swung, get_paths_from(_unit, origin_cell, target_cell, attack, board, facing))
+			return _walked(swung, get_paths_from(origin_cell, target_cell, attack, board, facing))
 		return _truncate(swung, origin_cell, dir, attack, board)
 	# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
 	# north whatever direction the aim came from. Turning it to the attacker-to-target cardinal
@@ -354,7 +355,7 @@ static func _footprint(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i
 	if not attack.swing:
 		return _height_only(placed, target_cell, attack, board)
 	if attack.is_single_target_swing():
-		return _walked(placed, get_paths_from(_unit, origin_cell, target_cell, attack, board, facing))
+		return _walked(placed, get_paths_from(origin_cell, target_cell, attack, board, facing))
 	return _spread(placed, target_cell, attack, board)
 
 
@@ -442,7 +443,7 @@ static func travel_steps(origin_cell: Vector2i, target_cell: Vector2i, attack: A
 #
 # Unit-blind like everything here: who stands on a tile, and so where each path is TAKEN, is
 # RulesService.gather_path_victims' question. A null board walks every tile ungated.
-static func get_paths_from(_unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Array]:
+static func get_paths_from(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Array]:
 	var walked: Array[Array] = []
 	if attack == null or not attack.is_single_target_swing():
 		return walked

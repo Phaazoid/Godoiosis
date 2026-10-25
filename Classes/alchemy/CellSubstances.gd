@@ -10,9 +10,11 @@ extends Object
 # Materia's shape: static, the board passed in, read through BoardContext METHODS only (a stub board
 # carries a null grid and a null state store), and its "stand by your source" footprint, Materia.REACH.
 #
-# THE BOARD AS IT STANDS: live tile states, gas and unit positions, never a pass's own deposits --
-# the limit empowerment already declares. A fire this plan lights is not present for a later cast in
-# the same plan.
+# THE GROUND AS IT STANDS: live tile states and gas, never a pass's own deposits -- the limit
+# empowerment already declares. A fire this plan lights is not present for a later cast in the same
+# plan. UNITS WHERE THE PLAN PUTS THEM (#1480 stage 4, dev ruling 2026-10-24): `hypo` is the pass's
+# own inside a resolve, so a neighbour walked in or soaked earlier in it lends what it has then, and
+# empty everywhere else, which reads each unit at its queued destination with the states it has now.
 
 # Every cell holds the ambient air (Atmosphere.SUBSTANCES) at whatever concentration its board
 # authors. A thin reading lowers damage and never makes a substance absent (#1324).
@@ -42,10 +44,10 @@ static var _parts_memo: Dictionary = {}
 # carries, all at PLENTY, then every compound's parts, recursively, at their compound's amount.
 # Deduped, in that order; a substance found twice keeps the larger amount.
 #
-# `caster` is counted wherever it is: `cell` IS where it casts from, which is often a cell it has only
-# queued a move to, so the live scan below would not find it there.
+# `caster` is counted whatever the scan finds: the body handed in is the one whose conduits count, and
+# a pass hands its copy.
 static func available_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
-		catalog: Dictionary = {}) -> Dictionary[String, int]:
+		catalog: Dictionary = {}, hypo: Dictionary = {}) -> Dictionary[String, int]:
 	var shared := catalog.is_empty()
 	if shared:
 		catalog = SubstanceCatalog.get_all()
@@ -54,7 +56,7 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: UnitStat
 		_add(found, id, AIR)
 	if board != null:
 		for near: Vector2i in GridUtils.cells_within_manhattan_range(cell, Materia.REACH):
-			_add_cell(found, near, board)
+			_add_cell(found, near, board, hypo)
 	if caster != null:
 		for state: Elemental.State in caster.element_states:
 			_add(found, SubstanceMap.of_state(state), PLENTY)
@@ -76,18 +78,19 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: UnitStat
 
 # Why `attack` fizzles cast from `cell`, or "". Only a carving can fizzle, and only one that parses; a
 # null board is no world to judge against, so nothing fizzles there.
-static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContext, caster: UnitState = null) -> String:
+static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContext, caster: UnitState = null,
+		hypo: Dictionary = {}) -> String:
 	var carving := attack as TransmutationData
 	if carving == null or board == null:
 		return ""
 	var recipe := carving.parsed()
 	if not recipe.is_legal():
 		return ""
-	return recipe.fizzle_reason(available_near(cell, board, caster))
+	return recipe.fizzle_reason(available_near(cell, board, caster, {}, hypo))
 
 
 # Everything here is a real source, so all of it is PLENTY.
-static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext) -> void:
+static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext, hypo: Dictionary) -> void:
 	var kind := board.terrain_kind_at(cell)
 	# Water is offered only as OPEN water (BoardContext.is_open_water): ice is a floor, not a well, so
 	# frozen water offers its ice, through the tile state below, and not its water.
@@ -105,9 +108,9 @@ static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: Boa
 	# A lit prop is a fire, made of what a burning tile is.
 	if board.prop_lit_at(cell):
 		_add(found, SubstanceMap.of_tile_state(Terrain.TileState.BURNING), PLENTY)
-	var unit := board.unit_at_cell(cell)
+	var unit := PlanResolver.unit_threaded_at(cell, board, hypo)
 	if unit != null:
-		for state: Elemental.State in unit.element_states:
+		for state: Elemental.State in PlanResolver.projected_states(unit, hypo):
 			_add(found, SubstanceMap.of_state(state), PLENTY)
 
 

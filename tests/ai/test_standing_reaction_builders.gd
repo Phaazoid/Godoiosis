@@ -643,14 +643,14 @@ func test_a_point_watch_is_never_aimed_inside_its_minimum_range() -> void:
 	_spawn(board, ENEMY, Vector2i(4, 0))
 	var ctx := _context(board)
 	var attack: AttackData = watcher.overwatch_attacks()[0]
-	assert_bool(Reach.can_aim_at(watcher, Vector2i(4, 4), Vector2i(4, 3), attack, ctx)).override_failure_message(
+	assert_bool(Reach.can_aim_at(Vector2i(4, 4), Vector2i(4, 3), attack, ctx)).override_failure_message(
 			"fixture is vacuous: the step out is a declarable aim").is_false()
 
 	AITactics.queue_main_action(watcher, ctx, board.squad_manager, WATCH_ONLY)
 	var watch := _queued_watch(watcher)
 	if watch == null:
 		return
-	assert_bool(Reach.can_aim_at(watcher, watcher.movement.cell, watch.target_cell, watch.fired_attack, ctx)) \
+	assert_bool(Reach.can_aim_at(watcher.movement.cell, watch.target_cell, watch.fired_attack, ctx)) \
 		.override_failure_message("the AI queued a watch at %s, an aim the player could never declare" % str(watch.target_cell)) \
 		.is_true()
 

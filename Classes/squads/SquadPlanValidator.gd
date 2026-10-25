@@ -294,7 +294,7 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 # as it will whiff at the resolve. The eligibility question above still asks no board.
 static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], units: Array[Unit], board: BoardContext) -> bool:
 	var origin := Unit.projected_cell(aim.actor, actions, true, true)
-	var footprint := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack, board)
+	var footprint := Reach.get_affected_cells_from(origin, aim.target_cell, aim.fired_attack, board)
 	# The current is reach, so an aim whose only casualties arrive by the arc is not a whiff. Asked
 	# with this function's own projection rather than through Conduction.sweep, which reads the
 	# occupancy seam a RESOLVED plan uses -- the two falses above are load-bearing here (#126).
@@ -317,7 +317,7 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 			return true     # the current does not check tags -- anybody in it is a casualty
 		if not footprint.has(cell):
 			continue
-		if RulesService.is_attack_victim(aim.actor, unit, aim.fired_attack):
+		if RulesService.is_attack_victim(aim.actor.state, unit, aim.fired_attack):
 			return true
 	return false
 

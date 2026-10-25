@@ -130,7 +130,7 @@ static func _check_kind_is_authored(attack: AttackData, found: Array[Dictionary]
 # Reach's own union-over-facings query, so a directional spread is judged by the same call the red
 # overlay draws with. A null user is safe: no geometry reads it.
 static func _check_reaches_anything(attack: AttackData, found: Array[Dictionary]) -> void:
-	if not Reach.get_all_attack_cells_from(null, PROBE_ORIGIN, attack).is_empty():
+	if not Reach.get_all_attack_cells_from(PROBE_ORIGIN, attack).is_empty():
 		return
 	var name := attack.display_name if attack.display_name != "" else "This attack"
 	var text := "%s can be aimed at NO cells at all -- it will not show any range in game, and nothing will refuse to fire it." % name

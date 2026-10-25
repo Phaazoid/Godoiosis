@@ -364,7 +364,7 @@ func test_a_shot_into_a_hole_is_neither_offered_nor_accepted() -> void:
 	var board: BoardContext = sess._board()
 	var origin := hero.get_projected_destination()
 	assert_bool(board.is_void_at(hole)).override_failure_message("fixture: the erased cell is no hole").is_true()
-	assert_bool(Reach.can_hit_cell_from(hero, origin, hole, zap, board)).override_failure_message(
+	assert_bool(Reach.can_hit_cell_from(origin, hole, zap, board)).override_failure_message(
 		"fixture: the weaker gate refuses the hole too, so this case shows nothing").is_true()
 	var h: String = sess.handle_for(hero)
 

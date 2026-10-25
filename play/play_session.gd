@@ -326,8 +326,8 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
 	# can_aim_at, the click's own gate (#1365), is what narrows it to the aim actually available. Both
 	# of queue_attack's gates are applied here in its own order, so a cell offered can never be refused.
-	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, aiming):
-		if not Reach.can_aim_at(unit, origin, aim, aiming, board):
+	for aim: Vector2i in Reach.get_all_attack_cells_from(origin, aiming):
+		if not Reach.can_aim_at(origin, aim, aiming, board):
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
 		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice. Whether
@@ -360,8 +360,8 @@ func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Diction
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't watch with %s from %s: %s" % [handle, _attack_label(watch), str(origin), fizzle]}
 	var out: Array[Dictionary] = []
-	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, watch):
-		if not Reach.can_aim_at(unit, origin, aim, watch, board):
+	for aim: Vector2i in Reach.get_all_attack_cells_from(origin, watch):
+		if not Reach.can_aim_at(origin, aim, watch, board):
 			continue
 		var probe := OverwatchAction.new()
 		probe.init(unit, aim, watch)
@@ -934,7 +934,7 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	# facing whose spread survives, a point aim needs the cell and a footprint with ground in it
 	# (#1228), so a shot into a hole is refused here as the click can never make it. The board carries
 	# the elevations for the vertical-tolerance half (#258).
-	if not Reach.can_aim_at(unit, origin, aim, aiming, _board()):
+	if not Reach.can_aim_at(origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
 	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
 	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
@@ -1081,7 +1081,7 @@ func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
 	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
 	# dud-aim refusal that stood below is inside it -- a facing watching no cells is not aimable.
-	if not Reach.can_aim_at(unit, origin, aim, aiming, _board()):
+	if not Reach.can_aim_at(origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
 	var action := OverwatchAction.new()
 	action.init(unit, aim, aiming)

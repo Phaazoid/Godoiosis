@@ -35,7 +35,7 @@ func test_gather_victims_picks_enemies_not_allies() -> void:
 	var enemy := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
 
-	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(1, 0), Vector2i(0, 1)], _board(), attacker.get_fired_attack())
+	var victims := RulesService.gather_attack_victims(attacker.state, [Vector2i(1, 0), Vector2i(0, 1)], _board(), attacker.get_fired_attack())
 
 	assert_array(victims).contains([enemy])
 	assert_array(victims).not_contains([ally])
@@ -46,7 +46,7 @@ func test_gather_victims_includes_allies_when_weapon_hits_allies() -> void:
 	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = true
 
 	# The flag is read off the attack passed in, not off the attacker (#102).
-	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(0, 1)], _board(), attacker.get_fired_attack())
+	var victims := RulesService.gather_attack_victims(attacker.state, [Vector2i(0, 1)], _board(), attacker.get_fired_attack())
 
 	assert_array(victims).contains([ally])
 
@@ -56,14 +56,14 @@ func test_attacker_is_not_a_victim_of_itself_by_default() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var attack := attacker.get_fired_attack()
 
-	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_false()
+	assert_bool(RulesService.is_attack_victim(attacker.state, attacker, attack)).is_false()
 
 func test_attacker_is_a_victim_of_itself_when_hits_self() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var attack := attacker.get_fired_attack()
 	attack.hits_self = true
 
-	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_true()
+	assert_bool(RulesService.is_attack_victim(attacker.state, attacker, attack)).is_true()
 
 # hits_self and hits_allies are independent flags on the same predicate -- neither implies the
 # other, which is what lets Heal (both true) differ from a plain self-buff (hits_self only) or an
@@ -75,13 +75,13 @@ func test_hits_self_and_hits_allies_are_independent() -> void:
 
 	attack.hits_self = true
 	attack.hits_allies = false
-	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_true()
-	assert_bool(RulesService.is_attack_victim(attacker, ally, attack)).is_false()
+	assert_bool(RulesService.is_attack_victim(attacker.state, attacker, attack)).is_true()
+	assert_bool(RulesService.is_attack_victim(attacker.state, ally, attack)).is_false()
 
 	attack.hits_self = false
 	attack.hits_allies = true
-	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_false()
-	assert_bool(RulesService.is_attack_victim(attacker, ally, attack)).is_true()
+	assert_bool(RulesService.is_attack_victim(attacker.state, attacker, attack)).is_false()
+	assert_bool(RulesService.is_attack_victim(attacker.state, ally, attack)).is_true()
 
 # --- targets (#1135): a map-only attack has NO unit victims -----------------------------------
 #
@@ -98,11 +98,11 @@ func test_a_map_only_attack_is_nobody_s_victim_and_both_still_is() -> void:
 
 	attack.targets = EquippableData.TargetMode.MAP
 	for unit: Unit in [enemy, ally, attacker]:
-		assert_bool(RulesService.is_attack_victim(attacker, unit, attack)) \
+		assert_bool(RulesService.is_attack_victim(attacker.state, unit, attack)) \
 			.override_failure_message("a MAP-only attack took %s as a victim" % unit.name).is_false()
 
 	attack.targets = EquippableData.TargetMode.BOTH
 	for unit: Unit in [enemy, ally, attacker]:
-		assert_bool(RulesService.is_attack_victim(attacker, unit, attack)).is_true()
+		assert_bool(RulesService.is_attack_victim(attacker.state, unit, attack)).is_true()
 
-	assert_bool(RulesService.is_attack_victim(attacker, enemy, null)).is_true()
+	assert_bool(RulesService.is_attack_victim(attacker.state, enemy, null)).is_true()

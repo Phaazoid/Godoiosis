@@ -134,7 +134,7 @@ func test_hovering_an_enemy_never_borrows_your_own_movement_layers() -> void:
 func _geometric_reach(unit: Unit, origins: Array[Vector2i]) -> Dictionary:
 	var out := {}
 	for origin: Vector2i in origins:
-		for cell: Vector2i in Reach.get_all_attack_cells_from(unit, origin, unit.get_fired_attack()):
+		for cell: Vector2i in Reach.get_all_attack_cells_from(origin, unit.get_fired_attack()):
 			out[cell] = true
 	return out
 

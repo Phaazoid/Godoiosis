@@ -96,7 +96,7 @@ static func render_focus(session, handle: String) -> String:
 		overlay[cell] = "-"
 	var refused := "- strands a squadmate" if unit.is_leader() and unit.has_squad() else "- breaks leader range"
 	if unit.has_equipped_weapon():
-		for cell in Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), unit.get_fired_attack()):
+		for cell in Reach.get_all_attack_cells_from(unit.get_projected_destination(), unit.get_fired_attack()):
 			overlay[cell] = "*" if overlay.has(cell) else "x"
 	for other in session.live_units():
 		if other.is_downed() and not overlay.has(other.movement.cell):

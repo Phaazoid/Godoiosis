@@ -24,11 +24,11 @@ func _hook(max_range := 0) -> AttackData:
 
 
 func _selectable(attack: AttackData, origin: Vector2i, hint: Vector2i) -> Array[Vector2i]:
-	return Reach.get_attack_cells_from(null, origin, hint, attack)
+	return Reach.get_attack_cells_from(origin, hint, attack)
 
 
 func _affected(attack: AttackData, origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
-	return Reach.get_affected_cells_from(null, origin, target, attack, null)
+	return Reach.get_affected_cells_from(origin, target, attack, null)
 
 
 func test_manhattan_range_all_eight_neighbours() -> void:
@@ -85,7 +85,7 @@ func test_a_facings_selectable_cells_are_its_footprint_and_a_zero_hint_is_a_dud(
 
 
 func test_the_union_over_facings_is_what_the_overlay_draws() -> void:
-	var cells := Reach.get_all_attack_cells_from(null, Vector2i.ZERO, P.line(_attack(), 2))
+	var cells := Reach.get_all_attack_cells_from(Vector2i.ZERO, P.line(_attack(), 2))
 	assert_array(cells).contains_exactly_in_any_order([U, U * 2, D, D * 2, L, L * 2, R, R * 2])
 
 
@@ -239,7 +239,7 @@ func _placed(offsets: Array[Vector2i], target: Vector2i, board: BoardContext, to
 	attack.swing = swinging
 	attack.up_tolerance = tolerance
 	attack.down_tolerance = tolerance
-	return Reach.get_affected_cells_from(null, Vector2i(9, 9), target, attack, board)
+	return Reach.get_affected_cells_from(Vector2i(9, 9), target, attack, board)
 
 
 func test_a_wall_between_the_impact_and_the_shape_cuts_what_is_behind_it() -> void:
@@ -327,7 +327,7 @@ func test_a_null_board_hands_back_the_whole_authored_shape() -> void:
 	var attack := P.stamped(_attack(), 4, scattered)
 	attack.up_tolerance = 0
 	attack.down_tolerance = 0
-	assert_array(Reach.get_affected_cells_from(null, Vector2i(9, 9), Vector2i.ZERO, attack, null)) \
+	assert_array(Reach.get_affected_cells_from(Vector2i(9, 9), Vector2i.ZERO, attack, null)) \
 		.contains_exactly_in_any_order(scattered)
 
 
@@ -340,7 +340,7 @@ func test_a_swung_shape_is_still_truncated_from_the_shooter_and_not_from_its_own
 	var swung := P.line(_attack(), 3)
 	swung.vertical_rule = AttackData.VerticalRule.MELEE
 	var board := _board({Vector2i(0, -2): 2})
-	var hit := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)
+	var hit := Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(0, -1), swung, board)
 	assert_array(hit).contains_exactly([Vector2i(0, -1)])
 
 
@@ -401,11 +401,11 @@ func test_the_flag_forks_a_self_anchored_swing_too() -> void:
 	var swung := P.line(_attack(), 3)
 	swung.vertical_rule = AttackData.VerticalRule.MELEE
 	var board := _board({Vector2i(0, -2): 2})
-	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
+	assert_array(Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
 		.contains_exactly([Vector2i(0, -1)])
 	swung.swing = false
 	# The raised cell is refused by the MELEE rule on its own account (a sheer step at range), and
 	# the cell BEHIND it -- flat, and unreachable for a swing because the lane ended -- comes back.
-	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
+	assert_array(Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
 		.override_failure_message("the directional branch never asks the flag") \
 		.contains_exactly([Vector2i(0, -1), Vector2i(0, -3)])

@@ -265,7 +265,7 @@ func test_an_all_skipped_counter_phase_produces_no_beats_and_no_turnover() -> vo
 	var source := H.stamped_attack(attacker, foe)
 	plan.attacks.append(source)
 	var victims: Array[Unit] = [attacker]
-	for counter in CounterAttackAction.create_counter_volley(foe, Vector2i(1, 0), victims, source, _cells_of(victims)):
+	for counter in CounterAttackAction.create_counter_volley(foe, foe.get_counter_attack(), Vector2i(1, 0), victims, source, _cells_of(victims)):
 		counter.resolved = ResolvedOutcome.new()
 		counter.resolved.skipped = true
 		plan.counters.append(counter)

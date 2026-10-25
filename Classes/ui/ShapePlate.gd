@@ -108,9 +108,9 @@ func show_attack(attack: AttackData) -> void:
 	var aim := Vector2i.UP if directional else Vector2i(0, -reach)
 	var ring: Array[Vector2i] = []
 	if not directional:
-		ring = Reach.get_attack_cells_from(null, Vector2i.ZERO, Vector2i.ZERO, attack)
-	var hits := Reach.get_affected_cells_from(null, Vector2i.ZERO, aim, attack, null)
-	_paint(attack, ring, hits, Reach.get_paths_from(null, Vector2i.ZERO, aim, attack, null))
+		ring = Reach.get_attack_cells_from(Vector2i.ZERO, Vector2i.ZERO, attack)
+	var hits := Reach.get_affected_cells_from(Vector2i.ZERO, aim, attack, null)
+	_paint(attack, ring, hits, Reach.get_paths_from(Vector2i.ZERO, aim, attack, null))
 
 	# The clip is DECLARED, never silent: a ring cut off at the plate's edge without a word would be a
 	# lie about where the attack stops.
@@ -127,8 +127,8 @@ func show_payload(payload: AttackData, onward: bool) -> void:
 		_clear("drops nothing")
 		return
 	var no_ring: Array[Vector2i] = []
-	var hits := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i.ZERO, payload, null, Vector2i.UP)
-	_paint(payload, no_ring, hits, Reach.get_paths_from(null, Vector2i.ZERO, Vector2i.ZERO, payload, null, Vector2i.UP))
+	var hits := Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i.ZERO, payload, null, Vector2i.UP)
+	_paint(payload, no_ring, hits, Reach.get_paths_from(Vector2i.ZERO, Vector2i.ZERO, payload, null, Vector2i.UP))
 	_caption.text = "^ the way the attack was going" if onward else "^ board north"
 
 

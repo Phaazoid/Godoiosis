@@ -3,9 +3,9 @@ class_name CounterAttackAction
 
 # A REACTION — derived fresh from the attack plan each resolve pass, never stored as a player
 # order (Law #2; see SquadManager.calculate_reactions_for_squad / create_counter_volley). Fires
-# whatever Unit.get_counter_attack() decides: a weapon ALWAYS counters with its main attack
-# regardless of any live pick, while a rune counters with whatever it would currently fire
-# (#30/#72).
+# whatever the counter-er's body, as the pass has left it, decides (UnitState.counter_attack): a weapon
+# ALWAYS counters with its main attack regardless of any live pick, while a rune counters with
+# whatever it would currently fire (#30/#72).
 #
 # Always a STRIKE at the attacking party. It had a second kind, a reactive heal on the defender's own
 # side (#148), until the dev repealed it (2026-09-28); a heal never counters now (AttackData.can_ever_counter).
@@ -36,22 +36,14 @@ func get_action_icon() -> Texture2D:
 	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else COUNTER_ATTACK_ICON
 
-# `payload` is set when this volley is a counter's PAYLOAD rather than the counter itself (#1058,
-# PlanResolver.drop_payloads): it fires that attack instead, and with nobody in reach it is still one
-# cell attack, since a payload always goes off. Built here rather than by hand so the volley is
-# stamped by the one factory every counter volley comes out of.
-static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction, footprint: Array[Vector2i], arc_links: Array[Conduction.Link] = [], payload: AttackData = null) -> Array[CounterAttackAction]:
+# Every counter volley comes out of this one factory. `chosen` is the attack the volley fires, decided
+# by the caller and HANDED IN (#1480 stage 4): a counter's is the counter-er's body as the pass left
+# it (UnitState.counter_attack), a counter's PAYLOAD (#1058, PlanResolver.drop_payloads) is the payload
+# itself. One `null` victim is a cell attack with nobody in reach: a payload always goes off.
+static func create_counter_volley(counter_unit: Unit, chosen: AttackData, origin: Vector2i, victims: Array[Unit], source: AttackAction, footprint: Array[Vector2i], arc_links: Array[Conduction.Link] = []) -> Array[CounterAttackAction]:
 	var counters: Array[CounterAttackAction] = []
 	var volley: Array[AttackAction] = []
-	# The attack this unit fires reactively: a rune counters with whatever it would currently
-	# fire (unchanged #30 quirk); a weapon ALWAYS counters with its main attack (#72 ruling —
-	# overwatch-style alt-attack countering is out of scope, #73). Derived here, not stored, so
-	# the counter's damage/elements/pattern match what get_counter_attack() decided.
-	var chosen: AttackData = payload if payload != null else counter_unit.get_counter_attack()
-	var hit: Array[Unit] = victims.duplicate()
-	if hit.is_empty() and payload != null:
-		hit.append(null)
-	for victim in hit:
+	for victim in victims:
 		var counter := CounterAttackAction.new()
 		counter.init_counter(counter_unit, victim, origin, source)
 		counter.fired_attack = chosen

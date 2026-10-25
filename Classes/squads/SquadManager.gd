@@ -548,7 +548,7 @@ func _candidate_watch_declarable(squad: Squad, action: BaseAction) -> bool:
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	if Reach.can_aim_at(action.actor, origin, watch.target_cell, watch.fired_attack, board_source.call()):
+	if Reach.can_aim_at(origin, watch.target_cell, watch.fired_attack, board_source.call()):
 		return true
 	watch.add_validation_error("Can't aim a watch there")
 	return false
@@ -694,6 +694,9 @@ func refused_orders(squad: Squad) -> Array[BaseAction]:
 # `hypo` is the pass the counter is derived inside (#1349): both units are judged where THIS pass has
 # put them, a shove the projection never published included. Required, like `board`: the AI, asking
 # outside any pass, says so with an empty one, which reads the projection.
+#
+# The counter-er is judged on its BODY as the pass has left it (#1480 stage 4): a unit maimed or
+# stripped by the blow it answers counters, or not, with what it has left.
 func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, hypo: Dictionary,
 		target_cell = null) -> bool:
 	if countering_unit == null or target_unit == null:
@@ -705,7 +708,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# AttackData.can_counter, checked below via attack_source_can_counter().
 	if not RulesService.can_target(countering_unit, target_unit):
 		return false
-	if not countering_unit.attack_source_can_counter():
+	var body := PlanResolver.state_of(countering_unit, hypo)
+	if not body.attack_source_can_counter(countering_unit.active_attack):
 		return false
 	# A STANDING WATCH IS YOUR REACTION (#810): the Overwatch was this unit's action, so it does not
 	# also answer a blow. Read live and not threaded — a unit arming a watch is always in the ACTIVE
@@ -726,7 +730,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# A counter whose carving FIZZLES where the counter-er stands lands nothing, so it answers nobody
 	# (#1354). The resolve skips one (PlanResolver.resolve_counters) and ThreatField draws no reach for
 	# one, so this is what keeps the AI's exchange scoring from counting it.
-	if CellSubstances.fizzle_reason(countering_unit.get_counter_attack(), counter_cell, board, countering_unit.state) != "":
+	var counter_attack := body.counter_attack(countering_unit.active_attack)
+	if CellSubstances.fizzle_reason(counter_attack, counter_cell, board, body, hypo) != "":
 		return false
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
@@ -734,7 +739,7 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# counter from a reach attack's range and then swing a range-1 main (#102). The board carries
 	# the elevations: a target above this unit's up_tolerance draws no counter (#258's counter
 	# denial). Required, may be null = flat -- an optional would silently read flat forever.
-	return Reach.can_hit_cell_from(countering_unit, counter_cell, aimed_from, countering_unit.get_counter_attack(), board)
+	return Reach.can_hit_cell_from(counter_cell, aimed_from, counter_attack, board)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext,
 		hypo: Dictionary) -> Unit:
@@ -743,7 +748,8 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], 
 	# First legal taunter in member order wins (deterministic, Law #1); an unreachable taunter
 	# falls through to the default policy below rather than suppressing the counter.
 	for member in attacking_party:
-		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member, board, hypo):
+		if PlanResolver.state_of(member, hypo).has_live_ability(Abilities.Id.TAUNT) \
+				and can_counter(countering_unit, member, board, hypo):
 			return member
 	# Default policy (C3 placeholder): first legal member.
 	for member in attacking_party:
@@ -850,8 +856,12 @@ func resolve_plan(squad: Squad, board: BoardContext,
 # hypothetical differs from the real resolve in one thing only -- it never writes the cache.
 func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
-		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
-	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions)
+		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all(),
+		held: Dictionary = {}) -> ResolvedPlan:
+	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions,
+			held)
+	if plan == null:
+		return null
 	SplitForecast.stamp(plan, board)
 	return plan
 
@@ -860,17 +870,21 @@ func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: Bo
 # what the board would show the instant the click queued it -- the forecast the health bars read while
 # aiming, and the payload tiles' only source (#1058 D2b: a sticky bomb goes off where the hit LEAVES its
 # victim, and that landing exists nowhere but a resolve). `source` is the carried weapon the aim fires
-# from when it is not the one in hand: the hypothetical runs with it held (Unit.with_weapon_in_hand).
+# from when it is not the one in hand: the pass's copy of the actor holds it (PlanResolver.hold_in_hand),
+# so the live hand never moves and a save or report taken mid-aim records what is really equipped. Null
+# when it cannot be held.
 #
 # It keeps resolve_hypothetical's contract HERE rather than leaving it to the caller: the pass
-# publishes the candidate's shoves onto the board, so a real resolve_plan follows -- OUTSIDE the hold,
-# or the cache would keep a plan resolved with a weapon nobody is holding -- before anyone reads a
+# publishes the candidate's shoves onto the board, so a real resolve_plan follows before anyone reads a
 # projected position again. A hover asks this on every cell it crosses.
 func preview_aim(squad: Squad, candidate: AttackAction, board: BoardContext,
 		source: EquippableData = null) -> ResolvedPlan:
 	var candidates: Array[BaseAction] = [candidate]
-	var plan: ResolvedPlan = candidate.actor.with_weapon_in_hand(source,
-		func() -> ResolvedPlan: return resolve_hypothetical(squad, candidates, board))
+	var held := {}
+	if source != null:
+		held[candidate.actor] = source
+	var plan := resolve_hypothetical(squad, candidates, board, ReactionCatalog.get_all(),
+			TerrainReactionCatalog.get_all(), held)
 	resolve_plan(squad, board)
 	return plan
 
@@ -900,10 +914,30 @@ static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[At
 # contaminate each other -- but the LAST one leaves its residue on the board, so a caller that runs
 # hypotheticals must finish with a real resolve_plan. Execution is safe by construction: both
 # OrderExecutor and play_session.execute re-resolve before they play anything back.
+#
+# THE SEAL (#1480 stage 4): the pass runs inside Unit.open_seal/close_seal, so a body read past
+# PlanResolver's doors is reported (Unit.seal_breaks). The pass is synchronous, and a script error
+# aborts only _resolve_pass, so the close always runs. Depth-counted, so a nested pass is fine.
+#
+# `held` is unit -> a carried weapon its copy holds for the pass (preview_aim); a refused hold is no
+# plan, before anything is published.
 func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardContext,
-		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction]) -> ResolvedPlan:
+		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
+		held: Dictionary = {}) -> ResolvedPlan:
+	Unit.open_seal()
+	var plan := _resolve_pass(squad, actions, board, reactions, terrain_reactions, held)
+	Unit.close_seal()
+	return plan
+
+
+func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext,
+		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
+		held: Dictionary) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
 	var hypo: Dictionary = plan.hypo   # threaded here, kept on the plan for end-of-pass reads (#124)
+	for unit: Unit in held:
+		if not PlanResolver.hold_in_hand(unit, held[unit], hypo):
+			return null
 
 	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
 	# pass's shove projections before recomputing; a unit's own queued move is untouched. The rescue
@@ -929,7 +963,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	# Standing watches armed in an EARLIER pass (#413) — the enemy-phase case, and the whole point of
 	# the mechanic. Same two-sources-one-list shape the wards above have; watches queued in THIS plan
 	# join at their own slot in the walk below, which is what makes a shove combo sequence-able.
-	for watch in Watch.standing(board.units):
+	for watch in Watch.standing(board.units, hypo):
 		plan.watches.append(watch.copy())
 	var watch_orders: Dictionary = {}   # Watch (this pass's copy) -> the OverwatchAction that armed it
 	# ...and the same watches in QUEUE ORDER, for the arm-fire pass in the tail (#1003). Its own
@@ -1102,13 +1136,13 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 		var c_aim_cell := PlanResolver.projected_position(aim.target, hypo)
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
 		# create_counter_volley stamps below (#102).
-		var c_attack := aim.actor.get_counter_attack()
+		var c_attack := PlanResolver.state_of(aim.actor, hypo).counter_attack(aim.actor.active_attack)
 		# A counter is an attack like any other, so a shock counter arcs (E7 -- counters are in the
 		# chain). Its current reads the hypo the attacks have already resolved into.
 		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo)
 		var c_affected := c_reach.cells
 		var c_victims := c_reach.victims
-		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
+		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_attack, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
 		AttackAction.stamp_sweep(c_volley, c_reach)
 		plan.counters.append_array(c_volley)
 	# Phase 2: counters, now built from post-shove positions.

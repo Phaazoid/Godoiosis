@@ -139,7 +139,7 @@ func _wide(length: int, width: int) -> AttackData:
 
 
 func _aimed_east(attack: AttackData, board: BoardContext, length := 2) -> Array[Vector2i]:
-	return Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(length, 0), attack, board)
+	return Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(length, 0), attack, board)
 
 
 # The headline: a line stops at the ledge it cannot see over. The raised cell itself is an ENDPOINT
@@ -194,7 +194,7 @@ func test_a_cleave_up_a_ledge_keeps_its_side_lanes() -> void:
 	var heights := BoardHeights.new()
 	for x_offset in [-1, 0, 1]:
 		heights.set_cell(Vector2i(1, x_offset), 4)
-	var cells := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(1, 0), _wide(1, 3), _board_with(heights))
+	var cells := Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(1, 0), _wide(1, 3), _board_with(heights))
 	assert_array(cells).contains_exactly_in_any_order([Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)])
 
 
@@ -205,13 +205,13 @@ func test_a_cleave_down_off_a_plateau_edge_keeps_its_side_lanes() -> void:
 	var heights := BoardHeights.new()
 	for y in [-1, 0, 1]:
 		heights.set_cell(Vector2i(0, y), 4)   # the shooter's plateau, three cells wide
-	var cells := Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(1, 0), _wide(1, 3), _board_with(heights))
+	var cells := Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(1, 0), _wide(1, 3), _board_with(heights))
 	assert_array(cells).contains_exactly_in_any_order([Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1)])
 
 
 # A null board reads flat here as everywhere else — every heights-less fixture is unaffected.
 func test_a_null_board_leaves_a_spread_whole() -> void:
-	assert_array(Reach.get_affected_cells_from(null, Vector2i.ZERO, Vector2i(2, 0), _line(2), null)) \
+	assert_array(Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(2, 0), _line(2), null)) \
 		.contains_exactly([Vector2i(1, 0), Vector2i(2, 0)])
 
 
@@ -226,16 +226,16 @@ func test_a_directional_attack_is_no_longer_exempt_from_the_gate() -> void:
 # the same cell on a flat board is not, and an unreachable cell stays unreachable however flat.
 func test_can_hit_conjoins_membership_and_tolerance() -> void:
 	var weapon_main := _attack(1, 2)   # pattern-less: Manhattan-1 fallback reach
-	assert_bool(Reach.can_hit_cell_from(null, Vector2i(0, 0), Vector2i(1, 0), weapon_main, _step_board(2))).is_false()
-	assert_bool(Reach.can_hit_cell_from(null, Vector2i(0, 0), Vector2i(1, 0), weapon_main, null)).is_true()
-	assert_bool(Reach.can_hit_cell_from(null, Vector2i(0, 0), Vector2i(3, 0), weapon_main, null)).is_false()
+	assert_bool(Reach.can_hit_cell_from(Vector2i(0, 0), Vector2i(1, 0), weapon_main, _step_board(2))).is_false()
+	assert_bool(Reach.can_hit_cell_from(Vector2i(0, 0), Vector2i(1, 0), weapon_main, null)).is_true()
+	assert_bool(Reach.can_hit_cell_from(Vector2i(0, 0), Vector2i(3, 0), weapon_main, null)).is_false()
 
 
 func test_blocked_cells_are_the_unreachable_subset_of_the_union() -> void:
 	var weapon_main := _attack(1, 2)
-	var blocked := Reach.blocked_cells_from(null, Vector2i(0, 0), weapon_main, _step_board(2))
+	var blocked := Reach.blocked_cells_from(Vector2i(0, 0), weapon_main, _step_board(2))
 	assert_array(blocked).contains_exactly([Vector2i(1, 0)])
-	assert_array(Reach.blocked_cells_from(null, Vector2i(0, 0), weapon_main, null)).is_empty()
+	assert_array(Reach.blocked_cells_from(Vector2i(0, 0), weapon_main, null)).is_empty()
 
 
 # The hatch a SPREAD draws is the union minus what every facing can still reach (#756) — it was
@@ -244,6 +244,6 @@ func test_blocked_cells_for_a_directional_attack_are_what_the_terrain_cut() -> v
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 4)
 	heights.set_cell(Vector2i(2, 0), 4)
-	var blocked := Reach.blocked_cells_from(null, Vector2i(0, 0), _line(2), _board_with(heights))
+	var blocked := Reach.blocked_cells_from(Vector2i(0, 0), _line(2), _board_with(heights))
 	assert_array(blocked).contains_exactly([Vector2i(2, 0)])
-	assert_array(Reach.blocked_cells_from(null, Vector2i(0, 0), _line(2), null)).is_empty()
+	assert_array(Reach.blocked_cells_from(Vector2i(0, 0), _line(2), null)).is_empty()

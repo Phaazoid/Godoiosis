@@ -44,7 +44,7 @@ func _line(length: int) -> AttackData:
 
 
 func _footprint(attack: AttackData, origin: Vector2i, aim: Vector2i) -> Array[Vector2i]:
-	return Reach.get_affected_cells_from(_shooter, origin, aim, attack, _rules())
+	return Reach.get_affected_cells_from(origin, aim, attack, _rules())
 
 
 # A path-shaped (single-target swing) attack walking `length` cells straight ahead.
@@ -66,12 +66,12 @@ func test_a_line_facing_off_the_board_watches_nothing_and_cannot_be_aimed() -> v
 	var attack := _line(3)
 	assert_array(_footprint(attack, EDGE, EDGE + WEST)).override_failure_message(
 		"a line facing off the board's edge still listed cells").is_empty()
-	assert_bool(Reach.can_aim_at(_shooter, EDGE, EDGE + WEST, attack, _rules())).override_failure_message(
+	assert_bool(Reach.can_aim_at(EDGE, EDGE + WEST, attack, _rules())).override_failure_message(
 		"a facing with nothing under it was accepted as an aim").is_false()
 	# The twin: the same line facing onto the board lands and is aimable.
 	assert_array(_footprint(attack, EDGE, EDGE + EAST)).contains_exactly(
 		[EDGE + EAST, EDGE + EAST * 2, EDGE + EAST * 3])
-	assert_bool(Reach.can_aim_at(_shooter, EDGE, EDGE + EAST, attack, _rules())).is_true()
+	assert_bool(Reach.can_aim_at(EDGE, EDGE + EAST, attack, _rules())).is_true()
 
 
 func test_a_line_half_off_the_edge_keeps_its_cells_on_the_board_in_order() -> void:
@@ -126,12 +126,12 @@ func test_a_point_aim_at_a_hole_is_refused_unless_its_blast_reaches_ground() -> 
 	var hole := EDGE + EAST * 2
 	_dig(hole)
 	var shot := P.point(AttackData.new(), 2)
-	assert_bool(Reach.can_aim_at(_shooter, EDGE, hole, shot, _rules())).override_failure_message(
+	assert_bool(Reach.can_aim_at(EDGE, hole, shot, _rules())).override_failure_message(
 		"a one-cell shot into a hole was accepted").is_false()
 
 	var cross: Array[Vector2i] = [Vector2i.ZERO, Vector2i.LEFT, Vector2i.RIGHT]
 	var blast := P.stamped(AttackData.new(), 2, cross)
-	assert_bool(Reach.can_aim_at(_shooter, EDGE, hole, blast, _rules())).override_failure_message(
+	assert_bool(Reach.can_aim_at(EDGE, hole, blast, _rules())).override_failure_message(
 		"a blast whose splash reaches ground was refused for landing on a hole").is_true()
 	assert_array(_footprint(blast, EDGE, hole)).contains_exactly([hole + WEST, hole + EAST])
 
@@ -185,10 +185,10 @@ func test_a_path_watch_across_a_hole_watches_only_ground() -> void:
 func test_the_hatch_never_marks_a_cell_with_no_surface() -> void:
 	var attack := _line(3)
 	var board := _rules()
-	var union := Reach.get_all_attack_cells_from(_shooter, EDGE, attack)
+	var union := Reach.get_all_attack_cells_from(EDGE, attack)
 	assert_bool(union.any(func(cell: Vector2i) -> bool: return not board.has_surface(cell))) \
 		.override_failure_message("fixture: the reach never leaves the board, so this case proves nothing") \
 		.is_true()
-	for cell in Reach.blocked_cells_from(_shooter, EDGE, attack, board):
+	for cell in Reach.blocked_cells_from(EDGE, attack, board):
 		assert_bool(board.has_surface(cell)).override_failure_message(
 			"the hatch marked %s, which has no surface" % str(cell)).is_true()

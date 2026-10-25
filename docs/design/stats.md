@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24; #1480 stage 3 (the pass threads a copy of each target) folded in 2026-10-24.**
+**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24; #1480 stage 3 (the pass threads a copy of each target) folded in 2026-10-24; #1480 stage 4 (the actor reads its copy too) folded in 2026-10-25.**
 
 ## Core stance
 
@@ -140,7 +140,7 @@ DEF row already uses for terrain cover: **this number will move on its own.** So
 even when they cancel out, because a +2 tonic against a −2 armour tax nets zero *right now* and
 costs 2 the moment it lapses.
 
-#### Mid-pass changes: the target is threaded, the actor is not yet *(verified 2026-07-29; corrected 2026-10-24, [#1455](https://github.com/Phaazoid/Godoiosis/issues/1455); the target side threaded 2026-10-24, [#1480](https://github.com/Phaazoid/Godoiosis/issues/1480) stage 3)*
+#### Mid-pass changes: the pass threads every body it touches, the actor's included *(verified 2026-07-29; corrected 2026-10-24, [#1455](https://github.com/Phaazoid/Godoiosis/issues/1455); the target side threaded 2026-10-24, [#1480](https://github.com/Phaazoid/Godoiosis/issues/1480) stage 3; the actor side 2026-10-25, stage 4)*
 
 Today the only body change that lands mid-pass is a lost limb's settle: a limb carries STR or DEX,
 so losing one can strip armour gated on them (and a CON piece takes max HP with it), a rune the aura tax leaves dry, or a severed
@@ -160,15 +160,24 @@ swing. `tests/flow/test_limb_loss_mid_pass.gd` drives that sequence end to end.
   stripped max HP, a would-be-down asks the stripped kit for Crisis, and the end-of-turn burn asks
   the stripped Insulation. So does the severing hit's own re-clamp, when a stripped CON piece takes
   max HP below what the hit left. `tests/law/test_strip_threads_through_the_pass.gd` pins all five.
-- **The ACTOR side is not threaded yet.** Every stat-derived number is frozen at plan time
-  (`AttackAction.execute` is pure playback, R3), and the pass computes an order's damage from the
-  live attacker. So a maimed unit's own swing or counter later in the pass uses its pre-sever STR,
-  in preview and execution alike: a fidelity gap, not a Law #2 break. That half, and the
-  supercharge tank (still `_Hypo.charges`), are #1480 stage 4. No shipped gear strips on a sever,
-  so none of this can happen today.
+- **The ACTOR reads its copy too** (#1480 stage 4). Every stat-derived number is still frozen at plan
+  time (`AttackAction.execute` is pure playback, R3), and the pass now computes it off
+  `state_of(actor, hypo)`: the base damage, the kind, elements and shove the hit delivers, the DEF a
+  revved Chainsword ignores, the counter and a Taunt's pull, a watch's fireability and a carving's
+  fizzle. So a unit that lost an arm earlier in its own pass swings and counters at the STR it has
+  left, in preview and execution alike. That is live on shipped content: the rotation takes an arm
+  first, and an arm carries STR. The supercharge spend draws on the copy's own tank (`_Hypo.charges`
+  is gone). `tests/flow/test_the_maimed_actor_swings_at_its_reduced_strength.gd` pins the counter
+  and the swing.
+- **A pass reads no live body past the doors.** `Unit.state` is sealed while
+  `SquadManager._resolve_actions` runs: a read past `state_of`/`_hypo_for` counts on
+  `Unit.seal_breaks` and logs with its backtrace, without changing the answer.
+  `tests/law/test_a_pass_reads_no_live_body.gd` walks every saved board's real passes (AI turns, a
+  queued aim's plan, hovers) and refuses a break; `test_a_pass_writes_no_live_body.gd` refuses a
+  live write (R2) over the same walk.
 
-A queued ACTION that applies an effect (a transmutation buffing an ally) needs the same thing on the
-actor side, so one order's stat change can reach a later order's damage; that is
+A queued ACTION that applies an effect (a transmutation buffing an ally) would write a body the same
+way, so one order's stat change could reach a later order's damage; that is
 [#113](https://github.com/Phaazoid/Godoiosis/issues/113), parked until a buff transmutation is
 wanted.
 

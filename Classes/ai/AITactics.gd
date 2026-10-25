@@ -457,7 +457,7 @@ static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes, stab
 # Can this aim pay FAR from anybody it could pay on? A payload goes off where the hit lands and a
 # current runs through water; everything else pays only on a body inside its own footprint.
 static func _may_pay_unmarked(unit: Unit, attack: AttackData) -> bool:
-	return attack.payload != null or PlanResolver.elements_of(unit, attack, false).has(Elemental.Element.SHOCK)
+	return attack.payload != null or PlanResolver.elements_of(unit.state, attack, false).has(Elemental.Element.SHOCK)
 
 
 # The cells worth sweeping. A facing for a directional attack; for a point attack the ring, narrowed
@@ -468,7 +468,7 @@ static func _aim_cells(unit: Unit, origin: Vector2i, attack: AttackData, board: 
 	var out: Array[Vector2i] = []
 	if Reach.is_directional_attack(attack):
 		for dir in GridUtils.CARDINAL_DIRECTIONS:
-			if Reach.can_aim_at(unit, origin, origin + dir, attack, board):
+			if Reach.can_aim_at(origin, origin + dir, attack, board):
 				out.append(origin + dir)
 		return out
 	var narrow := not _may_pay_unmarked(unit, attack)
@@ -476,7 +476,7 @@ static func _aim_cells(unit: Unit, origin: Vector2i, attack: AttackData, board: 
 	if attack.attack_shape != null:
 		for offset in attack.attack_shape.tiles():
 			radius = maxi(radius, absi(offset.x) + absi(offset.y))
-	var ring := Reach.get_all_attack_cells_from(unit, origin, attack)
+	var ring := Reach.get_all_attack_cells_from(origin, attack)
 	if narrow and radius == 0:
 		# A one-cell attack pays only ON a mark, so it is aimed at the marks in board order -- the order
 		# this builder always offered them in, which is what equal candidates fall back to.
@@ -533,7 +533,7 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 			for victim in drop.victims:
 				if is_instance_valid(victim) and Team.is_enemy(unit.get_faction(), victim.get_faction()):
 					return true
-	var elements := PlanResolver.elements_of(unit, attack, false)
+	var elements := PlanResolver.elements_of(unit.state, attack, false)
 	if elements.is_empty() or board.terrain_states == null:
 		return false
 	var terrain := TerrainReactionCatalog.get_all()
@@ -1064,7 +1064,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	var best_hops := -1
 	var best_covered := 0
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		if not footprints.has(dir) or not Reach.can_aim_at(unit, origin, origin + dir, attack, board):
+		if not footprints.has(dir) or not Reach.can_aim_at(origin, origin + dir, attack, board):
 			continue
 		var lane: Array[Vector2i] = footprints[dir]
 		var hops := -1
@@ -1086,7 +1086,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 		return best
 	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)
 	if facing != Vector2i.ZERO and footprints.has(facing) \
-			and Reach.can_aim_at(unit, origin, origin + facing, attack, board):
+			and Reach.can_aim_at(origin, origin + facing, attack, board):
 		var toward: Array[Vector2i] = footprints[facing]
 		if _lane_can_be_entered(toward, enemy, board):
 			return origin + facing
@@ -2053,7 +2053,7 @@ static func _nearest_standable_attack_cell(unit: Unit, goal: Vector2i, aiming: A
 # rather than one wrongly offered, and the candidate builder's own footprint read is authoritative.
 static func _standable_attack_cells(unit: Unit, goal: Vector2i, aiming: AttackData, board: BoardContext) -> Dictionary:
 	var cells := {}
-	for cell in Reach.get_all_attack_cells_from(unit, goal, aiming):
+	for cell in Reach.get_all_attack_cells_from(goal, aiming):
 		if not Reach.vertical_aim_ok(aiming, cell, goal, board):
 			continue   # a ledge above the weapon's tolerance is not a firing position (#258)
 		if not RulesService.can_traverse(cell, unit.state, board):
@@ -2105,7 +2105,7 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	var danger: ThreatField = ThreatField.build(board, unit.get_faction()) if weigh_safety else null
 
 	var best := here
-	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal) \
+	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
 	var avoids := AIProfiles.of(unit).avoids_hazards   # #1230: off, every cell reads as safe
 	var best_safe := not avoids or not _is_hazard(unit, here, board, watches)
@@ -2119,7 +2119,7 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	for cell in range.reachable.keys():
 		if allowed != null and not allowed.has(cell):
 			continue
-		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, cell, aiming).has(goal) \
+		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(cell, aiming).has(goal) \
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
 		var safe := not avoids or not _is_hazard(unit, cell, board, watches)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)

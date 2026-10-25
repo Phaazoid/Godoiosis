@@ -117,7 +117,7 @@ func _on_queued(squad: Squad, action: BaseAction) -> void:
 			# The facing is the whole answer for #769 and the row above cannot show it: which lane
 			# was picked, and what it actually covers once #756 has truncated it.
 			var ow: OverwatchAction = action
-			var cells := Reach.get_affected_cells_from(actor, dest, ow.target_cell, ow.fired_attack, game._board())
+			var cells := Reach.get_affected_cells_from(dest, ow.target_cell, ow.fired_attack, game._board())
 			_log("      watch aim %s (facing %s) covers %s" % [
 					str(ow.target_cell), str(ow.target_cell - dest), str(cells)])
 		if action.action_type == BaseAction.ActionType.REV:
@@ -139,7 +139,7 @@ func _on_queued(squad: Squad, action: BaseAction) -> void:
 	var board: BoardContext = game._board()
 	var origin := actor.get_projected_destination()
 	var atk_name: String = aim.fired_attack.display_name if aim.fired_attack != null else "fists"
-	var footprint := Reach.get_affected_cells_from(actor, origin, aim.target_cell, aim.fired_attack, board)
+	var footprint := Reach.get_affected_cells_from(origin, aim.target_cell, aim.fired_attack, board)
 	var occupants := []
 	for cell in footprint:
 		var o := board.projected_unit_at_cell(cell)
