@@ -22,6 +22,7 @@ const TEST_SAVE_DIR := "user://__test_saves_execute_two_hosts/"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const SHALLOW_WATER := Vector2i(6, 6)   # TestTiles' wadeable water (#116)
+const DEEP_WATER := Vector2i(5, 6)      # TestTiles' deep water, which drowns and freezes
 const HOLE_TILE := Vector2i(18, 2)      # TestTiles' authored VOID tile
 const WIDTH := 10
 const HEIGHT := 4
@@ -172,11 +173,88 @@ func _run(path: String, orders: Array[Dictionary], prepare: Callable = Callable(
 
 	var actor: Unit = game_units[orders[0].from]
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(actor.squad, game._board())
+	var planned := _planned_tiles(plan)
+	var game_before := _tiles_of(game.terrain_states, game.gas_field)
+	var play_before := _tiles_of(board.terrain_states, board.gas_field)
 	await game.order_executor.execute_orders(actor.squad.get_leader())
 	var played: Dictionary = _sess.execute()
 	assert_bool(played.get("ok", false)).override_failure_message(
 			"the headless pass did not execute: %s" % str(played.get("error", ""))).is_true()
-	return {"game": game_units, "play": play_units, "plan": plan}
+	return {"game": game_units, "play": play_units, "plan": plan, "planned": planned,
+			"tiles": {"game": [game_before, _tiles_of(game.terrain_states, game.gas_field)],
+				"play": [play_before, _tiles_of(board.terrain_states, board.gas_field)]}}
+
+
+# --- the tiles ----------------------------------------------------------------------------------
+
+const NO_TILE := "[] gas=0"
+
+
+static func _tile(states: Array[Terrain.TileState], packed: int) -> String:
+	var sorted := states.duplicate()
+	sorted.sort()
+	return "%s gas=%d" % [str(sorted), packed]
+
+
+# Every cell either store holds anything on, as one comparable line each.
+static func _tiles_of(states: TerrainStateManager, gas: GasField) -> Dictionary:
+	var out := {}
+	var cells: Array[Vector2i] = []
+	cells.assign(states.to_state_dict().keys())
+	for cell in gas.cells():
+		if not cells.has(cell):
+			cells.append(cell)
+	for cell in cells:
+		out[cell] = _tile(states.states_at(cell), gas.packed_at(cell))
+	return out
+
+
+# Where the plan says the pass leaves each cell it touches, read before anything plays.
+func _planned_tiles(plan: ResolvedPlan) -> Dictionary:
+	var out := {}
+	for effect in plan.cell_effects:
+		out[effect.cell] = _tile(game.terrain_states.projected_states_at(effect.cell, plan.cell_effects),
+				game.gas_field.projected_packed_at(effect.cell, plan.cell_effects))
+	return out
+
+
+# THE TILE HALF OF LAW #2 (#1498): in both hosts, every cell the plan touches ends as the plan said, and
+# every other cell ends as it started.
+func _assert_tiles_as_planned(ran: Dictionary) -> void:
+	var planned: Dictionary = ran.planned
+	for host: String in ["game", "play"]:
+		var before: Dictionary = ran.tiles[host][0]
+		var after: Dictionary = ran.tiles[host][1]
+		var cells := {}
+		for cell: Vector2i in before.keys() + after.keys() + planned.keys():
+			cells[cell] = true
+		for cell: Vector2i in cells:
+			var want: String = planned[cell] if planned.has(cell) else before.get(cell, NO_TILE)
+			assert_str(after.get(cell, NO_TILE)).override_failure_message(
+					"the %s host left %s as %s; the plan said %s" % [host, cell, after.get(cell, NO_TILE), want]) \
+				.is_equal(want)
+
+
+# THE BODY HALF: the game's live units after the pass against the plan the game resolved before it.
+static func _body(hp: int, lifecycle: Unit.LifecycleState, cell: Vector2i, states: Array[Elemental.State]) -> String:
+	var sorted := states.duplicate()
+	sorted.sort()
+	return "hp=%d %s cell=%s states=%s" % [hp, Unit.LifecycleState.keys()[lifecycle], cell, str(sorted)]
+
+
+func _assert_bodies_as_planned(ran: Dictionary) -> void:
+	var plan: ResolvedPlan = ran.plan
+	for at: Vector2i in ran.game:
+		var held: Variant = ran.game[at]
+		if not is_instance_valid(held) or (held as Node).is_queued_for_deletion():
+			continue
+		var unit := held as Unit
+		var body := PlanResolver.state_of(unit, plan.hypo)
+		var want := _body(body.get_current_hp(), body.lifecycle_state, PlanResolver.projected_position(unit, plan.hypo),
+				body.element_states)
+		var got := _body(unit.get_current_hp(), unit.lifecycle_state, unit.movement.cell, unit.element_states)
+		assert_str(got).override_failure_message(
+				"the unit loaded at %s left the pass as %s; the plan said %s" % [at, got, want]).is_equal(want)
 
 
 # Everything the pass can leave on a unit, by loading cell so the two hosts' objects compare.
@@ -228,6 +306,8 @@ func _assert_hosts_agree(ran: Dictionary) -> void:
 		assert_str(headless).override_failure_message(
 				"the unit loaded at %s left the pass differently:\n  game     %s\n  headless %s" % [cell, in_game, headless]) \
 			.is_equal(in_game)
+	_assert_bodies_as_planned(ran)
+	_assert_tiles_as_planned(ran)
 
 
 # --- the cases ----------------------------------------------------------------------------------
@@ -363,6 +443,83 @@ func test_a_payload() -> void:
 	for attack in plan.attacks:
 		dropped = dropped or attack.dropped_by != null
 	assert_bool(dropped).override_failure_message("fixture: the hit dropped no payload").is_true()
+	_assert_hosts_agree(ran)
+
+
+# A lake an attack freezes, and an enemy whose counter throws a squadmate into it (#1498's probe).
+const LAKE := Vector2i(4, 1)
+const FROSTER_AT := Vector2i(4, 0)
+const MATE_AT := Vector2i(3, 1)
+const FOE_AT := Vector2i(2, 1)
+
+
+func _author_frozen_lake(tag: String) -> String:
+	return _author(tag, func() -> void:
+		game.grid.paint(LAKE, GRASS_SOURCE, DEEP_WATER)
+		var froster := _spawn(PLAYER, FROSTER_AT)
+		var frost := _blow(1)
+		frost.elemental_damage_type = Elemental.Element.ICE
+		frost.targets = EquippableData.TargetMode.MAP
+		_arm(froster, frost)
+		var mate := _spawn(PLAYER, MATE_AT)
+		_arm(mate, _blow(2))
+		game.squad_manager.join_squad(froster, mate.squad)
+		var shove := _blow(2)
+		shove.knockback = 1
+		_arm(_spawn(ENEMY, FOE_AT), shove))
+
+
+func _lake_orders() -> Array[Dictionary]:
+	return [{"verb": "attack", "from": FROSTER_AT, "at": LAKE}, {"verb": "attack", "from": MATE_AT, "at": FOE_AT}]
+
+
+# The live counter that answers the squadmate's blow.
+static func _counter_on(plan: ResolvedPlan, mate: Unit) -> CounterAttackAction:
+	for counter in plan.counters:
+		if counter.target == mate and counter.resolved != null and not counter.resolved.skipped:
+			return counter
+	return null
+
+
+func _assert_the_lake_freezes_and_the_counter_throws(ran: Dictionary) -> CounterAttackAction:
+	var plan: ResolvedPlan = ran.plan
+	var freezes := false
+	for effect in plan.cell_effects:
+		freezes = freezes or (effect.cell == LAKE and effect.states_added.has(Terrain.TileState.FROZEN))
+	assert_bool(freezes).override_failure_message("fixture: the froster's attack never froze the lake").is_true()
+	var counter := _counter_on(plan, ran.game[MATE_AT])
+	assert_object(counter).override_failure_message("fixture: the enemy never countered the squadmate").is_not_null()
+	if counter != null:
+		assert_that(counter.resolved.knockback_to).override_failure_message(
+				"fixture: the counter did not throw the squadmate into the lake").is_equal(LAKE)
+	return counter
+
+
+# #1498's verify-first probe, kept as the arc's guard. The froster's attack freezes the lake, and the
+# enemy's counter throws the squadmate into it. The counter resolves on the ground the pass started on
+# while both hosts play it after the freeze has landed, so the preview contradicts itself -- yet every
+# body and every tile still ends where the plan says (Law #2). What the row SHOULD say is the next case.
+func test_a_counter_throws_a_squadmate_into_a_lake_the_pass_froze() -> void:
+	var ran: Dictionary = await _run(_author_frozen_lake("lake"), _lake_orders())
+
+	_assert_the_lake_freezes_and_the_counter_throws(ran)
+	_assert_hosts_agree(ran)
+
+
+# ...and what that counter's row should say (#1498 ruling 2, a tile change counts at the hit that makes
+# it): the squadmate lands on the ice the froster made, and does not drown. Today the counter resolves
+# on the ground the pass started on, so this is stage 3's acceptance test, skipped until then.
+func test_a_counter_throws_a_squadmate_onto_ice_the_pass_froze(do_skip := true,
+		skip_reason := "#1498 stage 3: a tile change counts at the hit that makes it") -> void:
+	var ran: Dictionary = await _run(_author_frozen_lake("ice"), _lake_orders())
+
+	var counter := _assert_the_lake_freezes_and_the_counter_throws(ran)
+	if counter == null:
+		return
+	assert_int(counter.resolved.drown_damage).override_failure_message(
+			"the counter drowns the squadmate in a lake the pass has already frozen").is_equal(0)
+	assert_that(PlanResolver.projected_lifecycle(ran.game[MATE_AT], (ran.plan as ResolvedPlan).hypo)) \
+		.is_equal(Unit.LifecycleState.ACTIVE)
 	_assert_hosts_agree(ran)
 
 
