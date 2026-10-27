@@ -534,6 +534,11 @@ zones = {
 }
 objectives = Array[int]([2])
 look_preset = "Forest Fire"
+weather = 18
+atmosphere = Dictionary[String, int]({
+"atom_fire": 40,
+"vapor": 0
+})
 roster = "Basics"
 deployment_cap = 4
 ai_factions = Array[int]([1])
