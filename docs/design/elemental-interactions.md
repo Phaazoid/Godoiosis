@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first *(both exist now: tile states since 2026-06-28, the end-of-turn pass in `TurnBoundary`; only a unit damage-over-time still needs its own tick, [elemental-system.md](elemental-system.md) → *Deferred layers*)*.
 
-**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22; #1332's blown gas the same day; #1423's meltwater the same day; #1331's scald the same day; #1427's heat haze folded in 2026-10-23.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
+**Canon checked through #1339 (2026-10-20); #1335's smoke folded in 2026-10-22; #1332's blown gas the same day; #1423's meltwater the same day; #1331's scald the same day; #1427's heat haze folded in 2026-10-23; #1509's drawn weather ruled and #1508's locked Dry Field folded in 2026-10-27.** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses fire tiles (BURNING/BLAZE then; #890 retired BLAZE, and one douse now covers a fire on any ground), FIRE ignites GRASS (and TALL_GRASS since #891, which spreads to corners as well as sides), and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -286,6 +286,8 @@ Prosthetic / weapon material as a build choice with elemental affinities — the
 ## Weather & atmosphere — a subsystem
 
 Weather = a **map-wide atmosphere layer**, authored per location (sometimes dynamic), fully deterministic and telegraphed. It's how a *place* gets an elemental identity. It (a) sets a baseline tile-state tendency, (b) biases which reactions dominate — the map's "elemental meta," (c) fires periodic events on a known cadence (Law #2 — you see the rhythm), (d) modifies vision/movement, (e) interacts with terrain.
+
+> **Ruled 2026-10-27 ([#1509](https://github.com/Phaazoid/Godoiosis/issues/1509)): a map may offer several weathers, one drawn when the mission starts** and shown on the pre-mission screen before the player commits, so it stays telegraphed and play is deterministic from there. A map may also stay locked to one: The Dry Field is locked to Ashfall and Prolog to none ([#1508](https://github.com/Phaazoid/Godoiosis/issues/1508)). Not built: a board names one weather today.
 
 | Weather | Baseline / meta | Periodic event | Notes |
 |---|---|---|---|
