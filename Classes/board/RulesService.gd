@@ -120,7 +120,7 @@ static func wets_in(cell: Vector2i, body: UnitState, board: BoardContext) -> boo
 # other lies about. Law #2 -- the number previewed is the number dealt.
 #
 # Takes the STATES rather than a cell, because the two callers hold different ones: the pass reads
-# the live store, the forecast reads projected_states_at with its own pass's deposits folded in.
+# the live store, the forecast reads its own pass's planned tiles (ResolvedPlan.tiles, #1498).
 #
 # is_burning is asked FIRST, and not only because the only damaging ground is fire: is_immune_to
 # walks jobs, worn armour and every mod on every contributing weapon, and this runs per unit on every

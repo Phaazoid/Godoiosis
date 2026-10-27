@@ -431,7 +431,7 @@ func test_the_outline_folds_a_queued_push_and_drops_it_once_played() -> void:
 		"fixture: the swing never queued (%s)" % [", ".join(action.validation_errors)]).is_true()
 	_game.refresh_action_queue(hero.squad)
 	var plan: ResolvedPlan = _game.squad_manager.resolved_plan_for(hero.squad)
-	var folded := _field().next_round(_game._board().with_deposits(plan.cell_effects))
+	var folded := _field().next_round(_game._board().planned(plan.tiles))
 	assert_bool(folded == _field().next_round(_game._board())).override_failure_message(
 		"fixture: the queued push changes nothing about next round").is_false()
 

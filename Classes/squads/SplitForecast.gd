@@ -37,7 +37,7 @@ class_name SplitForecast
 #
 # THE GROUND it stands on is the live one too: a pass's terrain deposits (ice frozen, ice melted) land
 # in one batch after the attack volley (OrderExecutor._apply_cell_effects), so the walk and the volley
-# settle on the board as it was, and everything after on BoardContext.with_deposits.
+# settle on the board as it was, and everything after on the plan's planned tiles (ResolvedPlan.tiles).
 #
 # A DEATH IS NEVER COUNTED -- a death is not a split, and its tether plays a look of its own (#1104) --
 # and neither is a unit that leaves a squad of one.
@@ -87,7 +87,7 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	if all_bands.is_empty():
 		return
 
-	var landed := board.with_deposits(plan.cell_effects)
+	var landed := board.planned(plan.tiles)
 	var walk_ends := plan.mid_walk_shots().size()
 	var deposits_land := walk_ends + plan.attack_playback().size()
 	var start := _start_positions(blows, bands, plan.hypo)
@@ -451,8 +451,9 @@ static func _sweep_contact(blows: Array[AttackAction], all_bands: Array[_Band],
 						SquadManager.LeaveCause.FORCED, pos)
 
 
-# Replays the pair blow by blow, each blow carrying its own deposits (ResolvedCellEffect.cause) --
-# the causal order, which is what names a row. Who leaves is the sweep's to say, on the full board.
+# Replays the pair blow by blow, each blow carrying its own deposits (ResolvedCellEffect.cause), landed
+# on a fresh copy of the tiles as the blow is replayed -- the causal order, which is what names a row.
+# Who leaves is the sweep's to say, on the full board.
 static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Unit,
 		start: Dictionary[Unit, Vector2i], start_bodies: Dictionary[Unit, UnitState],
 		body: Dictionary[Unit, UnitState], changes: Dictionary[Unit, int], board: BoardContext,
@@ -462,7 +463,7 @@ static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Uni
 	var leader_body: UnitState = start_bodies[leader]
 	var member_body: UnitState = start_bodies[member]
 	var ground := board
-	var made: Array[ResolvedCellEffect] = []
+	var made := PlannedTiles.new(board.terrain_states, board.gas)
 	var held := SquadCohesion.in_range_of(leader_body, at_leader, member_body, at_member, ground)
 	var culprit: AttackAction = null
 	for i in blows.size():
@@ -488,10 +489,10 @@ static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Uni
 		var dug := false
 		for effect in deposits:
 			if effect.cause == blow:
-				made.append(effect)
+				made.land(effect)
 				dug = true
 		if dug:
-			ground = board.with_deposits(made)
+			ground = board.planned(made)
 		if not moved and not dug and not changed:
 			continue
 		var now := SquadCohesion.in_range_of(leader_body, at_leader, member_body, at_member, ground)

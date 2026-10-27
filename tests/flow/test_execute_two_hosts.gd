@@ -209,12 +209,13 @@ static func _tiles_of(states: TerrainStateManager, gas: GasField) -> Dictionary:
 	return out
 
 
-# Where the plan says the pass leaves each cell it touches, read before anything plays.
-func _planned_tiles(plan: ResolvedPlan) -> Dictionary:
+# Where the plan says the pass leaves each cell it touches (ResolvedPlan.tiles), read before anything plays.
+static func _planned_tiles(plan: ResolvedPlan) -> Dictionary:
 	var out := {}
-	for effect in plan.cell_effects:
-		out[effect.cell] = _tile(game.terrain_states.projected_states_at(effect.cell, plan.cell_effects),
-				game.gas_field.projected_packed_at(effect.cell, plan.cell_effects))
+	if plan.tiles == null:
+		return out
+	for cell in plan.tiles.cells():
+		out[cell] = _tile(plan.tiles.states_at(cell), plan.tiles.gas_at(cell))
 	return out
 
 

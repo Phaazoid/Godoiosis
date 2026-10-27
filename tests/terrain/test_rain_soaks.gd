@@ -181,9 +181,9 @@ func test_the_weather_saves_loads_and_clears_with_the_board() -> void:
 
 
 # The forecast that settles a pass on the ground its own attacks changed (#367) asks a COPY of the
-# board -- a copy without the weather would settle a rainy pass as a dry one.
-func test_a_board_with_deposits_keeps_the_weather() -> void:
+# board over its planned tiles (#1498) -- a copy without the weather would settle a rainy pass as a dry one.
+func test_a_planned_board_keeps_the_weather() -> void:
 	game.scenario_manager.current_weather = sky
 	var board: BoardContext = game._board()
-	var none: Array[ResolvedCellEffect] = []
-	assert_int(board.with_deposits(none).weather).is_equal(sky)
+	var tiles := PlannedTiles.new(board.terrain_states, board.gas)
+	assert_int(board.planned(tiles).weather).is_equal(sky)

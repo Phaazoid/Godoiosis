@@ -172,8 +172,8 @@ func test_a_spreading_fire_gives_off_the_smoke_the_outline_foretold() -> void:
 			"the round left gas the outline never drew").is_equal(expected.size())
 
 
-# #1430: a tile a QUEUED hit lights spreads in Alt's outline (game.next_round_board, the previewed
-# plan's deposits folded) -- every cell the fire takes next round gives off its ground's gases there, as
+# #1430: a tile a QUEUED hit lights spreads in Alt's outline (game.next_round_board, over the previewed
+# plan's planned tiles) -- every cell the fire takes next round gives off its ground's gases there, as
 # for a tile already burning -- and the round then plays exactly the outline.
 func test_a_queued_hit_that_lights_grass_outlines_the_smoke_its_fire_spreads() -> void:
 	var hero := _spawn(PLAYER, Vector2i(1, 1))
@@ -193,7 +193,7 @@ func test_a_queued_hit_that_lights_grass_outlines_the_smoke_its_fire_spreads() -
 			"fixture: the previewed plan does not light the grass").is_true()
 	var live_takes: Array[Vector2i] = game.terrain_states.cells_fire_takes()
 	assert_bool(live_takes.is_empty()).override_failure_message("fixture: something already burns").is_true()
-	var taken: Array[Vector2i] = game.terrain_states.cells_fire_takes(board.deposits)
+	var taken: Array[Vector2i] = game.terrain_states.cells_fire_takes(board.tiles)
 	assert_bool(taken.is_empty()).override_failure_message("fixture: the lit grass spreads nowhere").is_false()
 	var fuel: TerrainReaction = game.terrain_states.fuel_at(target)
 	assert_bool(fuel != null and not Gas.released(fuel.gases).is_empty()).override_failure_message(

@@ -21,16 +21,15 @@ var weather: Weather.Kind = Weather.Kind.CLEAR
 # authored air moved by its weather (Atmosphere.effective), composed by the builder that sets it. Set
 # beside the weather, so every other builder reads a Normal board.
 var atmosphere: Dictionary[String, int] = {}
-# Terrain deposits not yet in the store, read as if they had landed (with_deposits). Empty on every
-# board the game builds.
-var deposits: Array[ResolvedCellEffect] = []
+# A pass's planned tiles (#1498), read before the stores (planned). Null on every board the game builds.
+var tiles: PlannedTiles = null
 # The mission being played (#1220), for the AI's one mission-shaped question: would this plan kill a
 # unit the mission says must survive. Null on a sandbox or fixture board, which has no such stake.
 var mission: MissionState
 
 # A unit whose death has RESOLVED is not on this board, and the filter lives HERE rather than in
 # any one builder because there are several -- game.gd's _board(), play/board_builder.gd,
-# play/play_session.gd and tests/support/squad_fixtures.gd, plus with_deposits/with_units below --
+# play/play_session.gd and tests/support/squad_fixtures.gd, plus planned/with_units below --
 # and a rule in one is a rule the others disagree with, which is the two-implementations shape that
 # hid #714 in the first place.
 #
@@ -163,38 +162,40 @@ func cover_def_at(cell: Vector2i) -> int:
 func tile_states_at(cell: Vector2i) -> Array[Terrain.TileState]:
 	if terrain_states == null:
 		return []
-	if deposits.is_empty():
-		return terrain_states.states_at(cell)
-	return terrain_states.projected_states_at(cell, deposits)
+	if tiles != null:
+		return tiles.states_at(cell)
+	return terrain_states.states_at(cell)
 
 func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 	if terrain_states == null:
 		return false
-	if deposits.is_empty():
-		return terrain_states.has_state(cell, state)
-	return terrain_states.projected_states_at(cell, deposits).has(state)
+	if tiles != null:
+		return tiles.has_state(cell, state)
+	return terrain_states.has_state(cell, state)
 
 # The air at this cell (#1324): the board's reading moved by the gas lying here (GasRules.air_of), the
 # one answer to "what is the air HERE". `atmosphere` stays the whole board's, for the readouts that
-# speak for the board. Deposits fold in the way they do for tile states; the game's boards carry none,
-# so the resolver reads the board as it stands.
+# speak for the board. Planned tiles count the way they do for tile states; the game's boards carry
+# none, so the resolver reads the board as it stands.
 func air_at(cell: Vector2i) -> Dictionary[String, int]:
 	if gas == null:
 		return atmosphere
 	return Atmosphere.nudged(atmosphere, GasRules.air_of(gas_at(cell)))
 
-# The gas lying on this cell (Gas.with_level's packed form), deposits folded in the way they are for
+# The gas lying on this cell (Gas.with_level's packed form), planned tiles first the way they are for
 # tile states: what air_at and the leash (SquadCohesion.reach_at, #1335) both read.
 func gas_at(cell: Vector2i) -> int:
 	if gas == null:
 		return 0
-	return gas.packed_at(cell) if deposits.is_empty() else gas.projected_packed_at(cell, deposits)
+	return tiles.gas_at(cell) if tiles != null else gas.packed_at(cell)
 
-# The board as it will stand once these deposits land (#367): the same world, with a pass's own
-# terrain deposits folded over the live store through the one fold the END OF TURN forecast already
-# reads (TerrainStateManager.projected_states_at). Every board the game and the Play API build has
-# none; SplitForecast asks for one, because the pass settles on ground its own attacks changed.
-func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
+# The same world over these planned tiles (#1498): its tile-state and gas reads ask them first, and
+# everything built on those follows (is_walkable, move_cost_at, is_open_water, cover_def_at, air_at).
+# A VIEW, not a copy: it reads the tiles as they stand when asked. Null is this board as it is. A
+# pass's readers after the fact ask it of plan.tiles; a one-off moment is PlannedTiles.after.
+func planned(planned_tiles: PlannedTiles) -> BoardContext:
+	if planned_tiles == null:
+		return self
 	# This board's own units, already filtered: re-running the filter would read live bodies inside a
 	# resolve pass (Unit.state's seal, #1480 stage 4), and nothing dies live inside one.
 	var none: Array[Unit] = []
@@ -202,7 +203,7 @@ func with_deposits(effects: Array[ResolvedCellEffect]) -> BoardContext:
 	board.units = units.duplicate()
 	board.weather = weather
 	board.atmosphere = atmosphere
-	board.deposits = effects.duplicate()
+	board.tiles = planned_tiles
 	return board
 
 # This board holding only these units -- the board a loader sees partway through its spawns, which
@@ -211,7 +212,7 @@ func with_units(unit_list: Array[Unit]) -> BoardContext:
 	var board := BoardContext.new(grid, unit_list, squad_manager, terrain_states, zones, heights, gas, mission)
 	board.weather = weather
 	board.atmosphere = atmosphere
-	board.deposits = deposits.duplicate()
+	board.tiles = tiles
 	return board
 
 # Is the prop standing on this cell ALIGHT (#272's prop_lit column)? Sibling of terrain_kind_at,
