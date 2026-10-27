@@ -377,6 +377,9 @@ static func plan_lists() -> Dictionary:
 			# The preview's rows nest each watch shot under the order that sets it off.
 			"watch_shots": {"play": covered(SESSION, "ActionQueueDisplayEntry.build_for"), "ai": covered(TACTICS, ".watch_shots")},
 			"hypo": {"play": never("the resolver's working state, not a consequence"), "ai": covered(TACTICS, ".hypo")},
+			# The pass's tiles as its cell_effects leave them, landed per cell (#1498).
+			"tiles": {"play": never("cell_effects landed per cell, not a consequence of its own: that row is the answer"),
+					"ai": gap("#117", "where the pass leaves the ground is not priced: _map_pays judges one deposit alone, never the plan's tiles")},
 		},
 	}
 
