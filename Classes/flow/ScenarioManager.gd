@@ -225,6 +225,7 @@ func capture_board() -> BoardSnapshot:
 	snapshot.tile_data = grid.tile_map_data
 	snapshot.terrain_states = game.terrain_states.to_state_dict()
 	snapshot.terrain_state_turns = game.terrain_states.to_turns_dict()
+	snapshot.terrain_state_starts = game.terrain_states.to_starts_dict()
 	snapshot.corner_heights = game.board_heights.to_corner_dict()
 	snapshot.gas = game.gas_field.to_dict()
 	snapshot.zones = game.zone_manager.to_dict()
@@ -256,8 +257,8 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.scenario_name = scenario_name
 	capture_board().write_into(scenario)
 	# #1483: a fire's live countdown is a battle fact, so an authored save keeps none and each fire
-	# loads on its ground's own clock. Dropped HERE, not in capture_board: the authoring undo and
-	# every full capture put the clocks back exactly as they were.
+	# loads on its authored start (#1484) or its ground's own clock. Dropped HERE, not in capture_board:
+	# the authoring undo and every full capture put the clocks back exactly as they were.
 	if authored:
 		scenario.terrain_state_turns = {}
 	scenario.active_faction = turn_manager.active_faction()

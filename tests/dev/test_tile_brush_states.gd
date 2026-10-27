@@ -5,7 +5,8 @@
 # whole cell. The round-trip case pins the two load-path fixes this feature exposed: clear_board
 # clears terrain state (and its icons), and apply_scenario redraws it (authored fire visible at turn
 # one, not at the first round tick). The countdown cases at the bottom pin #1483: an authoring save
-# drops a fire's live clock, while a full capture and an undo keep it.
+# drops a fire's live clock, while a full capture and an undo keep it. The authored-start cases after
+# them pin #1484: the Fire starts with row, the start an authoring save keeps, and the list's Clear.
 #
 # The mouse->cell half (_paint reading get_global_mouse_position) can't be aimed headless; these
 # cases drive _paint_state/_erase_state directly beneath the dispatch match, and set the brush's
@@ -292,3 +293,91 @@ func test_an_authoring_undo_puts_the_live_countdown_back() -> void:
 	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
 		.override_failure_message("restoring the undo snapshot reset the fire's countdown") \
 		.is_equal(full - 1)
+
+
+# --- an authored start (#1484) -------------------------------------------------------------
+#
+# The Fire starts with row, and the clock it sets: content, so an authoring save keeps it where #1483
+# drops the live remainder. Each start is the ground's clock moved off by a margin, so the two can
+# never read the same by accident.
+
+func _paint_with_start() -> int:
+	var start := _burn_ticks() + 2
+	_brush._start_spin.value = start   # through the row's own wire, not the private field
+	_brush._tile_state = Terrain.TileState.BURNING
+	game.dev_controller._paint_state(CELL)
+	return start
+
+func test_the_starts_with_row_sets_the_painted_fires_clock() -> void:
+	var start := _paint_with_start()
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the painted fire ignored the Fire starts with row") \
+		.is_equal(start)
+	assert_int(game.terrain_states.start_turns(CELL, Terrain.TileState.BURNING)).is_equal(start)
+
+func test_painting_a_different_start_over_a_lit_cell_re_arms_it() -> void:
+	var start := _paint_with_start()
+	game.terrain_states.tick_states()
+	_brush._start_spin.value = start + 1
+	game.dev_controller._paint_state(CELL)
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the brush paints a start absolutely, and a new one left the old clock running") \
+		.is_equal(start + 1)
+
+func test_an_authoring_save_keeps_the_authored_start() -> void:
+	var start := _paint_with_start()
+	game.terrain_states.tick_states()
+	var captured: ScenarioData = game.scenario_manager.capture_scenario("authored-start", true)
+	game.scenario_manager.clear_board()
+	game.scenario_manager.apply_scenario(captured)
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the authoring save lost the chosen start, so the mission opens on the ground's clock") \
+		.is_equal(start)
+	assert_int(game.terrain_states.start_turns(CELL, Terrain.TileState.BURNING)).is_equal(start)
+
+func test_an_authoring_undo_puts_the_start_back() -> void:
+	var start := _paint_with_start()
+	var snapshot: BoardSnapshot = game.scenario_manager.capture_board()   # typed: game is untyped
+	game.dev_controller._erase_state(CELL)
+	assert_int(game.terrain_states.start_turns(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("precondition: erasing the fire left its start behind") \
+		.is_equal(-1)
+	game.scenario_manager.restore_board(snapshot)
+	assert_int(game.terrain_states.start_turns(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("restoring the undo snapshot dropped the authored start") \
+		.is_equal(start)
+
+# The list draws off the store's version from _process, which runs only while the page is on screen.
+func test_the_list_shows_each_start_and_its_clear_takes_it_off() -> void:
+	game.game_state = game.GameState.DEV_MODE
+	game.dev_overlay.visible = true
+	game.dev_overlay.show_leaf(_brush)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.STATE)
+	var start := _paint_with_start()
+	await await_idle_frame()
+	var rows := _brush._starts_list.get_children().filter(
+		func(row: Node) -> bool: return not row.is_queued_for_deletion())
+	assert_int(rows.size()).override_failure_message(
+			"the list did not draw one row for the one authored start").is_equal(1)
+	var label: Label = rows[0].get_child(0)
+	assert_str(label.text).contains("starts at %d" % start)
+	var clear: Button = rows[0].get_child(1)
+
+	clear.pressed.emit()
+	assert_int(game.terrain_states.start_turns(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("Clear left the start on the cell") \
+		.is_equal(-1)
+	assert_int(game.terrain_states.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("Clear did not hand the fire back to its ground's clock") \
+		.is_equal(_burn_ticks())
+	await await_idle_frame()
+	rows = _brush._starts_list.get_children().filter(
+		func(row: Node) -> bool: return not row.is_queued_for_deletion())
+	assert_bool(rows.size() == 1 and rows[0] is Label) \
+		.override_failure_message("the list still shows a start Clear took off") \
+		.is_true()
+
+	assert_bool(game.dev_controller.undo_board()) \
+		.override_failure_message("Clear pushed no undo step") \
+		.is_true()
+	assert_int(game.terrain_states.start_turns(CELL, Terrain.TileState.BURNING)).is_equal(start)

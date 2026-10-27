@@ -32,8 +32,12 @@ var fuel_source: Callable
 
 var _states: Dictionary = {}        # Vector2i -> Array[Terrain.TileState]
 var _state_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns_left }
+# The AUTHORED starting clocks (#1484): where a board's author chose a state's countdown, in place
+# of its ground's own. Apart from _state_turns because play runs that one down and an authoring save
+# must keep this one. Only the brush and a load write it; it leaves with its state.
+var _start_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns }
 
-# Every write to either dictionary above marks here, the grid's and gas's shape (#1182). Only
+# Every write to any dictionary above marks here, the grid's and gas's shape (#1182). Only
 # `version` is read today -- the dev header's "(modified)" -- so the cell list goes unconsumed.
 var dirty := DirtyCells.new()
 
@@ -117,6 +121,7 @@ func prune_groundless() -> bool:
 func clear() -> void:
 	_states.clear()
 	_state_turns.clear()
+	_start_turns.clear()
 	dirty.mark_all()
 
 func to_state_dict() -> Dictionary:
@@ -133,9 +138,15 @@ func to_state_dict() -> Dictionary:
 func to_turns_dict() -> Dictionary:
 	return _state_turns.duplicate(true)
 
-func load_state_dict(data: Dictionary, turns: Dictionary = {}) -> void:
+# The authored starts (#1484), the third dict: board content an authoring save keeps, where the
+# live clocks above are a battle fact it drops (#1483).
+func to_starts_dict() -> Dictionary:
+	return _start_turns.duplicate(true)
+
+func load_state_dict(data: Dictionary, turns: Dictionary = {}, starts: Dictionary = {}) -> void:
 	_states.clear()
 	_state_turns.clear()
+	_start_turns.clear()
 	dirty.mark_all()
 	for cell in data:
 		var states: Array[Terrain.TileState] = []
@@ -149,7 +160,7 @@ func load_state_dict(data: Dictionary, turns: Dictionary = {}) -> void:
 		if not states.is_empty():
 			_states[cell] = states
 			for s in states:
-				_restore_timer(cell, s, turns)
+				_restore_timer(cell, s, turns, starts)
 
 func cells_with(state: Terrain.TileState) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
@@ -176,6 +187,31 @@ func turns_remaining(cell: Vector2i, state: Terrain.TileState) -> int:
 	if _state_turns.has(cell) and _state_turns[cell].has(state):
 		return _state_turns[cell][state]
 	return -1
+
+# The authored start of a state's clock at one cell (#1484), -1 where none is authored and the
+# state starts on its ground's own clock. The Tile Brush's list is the reader.
+func start_turns(cell: Vector2i, state: Terrain.TileState) -> int:
+	return _entry(_start_turns, cell, state)
+
+# Author a state's starting clock here, and start its live clock there too, so the board reads as it
+# will load. 0 clears it, back to the ground's clock. Refused where the state is absent or its ground
+# gives it no clock: a start changes HOW LONG, never WHETHER (dev ruling, 2026-10-27). Answers
+# whether anything moved, so a drag repainting the same start rewinds nothing.
+func set_start_turns(cell: Vector2i, state: Terrain.TileState, turns: int) -> bool:
+	if not has_state(cell, state) or _ground_clock(cell, state) < 0:
+		return false
+	if turns <= 0:
+		if start_turns(cell, state) < 0:
+			return false
+		_clear_start(cell, state)
+		_start_timer(cell, state)
+	else:
+		if start_turns(cell, state) == turns:
+			return false
+		_set_entry(_start_turns, cell, state, turns)
+		_set_entry(_state_turns, cell, state, turns)
+	dirty.mark(cell)
+	return true
 
 # The turn tick (#890): fire SPREADS, clocks run down, and burnt-out fuel SCORCHES. One function,
 # because the three are one moment and their ORDER is the rule.
@@ -291,29 +327,55 @@ func _deposit(cell: Vector2i, state: Terrain.TileState) -> void:
 # answer. No entry for this state (or no fuel at all) means no timer, which is the permanence COVER
 # and FROZEN have always had and which BLAZE used to need a second enum member for.
 func _start_timer(cell: Vector2i, state: Terrain.TileState) -> void:
+	var clock := _ground_clock(cell, state)
+	if clock >= 0:
+		_set_entry(_state_turns, cell, state, clock)
+
+
+# The clock this cell's ground gives `state`, or -1 for none: the question _start_timer asks, shared
+# with the start's gate so "may this state be timed here" has one answer.
+func _ground_clock(cell: Vector2i, state: Terrain.TileState) -> int:
 	var fuel := fuel_at(cell)
 	if fuel == null or not fuel.add_state_turns.has(state):
-		return
-	if not _state_turns.has(cell):
-		_state_turns[cell] = {}
-	_state_turns[cell][state] = fuel.add_state_turns[state]
+		return -1
+	return fuel.add_state_turns[state]
 
 
-# A loaded state's clock: the SAVED remainder where the save recorded one, and otherwise whatever
-# this cell's ground would give a fresh deposit.
+# A loaded state's clock, in ONE order (#1484): the SAVED remainder where the save recorded one, else
+# the AUTHORED start, else whatever this cell's ground would give a fresh deposit. A start is kept
+# only where the ground gives the state a clock, the same gate set_start_turns has.
 #
-# NO SENTINEL is needed to tell the two apart, and that falls out of the model rather than being
-# arranged: a save written before #890's clocks recorded nothing at all, so every fire in it lands
-# on the fresh-clock branch, which is exactly the old behaviour; and a fire that was permanent when
-# saved has no entry either, but its ground gives no clock, so the fresh branch answers permanent
-# too. The only thing an entry can mean is a countdown mid-flight.
-func _restore_timer(cell: Vector2i, state: Terrain.TileState, turns: Dictionary) -> void:
-	if not turns.has(cell) or not (turns[cell] as Dictionary).has(state):
+# NO SENTINEL is needed to tell a remainder from no clock, and that falls out of the model rather
+# than being arranged: a save written before #890's clocks recorded nothing at all, so every fire in
+# it lands on the fresh-clock branch, which is exactly the old behaviour; and a fire that was
+# permanent when saved has no entry either, but its ground gives no clock, so the fresh branch
+# answers permanent too. The only thing an entry can mean is a countdown mid-flight.
+func _restore_timer(cell: Vector2i, state: Terrain.TileState, turns: Dictionary,
+		starts: Dictionary) -> void:
+	var start := _entry(starts, cell, state)
+	if start > 0 and _ground_clock(cell, state) >= 0:
+		_set_entry(_start_turns, cell, state, start)
+	else:
+		start = -1
+	var remainder := _entry(turns, cell, state)
+	if remainder >= 0:
+		_set_entry(_state_turns, cell, state, remainder)
+	elif start > 0:
+		_set_entry(_state_turns, cell, state, start)
+	else:
 		_start_timer(cell, state)
-		return
-	if not _state_turns.has(cell):
-		_state_turns[cell] = {}
-	_state_turns[cell][state] = turns[cell][state]
+
+
+# One state's number in a cell -> { state: turns } dict, -1 where it has none.
+static func _entry(clocks: Dictionary, cell: Vector2i, state: Terrain.TileState) -> int:
+	if clocks.has(cell) and (clocks[cell] as Dictionary).has(state):
+		return clocks[cell][state]
+	return -1
+
+static func _set_entry(clocks: Dictionary, cell: Vector2i, state: Terrain.TileState, turns: int) -> void:
+	if not clocks.has(cell):
+		clocks[cell] = {}
+	clocks[cell][state] = turns
 
 
 # What fire consumes on this cell: its ground's ignition reaction, or null. Public since #1335 for the
@@ -324,11 +386,20 @@ func fuel_at(cell: Vector2i) -> TerrainReaction:
 	var fuel: TerrainReaction = fuel_source.call(cell)   # typed local: .call() erases to Variant
 	return fuel
 
+# A state leaving its cell takes its clock AND its authored start (#1484): erased, burnt out, doused or
+# pruned, every removal comes through here, so a later fire on the cell starts on its ground's clock.
 func _clear_timer(cell: Vector2i, state: Terrain.TileState) -> void:
 	if _state_turns.has(cell):
 		_state_turns[cell].erase(state)
 		if _state_turns[cell].is_empty():
 			_state_turns.erase(cell)
+	_clear_start(cell, state)
+
+func _clear_start(cell: Vector2i, state: Terrain.TileState) -> void:
+	if _start_turns.has(cell):
+		_start_turns[cell].erase(state)
+		if _start_turns[cell].is_empty():
+			_start_turns.erase(cell)
 
 func _remove_state(cell: Vector2i, state: Terrain.TileState) -> void:
 	dirty.mark(cell)
