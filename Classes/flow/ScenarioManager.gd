@@ -76,8 +76,14 @@ var last_loaded_path := ""
 var current_look_preset := ""
 
 # The weather over the CURRENT board (#1260). The look's store/writer shape, but a RULE input: the
-# game's BoardContext reads it, so the end-of-turn soak and its forecast see what the board says.
+# game's BoardContext reads it, so the end-of-turn soak and its forecast see what the board says. A
+# mission start may replace it with a draw (#1509, MissionController._draw_weather); a load never does.
 var current_weather: Weather.Kind = Weather.Kind.CLEAR
+
+# The weathers a mission start on the CURRENT board may draw (#1509): the air's store shape, a copy on
+# both doors, so the draw and the Properties page never write into the cached ScenarioData. Empty = a
+# locked board.
+var current_weather_odds: Dictionary[Weather.Kind, int] = {}
 
 # The wind over the CURRENT board (#1286): the weather's store/writer shape, a look only.
 var current_wind: Wind.Kind = Wind.Kind.CALM
@@ -267,6 +273,11 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.weather = current_weather                       # #1260: and the weather over it
+	# #1509: on a board that draws, the weather standing is battle state, so an authored save writes
+	# none and Update never bakes the last draw into the file.
+	if authored and WeatherDraw.draws(current_weather_odds):
+		scenario.weather = Weather.Kind.CLEAR
+	scenario.weather_odds = current_weather_odds.duplicate()   # and what a mission start may draw
 	scenario.wind = current_wind                             # #1286: and the wind, a look only
 	scenario.wind_direction = current_wind_direction
 	scenario.atmosphere = current_atmosphere.duplicate()     # #1324: and the air it holds
@@ -370,6 +381,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	# correctly applies nothing.
 	current_look_preset = scenario.look_preset
 	current_weather = scenario.weather            # #1260: a rule input, read through game._board()
+	current_weather_odds = scenario.weather_odds.duplicate()   # #1509: drawn from at a mission start, never here
 	current_wind = scenario.wind                  # #1286: a look only
 	current_wind_direction = scenario.wind_direction
 	current_atmosphere = scenario.atmosphere.duplicate()   # #1324: a rule input, like the weather
@@ -488,6 +500,7 @@ func clear_board():
 	# And the weather (#1260), with a sharper consequence than the look: rain is a rule, so a sandbox
 	# board inheriting the last mission's would soak units nobody told it to.
 	current_weather = Weather.Kind.CLEAR
+	current_weather_odds = {}   # and what it may draw (#1509): a sandbox is locked to a clear sky
 	# And the wind (#1286), for the look's reason: a sandbox must not blow the last mission's gale.
 	current_wind = Wind.Kind.CALM
 	current_wind_direction = Wind.Direction.EAST

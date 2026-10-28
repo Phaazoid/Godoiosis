@@ -116,6 +116,14 @@ through the rules the loadout screen uses, refusing in its words -- they are ONE
 `"resume": true` skips the draw, for a mid-battle snapshot whose `roster` would otherwise stand a
 second force on top of the saved one.
 
+**Weather (#1509).** A board may offer a set of weathers, and `load` draws one as the game's mission
+start does (`WeatherDraw`, the rule both hosts ask), before the pre-mission phase. Its reply names the
+weather and the set it was drawn from (`weather: Rain, drawn from Rain 50%, Snow 50%`); a locked board
+names its weather unless the sky is clear. `"weather": "RAIN"` (the enum name, or the display name)
+picks the draw instead, and is refused, with the set named, unless the board offers that weather; a
+locked board accepts only its own. `restart` keeps the draw, as the game's Retry and Reset Loadout do.
+`"resume": true` never draws: it replays the weather the snapshot saved, and refuses a `weather` pick.
+
 ```bash
 play/send.sh load '{"path":"res://Scenarios/missions/Level_1.tres"}'
 play/send.sh --batch '[{"cmd":"undeploy","args":{"unit":"C"}},{"cmd":"deploy","args":{"unit":"F","x":29,"y":3}},{"cmd":"begin"}]'

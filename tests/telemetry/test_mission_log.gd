@@ -182,6 +182,28 @@ func test_a_real_mission_is_not_flagged_as_a_sandbox() -> void:
 		"a flag that is always true separates nothing").is_false()
 
 
+# The weather the battle started under (#1509), by NAME, beside the set it was drawn from -- the
+# denominator, so "how often was it Rain, and did they win" is a query. A locked board records no set.
+func test_mission_start_names_the_weather_and_the_set_it_was_drawn_from() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var odds: Dictionary[Weather.Kind, int] = {Weather.Kind.RAIN: 1, Weather.Kind.SNOW: 2}
+	game.scenario_manager.current_weather_odds = odds
+	game.scenario_manager.current_weather = Weather.Kind.SNOW
+	mc._begin_turn()
+	var start := _of("mission_start")[0]
+	assert_str(str(start.get("weather"))).is_equal("SNOW")
+	assert_dict(start.get("weather_odds", {})).is_equal({"RAIN": 1, "SNOW": 2})
+
+
+func test_a_locked_board_records_its_weather_and_no_set() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	game.scenario_manager.current_weather = Weather.Kind.RAIN
+	mc._begin_turn()
+	var start := _of("mission_start")[0]
+	assert_str(str(start.get("weather"))).is_equal("RAIN")
+	assert_dict(start.get("weather_odds", {"unset": 1})).is_empty()
+
+
 func test_the_summary_carries_the_separation_flags() -> void:
 	game.scenario_manager.last_loaded_path = ""
 	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
