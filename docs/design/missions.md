@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #1478 (2026-10-23); #1458 (where the load-time shouts live) folded in 2026-10-24; #1456 (a roster VIP is forced into the force) folded in 2026-10-24; #1483 (an authoring save drops the fire countdowns) folded in 2026-10-24; #1480 (battle state lives on `UnitState`) folded in 2026-10-25; #1509 (a drawn weather, shown in CONDITIONS) folded in 2026-10-27; #1484 (an authored starting countdown for a fire) folded in 2026-10-27.**
+**Canon checked through #1478 (2026-10-23); #1458 (where the load-time shouts live) folded in 2026-10-24; #1456 (a roster VIP is forced into the force) folded in 2026-10-24; #1483 (an authoring save drops the fire countdowns) folded in 2026-10-24; #1480 (battle state lives on `UnitState`) folded in 2026-10-25; #1509 (a drawn weather, shown in CONDITIONS) folded in 2026-10-27; #1484 (an authored starting countdown for a fire) folded in 2026-10-27; #962 (the loadout's damage readouts) folded in 2026-10-28.**
 
 ## What a mission is
 
@@ -219,6 +219,18 @@ reads THROUGH to its template — re-wording a family re-words every weapon buil
 scenarios included, with no migration. Only then were the seven base-weapon descriptions worth
 writing. **Flavour never states a number**: a value in prose goes stale while the data stays right,
 which `test_derived_readouts.gd` enforces over every authored weapon file. Weight reads each unit's body (BLD) plus what it carries (#120), and every body and item has an authored weight since #120 PR 3, set on the dev-tools Weights page ([weight.md](weight.md)).
+
+### Which weapon hits harder, and why ([#962](https://github.com/Phaazoid/Godoiosis/issues/962), 2026-10-28)
+
+The dev asked for a loadout that makes it clear which weapon does the most damage for a character, and whether their stats suit one weapon over another. Before this change the damage number lived only in a card row's tooltip, and a stash weapon said nothing about its stats.
+
+**At rest, every weapon row on a card prints what it hits for in that unit's hands**, between the name and the detail chip. **Every stash weapon prints what it scales off** (`DEX 40%, PER 60%`), the one weapon question that loose gear can answer with nobody holding it. **What a card row scales off is in its popup**: the row's own tooltip, `ItemText.hover`, now carries a `Scales off …` line under `Damage N`. The dev ruled that the numbers sit on the row and the stats behind them sit in a hover-hold popup. #1105's *"nothing on hover"* rules out a hover CARD; the existing tooltip is a different thing.
+
+**With a piece in hand, every other card shows a ghost of it** in the slot a click there would fill: its name after a `+`, faded, with what it would hit for in that unit's hands. The ghost is an EMPTY row, so a click on it is the empty slot's own put-down and nothing new decides the move. A unit that would refuse the piece draws the card's own `!` mark and refused border on its ghost, and a full card draws no ghost at all. **While the piece in hand is a weapon, the keys of the stats its blend reads are lit on every card**, so a row of cards says why one unit hits harder with it. Only the keys light up, because #745's preview rewrites the values in place.
+
+**Every number is HELD, never LIVE** (`WeaponInstance.held_damage`). `base_damage` reads the wielder's stats with whatever is in hand NOW, and a fitted mod's `stat_modifiers` ride only the weapon in hand, so for a weapon that is carried but not swung, or still in the stash, the live read prints a number that equipping it would change. `held_damage` reads the stats through #745's `previewed_stat` with this weapon as the candidate: the number shown before the choice is the number the choice gets. For the weapon already in hand the two are one number by construction. No shipped mod authors a stat modifier yet, so the two readings agree on every shipped weapon today. A stash weapon's detail card reads `Power N + the carrier's <blend>`, the BUILD with no number computed against nobody (`attack_detail` with a null wielder).
+
+**The rune half of the ask is a second diff.** `RuneDetailCard` (#1019/#1022) already lists every carving with its recipe as cost bars; what is left is those bars on the stash rune row itself.
 
 ### Gear moves, and the stash that owns it ([#741](https://github.com/Phaazoid/Godoiosis/issues/741))
 
