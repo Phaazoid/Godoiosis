@@ -1,6 +1,7 @@
-# What the loadout says about a weapon before it is moved (#962): what each one hits for in each
+# What the loadout says about a piece before it is moved (#962): what each weapon hits for in each
 # unit's hands, what it scales off, and -- with a piece in hand -- a ghost of it in the slot a click
-# on every other card would fill, at that unit's number.
+# on every other card would fill, at that unit's number. The rune half: a stash rune draws each
+# carving's recipe as the rune card's bars, and its tooltip says what each carving asks for.
 #
 # Reads the RENDERED rows, never the builders in isolation (tests/ui/test_gear_hover_text.gd's
 # precedent), and picks up through the real row click: the ghost is drawn by a deferred redraw, so a
@@ -156,6 +157,34 @@ func _click(row: GearRow) -> void:
 	await await_idle_frame()
 
 
+# ...and the realer one, for what lies ON a row: into the window at the control's centre, so the
+# viewport's own hit test decides who gets it (tests/ui/test_cards_outrank_live_surfaces.gd's helper).
+func _screen_point(control: Control) -> Vector2:
+	var view := control.get_viewport()
+	var in_view: Vector2 = (view.get_final_transform() * control.get_global_transform_with_canvas()) \
+			* (control.size * 0.5)
+	var container := _main.get_node("GameContainer") as Control
+	return container.get_global_rect().position + in_view
+
+
+func _click_through_window(control: Control) -> void:
+	var at := _screen_point(control)
+	var motion := InputEventMouseMotion.new()
+	motion.position = at
+	motion.global_position = at
+	Input.parse_input_event(motion)
+	for pressed: bool in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = at
+		event.global_position = at
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.pressed = pressed
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		Input.parse_input_event(event)
+	await await_idle_frame()
+	await await_idle_frame()
+
+
 # --- fixtures ---
 
 # A two-stat blend, lopsided, so the lit keys are a strict subset of the card's stats and a weapon
@@ -181,6 +210,37 @@ func _main_of(weapon: WeaponInstance, unit: Unit) -> WeaponAttackData:
 func _badge_for(weapon: WeaponInstance, unit: Unit) -> String:
 	var main := _main_of(weapon, unit)
 	return main.hit_badge(weapon.held_damage(unit.state, main))
+
+
+# Built like tests/ui/test_rune_detail_card.gd's: two fire-tempered carvings, one of them asking for
+# two elements, so a bar drawn in the wrong element or the wrong carving's group cannot coincide.
+func _rune() -> RuneData:
+	var rune := RuneData.new()
+	rune.display_name = "Test Rune"
+	rune.size = RuneData.Size.LARGE
+	for spec: Array in [["Break(F, E) + Push(F)", "Cinder"], ["Push(F2)", "Ember"]]:
+		var carving := TransmutationData.new()
+		carving.display_name = spec[1]
+		carving.power = 4
+		carving.recipe = spec[0]
+		assert_bool(rune.inscribe(carving)).override_failure_message(
+			"fixture carving %s failed to inscribe" % spec[1]).is_true()
+	return rune
+
+
+# One group per carving: an HBox holding nothing but bars.
+static func _bar_groups(row: Control) -> Array[HBoxContainer]:
+	var out: Array[HBoxContainer] = []
+	for node in _walk(row):
+		var group := node as HBoxContainer
+		if group == null or group.get_child_count() == 0:
+			continue
+		var only_bars := true
+		for child in group.get_children():
+			only_bars = only_bars and child is Panel
+		if only_bars:
+			out.append(group)
+	return out
 
 
 # A card with a free slot, or null -- the shipped roster's kit decides, so a case needing one says so.
@@ -366,7 +426,7 @@ func test_a_piece_a_unit_refuses_ghosts_with_the_refusal_mark() -> void:
 func test_a_weapon_in_hand_lights_the_keys_of_the_stats_it_reads() -> void:
 	if not await _enter_phase():
 		return
-	var lit_ink := QueueStyle.ink(QueueStyle.Role.NAME_TEXT)
+	var lit_ink := QueueStyle.ink(QueueStyle.Role.EMPHASIS_TEXT)
 	var rest_ink := QueueStyle.ink(QueueStyle.Role.HEADER_TEXT)
 	assert_bool(lit_ink != rest_ink).override_failure_message(
 		"the lit and resting inks are one colour, so this case cannot see a tint").is_true()
@@ -382,3 +442,78 @@ func test_a_weapon_in_hand_lights_the_keys_of_the_stats_it_reads() -> void:
 		var lit: bool = blend.get(stat, 0) > 0
 		assert_bool(key.get_theme_color("font_color") == (lit_ink if lit else rest_ink)).override_failure_message(
 			"%s's key is %s with the weapon in hand" % [key.text, "unlit" if lit else "lit"]).is_true()
+
+# --- the rune half ---
+
+# THE FULL RECIPE (dev, 2026-10-28: the wildcard mark read too much like the gap between carvings).
+# Nobody pays in the stash, so every bar is the rune card's own "asked for, unpaid".
+func test_a_stash_rune_row_draws_each_carvings_recipe() -> void:
+	if not await _enter_phase():
+		return
+	var rune := _rune()
+	mc.loadout().stash.append(rune)
+	await _redraw()
+
+	var groups := _bar_groups(_stash_row_for(rune))
+	assert_int(groups.size()).override_failure_message(
+		"the stash row draws %d bar groups for %d carvings" % [groups.size(), rune.inscriptions.size()]) \
+		.is_equal(rune.inscriptions.size())
+	for i in mini(groups.size(), rune.inscriptions.size()):
+		var carving := rune.inscriptions[i]
+		var expected: Array[Color] = []
+		for element: Elemental.Element in carving.distinct_elements():
+			for _n in range(carving.demand_of(element)):
+				expected.append(QueueStyle.element_ink(element))
+		var drawn: Array[Color] = []
+		for bar: Node in groups[i].get_children():
+			var box := (bar as Panel).get_theme_stylebox("panel") as StyleBoxFlat
+			assert_int(box.border_width_left).override_failure_message(
+				"%s drew a solid bar with nobody to pay it" % carving.display_name).is_greater(0)
+			drawn.append(box.border_color)
+		assert_array(drawn).override_failure_message(
+			"%s's bars are not its recipe, element by element" % carving.display_name).is_equal(expected)
+
+
+# A Panel stops the pointer by default, so a bar that kept it would swallow the very click that picks
+# the rune up. Through the window, so the viewport's own hit test is what is being asked.
+func test_a_click_on_a_recipe_bar_picks_the_rune_up() -> void:
+	if not await _enter_phase():
+		return
+	var rune := _rune()
+	mc.loadout().stash.insert(0, rune)   # first, so the stash's scroll cannot hide it
+	await _redraw()
+
+	var groups := _bar_groups(_stash_row_for(rune))
+	assert_bool(groups.is_empty()).override_failure_message("the stash row drew no bars").is_false()
+	if groups.is_empty():
+		return
+	await _click_through_window(groups[0].get_child(0) as Control)
+	assert_object(_screen()._selected_item).override_failure_message(
+		"a click on a recipe bar never reached the row").is_same(rune)
+
+
+func test_a_rune_tooltip_says_what_each_carving_asks_for() -> void:
+	if not await _enter_phase():
+		return
+	var rune := _rune()
+	mc.loadout().stash.append(rune)
+	await _redraw()
+
+	var stash_tip := _stash_row_for(rune).tooltip_text
+	for carving: TransmutationData in rune.inscriptions:
+		assert_str(stash_tip).override_failure_message(
+			"the stash tooltip does not say what %s asks for:\n%s" % [carving.display_name, stash_tip]) \
+			.contains(carving.demand_text())
+
+	# ...and the same on a card: what a carving asks for does not depend on who carries it.
+	var card := _card_with_room(rune)
+	if card == null:
+		push_warning("every card is full, so there is nowhere to carry the fixture rune")
+		return
+	assert_str(mc.loadout().move(rune, null, card.unit)).is_empty()
+	await _redraw()
+	var card_tip := _row_for(card, rune).tooltip_text
+	for carving: TransmutationData in rune.inscriptions:
+		assert_str(card_tip).override_failure_message(
+			"the card row's tooltip does not say what %s asks for:\n%s" % [carving.display_name, card_tip]) \
+			.contains(carving.demand_text())
