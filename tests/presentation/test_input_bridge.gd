@@ -140,12 +140,21 @@ func _paint_move_markup() -> void:
 
 
 func _under_ui(screen_pos: Vector2) -> bool:
-	for node in _game.ui_layer.get_children():
+	return _catches_under(_game.ui_layer, screen_pos)
+
+
+# Every depth, not only the layer's children: a surface's catching box can sit under an IGNORE
+# host (the End Turn button and the objectives box both do), and a check that stops at the host
+# reads them as bare board.
+func _catches_under(parent: Node, screen_pos: Vector2) -> bool:
+	for node in parent.get_children():
 		var control := node as Control
-		if control == null or not control.is_visible_in_tree():
+		if control != null and not control.is_visible_in_tree():
 			continue
-		if control.mouse_filter != Control.MOUSE_FILTER_IGNORE \
+		if control != null and control.mouse_filter != Control.MOUSE_FILTER_IGNORE \
 				and control.get_global_rect().has_point(screen_pos):
+			return true
+		if _catches_under(node, screen_pos):
 			return true
 	return false
 
@@ -311,13 +320,15 @@ func _active_orders() -> Array[BaseAction]:
 
 
 # A point over bare board, so a press there is the board's to read: nothing in the UI layer covers
-# it, and the queue panel that opens once an order is queued is exactly what could.
-func _bare_board_point() -> Vector2:
+# it, and the queue panel that opens once an order is queued is exactly what could. `reach` is a
+# drag the case will make from it, whose end must be bare board too, or the motion goes to a button.
+func _bare_board_point(reach := Vector2.ZERO) -> Vector2:
 	var view: Rect2 = _scene.get_viewport().get_visible_rect()
 	var grid: TileMapLayer = _game.grid
 	for cell: Vector2i in grid.get_used_cells():
 		var at := _screen_of(cell)
-		if view.has_point(at) and not _under_ui(at):
+		if view.has_point(at) and not _under_ui(at) \
+				and view.has_point(at + reach) and not _under_ui(at + reach):
 			return at
 	return Vector2(-1.0, -1.0)
 
@@ -908,12 +919,13 @@ func test_a_pan_held_into_a_modal_freeze_is_let_go() -> void:
 	var rig := _rig() as CameraRig3D
 	assert_int(rig.pan_button).override_failure_message(
 			"precondition: the pan is not on middle, so these presses start nothing").is_equal(MOUSE_BUTTON_MIDDLE)
-	var at := _bare_board_point()
+	var drag := Vector2(30.0, 0.0)
+	var at := _bare_board_point(drag)
 	assert_bool(at.x >= 0.0).override_failure_message("no bare board point to press on").is_true()
 	_parse_middle(at, true)
 	await _pump()
 	var start: Vector3 = rig._target_aim
-	_parse_middle_drag(at, Vector2(30.0, 0.0))
+	_parse_middle_drag(at, drag)
 	await _pump()
 	assert_bool(rig._target_aim.is_equal_approx(start)).override_failure_message(
 			"precondition: the middle drag never panned, so this proves nothing").is_false()

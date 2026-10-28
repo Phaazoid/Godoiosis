@@ -319,9 +319,9 @@ func _refresh_readout() -> void:
 	_headline.text = "%s  ·  %s  ·  %s" % [_weapon.shown_name(), family, carrier]
 
 	_plate.show_attack(_attack)
-	# attack_detail asks the WIELDER's stats, so a weapon nobody holds has no number to show rather
-	# than a number computed against nobody.
-	_damage.text = _weapon.attack_detail(_wielder.state, _attack) if _wielder != null and _attack != null else ""
+	# attack_detail asks the WIELDER's stats, so a weapon nobody holds gets the build's line instead --
+	# what it would scale off, with no number computed against nobody (#962).
+	_damage.text = _weapon.attack_detail(UnitState.of(_wielder), _attack) if _attack != null else ""
 	_damage.visible = _damage.text != ""
 	_range.text = AttackChannelText.range_text(_attack)
 	_refresh_channels()

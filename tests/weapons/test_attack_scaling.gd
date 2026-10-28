@@ -156,3 +156,88 @@ func test_every_shipped_attack_totals_100() -> void:
 				if finding["severity"] == AttackLint.Severity.DEGRADES:
 					offenders.append(file)
 	assert_array(offenders).is_empty()
+
+# --- HELD: the number before a swap is the number after it (#962) ---
+#
+# The loadout prints a damage number on every weapon a unit carries, and on the ghost of one still in
+# the stash. A fitted mod's stat_modifiers ride only the weapon in HAND, so base_damage on a weapon
+# nobody is swinging reads the wrong stats; held_damage is the number swinging it lands. Each case
+# reaches "in hand" through the real door (add_item / set_equipped_weapon), never by setting the field.
+
+func _stat_mod(stat: Stats.Stat, delta: int) -> WeaponModData:
+	var m := WeaponModData.new()
+	var mods: Dictionary[Stats.Stat, int] = {}
+	mods[stat] = delta
+	m.stat_modifiers = mods
+	return m
+
+func test_a_carried_weapon_reads_the_number_it_will_swing_for() -> void:
+	var unit := _wielder()
+	unit.unit_instance.set_proficiency(WeaponData.WeaponType.CHAINSWORD, 3)
+	var swung := _weapon(_attack(0, {Stats.Stat.DEX: 100}))
+	var main := _attack(0, {Stats.Stat.STR: 100})
+	var carried := _weapon(main)
+	assert_bool(carried.fit(0, _stat_mod(Stats.Stat.STR, 4))).is_true()
+	assert_bool(unit.add_item(swung)).is_true()
+	assert_bool(unit.add_item(carried)).is_true()
+	assert_object(unit.get_equipped_weapon()).override_failure_message(
+		"fixture: the first weapon added is not the one in hand").is_same(swung)
+
+	var promised := carried.held_damage(unit.state, main)
+	assert_int(promised).override_failure_message(
+		"the mod's STR never separates held from live, so this case cannot fail"
+		).is_not_equal(carried.base_damage(unit.state, main))
+
+	assert_bool(unit.set_equipped_weapon(carried)).is_true()
+	assert_int(carried.base_damage(unit.state, main)).override_failure_message(
+		"the carried row promised %d and swinging it lands something else" % promised).is_equal(promised)
+	# ...and for the weapon now in hand the two readings are one number.
+	assert_int(carried.held_damage(unit.state, main)).is_equal(carried.base_damage(unit.state, main))
+
+func test_a_stash_weapon_reads_the_number_it_will_swing_for() -> void:
+	var unit := _wielder()
+	unit.unit_instance.set_proficiency(WeaponData.WeaponType.CHAINSWORD, 3)
+	assert_bool(unit.add_item(_weapon(_attack(0, {Stats.Stat.DEX: 100})))).is_true()
+	var main := _attack(2, {Stats.Stat.STR: 50, Stats.Stat.DEX: 50})
+	var loose := _weapon(main)
+	assert_bool(loose.fit(0, _stat_mod(Stats.Stat.DEX, 6))).is_true()
+
+	var promised := loose.held_damage(unit.state, main)
+	assert_int(promised).override_failure_message(
+		"the mod's DEX never separates held from live, so this case cannot fail"
+		).is_not_equal(loose.base_damage(unit.state, main))
+
+	assert_bool(unit.add_item(loose)).is_true()
+	assert_bool(unit.set_equipped_weapon(loose)).is_true()
+	assert_int(loose.base_damage(unit.state, main)).override_failure_message(
+		"the ghost promised %d and swinging it lands something else" % promised).is_equal(promised)
+
+func test_a_stash_weapon_tooltip_names_its_blend_and_no_number() -> void:
+	# Nobody holds it, so there is no wielder to compute a number against: the build line only.
+	var main := _attack(4, {Stats.Stat.STR: 100})
+	var weapon := _weapon(main)
+	var detail := weapon.attack_detail(null, main)
+	assert_str(detail).contains(Stats.blend_text(weapon.scaling_of(null, main)))
+	assert_str(detail).contains("4")
+	assert_str(detail).override_failure_message(
+		"a weapon nobody holds printed a computed contribution: %s" % detail).not_contains(" from ")
+
+func test_a_damageless_stash_weapon_names_no_blend() -> void:
+	var utility := _attack(4, {Stats.Stat.STR: 100})
+	utility.deals_no_damage = true
+	var weapon := _weapon(utility)
+	assert_str(weapon.attack_detail(null, utility)).not_contains(
+		Stats.blend_text(weapon.scaling_of(null, utility)))
+
+func test_nobodys_blend_is_the_build_every_space_counting() -> void:
+	# Proficiency 1 reaches one space; the stash reads every space (active_space_count's own rule), so a
+	# nudge fitted in the second space moves the build and not this holder's blend.
+	var unit := _wielder()
+	unit.unit_instance.set_proficiency(WeaponData.WeaponType.CHAINSWORD, 1)
+	var main := _attack(0, {Stats.Stat.STR: 100})
+	var weapon := _weapon(main)
+	assert_bool(weapon.fit(1, _mod({Stats.Stat.DEX: 100}))).is_true()
+	assert_bool(weapon.scaling_of(null, main).has(Stats.Stat.DEX)).override_failure_message(
+		"the build ignored a mod in a space the build has").is_true()
+	assert_bool(weapon.scaling_of(unit.state, main).has(Stats.Stat.DEX)).override_failure_message(
+		"a proficiency-1 holder reads a mod in the second space").is_false()

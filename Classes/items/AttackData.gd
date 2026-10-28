@@ -285,6 +285,15 @@ func hit_text(amount: int, kind: Kind) -> String:
 		return "Heals %d" % amount
 	return "Damage %d, %s" % [amount, kind_name(kind)]
 
+# The same hit as a BADGE, for a row with no room for hit_text's words (#962): the number alone. A heal
+# wears its sign, so authoring one never reads as damage on a row.
+func hit_badge(amount: int) -> String:
+	if deals_no_damage:
+		return "—"
+	if heals:
+		return "+%d" % amount
+	return str(amount)
+
 # The targeting channel's readout token (#135 round 2) — same one-spelling rule as hit_text,
 # deliberately its own function: what a hit does and what it may land on are different questions. Concise parens by
 # dev call ("(unit)" / "(tile)" / "(unit/tile)"); Glossary's ATTACK_TARGETING entry explains them.

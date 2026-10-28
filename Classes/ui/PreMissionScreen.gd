@@ -429,6 +429,7 @@ func _refresh_cards() -> void:
 			card.mouse_entered.connect(_on_card_hovered.bind(card))
 			card.mouse_exited.connect(_on_gear_unhovered.bind(card))
 			card.selected_item = _selected_item if _selected_owner == unit else null
+			card.in_hand = _selected_item if _selected_owner != unit else null
 			_cards.append(card)
 			_grid.add_child(card)
 		_cards = _default_order()
@@ -436,6 +437,7 @@ func _refresh_cards() -> void:
 		return
 	for card in _cards:
 		card.selected_item = _selected_item if _selected_owner == card.unit else null
+		card.in_hand = _selected_item if _selected_owner != card.unit else null   # the ghost (#962)
 		card.refresh()
 	_settle_order(true)
 
@@ -579,6 +581,12 @@ func _refresh_stash() -> void:
 		label.add_theme_font_size_override("font_size", 11)
 		label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 		line.add_child(label)
+		var blend := _blend_label(item)
+		if blend != null:
+			line.add_child(blend)
+		var recipes := _recipe_bars(item)
+		if recipes != null:
+			line.add_child(recipes)
 		# Stash gear opens its detail card too (#732, widened at #1019) -- the same chip the unit cards
 		# carry. Both cards handle a wielder-less piece: the weapon's reads its proficiency as
 		# unreduced, the rune's shows the demand with an empty centre and no verdict.
@@ -588,6 +596,38 @@ func _refresh_stash() -> void:
 			line.add_child(chip)
 		_stash_box.add_child(row)
 	_refresh_hint()
+
+
+# What a stash weapon scales off, at rest (#962) -- the one weapon question with nobody to ask that a
+# list of loose gear can still answer, for the build (every space counting). Null for any other kind.
+static func _blend_label(item: Item) -> Label:
+	var weapon := item as WeaponInstance
+	if weapon == null:
+		return null
+	var main := weapon.default_attack(null) as WeaponAttackData
+	if main == null or main.deals_no_damage:
+		return null
+	var label := Label.new()
+	label.text = Stats.blend_text(weapon.scaling_of(null, main))
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	return label
+
+
+# ...and a stash rune's carvings, each as its full recipe (#962, the dev's ruling 2026-10-28): the rune
+# card's own bars for nobody, so every one is hollow, asked for and unpaid. Null for any other kind and
+# for a blank rune.
+static func _recipe_bars(item: Item) -> Control:
+	var rune := item as RuneData
+	if rune == null or rune.inscriptions.is_empty():
+		return null
+	var carvings := HBoxContainer.new()
+	carvings.add_theme_constant_override("separation", 6)
+	carvings.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	carvings.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for carving: TransmutationData in rune.inscriptions:
+		carvings.add_child(RuneDetailCard.cost_bars(carving, null))
+	return carvings
 
 
 # A VIP's squad leads the strip (#1456), the card grid's own rule; the rest keep board order.

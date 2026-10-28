@@ -505,20 +505,31 @@ func attack_block_reason(_wielder: UnitState, attack: AttackData) -> String:
 # The second itemises the way ArmorData.mechanical_text itemises DEF -- for THIS wielder, since
 # both halves depend on them. It reads the same effective_blend base_damage weighs, so a fitted
 # mod's shift is visible on hover rather than something you infer from a damage number moving.
+#
+# HELD (#962): the numbers are this weapon's once it is the one in hand, so the fitting card agrees
+# with the loadout row about a carried weapon nobody is swinging. The battle asks only about the
+# weapon in hand (Unit.attack_detail), where the two readings are the same number.
+#
+# A NULL WIELDER is the BUILD (#962) -- a stash weapon's card: what it would scale off, and no number
+# computed against nobody.
 func attack_detail(wielder: UnitState, attack: AttackData) -> String:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return ""
-	var damage := base_damage(wielder, weapon_attack)
-	var headline := "%s %s" % [weapon_attack.hit_text(damage, effective_kind(wielder, weapon_attack)), weapon_attack.targets_text()]
-	if weapon_attack.deals_no_damage:
-		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
 	var mods := _mods_for(wielder, weapon_attack)
 	var eff_power := weapon_attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
-	var from_stats := scaling_contribution(wielder, weapon_attack, mods)
 	var blend := Stats.blend_text(effective_blend(weapon_attack, mods))
+	if wielder == null:
+		if weapon_attack.deals_no_damage:
+			return "%s %s" % [weapon_attack.hit_text(0, weapon_attack.damage_kind), weapon_attack.targets_text()]
+		return "Power %d + the carrier's %s" % [eff_power, blend]
+	var damage := held_damage(wielder, weapon_attack)
+	var headline := "%s %s" % [weapon_attack.hit_text(damage, effective_kind(wielder, weapon_attack)), weapon_attack.targets_text()]
+	if weapon_attack.deals_no_damage:
+		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
+	var from_stats := scaling_contribution(wielder, weapon_attack, mods, self)
 	return "%s\n%d power + %d from %s" % [headline, eff_power, from_stats, blend]
 
 # ALL fitted modules count, active or not -- mass is physical, not capability-gated. The
@@ -553,13 +564,23 @@ static func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]
 			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_change[stat])
 	return blend
 
-static func scaling_contribution(wielder: UnitState, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
+# effective_blend for THIS weapon's mods that reach this attack, so a surface outside this file never
+# re-derives which mods those are (#962). A null wielder is the build: every space counts, which is
+# active_space_count's own reading of a weapon nobody holds.
+func scaling_of(wielder: UnitState, attack: WeaponAttackData) -> Dictionary:
+	return effective_blend(attack, _mods_for(wielder, attack))
+
+# `held` reads the wielder's stats with that weapon in hand (UnitState.previewed_stat, #745's seam)
+# rather than with whatever is in hand now -- see held_damage. Null is the live read.
+static func scaling_contribution(wielder: UnitState, attack: WeaponAttackData, mods: Array[WeaponModData],
+		held: EquippableData = null) -> int:
 	var blend := effective_blend(attack, mods)
 	var total_weight := 0
 	var weighted_sum := 0
 	for stat: Stats.Stat in blend:
 		total_weight += blend[stat]
-		weighted_sum += wielder.get_effective_stat(stat) * blend[stat]
+		var value := wielder.previewed_stat(stat, held) if held != null else wielder.get_effective_stat(stat)
+		weighted_sum += value * blend[stat]
 	if total_weight == 0:
 		return 0
 	return int(round(float(weighted_sum) / total_weight))
@@ -570,6 +591,17 @@ static func scaling_contribution(wielder: UnitState, attack: WeaponAttackData, m
 # law #4 one level down from #102 itself. Callers wanting the headline view of a weapon pass
 # default_attack() explicitly -- see inventory_panel.
 func base_damage(wielder: UnitState, attack: WeaponAttackData) -> int:
+	return _damage(wielder, attack, null)
+
+# What this attack hits for once THIS weapon is the one in hand (#962): the loadout's number, asked of
+# weapons that are carried but not swung, or still in the stash. base_damage reads the stats with
+# whatever is in hand NOW, and a fitted mod's stat_modifiers ride only the weapon in hand, so the two
+# differ exactly when a mod moves a stat this blend reads. For the weapon already in hand they are the
+# same number by construction -- previewed_stat with the held weapon as the candidate IS the live read.
+func held_damage(wielder: UnitState, attack: WeaponAttackData) -> int:
+	return _damage(wielder, attack, self)
+
+func _damage(wielder: UnitState, attack: WeaponAttackData, held: EquippableData) -> int:
 	if template == null or attack == null:
 		return 0
 	if attack.deals_no_damage:
@@ -578,7 +610,7 @@ func base_damage(wielder: UnitState, attack: WeaponAttackData) -> int:
 	var eff_power := attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
-	return eff_power + scaling_contribution(wielder, attack, mods)
+	return eff_power + scaling_contribution(wielder, attack, mods, held)
 
 # A weapon attack thrown as a PAYLOAD by a unit with no weapon in hand (#1058, ruling 42): it still
 # scales as if they had fired it -- its own power, its own blend over their stats -- with no mods,
