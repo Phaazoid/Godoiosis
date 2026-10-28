@@ -388,7 +388,7 @@ func test_an_air_hit_that_shoves_nobody_disperses_every_gas_on_the_cells_it_stri
 	# The preview, the forecast's fold and the store all say the same thing (Law #2).
 	assert_bool(plan.pending_deposits().has({"cell": TARGET_CELL, "clears_gas": true})).override_failure_message(
 			"the board would not show the gas going before Execute").is_true()
-	assert_int(board.gas.projected_packed_at(TARGET_CELL, plan.cell_effects)).is_equal(0)
+	assert_int(board.planned(plan.tiles).gas_at(TARGET_CELL)).is_equal(0)
 	board.gas.apply(plan.cell_effects[0])
 	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
 
@@ -433,9 +433,8 @@ func test_a_cleared_cell_keeps_the_gas_its_own_effect_releases() -> void:
 	effect.cell = TARGET_CELL
 	effect.gas_cleared = true
 	effect.add_gas(STEAM, Gas.Level.THIN)
-	var effects: Array[ResolvedCellEffect] = [effect]
 	var want := Gas.with_level(0, STEAM, Gas.Level.THIN)
-	assert_int(field.projected_packed_at(TARGET_CELL, effects)).is_equal(want)
+	assert_int(GasField.fold(field.packed_at(TARGET_CELL), effect)).is_equal(want)
 	field.apply(effect)
 	assert_int(Gas.level_in(field.packed_at(TARGET_CELL), Gas.Kind.SMOKE)).is_equal(0)
 	assert_int(Gas.level_in(field.packed_at(TARGET_CELL), STEAM)).is_equal(Gas.Level.THIN)
@@ -495,8 +494,8 @@ func test_a_shoving_air_hit_blows_every_gas_on_the_tile_as_far_as_it_shoves() ->
 	for kind: Gas.Kind in before:
 		assert_bool(deposits.has({"cell": landing, "gas": kind})).override_failure_message(
 				"the board would not show %s landing on %s" % [Gas.name_of(kind), landing]).is_true()
-	assert_int(board.gas.projected_packed_at(TARGET_CELL, plan.cell_effects)).is_equal(0)
-	assert_dict(_levels(board.gas.projected_packed_at(landing, plan.cell_effects))).is_equal(before)
+	assert_int(board.planned(plan.tiles).gas_at(TARGET_CELL)).is_equal(0)
+	assert_dict(_levels(board.planned(plan.tiles).gas_at(landing))).is_equal(before)
 	_play(plan, board)
 	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
 	assert_dict(_levels(board.gas.packed_at(landing))).is_equal(before)
@@ -551,7 +550,7 @@ func test_blown_gas_adds_to_what_it_lands_on_capped_at_thick() -> void:
 	board.gas.set_level(landing, STEAM, Gas.Level.MEDIUM)
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var plan := _resolve(_one(_aim(attacker, struck)), board)
-	var projected := board.gas.projected_packed_at(landing, plan.cell_effects)
+	var projected := board.planned(plan.tiles).gas_at(landing)
 	_play(plan, board)
 	assert_int(board.gas.level_at(landing, Gas.Kind.SMOKE)).is_equal(Gas.Level.MEDIUM)
 	assert_int(board.gas.level_at(landing, STEAM)).is_equal(Gas.Level.THICK)
@@ -587,8 +586,8 @@ func test_a_shoving_air_hit_blows_gas_an_earlier_order_in_the_same_plan_left() -
 	var struck: Array[Vector2i] = [TARGET_CELL]
 	var attacks: Array[AttackAction] = [_aim(steamer, struck), _aim(attacker, struck)]
 	var plan := _resolve(attacks, board)
-	assert_int(board.gas.projected_packed_at(TARGET_CELL, plan.cell_effects)).is_equal(0)
-	assert_int(Gas.level_in(board.gas.projected_packed_at(landing, plan.cell_effects), STEAM)).override_failure_message(
+	assert_int(board.planned(plan.tiles).gas_at(TARGET_CELL)).is_equal(0)
+	assert_int(Gas.level_in(board.planned(plan.tiles).gas_at(landing), STEAM)).override_failure_message(
 			"the Air hit read the board as it stood, not the steam the order before it left").is_equal(Gas.Level.MEDIUM)
 	_play(plan, board)
 	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)

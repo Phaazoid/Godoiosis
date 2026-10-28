@@ -122,7 +122,7 @@ func test_a_bystander_where_this_plan_lights_a_fire_gets_this_squads_row() -> vo
 
 	var plan := _sm.resolve_plan(caster.squad, _board([caster, bystander]), no_reactions, terrain_reactions)
 
-	assert_bool(_states.projected_states_at(bystander.movement.cell, plan.cell_effects).has(Terrain.TileState.BURNING)) \
+	assert_bool(_board([]).planned(plan.tiles).has_tile_state(bystander.movement.cell, Terrain.TileState.BURNING)) \
 			.override_failure_message("fixture: the aim lit nothing under the bystander").is_true()
 	assert_object(_hit_for(plan, bystander)).override_failure_message(
 			"a same-faction unit outside the squad burns for this plan with no row").is_not_null()
@@ -149,10 +149,11 @@ func test_a_bystander_in_old_fire_this_plan_never_touches_gets_no_row() -> void:
 # the fire this very pass is about to light -- your own fireball landing under your own squadmate.
 func test_the_forecast_sees_a_fire_this_pass_is_about_to_light() -> void:
 	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	var board := _board([stander])
 	var plan := ResolvedPlan.new()
-	plan.cell_effects.append(_deposit(FIRE, Terrain.TileState.BURNING))
+	plan.deposit(_deposit(FIRE, Terrain.TileState.BURNING), board)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, _board([stander]))
+	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
 
 	assert_object(_hit_for(plan, stander)).override_failure_message(
 			"the forecast read the live store and missed the fire this pass lights").is_not_null()
@@ -163,13 +164,14 @@ func test_the_forecast_sees_a_fire_this_pass_is_about_to_light() -> void:
 func test_a_fire_this_pass_puts_out_is_not_forecast() -> void:
 	_ignite(FIRE)
 	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	var board := _board([stander])
 	var plan := ResolvedPlan.new()
 	var douse := ResolvedCellEffect.new()
 	douse.cell = FIRE
 	douse.states_removed.assign([Terrain.TileState.BURNING])
-	plan.cell_effects.append(douse)
+	plan.deposit(douse, board)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, _board([stander]))
+	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
 
 	assert_int(plan.tile_hits.size()).override_failure_message(
 			"the forecast burned a unit standing on a fire this pass puts out").is_equal(0)
@@ -381,13 +383,14 @@ func test_the_forecast_sees_steam_this_pass_deposits() -> void:
 	assert_int(rules.state).override_failure_message(
 			"fixture: steam's rules name no state").is_not_equal(Elemental.State.NONE)
 	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
+	var board := _board([stander])
 	var plan := ResolvedPlan.new()
 	var steam := ResolvedCellEffect.new()
 	steam.cell = FIRE
 	steam.add_gas(Gas.Kind.STEAM, rules.state_from)
-	plan.cell_effects.append(steam)
+	plan.deposit(steam, board)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, _board([stander]))
+	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
 
 	var hit := _hit_for(plan, stander)
 	assert_object(hit).override_failure_message(

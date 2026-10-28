@@ -53,7 +53,7 @@ func apply(effect: ResolvedCellEffect) -> void:
 	# a cell whose tile was just erased still has to be cleanable, and routing that through here
 	# keeps the timer bookkeeping below correct instead of needing a second back door.
 	dirty.mark(effect.cell)
-	var grounded := _has_ground(effect.cell)
+	var grounded := has_ground(effect.cell)
 	var current := fold(states_at(effect.cell), effect, grounded)
 	if current.is_empty():
 		_states.erase(effect.cell)
@@ -65,8 +65,8 @@ func apply(effect: ResolvedCellEffect) -> void:
 		for s in effect.states_added:
 			_start_timer(effect.cell, s)
 
-# The remove-then-add fold one effect makes to a state list — apply()'s rule, shared so a PENDING
-# deposit reads exactly as the applied one will (#419).
+# The remove-then-add fold one effect makes to a state list — apply()'s rule, shared so a planned cell
+# (PlannedTiles.land) reads exactly as the applied one will (#419, #1498).
 static func fold(states: Array[Terrain.TileState], effect: ResolvedCellEffect,
 		grounded := true) -> Array[Terrain.TileState]:
 	var result := states.duplicate()
@@ -79,18 +79,8 @@ static func fold(states: Array[Terrain.TileState], effect: ResolvedCellEffect,
 	return result
 
 
-# A cell's states with this pass's own deposits folded in — what the END OF TURN forecast reads,
-# since cell effects only reach the store at execution (#419).
-func projected_states_at(cell: Vector2i, effects: Array[ResolvedCellEffect]) -> Array[Terrain.TileState]:
-	var states := states_at(cell)
-	var grounded := _has_ground(cell)
-	for effect in effects:
-		if effect.cell == cell:
-			states = fold(states, effect, grounded)
-	return states
-
-
-func _has_ground(cell: Vector2i) -> bool:
+# The store's own ground judgement, public for the planned tiles' fold (#1498).
+func has_ground(cell: Vector2i) -> bool:
 	if not ground_source.is_valid():
 		return true
 	var grounded: bool = ground_source.call(cell)   # typed local: .call() erases to Variant
@@ -105,7 +95,7 @@ func _has_ground(cell: Vector2i) -> bool:
 func prune_groundless() -> bool:
 	var doomed: Array[Vector2i] = []
 	for cell: Vector2i in _states.keys():
-		if not _has_ground(cell):
+		if not has_ground(cell):
 			doomed.append(cell)
 	for cell in doomed:
 		var effect := ResolvedCellEffect.new()
@@ -213,30 +203,30 @@ func tick_states() -> void:
 # PUBLIC since #1335: the gas round (GasSpread.next) asks it BEFORE this tick lights anything, so the
 # smoke a spreading fire gives off lands on the cells this tick is about to take.
 #
-# `effects` reads the cells as those deposits will leave them (#1430), projected_states_at's fold: Alt's
-# outline asks with the previewed plan's, so a tile a queued hit lights spreads in it and one a queued
-# douse puts out does not. The tick asks with none.
-func cells_fire_takes(effects: Array[ResolvedCellEffect] = []) -> Array[Vector2i]:
+# `planned` reads the cells as those planned tiles leave them (#1430, #1498): Alt's outline asks with the
+# previewed plan's, so a tile a queued hit lights spreads in it and one a queued douse puts out does not.
+# The tick asks with none.
+func cells_fire_takes(planned: PlannedTiles = null) -> Array[Vector2i]:
 	var taken: Array[Vector2i] = []
-	for source in _burning_sources(effects):
+	for source in _burning_sources(planned):
 		for cell in GridUtils.cells_within_blended_range(source, 1, _spreads_wide(source)):
-			if not taken.has(cell) and _catches_fire(cell, effects):
+			if not taken.has(cell) and _catches_fire(cell, planned):
 				taken.append(cell)
 	return taken
 
 
-# burning_cells() as these deposits leave the store: the live cells and the deposits' own, each once.
-func _burning_sources(effects: Array[ResolvedCellEffect]) -> Array[Vector2i]:
-	if effects.is_empty():
+# burning_cells() as the planned tiles leave the store: the live cells and the planned ones, each once.
+func _burning_sources(planned: PlannedTiles) -> Array[Vector2i]:
+	if planned == null:
 		return burning_cells()
 	var seen: Dictionary[Vector2i, bool] = {}
 	for cell: Vector2i in _states:
 		seen[cell] = true
-	for effect in effects:
-		seen[effect.cell] = true
+	for cell in planned.cells():
+		seen[cell] = true
 	var result: Array[Vector2i] = []
 	for cell: Vector2i in seen:
-		if Terrain.is_burning(projected_states_at(cell, effects)):
+		if Terrain.is_burning(planned.states_at(cell)):
 			result.append(cell)
 	return result
 
@@ -261,9 +251,9 @@ func _spreads_wide(cell: Vector2i) -> bool:
 # apply()'s timer reset, and no field would ever go out however much of it had already burnt. Since
 # #891 it is also what drops the ORIGIN out of cells_fire_takes' reach, every source there being a
 # burning cell by construction -- so a fire cannot re-light itself and lose its own clock.
-func _catches_fire(cell: Vector2i, effects: Array[ResolvedCellEffect] = []) -> bool:
-	var states := projected_states_at(cell, effects) if not effects.is_empty() else states_at(cell)
-	if Terrain.is_burning(states) or not _has_ground(cell):
+func _catches_fire(cell: Vector2i, planned: PlannedTiles = null) -> bool:
+	var states := planned.states_at(cell) if planned != null else states_at(cell)
+	if Terrain.is_burning(states) or not has_ground(cell):
 		return false
 	var fuel := fuel_at(cell)
 	return fuel != null and fuel.admits(states)

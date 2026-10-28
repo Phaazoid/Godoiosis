@@ -727,7 +727,7 @@ func test_a_board_with_deposits_reads_the_ice_they_freeze_and_melt() -> void:
 	freeze.cell = crossing
 	freeze.states_added.assign([Terrain.TileState.FROZEN])
 	var live: BoardContext = game._board()
-	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, live.with_deposits([freeze]))) \
+	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, PlannedTiles.after(live, [freeze]))) \
 		.override_failure_message("range does not cross ice a deposit freezes").is_true()
 	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, live)) \
 		.override_failure_message("the live board read a deposit that has not landed").is_false()
@@ -737,7 +737,7 @@ func test_a_board_with_deposits_reads_the_ice_they_freeze_and_melt() -> void:
 	melt.cell = crossing
 	melt.states_removed.assign([Terrain.TileState.FROZEN])
 	var frozen: BoardContext = game._board()
-	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, frozen.with_deposits([melt]))) \
+	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, PlannedTiles.after(frozen, [melt]))) \
 		.override_failure_message("range still crosses ice a deposit melts").is_false()
 	assert_bool(SquadCohesion.in_range(squad, Vector2i.ZERO, member, across, frozen)).is_true()
 
@@ -886,7 +886,7 @@ func test_smoke_blown_under_an_enemy_leader_is_forecast_and_splits_their_squad()
 			"fixture: the gust never queued (%s)" % [", ".join(aim.validation_errors)]).is_true()
 
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(hero.squad, game._board())
-	assert_int(Gas.level_in(game.gas_field.projected_packed_at(Vector2i.ZERO, plan.cell_effects), Gas.Kind.SMOKE)) \
+	assert_int(Gas.level_in(game._board().planned(plan.tiles).gas_at(Vector2i.ZERO), Gas.Kind.SMOKE)) \
 		.override_failure_message("fixture: the gust does not blow the smoke onto the leader").is_greater_equal(_smoke_level())
 	assert_bool(SplitForecast.leavers(plan).has(member)).override_failure_message(
 			"no row forecast the enemy member leaving once the smoke is blown onto its leader").is_true()

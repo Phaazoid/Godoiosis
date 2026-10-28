@@ -66,8 +66,8 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 	for atk in group:
 		_resolve_one(atk, plan, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
-			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, plan.cell_effects, hypo):
-				plan.cell_effects.append(cell_effect)
+			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, plan.tiles, hypo):
+				plan.deposit(cell_effect, board)
 
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
 #
@@ -98,8 +98,8 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		else:
 			_resolve_one(ctr, plan, reactions, hypo, board)
 			if board != null and not ctr.is_secondary_hit:
-				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.cell_effects, hypo):
-					plan.cell_effects.append(cell_effect)
+				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.tiles, hypo):
+					plan.deposit(cell_effect, board)
 		ordered.append(ctr)
 		if i == derived.size() - 1 or not is_same(derived[i + 1].volley, ctr.volley) or ctr.volley.is_empty():
 			for dropped in drop_payloads(_volley_of(ctr), plan, hypo, reactions, board, terrain_reactions):
@@ -126,9 +126,9 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 # pass burns nobody else — an enemy shoved into fire correctly grows no row here, that happens at the
 # end of THEIR turn. The cell is the THREADED one (#1349): the halt, every shove (a counter's and a
 # watch shot's included, which the projection never publishes) and the rescue haul all land in it. The
-# states come from the store WITH this pass's own deposits folded in — your own fireball igniting a
-# squadmate's cell is a burn the queue has to show. The gas the same way (#508): dousing a squadmate's
-# fire steams them, and the soak reads the states the pass leaves them holding.
+# states are the pass's planned tiles (#1498), so this pass's own deposits count — your own fireball
+# igniting a squadmate's cell is a burn the queue has to show. The gas the same way (#508): dousing a
+# squadmate's fire steams them, and the soak reads the states the pass leaves them holding.
 # What one unit's rows are, and their order, is TileHitAction.end_of_turn, which TurnBoundary.tile_hits
 # calls too: a scald before the burn, and the burn predicted on the HP the scald leaves (#1331).
 static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
@@ -136,6 +136,7 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 		return
 	var revived := _rescued_this_pass(actions, hypo)
 	plan.end_of_turn_subjects = _end_of_turn_subjects(plan, squad, hypo, board, revived)
+	var landed := board.planned(plan.tiles)
 	for unit in plan.end_of_turn_subjects:
 		var body := state_of(unit, hypo)
 		if revived.has(unit):
@@ -149,11 +150,8 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 		if body.lifecycle_state == Unit.LifecycleState.DEAD:
 			continue
 		var destination := projected_position(unit, hypo)
-		var packed := board.gas.projected_packed_at(destination, plan.cell_effects) if board.gas != null else 0
-		var ground: Array[Terrain.TileState] = []
-		if board.terrain_states != null:
-			ground = board.terrain_states.projected_states_at(destination, plan.cell_effects)
-		plan.tile_hits.append_array(TileHitAction.end_of_turn(body, packed, board.weather, ground))
+		plan.tile_hits.append_array(TileHitAction.end_of_turn(body, landed.gas_at(destination), board.weather,
+				landed.tile_states_at(destination)))
 
 
 # Who the END OF TURN forecast speaks for (#1353, dev 2026-10-21): the squad's members, then every other
@@ -933,7 +931,7 @@ static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalRe
 	if effect.gas_added.is_empty():
 		return
 	effect.cause = action
-	plan.cell_effects.append(effect)
+	plan.deposit(effect, board)
 
 # The states a unit would hold once a hit's removes and then its adds have landed: #1092's judge of
 # what an add is blocked by. The landing itself goes through the body's doors (_resolve_one).
@@ -965,7 +963,7 @@ static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardConte
 		moment: SinkAction.Moment) -> void:
 	if board == null or board.terrain_states == null or plan.cell_effects.is_empty():
 		return
-	var landed := board.with_deposits(plan.cell_effects)
+	var landed := board.planned(plan.tiles)
 	for unit in board.units:
 		if not is_instance_valid(unit) or plan.has_sunk(unit):
 			continue
@@ -987,13 +985,15 @@ static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardConte
 
 
 # Which deposit took the floor away: the first after which this cell drowns this unit. Its attack is
-# where the queue hangs the sinking's row.
+# where the queue hangs the sinking's row. The deposits are landed one at a time on a fresh copy of the
+# tiles, in the order the pass made them, and the cell asked after each one that lands on it.
 static func _floor_taken_by(cell: Vector2i, body: UnitState, board: BoardContext,
 		deposits: Array[ResolvedCellEffect]) -> AttackAction:
-	var so_far: Array[ResolvedCellEffect] = []
+	var tiles := PlannedTiles.new(board.terrain_states, board.gas)
+	var so_far := board.planned(tiles)
 	for effect in deposits:
-		so_far.append(effect)
-		if effect.cell == cell and RulesService.drowns_in(cell, body, board.with_deposits(so_far)):
+		tiles.land(effect)
+		if effect.cell == cell and RulesService.drowns_in(cell, body, so_far):
 			return effect.cause
 	return null
 
@@ -1564,7 +1564,7 @@ static func hold_in_hand(unit: Unit, source: EquippableData, hypo: Dictionary) -
 #
 # What is NOT body stays beside it: where the pass has put the unit (`position`, the attack prefix
 # plus every shove), and the baselines a readout compares the copy against (`start_*`). Tiles are not
-# here at all: a pass's terrain is deposits on plan.cell_effects (#1498).
+# here at all: they are the plan's other half, ResolvedPlan.tiles (#1498).
 #
 # The copy outlives the pass on ResolvedPlan.hypo, so a readout drawn after it reads the planned body
 # through state_of. An effect a QUEUED order applies (a buffing carving, a tonic) would land on the
@@ -1597,14 +1597,14 @@ class _Hypo:
 # Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
 # that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
 #
-# THE GAS IS READ AS THE PASS LEAVES IT (#1332): the live field with `prior`, the plan's earlier cell
-# effects, folded in -- exactly what the batch apply will have laid before this hit's own effects land,
-# since both walk plan.cell_effects in append order. So a Gust blows the steam a douse queued ahead of
-# it, and a second Gust moves what the first blew in. Fizzle, empowerment and the air reading still read
-# the GROUND as it stands: they ask what a caster draws on, which is a different question. The ATTACKER is
-# read as the pass has left it (#1480 stage 4): its elements and its shove come off its copy.
+# THE GAS IS READ AS THE PASS LEAVES IT (#1332): `tiles`, the plan's planned tiles so far (#1498), over
+# the live field -- exactly what the batch apply will have laid before this hit's own effects land, since
+# both take plan.cell_effects in append order. So a Gust blows the steam a douse queued ahead of it, and a
+# second Gust moves what the first blew in. Fizzle, empowerment and the air reading still read the GROUND
+# as it stands: they ask what a caster draws on, which is a different question. The ATTACKER is read as
+# the pass has left it (#1480 stage 4): its elements and its shove come off its copy.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction],
-		prior: Array[ResolvedCellEffect] = [], hypo: Dictionary = {}) -> Array[ResolvedCellEffect]:
+		tiles: PlannedTiles = null, hypo: Dictionary = {}) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
@@ -1620,8 +1620,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
 	if elements.is_empty() and not leaves_gas:
 		return effects
-	var in_pass: Array[ResolvedCellEffect] = board.deposits.duplicate()
-	in_pass.append_array(prior)
+	var as_left := board.planned(tiles)
 	# What each struck tile's dispersal carries off, by where it lands (#1332). Every tile is read
 	# before anything moves, and landed only after the loop, so a cloud across a struck line shifts
 	# intact rather than eating itself.
@@ -1642,7 +1641,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 			cells.append(cell)
 	for cell in cells:
 		var effect: ResolvedCellEffect = null
-		var gas_here := board.gas.projected_packed_at(cell, in_pass) if board.gas != null else 0
+		var gas_here := as_left.gas_at(cell)
 		if struck.has(cell) and not ground.is_empty():
 			effect = _resolve_cell_effect_at(cell, ground, board, terrain_reactions)
 		if not elements.is_empty():
@@ -1716,9 +1715,7 @@ static func _current_cells(action: AttackAction) -> Array[Vector2i]:
 # _resolve_air_at's.
 static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
-	var held: Array[Terrain.TileState] = []
-	if board.terrain_states != null:
-		held = board.terrain_states.states_at(cell)
+	var held := board.tile_states_at(cell)
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
 	var fired := false
@@ -1739,9 +1736,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 static func _resolve_air_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext,
 		terrain_reactions: Array[TerrainReaction], effect: ResolvedCellEffect, gas_here: int) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
-	var held: Array[Terrain.TileState] = []
-	if board.terrain_states != null:
-		held = board.terrain_states.states_at(cell)
+	var held := board.tile_states_at(cell)
 	for reaction in terrain_reactions:
 		if not reaction.in_the_air or not reaction.fires_for(elements) \
 				or not reaction.applies_to_tile(kind, held):
