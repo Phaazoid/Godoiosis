@@ -1,29 +1,32 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://b56unv1qqi4si"]
 
-[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_s4xfq"]
-[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_prrta"]
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_3nkwa"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_s4xfq"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_prrta"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_du6p0"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_3nkwa"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_g5k0t"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="6_23pvm"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight Templar_Downed.png" id="7_i2h2e"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight Templar.png" id="8_33xy2"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight Templar_Moving.png" id="9_rwd0q"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="10_toqk5"]
-[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="11_ybhc6"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="12_typhl"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="13_5k6y4"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc_Downed.png" id="14_562fr"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc.png" id="15_aeo7y"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc_Moving.png" id="16_fisug"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Black Knight_B_Downed.png" id="17_aww1r"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Black Knight_B.png" id="18_6xwr5"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Black Knight_B_Moving.png" id="19_7eyuu"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="20_lvivd"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="21_255me"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Swordsman_Downed.png" id="22_wij8o"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Swordsman.png" id="23_wj8u8"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Swordsman_Moving.png" id="24_0padb"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_g5k0t"]
+[ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_3nkwa"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="6_23pvm"]
+[ext_resource type="Texture2D" uid="uid://d3mntcyfcactc" path="res://Art/Units/MapSprites/Knight Templar_Downed.png" id="7_i2h2e"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="8_23pvm"]
+[ext_resource type="Texture2D" uid="uid://bo3adqvmrh6cm" path="res://Art/Units/MapSprites/Knight Templar.png" id="8_33xy2"]
+[ext_resource type="Texture2D" uid="uid://b2dsxr1elpcrp" path="res://Art/Units/MapSprites/Knight Templar_Moving.png" id="9_rwd0q"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="10_i2h2e"]
+[ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="10_toqk5"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="11_ybhc6"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="12_typhl"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="13_5k6y4"]
+[ext_resource type="Texture2D" uid="uid://lwdxls0bwe07" path="res://Art/Units/MapSprites/Orc_Downed.png" id="14_562fr"]
+[ext_resource type="Texture2D" uid="uid://djn7qkinjsvvk" path="res://Art/Units/MapSprites/Orc.png" id="15_aeo7y"]
+[ext_resource type="Texture2D" uid="uid://cuw76kdqfrbjw" path="res://Art/Units/MapSprites/Orc_Moving.png" id="16_fisug"]
+[ext_resource type="Texture2D" uid="uid://dvixwm5gc3ms3" path="res://Art/Units/MapSprites/Black Knight_B_Downed.png" id="17_aww1r"]
+[ext_resource type="Texture2D" uid="uid://dhug452laj63b" path="res://Art/Units/MapSprites/Black Knight_B.png" id="18_6xwr5"]
+[ext_resource type="Texture2D" uid="uid://cfaxdymde6tgn" path="res://Art/Units/MapSprites/Black Knight_B_Moving.png" id="19_7eyuu"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="20_lvivd"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="21_255me"]
+[ext_resource type="Texture2D" uid="uid://djqtna32u8h7g" path="res://Art/Units/MapSprites/Swordsman_Downed.png" id="22_wij8o"]
+[ext_resource type="Texture2D" uid="uid://d2iqas3fcjvs" path="res://Art/Units/MapSprites/Swordsman.png" id="23_wj8u8"]
+[ext_resource type="Texture2D" uid="uid://d10higup34jb4" path="res://Art/Units/MapSprites/Swordsman_Moving.png" id="24_0padb"]
 
 [sub_resource type="Resource" id="Resource_0jp17"]
 script = ExtResource("4_3nkwa")
@@ -58,16 +61,24 @@ stats = Dictionary[int, int]({
 2: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_0jp17")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
 })
 
 [sub_resource type="Resource" id="Resource_ng2b5"]
@@ -104,16 +115,24 @@ stats = Dictionary[int, int]({
 2: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_ng2b5")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
 })
 
 [sub_resource type="Resource" id="Resource_hjx60"]
@@ -149,16 +168,24 @@ stats = Dictionary[int, int]({
 2: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4,
+8: 10
 })
 current_hp = 12
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_hjx60")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
 })
 
 [sub_resource type="Resource" id="Resource_5c0il"]
@@ -195,16 +222,24 @@ stats = Dictionary[int, int]({
 2: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4,
+8: 10
 })
 current_hp = 12
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_5c0il")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
 })
 
 [sub_resource type="Resource" id="Resource_x3031"]
@@ -241,16 +276,24 @@ stats = Dictionary[int, int]({
 2: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_x3031")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
 })
 
 [sub_resource type="Resource" id="Resource_3i87w"]
@@ -286,16 +329,24 @@ stats = Dictionary[int, int]({
 2: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_du6p0")]([SubResource("Resource_3i87w")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
 })
 
 [resource]

@@ -57,7 +57,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_5qx3r")])
@@ -110,7 +111,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_adqjh")])
@@ -163,7 +165,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_rdr4l")])
@@ -217,7 +220,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_tviya")])
@@ -268,7 +272,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_22von")])
@@ -317,7 +322,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_q5eac")])
@@ -367,7 +373,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_h1x2s")])
@@ -415,7 +422,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_8pwjl")])
@@ -466,7 +474,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_httdr")])
@@ -523,7 +532,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_1id6q")])
@@ -576,7 +586,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_tvh0h")])
@@ -627,7 +638,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_v78ee")])
@@ -677,7 +689,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_4sfdo")])
@@ -729,7 +742,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_ppp6a")])
@@ -783,7 +797,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_p0203")])
@@ -833,7 +848,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_41j7o")])
@@ -883,7 +899,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_hjnp5")])
@@ -932,7 +949,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_5e51k")])
@@ -983,7 +1001,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_nirbv")])
@@ -1033,7 +1052,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_cg6r7")])
@@ -1088,7 +1108,8 @@ stats = Dictionary[int, int]({
 4: 3,
 5: 3,
 6: 7,
-7: 3
+7: 3,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("5_5qx3r")]([SubResource("Resource_ec5cr")])

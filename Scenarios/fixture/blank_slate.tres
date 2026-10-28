@@ -1,7 +1,9 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://d121tbt5r7251"]
 
-[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_ero15"]
-[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_j3idk"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_ero15"]
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_phhg3"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_j3idk"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_po0cx"]
 
 [resource]
 script = ExtResource("1_ero15")
