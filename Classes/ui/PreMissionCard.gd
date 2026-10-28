@@ -547,8 +547,9 @@ func _refresh_abilities() -> void:
 
 
 # With a weapon in hand, the KEYS of the stats its blend reads are lit (#962), so a row of cards says
-# why one unit hits harder with it than another. Keys only: #745's preview rewrites the VALUES in
-# place, and would put a tint on them back to rest.
+# why one unit hits harder with it than another. In the damage badge's ink, so the keys and the number
+# they make read as one. Keys only: #745's preview rewrites the VALUES in place, and would put a tint
+# on them back to rest.
 func _refresh_stats() -> void:
 	_clear(_stats_grid)
 	_stat_values.clear()
@@ -560,7 +561,7 @@ func _refresh_stats() -> void:
 		key.text = String(Stats.Stat.keys()[stat])
 		key.add_theme_font_size_override("font_size", 11)
 		key.add_theme_color_override("font_color", QueueStyle.ink(
-			QueueStyle.Role.NAME_TEXT if lit.has(stat) else QueueStyle.Role.HEADER_TEXT))
+			QueueStyle.Role.EMPHASIS_TEXT if lit.has(stat) else QueueStyle.Role.HEADER_TEXT))
 		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(key)
 		var value := Label.new()

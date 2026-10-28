@@ -434,7 +434,7 @@ func _carving_row(carving: TransmutationData) -> Control:
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.NAME_TEXT))
 	line.add_child(name_label)
 
-	line.add_child(_cost_bars(carving))
+	line.add_child(cost_bars(carving, _wielder))
 
 	# WHAT IT DOES, underneath -- damage, kind, targets, and deliberately NOT the cost: the bars above
 	# ARE the cost (dev). It needs a carrier, since the damage scales off their aura, so a stash rune's
@@ -471,14 +471,18 @@ static func _box_state(state: TransmutationData.Channel) -> QueueStyle.Channel:
 #
 # SKINNED, because these sit on the list's paper, where the ring above takes AUTHORED off the card's
 # own dark frame. Two grounds on one card is #814's rule, not an inconsistency.
-func _cost_bars(carving: TransmutationData) -> Control:
+#
+# STATIC, because the loadout's stash row draws the same recipe for nobody (#962), and IGNORE, because
+# a Panel stops the pointer: a click or a hover landing on a bar has to reach the row it sits in.
+static func cost_bars(carving: TransmutationData, wielder: Unit) -> Control:
 	var bars := HBoxContainer.new()
 	bars.add_theme_constant_override("separation", 2)
 	bars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var left: Dictionary[Elemental.Element, int] = {}
 	for element: Elemental.Element in carving.distinct_elements():
-		left[element] = _wielder.get_element_aura(element) if _wielder != null else 0
+		left[element] = wielder.get_element_aura(element) if wielder != null else 0
 	for element: Elemental.Element in carving.distinct_elements():
 		for _i in range(carving.demand_of(element)):
 			var paid: bool = left.get(element, 0) > 0
@@ -504,7 +508,7 @@ func _cost_bars(carving: TransmutationData) -> Control:
 	return bars
 
 
-func _cost_bar(element: Elemental.Element, alpha: float, outlined: bool) -> Control:
+static func _cost_bar(element: Elemental.Element, alpha: float, outlined: bool) -> Control:
 	var tint := QueueStyle.element_ink(element)
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(tint, alpha)
@@ -514,6 +518,7 @@ func _cost_bar(element: Elemental.Element, alpha: float, outlined: bool) -> Cont
 	var bar := Panel.new()
 	bar.add_theme_stylebox_override("panel", box)
 	bar.custom_minimum_size = COST_BAR
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return bar
 
 
