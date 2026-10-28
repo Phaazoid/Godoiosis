@@ -59,12 +59,15 @@ var _board: Dictionary = {}
 # MissionController._staged survives reset(). Which loads replay it is PreMissionPhase's rule.
 var _staged: PreMissionSnapshot = null
 var _loaded_path := ""   # the mission `restart` reloads; "" on a `new` board
+# The roll behind a mission start's weather draw (#1509): MissionController.weather_rng's twin.
+var _weather_rng := RandomNumberGenerator.new()
 var _last_id := 0
 var _quitting := false
 var _frames   # FrameLog; every state write also lands as a numbered frame
 
 func _initialize() -> void:
 	Engine.max_fps = 30   # poll ~30x/s without pegging a core
+	_weather_rng.randomize()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(RUN_DIR))
 	if FileAccess.file_exists(CMD):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(CMD))   # don't replay a stale command
@@ -121,8 +124,9 @@ func _run_one(cmd: String, args) -> Dictionary:
 		"new":
 			return {"ok": true, "text": await _cmd_new()}
 		"load":
-			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")),
-					bool((args as Dictionary).get("resume", false)))}
+			var load_args := args as Dictionary
+			return await _cmd_load(str(load_args.get("path", "")), bool(load_args.get("resume", false)),
+					str(load_args.get("weather", "")))
 		"restart":
 			return await _cmd_restart()
 	if _session == null:
@@ -305,19 +309,34 @@ func _cmd_new() -> String:
 #
 # Like begin_mission, it replays the last Begin's loadout when that was taken on THIS mission (#763
 # ruling 1, PreMissionPhase.replay_for), and says so.
-func _cmd_load(path: String, resume := false) -> String:
+#
+# The weather is DRAWN here too (#1509), as the game's begin_mission draws it: before the phase, and never
+# on a resume, which replays the weather it saved. `weather` is a driver's own pick of the draw, refused
+# unless the board offers it; `kept` is a restart's weather, which the draw keeps.
+func _cmd_load(path: String, resume := false, weather := "", kept: int = WeatherDraw.NONE) -> Dictionary:
 	if path == "":
-		return "load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"
+		return {"ok": true, "text":
+				"load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"}
+	# Judged BEFORE anything is torn down, so a refused pick leaves the board it was asked over standing.
+	var pick := WeatherDraw.NONE
+	if weather != "":
+		var refusal := _weather_pick_refusal(path, resume, weather)
+		if refusal != "":
+			return {"ok": false, "text": refusal}
+		pick = Weather.Kind.keys().find(_weather_key(weather))
 	_reset_board()
 	_board = BoardBuilder.build(root, "PlayRoot_%d" % Time.get_ticks_msec())
 	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
 	_session = PlaySession.new(_board)
 	_loaded_path = path
+	var sky: Weather.Kind = BoardBuilder.weather_of(_board) if resume \
+			else _session.start_weather(_weather_rng, kept, pick)
 	var offered: bool = _session.scenario_data != null and _session.scenario_data.offers_pre_mission
 	var replay: PreMissionSnapshot = null if resume else PreMissionPhase.replay_for(_staged, path, offered)
 	var drawn: int = 0 if resume else _session.start_pre_mission(replay)
 	await process_frame   # the drawn units' _ready, as load_scenario waits for its own spawns
 	var head := "Loaded %s (%d units)" % [path, loaded.size()]
+	head += _weather_note(sky, resume, kept, pick)
 	# Keyed on whether the phase OPENED (#46), not on the draw: a board with no pre-mission screen
 	# still draws its roster, and says so, because the force it starts with is the author's.
 	if _session.is_deploying():
@@ -327,7 +346,40 @@ func _cmd_load(path: String, resume := false) -> String:
 			head += " -- your last loadout for this mission stands again"
 	elif drawn > 0:
 		head += "; this mission has no pre-mission screen, so its roster's authored draw of %d stands and the battle has begun" % drawn
-	return "%s\n\n%s" % [head, BoardView.render_overview(_session)]
+	return {"ok": true, "text": "%s\n\n%s" % [head, BoardView.render_overview(_session)]}
+
+# Why a driver may not pick this weather as the draw, or "": WeatherDraw's rule, read off the file
+# before the load so a refusal changes nothing.
+func _weather_pick_refusal(path: String, resume: bool, weather: String) -> String:
+	if resume:
+		return "a resume replays the weather it saved -- drop the weather argument"
+	var kind := Weather.Kind.keys().find(_weather_key(weather))
+	if kind < 0:
+		return "unknown weather '%s' -- one of %s" % [weather, ", ".join(Weather.Kind.keys())]
+	var scenario: ScenarioData = ContentRepair.load_tolerant(path)
+	if scenario == null:
+		return ""   # the load itself reports a file it cannot read
+	var reason := WeatherDraw.pick_block_reason(scenario.weather_odds, scenario.weather, kind as Weather.Kind)
+	return "" if reason == "" else "cannot pick %s: %s" % [Weather.display_name(kind as Weather.Kind), reason]
+
+# A weather as a driver may spell it: the enum name, or the display name ("Heavy Rain").
+static func _weather_key(weather: String) -> String:
+	return weather.strip_edges().to_upper().replace(" ", "_")
+
+# The load reply's weather, said only where there is something to say: a board that draws names what
+# it drew and from what, and a locked one names its weather unless the sky is clear.
+func _weather_note(sky: Weather.Kind, resume: bool, kept: int, pick: int) -> String:
+	var scenario: ScenarioData = _session.scenario_data
+	if scenario != null and not resume and WeatherDraw.draws(scenario.weather_odds):
+		var how := "drawn"
+		if pick != WeatherDraw.NONE:
+			how = "picked"
+		elif kept == sky:
+			how = "kept by the restart"
+		return "; weather: %s, %s from %s" % [Weather.display_name(sky), how, WeatherDraw.odds_text(scenario.weather_odds)]
+	if sky != Weather.Kind.CLEAR:
+		return "; weather: %s" % Weather.display_name(sky)
+	return ""
 
 # The game's Restart (#763): the same mission again, back in its pre-mission phase. Taken from inside
 # the phase it is Reset Loadout and drops the buffer; otherwise the last Begin's loadout replays.
@@ -337,9 +389,12 @@ func _cmd_restart() -> Dictionary:
 		return {"ok": false, "text": "restart reloads a loaded mission -- load one first"}
 	var from_inside_phase: bool = _session.is_deploying()
 	_staged = PreMissionPhase.kept_by_restart(_staged, from_inside_phase)
-	var text := await _cmd_load(_loaded_path)
+	# The weather it is leaving, read before the reload resets the store (#1509 ruling 2: both kinds of
+	# restart keep the draw, as the game's restart_mission does).
+	var kept: Weather.Kind = BoardBuilder.weather_of(_board)
+	var res: Dictionary = await _cmd_load(_loaded_path, false, "", kept)
 	var kind := "Reset Loadout -- the mission's own draw" if from_inside_phase else "Restarted"
-	return {"ok": true, "text": "%s\n%s" % [kind, text]}
+	return {"ok": res.ok, "text": "%s\n%s" % [kind, res.text]}
 
 func _reset_board() -> void:
 	if _board.has("root") and is_instance_valid(_board.root):

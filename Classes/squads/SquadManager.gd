@@ -1216,7 +1216,7 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 				PlanResolver.thread_haul(rescue.target, rescue.haul_to, hypo)
 
 	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile where the pass leaves the
-	# burrower. Routed through cell_effects so preview + execution consume the same object
+	# burrower. Routed through the plan's deposit door so preview + execution consume the same object
 	# (R3) — it serializes and draws for free, exactly like an elemental terrain deposit.
 	if board != null:
 		for action in actions:
@@ -1227,7 +1227,7 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 			var cover := ResolvedCellEffect.new()
 			cover.cell = PlanResolver.projected_position(action.actor, hypo)
 			cover.states_added.append(Terrain.TileState.COVER)
-			plan.cell_effects.append(cover)
+			plan.deposit(cover, board)
 
 	# A watch armed over an enemy who is ALREADY standing there fires on the spot (#1003, dev's
 	# ruling). HERE, and the position is the ruling rather than a convenience: *"it would be the

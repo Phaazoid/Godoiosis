@@ -545,7 +545,7 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 		if effect == null:
 			continue
 		var deposits: Array[ResolvedCellEffect] = [effect]
-		if RulesService.drowns_in(cell, standing.state, board.with_deposits(deposits)) \
+		if RulesService.drowns_in(cell, standing.state, PlannedTiles.after(board, deposits)) \
 				and not RulesService.drowns_in(cell, standing.state, board):
 			return true
 	return false
