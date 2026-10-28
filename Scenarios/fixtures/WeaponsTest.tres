@@ -1,43 +1,43 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://dlkjsugoggoc"]
 
-[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_02ul2"]
-[ext_resource type="Script" path="res://Classes/flow/DialogBeat.gd" id="1_cl8yi"]
-[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_ggi03"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_02ul2"]
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_cl8yi"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_ggi03"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="3_h6kap"]
-[ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_ykmmo"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_nn2sb"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_dv1lo"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="6_e7coi"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight Templar_Downed.png" id="7_ty032"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight Templar.png" id="8_uy5w0"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight Templar_Moving.png" id="9_8pdvm"]
-[ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="9_ukvwx"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="10_x0m8r"]
-[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="11_o386q"]
-[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="11_vi37y"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="12_vltmb"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="13_r84dj"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc_Downed.png" id="14_udnht"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc.png" id="15_2ao25"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Orc_Moving.png" id="16_cl8yi"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Black Knight_B_Downed.png" id="17_ykmmo"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Black Knight_B.png" id="18_ukvwx"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Black Knight_B_Moving.png" id="19_o386q"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="20_os73n"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="21_ds0m5"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Swordsman_Downed.png" id="22_g8ks8"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Swordsman.png" id="23_eturi"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Swordsman_Moving.png" id="24_0mt4b"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="25_e7coi"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="26_ty032"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Armored Axeman_Downed.png" id="27_uy5w0"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Armored Axeman.png" id="28_8pdvm"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Armored Axeman_Moving.png" id="29_x0m8r"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="30_vi37y"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_ykmmo"]
+[ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_nn2sb"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="5_dv1lo"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="6_e7coi"]
+[ext_resource type="Texture2D" uid="uid://d3mntcyfcactc" path="res://Art/Units/MapSprites/Knight Templar_Downed.png" id="7_ty032"]
+[ext_resource type="Texture2D" uid="uid://bo3adqvmrh6cm" path="res://Art/Units/MapSprites/Knight Templar.png" id="8_uy5w0"]
+[ext_resource type="Texture2D" uid="uid://b2dsxr1elpcrp" path="res://Art/Units/MapSprites/Knight Templar_Moving.png" id="9_8pdvm"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="9_ukvwx"]
+[ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="10_x0m8r"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="11_o386q"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="11_vi37y"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="12_vltmb"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="13_r84dj"]
+[ext_resource type="Texture2D" uid="uid://lwdxls0bwe07" path="res://Art/Units/MapSprites/Orc_Downed.png" id="14_udnht"]
+[ext_resource type="Texture2D" uid="uid://djn7qkinjsvvk" path="res://Art/Units/MapSprites/Orc.png" id="15_2ao25"]
+[ext_resource type="Texture2D" uid="uid://cuw76kdqfrbjw" path="res://Art/Units/MapSprites/Orc_Moving.png" id="16_cl8yi"]
+[ext_resource type="Texture2D" uid="uid://dvixwm5gc3ms3" path="res://Art/Units/MapSprites/Black Knight_B_Downed.png" id="17_ykmmo"]
+[ext_resource type="Texture2D" uid="uid://dhug452laj63b" path="res://Art/Units/MapSprites/Black Knight_B.png" id="18_ukvwx"]
+[ext_resource type="Texture2D" uid="uid://cfaxdymde6tgn" path="res://Art/Units/MapSprites/Black Knight_B_Moving.png" id="19_o386q"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="20_os73n"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="21_ds0m5"]
+[ext_resource type="Texture2D" uid="uid://djqtna32u8h7g" path="res://Art/Units/MapSprites/Swordsman_Downed.png" id="22_g8ks8"]
+[ext_resource type="Texture2D" uid="uid://d2iqas3fcjvs" path="res://Art/Units/MapSprites/Swordsman.png" id="23_eturi"]
+[ext_resource type="Texture2D" uid="uid://d10higup34jb4" path="res://Art/Units/MapSprites/Swordsman_Moving.png" id="24_0mt4b"]
+[ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="25_e7coi"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="26_ty032"]
+[ext_resource type="Texture2D" uid="uid://dco3jtywvqftd" path="res://Art/Units/MapSprites/Armored Axeman_Downed.png" id="27_uy5w0"]
+[ext_resource type="Texture2D" uid="uid://mn0tjs230ii0" path="res://Art/Units/MapSprites/Armored Axeman.png" id="28_8pdvm"]
+[ext_resource type="Texture2D" uid="uid://bgbxnckfhglss" path="res://Art/Units/MapSprites/Armored Axeman_Moving.png" id="29_x0m8r"]
+[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="30_vi37y"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="31_vltmb"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="32_r84dj"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="33_udnht"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="34_2ao25"]
+[ext_resource type="Texture2D" uid="uid://dpd0m64njf8rn" path="res://Art/Units/MapSprites/Archer_Downed.png" id="32_r84dj"]
+[ext_resource type="Texture2D" uid="uid://bgvvkigtcobal" path="res://Art/Units/MapSprites/Archer.png" id="33_udnht"]
+[ext_resource type="Texture2D" uid="uid://cd51n0ptxrquf" path="res://Art/Units/MapSprites/Archer_Moving.png" id="34_2ao25"]
 [ext_resource type="Resource" path="res://Resources/WeaponMods/Line Sniper.tres" id="35_os73n"]
 
 [sub_resource type="Resource" id="Resource_cl8yi"]
@@ -74,7 +74,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_cl8yi")])
@@ -127,7 +128,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_o386q")])
@@ -179,7 +181,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_g8ks8")])
@@ -232,7 +235,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_0qra6")])
@@ -285,7 +289,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_enc8v")])
@@ -337,7 +342,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_e7ndh")])
@@ -389,7 +395,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_7qklc")])
@@ -437,7 +444,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_gl26j")])
@@ -485,7 +493,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_wtwd2")])
@@ -538,7 +547,8 @@ stats = Dictionary[int, int]({
 4: 5,
 5: 5,
 6: 5,
-7: 4
+7: 4,
+8: 10
 })
 current_hp = 20
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_rs6iw")])

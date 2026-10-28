@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://c5ftji4nqvhdu"]
 
 [ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_a1kvu"]
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_wdgyx"]
@@ -54,8 +54,31 @@ script = ExtResource("2_megpd")
 unit_data = SubResource("Resource_mifoh")
 cell = Vector2i(-4, 1)
 squad_id = 0
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_3ci5y_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_u6n6d_inst"]
 script = ExtResource("wi_kineticmace")
@@ -82,8 +105,31 @@ script = ExtResource("2_megpd")
 unit_data = SubResource("Resource_n5k50")
 cell = Vector2i(-4, 3)
 squad_id = 1
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_u6n6d_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_xys8w_inst"]
 script = ExtResource("wi_chemicalspitter")
@@ -111,8 +157,31 @@ script = ExtResource("2_megpd")
 unit_data = SubResource("Resource_lb0cr")
 cell = Vector2i(0, 1)
 squad_id = 2
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_xys8w_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charges": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_4osyr_inst"]
 script = ExtResource("wi_chemicalspitter")
@@ -140,8 +209,31 @@ script = ExtResource("2_megpd")
 unit_data = SubResource("Resource_jrv5b")
 cell = Vector2i(0, 3)
 squad_id = 3
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_4osyr_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charges": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_ix2xb_inst"]
 script = ExtResource("wi_kineticmace")
@@ -169,8 +261,31 @@ unit_data = SubResource("Resource_ha6eo")
 cell = Vector2i(-3, 1)
 squad_id = 0
 is_leader = true
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_ix2xb_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_w25rl_inst"]
 script = ExtResource("wi_kineticmace")
@@ -198,8 +313,31 @@ unit_data = SubResource("Resource_0fglh")
 cell = Vector2i(-3, 3)
 squad_id = 1
 is_leader = true
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_w25rl_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_y8fi4_inst"]
 script = ExtResource("wi_chainsword")
@@ -228,8 +366,31 @@ unit_data = SubResource("Resource_4ooql")
 cell = Vector2i(1, 1)
 squad_id = 2
 is_leader = true
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_y8fi4_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_vollj_inst"]
 script = ExtResource("wi_chainsword")
@@ -258,8 +419,31 @@ unit_data = SubResource("Resource_uckst")
 cell = Vector2i(1, 3)
 squad_id = 3
 is_leader = true
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+current_hp = 20
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_vollj_inst")])
 equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
 
 [resource]
 script = ExtResource("1_wdgyx")
