@@ -10,9 +10,9 @@ class_name SinkAction
 # down, Crisis, and a body already down is finished; never a limb, the water not being a blow) -- and
 # the answer is a rescue from the bank.
 
-# WHEN it goes under. The ice melts when the pass's deposits land, straight after the attack volley
-# (OrderExecutor._apply_cell_effects); a melt only a COUNTER or a tail shot makes is not known until
-# those resolve, so its stander goes under once the pass has settled (dev ruling, 2026-09-27).
+# WHEN it goes under. The ice melts at the end of the volley that melted it (#1498), and its stander
+# goes under once the attack phase has played; a melt only a COUNTER or a tail shot makes is not known
+# until those resolve, so its stander goes under once the pass has settled (dev ruling, 2026-09-27).
 enum Moment { DEPOSITS_LAND, PASS_END }
 
 var moment: Moment = Moment.DEPOSITS_LAND

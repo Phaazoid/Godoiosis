@@ -516,8 +516,8 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 	# Deep water draws as deep water (#46), no longer as rock.
 	assert_str(_glyph_at(cell)).is_equal(BoardView.GROUND["deep"][0])
 
-	# terrain_states.apply IS the production write path — play_session._apply_cell_effects and
-	# OrderExecutor both hand a resolved effect to exactly this call. Only the effect's source is
+	# terrain_states.apply IS the production write path — ResolvedPlan.play_landing, which both
+	# executors run, hands a resolved effect to exactly this call. Only the effect's source is
 	# synthesized here; test_ice.gd covers deriving one from a real ICE hit.
 	var freeze := ResolvedCellEffect.new()
 	freeze.cell = cell

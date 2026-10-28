@@ -101,7 +101,7 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.tiles, hypo):
 					plan.deposit(cell_effect, board)
 		ordered.append(ctr)
-		if i == derived.size() - 1 or not is_same(derived[i + 1].volley, ctr.volley) or ctr.volley.is_empty():
+		if ctr.closes_volley():
 			for dropped in drop_payloads(_volley_of(ctr), plan, hypo, reactions, board, terrain_reactions):
 				ordered.append(dropped as CounterAttackAction)
 	plan.counters = ordered
@@ -994,7 +994,7 @@ static func _floor_taken_by(cell: Vector2i, body: UnitState, board: BoardContext
 	for effect in deposits:
 		tiles.land(effect)
 		if effect.cell == cell and RulesService.drowns_in(cell, body, so_far):
-			return effect.cause
+			return effect.cause as AttackAction   # a Burrow's COVER takes no floor away
 	return null
 
 
@@ -1598,11 +1598,12 @@ class _Hypo:
 # that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
 #
 # THE GAS IS READ AS THE PASS LEAVES IT (#1332): `tiles`, the plan's planned tiles so far (#1498), over
-# the live field -- exactly what the batch apply will have laid before this hit's own effects land, since
-# both take plan.cell_effects in append order. So a Gust blows the steam a douse queued ahead of it, and a
-# second Gust moves what the first blew in. Fizzle, empowerment and the air reading still read the GROUND
-# as it stands: they ask what a caster draws on, which is a different question. The ATTACKER is read as
-# the pass has left it (#1480 stage 4): its elements and its shove come off its copy.
+# the live field -- exactly what playback will have landed before this hit's own effects land, since it
+# lands each volley's deposits in append order (ResolvedPlan.play_landing). So a Gust blows the steam a
+# douse queued ahead of it, and a second Gust moves what the first blew in. Fizzle, empowerment and the
+# air reading still read the GROUND as it stands: they ask what a caster draws on, which is a different
+# question. The ATTACKER is read as the pass has left it (#1480 stage 4): its elements and its shove
+# come off its copy.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction],
 		tiles: PlannedTiles = null, hypo: Dictionary = {}) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []

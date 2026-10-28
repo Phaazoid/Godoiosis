@@ -30,7 +30,7 @@ func add_gas(kind: Gas.Kind, levels: int) -> void:
 func add_gases(gases: Dictionary[Gas.Kind, Gas.Level]) -> void:
 	for kind: Gas.Kind in Gas.released(gases):
 		add_gas(kind, gases[kind])
-# The blow that deposited it, or null for an order's own deposit (Burrow's COVER). Live applies a
-# pass's deposits in one batch, so nothing in playback reads this; the Split forecast does (#367),
-# to hand a break over ice this pass melts to the fire that melted it.
-var cause: AttackAction = null
+# The action that deposited it: a blow, or an order's own deposit (Burrow's COVER). Playback lands it
+# once that action's whole volley has played (ResolvedPlan.landing_after, #1498), and the Split
+# forecast replays that moment (#367), handing a break over ice this pass melts to the blast that did.
+var cause: BaseAction = null

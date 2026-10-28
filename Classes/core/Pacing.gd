@@ -418,10 +418,9 @@ static func profile_for(beat: BeatSheet.Beat) -> Profile:
 # it is punctuation INSIDE a fight -- dropping to plain for it would cut the exchange in half between
 # an attack and its counter.
 #
-# MOVES and CODA are the walk and the side-channel verbs, neither of which is a blow. CELL_EFFECTS is
-# the edge the wording could have reached -- a unit standing in fire IS taking damage -- and it stays
-# plain rather than reversing a standing call: the environment pass forks on neither profile nor
-# faction, because the board acts there and the zoom has no drama to add to bookkeeping.
+# MOVES and CODA are the walk and the side-channel verbs, neither of which is a blow. A volley's tile
+# changes were the edge the wording could have reached while they were a beat of their own; since
+# #1498 they land at the end of their volley, inside its beat.
 static func is_combat_beat(beat: BeatSheet.Beat) -> bool:
 	if beat == null:
 		return false

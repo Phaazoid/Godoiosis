@@ -1454,26 +1454,32 @@ func execute() -> Dictionary:
 	# that walker after, and every watch shot in trigger order. Only the MID-WALK shots: one a shove set
 	# off belongs after the volley that threw somebody into it, and attack_playback() below is where it
 	# lands (#567). Headless there is no walk to halt, so this is the order things land and nothing else.
+	#
+	# A leader a walk shot kills hands over at the walk's END, as the game's walk holds it (#367): a later
+	# shot's shove or landed tiles move the reach its successor is judged on (#1498).
+	squad_manager.hold_handovers()
 	for moment in plan.walk_moments(moves):
 		if moment["soak"]:
 			_apply_walk_states(moment["move"] as MoveAction, events)
 		for shot: AttackAction in moment["shots"]:
 			_apply_attack(shot, events)
+			_land_after(plan, shot, events)
 	# ...and every other walk's soaking, as the walk ends.
 	for move: MoveAction in moves:
 		_apply_walk_states(move, events)
+	squad_manager.release_handovers()
 
-	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
-	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
-	# follow it, and for every later pass.
+	# 2) attacks, each volley's tiles landing once its last member has played (#1498), then 3) counters
+	# the same way. Same order as OrderExecutor.execute_orders.
 	for atk in plan.attack_playback():
 		_apply_attack(atk, events)
-	_apply_cell_effects(plan.cell_effects, events)
+		_land_after(plan, atk, events)
 	# ...and whoever the melt took the floor from goes under (#922), before any counter -- MIRRORS
 	# OrderExecutor.execute_orders. SinkAction.execute is synchronous pure playback, so the real one runs.
 	_apply_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), events)
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
+		_land_after(plan, ctr, events)
 
 	# 4) side-channel tail in registry order (BaseAction.SIDE_CHANNEL_ORDER). These executes
 	# are synchronous pure logic (no animation), so the REAL action runs — no per-type headless
@@ -1491,12 +1497,14 @@ func execute() -> Dictionary:
 				continue
 			action.execute()
 			events.append(_side_line(action))
+			_land_after(plan, action, events)   # a Burrow's COVER, at its own slot
 			# ...then the shots THIS order set off (#1003) -- MIRRORS execute_orders' own interleave,
 			# which is the third and last playback partition. An Overwatch armed onto a cell an
 			# enemy already occupies fires here, after the counters, because that is where the
 			# arming happens.
 			for shot in plan.shots_fired_during(action):
 				_apply_attack(shot, events)
+				_land_after(plan, shot, events)
 
 	# 4b) the melts only a counter or a tail shot made (#922) -- the pass has settled.
 	_apply_sinks(plan.sinks_at(SinkAction.Moment.PASS_END), events)
@@ -1532,17 +1540,15 @@ func _apply_walk_states(move: MoveAction, events: Array[String]) -> void:
 	for state in move.resolved.states_added:
 		events.append("%s gains %s" % [handle_for(move.actor), Elemental.state_display_name(state)])
 
-# Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
-# the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
-func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[String]) -> void:
+# What lands once `played` has played (#1498): ResolvedPlan.play_landing, the step OrderExecutor runs after
+# the same action, minus the redraw, plus its lines. Preview and execution consume the SAME
+# ResolvedCellEffect objects (R3).
+func _land_after(plan: ResolvedPlan, played: BaseAction, events: Array[String]) -> void:
 	if terrain_states == null:
 		return
-	for effect in cell_effects:
-		terrain_states.apply(effect)
+	for effect in plan.play_landing(played, terrain_states, gas_field):
 		for state in effect.states_added:
 			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
-		if gas_field != null:
-			gas_field.apply(effect)
 		if effect.gas_cleared:
 			events.append("%s's gas leaves" % str(effect.cell))   # dispersed, or blown to a "gains" line (#1332)
 		for kind: Gas.Kind in effect.gas_added:

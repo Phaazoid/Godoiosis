@@ -162,6 +162,43 @@ func sinks_caused_by(action: BaseAction) -> Array[SinkAction]:
 	return caused
 
 
+# What one VOLLEY laid on the ground (#1498): every deposit a member of `action`'s volley made, or the
+# order's own when it is not a blow (Burrow's COVER), in the order the resolve laid them.
+func deposits_of(action: BaseAction) -> Array[ResolvedCellEffect]:
+	var laid: Array[ResolvedCellEffect] = []
+	if action == null:
+		return laid
+	var blow := action as AttackAction
+	for effect in cell_effects:
+		var by := effect.cause as AttackAction
+		if effect.cause == action or (blow != null and by != null and AttackAction.same_volley(blow, by)):
+			laid.append(effect)
+	return laid
+
+
+# ...and what lands once `played` has played: its volley's deposits when it closes the volley, nothing
+# after an earlier member (ruling 3: one blast is one moment). An order that is not a blow closes its own.
+func landing_after(played: BaseAction) -> Array[ResolvedCellEffect]:
+	var blow := played as AttackAction
+	if blow != null and not blow.closes_volley():
+		var none: Array[ResolvedCellEffect] = []
+		return none
+	return deposits_of(played)
+
+
+# THE landing both executors run after every action they play (#1498): landing_after's deposits, onto
+# the live stores through their own apply, handed back for the host to redraw or log. The one place
+# playback writes a pass's tiles.
+func play_landing(played: BaseAction, states: TerrainStateManager, gas: GasField) -> Array[ResolvedCellEffect]:
+	var landed := landing_after(played)
+	for effect in landed:
+		if states != null:
+			states.apply(effect)
+		if gas != null:
+			gas.apply(effect)
+	return landed
+
+
 func has_sunk(unit: Unit) -> bool:
 	for sink in sinks:
 		if sink.actor == unit:

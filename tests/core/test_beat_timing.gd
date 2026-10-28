@@ -186,7 +186,7 @@ func test_an_undeclared_verb_never_shortens_the_beat() -> void:
 # PLAYER_ACTION, i.e. exactly the tuned values this suite refuses to touch.
 
 func _every_kind() -> Array[BeatSheet.Beat]:
-	return [_chip(), _turnover(), _walk(), _cell_effects(), _coda(BaseAction.ActionType.RESCUE)]
+	return [_chip(), _turnover(), _walk(), _coda(BaseAction.ActionType.RESCUE)]
 
 
 func test_every_beat_runs_cinematic_when_the_zoom_is_on_for_everything() -> void:
@@ -217,8 +217,6 @@ func test_combat_only_splits_the_blow_from_everything_around_it() -> void:
 			"a walk is being played as combat").is_equal(BOARD)
 	assert_int(Pacing.profile_for(_coda(BaseAction.ActionType.RESCUE))).override_failure_message(
 			"a side-channel verb is being played as combat").is_equal(BOARD)
-	assert_int(Pacing.profile_for(_cell_effects())).override_failure_message(
-			"the environment pass gained drama it has no faction to owe it to").is_equal(BOARD)
 
 
 # The fallback the executor leans on for an action the sheet has no beat for: unclassifiable is not
@@ -404,12 +402,6 @@ func _turnover() -> BeatSheet.Beat:
 func _walk() -> BeatSheet.Beat:
 	var beat := BeatSheet.Beat.new()
 	beat.kind = BeatSheet.Kind.MOVES
-	return beat
-
-
-func _cell_effects() -> BeatSheet.Beat:
-	var beat := BeatSheet.Beat.new()
-	beat.kind = BeatSheet.Kind.CELL_EFFECTS
 	return beat
 
 

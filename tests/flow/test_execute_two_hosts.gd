@@ -182,7 +182,8 @@ func _run(path: String, orders: Array[Dictionary], prepare: Callable = Callable(
 			"the headless pass did not execute: %s" % str(played.get("error", ""))).is_true()
 	return {"game": game_units, "play": play_units, "plan": plan, "planned": planned,
 			"tiles": {"game": [game_before, _tiles_of(game.terrain_states, game.gas_field)],
-				"play": [play_before, _tiles_of(board.terrain_states, board.gas_field)]}}
+				"play": [play_before, _tiles_of(board.terrain_states, board.gas_field)]},
+			"events": played.get("events", [])}
 
 
 # --- the tiles ----------------------------------------------------------------------------------
@@ -665,4 +666,188 @@ func test_a_volley_whose_lead_the_pass_killed() -> void:
 		var carbine := (units[gunner_cell] as Unit).get_equipped_weapon() as CarbineWeaponInstance
 		assert_int(carbine.shots_remaining).override_failure_message(
 				"the %s host's volley spent no round for its dead lead" % host).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE - 1)
+	_assert_hosts_agree(ran)
+
+
+# --- WHEN a pass's tiles land (#1498 stage 2) ----------------------------------------------------
+#
+# A volley's tile changes land once its LAST member has played (ruling 3: one blast is one moment), in
+# both hosts: the game's read at each blow's impact (volley_struck), the headless one by where its lines
+# fall in the event log. The tiles are the attack's own smoke (AttackData.gases), so no reaction need fire,
+# and where it lies is read off the resolve rather than named here.
+
+const SMOKE := Gas.Kind.SMOKE
+
+
+func _smoky(power: int) -> WeaponAttackData:
+	var attack := _blow(power)
+	attack.gases = {SMOKE: Gas.Level.THICK}
+	return attack
+
+
+static func _smoke_cells(gas: GasField) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell: Vector2i in gas.cells():
+		if Gas.level_in(gas.packed_at(cell), SMOKE) > 0:
+			out.append(cell)
+	return out
+
+
+# Where the game's live field held smoke at each blow's impact, as the game plays the pass.
+func _smoke_at_each_impact() -> Array[Dictionary]:
+	var seen: Array[Dictionary] = []
+	game.order_executor.volley_struck.connect(func(attack: AttackAction) -> void:
+		seen.append({"actor": attack.actor, "smoke": _smoke_cells(game.gas_field)}))
+	return seen
+
+
+# Whether `cell` held smoke when `actor`'s first blow struck in the game; null if it never struck.
+static func _smoke_when(seen: Array[Dictionary], actor: Unit, cell: Vector2i) -> Variant:
+	for impact in seen:
+		if impact.actor == actor:
+			return (impact.smoke as Array).has(cell)
+	return null
+
+
+# Where `actor`'s blow laid its smoke, by the plan; (-1, -1) for nowhere.
+static func _laid_by(plan: ResolvedPlan, actor: Unit) -> Vector2i:
+	for effect in plan.cell_effects:
+		var by := effect.cause as AttackAction
+		if by != null and by.actor == actor and effect.gas_added.has(SMOKE):
+			return effect.cell
+	return Vector2i(-1, -1)
+
+
+static func _line(events: Array, prefix: String) -> int:
+	for i in events.size():
+		if str(events[i]).begins_with(prefix):
+			return i
+	return -1
+
+
+func _hit(ran: Dictionary, from: Vector2i, to: Vector2i) -> String:
+	return "%s hits %s for " % [_sess.handle_for(ran.play[from]), _sess.handle_for(ran.play[to])]
+
+
+func _assert_lines_found(events: Array, at: Dictionary) -> bool:
+	for what: String in at:
+		assert_int(int(at[what])).override_failure_message("fixture: no %s line in\n%s" % [what, "\n".join(events)]) \
+			.is_not_equal(-1)
+	return not at.values().has(-1)
+
+
+# A two-victim volley's smoke lands after its SECOND victim's hit, and before the next attack.
+func test_a_volley_lands_its_tiles_after_its_last_member() -> void:
+	var gunner_cell := Vector2i(2, 2)
+	var next_cell := Vector2i(2, 1)
+	var lead_cell := Vector2i(3, 1)
+	var second_cell := Vector2i(4, 1)
+	var path := _author("volley_lands", func() -> void:
+		var gunner := _spawn(PLAYER, gunner_cell)
+		var burst := _smoky(2)
+		# The aimed cell and the one east of it, as a true AoE: a placed shape emits west to east within
+		# a row, so the foe on the aimed cell is the volley's lead.
+		P.stamped(burst, 2, [Vector2i(0, 0), Vector2i(1, 0)] as Array[Vector2i])
+		burst.swing = false
+		_arm(gunner, burst)
+		var next := _spawn(PLAYER, next_cell)
+		_arm(next, _blow(2))
+		game.squad_manager.join_squad(next, gunner.squad)
+		_spawn(ENEMY, lead_cell, 200)
+		_spawn(ENEMY, second_cell, 200))
+	var seen := _smoke_at_each_impact()
+
+	var ran: Dictionary = await _run(path, [
+			{"verb": "attack", "from": gunner_cell, "at": lead_cell},
+			{"verb": "attack", "from": next_cell, "at": lead_cell}])
+
+	var laid := _laid_by(ran.plan, ran.game[gunner_cell])
+	assert_that(laid).override_failure_message("fixture: the volley laid no smoke").is_not_equal(Vector2i(-1, -1))
+	var events: Array = ran.events
+	var at := {"second victim's hit": _line(events, _hit(ran, gunner_cell, second_cell)),
+			"smoke": _line(events, "%s gains" % str(laid)),
+			"next attack's hit": _line(events, _hit(ran, next_cell, lead_cell))}
+	if _assert_lines_found(events, at):
+		assert_int(at["smoke"]).override_failure_message(
+				"the headless host landed the volley's smoke before its last member played:\n%s" % "\n".join(events)) \
+			.is_greater(at["second victim's hit"])
+		assert_int(at["smoke"]).override_failure_message(
+				"the headless host landed the volley's smoke only after the next attack:\n%s" % "\n".join(events)) \
+			.is_less(at["next attack's hit"])
+	assert_that(_smoke_when(seen, ran.game[gunner_cell], laid)).override_failure_message(
+			"the game's smoke was down before the volley that lays it struck").is_equal(false)
+	assert_that(_smoke_when(seen, ran.game[next_cell], laid)).override_failure_message(
+			"the volley's smoke was not down when the next attack struck in the game").is_equal(true)
+	_assert_hosts_agree(ran)
+
+
+# A counter's smoke lands after that counter -- not before the counters start, where the one batch was.
+func test_a_counter_lands_its_tiles_after_it_plays() -> void:
+	var hero_cell := Vector2i(1, 1)
+	var foe_cell := Vector2i(2, 1)
+	var path := _author("counter_lands", func() -> void:
+		_arm(_spawn(PLAYER, hero_cell), _blow(2))
+		_arm(_spawn(ENEMY, foe_cell, 200), _smoky(2)))
+	var seen := _smoke_at_each_impact()
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": hero_cell, "at": foe_cell}])
+
+	var foe: Unit = ran.game[foe_cell]
+	var laid := _laid_by(ran.plan, foe)
+	assert_that(laid).override_failure_message("fixture: the counter laid no smoke").is_not_equal(Vector2i(-1, -1))
+	var events: Array = ran.events
+	var at := {"counter's hit": _line(events, _hit(ran, foe_cell, hero_cell)),
+			"smoke": _line(events, "%s gains" % str(laid))}
+	if _assert_lines_found(events, at):
+		assert_int(at["smoke"]).override_failure_message(
+				"the headless host landed the counter's smoke before the counter:\n%s" % "\n".join(events)) \
+			.is_greater(at["counter's hit"])
+	assert_that(_smoke_when(seen, foe, laid)).override_failure_message(
+			"the counter's smoke was down in the game before the counter struck").is_equal(false)
+	assert_bool(_smoke_cells(game.gas_field).has(laid)).override_failure_message(
+			"the counter's smoke never landed in the game").is_true()
+	_assert_hosts_agree(ran)
+
+
+# A walk-phase watch shot's smoke lands at its step, before the attack phase -- not after it.
+func test_a_walk_shot_lands_its_tiles_at_its_step() -> void:
+	var walker_cell := Vector2i(0, 1)
+	var crossing := Vector2i(2, 1)
+	var watcher_cell := Vector2i(2, 3)
+	var foe_cell := Vector2i(4, 1)
+	var path := _author("walk_lands", func() -> void:
+		_arm(_spawn(PLAYER, walker_cell), _blow(2))
+		var watcher := _spawn(ENEMY, watcher_cell)
+		var puff := _smoky(2)
+		puff.can_overwatch = true   # the capture saves a watch by its place among the watch attacks
+		_arm(watcher, puff)
+		var footprint: Array[Vector2i] = [crossing]
+		watcher.arm_watch(watcher.movement.cell, crossing, footprint, watcher.overwatch_attacks()[0])
+		assert_object(watcher.watch).override_failure_message("fixture: the watch did not arm").is_not_null()
+		_spawn(ENEMY, foe_cell, 200))
+	var seen := _smoke_at_each_impact()
+
+	var ran: Dictionary = await _run(path, [
+			{"verb": "move", "from": walker_cell, "to": Vector2i(3, 1)},
+			{"verb": "attack", "from": walker_cell, "at": foe_cell}])
+
+	var plan: ResolvedPlan = ran.plan
+	assert_int(plan.mid_walk_shots().size()).override_failure_message("fixture: the watch never fired mid-walk").is_greater(0)
+	var laid := _laid_by(plan, ran.game[watcher_cell])
+	assert_that(laid).override_failure_message("fixture: the watch shot laid no smoke").is_not_equal(Vector2i(-1, -1))
+	var events: Array = ran.events
+	var at := {"watch shot's hit": _line(events, _hit(ran, watcher_cell, walker_cell)),
+			"smoke": _line(events, "%s gains" % str(laid)),
+			"attack's hit": _line(events, _hit(ran, walker_cell, foe_cell))}
+	if _assert_lines_found(events, at):
+		assert_int(at["smoke"]).override_failure_message(
+				"the headless host landed the walk shot's smoke before the shot:\n%s" % "\n".join(events)) \
+			.is_greater(at["watch shot's hit"])
+		assert_int(at["smoke"]).override_failure_message(
+				"the headless host landed the walk shot's smoke only after the attack phase:\n%s" % "\n".join(events)) \
+			.is_less(at["attack's hit"])
+	assert_that(_smoke_when(seen, ran.game[watcher_cell], laid)).override_failure_message(
+			"the walk shot's smoke was down in the game before the shot struck").is_equal(false)
+	assert_that(_smoke_when(seen, ran.game[walker_cell], laid)).override_failure_message(
+			"the walk shot's smoke was not down when the walker's attack struck in the game").is_equal(true)
 	_assert_hosts_agree(ran)

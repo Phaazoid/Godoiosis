@@ -2,8 +2,8 @@ extends Node
 class_name OrderExecutor
 
 # Runs a squad's queued plan against the board, then settles the fallout. One pass:
-# resolve -> moves (parallel) -> attacks (sequential) -> cell effects -> counters ->
-# side-channel verbs -> eject whoever went down. Pulled out of game.gd 2026-07-26; holds a
+# resolve -> moves (parallel) -> attacks (sequential) -> counters -> side-channel verbs -> eject
+# whoever went down, each volley's tile changes landing once its last member has played (#1498). Pulled out of game.gd 2026-07-26; holds a
 # back-ref to the Game coordinator (same pattern as DevController/AIController/MainActionMenu)
 # for the managers and panels it drives.
 #
@@ -233,12 +233,11 @@ func execute_orders(unit):
 	# threw somebody into it (#567), where the whole batch of them used to play ahead of the attacks
 	# -- so the answering shot came before the blow it answered. The spliced list is built for
 	# playback and never written back: a triggered shot inside plan.attacks would be counter-bait.
-	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases,
+	await _execute_action_sequence(plan, plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases,
 			profiles)
 	if _board_gone(board):
 		return
-	_apply_cell_effects(plan.cell_effects)
-	await _play_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND))   # the ice just went (#922)
+	await _play_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND))   # the attack phase's melts (#922)
 	if _board_gone(board):
 		return
 	# The act break, held once between the two montages rather than folded into the first counter --
@@ -249,7 +248,7 @@ func execute_orders(unit):
 			if turnover != null else 0.0)
 	if _board_gone(board):
 		return
-	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), is_ai),
+	await _execute_action_sequence(plan, plan.counters, beat, _beat_holds(sheet.volleys(true), is_ai),
 			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)),
 			_beat_lingers(sheet.volleys(true)), _beat_emphases(sheet.volleys(true)),
 			_beat_profiles(sheet.volleys(true)))
@@ -274,7 +273,7 @@ func execute_orders(unit):
 		# holds -- coda_hold keeps saying 0.5, and nothing here disagrees with it, because the
 		# question asked above is whether we get as far as asking.
 		if not Pacing.coda_earns_a_beat(type, is_ai):
-			await _execute_action_sequence(batch)
+			await _execute_action_sequence(plan, batch)
 			if _board_gone(board):
 				return
 			continue
@@ -284,7 +283,7 @@ func execute_orders(unit):
 		# lingers off the same Pacing tables every other shot does, and the coda entries keep
 		# answering for the orders. The two key sets are disjoint (an order, or a derived shot), so
 		# the merge cannot resolve a conflict in either direction.
-		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai).merged(holds),
+		await _execute_action_sequence(plan, batch, beat, _beat_holds(codas, is_ai).merged(holds),
 				_beat_subjects(codas).merged(subjects), lines, _beat_lingers(codas).merged(lingers),
 				_beat_emphases(codas).merged(emphases), _beat_profiles(codas).merged(profiles))
 		if _board_gone(board):
@@ -474,7 +473,7 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 				if next["soak"]:
 					mover.apply_walk_states()
 				var shots: Array = next["shots"]
-				await _execute_action_sequence(shots, beat, holds, subjects, lines,
+				await _execute_action_sequence(plan, shots, beat, holds, subjects, lines,
 						lingers, emphases, profiles)
 				if _board_gone(board):
 					return
@@ -597,7 +596,7 @@ func _retire_move_markup(action: BaseAction) -> void:
 # "Never after" was this comment's own rule until 2026-08-27, written when a beat had nothing worth
 # watching on the way out; health-cube debris is what made the trailing pause a feature rather than
 # dead air.
-func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {},
+func _execute_action_sequence(plan: ResolvedPlan, actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {},
 		lines: Dictionary = {}, lingers: Dictionary = {}, emphases: Dictionary = {},
 		profiles: Dictionary = {}):
 	if actions.is_empty():
@@ -648,6 +647,11 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			await get_tree().process_frame
 			if _board_gone(board):
 				return
+		# The tiles this blast changed land once its last member has played (#1498, one blast is one
+		# moment) -- before the linger, so the new ground is on screen while the blow settles. Every
+		# action asks, a Burrow's COVER included; the play API runs the same step after the same action.
+		if not plan.play_landing(action, game.terrain_states, game.gas_field).is_empty():
+			game.overlay_manager.redraw_terrain_live(game.terrain_states)   # GasMirror polls its own store
 		# ...and the LINGER, the one pause in this file that lands AFTER (#520, dev 2026-08-27).
 		# execution_complete means the lunge, the shove and the fall are done -- it does NOT mean the
 		# health cubes have finished bursting, because those are thrown by UnitMirror's own HP poll
@@ -1029,8 +1033,8 @@ func _beat_lines(beats: Array[BeatSheet.Beat]) -> Dictionary:
 	return lines
 
 # The units the pass's own terrain dropped into the water (#922), played back as resolved (R3) -- each
-# goes under, then the same look the end-of-turn burn gives a unit the ground hurt. The stage the
-# deposits' beat staged is still up, so the camera stays where it is.
+# goes under, then the same look the end-of-turn burn gives a unit the ground hurt. The fight's stage
+# is still up, so the camera stays where it is.
 func _play_sinks(sinks: Array[SinkAction]) -> void:
 	var board := _board_now()
 	for sink in sinks:
@@ -1038,15 +1042,6 @@ func _play_sinks(sinks: Array[SinkAction]) -> void:
 		await Pacing.beat(self, after_the_blow(sink, Pacing.ENVIRONMENT_HOLD))
 		if _board_gone(board):
 			return
-
-
-# Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
-# the attack phase that produced them.
-func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
-	for effect in cell_effects:
-		game.terrain_states.apply(effect)
-		game.gas_field.apply(effect)   # GasMirror polls the store's version, so no redraw call
-	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 
 # ==============================================================================
 #  End-of-turn tiles

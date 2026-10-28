@@ -8,8 +8,9 @@ class_name BeatSheet
 # the zoom is a mirror, never an authority).
 #
 # The beat order MIRRORS OrderExecutor.execute_orders and its phase order rather than restating
-# it: moves, attack volleys in queue order, cell effects, the counter turnover, counter volleys,
-# then the side-channel tail in SIDE_CHANNEL_ORDER. A phase with nothing in it produces no beat.
+# it: moves, attack volleys in queue order, the counter turnover, counter volleys, then the
+# side-channel tail in SIDE_CHANNEL_ORDER. A phase with nothing in it produces no beat. A volley's
+# tile changes are no beat of their own: they land at the end of it (#1498).
 # Mirroring is literal about GRANULARITY too, not just order: a volley is one beat because one
 # blast is one moment, and a side-channel verb is one beat EACH because execute_orders awaits them
 # one at a time. Where the two disagree, this is wrong and execution is right.
@@ -23,7 +24,7 @@ class_name BeatSheet
 # beat length is #519's table under a chosen profile, and ranking KILLED against a lost limb is that
 # same table's call. Doing either here would be a second answer to a question #519 owns (Law #4).
 
-enum Kind { MOVES, VOLLEY, CELL_EFFECTS, TURNOVER, CODA }
+enum Kind { MOVES, VOLLEY, TURNOVER, CODA }
 
 
 # One shot. A VOLLEY is one blast in one moment however many it hits (#410: an AoE striking three
@@ -34,7 +35,7 @@ class Beat:
 
 	# The orders this beat PLAYS, in execution order -- a volley's members in strike order, a MOVES
 	# beat's real moves, a CODA's single side-channel verb. Typed to the base so one field answers
-	# for every kind; empty only on punctuation (CELL_EFFECTS, TURNOVER).
+	# for every kind; empty only on punctuation (TURNOVER).
 	var actions: Array[BaseAction] = []
 	var actor: Unit = null
 
@@ -258,11 +259,6 @@ static func read(squad: Squad, plan: ResolvedPlan, is_ai: bool = false) -> BeatS
 	# ...and the shots a SHOVE set off play inside the attack phase, after the volley that threw
 	# somebody into them. attack_playback() is that order; mirroring it is this sheet's whole job.
 	sheet.beats.append_array(_group(plan.attack_playback(), false))
-
-	if not plan.cell_effects.is_empty():
-		var deposits := Beat.new()
-		deposits.kind = Kind.CELL_EFFECTS
-		sheet.beats.append(deposits)
 
 	# The act break exists only if the defending line actually answers -- #410's "when the
 	# attacker's last swing lands, a beat, the defending line raises weapons in unison". A counter
