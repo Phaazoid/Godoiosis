@@ -23,6 +23,9 @@ var terrain_states: Dictionary = {}  # TerrainStateManager.to_state_dict()
 # authored by hand in a mission .tres and read by the brush -- a countdown is a battle fact, not
 # something an author sets. An empty one is the honest reading of a board that predates this.
 var terrain_state_turns: Dictionary = {}  # TerrainStateManager.to_turns_dict()
+# The AUTHORED starts (#1484): what an author chose a clock to begin at. Content, unlike the live
+# clocks above, so an authoring save keeps this and drops those (#1483).
+var terrain_state_starts: Dictionary = {}  # TerrainStateManager.to_starts_dict()
 var corner_heights: Dictionary = {}  # BoardHeights.to_corner_dict()
 var gas: Dictionary = {}             # GasField.to_dict() (#508)
 var zones: Dictionary = {}           # ZoneManager.to_dict()
@@ -40,6 +43,7 @@ func equals(other: BoardSnapshot) -> bool:
 		and tile_data == other.tile_data \
 		and terrain_states == other.terrain_states \
 		and terrain_state_turns == other.terrain_state_turns \
+		and terrain_state_starts == other.terrain_state_starts \
 		and corner_heights == other.corner_heights \
 		and gas == other.gas \
 		and zones == other.zones
@@ -56,6 +60,7 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 	snapshot.tile_data = scenario.tile_data
 	snapshot.terrain_states = scenario.terrain_states
 	snapshot.terrain_state_turns = scenario.terrain_state_turns
+	snapshot.terrain_state_starts = scenario.terrain_state_starts
 	snapshot.corner_heights = scenario.corner_heights
 	snapshot.gas = scenario.gas
 	snapshot.zones = scenario.zones
@@ -68,7 +73,7 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 func restore_into(grid: BoardGrid, states: TerrainStateManager, heights: BoardHeights, gas_store: GasField,
 		zone_store: ZoneManager) -> void:
 	grid.restore(tile_data)
-	states.load_state_dict(terrain_states, terrain_state_turns)
+	states.load_state_dict(terrain_states, terrain_state_turns, terrain_state_starts)
 	heights.load_corner_dict(corner_heights)
 	gas_store.load_dict(gas)
 	zone_store.load_dict(zones)
@@ -78,6 +83,7 @@ func write_into(scenario: ScenarioData) -> void:
 	scenario.tile_data = tile_data
 	scenario.terrain_states = terrain_states
 	scenario.terrain_state_turns = terrain_state_turns
+	scenario.terrain_state_starts = terrain_state_starts
 	scenario.corner_heights = corner_heights
 	scenario.gas = gas
 	scenario.zones = zones

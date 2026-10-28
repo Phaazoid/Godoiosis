@@ -3,7 +3,8 @@ class_name TileBrushTool
 
 # Dev-overlay tab for authoring the board: paints terrain tiles, dynamic tile states (#174),
 # named zones, and per-cell elevation + ramps (#260) — left-drag paints, right-drag erases in
-# every mode — plus map resize.
+# every mode — plus map resize. A tile state paints at an authored starting clock where one is
+# picked, and the page lists the board's authored starts (#1484).
 # Terrain choices are scanned from the tileset itself, never hardcoded: every tile carrying a
 # terrain_type kind or an authored terrain_name is paintable, across all atlas sources.
 # Zone mode carries a picker (2026-08-12): a dropdown of every painted zone, so authoring can
@@ -47,6 +48,15 @@ var _state_row: HBoxContainer
 var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
+# The start the next stroke paints a timed state at (#1484), 0 being the ground's own clock, and the
+# board's authored starts listed under it -- the only place a start is shown (dev ruling, 2026-10-27).
+const START_TIP := "The countdown a painted fire starts at, in place of its ground's own. 0 = the ground's clock. Only ground that gives fire a clock takes a start: fire on stone never goes out, and the other states ignore this row. An authoring save keeps it; passing turns never changes it."
+const HINT_DIM := Color(1, 1, 1, 0.6)
+var _start_turns := 0
+var _start_spin: SpinBox
+var _start_nodes: Array[Control] = []   # the row, its hint and the list: STATE mode only
+var _starts_list: VBoxContainer
+var _starts_version := -1   # the store version the list last drew
 # GAS mode (#508): which gas the next stroke lays and how thick. Absolute like the corner tool --
 # every cell a drag crosses goes TO the level, so a stroke repaints idempotently.
 const GAS_LEVEL_LABELS: Array[String] = ["Thin", "Medium", "Thick"]
@@ -169,6 +179,10 @@ func _process(_delta: float) -> void:
 	var controller: DevController = game.dev_controller
 	if controller.history_block_reason() != _undo_refusal:
 		_refresh_undo_row()
+	# The starts list reads the tile-state store, which announces nothing either: gated on its version.
+	var states: TerrainStateManager = game.terrain_states
+	if paint_mode == PaintMode.STATE and states.dirty.version != _starts_version:
+		_refresh_starts_list()
 
 # Greyed rather than hidden: a row that vanishes at the bottom of the history moves every control
 # under it. Built before init() runs, so this has to answer with no game ref too. Greyed by the gate
@@ -390,11 +404,28 @@ func _build_extra_controls() -> void:
 	_build_state_options()
 	_state_row = DevWidgets.add_option(self, "Tile State", _state_labels, _state_labels[0],
 		func(label: String): _tile_state = _state_values[_state_labels.find(label)])
+	_start_spin = DevWidgets.add_spinbox(self, "Fire starts with", _start_turns,
+		func(value: float): _start_turns = int(value))
+	_start_spin.min_value = 0
+	_start_spin.max_value = 99
+	_start_spin.suffix = "turns"
+	var start_row: HBoxContainer = _start_spin.get_parent()
+	DevWidgets.apply_tooltip(start_row, DevWidgets.wrap_tooltip(START_TIP))
+	var hint := Label.new()
+	hint.text = "0 = the ground's own clock"
+	hint.modulate = HINT_DIM
+	add_child(hint)
+	_start_nodes.append_array([start_row, hint])
 	_clear_states_button = Button.new()
 	_clear_states_button.text = "Clear All Tile States"
 	_clear_states_button.tooltip_text = "Wipe every dynamic tile state on the board (fire/ice/cover). Unsaved paint is lost."
 	_clear_states_button.pressed.connect(_on_clear_states_pressed)
 	add_child(_clear_states_button)
+	for node: Node in DevWidgets.add_heading(self, "Authored starts on this board"):
+		_start_nodes.append(node as Control)
+	_starts_list = VBoxContainer.new()
+	add_child(_starts_list)
+	_start_nodes.append(_starts_list)
 
 	# Part 4b: gas painting (#508's look harness). Options scan Gas.Kind, so a new gas shows up here
 	# automatically. Right-drag takes away only the picked gas, the zone brush's scoping.
@@ -697,6 +728,43 @@ func selected_gas_level() -> Gas.Level:
 func selected_tile_state() -> Terrain.TileState:
 	return _tile_state
 
+func selected_start_turns() -> int:
+	return _start_turns
+
+# One row per authored start, from the store, with a Clear that takes that start off and leaves the
+# state on its ground's clock. Rebuilt only when the store's version moved (_process).
+func _refresh_starts_list() -> void:
+	var states: TerrainStateManager = game.terrain_states
+	_starts_version = states.dirty.version
+	for child in _starts_list.get_children():
+		child.queue_free()
+	var starts := states.to_starts_dict()
+	var cells: Array = starts.keys()
+	cells.sort()
+	for cell: Vector2i in cells:
+		for state: Terrain.TileState in starts[cell]:
+			_starts_list.add_child(_start_row(cell, state, starts[cell][state],
+				states.turns_remaining(cell, state)))
+	if cells.is_empty():
+		var none := Label.new()
+		none.text = "None: each fire starts on its ground's own clock."
+		none.modulate = HINT_DIM
+		_starts_list.add_child(none)
+
+func _start_row(cell: Vector2i, state: Terrain.TileState, start: int, left: int) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "%s at (%d, %d): starts at %d, %d left now" % [
+		Terrain.tile_state_display_name(state), cell.x, cell.y, start, left]
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var clear := Button.new()
+	clear.text = "Clear"
+	clear.tooltip_text = "Take this start off. The state stays, on its ground's own clock."
+	clear.pressed.connect(func(): game.dev_controller.clear_start_turns(cell, state))
+	row.add_child(clear)
+	return row
+
 func _set_paint_mode(mode: PaintMode) -> void:
 	paint_mode = mode
 	_tile_row.visible = mode == PaintMode.TERRAIN
@@ -705,6 +773,8 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_zone_name_row.visible = mode == PaintMode.ZONE
 	_state_row.visible = mode == PaintMode.STATE
 	_clear_states_button.visible = mode == PaintMode.STATE
+	for node in _start_nodes:
+		node.visible = mode == PaintMode.STATE
 	_gas_row.visible = mode == PaintMode.GAS
 	_gas_level_row.visible = mode == PaintMode.GAS
 	_step_gas_button.visible = mode == PaintMode.GAS
