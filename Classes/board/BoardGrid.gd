@@ -58,5 +58,9 @@ func restore(data: PackedByteArray) -> void:
 	# standing. Every previous caller happened to clear first (apply_scenario runs clear_board), so
 	# the quirk was invisible until an undo asked for the empty board directly.
 	clear()
+	# And clear() only MARKS cells until the frame's internal update: without the purge, the write
+	# re-sets every cell the old board shared in place, in the OLD board's order, so an Update wrote
+	# whichever order the previous load left (Prolog, #1513).
+	update_internals()
 	tile_map_data = data
 	dirty.mark_all()
