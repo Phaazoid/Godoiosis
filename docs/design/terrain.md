@@ -56,7 +56,7 @@
 >
 > **The dial's floor is ONE** (dev, 2026-09-12). An absent clock is legal `.tres` and means *burns forever* — but `tests/terrain/test_fire_clock.gd` refuses one on a shipped fuel, because a grass field that never goes out would ship silently. Forever is already spelled, and better: **ground that is not fuel never runs out**, which is what Prolog's braziers on flagstone have always been. So the TICK is how you say forever, and the dial cannot author a file CI reds.
 
-**Canon checked through #902 (2026-09-12); #1509 (a board may offer a set of weathers, drawn at mission start) folded in 2026-10-27; #1483 (an authoring save drops the fire countdowns) folded in 2026-10-24; #1484 (an authored starting countdown for a fire) folded in 2026-10-27; #1428 (the health bars draw the END OF TURN, and a rescued body is spoken for) folded in 2026-10-23; #920's safe route and #1220's hazard destinations folded in 2026-10-05, and #1230's per-profile reading of both the same day; #508's gas store folded in 2026-10-01, its sources and its round tick 2026-10-03, its soak 2026-10-04; #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10; #120's swim drop folded in 2026-10-01; #1213's catalog cache folded in 2026-10-04; #46's soak moment folded in 2026-10-04; #1223's frozen move cost folded in 2026-10-05; #1260's weather folded in 2026-10-08; #1269's snows folded in 2026-10-09; #1285's fogs the same day; #1286's wind folded in 2026-10-10; #1298's auroras the same day; #1302's sands and ashes the same day; #1329's Dried Off steam folded in 2026-10-19; #1335's smoke folded in 2026-10-22, its ozone the same day; #1332's blown gas the same day; #1331's scald the same day; #1427's heat haze folded in 2026-10-23.**
+**Canon checked through #902 (2026-09-12); #1498 stage 3 (a tile change counts at the hit that makes it; a melt sinks its stander at the melt, and water catches a walker) folded in 2026-10-28; #1509 (a board may offer a set of weathers, drawn at mission start) folded in 2026-10-27; #1483 (an authoring save drops the fire countdowns) folded in 2026-10-24; #1484 (an authored starting countdown for a fire) folded in 2026-10-27; #1428 (the health bars draw the END OF TURN, and a rescued body is spoken for) folded in 2026-10-23; #920's safe route and #1220's hazard destinations folded in 2026-10-05, and #1230's per-profile reading of both the same day; #508's gas store folded in 2026-10-01, its sources and its round tick 2026-10-03, its soak 2026-10-04; #1174 (the water takes no limb) folded in 2026-10-01; #1092's Chilled-beats-Wet rule folded in 2026-09-29; #1135's map-only rule folded in 2026-09-28; #922's melt-sinking folded in 2026-09-27; the burn-rule surface folded in 2026-09-12; the #895 firebreak measurement and fireproofing #892 folded in 2026-09-11; shallow water re-costed 2026-09-10; #120's swim drop folded in 2026-10-01; #1213's catalog cache folded in 2026-10-04; #46's soak moment folded in 2026-10-04; #1223's frozen move cost folded in 2026-10-05; #1260's weather folded in 2026-10-08; #1269's snows folded in 2026-10-09; #1285's fogs the same day; #1286's wind folded in 2026-10-10; #1298's auroras the same day; #1302's sands and ashes the same day; #1329's Dried Off steam folded in 2026-10-19; #1335's smoke folded in 2026-10-22, its ozone the same day; #1332's blown gas the same day; #1331's scald the same day; #1427's heat haze folded in 2026-10-23.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -190,21 +190,26 @@ shore.
 Ice melting under a standing unit is the same event from the other side, so it reaches the same rung:
 the water takes everything the unit has left, it comes up WET (unless CHILLED, #1092), and a rescue from the bank is the
 answer. That is what makes the Toll Road move (*"freeze it into an ice bridge, cross, then melt it
-behind you"*, `level-concepts.md`) drown rather than merely strand. `PlanResolver.settle_sinks` is
-the one rule and it names no state: *the ground this pass's deposits leave drowns you, and the live
-ground did not* -- so a refreeze in the same pass nets to nothing, and a Waterwalker or shallow water
-never sinks, for `drowns_in`'s own reasons. The resolver predicts it (a derived `SinkAction` row,
-hung in the queue under the attack whose deposit melted the ice) and execution plays it back, never
-the store's `apply()`, which is also the brush's and a load's door. **WHEN is the dev's ruling:** the
-ice melts when the pass's deposits land, straight after the volley and before any counter
-(`OrderExecutor._apply_cell_effects`), so a unit that sinks there cannot hit back; a melt only a
-COUNTER or a tail shot makes is not known until those resolve, so its stander goes under once the
-pass has settled -- visibly standing on the open water until then, the one cost of that timing. No
-fall damage: the unit was already at water height. A body already down on the ice is finished by the
-water, exactly as a shove into it finishes one. Two declared residuals: a same-pass rescue of a unit
-your own pass sinks reads the ice as still there (`rescue_landings` reads the live store), and the AI
-will still stand on ice you can melt -- it scores the sinkings it causes but not the ones it risks
-([#117](https://github.com/Phaazoid/Godoiosis/issues/117)).
+behind you"*, `level-concepts.md`) drown rather than merely strand. `PlanResolver.settle_landing` is
+the one rule and it names no state: *the landing that just happened drowns you, and the ground before
+it did not* -- so a Waterwalker or shallow water never sinks, for `drowns_in`'s own reasons, and
+nobody sinks twice. The resolver predicts it (a derived `SinkAction` row, hung in the queue after the
+whole volley whose landing melted the ice) and execution plays it back, never the store's `apply()`,
+which is also the brush's and a load's door. **WHEN is the dev's ruling ([#1498](https://github.com/Phaazoid/Godoiosis/issues/1498)
+stage 3, 2026-10-28, replacing #922's two moments):** a tile change counts at the hit that makes it,
+and one blast is one moment. So the ice melts when the volley that melts it lands, after its last
+member, and its stander goes under right then, before the next attack, counter or watch shot. A unit
+that sinks to an attack cannot counter, and a counter's melt sinks its stander straight after that
+counter. A refreeze later in the same pass closes the ice over the body, which stays in the water.
+**Water catches a walker too:** a walk step onto a cell an earlier walk shot melted drowns the
+walker there, and the walk ends on that cell (`PlanResolver.resolve_move`). No fall damage: the unit
+was already at water height. A body already down on the ice is finished by the water, exactly as a
+shove into it finishes one. Declared residuals: the AI will still stand on ice you can melt -- it
+scores the sinkings it causes but not the ones it risks ([#117](https://github.com/Phaazoid/Godoiosis/issues/117)) -- and until
+#1498's next step the judges outside the pass (the queue gate, the ring, the rescue pick) read the
+live board, so an order can go red right after it queues when an earlier order in the same plan
+changes the tiles it needs. A haul onto a bank the pass melts is one of these: the resolve judges the
+bank on the ground the pass has left, and the row goes red.
 
 **The water shader has a SECOND kind of tenant since [#887](https://github.com/Phaazoid/Godoiosis/issues/887)
 (2026-09-10): an EVENT.** A shock's current crawls across the surface as filaments, driven by a mask
