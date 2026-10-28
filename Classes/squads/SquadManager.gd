@@ -1227,6 +1227,7 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 			var cover := ResolvedCellEffect.new()
 			cover.cell = PlanResolver.projected_position(action.actor, hypo)
 			cover.states_added.append(Terrain.TileState.COVER)
+			cover.cause = action   # so it lands when the Burrow plays (ResolvedPlan.landing_after)
 			plan.deposit(cover, board)
 
 	# A watch armed over an enemy who is ALREADY standing there fires on the spot (#1003, dev's

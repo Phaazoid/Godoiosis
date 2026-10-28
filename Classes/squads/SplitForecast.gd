@@ -35,9 +35,10 @@ class_name SplitForecast
 # one the settle reads. Exact unless one unit's stats move at two blows of one pass: between them it
 # has its live body, so a break they cause goes on the later blow.
 #
-# THE GROUND it stands on is the live one too: a pass's terrain deposits (ice frozen, ice melted) land
-# in one batch after the attack volley (OrderExecutor._apply_cell_effects), so the walk and the volley
-# settle on the board as it was, and everything after on the plan's planned tiles (ResolvedPlan.tiles).
+# THE GROUND it stands on is the live one too: playback lands a volley's terrain deposits (ice frozen,
+# ice melted) once its last member has played (ResolvedPlan.landing_after, #1498), so a blow settles on
+# the ground every EARLIER volley has left, and the pass end on the plan's planned tiles
+# (ResolvedPlan.tiles). A Burrow's COVER is never landed partway: it is DEF, and no reach reads it.
 #
 # A DEATH IS NEVER COUNTED -- a death is not a split, and its tether plays a look of its own (#1104) --
 # and neither is a unit that leaves a squad of one.
@@ -90,6 +91,9 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var landed := board.planned(plan.tiles)
 	var walk_ends := plan.mid_walk_shots().size()
 	var deposits_land := walk_ends + plan.attack_playback().size()
+	var landings := _landings(plan, blows)
+	var so_far := PlannedTiles.new(board.terrain_states, board.gas)
+	var ground := board.planned(so_far)   # what playback has landed by the blow being replayed
 	var start := _start_positions(blows, bands, plan.hypo)
 	var pos: Dictionary[Unit, Vector2i] = start.duplicate()
 	var start_bodies := _start_bodies(bands, changes, plan.hypo)
@@ -100,10 +104,12 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var held: Array[_Handover] = []
 	var sunk := false
 	for i in blows.size():
+		if i > 0:
+			_land(so_far, landings[i - 1])
 		if i == walk_ends:
-			_hand_over_held(held, bands, pos, body, board)
+			_hand_over_held(held, bands, pos, body, ground)
 		if i == deposits_land:
-			_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, landed, dead, downed, downs)
+			_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, ground, dead, downed, downs)
 			sunk = true
 		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
@@ -114,7 +120,6 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 			pos[victim] = outcome.knockback_to
 		if changes.get(victim, -1) == i:
 			body[victim] = PlanResolver.state_of(victim, plan.hypo)
-		var ground := board if i < deposits_land else landed
 		match LethalityRules.lifecycle_for(outcome.lethality):
 			Unit.LifecycleState.DEAD:
 				if not dead.has(victim):
@@ -125,15 +130,17 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 				if not downed.has(victim):
 					downed[victim] = true
 					downs.append(blow)
-	_hand_over_held(held, bands, pos, body, board)   # a pass that is nothing but its walk
+	if not blows.is_empty():
+		_land(so_far, landings[-1])
+	_hand_over_held(held, bands, pos, body, ground)   # a pass that is nothing but its walk
 	if not sunk:   # nothing played after the volley, so the loop never reached the deposits' moment
-		_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, landed, dead, downed, downs)
+		_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, ground, dead, downed, downs)
 	_sink(plan.sinks_at(SinkAction.Moment.PASS_END), bands, pos, body, landed, dead, downed, downs)
 
 	# A body finished off later in the pass is never ejected -- and needs no check here: its death
 	# already took it out of its copied squad, so _leave finds nothing to do.
 	_settle_downs(downs, bands, pos, body, landed)
-	_sweep_contact(blows, all_bands, start, pos, start_bodies, body, changes, board, plan.cell_effects, landed)
+	_sweep_contact(blows, all_bands, start, pos, start_bodies, body, changes, board, landings, landed)
 	_settle_burns(plan.tile_hits, bands, pos, body, landed)
 
 
@@ -147,6 +154,22 @@ static func playback(plan: ResolvedPlan) -> Array[AttackAction]:
 		order.append(counter)
 	order.append_array(plan.coda_shots())
 	return order
+
+
+# What playback lands after each of those blows, index for index (#1498): a volley's deposits at its
+# last member, nothing at the others. Asked once per stamp, so the replays below only read it.
+static func _landings(plan: ResolvedPlan, blows: Array[AttackAction]) -> Array[Array]:
+	var out: Array[Array] = []
+	for blow in blows:
+		out.append(plan.landing_after(blow))
+	return out
+
+
+# Lands one blow's deposits on a replay's tiles; true when there were any.
+static func _land(tiles: PlannedTiles, effects: Array) -> bool:
+	for effect: ResolvedCellEffect in effects:
+		tiles.land(effect)
+	return not effects.is_empty()
 
 
 # Every row a stamp can write a split onto: the blows, then the end-of-turn burn and the sinkings.
@@ -389,7 +412,7 @@ static func _settle_downs(downs: Array[BaseAction], bands: Dictionary[Unit, _Ban
 
 # The pass's own terrain dropping units into the water (#922), at the moment they go under: the burn's
 # two halves -- a death leaves at once, a down waits for the settle with the rest, in the order it went
-# down. The ground is the landed one, since the deposits are what took the floor away.
+# down. The ground is what playback has landed by then, the deposits that took the floor away among it.
 static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos: Dictionary[Unit, Vector2i],
 		body: Dictionary[Unit, UnitState], ground: BoardContext, dead: Dictionary[Unit, bool],
 		downed: Dictionary[Unit, bool], downs: Array[BaseAction]) -> void:
@@ -429,12 +452,12 @@ static func _settle_burns(burns: Array[TileHitAction], bands: Dictionary[Unit, _
 
 # The pass-end contact sweep, on the ground the pass leaves. A break is owned by the blow after which
 # the pair STAYED out of range: the last in-range -> out-of-range transition, whether the member or
-# its leader was the one shoved, the ground between them changed under a blow's own deposits, or a
+# its leader was the one shoved, the ground between them changed as a volley's deposits landed, or a
 # blow moved a stat of either (`changes`, flipping `start_bodies` to `body`, the pass's copies).
 static func _sweep_contact(blows: Array[AttackAction], all_bands: Array[_Band],
 		start: Dictionary[Unit, Vector2i], pos: Dictionary[Unit, Vector2i],
 		start_bodies: Dictionary[Unit, UnitState], body: Dictionary[Unit, UnitState],
-		changes: Dictionary[Unit, int], board: BoardContext, deposits: Array[ResolvedCellEffect],
+		changes: Dictionary[Unit, int], board: BoardContext, landings: Array[Array],
 		landed: BoardContext) -> void:
 	for band in all_bands:
 		if band.members.size() <= 1:
@@ -444,55 +467,49 @@ static func _sweep_contact(blows: Array[AttackAction], all_bands: Array[_Band],
 					body[member], pos[member], landed):
 				continue
 			var culprit := _breaking_blow(blows, band.leader, member, start, start_bodies, body, changes,
-					board, deposits)
+					board, landings)
 			if culprit != null:
 				culprit.resolved_outcome().splits.append(member)
 				_relink(culprit.resolved_outcome(), member, band.leader, true,
 						SquadManager.LeaveCause.FORCED, pos)
 
 
-# Replays the pair blow by blow, each blow carrying its own deposits (ResolvedCellEffect.cause), landed
-# on a fresh copy of the tiles as the blow is replayed -- the causal order, which is what names a row.
-# Who leaves is the sweep's to say, on the full board.
+# Replays the pair blow by blow, each volley's deposits landing on a fresh copy of the tiles after its
+# last member, as playback lands them -- the causal order, which is what names a row. Who leaves is the
+# sweep's to say, on the full board.
 static func _breaking_blow(blows: Array[AttackAction], leader: Unit, member: Unit,
 		start: Dictionary[Unit, Vector2i], start_bodies: Dictionary[Unit, UnitState],
 		body: Dictionary[Unit, UnitState], changes: Dictionary[Unit, int], board: BoardContext,
-		deposits: Array[ResolvedCellEffect]) -> AttackAction:
+		landings: Array[Array]) -> AttackAction:
 	var at_leader: Vector2i = start[leader]
 	var at_member: Vector2i = start[member]
 	var leader_body: UnitState = start_bodies[leader]
 	var member_body: UnitState = start_bodies[member]
-	var ground := board
 	var made := PlannedTiles.new(board.terrain_states, board.gas)
+	var ground := board.planned(made)
 	var held := SquadCohesion.in_range_of(leader_body, at_leader, member_body, at_member, ground)
 	var culprit: AttackAction = null
 	for i in blows.size():
 		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
-		if not _landed(outcome):
-			continue
 		var moved := false
-		if outcome.knockback_applied and not outcome.removed:
-			if blow.target == leader:
-				at_leader = outcome.knockback_to
-				moved = true
-			elif blow.target == member:
-				at_member = outcome.knockback_to
-				moved = true
 		var changed := false
-		if changes.get(leader, -1) == i:
-			leader_body = body[leader]
-			changed = true
-		if changes.get(member, -1) == i:
-			member_body = body[member]
-			changed = true
-		var dug := false
-		for effect in deposits:
-			if effect.cause == blow:
-				made.land(effect)
-				dug = true
-		if dug:
-			ground = board.planned(made)
+		if _landed(outcome):
+			if outcome.knockback_applied and not outcome.removed:
+				if blow.target == leader:
+					at_leader = outcome.knockback_to
+					moved = true
+				elif blow.target == member:
+					at_member = outcome.knockback_to
+					moved = true
+			if changes.get(leader, -1) == i:
+				leader_body = body[leader]
+				changed = true
+			if changes.get(member, -1) == i:
+				member_body = body[member]
+				changed = true
+		# ...and a volley's tiles at its last member, which lands them even when the pass skipped it.
+		var dug := _land(made, landings[i])
 		if not moved and not dug and not changed:
 			continue
 		var now := SquadCohesion.in_range_of(leader_body, at_leader, member_body, at_member, ground)

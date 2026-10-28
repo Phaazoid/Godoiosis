@@ -2509,12 +2509,11 @@ func previewed_plan() -> ResolvedPlan:
 
 # The board next round is ruled on (#1332): the live one over the previewed plan's planned tiles (#1498),
 # so a queued push outlines from where it will leave the gas and a tile a queued hit lights spreads its
-# fire (#1430). Alt's outline (GasMirror) and the red tether (_member_links) both read it. Never while a
-# pass runs: its deposits land in the live store partway through, so the live board is the answer then.
+# fire (#1430). Alt's outline (GasMirror) and the red tether (_member_links) both read it. While a pass
+# plays too: its planned tiles are where each cell ENDS, so a cell playback has already landed reads the
+# same, and one it has not yet reads as it will.
 func next_round_board() -> BoardContext:
 	var board := _board()
-	if order_executor != null and order_executor.executing_plan != null:
-		return board
 	var plan := previewed_plan()
 	if plan == null:
 		return board

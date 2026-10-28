@@ -140,6 +140,48 @@ func test_after_over_a_planned_board_builds_on_its_tiles() -> void:
 	assert_int(planned.gas_at(B)).override_failure_message("after() wrote the tiles it built on").is_equal(0)
 
 
+# WHEN playback lands them (#1498 stage 2): a volley's deposits, whichever member laid each, once its LAST
+# member has played (one blast is one moment) and in the order they were laid; a lone hit's and a
+# Burrow's COVER once they have. Hand-built members, so no shape decides who leads.
+func test_a_volley_lands_after_its_last_member_and_an_order_after_itself() -> void:
+	var lead := AttackAction.new()
+	var last := AttackAction.new()
+	var volley: Array[AttackAction] = [lead, last]
+	lead.volley = volley
+	last.volley = volley
+	var lone := AttackAction.new()
+	var burrow := BurrowAction.new()
+	var plan := ResolvedPlan.new()
+	var board := _board(_terrain, _gas)
+	var laid: Array[ResolvedCellEffect] = [
+		_effect(A, [], [], {SMOKE: Gas.Level.THIN}),
+		_effect(B, [], [], {STEAM: Gas.Level.THIN}),
+		_effect(B, [], [], {}, true),
+		_effect(A, [Terrain.TileState.COVER]),
+	]
+	var causes: Array[BaseAction] = [lead, last, lone, burrow]
+	for i in laid.size():
+		laid[i].cause = causes[i]
+		plan.deposit(laid[i], board)
+
+	assert_array(plan.landing_after(lead)).override_failure_message("a volley landed before its last member").is_empty()
+	assert_array(plan.landing_after(last)).override_failure_message("the volley did not land whole, in the order laid") \
+		.contains_exactly([laid[0], laid[1]])
+	assert_array(plan.deposits_of(lead)).override_failure_message("a member answered for less than its volley") \
+		.contains_exactly([laid[0], laid[1]])
+	assert_array(plan.landing_after(lone)).contains_exactly([laid[2]])
+	assert_array(plan.landing_after(burrow)).override_failure_message("a Burrow's COVER did not land with it") \
+		.contains_exactly([laid[3]])
+
+	assert_array(plan.play_landing(last, _terrain, _gas)).contains_exactly([laid[0], laid[1]])
+	assert_int(Gas.level_in(_gas.packed_at(A), SMOKE)).override_failure_message("play_landing wrote no store") \
+		.is_equal(Gas.Level.THIN)
+	assert_int(Gas.level_in(_gas.packed_at(B), STEAM)).is_equal(Gas.Level.THIN)
+	assert_bool(_terrain.has_state(A, Terrain.TileState.COVER)).override_failure_message(
+			"play_landing landed a deposit that is not this volley's").is_false()
+	volley.clear()   # the cycle a plan breaks as it frees (#1359); these members are in none of its lists
+
+
 # An attacker at `at` whose every hit leaves `level` of `kind` on the cells it strikes
 # (test_gas_deposits' aim: the struck cells stamped as the volley builder stamps them).
 func _gasser(at: Vector2i, kind: Gas.Kind, level: Gas.Level, struck: Array[Vector2i]) -> AttackAction:

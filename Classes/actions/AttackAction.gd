@@ -310,6 +310,12 @@ static func same_volley(first: AttackAction, other: AttackAction) -> bool:
 		return true
 	return not first.volley.is_empty() and is_same(other.volley, first.volley)
 
+# Is this its volley's LAST member, after which the blast is over (#1498 ruling 3)? Every builder
+# appends members in volley order and every list plays them in it, so the array's last is the last to
+# play; a lone attack closes its own.
+func closes_volley() -> bool:
+	return volley.is_empty() or volley[-1] == self
+
 func resolved_outcome() -> ResolvedOutcome:
 	return resolved
 
