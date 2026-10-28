@@ -1388,8 +1388,10 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 	for member in squad.get_members():
 		live[member] = member.movement.cell
 	var watches := _hostile_watches(leader.get_faction(), board)
+	var drift: Dictionary = _round_gas(board) \
+			if _leads_squadmates(leader) and AIProfiles.of(leader).avoids_hazards else {}
 	for member in squad.get_members():
-		out.hazards[member] = _hazards_of(member, board, watches)
+		out.hazards[member] = _hazards_of(member, board, watches, drift)
 	var wins: Array[BaseAction] = []
 	var stakes := _stakes_for(null, board, null)
 	var threat: Array = []   # the ThreatField the dry fall-back reads, built the first time it is asked
@@ -1540,7 +1542,8 @@ static func _hostile_watches(faction: Team.Faction, board: BoardContext) -> Arra
 
 # Every cell `unit` could end on that would hurt it there (rulings 15, 19) -- none for a unit whose
 # profile does not avoid hazards (#1230), so every reader of this set treats all ground alike.
-static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) -> Dictionary:
+# `drift` is the round's gas (_round_gas), read only for a leader.
+static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch], drift: Dictionary = {}) -> Dictionary:
 	if not AIProfiles.of(unit).avoids_hazards:
 		return {}
 	var walk: Dictionary = RulesService.compute_move_range(unit, board)
@@ -1549,7 +1552,7 @@ static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) 
 	cells.append(unit.movement.cell)
 	var out := {}
 	for cell: Vector2i in cells:
-		if _is_hazard(unit, cell, board, watches):
+		if _is_hazard(unit, cell, board, watches, drift):
 			out[cell] = true
 	return out
 
@@ -1557,11 +1560,17 @@ static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) 
 # A cell that hurts whoever ends on it: end-of-turn damage -- the ground's burn, or the gas's scald
 # (#1331) -- or a hostile watch it would trip on the way in (PlanResolver.watch_fires_at, the
 # resolver's own trigger). The cell a unit already stands on trips nothing -- a watch fires on ENTRY.
-static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch]) -> bool:
+# For a leader, also a cell the round's gas (`drift`) will shorten its leash on: the split the player
+# sees as a red tether (SplitForecast.round_leavers, #1430), avoided before it happens (#1514).
+static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch],
+		drift: Dictionary = {}) -> bool:
 	if board.terrain_states != null \
 			and RulesService.occupant_damage_for(unit.state, board.terrain_states.states_at(cell)) > 0:
 		return true
 	if board.gas != null and RulesService.gas_damage_at(unit.state, board.gas.packed_at(cell)) > 0:
+		return true
+	if not drift.is_empty() and _leads_squadmates(unit) \
+			and SquadCohesion.reach_in(unit.state, int(drift.get(cell, 0))) < SquadCohesion.reach_at(unit.state, cell, board):
 		return true
 	if cell == unit.movement.cell:
 		return false
@@ -1569,6 +1578,20 @@ static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches:
 		if PlanResolver.watch_fires_at(watch, unit, cell, {}):
 			return true
 	return false
+
+
+# The gas the round tick will leave (GasField.next_round: spill, fade and what spreading fire gives
+# off), read off the gas as it lies now; empty on a board with no gas store.
+static func _round_gas(board: BoardContext) -> Dictionary:
+	if board.gas == null:
+		return {}
+	var next: Dictionary = board.gas.next_round(board)
+	return next
+
+
+# Whose cell sets a leash: a squad's leader, with someone to hold to it.
+static func _leads_squadmates(unit: Unit) -> bool:
+	return unit.has_squad() and unit.squad.get_leader() == unit
 
 
 static func _can_seek(unit: Unit) -> bool:
@@ -2005,8 +2028,11 @@ static func _candidate_key(a: AttackAction) -> String:
 
 
 # Reachable cell that best approaches `goal_cell` -- Sentry's walk back to its post. Same walk with
-# no attack term: a post is a place, not a target.
+# no attack term: a post is a place, not a target. A leader asks only cells its squad can follow it
+# to, as engage does (#1220): one the members cannot fit around rolls the whole formation back (#1514).
 static func closest_reachable_cell_to(unit: Unit, goal_cell: Vector2i, board: BoardContext, allowed = null) -> Vector2i:
+	if unit.squad != null and unit.squad.get_leader() == unit:
+		allowed = _leader_allowed(unit, board, allowed)
 	return _best_approach(unit, goal_cell, board, allowed, false)
 
 
@@ -2108,7 +2134,8 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
 	var avoids := AIProfiles.of(unit).avoids_hazards   # #1230: off, every cell reads as safe
-	var best_safe := not avoids or not _is_hazard(unit, here, board, watches)
+	var drift: Dictionary = _round_gas(board) if avoids and _leads_squadmates(unit) else {}
+	var best_safe := not avoids or not _is_hazard(unit, here, board, watches, drift)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
 	var best_threat: int = danger.attackers_of(here).size() if danger != null else 0
 	if danger != null and best_can_attack:
@@ -2121,7 +2148,7 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 			continue
 		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(cell, aiming).has(goal) \
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
-		var safe := not avoids or not _is_hazard(unit, cell, board, watches)
+		var safe := not avoids or not _is_hazard(unit, cell, board, watches, drift)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
 		var threat: int = danger.attackers_of(cell).size() if danger != null else 0
 		if danger != null and can_attack:

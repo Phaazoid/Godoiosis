@@ -816,7 +816,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - **Gust aims at any tile** now (Targets: both), so it can clear smoke on an empty tile.
   - Its equation is codev's to write: it is on the lint's PENDING ledger.
 - **Ledger:** TallGrassIgnites, Burning and GrassIgnites come off NOT_YET_FOLLOWED.
-- **The AI is blind to smoke** (#117): it neither seeks nor avoids a cloud. Its existing split term reads a smoke split the forecast stamps.
+- **The AI is blind to smoke** (#117): it neither seeks nor avoids a cloud. Its existing split term reads a smoke split the forecast stamps. *(Since #1514 a leader keeps out of the cells the round's smoke will drift onto, and a walk asks only cells its squad can follow it to: ai-tactics.md → *Smoke and the leash*.)*
 
 **Built 2026-10-22: ozone ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), its second half).** Rulings 6 to 10 of the issue (Phaazoid@, 2026-10-18/19), as approved in the build plan:
 - **Every shock hit makes ozone.** "Thunder is lightning in air" is now a natural reaction: `Resources/TerrainReactions/Ozone.tres`, keyed on SHOCK, with codev's `2QF + 2A2 -> 2QA + FA2 + F`.

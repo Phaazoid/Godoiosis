@@ -414,7 +414,9 @@ static func gases() -> Dictionary:
 		"rows": {
 			# The scald is avoided like a burn (#1331); the soak alone is still unpriced (#117).
 			K.STEAM: {"ai": gas_hazard()},
-			K.SMOKE: {"ai": gap("#117", "the AI is blind to smoke: it neither seeks nor avoids the cloud that shortens its leash (#1335)")},
+			# The leash it shortens (#1335): a leader keeps out of the round's drift, and a walk asks only
+			# cells its squad can follow it to (#1514).
+			K.SMOKE: {"ai": covered(TACTICS, "SquadCohesion.reach_in")},
 			K.POISON: {"ai": inert()},
 			K.FROST: {"ai": air},
 			K.OZONE: {"ai": air},

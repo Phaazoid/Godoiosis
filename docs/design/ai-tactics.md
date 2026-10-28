@@ -223,6 +223,20 @@ Its second half stands alone as `AITactics.queue_fallback_actions_for_squad` —
 
 Two things are worth carrying from it. **`play_session._take_ai_turn` had always called `_board()` inside its own loop** — two live implementations of one walk, with the fault in whichever was not the model, which is the same shape as the `went_downed` wire that was missing from the game and present in the Play API for thirteen months. And **`BoardContext`'s constructor now excludes a unit whose death has RESOLVED**, asking the domain fact (`Unit.die()` sets lifecycle DEAD *before* it queue_frees) rather than `is_queued_for_deletion()`; the filter is in the constructor because three builders feed it and a rule in one is a rule the other two disagree with.
 
+### Smoke and the leash ([#1514](https://github.com/Phaazoid/Godoiosis/issues/1514), 2026-10-28)
+
+Smoke deals no damage, so it is no hazard in the sense above. It shortens a leader's leash while the leader stands in medium or thick smoke ([#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), `SquadCohesion.reach_at`), and the AI meets it in two places.
+
+- **Smoke where the leader stops.** Engage and the seek already asked only cells the squad can follow it to (`_followable`, which reads the leash at each destination, #1220), and the solver packs the members inside the shorter leash. #1514 put the two walks that skipped the filter on it: Rushdown's walk to the cargo and Sentry's walk home (`closest_reachable_cell_to`, for a leader).
+  - Before, a destination the members could not fit around left one unplaced. The validator refused its hold order and `queue_batch` rolled the whole formation back, so the squad stood still every turn the cloud stayed.
+  - A slow member behind a fast leader froze the same way, with no smoke at all.
+- **Smoke the round drifts onto the leader.** A cell where the round's gas (`GasField.next_round`, the forecast the red tether reads, #1430) would shorten a leader's leash is a HAZARD for that leader, under `avoids_hazards` (Medium and Hard).
+  - It ranks as fire does, within a tier: a leader whose only firing cell lies in the drift still takes it.
+  - Members and solo units are unaffected, since only the leader's cell sets the leash.
+  - Smoke lying on a cell NOW is not a hazard on its own. The followable filter already fits the formation to it, and nothing splits unless the smoke thickens.
+
+Its limits are under *Known v1 approximations*.
+
 ## Attack scoring (ratified 2026-07-22; rebuilt onto the SQUAD'S PLAN 2026-09-02, #117)
 
 A candidate is scored by its **marginal gain to the squad's plan** — `score(plan + candidate) − score(plan)`, both sides resolved by the real `SquadManager.resolve_plan` machinery — as an `AIScore` -- `(mission, removals, splits, saves, limbs, net damage, damage taken)`, compared lexicographically, with less damage taken the better. **The score ORDERS candidates; it gates one only to keep a squad from felling its own** (#711 below, and #1220's floor). *(Since [#1220](https://github.com/Phaazoid/Godoiosis/issues/1220), 2026-10-05, the score is a small comparable type rather than a vector, because it grew to six terms; every `.x`/`.y` reader went with it. Before that it was `(net removals, net squad breaks, net damage dealt, −damage taken from reactions)`.)* *(Two terms until the third landed with target selection, 2026-09-02 — see* Target selection *for why it is a tie-break rather than a cost. The squad-break term joined second with [#761](https://github.com/Phaazoid/Godoiosis/issues/761), 2026-10-03, so a tuple quoted below from before that date is three terms: removals, damage, taken.)*
@@ -359,6 +373,7 @@ It never introduces a verb the archetype declared `NEVER`, never invents a targe
 - **Movement is not scored at all** — joint selection prices *what a member does*, never *where it stands*. `score(plan with X at cell C)` is the same delta and is the natural next step, but the destination pick is still the group move below.
   - **Narrowed by #760:** where a unit stands IS scored now, by standing it on each cell, but only for a removal or a squad break. Damage alone moves nobody, by ruling.
   - **Narrowed again by #1220 (ruling 9):** damage moves a MEMBER inside the leash, judged by geometry rather than a resolve -- *can it hit anyone from there*. The leader is still moved only by a removal, a break or the mission.
+- **The round's drift is read off the gas as it lies when the squad decides** (#1514, *Smoke and the leash*). It misses smoke the AI's own pass lights (a split inside the pass is still scored), and anything a later faction does before the round ticks. It also steers a leader off the drift when its squad stands close enough that nobody would leave, where the player's tether would not turn red.
 - **The danger field is an UPPER BOUND** (#1220), so the dry fall-back's *fewest enemies reach it* and Balanced's safety tie-break are approximate: the field assumes every enemy squad charges.
 - **Routes are asked of the LIVE watches** (#920). A watch a squadmate's earlier walk in the same pass would spend still counts, so the route errs toward the detour.
 - **Mixed bands in one squad's joint pass** (#1230). Each member's candidates are scored under its own profile and the round takes the best across members, so a sloppy member can win a round with a score a disciplined one would not give.
@@ -394,7 +409,7 @@ It never introduces a verb the archetype declared `NEVER`, never invents a targe
 
 **Known limits, declared:**
 
-- ~~**The engageable set is OPTIMISTIC for a leader with squadmates.**~~ **Closed by #1220.** It used the leader's own unclamped move range, so cohesion could refuse the group move to a cell the leader alone could stand on, and in play that read as *"it went for the mage and then didn't."* `_engageable_enemies`, `best_attack_destination` and the seek's leader cells now ask only cells the squad can FOLLOW it to (`GroupMoveSolver.followable_destinations`, the sweep the player's Move overlay paints grey with, #1069), computed once per squad decision and shared (`_followable`).
+- ~~**The engageable set is OPTIMISTIC for a leader with squadmates.**~~ **Closed by #1220.** It used the leader's own unclamped move range, so cohesion could refuse the group move to a cell the leader alone could stand on, and in play that read as *"it went for the mage and then didn't."* `_engageable_enemies`, `best_attack_destination` and the seek's leader cells now ask only cells the squad can FOLLOW it to (`GroupMoveSolver.followable_destinations`, the sweep the player's Move overlay paints grey with, #1069), computed once per squad decision and shared (`_followable`). **The two walks followed in [#1514](https://github.com/Phaazoid/Godoiosis/issues/1514):** Rushdown's walk to the cargo and Sentry's walk home ask the same cells (`closest_reachable_cell_to`, for a leader).
 - **Leader-only.** `engage` group-moves the whole squad toward the leader's pick, so a target good for the leader may be poor for a member. Widening it is #117's per-unit movement item. **Narrowed by #760:** a member that can take a removal or a squad break is pinned to the cell it takes it from, so the leader's pick no longer decides that member's footing. **And by #1220:** a member with nobody to hit steps to a follow cell it can hit from.
 
 ## The Sentry's leash is footing, not reach ([#1377](https://github.com/Phaazoid/Godoiosis/issues/1377), 2026-10-21)
