@@ -384,8 +384,9 @@ static func _candidates_by_member(members: Array[Unit], board: BoardContext, bas
 # reach the same victims across the same cells are one candidate.
 #
 # A MAP-ONLY attack hits no unit (#1135), so its aim is kept only for what it does THIS pass: the
-# current it carries, the payloads it drops, or the ice it melts under a hostile. Ground it merely
-# leaves burning or soaked for later is not priced, declared on #117.
+# current it carries, the payloads it drops, the ice it melts under a hostile, or the cloud it blows
+# onto a hostile leader (#1514). Ground it merely leaves burning or soaked for later is not priced,
+# declared on #117.
 #
 # The sweep reads wetness LIVE, as the queue's whiff gate does (SquadPlanValidator.aim_finds_a_target),
 # so a candidate is never one the gate would refuse.
@@ -421,19 +422,26 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 		if CellSubstances.fizzle_reason(attack, origin, board, unit.state) != "":
 			continue
 		var marks: Dictionary = patients if attack.heals else hostiles
+		# A blow is aimed at a cloud, wherever it lies (#1514), only by a band that values splits.
+		var blows := not attack.heals and board.gas != null and not board.gas.is_empty() \
+				and AIProfiles.of(unit).values_splits and _blows_gas(unit, attack)
+		if blows:
+			marks = marks.duplicate()
+			for cell in board.gas.cells():
+				marks[cell] = true
 		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
 			continue
 		for aim in _aim_cells(unit, origin, attack, board, marks):
 			var sweep := Conduction.sweep(unit, origin, aim, attack, board)
 			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes, stabilise)
-			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo):
+			unit.active_attack = attack   # declare()'s stamp only (#102)
+			var action := AttackAction.declare(unit, origin, aim)
+			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo, action, blows):
 				continue
 			var key := _aim_key(attack, sweep)
 			if seen.has(key):
 				continue
 			seen[key] = true
-			unit.active_attack = attack   # declare()'s stamp only (#102)
-			var action := AttackAction.declare(unit, origin, aim)
 			out.append(action)
 			if victims_out != null:
 				victims_out[action] = paying
@@ -520,10 +528,11 @@ static func _paying_victims(unit: Unit, attack: AttackData, sweep: Conduction.Sw
 	return out
 
 
-# What a map-only aim does this pass with no victim of its own: a payload that catches a hostile, or
-# a deposit that takes the ice from under one. Geometry only -- the resolve prices it.
+# What a map-only aim does this pass with no victim of its own: a payload that catches a hostile, a
+# deposit that takes the ice from under one, or -- for `action` when it `blows` gas -- a cloud blown
+# onto a hostile leader that cuts a member loose. Geometry only -- the resolve prices it.
 static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, board: BoardContext,
-		hypo: Dictionary) -> bool:
+		hypo: Dictionary, action: AttackAction = null, blows := false) -> bool:
 	if not attack.hits_map():
 		return false
 	if attack.payload != null:
@@ -533,6 +542,8 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 			for victim in drop.victims:
 				if is_instance_valid(victim) and Team.is_enemy(unit.get_faction(), victim.get_faction()):
 					return true
+	if blows and action != null and _blow_splits(unit, action, sweep, board, hypo):
+		return true
 	var elements := PlanResolver.elements_of(unit.state, attack, false)
 	if elements.is_empty() or board.terrain_states == null:
 		return false
@@ -549,6 +560,62 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 				and not RulesService.drowns_in(cell, standing.state, board):
 			return true
 	return false
+
+
+# Does this attack blow gas where it strikes (#1332)? It shoves, and a dispersal in the air fires for
+# its elements: the gates PlanResolver's push asks, before any cell is.
+static func _blows_gas(unit: Unit, attack: AttackData) -> bool:
+	if unit.state.attack_knockback(attack) <= 0:
+		return false
+	var elements := PlanResolver.elements_of(unit.state, attack, false)
+	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air and reaction.disperses_gas and reaction.fires_for(elements):
+			return true
+	return false
+
+
+# Does this blow land gas on a hostile leader and cut a member loose (#1514)? The resolver's own clear
+# (_resolve_air_at) and walk (_gas_landing), then SplitForecast.round_leavers asked of the landing alone:
+# who that gas on the leader's cell leaves out, everyone standing where the base plan leaves them.
+static func _blow_splits(unit: Unit, action: AttackAction, sweep: Conduction.Sweep, board: BoardContext,
+		hypo: Dictionary) -> bool:
+	var elements := PlanResolver.source_elements(action, hypo)
+	var terrain := TerrainReactionCatalog.get_all()
+	for cell in sweep.struck:
+		var gas_here := board.gas_at(cell)
+		if gas_here == 0:
+			continue
+		var cleared := PlanResolver._resolve_air_at(cell, elements, board, terrain, null, gas_here)
+		if cleared == null or not cleared.gas_cleared:
+			continue
+		var landing := PlanResolver._gas_landing(action, cell, board, hypo)
+		if landing == cell:
+			continue
+		var leader := _hostile_leader_at(unit, landing, board, hypo)
+		if leader == null:
+			continue
+		var blown := ResolvedCellEffect.new()
+		blown.cell = landing
+		for kind: Gas.Kind in Gas.kinds_in(gas_here):
+			blown.add_gas(kind, Gas.level_in(gas_here, kind))
+		var deposits: Array[ResolvedCellEffect] = [blown]
+		var next: Dictionary[Vector2i, int] = {landing: PlannedTiles.after(board, deposits).gas_at(landing)}
+		var at: Dictionary[Unit, Vector2i] = {}
+		for member in leader.squad.get_members():
+			at[member] = PlanResolver.projected_position(member, hypo)
+		if not SplitForecast.round_leavers(leader.squad, landing, at, board, next, null).is_empty():
+			return true
+	return false
+
+
+# The hostile squad leader the base plan leaves standing on `cell`, with someone to hold to its leash.
+static func _hostile_leader_at(unit: Unit, cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
+	for other in board.units:
+		if is_instance_valid(other) and Team.is_enemy(unit.get_faction(), other.get_faction()) \
+				and _leads_squadmates(other) and PlanResolver.projected_position(other, hypo) == cell \
+				and PlanResolver.projected_lifecycle(other, hypo) != Unit.LifecycleState.DEAD:
+			return other
+	return null
 
 
 static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
@@ -1388,8 +1455,10 @@ static func seek_positions(squad: Squad, default_destination: Vector2i, board: B
 	for member in squad.get_members():
 		live[member] = member.movement.cell
 	var watches := _hostile_watches(leader.get_faction(), board)
+	var drift: Dictionary = _round_gas(board) \
+			if _leads_squadmates(leader) and AIProfiles.of(leader).avoids_hazards else {}
 	for member in squad.get_members():
-		out.hazards[member] = _hazards_of(member, board, watches)
+		out.hazards[member] = _hazards_of(member, board, watches, drift)
 	var wins: Array[BaseAction] = []
 	var stakes := _stakes_for(null, board, null)
 	var threat: Array = []   # the ThreatField the dry fall-back reads, built the first time it is asked
@@ -1540,7 +1609,8 @@ static func _hostile_watches(faction: Team.Faction, board: BoardContext) -> Arra
 
 # Every cell `unit` could end on that would hurt it there (rulings 15, 19) -- none for a unit whose
 # profile does not avoid hazards (#1230), so every reader of this set treats all ground alike.
-static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) -> Dictionary:
+# `drift` is the round's gas (_round_gas), read only for a leader.
+static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch], drift: Dictionary = {}) -> Dictionary:
 	if not AIProfiles.of(unit).avoids_hazards:
 		return {}
 	var walk: Dictionary = RulesService.compute_move_range(unit, board)
@@ -1549,7 +1619,7 @@ static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) 
 	cells.append(unit.movement.cell)
 	var out := {}
 	for cell: Vector2i in cells:
-		if _is_hazard(unit, cell, board, watches):
+		if _is_hazard(unit, cell, board, watches, drift):
 			out[cell] = true
 	return out
 
@@ -1557,11 +1627,17 @@ static func _hazards_of(unit: Unit, board: BoardContext, watches: Array[Watch]) 
 # A cell that hurts whoever ends on it: end-of-turn damage -- the ground's burn, or the gas's scald
 # (#1331) -- or a hostile watch it would trip on the way in (PlanResolver.watch_fires_at, the
 # resolver's own trigger). The cell a unit already stands on trips nothing -- a watch fires on ENTRY.
-static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch]) -> bool:
+# For a leader, also a cell the round's gas (`drift`) will shorten its leash on: the split the player
+# sees as a red tether (SplitForecast.round_leavers, #1430), avoided before it happens (#1514).
+static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches: Array[Watch],
+		drift: Dictionary = {}) -> bool:
 	if board.terrain_states != null \
 			and RulesService.occupant_damage_for(unit.state, board.terrain_states.states_at(cell)) > 0:
 		return true
 	if board.gas != null and RulesService.gas_damage_at(unit.state, board.gas.packed_at(cell)) > 0:
+		return true
+	if not drift.is_empty() and _leads_squadmates(unit) \
+			and SquadCohesion.reach_in(unit.state, int(drift.get(cell, 0))) < SquadCohesion.reach_at(unit.state, cell, board):
 		return true
 	if cell == unit.movement.cell:
 		return false
@@ -1569,6 +1645,20 @@ static func _is_hazard(unit: Unit, cell: Vector2i, board: BoardContext, watches:
 		if PlanResolver.watch_fires_at(watch, unit, cell, {}):
 			return true
 	return false
+
+
+# The gas the round tick will leave (GasField.next_round: spill, fade and what spreading fire gives
+# off), read off the gas as it lies now; empty on a board with no gas store.
+static func _round_gas(board: BoardContext) -> Dictionary:
+	if board.gas == null:
+		return {}
+	var next: Dictionary = board.gas.next_round(board)
+	return next
+
+
+# Whose cell sets a leash: a squad's leader, with someone to hold to it.
+static func _leads_squadmates(unit: Unit) -> bool:
+	return unit.has_squad() and unit.squad.get_leader() == unit
 
 
 static func _can_seek(unit: Unit) -> bool:
@@ -2005,8 +2095,11 @@ static func _candidate_key(a: AttackAction) -> String:
 
 
 # Reachable cell that best approaches `goal_cell` -- Sentry's walk back to its post. Same walk with
-# no attack term: a post is a place, not a target.
+# no attack term: a post is a place, not a target. A leader asks only cells its squad can follow it
+# to, as engage does (#1220): one the members cannot fit around rolls the whole formation back (#1514).
 static func closest_reachable_cell_to(unit: Unit, goal_cell: Vector2i, board: BoardContext, allowed = null) -> Vector2i:
+	if unit.squad != null and unit.squad.get_leader() == unit:
+		allowed = _leader_allowed(unit, board, allowed)
 	return _best_approach(unit, goal_cell, board, allowed, false)
 
 
@@ -2108,7 +2201,8 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(here, aiming).has(goal) \
 		and Reach.vertical_aim_ok(aiming, here, goal, board)
 	var avoids := AIProfiles.of(unit).avoids_hazards   # #1230: off, every cell reads as safe
-	var best_safe := not avoids or not _is_hazard(unit, here, board, watches)
+	var drift: Dictionary = _round_gas(board) if avoids and _leads_squadmates(unit) else {}
+	var best_safe := not avoids or not _is_hazard(unit, here, board, watches, drift)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
 	var best_threat: int = danger.attackers_of(here).size() if danger != null else 0
 	if danger != null and best_can_attack:
@@ -2121,7 +2215,7 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 			continue
 		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(cell, aiming).has(goal) \
 			and Reach.vertical_aim_ok(aiming, cell, goal, board)
-		var safe := not avoids or not _is_hazard(unit, cell, board, watches)
+		var safe := not avoids or not _is_hazard(unit, cell, board, watches, drift)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
 		var threat: int = danger.attackers_of(cell).size() if danger != null else 0
 		if danger != null and can_attack:

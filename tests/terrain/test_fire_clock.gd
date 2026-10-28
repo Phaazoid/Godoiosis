@@ -123,6 +123,121 @@ func test_a_retired_state_never_survives_a_load() -> void:
 		.is_true()
 
 
+# --- Authored starts (#1484): a clock the author chose, in place of the ground's. ---
+# Every number below is the fixture's dial moved off by a margin, so a start and the ground's own
+# clock can never read the same by accident.
+const START := T.FUEL_TURNS + 2
+
+
+func test_an_authored_start_replaces_the_grounds_clock_and_play_never_moves_it() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(store)
+	_deposit(store, CELL, Terrain.TileState.BURNING)
+	assert_bool(store.set_start_turns(CELL, Terrain.TileState.BURNING, START)).is_true()
+	assert_int(store.turns_remaining(CELL, Terrain.TileState.BURNING)).is_equal(START)
+	store.tick_states()
+	assert_int(store.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("an authored start did not count down like any other clock") \
+		.is_equal(START - 1)
+	assert_int(store.start_turns(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("passing a turn moved the AUTHORED start, so an authoring save would write a battle fact") \
+		.is_equal(START)
+
+
+# The brush paints absolutely, so a drag back over a lit cell asks for the start it already holds;
+# answering that with a fresh clock would rewind a fire mid-test.
+func test_asking_for_the_start_a_state_already_holds_moves_nothing() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(store)
+	_deposit(store, CELL, Terrain.TileState.BURNING)
+	store.set_start_turns(CELL, Terrain.TileState.BURNING, START)
+	store.tick_states()
+	assert_bool(store.set_start_turns(CELL, Terrain.TileState.BURNING, START)).is_false()
+	assert_int(store.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("repainting the same start rewound the clock") \
+		.is_equal(START - 1)
+
+
+func test_a_start_of_zero_hands_the_state_back_to_its_grounds_clock() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(store)
+	_deposit(store, CELL, Terrain.TileState.BURNING)
+	store.set_start_turns(CELL, Terrain.TileState.BURNING, START)
+	assert_bool(store.set_start_turns(CELL, Terrain.TileState.BURNING, 0)).is_true()
+	assert_int(store.start_turns(CELL, Terrain.TileState.BURNING)).is_equal(-1)
+	assert_int(store.turns_remaining(CELL, Terrain.TileState.BURNING)).is_equal(T.FUEL_TURNS)
+	assert_bool(store.set_start_turns(CELL, Terrain.TileState.BURNING, 0)) \
+		.override_failure_message("clearing a start that was never there reported a change, which pushes an empty undo step") \
+		.is_false()
+
+
+# No start on a permanent state (the dev's ruling, 2026-10-27): ground that gives a state no clock
+# takes no start, and neither does a cell the state is not on.
+func test_ground_with_no_clock_and_an_empty_cell_both_refuse_a_start() -> void:
+	var stone: TerrainStateManager = auto_free(T.store_on_stone())
+	add_child(stone)
+	_deposit(stone, CELL, Terrain.TileState.BURNING)
+	assert_bool(stone.set_start_turns(CELL, Terrain.TileState.BURNING, START)).is_false()
+	assert_int(stone.start_turns(CELL, Terrain.TileState.BURNING)).is_equal(-1)
+	assert_int(stone.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("a start turned a permanent fire into one that goes out") \
+		.is_equal(-1)
+	var grass: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(grass)
+	assert_bool(grass.set_start_turns(CELL, Terrain.TileState.BURNING, START)).is_false()
+	assert_dict(grass.to_starts_dict()).is_empty()
+
+
+func test_a_start_leaves_with_its_state() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(store)
+	_deposit(store, CELL, Terrain.TileState.BURNING)
+	store.set_start_turns(CELL, Terrain.TileState.BURNING, 1)
+	store.tick_states()
+	assert_bool(store.has_state(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("a one-turn start did not burn out on its turn") \
+		.is_false()
+	assert_int(store.start_turns(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the start outlived its fire, so the next fire here would inherit it") \
+		.is_equal(-1)
+
+
+# THE ORDER, in one case: a remainder beats a start, a start beats the ground, and a start the ground
+# refuses is dropped at the door. One load per rung, each with only what that rung needs.
+func test_a_load_reads_the_remainder_then_the_start_then_the_ground() -> void:
+	var lit := {CELL: [Terrain.TileState.BURNING]}
+	var starts := {CELL: {Terrain.TileState.BURNING: START}}
+	var turns := {CELL: {Terrain.TileState.BURNING: 1}}
+
+	var saved: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(saved)
+	saved.load_state_dict(lit, turns, starts)
+	assert_int(saved.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("a mid-battle save's remainder lost to the authored start") \
+		.is_equal(1)
+	assert_int(saved.start_turns(CELL, Terrain.TileState.BURNING)).is_equal(START)
+
+	var authored: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(authored)
+	authored.load_state_dict(lit, {}, starts)
+	assert_int(authored.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("an authored board loaded its fire on the ground's clock, not its start") \
+		.is_equal(START)
+
+	var plain: TerrainStateManager = auto_free(T.store_on_fuel())
+	add_child(plain)
+	plain.load_state_dict(lit)
+	assert_int(plain.turns_remaining(CELL, Terrain.TileState.BURNING)).is_equal(T.FUEL_TURNS)
+
+	var stone: TerrainStateManager = auto_free(T.store_on_stone())
+	add_child(stone)
+	stone.load_state_dict(lit, {}, starts)
+	assert_int(stone.turns_remaining(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("a saved start armed a clock on ground that gives fire none") \
+		.is_equal(-1)
+	assert_dict(stone.to_starts_dict()).is_empty()
+
+
 # The CONTENT case, and the only one here that reads authored files: every ground the shipped
 # reactions declare flammable must also declare how long it burns. Omitting the clock is legal
 # GDScript and legal .tres -- it means "burns forever" -- so a grass field that never goes out

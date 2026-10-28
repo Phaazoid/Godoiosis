@@ -202,7 +202,8 @@ static func leavers(plan: ResolvedPlan) -> Array[Unit]:
 # the round's: the pass's own sweep takes it, and the Split chip says so. The two halves are
 # SquadCohesion's (reach_in, field_within), the pieces in_range is made of. `plan` is the previewed pass,
 # and the leader's leash and each member's traversal are judged on the bodies it leaves
-# (PlanResolver.state_of, #1504); null judges the live ones.
+# (PlanResolver.state_of, #1504); null judges the live ones. The AI asks it of one blown cloud too
+# (AITactics._blow_splits, #1514), handing the gas the blow leaves as `next`.
 static func round_leavers(squad: Squad, leader_cell: Vector2i, at: Dictionary[Unit, Vector2i],
 		board: BoardContext, next: Dictionary[Vector2i, int], plan: ResolvedPlan) -> Array[Unit]:
 	var leavers: Array[Unit] = []

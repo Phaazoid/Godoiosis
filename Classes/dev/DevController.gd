@@ -818,15 +818,20 @@ func _erase_zone(cell: Vector2i) -> void:
 # seam -- so a painted BURNING gets the clock of the GROUND it lands on (#890): three turns on
 # grass, and none at all on stone, which is how the authored braziers on Prolog's flagstones burn
 # forever without a second fire state to spell it.
+#
+# It paints AT the brush's start (#1484), absolutely: a cell already holding the state takes the
+# picked start too, so the same drag authors a start onto fires already standing. set_start_turns
+# answers false where nothing moves, so a drag repainting the same start rewinds no clock.
 func _paint_state(cell: Vector2i) -> void:
-	var state: Terrain.TileState = game.dev_overlay.tile_brush.selected_tile_state()
-	if game.terrain_states.has_state(cell, state):
-		return   # a drag repaints every motion event: skip the redraw churn and the timer rewind
-	var effect := ResolvedCellEffect.new()
-	effect.cell = cell
-	effect.states_added.assign([state])
-	game.terrain_states.apply(effect)
-	game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	var state: Terrain.TileState = brush.selected_tile_state()
+	if not game.terrain_states.has_state(cell, state):
+		var effect := ResolvedCellEffect.new()
+		effect.cell = cell
+		effect.states_added.assign([state])
+		game.terrain_states.apply(effect)
+		game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	game.terrain_states.set_start_turns(cell, state, brush.selected_start_turns())
 
 # Elevation + ramp painting (#260). One click writes BOTH fields, because set_cell takes both and a
 # cell is one answer. Groundless cells are refused for the same reason a state deposit is (#245):
@@ -871,6 +876,13 @@ func clear_tile_states() -> void:
 	_begin_stroke()
 	game.terrain_states.clear()
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	_end_stroke()
+
+# The Tile Brush list's Clear (#1484): one authored start off, the state left standing on its ground's
+# clock. Here for the same reason as the wipe above, so it is one undo step.
+func clear_start_turns(cell: Vector2i, state: Terrain.TileState) -> void:
+	_begin_stroke()
+	game.terrain_states.set_start_turns(cell, state, 0)
 	_end_stroke()
 
 # Everything that sits ON a cell goes with its ground, at both sites ground can leave: tile states
