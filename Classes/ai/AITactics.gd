@@ -384,8 +384,9 @@ static func _candidates_by_member(members: Array[Unit], board: BoardContext, bas
 # reach the same victims across the same cells are one candidate.
 #
 # A MAP-ONLY attack hits no unit (#1135), so its aim is kept only for what it does THIS pass: the
-# current it carries, the payloads it drops, or the ice it melts under a hostile. Ground it merely
-# leaves burning or soaked for later is not priced, declared on #117.
+# current it carries, the payloads it drops, the ice it melts under a hostile, or the cloud it blows
+# onto a hostile leader (#1514). Ground it merely leaves burning or soaked for later is not priced,
+# declared on #117.
 #
 # The sweep reads wetness LIVE, as the queue's whiff gate does (SquadPlanValidator.aim_finds_a_target),
 # so a candidate is never one the gate would refuse.
@@ -421,19 +422,26 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 		if CellSubstances.fizzle_reason(attack, origin, board, unit.state) != "":
 			continue
 		var marks: Dictionary = patients if attack.heals else hostiles
+		# A blow is aimed at a cloud, wherever it lies (#1514), only by a band that values splits.
+		var blows := not attack.heals and board.gas != null and not board.gas.is_empty() \
+				and AIProfiles.of(unit).values_splits and _blows_gas(unit, attack)
+		if blows:
+			marks = marks.duplicate()
+			for cell in board.gas.cells():
+				marks[cell] = true
 		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
 			continue
 		for aim in _aim_cells(unit, origin, attack, board, marks):
 			var sweep := Conduction.sweep(unit, origin, aim, attack, board)
 			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes, stabilise)
-			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo):
+			unit.active_attack = attack   # declare()'s stamp only (#102)
+			var action := AttackAction.declare(unit, origin, aim)
+			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo, action, blows):
 				continue
 			var key := _aim_key(attack, sweep)
 			if seen.has(key):
 				continue
 			seen[key] = true
-			unit.active_attack = attack   # declare()'s stamp only (#102)
-			var action := AttackAction.declare(unit, origin, aim)
 			out.append(action)
 			if victims_out != null:
 				victims_out[action] = paying
@@ -520,10 +528,11 @@ static func _paying_victims(unit: Unit, attack: AttackData, sweep: Conduction.Sw
 	return out
 
 
-# What a map-only aim does this pass with no victim of its own: a payload that catches a hostile, or
-# a deposit that takes the ice from under one. Geometry only -- the resolve prices it.
+# What a map-only aim does this pass with no victim of its own: a payload that catches a hostile, a
+# deposit that takes the ice from under one, or -- for `action` when it `blows` gas -- a cloud blown
+# onto a hostile leader that cuts a member loose. Geometry only -- the resolve prices it.
 static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, board: BoardContext,
-		hypo: Dictionary) -> bool:
+		hypo: Dictionary, action: AttackAction = null, blows := false) -> bool:
 	if not attack.hits_map():
 		return false
 	if attack.payload != null:
@@ -533,6 +542,8 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 			for victim in drop.victims:
 				if is_instance_valid(victim) and Team.is_enemy(unit.get_faction(), victim.get_faction()):
 					return true
+	if blows and action != null and _blow_splits(unit, action, sweep, board, hypo):
+		return true
 	var elements := PlanResolver.elements_of(unit.state, attack, false)
 	if elements.is_empty() or board.terrain_states == null:
 		return false
@@ -549,6 +560,62 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 				and not RulesService.drowns_in(cell, standing.state, board):
 			return true
 	return false
+
+
+# Does this attack blow gas where it strikes (#1332)? It shoves, and a dispersal in the air fires for
+# its elements: the gates PlanResolver's push asks, before any cell is.
+static func _blows_gas(unit: Unit, attack: AttackData) -> bool:
+	if unit.state.attack_knockback(attack) <= 0:
+		return false
+	var elements := PlanResolver.elements_of(unit.state, attack, false)
+	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air and reaction.disperses_gas and reaction.fires_for(elements):
+			return true
+	return false
+
+
+# Does this blow land gas on a hostile leader and cut a member loose (#1514)? The resolver's own clear
+# (_resolve_air_at) and walk (_gas_landing), then SplitForecast.round_leavers asked of the landing alone:
+# who that gas on the leader's cell leaves out, everyone standing where the base plan leaves them.
+static func _blow_splits(unit: Unit, action: AttackAction, sweep: Conduction.Sweep, board: BoardContext,
+		hypo: Dictionary) -> bool:
+	var elements := PlanResolver.source_elements(action, hypo)
+	var terrain := TerrainReactionCatalog.get_all()
+	for cell in sweep.struck:
+		var gas_here := board.gas_at(cell)
+		if gas_here == 0:
+			continue
+		var cleared := PlanResolver._resolve_air_at(cell, elements, board, terrain, null, gas_here)
+		if cleared == null or not cleared.gas_cleared:
+			continue
+		var landing := PlanResolver._gas_landing(action, cell, board, hypo)
+		if landing == cell:
+			continue
+		var leader := _hostile_leader_at(unit, landing, board, hypo)
+		if leader == null:
+			continue
+		var blown := ResolvedCellEffect.new()
+		blown.cell = landing
+		for kind: Gas.Kind in Gas.kinds_in(gas_here):
+			blown.add_gas(kind, Gas.level_in(gas_here, kind))
+		var deposits: Array[ResolvedCellEffect] = [blown]
+		var next: Dictionary[Vector2i, int] = {landing: board.with_deposits(deposits).gas_at(landing)}
+		var at: Dictionary[Unit, Vector2i] = {}
+		for member in leader.squad.get_members():
+			at[member] = PlanResolver.projected_position(member, hypo)
+		if not SplitForecast.round_leavers(leader.squad, landing, at, board, next, null).is_empty():
+			return true
+	return false
+
+
+# The hostile squad leader the base plan leaves standing on `cell`, with someone to hold to its leash.
+static func _hostile_leader_at(unit: Unit, cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
+	for other in board.units:
+		if is_instance_valid(other) and Team.is_enemy(unit.get_faction(), other.get_faction()) \
+				and _leads_squadmates(other) and PlanResolver.projected_position(other, hypo) == cell \
+				and PlanResolver.projected_lifecycle(other, hypo) != Unit.LifecycleState.DEAD:
+			return other
+	return null
 
 
 static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:

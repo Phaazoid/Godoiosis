@@ -1,6 +1,7 @@
 # The AI and smoke (#1514, a #117 child). Smoke on a squad leader's cell shortens its leash (#1335):
-# a leader keeps out of the cells the round's gas will drift that smoke onto, and a walk toward a
-# place asks only cells the squad can follow it to.
+# a leader keeps out of the cells the round's gas will drift that smoke onto, a walk toward a place
+# asks only cells the squad can follow it to, and an Air hit that shoves (#1332) is aimed at a cloud
+# to blow it onto an enemy leader when that cuts a member loose -- in a band that values splits.
 #
 # Every case plans through the AI's real door and asserts on the plan it left. Cells that depend on
 # movement are DERIVED: from a clear-board run, from the unit's MOV, and from the gas rules.
@@ -158,3 +159,136 @@ func test_a_sentry_walking_home_into_smoke_stops_where_its_squad_can_follow() ->
 		.override_failure_message("the leader did not close on its post, ending at %s" % [at]).is_true()
 	assert_bool(SquadCohesion.in_range(leader.squad, at, member, member.get_projected_destination(), ctx)) \
 		.override_failure_message("the member was left outside the leash").is_true()
+
+
+# --- A Gust blows smoke onto an enemy leader --------------------------------------------------------
+
+const BLOW := Rect2i(0, 0, 14, 3)
+const GALE_AT := Vector2i(1, 1)
+const CLOUD_AT := Vector2i(3, 1)   # in the Gust's range, on the line out from it
+const SQUAD := {Stats.Stat.LDR: 10, Stats.Stat.MHP: 40}
+
+
+# The air reaction that blows gas, failing loudly when the content no longer has one.
+func _disperse() -> TerrainReaction:
+	for reaction in TerrainReactionCatalog.get_all():
+		if reaction.in_the_air and reaction.disperses_gas:
+			return reaction
+	assert_bool(false).override_failure_message("fixture: no authored reaction disperses gas").is_true()
+	return null
+
+
+# A Hold unit whose main is a Gust: Air on units and ground alike, which shoves and deals nothing.
+func _galewright(board: Dictionary) -> Unit:
+	var unit := _spawn(board, ENEMY, GALE_AT, {}, 1)
+	var gust := unit.get_fired_attack()
+	gust.targets = EquippableData.TargetMode.BOTH
+	gust.max_range = 3
+	gust.deals_no_damage = true
+	gust.elemental_damage_type = _disperse().incoming_element
+	gust.knockback = 2
+	unit.squad.archetype = AIArchetype.Type.HOLD
+	return unit
+
+
+# Where a Gust at the cloud lands it: straight on, as far as it shoves.
+func _landing(gale: Unit) -> Vector2i:
+	return CLOUD_AT + (CLOUD_AT - GALE_AT).sign() * gale.get_fired_attack().knockback
+
+
+func _recruit(board: Dictionary, leader: Unit, cell: Vector2i) -> Unit:
+	var member := _spawn(board, PLAYER, cell, SQUAD)
+	board.squad_manager.join_squad(member, leader.squad)
+	return member
+
+
+# Thick smoke on the cloud's cell, with the squad out of the Gust's own reach: the blow is its only aim.
+func _lay_cloud(board: Dictionary, gale: Unit) -> void:
+	assert_bool(GridUtils.manhattan_distance(GALE_AT, _landing(gale)) > gale.get_fired_attack().max_range) \
+		.override_failure_message("fixture: the Gust reaches the squad itself").is_true()
+	_gas(board).set_level(CLOUD_AT, Gas.Kind.SMOKE, Gas.Level.THICK)
+
+
+func _blind_reach(leader: Unit) -> int:
+	return SquadCohesion.reach_in(leader.state, Gas.with_level(0, Gas.Kind.SMOKE, Gas.Level.THICK))
+
+
+func _aims_at(unit: Unit, cell: Vector2i) -> bool:
+	for action in unit.squad.action_queue:
+		if action is AttackAction and action.actor == unit and (action as AttackAction).target_cell == cell:
+			return true
+	return false
+
+
+# The enemy leader stands where the cloud lands, its member at the clear leash's edge.
+func _split_setup(board: Dictionary) -> Dictionary:
+	var gale := _galewright(board)
+	var leader := _spawn(board, PLAYER, _landing(gale), SQUAD)
+	var reach := leader.squad.get_max_squad_range()
+	assert_bool(_blind_reach(leader) < reach).override_failure_message(
+			"fixture: thick smoke does not shorten the leash").is_true()
+	var member := _recruit(board, leader, _landing(gale) + Vector2i(reach, 0))
+	_lay_cloud(board, gale)
+	return {"gale": gale, "member": member}
+
+
+func test_a_gust_blows_a_cloud_onto_an_enemy_leader_to_split_its_squad() -> void:
+	var board := _build_board(BLOW)
+	var setup := _split_setup(board)
+	var gale: Unit = setup.gale
+
+	_plan(gale.squad, board)
+
+	assert_bool(_aims_at(gale, CLOUD_AT)).override_failure_message(
+			"the Galewright did not blow the cloud onto the enemy leader").is_true()
+	var plan := (board.squad_manager as SquadManager).resolve_plan(gale.squad, _ctx(board))
+	assert_bool(SplitForecast.leavers(plan).has(setup.member)).override_failure_message(
+			"the blow it aimed does not cut the member loose").is_true()
+
+
+# Medium does not value splits (#1230), so the cloud is no mark of its.
+func test_a_band_that_does_not_value_splits_never_aims_the_blow() -> void:
+	var medium := AIProfile.new()
+	medium.values_splits = false
+	AIProfiles.use_fixtures({"": medium})
+	var board := _build_board(BLOW)
+	var gale: Unit = _split_setup(board).gale
+
+	_plan(gale.squad, board)
+
+	assert_bool(_aims_at(gale, CLOUD_AT)).override_failure_message(
+			"a band that does not value splits aimed a blow at the cloud").is_false()
+
+
+# Smoke on a member sets no leash. A second member stands where a leash measured from the cloud's
+# landing would lose it, so reading the member's cell as the leader's would aim the blow.
+func test_no_blow_is_aimed_when_the_cloud_would_land_on_a_member() -> void:
+	var board := _build_board(BLOW)
+	var gale := _galewright(board)
+	var leader := _spawn(board, PLAYER, _landing(gale) + Vector2i(1, 0), SQUAD)
+	var reach := leader.squad.get_max_squad_range()
+	assert_bool(_blind_reach(leader) < reach).override_failure_message(
+			"fixture: thick smoke does not shorten the leash").is_true()
+	_recruit(board, leader, _landing(gale))
+	_recruit(board, leader, _landing(gale) + Vector2i(reach, 0))
+	_lay_cloud(board, gale)
+
+	_plan(gale.squad, board)
+
+	assert_bool(_aims_at(gale, CLOUD_AT)).override_failure_message(
+			"the Galewright blew the cloud onto a member, which splits nobody").is_false()
+
+
+func test_no_blow_is_aimed_when_the_members_stand_inside_the_shorter_leash() -> void:
+	var board := _build_board(BLOW)
+	var gale := _galewright(board)
+	var leader := _spawn(board, PLAYER, _landing(gale), SQUAD)
+	assert_int(_blind_reach(leader)).override_failure_message(
+			"fixture: thick smoke leaves no leash at all, so a member beside the leader still leaves").is_greater_equal(1)
+	_recruit(board, leader, _landing(gale) + Vector2i(1, 0))
+	_lay_cloud(board, gale)
+
+	_plan(gale.squad, board)
+
+	assert_bool(_aims_at(gale, CLOUD_AT)).override_failure_message(
+			"the Galewright blew the cloud onto a leader whose squad stays together").is_false()
