@@ -63,6 +63,9 @@ var _phase: PreMissionPhase = PreMissionPhase.new()
 # A demo boot (armed=false, #375) replays one like any other arrival. Harmless and deliberate: it
 # never opens the phase, so what it inherits is a force somebody chose rather than the plain walk.
 var _staged: PreMissionSnapshot = null
+# The roll behind the mission start's weather draw (#1509), randomized once. A suite swaps in a seeded
+# one -- ScenarioManager.save_dir's "injectable for tests" shape. Only _draw_weather reads it.
+var weather_rng := RandomNumberGenerator.new()
 # The phase is open and its BRIEFING is still talking (#882), so the screen is built but withheld:
 # a line telling you what the map wants has to arrive over the map, and before the loadout, or it
 # is advice about a choice already made. Cleared in _close_deployment_menu rather than in reset(),
@@ -108,6 +111,10 @@ var _deploying := false:
 		_deploying = value
 		game.set_battle_hud_hidden(value)
 		game.refresh_dock_gate()
+
+
+func _init() -> void:
+	weather_rng.randomize()
 
 
 func is_over() -> bool:
@@ -289,6 +296,7 @@ func mission_select_is_up() -> bool:
 func begin_mission(path: String, armed := true) -> void:
 	_close_mission_select()
 	game.scenario_manager.load_scenario(path)   # routes through clear_board() -> reset()
+	_draw_weather()   # #1509: a fresh start draws; before the phase opens, so its screen shows the draw
 	# Staged against the path we were HANDED, not last_loaded_path: same value here, but this one
 	# cannot be read before the load has set it (#763 ruling 1 -- the buffer belongs to a mission,
 	# not to the button that got us here, so coming back through Mission Select restores it too).
@@ -524,6 +532,22 @@ func deploy_roster(staged: PreMissionSnapshot = null) -> int:
 	return deployed
 
 
+# The mission start's weather draw (#1509), WeatherDraw's rule on this game's store. deploy_roster's
+# doors and deploy_roster's reason: called at the two fresh starts and never inside apply_scenario,
+# which a save slot, a report, a replay and F2 all cross -- each of those replays the RESULT. A locked
+# board draws nothing and keeps the weather its load set. `kept` is a restart's weather (ruling 2).
+#
+# It writes current_weather and nothing else: the ScenarioData behind it is the resource cache.
+func _draw_weather(kept: int = WeatherDraw.NONE) -> void:
+	var sm: ScenarioManager = game.scenario_manager
+	var drawn := WeatherDraw.at_start(sm.current_weather_odds, sm.current_weather, weather_rng, kept)
+	if drawn == sm.current_weather:
+		return
+	sm.current_weather = drawn
+	# The load refreshed the HUD under the weather it stood up with -- #134's write-point trap again.
+	game.refresh_mission_status()
+
+
 func _on_sandbox_chosen() -> void:
 	_close_mission_select()
 	game.spawn_sandbox()                        # also routes through clear_board() -> reset()
@@ -572,8 +596,12 @@ func restart_mission() -> void:
 	# the author wrote it; the pause menu renames its own row there to say so. The rule itself is
 	# PreMissionPhase's, shared with the headless Play API's restart (#46).
 	_staged = PreMissionPhase.kept_by_restart(_staged, _deploying)
+	# The weather is read before the reload for the same reason: the reload sets it back to the file's
+	# (#1509 ruling 2 -- Retry, Restart and Reset Loadout all keep the draw).
+	var kept: Weather.Kind = game.scenario_manager.current_weather
 	game.mission_log.seal(MissionLog.Ending.RESTARTED)   # a retry is its own metric (#53)
 	game.scenario_manager.reload_current()
+	_draw_weather(kept)
 	# ...and returns to the PHASE, so a retry is a chance to place differently (#739) -- with what
 	# was placed LAST attempt already standing there (#763), rather than five minutes of loadout to
 	# rebuild before one unit can move two tiles. Whether the board offers the phase at all (#46) is

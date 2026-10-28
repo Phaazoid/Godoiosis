@@ -90,8 +90,8 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	var gas_field := GasField.new()
 	gas_field.ground_source = terrain_states.ground_source
 
-	# The Dictionary this returns, made BEFORE the lambda below so the lambda can read the scenario
-	# apply_scenario files into it later -- the weather (#1260) is that scenario's, not a store of its own.
+	# The Dictionary this returns, made BEFORE the lambda below so the lambda can read what apply_scenario
+	# files into it later: the scenario, and the weather standing over it (#1260, a store since #1509).
 	var board := {}
 
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
@@ -125,17 +125,18 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	})
 	return board
 
-# The weather over a built board (#1260): its loaded scenario's, CLEAR before one is loaded.
+# The weather over a built board (#1260): its own store (#1509), which apply_scenario stands up and a
+# mission start's draw may replace -- never the loaded ScenarioData, which is the resource cache. CLEAR
+# before a scenario is loaded.
 static func weather_of(board: Dictionary) -> Weather.Kind:
-	var scenario: ScenarioData = board.get("scenario")
-	return scenario.weather if scenario != null else Weather.Kind.CLEAR
+	return board.get("weather", Weather.Kind.CLEAR)
 
-# And its air (#1324) as played: the loaded scenario's reading moved by its weather
+# And its air (#1324) as played: the loaded scenario's reading moved by that weather
 # (Atmosphere.effective), Normal before one is loaded.
 static func atmosphere_of(board: Dictionary) -> Dictionary[String, int]:
 	var scenario: ScenarioData = board.get("scenario")
 	var none: Dictionary[String, int] = {}
-	return Atmosphere.effective(scenario.atmosphere, scenario.weather) if scenario != null else none
+	return Atmosphere.effective(scenario.atmosphere, weather_of(board)) if scenario != null else none
 
 static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 	for x in range(rect.position.x, rect.end.x):
@@ -236,4 +237,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 
 	board.turn_manager.set_active_faction(scenario.active_faction)
 	board["scenario"] = scenario
+	# The weather it STANDS under (#1509): ScenarioManager.current_weather's twin, the one store both
+	# headless boards read. A mission start may draw over it (PlaySession.start_weather); a load never does.
+	board["weather"] = scenario.weather
 	return spawned

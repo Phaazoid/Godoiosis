@@ -52,6 +52,10 @@ Moved verbatim out of [`CLAUDE.md`](../../CLAUDE.md) on 2026-10-20, when that fi
 
 **The filter is at the menu's call site, NEVER inside `get_missions()`** — CI sweeps that list to lint every shipped mission, and filtering at the source would stop linting exactly the boards nobody ticked.
 
+## The mission start's weather draw
+
+**A fresh start may DRAW the weather ([#1509](https://github.com/Phaazoid/Godoiosis/issues/1509), 2026-10-27).** `MissionController._draw_weather` sits beside `deploy_roster` at the same two doors, `begin_mission` and `restart_mission`, after the load and before the phase opens, so the pre-mission screen shows the draw and telemetry's `board.tres` (written in `_begin_turn`) records it. Every other arrival restores: `resume_from_slot`, `ReplayDriver.seed`, F2 and the dev header's Load all cross `apply_scenario` and replay the weather the file holds. `restart_mission` reads the weather BEFORE its reload, as it reads `_deploying`, and keeps it. The model and the headless twin → [presentation.md](presentation.md) → *Weather*.
+
 ## The flow/ folder
 
 `flow/` — `TurnManager`, `ScenarioManager` + `ScenarioData`/`ScenarioUnitEntry`; `MissionRules` (the pure win/lose predicate) + `MissionState` (the latches and the rules over them, one per mission, owned by both hosts since #46) + `MissionController` (what the game does about an ending).

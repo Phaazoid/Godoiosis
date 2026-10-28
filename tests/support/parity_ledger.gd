@@ -457,7 +457,7 @@ static func weathers() -> Dictionary:
 		"name": "weathers (Weather.Kind)",
 		"members": members,
 		"label": _enum_label(K.keys()),
-		"play_all": covered(SESSION, "scenario_data.weather"),
+		"play_all": covered(SESSION, "BoardBuilder.weather_of"),   # the built board's store (#1509)
 		"rows": {
 			K.LIGHT_RAIN: {"ai": blind},
 			K.RAIN: {"ai": blind},
