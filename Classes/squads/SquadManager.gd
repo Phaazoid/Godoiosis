@@ -1129,8 +1129,8 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 			var walk := action as MoveAction
 			walk.resolved_displaced = PlanResolver.projected_position(walk.actor, hypo) != walk.get_destination()
 
-	# The deposits land after the volley (#922): whoever the melt took the floor from goes under NOW,
-	# before any reaction is derived -- a sunk unit is down, and a body does not counter.
+	# The attack phase's deposits have all landed by here (#922, #1498): whoever the melt took the floor
+	# from goes under NOW, before any reaction is derived -- a sunk unit is down, and a body does not counter.
 	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.DEPOSITS_LAND)
 
 	# Counters are derived as single-target "aims" (who answers whom). Expand each into its own

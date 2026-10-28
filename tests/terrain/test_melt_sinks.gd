@@ -227,7 +227,8 @@ func test_a_waterwalker_on_melting_ice_keeps_standing() -> void:
 	assert_object(_sink_of(_plan((s.hero as Unit).squad), foe)).is_null()
 
 
-# The deposits land as one batch, so a pass that melts the ice and then freezes it again leaves ice.
+# The sink is judged once the attack phase's deposits have all landed (until #1498 stage 3), so a pass
+# that melts the ice and then freezes it again leaves ice.
 func test_ice_the_same_pass_refreezes_sinks_nobody() -> void:
 	var s := _fire_on_the_ice()
 	var hero: Unit = s.hero

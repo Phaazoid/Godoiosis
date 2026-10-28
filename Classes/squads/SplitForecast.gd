@@ -13,8 +13,9 @@ class_name SplitForecast
 #     leader's successor is judged where everyone stands at that blow -- except during the WALK,
 #     where the successor is named at once and its reach waits for the walk to end
 #     (SquadManager.hold_handovers);
-#   - a unit the pass's own melt drops into the water (#922) goes under when the deposits land, right
-#     after the volley -- or once the pass has settled, for a melt only a counter or tail shot made;
+#   - a unit the pass's own melt drops into the water (#922) goes under once the attack phase has
+#     played and its deposits have landed -- or once the pass has settled, for a melt only a counter or
+#     tail shot made;
 #   - at pass end, OrderExecutor._process_downed_pending ejects each downed unit in the order it went
 #     down -- skipping one finished off later in the pass -- and a downed leader hands over;
 #   - then SquadManager.enforce_contact ejects every member out of its leader's range;

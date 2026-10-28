@@ -576,7 +576,7 @@ func test_a_struck_line_of_gas_shifts_intact() -> void:
 
 
 # The gas is read as the PASS leaves it: steam an earlier order in the same plan laid is blown on, which
-# is what the batch apply plays.
+# is what playback lands, in that order (ResolvedPlan.play_landing).
 func test_a_shoving_air_hit_blows_gas_an_earlier_order_in_the_same_plan_left() -> void:
 	var steamer := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
 	steamer.get_fired_attack().gases = {STEAM: Gas.Level.MEDIUM}
