@@ -575,8 +575,9 @@ func test_a_struck_line_of_gas_shifts_intact() -> void:
 	assert_dict(_levels(board.gas.packed_at(far + away))).is_equal({STEAM: Gas.Level.MEDIUM})
 
 
-# The gas is read as the PASS leaves it: steam an earlier order in the same plan laid is blown on, which
-# is what playback lands, in that order (ResolvedPlan.play_landing).
+# The gas is read as the PASS leaves it: steam an earlier order in the same plan laid is blown on, its
+# volley having landed before this one resolves (ResolvedPlan.land, #1498 stage 3), which is what
+# playback lands, in that order (play_landing).
 func test_a_shoving_air_hit_blows_gas_an_earlier_order_in_the_same_plan_left() -> void:
 	var steamer := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
 	steamer.get_fired_attack().gases = {STEAM: Gas.Level.MEDIUM}

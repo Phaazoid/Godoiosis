@@ -20,9 +20,12 @@ const WHIFFED_POPUP := "Whiffed!"   # a swing at a target this pass already kill
 
 static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
 	# plan.hypo (Unit -> _Hypo) is shared across both phases so counter liveness sees the attacks,
-	# and lives on the plan so end-of-pass state stays readable after the pass (#124).
+	# and lives on the plan so end-of-pass state stays readable after the pass (#124). The board wears the
+	# plan's own tiles for the pass, as SquadManager's pass does (#1498).
+	var worn := plan.lend_tiles(board)
 	resolve_attacks(plan, plan.hypo, reactions, board, terrain_reactions)
 	resolve_counters(plan, plan.hypo, reactions, board, terrain_reactions)
+	plan.return_tiles(board, worn)
 
 # Phase 1: the ordered attacks. Split out so SquadManager.resolve_plan can reflect knockback shoves
 # into projected positions BEFORE deriving counters (#84 approach B) — a counter is judged from
@@ -66,8 +69,9 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 	for atk in group:
 		_resolve_one(atk, plan, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
-			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, plan.tiles, hypo):
-				plan.deposit(cell_effect, board)
+			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, hypo):
+				plan.deposit(cell_effect)
+		settle_landing(atk, plan, hypo, board)   # the volley's tiles, once its last member has resolved
 
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
 #
@@ -98,8 +102,9 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		else:
 			_resolve_one(ctr, plan, reactions, hypo, board)
 			if board != null and not ctr.is_secondary_hit:
-				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, plan.tiles, hypo):
-					plan.deposit(cell_effect, board)
+				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, hypo):
+					plan.deposit(cell_effect)
+		settle_landing(ctr, plan, hypo, board)
 		ordered.append(ctr)
 		if ctr.closes_volley():
 			for dropped in drop_payloads(_volley_of(ctr), plan, hypo, reactions, board, terrain_reactions):
@@ -136,7 +141,7 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 		return
 	var revived := _rescued_this_pass(actions, hypo)
 	plan.end_of_turn_subjects = _end_of_turn_subjects(plan, squad, hypo, board, revived)
-	var landed := board.planned(plan.tiles)
+	var landed := plan.ground(board)
 	for unit in plan.end_of_turn_subjects:
 		var body := state_of(unit, hypo)
 		if revived.has(unit):
@@ -330,6 +335,14 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		# makes ONE cell-by-cell loop answer both.
 		if board != null and RulesService.wets_in(walk[i], state_of(mover, hypo), board):
 			_soak(mover, hypo, action, i)
+		# Water the pass melted catches the walker (#1498 ruling 5): a valid path holds no cell that
+		# drowns its walker on the live ground, so this is ice a walk shot melted. It goes under here,
+		# after the soaking (so the sinking adds no second WET) and before the step's shots, and walks
+		# no further, Crisis or not.
+		var drowned := board != null and not plan.has_sunk(mover) \
+				and RulesService.drowns_in(walk[i], state_of(mover, hypo), board)
+		if drowned:
+			_go_under(SinkAction.make(state_of(mover, hypo), walk[i], action, false), plan, hypo)
 		# ...and THIS step is the moment the shot plays back at (#567): the walk halts here, the
 		# shot fires, the walk resumes. The moment is stamped where the shots are made because
 		# nothing downstream can recover it — a crosser who walks on leaves no trace of the step.
@@ -337,7 +350,7 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		# A crosser the shot DOWNS stops where it was hit — lifecycle, not a new rule. So does one
 		# the shot THREW: you cannot resume a path you were knocked off (the doc's "involuntary
 		# displacement ends a move").
-		if projected_lifecycle(mover, hypo) != Unit.LifecycleState.ACTIVE \
+		if drowned or projected_lifecycle(mover, hypo) != Unit.LifecycleState.ACTIVE \
 				or projected_position(mover, hypo) != walk[i]:
 			# Stamped even when the halt lands on the last cell: it is what tells the projection
 			# that this mover did NOT walk out from under a shove (Unit.projected_cell).
@@ -931,7 +944,7 @@ static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalRe
 	if effect.gas_added.is_empty():
 		return
 	effect.cause = action
-	plan.deposit(effect, board)
+	plan.deposit(effect)
 
 # The states a unit would hold once a hit's removes and then its adds have landed: #1092's judge of
 # what an add is blocked by. The landing itself goes through the body's doors (_resolve_one).
@@ -949,53 +962,53 @@ static func _states_after(held: Array[Elemental.State], removed: Array[Elemental
 
 # --- The floor leaving (#922) ---------------------------------------------------------------
 #
-# Everyone this pass's own terrain deposits leave standing on water they cannot stand on goes under
-# -- ice melted beneath them. Asked of the deposits as a WHOLE against the live ground, one comparison
-# and no FROZEN clause: "the landed board drowns you and the live one did not". A refreeze in the same
-# pass nets to nothing, a Waterwalker and shallow water never drown, and a unit shoved INTO water this
-# pass already drowned on the live board, so none of them is asked twice.
+# The resolve's twin of ResolvedPlan.play_landing (#1498): once `played` has resolved, its landing goes
+# onto the pass's tiles, and everyone it leaves standing on water they cannot stand on goes under right
+# there (ruling 4) -- ice melted beneath them. Asked per cell the landing touches, before and after it:
+# "the landed ground drowns you and the ground before it did not". So a Waterwalker and shallow water
+# never drown, a unit shoved INTO water already drowned on the way in, and a refreeze later in the pass
+# closes over a body that has already gone under. A unit sinks at most once.
 #
-# Called at the two moments a sinking plays (SinkAction.Moment): once the attack walk has resolved,
-# with the deposits known then -- the ice melts straight after the volley, before any counter, so a
-# sunk unit does not counter -- and once the pass has settled, for the melts only a counter or a tail
-# shot made and for anyone moved onto melted ice after the first call. A unit sinks at most once.
-static func settle_sinks(plan: ResolvedPlan, hypo: Dictionary, board: BoardContext,
-		moment: SinkAction.Moment) -> void:
-	if board == null or board.terrain_states == null or plan.cell_effects.is_empty():
+# Called after every action the resolve resolves, as both hosts land after every action they play: a
+# member that does not close its volley lands nothing.
+static func settle_landing(played: BaseAction, plan: ResolvedPlan, hypo: Dictionary, board: BoardContext) -> void:
+	if board == null:
 		return
-	var landed := board.planned(plan.tiles)
-	for unit in board.units:
-		if not is_instance_valid(unit) or plan.has_sunk(unit):
-			continue
-		if projected_lifecycle(unit, hypo) == Unit.LifecycleState.DEAD:
-			continue
+	var landing := plan.landing_after(played)
+	if landing.is_empty():
+		return
+	var ground := plan.ground(board)
+	var standing: Array[Unit] = []
+	if ground.terrain_states != null:
+		var touched := {}
+		for effect in landing:
+			touched[effect.cell] = true
+		for unit in ground.units:
+			if not is_instance_valid(unit) or plan.has_sunk(unit):
+				continue
+			if projected_lifecycle(unit, hypo) == Unit.LifecycleState.DEAD:
+				continue
+			var cell := projected_position(unit, hypo)
+			if touched.has(cell) and not RulesService.drowns_in(cell, state_of(unit, hypo), ground):
+				standing.append(unit)
+	plan.land(played, ground)
+	for unit in standing:
 		var cell := projected_position(unit, hypo)
 		var body := state_of(unit, hypo)
-		if not RulesService.drowns_in(cell, body, landed) or RulesService.drowns_in(cell, body, board):
+		if not RulesService.drowns_in(cell, body, ground):
 			continue
-		var wets := RulesService.wets_in(cell, body, landed) \
+		var wets := RulesService.wets_in(cell, body, ground) \
 				and not Elemental.is_blocked(body.element_states, Elemental.State.WET)
-		var sink := SinkAction.make(body, cell, _floor_taken_by(cell, body, board, plan.cell_effects),
-				moment, wets)
-		var sinker := _hypo_for(unit, hypo).state
-		LethalityRules.land_rung(sinker, sink.resolved.lethality, sink.resolved.damage)
-		for s in sink.resolved.states_added:
-			sinker.add_element_state(s, sink.resolved.state_turns.get(s, 0))   # SinkAction.execute's door
-		plan.sinks.append(sink)
+		_go_under(SinkAction.make(body, cell, played, wets), plan, hypo)
 
 
-# Which deposit took the floor away: the first after which this cell drowns this unit. Its attack is
-# where the queue hangs the sinking's row. The deposits are landed one at a time on a fresh copy of the
-# tiles, in the order the pass made them, and the cell asked after each one that lands on it.
-static func _floor_taken_by(cell: Vector2i, body: UnitState, board: BoardContext,
-		deposits: Array[ResolvedCellEffect]) -> AttackAction:
-	var tiles := PlannedTiles.new(board.terrain_states, board.gas)
-	var so_far := board.planned(tiles)
-	for effect in deposits:
-		tiles.land(effect)
-		if effect.cell == cell and RulesService.drowns_in(cell, body, so_far):
-			return effect.cause as AttackAction   # a Burrow's COVER takes no floor away
-	return null
+# A sinking lands on the pass's copy of the body through SinkAction.execute's doors, and joins the plan.
+static func _go_under(sink: SinkAction, plan: ResolvedPlan, hypo: Dictionary) -> void:
+	var sinker := _hypo_for(sink.actor, hypo).state
+	LethalityRules.land_rung(sinker, sink.resolved.lethality, sink.resolved.damage)
+	for s in sink.resolved.states_added:
+		sinker.add_element_state(s, sink.resolved.state_turns.get(s, 0))
+	plan.sinks.append(sink)
 
 
 # Elements that survive the target's gear, as the pass has left it. A blocked element is erased from the hit entirely, so
@@ -1415,8 +1428,8 @@ static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 
 # Does this order's carving fizzle where the PASS has its caster (Deep Alchemy Phase 2)? The threaded
 # position, the way _source_base_damage reads empowerment: a caster shoved off the riverbank casts dry.
-# Its neighbours are read as the pass has left them too (#1480 stage 4); the GROUND is the plain one
-# -- the pass's own deposits are not present yet, empowerment's limit.
+# Its neighbours are read as the pass has left them too (#1480 stage 4), and so is the GROUND: the
+# pass's own ground, every volley landed so far (#1498).
 static func _fizzles(action: AttackAction, board: BoardContext, hypo: Dictionary) -> bool:
 	return CellSubstances.fizzle_reason(action.fired_attack, projected_position(action.actor, hypo),
 			board, state_of(action.actor, hypo), hypo) != ""
@@ -1597,15 +1610,13 @@ class _Hypo:
 # Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
 # that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
 #
-# THE GAS IS READ AS THE PASS LEAVES IT (#1332): `tiles`, the plan's planned tiles so far (#1498), over
-# the live field -- exactly what playback will have landed before this hit's own effects land, since it
-# lands each volley's deposits in append order (ResolvedPlan.play_landing). So a Gust blows the steam a
-# douse queued ahead of it, and a second Gust moves what the first blew in. Fizzle, empowerment and the
-# air reading still read the GROUND as it stands: they ask what a caster draws on, which is a different
-# question. The ATTACKER is read as the pass has left it (#1480 stage 4): its elements and its shove
-# come off its copy.
+# THE TILES ARE READ AS THE PASS LEAVES THEM (#1332, #1498): `board` is the pass's own ground, every
+# volley landed so far and none of this one's (ruling 3) -- exactly what playback will have landed
+# before this volley lands (ResolvedPlan.play_landing). So a Gust blows the steam a douse queued ahead
+# of it, a second Gust moves what the first blew in, and fire on water an earlier volley froze melts it.
+# The ATTACKER is read as the pass has left it (#1480 stage 4): its elements and its shove come off its copy.
 static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction],
-		tiles: PlannedTiles = null, hypo: Dictionary = {}) -> Array[ResolvedCellEffect]:
+		hypo: Dictionary = {}) -> Array[ResolvedCellEffect]:
 	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
@@ -1621,7 +1632,6 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
 	if elements.is_empty() and not leaves_gas:
 		return effects
-	var as_left := board.planned(tiles)
 	# What each struck tile's dispersal carries off, by where it lands (#1332). Every tile is read
 	# before anything moves, and landed only after the loop, so a cloud across a struck line shifts
 	# intact rather than eating itself.
@@ -1642,7 +1652,7 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 			cells.append(cell)
 	for cell in cells:
 		var effect: ResolvedCellEffect = null
-		var gas_here := as_left.gas_at(cell)
+		var gas_here := board.gas_at(cell)
 		if struck.has(cell) and not ground.is_empty():
 			effect = _resolve_cell_effect_at(cell, ground, board, terrain_reactions)
 		if not elements.is_empty():

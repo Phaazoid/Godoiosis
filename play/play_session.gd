@@ -1461,6 +1461,9 @@ func execute() -> Dictionary:
 	for moment in plan.walk_moments(moves):
 		if moment["soak"]:
 			_apply_walk_states(moment["move"] as MoveAction, events)
+		var drowned: Array[SinkAction] = []
+		drowned.assign(moment["sinks"])
+		_apply_sinks(drowned, events)   # the water a walk shot melted takes the walker it caught (#1498)
 		for shot: AttackAction in moment["shots"]:
 			_apply_attack(shot, events)
 			_land_after(plan, shot, events)
@@ -1474,9 +1477,6 @@ func execute() -> Dictionary:
 	for atk in plan.attack_playback():
 		_apply_attack(atk, events)
 		_land_after(plan, atk, events)
-	# ...and whoever the melt took the floor from goes under (#922), before any counter -- MIRRORS
-	# OrderExecutor.execute_orders. SinkAction.execute is synchronous pure playback, so the real one runs.
-	_apply_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), events)
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
 		_land_after(plan, ctr, events)
@@ -1505,9 +1505,6 @@ func execute() -> Dictionary:
 			for shot in plan.shots_fired_during(action):
 				_apply_attack(shot, events)
 				_land_after(plan, shot, events)
-
-	# 4b) the melts only a counter or a tail shot made (#922) -- the pass has settled.
-	_apply_sinks(plan.sinks_at(SinkAction.Moment.PASS_END), events)
 
 	# The pass is over before the sweeps, as OrderExecutor drops executing_plan before them: the
 	# sweeps' and the clear's own refreshes re-resolve the plan.
@@ -1541,18 +1538,19 @@ func _apply_walk_states(move: MoveAction, events: Array[String]) -> void:
 		events.append("%s gains %s" % [handle_for(move.actor), Elemental.state_display_name(state)])
 
 # What lands once `played` has played (#1498): ResolvedPlan.play_landing, the step OrderExecutor runs after
-# the same action, minus the redraw, plus its lines. Preview and execution consume the SAME
-# ResolvedCellEffect objects (R3).
+# the same action, minus the redraw, plus its lines -- and then whoever it took the floor from goes under
+# (ruling 4), as OrderExecutor plays them. Preview and execution consume the SAME ResolvedCellEffect and
+# SinkAction objects (R3); SinkAction.execute is synchronous pure playback, so the real one runs.
 func _land_after(plan: ResolvedPlan, played: BaseAction, events: Array[String]) -> void:
-	if terrain_states == null:
-		return
-	for effect in plan.play_landing(played, terrain_states, gas_field):
-		for state in effect.states_added:
-			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
-		if effect.gas_cleared:
-			events.append("%s's gas leaves" % str(effect.cell))   # dispersed, or blown to a "gains" line (#1332)
-		for kind: Gas.Kind in effect.gas_added:
-			events.append("%s gains %s %s" % [str(effect.cell), Gas.Level.keys()[effect.gas_added[kind]], Gas.name_of(kind)])
+	if terrain_states != null:
+		for effect in plan.play_landing(played, terrain_states, gas_field):
+			for state in effect.states_added:
+				events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
+			if effect.gas_cleared:
+				events.append("%s's gas leaves" % str(effect.cell))   # dispersed, or blown to a "gains" line (#1332)
+			for kind: Gas.Kind in effect.gas_added:
+				events.append("%s gains %s %s" % [str(effect.cell), Gas.Level.keys()[effect.gas_added[kind]], Gas.name_of(kind)])
+	_apply_sinks(plan.sinks_caused_by(played), events)
 
 
 func _apply_sinks(sinks: Array[SinkAction], events: Array[String]) -> void:

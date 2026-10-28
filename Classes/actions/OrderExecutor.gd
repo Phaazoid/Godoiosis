@@ -237,9 +237,6 @@ func execute_orders(unit):
 			profiles)
 	if _board_gone(board):
 		return
-	await _play_sinks(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND))   # the attack phase's melts (#922)
-	if _board_gone(board):
-		return
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of. It is a COMBAT beat under
 	# COMBAT_ONLY (dev, 2026-08-28), so it keeps the cinematic's hold there.
@@ -288,10 +285,6 @@ func execute_orders(unit):
 				_beat_emphases(codas).merged(emphases), _beat_profiles(codas).merged(profiles))
 		if _board_gone(board):
 			return
-	# The melts only a counter or a tail shot made (#922) -- the pass has settled, and the stage is still up.
-	await _play_sinks(plan.sinks_at(SinkAction.Moment.PASS_END))
-	if _board_gone(board):
-		return
 	await _bring_the_board_home()   # the tiles travel back into their sockets (#521 slice B)
 	if _board_gone(board):
 		return
@@ -469,9 +462,16 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 			# without its pause because its mover was removed mid-shot. Unreachable by design, and
 			# it plays the shot late rather than dropping it.
 			if mover.parked_at() == int(next["step"]) or all_complete:
-				# The soaking lands first, as the resolve soaked the walker before this step's shots (#46).
+				# The soaking lands first, as the resolve soaked the walker before this step's shots (#46),
+				# then the water a walk shot melted takes the walker it caught (#1498 ruling 5).
 				if next["soak"]:
 					mover.apply_walk_states()
+				var drowned: Array[SinkAction] = []
+				drowned.assign(next["sinks"])
+				if not drowned.is_empty():
+					await _play_sinks(drowned)
+					if _board_gone(board):
+						return
 				var shots: Array = next["shots"]
 				await _execute_action_sequence(plan, shots, beat, holds, subjects, lines,
 						lingers, emphases, profiles)
@@ -665,6 +665,13 @@ func _execute_action_sequence(plan: ResolvedPlan, actions: Array, beat: float = 
 		await Pacing.beat(self, after_the_blow(action, float(lingers.get(action, 0.0))))
 		if _board_gone(board):
 			return
+		# ...and whoever that landing took the floor from goes under, before the next action (#1498
+		# ruling 4), as the resolve sank them.
+		var sunk := plan.sinks_caused_by(action)
+		if not sunk.is_empty():
+			await _play_sinks(sunk)
+			if _board_gone(board):
+				return
 
 
 # Wait until the 3D camera has finished easing onto the beat's shot (#1132 follow-up). The rig says so
@@ -1032,9 +1039,9 @@ func _beat_lines(beats: Array[BeatSheet.Beat]) -> Dictionary:
 			lines[beat.actions[0]] = line
 	return lines
 
-# The units the pass's own terrain dropped into the water (#922), played back as resolved (R3) -- each
-# goes under, then the same look the end-of-turn burn gives a unit the ground hurt. The fight's stage
-# is still up, so the camera stays where it is.
+# The units the pass's own terrain dropped into the water (#922), played back as resolved (R3) right
+# after their cause -- each goes under, then the same look the end-of-turn burn gives a unit the ground
+# hurt. The camera stays where the cause left it.
 func _play_sinks(sinks: Array[SinkAction]) -> void:
 	var board := _board_now()
 	for sink in sinks:

@@ -327,7 +327,7 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 		sinks.append({
 			"unit": _ref(sink.actor),
 			"at": _cell(sink.cell),
-			"moment": SinkAction.Moment.keys()[sink.moment],
+			"cause": _sink_cause(sink, plan),
 			"damage": sink.resolved.damage,
 			"lethality": ResolvedOutcome.Lethality.keys()[sink.resolved.lethality],
 		})
@@ -339,6 +339,19 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 		"cell_effects": effects,
 		"sinks": sinks,
 	})
+
+
+# What a sinking went under after (#1498): the `hits` kind of the blow whose landing melted the ice, or
+# "walk" for a walker the water caught.
+static func _sink_cause(sink: SinkAction, plan: ResolvedPlan) -> String:
+	if sink.cause is MoveAction:
+		return "walk"
+	if sink.cause is CounterAttackAction:
+		return "counter"
+	var shot := sink.cause as AttackAction
+	if shot != null and plan.watch_shots.has(shot):
+		return "watch_shot"
+	return "attack"
 
 
 func record_turn_effects(faction: Team.Faction, hits: Array[TileHitAction]) -> void:

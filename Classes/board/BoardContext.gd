@@ -21,7 +21,8 @@ var weather: Weather.Kind = Weather.Kind.CLEAR
 # authored air moved by its weather (Atmosphere.effective), composed by the builder that sets it. Set
 # beside the weather, so every other builder reads a Normal board.
 var atmosphere: Dictionary[String, int] = {}
-# A pass's planned tiles (#1498), read before the stores (planned). Null on every board the game builds.
+# A pass's planned tiles (#1498), read before the stores (planned). Null on every board the game builds,
+# but for the length of a resolve pass, which lends the board its own (ResolvedPlan.lend_tiles).
 var tiles: PlannedTiles = null
 # The mission being played (#1220), for the AI's one mission-shaped question: would this plan kill a
 # unit the mission says must survive. Null on a sandbox or fixture board, which has no such stake.

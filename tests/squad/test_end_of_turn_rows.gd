@@ -36,6 +36,14 @@ func _deposit(cell: Vector2i, state: Terrain.TileState) -> ResolvedCellEffect:
 	return effect
 
 
+# A lone hit laying `effect`, landed on the plan's tiles the way the pass lands one (#1498).
+func _lay(plan: ResolvedPlan, effect: ResolvedCellEffect, board: BoardContext) -> void:
+	var hit := AttackAction.new()
+	effect.cause = hit
+	plan.deposit(effect)
+	plan.land(hit, board)
+
+
 func _board(units_in: Array) -> BoardContext:
 	var units: Array[Unit] = []
 	units.assign(units_in)
@@ -151,7 +159,7 @@ func test_the_forecast_sees_a_fire_this_pass_is_about_to_light() -> void:
 	var stander := H.spawn_solo(self, _sm, PLAYER, FIRE, STOUT, false)
 	var board := _board([stander])
 	var plan := ResolvedPlan.new()
-	plan.deposit(_deposit(FIRE, Terrain.TileState.BURNING), board)
+	_lay(plan, _deposit(FIRE, Terrain.TileState.BURNING), board)
 
 	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
 
@@ -169,7 +177,7 @@ func test_a_fire_this_pass_puts_out_is_not_forecast() -> void:
 	var douse := ResolvedCellEffect.new()
 	douse.cell = FIRE
 	douse.states_removed.assign([Terrain.TileState.BURNING])
-	plan.deposit(douse, board)
+	_lay(plan, douse, board)
 
 	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
 
@@ -388,7 +396,7 @@ func test_the_forecast_sees_steam_this_pass_deposits() -> void:
 	var steam := ResolvedCellEffect.new()
 	steam.cell = FIRE
 	steam.add_gas(Gas.Kind.STEAM, rules.state_from)
-	plan.deposit(steam, board)
+	_lay(plan, steam, board)
 
 	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
 

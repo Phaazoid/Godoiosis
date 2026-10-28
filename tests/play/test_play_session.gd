@@ -528,7 +528,8 @@ func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
 	assert_str(_glyph_at(cell)).is_equal(BoardView.GROUND["frozen"][0])
 
 # #922: melting the ice under a unit drops it in, and the headless twin plays that where the game
-# does -- when the deposits land, before any counter -- with the preview naming it first (Law #2).
+# does -- right after the volley that melts it (#1498 stage 3), before any counter -- with the preview
+# naming it first (Law #2).
 func test_melting_the_ice_under_a_unit_sinks_it_headlessly_too() -> void:
 	var b: Dictionary = BoardBuilder.build(self, "SinkRoot")
 	auto_free(b.root)

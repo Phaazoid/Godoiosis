@@ -1,6 +1,7 @@
 # PlannedTiles (#1498): where a pass leaves the tiles it touches, the cell half of the pass's
-# hypothetical. Pure data over two bare stores -- no scene -- except the last case, which resolves a
-# real plan to check every deposit landed on plan.tiles as it was appended.
+# hypothetical. Pure data over two bare stores -- no scene -- except the last three cases, which resolve
+# real plans: every deposit landed on plan.tiles by the pass's end, and the board the pass borrowed for
+# its tiles given back as it was.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -162,7 +163,7 @@ func test_a_volley_lands_after_its_last_member_and_an_order_after_itself() -> vo
 	var causes: Array[BaseAction] = [lead, last, lone, burrow]
 	for i in laid.size():
 		laid[i].cause = causes[i]
-		plan.deposit(laid[i], board)
+		plan.deposit(laid[i])
 
 	assert_array(plan.landing_after(lead)).override_failure_message("a volley landed before its last member").is_empty()
 	assert_array(plan.landing_after(last)).override_failure_message("the volley did not land whole, in the order laid") \
@@ -172,6 +173,18 @@ func test_a_volley_lands_after_its_last_member_and_an_order_after_itself() -> vo
 	assert_array(plan.landing_after(lone)).contains_exactly([laid[2]])
 	assert_array(plan.landing_after(burrow)).override_failure_message("a Burrow's COVER did not land with it") \
 		.contains_exactly([laid[3]])
+
+	# The resolve's twin (stage 3): recording lands nothing, land() lands the same thing at the same
+	# member, onto the plan's own ground and never the stores.
+	var ground := plan.ground(board)
+	assert_int(ground.gas_at(A)).override_failure_message("a deposit counted as it was recorded").is_equal(0)
+	assert_array(plan.land(lead, board)).is_empty()
+	assert_array(plan.land(last, board)).contains_exactly([laid[0], laid[1]])
+	assert_int(Gas.level_in(ground.gas_at(A), SMOKE)).override_failure_message(
+			"the plan's ground did not show its landing").is_equal(Gas.Level.THIN)
+	assert_object(plan.ground(ground)).override_failure_message("the plan's own ground was wrapped again") \
+		.is_same(ground)
+	assert_int(Gas.level_in(_gas.packed_at(A), SMOKE)).override_failure_message("land() wrote the store").is_equal(0)
 
 	assert_array(plan.play_landing(last, _terrain, _gas)).contains_exactly([laid[0], laid[1]])
 	assert_int(Gas.level_in(_gas.packed_at(A), SMOKE)).override_failure_message("play_landing wrote no store") \
@@ -195,8 +208,9 @@ func _gasser(at: Vector2i, kind: Gas.Kind, level: Gas.Level, struck: Array[Vecto
 	return aim
 
 
-# Every deposit a real pass makes lands on plan.tiles as it is appended (ResolvedPlan.deposit): two
-# attacks laying gas on one shared cell, and the plan's tiles read as its own records landed afresh.
+# Every deposit a real pass makes lands on plan.tiles once its volley has (ResolvedPlan.land, stage 3),
+# so by pass end every one, in the order laid: two attacks laying gas on one shared cell, and the plan's
+# tiles read as its own records landed afresh.
 func test_a_resolved_plans_tiles_are_its_deposits_landed() -> void:
 	_gas.set_level(B, STEAM, Gas.Level.THIN)
 	var first: Array[Vector2i] = [A, B]
@@ -222,3 +236,53 @@ func test_a_resolved_plans_tiles_are_its_deposits_landed() -> void:
 	assert_int(Gas.level_in(plan.tiles.gas_at(B), STEAM)).override_failure_message(
 			"the planned cell did not start from the store's steam").is_equal(Gas.Level.MEDIUM)
 	assert_int(Gas.level_in(_gas.packed_at(B), SMOKE)).override_failure_message("the resolve wrote the store").is_equal(0)
+
+
+# The pass LENDS its tiles to the board it was handed (ResolvedPlan.lend_tiles) and gives back what that
+# board wore once it is over: the caller's board, the game's own among them, never leaves a pass planned.
+func test_a_resolve_gives_its_board_back_the_tiles_it_wore() -> void:
+	var struck: Array[Vector2i] = [A]
+	var no_reactions: Array[ElementalReaction] = []
+	var plan := ResolvedPlan.new()
+	plan.attacks = [_gasser(Vector2i(0, 0), STEAM, Gas.Level.THIN, struck)] as Array[AttackAction]
+	var board := _board(_terrain, _gas)
+
+	PlanResolver.resolve(plan, no_reactions, board, TerrainReactionCatalog.get_all())
+
+	assert_object(plan.tiles).override_failure_message("fixture: the pass lent no tiles").is_not_null()
+	assert_object(board.tiles).override_failure_message("the pass left its tiles on the board").is_null()
+
+	# Over a board already wearing tiles (a pass over a planned board), those come back, never written.
+	var worn := PlannedTiles.new(_terrain, _gas)
+	var planned := _board(_terrain, _gas)
+	planned.tiles = worn
+	var again := ResolvedPlan.new()
+	again.attacks = [_gasser(Vector2i(0, 1), SMOKE, Gas.Level.MEDIUM, struck)] as Array[AttackAction]
+
+	PlanResolver.resolve(again, no_reactions, planned, TerrainReactionCatalog.get_all())
+
+	assert_object(planned.tiles).override_failure_message("the pass did not give back the tiles it found").is_same(worn)
+	assert_array(worn.cells()).override_failure_message("the pass landed on the tiles it was lent over").is_empty()
+	assert_int(Gas.level_in(again.tiles.gas_at(A), SMOKE)).override_failure_message(
+			"fixture: the pass did not land its smoke on its own tiles").is_equal(Gas.Level.MEDIUM)
+
+
+# The squad pass gives the board back on EVERY exit, the refused hold's early return included (the
+# give-back sits in _resolve_actions, outside the pass, for exactly that return).
+func test_the_squad_pass_gives_its_board_back_on_every_exit() -> void:
+	var sm := H.make_manager(self)
+	var hero := H.spawn_solo(self, sm, Team.Faction.PLAYER, Vector2i(0, 0))
+	var board: BoardContext = sm.board_source.call()
+
+	var plan := sm.resolve_plan(hero.squad, board)
+
+	assert_object(plan.tiles).override_failure_message("fixture: the pass lent no tiles").is_not_null()
+	assert_object(board.tiles).override_failure_message("the pass left its tiles on the board").is_null()
+
+	var carried_nowhere := (hero.get_equipped_weapon() as WeaponInstance).copy_for_grant() as EquippableData
+	var none: Array[BaseAction] = []
+	var refused := sm.resolve_hypothetical(hero.squad, none, board, ReactionCatalog.get_all(),
+			TerrainReactionCatalog.get_all(), {hero: carried_nowhere})
+
+	assert_object(refused).override_failure_message("fixture: the hold was not refused").is_null()
+	assert_object(board.tiles).override_failure_message("a refused hold left the pass's tiles on the board").is_null()

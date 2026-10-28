@@ -89,8 +89,10 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 # panel. An empty batch contributes nothing at all — no header, no divider.
 #
 # A row is followed by a row per watch shot THAT order set off (#413/#592) — see _watch_shots_for —
-# and any row is followed by the sinkings its deposit caused (#922): a unit the melt took the floor
-# from, hung under the attack that melted it. A watch shot can melt ice too, so its rows get theirs.
+# and any row by the sinkings it caused (#922): a unit the melt took the floor from, hung under the
+# action whose landing melted it (#1498) -- a volley's LAST member, so the volley stays one row. A watch
+# shot can melt ice too, so its rows get theirs. A blow's sinkings come before the watch shots its
+# shoves set off; a walk's after the shots it walked into, since the water ends it.
 static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String, batch: Array,
 		plan: ResolvedPlan = null) -> void:
 	if batch.is_empty():
@@ -99,14 +101,25 @@ static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String,
 		entries.append(divider())
 	entries.append(header(title))
 	for action in batch:
-		_add_with_sinks(entries, action, _depth_of(action), plan)
+		var depth := _depth_of(action)
+		var walk := action is MoveAction
+		entries.append(action_row(action, depth))
+		if not walk:
+			_add_sinks(entries, action, depth, plan)
 		for shot: AttackAction in _watch_shots_for(plan, action):
 			_add_with_sinks(entries, shot, 1 + _depth_of(shot), plan)
+		if walk:
+			_add_sinks(entries, action, depth, plan)
 
 
 static func _add_with_sinks(entries: Array[ActionQueueDisplayEntry], action: BaseAction, depth: int,
 		plan: ResolvedPlan) -> void:
 	entries.append(action_row(action, depth))
+	_add_sinks(entries, action, depth, plan)
+
+
+static func _add_sinks(entries: Array[ActionQueueDisplayEntry], action: BaseAction, depth: int,
+		plan: ResolvedPlan) -> void:
 	if plan == null:
 		return
 	for sink in plan.sinks_caused_by(action):

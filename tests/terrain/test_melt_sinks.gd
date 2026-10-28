@@ -2,10 +2,11 @@
 # drowning from the other side, so it reaches the same rung -- the water takes whatever is left, the
 # unit comes up WET, and a rescue from the bank is the answer.
 #
-# WHEN is the dev's ruling (2026-09-27): a unit goes under when the pass's deposits land, straight
-# after the volley and before any counter -- and a melt only a COUNTER makes, known only once the
-# counters resolve, goes under when the pass settles. Both moments are ordering claims, so both are
-# driven through the real resolve and the real execute_orders on the game scene.
+# WHEN is the dev's ruling (#1498 ruling 4, replacing #922's two batch moments): a unit goes under AT
+# THE MELT -- right after the action whose landing took the floor away (a volley's last member, a
+# counter, a watch shot) and before anything after it. That is an ordering claim, so it is driven
+# through the real resolve and the real execute_orders on the game scene; test_execute_two_hosts pins
+# the playback slot in both hosts.
 #
 # Boards are hand-painted on the fixture's grass (the content razor); water is the deep tile, which
 # is what ice forms on.
@@ -14,6 +15,7 @@ extends GdUnitTestSuite
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const F := preload("res://tests/support/job_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const DEEP_WATER := Vector2i(5, 6)
@@ -144,7 +146,6 @@ func test_a_fire_that_melts_the_ice_under_an_enemy_sinks_it() -> void:
 	var sink := _sink_of(plan, foe)
 	assert_object(sink).override_failure_message("the melt previews nothing for the unit on the ice") \
 		.is_not_null()
-	assert_that(sink.moment).is_equal(SinkAction.Moment.DEPOSITS_LAND)
 	assert_that(sink.cell).is_equal(ICE)
 	# The water takes whatever the blow left (#116), through the ordinary ladder.
 	assert_int(sink.resolved.hp_before).is_equal(hit.resolved.target_hp_after)
@@ -175,7 +176,44 @@ func test_the_sinking_hangs_under_the_attack_that_melted_the_ice() -> void:
 	assert_int(next.indent_level).is_equal(entries[at].indent_level + 1)
 
 
-# The sinking happens when the deposits land, BEFORE the counters are derived, so a unit the melt
+# One blast is one moment (#1498 ruling 3), so a melt under a blast's MIDDLE victim lands, and sinks
+# them, once the whole volley has played: the sinking hangs after the volley's last member, and the
+# volley's rows stay together (the panel folds them into one).
+func test_a_blasts_sinking_hangs_after_its_whole_volley() -> void:
+	_ice(ICE)
+	var foes: Array[Unit] = [_spawn(ENEMY, ICE + Vector2i.UP, {Stats.Stat.MHP: 30}),
+			_spawn(ENEMY, ICE, {Stats.Stat.MHP: 30}), _spawn(ENEMY, ICE + Vector2i.DOWN, {Stats.Stat.MHP: 30})]
+	var hero := _spawn(PLAYER, ICE + Vector2i.LEFT * 2)
+	_imbue(hero, Elemental.Element.FIRE)
+	var blast := (hero.get_equipped_weapon() as WeaponInstance).template.main_attack
+	P.stamped(blast, 2, [Vector2i.UP, Vector2i.ZERO, Vector2i.DOWN] as Array[Vector2i])
+	blast.swing = false
+	_queue(hero, ICE)
+	var plan := _plan(hero.squad)
+	var volley: Array[AttackAction] = []
+	for attack in plan.attacks:
+		if foes.has(attack.target):
+			volley.append(attack)
+	assert_int(volley.size()).override_failure_message("fixture: the blast must reach all three").is_equal(3)
+	var sink := _sink_of(plan, foes[1])
+	assert_object(sink).override_failure_message("fixture: the middle enemy never sinks").is_not_null()
+	if sink == null or volley.size() != 3:
+		return
+	assert_object(sink.cause).override_failure_message("the sinking is not caused by the volley's last member") \
+		.is_same(volley[-1])
+
+	var entries := ActionQueueDisplayEntry.build_for(hero.squad, plan)
+	var rows: Array[BaseAction] = []
+	for entry in entries:
+		if entry.action != null:
+			rows.append(entry.action)
+	var first := rows.find(volley[0])
+	assert_array(rows.slice(first, first + 4)).override_failure_message(
+			"the sinking split the volley's rows, or hangs anywhere but after the last").is_equal(
+			[volley[0], volley[1], volley[2], sink] as Array[BaseAction])
+
+
+# The sinking happens at the melt, BEFORE the counters are derived, so a unit the melt
 # sinks cannot hit back. Pinned against its own fixture first: on dry ground the same enemy DOES
 # counter, or the skip below would pass on a board where nobody could.
 func test_a_unit_the_melt_sinks_does_not_counter() -> void:
@@ -227,9 +265,9 @@ func test_a_waterwalker_on_melting_ice_keeps_standing() -> void:
 	assert_object(_sink_of(_plan((s.hero as Unit).squad), foe)).is_null()
 
 
-# The sink is judged once the attack phase's deposits have all landed (until #1498 stage 3), so a pass
-# that melts the ice and then freezes it again leaves ice.
-func test_ice_the_same_pass_refreezes_sinks_nobody() -> void:
+# The sink is judged at the melt (#1498 ruling 4), so a pass that melts the ice and then freezes it
+# again sinks the unit at the melt, and the ice closes over the body. How that reads is #1506's.
+func test_ice_the_same_pass_refreezes_closes_over_the_sunk_unit() -> void:
 	var s := _fire_on_the_ice()
 	var hero: Unit = s.hero
 	var froster := _spawn(PLAYER, Vector2i(4, 1))
@@ -244,8 +282,49 @@ func test_ice_the_same_pass_refreezes_sinks_nobody() -> void:
 		if effect.cell == ICE and effect.states_removed.has(Terrain.TileState.FROZEN):
 			melted = true
 	assert_bool(melted).override_failure_message("fixture: the fire must still melt the ice").is_true()
-	assert_bool(plan.sinks.is_empty()).override_failure_message(
-			"a pass that ends with the ice back sank somebody").is_true()
+	var sink := _sink_of(plan, s.foe as Unit)
+	assert_object(sink).override_failure_message("the melt sank nobody because a later attack refroze it") \
+		.is_not_null()
+	if sink == null:
+		return
+	assert_object(sink.cause).override_failure_message("the sinking is not caused by the fire") \
+		.is_same(_hit_on(plan, s.foe as Unit))
+	assert_bool(plan.tiles.states_at(ICE).has(Terrain.TileState.FROZEN)).override_failure_message(
+			"the second attack did not freeze the water the fire opened").is_true()
+
+
+# A haul's chosen bank is ice a fire in the same plan melts (#1498). The pass judges the haul at the
+# rescue's slot on its own ground, so the order goes red, rather than validating on the live ice and
+# hauling the body onto water at execution.
+func test_a_haul_onto_a_bank_the_pass_melts_reds_the_rescue() -> void:
+	var lake := Vector2i(5, 1)
+	var bank := Vector2i(4, 0)
+	var rescuer := _spawn(PLAYER, Vector2i(4, 1))
+	var ally := _spawn(PLAYER, lake, {Stats.Stat.MHP: 30})
+	(game.grid as BoardGrid).paint(lake, GRASS_SOURCE, DEEP_WATER)
+	ally.take_damage(ally.get_current_hp())
+	assert_bool(ally.is_downed()).override_failure_message("fixture: the ally did not go down").is_true()
+	_ice(bank)
+	var lighter := _spawn(PLAYER, Vector2i(3, 0))
+	_imbue(lighter, Elemental.Element.FIRE)
+	game.squad_manager.join_squad(lighter, rescuer.squad)
+	assert_bool(RulesService.rescue_landings(rescuer, ally, game._board()).has(bank)).override_failure_message(
+			"fixture: the ice is no bank to begin with").is_true()
+	game.squad_manager.active_squad = rescuer.squad
+	var rescue := RescueAction.new()
+	rescue.init(rescuer, ally, bank)
+	assert_bool(game.squad_manager.queue_action(rescuer.squad, rescue)).override_failure_message(
+			"fixture: the rescue never queued (%s)" % ", ".join(rescue.validation_errors)).is_true()
+	_queue(lighter, bank)
+
+	var plan := _plan(rescuer.squad)
+	game.squad_manager.validate_squad_plan(rescuer.squad, plan)
+	assert_bool(rescue.resolved_haul_lands).override_failure_message(
+			"the pass hauls the body onto a bank its own fire melted").is_false()
+	assert_array(rescue.validation_errors).override_failure_message("the rescue onto melted ice stays green") \
+		.contains(["Can't pull them out to there any more"])
+	assert_that(ally.get_projected_destination()).override_failure_message(
+			"the board draws the body on a bank the pass melts").is_not_equal(bank)
 
 
 # --- execution plays it back ---------------------------------------------------------------------
@@ -272,9 +351,9 @@ func test_after_the_pass_the_sunk_unit_is_down_and_wet_in_the_water() -> void:
 			"the sunk enemy's counter landed after all").is_equal(hero_hp)
 
 
-# A melt only a COUNTER makes is known once the counters resolve, so the unit it strands goes under
-# when the pass settles -- here the attacker, standing on the ice to swing.
-func test_a_counter_that_melts_the_ice_under_the_attacker_sinks_it_when_the_pass_settles() -> void:
+# A melt a COUNTER makes sinks the unit it strands right after that counter -- here the attacker,
+# standing on the ice to swing.
+func test_a_counter_that_melts_the_ice_under_the_attacker_sinks_it_after_the_counter() -> void:
 	_ice(ICE)
 	var hero := _spawn(PLAYER, ICE, {Stats.Stat.MHP: 30})
 	var foe := _spawn(ENEMY, Vector2i(4, 1), {Stats.Stat.MHP: 30})
@@ -287,7 +366,6 @@ func test_a_counter_that_melts_the_ice_under_the_attacker_sinks_it_when_the_pass
 	var sink := _sink_of(plan, hero)
 	assert_object(sink).override_failure_message("the counter's melt left the attacker standing on water") \
 		.is_not_null()
-	assert_that(sink.moment).is_equal(SinkAction.Moment.PASS_END)
 	assert_object(sink.cause).is_same(counter)
 	assert_int(sink.resolved.drown_damage).is_equal(counter.resolved.target_hp_after)
 

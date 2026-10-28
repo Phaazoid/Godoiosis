@@ -902,7 +902,8 @@ static func _fells_own(aims: Array, faction: Team.Faction, base: ResolvedPlan, p
 				or (a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS and _own_side(a.target, faction)):
 			return true
 	for sink in plan.sinks:
-		if sink.cause == null or not (aims.has(sink.cause) or aims.has(sink.cause.source_aim)):
+		var by := sink.cause as AttackAction   # a walk the water caught is no aim
+		if by == null or not (aims.has(by) or aims.has(by.source_aim)):
 			continue
 		if _newly_felled(sink.actor, faction, base, plan, kills_only):
 			return true

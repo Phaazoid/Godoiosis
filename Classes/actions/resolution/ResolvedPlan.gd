@@ -15,18 +15,62 @@ var counters: Array[CounterAttackAction] = []
 var cell_effects: Array[ResolvedCellEffect] = []
 
 # Where those leave the tiles they touch (#1498), the cell half of the pass's hypothetical beside `hypo`.
-# Null until the first deposit. Read through BoardContext.planned, never folded from cell_effects by hand.
+# Made by lend_tiles, ground() or the first landing. Read through BoardContext.planned, never folded from
+# cell_effects by hand.
 var tiles: PlannedTiles = null
 
 
-# The ONE door a pass's tile change enters by: recorded for playback, and landed on the planned tiles.
-# Landed as it is recorded, which is every reader's moment today -- each asks once the deposits it
-# folded have all been made.
-func deposit(effect: ResolvedCellEffect, board: BoardContext) -> void:
+# The ONE door a pass's tile change enters by: recorded, for playback and for land() below. It counts
+# once its volley lands (ruling 3), never as it is recorded.
+func deposit(effect: ResolvedCellEffect) -> void:
 	cell_effects.append(effect)
+
+
+# The ground a pass reads (#1498 stage 3): these tiles, LENT to the board the pass was handed for as long
+# as it runs, so every landing shows at once. Lent rather than viewed because a view is a plain
+# BoardContext, which drops whatever a stub board overrides. Hands back what the board wore, for
+# return_tiles once the pass is over.
+func lend_tiles(board: BoardContext) -> PlannedTiles:
+	if board == null:
+		return null
+	var worn := board.tiles
+	_make_tiles(board)
+	board.tiles = tiles
+	return worn
+
+
+func return_tiles(board: BoardContext, worn: PlannedTiles) -> void:
+	if board != null:
+		board.tiles = worn
+
+
+# `board` over these tiles for a reader outside the pass: a VIEW, so a landing made later shows through
+# it. Inside the pass the board already wears them, and comes back as it is.
+func ground(board: BoardContext) -> BoardContext:
+	if board == null:
+		return null
+	if tiles != null and board.tiles == tiles:
+		return board
+	_make_tiles(board)
+	return board.planned(tiles)
+
+
+# Built on any tiles the board already carries (a pass over a planned board).
+func _make_tiles(board: BoardContext) -> void:
 	if tiles == null:
-		tiles = PlannedTiles.new(board.terrain_states, board.gas)
-	tiles.land(effect)
+		tiles = board.tiles.copy() if board.tiles != null else PlannedTiles.new(board.terrain_states, board.gas)
+
+
+# The resolve's twin of play_landing: landing_after's deposits, onto the planned tiles, once `played` has
+# resolved. Handed back for PlanResolver.settle_landing, which asks who the landing took the floor from.
+func land(played: BaseAction, board: BoardContext) -> Array[ResolvedCellEffect]:
+	var landed := landing_after(played)
+	if landed.is_empty() or board == null:
+		return landed
+	_make_tiles(board)
+	for effect in landed:
+		tiles.land(effect)
+	return landed
 
 # What the END OF TURN pass will do to this squad's own units (#419) — derived LAST, after
 # everything above, because that is when it happens. Its own list for the reason watch_shots is:
@@ -38,7 +82,8 @@ var tile_hits: Array[TileHitAction] = []
 var end_of_turn_subjects: Array[Unit] = []
 
 # Who the pass's own terrain dropped into the water (#922), in the order they went under. Its own list
-# for tile_hits' reason, and each is stamped with its MOMENT, which is when both execution twins play it.
+# for tile_hits' reason. Each names its CAUSE, the action after which both execution twins play it: the
+# landing that melted the ice (#1498 ruling 4), or the walk the water caught (ruling 5).
 var sinks: Array[SinkAction] = []
 
 # The Guards this pass can see (#414), in ARM ORDER — so a stacked pair absorbs earliest-first with
@@ -88,6 +133,10 @@ func mid_walk_shots() -> Array[AttackAction]:
 # A SOAKING (#884) is a moment only when a walk-phase shot lands on that walker: its order against
 # those shots is then the outcome, so it plays where the resolve soaked it, before that step's shots.
 # A soaking nothing lands on keeps to the walk's end, so a ford nobody fires at walks as it always has.
+#
+# A walk the WATER CAUGHT (#1498 ruling 5) halts at the cell a walk shot melted, and goes under there:
+# its sinking is a moment at the halt, played after that step's soaking and before its shots, as the
+# resolve made them -- so its soaking is a moment too, or the walker would go under dry.
 func walk_moments(moves: Array) -> Array[Dictionary]:
 	var shots := mid_walk_shots()
 	var struck: Dictionary[Unit, bool] = {}
@@ -99,20 +148,28 @@ func walk_moments(moves: Array) -> Array[Dictionary]:
 		var move := action as MoveAction
 		if move == null:
 			continue
-		var soak := move.resolved_soak_step if struck.has(move.actor) else -1
+		var drowned := sinks_caused_by(move)
+		var soak := move.resolved_soak_step if struck.has(move.actor) or not drowned.is_empty() else -1
 		for shot in shots:
 			if shot.triggered_during != move:
 				continue
 			var step: int = shot.triggered_at_step
 			if soak >= 0 and step >= soak:
-				moments.append({"move": move, "step": soak, "soak": true, "shots": []})
+				moments.append({"move": move, "step": soak, "soak": true, "sinks": [], "shots": []})
 				soak = -1
 			if not moments.is_empty() and moments[-1]["move"] == move and int(moments[-1]["step"]) == step:
 				(moments[-1]["shots"] as Array).append(shot)
 				continue
-			moments.append({"move": move, "step": step, "soak": false, "shots": [shot]})
+			moments.append({"move": move, "step": step, "soak": false, "sinks": [], "shots": [shot]})
 		if soak >= 0:
-			moments.append({"move": move, "step": soak, "soak": true, "shots": []})
+			moments.append({"move": move, "step": soak, "soak": true, "sinks": [], "shots": []})
+		if drowned.is_empty():
+			continue
+		var halt := move.resolved_stop_index
+		if not moments.is_empty() and moments[-1]["move"] == move and int(moments[-1]["step"]) == halt:
+			(moments[-1]["sinks"] as Array).append_array(drowned)
+		else:
+			moments.append({"move": move, "step": halt, "soak": false, "sinks": drowned, "shots": []})
 	return moments
 
 
@@ -142,16 +199,8 @@ func shots_fired_during(order: BaseAction) -> Array[AttackAction]:
 	return shots
 
 
-# The sinkings that play at one moment (#922) -- the executor's and the Play API's one read.
-func sinks_at(moment: SinkAction.Moment) -> Array[SinkAction]:
-	var at: Array[SinkAction] = []
-	for sink in sinks:
-		if sink.moment == moment:
-			at.append(sink)
-	return at
-
-
-# ...and the ones a row's deposit caused, which the queue panel hangs under that row.
+# The sinkings `action` caused (#922): the ones its landing took the floor from, or its walk walked into
+# the water. Both executors play them right after it, and the queue panel hangs them under its row.
 func sinks_caused_by(action: BaseAction) -> Array[SinkAction]:
 	var caused: Array[SinkAction] = []
 	if action == null:
