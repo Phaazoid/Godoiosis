@@ -53,6 +53,7 @@ const NOT_COMMANDS := {
 	"can_spawn_at": "a host call PreMissionPhase makes, not ordered",
 	"get_unit_at_cell": "a host call PreMissionPhase makes, not ordered",
 	"start_pre_mission": "called by `load`, the fresh-start door",
+	"start_weather": "called by `load` and `restart`, the mission start's weather draw (#1509)",
 	"is_deploying": "read by the view, not ordered",
 	"reserve_units": "read by the view, not ordered",
 	"deployment_cells": "read by the view, not ordered",

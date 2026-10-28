@@ -556,7 +556,7 @@ static func _map_pays(unit: Unit, attack: AttackData, sweep: Conduction.Sweep, b
 		if effect == null:
 			continue
 		var deposits: Array[ResolvedCellEffect] = [effect]
-		if RulesService.drowns_in(cell, standing.state, board.with_deposits(deposits)) \
+		if RulesService.drowns_in(cell, standing.state, PlannedTiles.after(board, deposits)) \
 				and not RulesService.drowns_in(cell, standing.state, board):
 			return true
 	return false
@@ -599,7 +599,7 @@ static func _blow_splits(unit: Unit, action: AttackAction, sweep: Conduction.Swe
 		for kind: Gas.Kind in Gas.kinds_in(gas_here):
 			blown.add_gas(kind, Gas.level_in(gas_here, kind))
 		var deposits: Array[ResolvedCellEffect] = [blown]
-		var next: Dictionary[Vector2i, int] = {landing: board.with_deposits(deposits).gas_at(landing)}
+		var next: Dictionary[Vector2i, int] = {landing: PlannedTiles.after(board, deposits).gas_at(landing)}
 		var at: Dictionary[Unit, Vector2i] = {}
 		for member in leader.squad.get_members():
 			at[member] = PlanResolver.projected_position(member, hypo)

@@ -37,11 +37,16 @@ var mission: MissionState
 var _phase: PreMissionPhase = null
 var _deploying := false
 var staged: PreMissionSnapshot = null
+# The built board this session drives. Its "weather" key is the one weather store both headless boards
+# read (#1509), so the session holds the Dictionary rather than a copy of what is in it.
+var _built: Dictionary
 
+const BoardBuilder := preload("res://play/board_builder.gd")
 const PLAYER_GLYPHS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ENEMY_GLYPHS := "abcdefghijklmnopqrstuvwxyz"
 
 func _init(board: Dictionary) -> void:
+	_built = board
 	grid = board.grid
 	units_root = board.units_root
 	squad_manager = board.squad_manager
@@ -165,18 +170,25 @@ func _board() -> BoardContext:
 	var board := BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission)
 	board.weather = _weather()
-	board.atmosphere = _atmosphere()
+	board.atmosphere = BoardBuilder.atmosphere_of(_built)   # #1324: the air as played, the builder's one composition
 	return board
 
-# The weather over this board (#1260): the scenario's, as the game's ScenarioManager.current_weather is.
+# The weather over this board (#1260): the built board's store (#1509), as the game's
+# ScenarioManager.current_weather is -- the same one the builder's board_source reads.
 func _weather() -> Weather.Kind:
-	return scenario_data.weather if scenario_data != null else Weather.Kind.CLEAR
+	return BoardBuilder.weather_of(_built)
 
-# And its air (#1324) as played: the scenario's reading moved by its weather (Atmosphere.effective,
-# the composition game._board() reads), Normal before a scenario is loaded.
-func _atmosphere() -> Dictionary[String, int]:
-	var none: Dictionary[String, int] = {}
-	return Atmosphere.effective(scenario_data.atmosphere, scenario_data.weather) if scenario_data != null else none
+# The mission start's weather draw (#1509), WeatherDraw's rule on this board's store: the twin of
+# MissionController._draw_weather, and like it never part of a load. `kept` is a restart's weather (it
+# keeps the draw); `pick` is a driver's own choice, already judged by WeatherDraw.pick_block_reason.
+func start_weather(rng: RandomNumberGenerator, kept: int = WeatherDraw.NONE,
+		pick: int = WeatherDraw.NONE) -> Weather.Kind:
+	if scenario_data == null:
+		return _weather()
+	var drawn: Weather.Kind = pick as Weather.Kind if pick != WeatherDraw.NONE \
+			else WeatherDraw.at_start(scenario_data.weather_odds, _weather(), rng, kept)
+	_built["weather"] = drawn
+	return drawn
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()

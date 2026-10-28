@@ -11,7 +11,7 @@ The long version of every entry in `CLAUDE.md`'s *Architecture map* and *Code la
 | [`actions.md`](actions.md) | *Actions are a small in-code registry* · *The ring's verbs* · *Execution order* · *The actions/ folder* |
 | [`targeting.md`](targeting.md) | *Reach* · *Targeting modes* |
 | [`weapons-and-items.md`](weapons-and-items.md) | *Weapons are template + instance, and the attack is its own content* · *The weapons/ folder* · *The items/ folder* · *The alchemy/ folder* · *The jobs/ folder* · *The elemental/ folder and Conduction* |
-| [`flow-and-missions.md`](flow-and-missions.md) | *TurnManager* · *ScenarioDirector* · *Authoring a Dialogic timeline* · *Missions — the closed loop* · *The flow/ folder* |
+| [`flow-and-missions.md`](flow-and-missions.md) | *TurnManager* · *ScenarioDirector* · *Authoring a Dialogic timeline* · *Missions — the closed loop* · *The mission start's weather draw* · *The flow/ folder* |
 | [`ai.md`](ai.md) | *Archetype AI* · *The ai/ folder: the threat field and enemy ranges* |
 | [`presentation.md`](presentation.md) | *Scenes/LookDev/ is load-bearing* · *ArcLightning* · *Gas* · *Weather* · *A unit wears its element state* · *A unit sprite can play frames* |
 | [`dev-tools.md`](dev-tools.md) | *The dev-tools window and its pages* · *The Tiles tab* · *The Game tab* · *The dev/ folder and the content lints* |

@@ -347,6 +347,62 @@ func test_both_headless_boards_see_the_weathers_nudge_on_the_air() -> void:
 				"the builder's board_source left %s where %s does not" % [id, Weather.name_of(sky)]).is_equal(
 				Atmosphere.percent_of(id, expected))
 
+# The mission start's weather draw (#1509), headless. A board whose set is the suite's own, standing
+# under a clear sky, so a draw that never reaches the store reads CLEAR and cannot pass.
+func _drawing_session() -> Array:
+	var src: Dictionary = BoardBuilder.build(self, "DrawSrc")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 4, 4))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	var odds: Dictionary[Weather.Kind, int] = {Weather.Kind.RAIN: 1, Weather.Kind.SNOW: 1}
+	scenario.weather_odds = odds
+	var dst: Dictionary = BoardBuilder.build(self, "DrawDst")
+	auto_free(dst.root)
+	await BoardBuilder.apply_scenario(dst, scenario)
+	return [PlaySession.new(dst), scenario, dst]
+
+static func _seeded(seed_value: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	return rng
+
+# The draw lands in the built board's store, so BOTH headless boards read it -- and under one seed it is
+# the rule's own answer, which is what the game's MissionController draws under that seed too.
+func test_both_headless_boards_read_the_drawn_weather() -> void:
+	var made: Array = await _drawing_session()
+	var sess = made[0]
+	var scenario: ScenarioData = made[1]
+	var dst: Dictionary = made[2]
+	var drawn: Weather.Kind = sess.start_weather(_seeded(1509))
+	assert_int(drawn).is_equal(WeatherDraw.draw(scenario.weather_odds, scenario.weather, _seeded(1509)))
+	assert_int(drawn).override_failure_message("fixture: nothing was drawn").is_not_equal(Weather.Kind.CLEAR)
+	assert_int(sess._board().weather).override_failure_message(
+			"the session's board never saw the draw").is_equal(drawn)
+	var source_board: BoardContext = dst.squad_manager.board_source.call()
+	assert_int(source_board.weather).override_failure_message(
+			"the builder's board_source never saw the draw").is_equal(drawn)
+	assert_int(scenario.weather).override_failure_message(
+			"the draw was written into the loaded scenario").is_equal(Weather.Kind.CLEAR)
+
+# A restart keeps the draw (#1509 ruling 2), and a driver's pick is what stands.
+func test_a_headless_restart_keeps_the_draw_and_a_pick_stands() -> void:
+	var made: Array = await _drawing_session()
+	var sess = made[0]
+	var scenario: ScenarioData = made[1]
+	var drawn: Weather.Kind = sess.start_weather(_seeded(1509))
+	var other := Weather.Kind.SNOW if drawn == Weather.Kind.RAIN else Weather.Kind.RAIN
+	var differs := -1   # a seed whose draw is the OTHER weather, so drawing again would show
+	for s in range(200):
+		if WeatherDraw.draw(scenario.weather_odds, scenario.weather, _seeded(s)) == other:
+			differs = s
+			break
+	assert_int(differs).override_failure_message("fixture: no seed draws the other weather").is_not_equal(-1)
+	assert_int(sess.start_weather(_seeded(differs), drawn)).override_failure_message(
+			"the headless restart drew the weather again").is_equal(drawn)
+	assert_int(sess.start_weather(_seeded(1509), WeatherDraw.NONE, other)).is_equal(other)
+	assert_int(sess._weather()).is_equal(other)
+
 # The headless scenario loader: an in-memory ScenarioData round-trips onto a fresh board
 # (file-independent, so it survives scenario renames).
 func test_apply_scenario_restores_units_terrain_and_turn() -> void:

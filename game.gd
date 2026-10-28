@@ -2507,18 +2507,18 @@ func previewed_plan() -> ResolvedPlan:
 		return aim_forecast
 	return squad_manager.resolved_plan_for(squad_manager.active_squad)
 
-# The board next round is ruled on (#1332): the live one with the previewed plan's deposits folded in,
+# The board next round is ruled on (#1332): the live one over the previewed plan's planned tiles (#1498),
 # so a queued push outlines from where it will leave the gas and a tile a queued hit lights spreads its
 # fire (#1430). Alt's outline (GasMirror) and the red tether (_member_links) both read it. Never while a
-# pass runs: its deposits land in the live store partway through, and folding them again counts them twice.
+# pass runs: its deposits land in the live store partway through, so the live board is the answer then.
 func next_round_board() -> BoardContext:
 	var board := _board()
 	if order_executor != null and order_executor.executing_plan != null:
 		return board
 	var plan := previewed_plan()
-	if plan == null or plan.cell_effects.is_empty():
+	if plan == null:
 		return board
-	return board.with_deposits(plan.cell_effects)
+	return board.planned(plan.tiles)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

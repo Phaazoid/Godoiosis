@@ -34,7 +34,7 @@ func packed_at(cell: Vector2i) -> int:
 # changed, so a drag repainting what is already there costs a renderer nothing. A level on a groundless
 # cell is refused; taking gas away never is.
 func set_level(cell: Vector2i, kind: Gas.Kind, level: int) -> void:
-	if level > 0 and not _has_ground(cell):
+	if level > 0 and not has_ground(cell):
 		return
 	var before: int = _cells.get(cell, 0)
 	_write(cell, Gas.with_level(before, kind, level))
@@ -51,51 +51,45 @@ func add_level(cell: Vector2i, kind: Gas.Kind, levels: int) -> void:
 # Play one resolved cell effect's gas into the store -- terrain_states.apply's twin, called beside it
 # by both executors.
 func apply(effect: ResolvedCellEffect) -> void:
-	if effect.gas_cleared:
-		_write(effect.cell, 0)   # dispersed before this effect's own gas lands (#1335)
+	_write(effect.cell, fold(packed_at(effect.cell), effect, has_ground(effect.cell)))
+
+
+# One effect's gas folded into a cell's packed value -- apply()'s rule, shared so a planned cell
+# (PlannedTiles.land) reads exactly as the landed one will (#1498). The clear runs first (#1335), then
+# each level is added and capped with a fresh hold, add_level's rule. A groundless cell takes no gas,
+# though a clear always runs.
+static func fold(packed: int, effect: ResolvedCellEffect, grounded := true) -> int:
+	var result := 0 if effect.gas_cleared else packed
+	if not grounded:
+		return result
 	for kind: Gas.Kind in effect.gas_added:
-		add_level(effect.cell, kind, effect.gas_added[kind])
-
-
-# The cell as it will stand once these deposits land, written nowhere -- TerrainStateManager's
-# projected_states_at twin, so the end-of-turn forecast sees the steam its own pass makes. The same
-# add-and-cap as add_level; the resolver has already dropped gas a cell cannot hold.
-func projected_packed_at(cell: Vector2i, effects: Array[ResolvedCellEffect]) -> int:
-	var packed: int = _cells.get(cell, 0)
-	for effect in effects:
-		if effect.cell != cell:
-			continue
-		if effect.gas_cleared:
-			packed = 0
-		for kind: Gas.Kind in effect.gas_added:
-			if effect.gas_added[kind] <= 0:
-				continue
-			var level := mini(Gas.level_in(packed, kind) + effect.gas_added[kind], Gas.MAX_LEVEL)
-			packed = Gas.with_level(packed, kind, level)
-	return packed
-
-
-# Every cell as it will stand once these deposits land, written nowhere: projected_packed_at over the
-# whole field, cells the deposits empty dropped.
-func projected_cells(effects: Array[ResolvedCellEffect]) -> Dictionary[Vector2i, int]:
-	var out: Dictionary[Vector2i, int] = _cells.duplicate()
-	for effect in effects:
-		var packed := projected_packed_at(effect.cell, effects)
-		if packed == 0:
-			out.erase(effect.cell)
-		else:
-			out[effect.cell] = packed
-	return out
+		var levels: int = effect.gas_added[kind]
+		if levels > 0:
+			result = Gas.with_level(result, kind, Gas.level_in(result, kind) + levels)
+	return result
 
 
 # What the field WILL hold after the next round, written nowhere -- the forecast's read, and the
-# tick's, so the two cannot disagree. A board carrying deposits (#1332) is ruled from where they leave
-# the gas: the Alt outline hands it the previewed plan's, so a queued push outlines from where it lands.
-# The tick's board carries none.
+# tick's, so the two cannot disagree. A board carrying planned tiles (#1332, #1498) is ruled from where
+# they leave the gas: the Alt outline hands it the previewed plan's, so a queued push outlines from where
+# it lands. The tick's board carries none.
 func next_round(board: BoardContext) -> Dictionary[Vector2i, int]:
-	if board != null and not board.deposits.is_empty():
-		return GasSpread.next(projected_cells(board.deposits), board)
-	return GasSpread.next(_cells, board)
+	return GasSpread.next(_cells_under(board.tiles if board != null else null), board)
+
+
+# The field as these planned tiles leave it, written nowhere: their gas over the store's, a cell they
+# empty dropped.
+func _cells_under(planned: PlannedTiles) -> Dictionary[Vector2i, int]:
+	if planned == null:
+		return _cells
+	var out: Dictionary[Vector2i, int] = _cells.duplicate()
+	for cell in planned.cells():
+		var packed := planned.gas_at(cell)
+		if packed == 0:
+			out.erase(cell)
+		else:
+			out[cell] = packed
+	return out
 
 
 # The round's gas step (#508): GasSpread's answer for this board, written back cell by cell so only
@@ -120,7 +114,8 @@ func _write(cell: Vector2i, after: int) -> void:
 	dirty.mark(cell)
 
 
-func _has_ground(cell: Vector2i) -> bool:
+# The store's own ground judgement, public for the planned tiles' fold (#1498).
+func has_ground(cell: Vector2i) -> bool:
 	if not ground_source.is_valid():
 		return true
 	var grounded: bool = ground_source.call(cell)   # typed local: .call() erases to Variant

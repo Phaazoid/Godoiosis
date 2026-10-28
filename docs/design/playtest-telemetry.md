@@ -2,7 +2,7 @@
 
 **Status: THE ARC IS COMPLETE ([#53](https://github.com/Phaazoid/Godoiosis/issues/53), closed 2026-09-09).** Five slices, all merged: the recorder + replay-grade capture (#831), the notice (#840), the replay viewer (#843), the quit record (#845), and transport + storage (#848, with #849 and #850 behind it). Filed 2026-07-14, parked, and unparked by the dev 2026-09-07 with *"now that we've started to close the loop of a player playing a mission, we can start on it."* The polish it deliberately left is [#856](https://github.com/Phaazoid/Godoiosis/issues/856).
 
-**Canon checked through [#1478](https://github.com/Phaazoid/Godoiosis/issues/1478) (2026-10-23).**
+**Canon checked through [#1478](https://github.com/Phaazoid/Godoiosis/issues/1478) (2026-10-23); [#1509](https://github.com/Phaazoid/Godoiosis/issues/1509)'s two `mission_start` fields folded in 2026-10-27.**
 
 **Not to be confused with [`playtest-experiments.md`](../playtest-experiments.md)**, whose name is one word away and whose subject is different: that one is how to drive an AI agent through the headless bridge and get a measurement you can believe. This one is the record a HUMAN's played mission leaves behind. Neither reads the other's data.
 
@@ -106,6 +106,8 @@ Recorded: the mission's start (roster -- each unit's AI profile among it since [
 **A pass also carries its `sinks`** ([#922](https://github.com/Phaazoid/Godoiosis/issues/922), 2026-09-27): each unit the pass's own melt dropped into the water, with its cell, its moment, the damage the water took and the rung. It is damage no hit carries, so `MissionSummary` adds it to `damage_to` the way it adds a `turn_effects` burn -- without that, every sinking would read as an `unattributed` gap in the reconciliation. The down itself needs nothing new: it fires `unit_downed` like any other.
 
 **A `turn_effects` row can be a SOAK** ([#508](https://github.com/Phaazoid/Godoiosis/issues/508) PR 3, 2026-10-04): steam over a unit at its turn's end rides the burn's own list, so its row is in the same event with `damage` 0 and two keys only a soak carries, `gas` (the `Gas.Kind` name) and `states` (what it gave). The keys are added to soak rows alone, so a burn row keeps the shape every older run holds and `ReplayDriver`'s compare of `turn_effects` still lines up across it; `MissionSummary` already skips a row whose damage is 0. **Since [#1260](https://github.com/Phaazoid/Godoiosis/issues/1260) a soak can come from the WEATHER**, and that row carries `weather` (the `Weather.Kind` name) where a gas soak carries `gas`; the weather itself is the board's, so it is in every run's `board.tres`.
+
+**`mission_start` carries the WEATHER and the set it was drawn from** ([#1509](https://github.com/Phaazoid/Godoiosis/issues/1509), 2026-10-27): `weather` is the kind's NAME, and `weather_odds` is the board's offered set as `{name: weight}`, empty on a locked board. A board may offer several weathers and draw one when the mission starts, so the set is the denominator: "how often was it Rain, and did they win" is a query, not a new build. `board.tres` holds the same weather as the replay's exact seed (a full capture keeps the draw), so a replay stands under the weather that was drawn and never rolls again. Runs recorded before it carry neither key.
 
 **A pass's `cell_effects` rows carry a `gas` map** ([#1202](https://github.com/Phaazoid/Godoiosis/issues/1202), #508 PR 1, 2026-10-03): beside the tile states each changed cell gained and lost, the gas the pass laid there, by `Gas.Kind` name and amount.
 

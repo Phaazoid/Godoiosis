@@ -56,10 +56,18 @@ class_name ScenarioData
 # unit_data. Empty = the default look. Resolved by LookKnobs.resolve, applied by battle3d.
 @export var look_preset := ""
 
-# The weather over this board (#1260), fixed for the battle. An enum rather than look_preset's name,
-# because a weather is a rule input (rain soaks at the end of a turn), so it has to travel with every
-# save, report, replay and Play API board exactly as authored. CLEAR is the default and does nothing.
+# The weather this board STANDS under (#1260), fixed for the battle. An enum rather than look_preset's
+# name, because a weather is a rule input (rain soaks at the end of a turn), so it has to travel with
+# every save, report, replay and Play API board exactly as played. CLEAR is the default and does nothing.
+# THE answer to "what weather is it": ScenarioManager.current_weather is its live store.
 @export var weather: Weather.Kind = Weather.Kind.CLEAR
+
+# The weathers a mission START may draw instead (#1509): kind -> relative weight, read by WeatherDraw at
+# the fresh-start doors and never by a load. EMPTY = no draw, the mission starts under `weather` above:
+# a locked board, which every board saved before #1509 is. The dev tools write one weather as a locked
+# board, never as a set of one. On a board that draws, `weather` is battle state, so an authored save
+# writes it as CLEAR (#1483's terrain_state_turns shape) and Update never bakes a draw into the file.
+@export var weather_odds: Dictionary[Weather.Kind, int] = {}
 
 # The wind over this board (#1286): how hard and which way, beside the weather and independent of it.
 # A look only, so nothing reads it but the drawing. CALM blowing EAST is the default and blows nothing.

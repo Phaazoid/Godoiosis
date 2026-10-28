@@ -29,6 +29,10 @@ var _in_demo_box: CheckBox
 var _air_row: VBoxContainer
 var _air_spins := {}   # substance id -> SpinBox
 var _air_weather: Label   # what the board's weather adds to the air (#1324)
+var _weather_now: OptionButton   # the weather standing now; rebuilt with the look row
+var _weather_set_row: VBoxContainer   # what a mission start may draw (#1509)
+var _weather_spins := {}   # Weather.Kind -> SpinBox
+var _weather_set_summary: Label
 var _report_box: VBoxContainer
 
 const NO_LOOK_LABEL := "(none - default)"
@@ -52,7 +56,8 @@ func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -
 	_build_objectives()
 	_build_lose_conditions()
 	_build_check_section()
-	_build_air_row()       # before the look row, which pins it directly beneath itself
+	_build_weather_set_row()   # before the look row, which pins it directly beneath itself...
+	_build_air_row()       # ...and the air beneath that
 	refresh_look_row()
 	refresh_roster_row()   # between the two: each row pins itself to index 0, so this is the order
 	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
@@ -86,29 +91,37 @@ func refresh_look_row() -> void:
 	_add_weather_picker(_look_row)
 	_add_wind_pickers(_look_row)
 	move_child(_look_row, 0)
+	if _weather_set_row != null:
+		move_child(_weather_set_row, 1)
 	if _air_row != null:
-		move_child(_air_row, 1)
+		move_child(_air_row, 2 if _weather_set_row != null else 1)
 
 
-# The weather over this board (#1260), riding the look row for the roster cap's reason: the two are
-# one thought (what the board looks like and what is falling on it), and a second pinned row would
-# drift on the next rebuild. Built by hand rather than through add_option, which wraps its own HBox.
-# After the look's own tooltip has been set, never before, so this one does not wear it.
+# The weather this board stands under NOW (#1260), riding the look row for the roster cap's reason: the
+# two are one thought (what the board looks like and what is falling on it), and a second pinned row
+# would drift on the next rebuild. Built by hand rather than through add_option, which wraps its own
+# HBox. After the look's own tooltip has been set, never before, so this one does not wear it.
+#
+# On a locked board it IS the board's weather; on one that draws (#1509) it is a preview, which a
+# mission start replaces and an authored save never writes (ScenarioManager.capture_scenario).
 func _add_weather_picker(row: HBoxContainer) -> void:
 	var label := Label.new()
-	label.text = "Weather"
+	label.text = "Weather now"
 	row.add_child(label)
-	var picker := OptionButton.new()
+	_weather_now = OptionButton.new()
 	for kind: Weather.Kind in Weather.Kind.values():
-		picker.add_item(Weather.display_name(kind), kind)
-	picker.select(picker.get_item_index(scenario_manager.current_weather))
+		_weather_now.add_item(Weather.display_name(kind), kind)
+	_weather_now.select(_weather_now.get_item_index(scenario_manager.current_weather))
+	var picker := _weather_now
 	picker.item_selected.connect(func(index: int) -> void:
 		_on_weather_picked(picker.get_item_id(index) as Weather.Kind))
 	row.add_child(picker)
 	var tip := DevWidgets.wrap_tooltip(
-		"What falls on this board, for the whole battle. Rain wets every unit at the end of its own "
-		+ "turn, so it shows in the queue's END OF TURN section. Saved with the board. How each "
-		+ "weather looks is tuned on Project > Weather.")
+		"What falls on this board right now. On a locked board (one weather in the set below) this IS "
+		+ "its weather, and picking another locks it to that one. On a board that draws, it is a "
+		+ "preview: a mission start draws again, and an authored Update never saves it.\n\n"
+		+ "Rain wets every unit at the end of its own turn, so it shows in the queue's END OF TURN "
+		+ "section. How each weather looks is tuned on Project > Weather.")
 	DevWidgets.apply_tooltip(label, tip)
 	DevWidgets.apply_tooltip(picker, tip)
 
@@ -146,12 +159,105 @@ func _add_wind_pickers(row: HBoxContainer) -> void:
 
 func _on_weather_picked(kind: Weather.Kind) -> void:
 	scenario_manager.current_weather = kind
+	_weather_edited()
+
+
+# Either half of the weather changed (#1260, #1509). The open plan's END OF TURN rows read the weather,
+# and since #1324 so do its carving rows and the corner HUD's air, so re-resolve and redraw now rather
+# than show what the last weather would have.
+func _weather_edited() -> void:
 	_mark()
-	# The open plan's END OF TURN rows read the weather, and since #1324 so do its carving rows and the
-	# corner HUD's air, so re-resolve and redraw now rather than show what the last weather would have.
 	game.refresh_action_queue(game.squad_manager.active_squad)
 	game.refresh_mission_status()
 	_refresh_air_row()
+	_refresh_weather_set()
+
+
+# The weathers a mission start may draw (#1509): a weight per weather, 0 = not offered. One line per
+# kind of fall, read off each weather's own look (WeatherLook.fall), so a new kind finds its line; a
+# weather with no look, which is Clear, gets a line of its own. Built once and refreshed in place, the
+# air row's shape: Weather.Kind is an enum, so a load has nothing to re-enumerate.
+func _build_weather_set_row() -> void:
+	_weather_set_row = VBoxContainer.new()
+	var heading := Label.new()
+	heading.text = "Weather set, drawn when the mission starts (0 = not offered)"
+	_weather_set_row.add_child(heading)
+	var lines := {}   # a look's Fall, or -1 for a weather with no look -> its line
+	for kind: Weather.Kind in Weather.Kind.values():
+		var look := WeatherLook.for_kind(kind)
+		var fall: int = look.fall if look != null else -1
+		if not lines.has(fall):
+			var line := HBoxContainer.new()
+			if fall >= 0:
+				var family := Label.new()
+				family.text = (WeatherLook.Fall.keys()[fall] as String).capitalize() + ":"
+				line.add_child(family)
+			_weather_set_row.add_child(line)
+			lines[fall] = line
+		var name_label := Label.new()
+		name_label.text = Weather.display_name(kind)
+		(lines[fall] as HBoxContainer).add_child(name_label)
+		var spin := SpinBox.new()
+		spin.min_value = 0
+		spin.max_value = 99
+		spin.value_changed.connect(func(value: float) -> void: _on_weather_weight_changed(kind, int(value)))
+		(lines[fall] as HBoxContainer).add_child(spin)
+		_weather_spins[kind] = spin
+	_weather_set_summary = Label.new()
+	_weather_set_row.add_child(_weather_set_summary)
+	DevWidgets.apply_tooltip(_weather_set_row, DevWidgets.wrap_tooltip(
+		"The weathers a mission start may draw on this board, by relative weight: 0 leaves a weather "
+		+ "out, and equal weights are equal odds. One weather is a locked board, which always plays "
+		+ "under it. With two or more, one is drawn when the mission starts and shown on the "
+		+ "pre-mission screen before the player commits, and a restart keeps the draw. Saved with "
+		+ "the board."))
+	add_child(_weather_set_row)
+	_refresh_weather_set()
+
+
+# The set as the grid shows it: the odds on a board that draws, and its one weather at 1 on a locked one.
+func _shown_weather_set() -> Dictionary[Weather.Kind, int]:
+	var shown: Dictionary[Weather.Kind, int] = {}
+	var odds: Dictionary[Weather.Kind, int] = scenario_manager.current_weather_odds
+	if not WeatherDraw.draws(odds):
+		shown[scenario_manager.current_weather] = 1
+		return shown
+	for kind: Weather.Kind in WeatherDraw.offered(odds):
+		shown[kind] = odds[kind]
+	return shown
+
+
+# ONE SPELLING PER MEANING (#1509): two or more weathers are odds, and one is a locked board -- odds
+# empty and the weather standing on it -- never a set of one. None left is a clear sky.
+func _on_weather_weight_changed(kind: Weather.Kind, weight: int) -> void:
+	var weights := _shown_weather_set()
+	if weight > 0:
+		weights[kind] = weight
+	else:
+		weights.erase(kind)
+	var kinds := WeatherDraw.offered(weights)
+	if kinds.size() >= 2:
+		scenario_manager.current_weather_odds = weights
+	else:
+		scenario_manager.current_weather_odds = {}
+		scenario_manager.current_weather = kinds[0] if not kinds.is_empty() else Weather.Kind.CLEAR
+	_weather_edited()
+
+
+func _refresh_weather_set() -> void:
+	if _weather_set_row == null:
+		return
+	var shown := _shown_weather_set()
+	for kind: Weather.Kind in _weather_spins:
+		(_weather_spins[kind] as SpinBox).set_value_no_signal(shown.get(kind, 0))
+	var odds: Dictionary[Weather.Kind, int] = scenario_manager.current_weather_odds
+	if WeatherDraw.draws(odds):
+		_weather_set_summary.text = "Drawn at mission start: %s" % WeatherDraw.odds_text(odds)
+	else:
+		_weather_set_summary.text = "Locked: %s. Give a second weather a weight to make it draw." \
+				% Weather.display_name(scenario_manager.current_weather)
+	if _weather_now != null:
+		_weather_now.select(_weather_now.get_item_index(scenario_manager.current_weather))
 
 
 # The air over this board (#1324): one percentage per ambient substance, under the weather it sits
@@ -398,6 +504,7 @@ func refresh_on_show() -> void:
 	refresh_lose_conditions()   # ...and what loses it (#101)
 	refresh_look_row()   # a board load changes which preset this board wears
 	_refresh_air_row()   # ...and the air over it (#1324)
+	_refresh_weather_set()   # ...and the weathers it may draw (#1509)
 	refresh_roster_row()   # ...and who it offers (#735)
 	refresh_camera_row()   # ...and where it opens (#234)
 	_refresh_in_demo_box()   # ...and whether a shipped build lists it (#860)

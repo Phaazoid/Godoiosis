@@ -85,6 +85,7 @@ var _last_refusal := ""
 # reason the last move failed -- and written straight to the label, never through a redraw.
 var _hover_note := ""
 var _weather_value: Label
+var _weather_row: HBoxContainer   # carries the draw's tooltip (#1509)
 # The air's reading (#1324): its rows' box, which carries the glossary tooltip, and per substance id
 # its [name, percent, steps] labels. Built once, since Atmosphere.SUBSTANCES is a const.
 var _air_box: VBoxContainer
@@ -249,6 +250,7 @@ func _build_conditions() -> Control:
 
 	var weather := _condition_row("Weather")
 	_weather_value = weather[1]
+	_weather_row = weather[0]
 	column.add_child(weather[0])
 
 	_air_box = VBoxContainer.new()
@@ -527,6 +529,11 @@ func _refresh_conditions() -> void:
 	var weather: Weather.Kind = sm.current_weather
 	var reading := sm.air_reading()
 	_weather_value.text = Weather.display_name(weather)
+	# A board that draws its weather (#1509) says so, and from what: the draw is shown before the commit,
+	# so the player can read it as the circumstance it is. The row's labels let the hover through to it.
+	var odds := sm.current_weather_odds
+	_weather_row.tooltip_text = UiText.wrap("Drawn when the mission started, from %s." % WeatherDraw.odds_text(odds)) \
+			if WeatherDraw.draws(odds) else ""
 	for id: String in _air_rows:
 		var labels: Array = _air_rows[id]
 		(labels[1] as Label).text = Atmosphere.percent_text(id, reading)

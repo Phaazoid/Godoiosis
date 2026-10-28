@@ -122,32 +122,25 @@ func test_apply_plays_a_cell_effects_gas_into_the_store() -> void:
 	assert_int(field.level_at(A, Gas.Kind.STEAM)).is_equal(THICK)
 
 
-# The forecast's read (#508 PR 3): what apply WOULD leave, written nowhere -- the same add-and-cap,
-# this cell's deposits only, and the live store untouched.
-func test_the_projected_cell_folds_this_passes_deposits_and_writes_nothing() -> void:
+# The forecast's read (#508 PR 3, #1498): the fold a planned cell takes is apply's own add-and-cap,
+# written nowhere, so the planned cell and the landed one agree to the bit.
+func test_the_gas_fold_is_applys_rule_and_writes_nothing() -> void:
 	var field := GasField.new()
 	field.set_level(A, Gas.Kind.STEAM, MEDIUM)
 	var here := ResolvedCellEffect.new()
 	here.cell = A
 	here.add_gas(Gas.Kind.STEAM, MEDIUM)
-	var elsewhere := ResolvedCellEffect.new()
-	elsewhere.cell = B
-	elsewhere.add_gas(Gas.Kind.STEAM, THICK)
-	var effects: Array[ResolvedCellEffect] = [here, elsewhere]
 	var version := field.dirty.version
 
-	var projected := field.projected_packed_at(A, effects)
+	var folded := GasField.fold(field.packed_at(A), here)
 
-	assert_int(Gas.level_in(projected, Gas.Kind.STEAM)).is_equal(Gas.MAX_LEVEL)   # capped, as apply caps
-	assert_int(Gas.level_in(field.projected_packed_at(B, effects), Gas.Kind.STEAM)).is_equal(THICK)
+	assert_int(Gas.level_in(folded, Gas.Kind.STEAM)).is_equal(Gas.MAX_LEVEL)   # capped, as apply caps
 	assert_int(field.level_at(A, Gas.Kind.STEAM)).override_failure_message(
-			"the projection wrote into the live store").is_equal(MEDIUM)
+			"the fold wrote into the live store").is_equal(MEDIUM)
 	assert_int(field.dirty.version).is_equal(version)
-	var applied := GasField.new()
-	applied.set_level(A, Gas.Kind.STEAM, MEDIUM)
-	applied.apply(here)
-	assert_int(Gas.level_in(projected, Gas.Kind.STEAM)).override_failure_message(
-			"the projection and apply disagree about the same deposit").is_equal(applied.level_at(A, Gas.Kind.STEAM))
+	field.apply(here)
+	assert_int(field.packed_at(A)).override_failure_message(
+			"the fold and apply disagree about the same deposit").is_equal(folded)
 
 
 func test_a_tick_that_moves_nothing_marks_nothing() -> void:
@@ -163,9 +156,9 @@ func test_a_tick_that_moves_nothing_marks_nothing() -> void:
 	assert_int(field.dirty.version).is_equal(before)
 
 
-# #1332: a board carrying deposits is ruled from where they leave the gas -- the Alt outline hands it
-# the previewed plan's -- while a board with none gets the store's own round, which is the tick's.
-func test_next_round_rules_on_the_gas_a_boards_deposits_leave() -> void:
+# #1332: a board carrying planned tiles is ruled from where they leave the gas -- the Alt outline hands
+# it the previewed plan's -- while a board with none gets the store's own round, which is the tick's.
+func test_next_round_rules_on_the_gas_a_boards_planned_tiles_leave() -> void:
 	var field := GasField.new()
 	field.set_level(A, Gas.Kind.STEAM, THICK)
 	var moved := A + Vector2i(3, 0)
@@ -175,15 +168,17 @@ func test_next_round_rules_on_the_gas_a_boards_deposits_leave() -> void:
 	var landed := ResolvedCellEffect.new()
 	landed.cell = moved
 	landed.add_gas(Gas.Kind.STEAM, THICK)
-	var effects: Array[ResolvedCellEffect] = [cleared, landed]
-	var projected := field.projected_cells(effects)
-	assert_bool(projected.has(A)).override_failure_message("the projection kept gas a deposit cleared").is_false()
-	assert_int(Gas.level_in(projected.get(moved, 0), Gas.Kind.STEAM)).is_equal(THICK)
+	var tiles := PlannedTiles.new(null, field)
+	tiles.land(cleared)
+	tiles.land(landed)
+	assert_int(tiles.gas_at(A)).override_failure_message("the planned tiles kept gas a deposit cleared").is_equal(0)
+	assert_int(Gas.level_in(tiles.gas_at(moved), Gas.Kind.STEAM)).is_equal(THICK)
 
 	var no_units: Array[Unit] = []
 	var bare := BoardContext.new(null, no_units, null)
-	var folded := field.next_round(bare.with_deposits(effects))
-	assert_dict(folded).is_equal(GasSpread.next(projected, bare))
+	var folded := field.next_round(bare.planned(tiles))
+	var left: Dictionary[Vector2i, int] = {moved: tiles.gas_at(moved)}
+	assert_dict(folded).is_equal(GasSpread.next(left, bare))
 	assert_bool(folded.has(A) or not folded.has(moved)).override_failure_message(
 		"next round was ruled on the store, not on where the deposits leave the gas").is_false()
 	var live := field.next_round(bare)

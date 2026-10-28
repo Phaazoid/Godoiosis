@@ -68,12 +68,13 @@ func test_editing_the_live_air_leaves_the_loaded_scenario_alone() -> void:
 			"clearing the live air emptied the scenario it came from").is_equal(reading.size())
 
 
-# The pass that settles on its own deposits (#367) asks a COPY of the board, which must keep the air.
-func test_a_board_with_deposits_keeps_the_air() -> void:
+# The pass that settles on its own deposits (#367) asks a COPY of the board over its planned tiles
+# (#1498), which must keep the air.
+func test_a_planned_board_keeps_the_air() -> void:
 	game.scenario_manager.current_atmosphere = _reading()
 	var board: BoardContext = game._board()
-	var none: Array[ResolvedCellEffect] = []
-	assert_int(board.with_deposits(none).atmosphere.size()).is_equal(Atmosphere.SUBSTANCES.size())
+	var tiles := PlannedTiles.new(board.terrain_states, board.gas)
+	assert_int(board.planned(tiles).atmosphere.size()).is_equal(Atmosphere.SUBSTANCES.size())
 
 
 # --- the weather's nudge (#1324) ----------------------------------------------------------
