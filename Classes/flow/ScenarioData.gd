@@ -16,6 +16,10 @@ class_name ScenarioData
 # mission file, and loads as "give each state its ground's own clock", which is what every board did
 # before the field existed.
 @export var terrain_state_turns: Dictionary = {}
+# Vector2i -> { Terrain.TileState: turns } (#1484): a starting clock the author CHOSE on the Tile
+# Brush, in place of the ground's. Content, written by every capture. A load reads the remainder
+# above first, then this, then the ground (TerrainStateManager._restore_timer, the one order).
+@export var terrain_state_starts: Dictionary = {}
 @export var corner_heights: Dictionary = {}   # Vector2i -> Vector4i(NW,NE,SE,SW) in half-level units
 											  # (#427). SPARSE: an absent cell is flat at 0, so a flat
 											  # board saves as {}. BoardHeights owns that default and is
