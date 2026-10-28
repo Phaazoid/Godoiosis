@@ -538,6 +538,11 @@ func _mission_start_fields(resumed: bool) -> Dictionary:
 		"objectives": _names(MissionRules.Objective, mc.objectives),
 		"lose_conditions": _names(MissionRules.LoseCondition, mc.lose_conditions),
 		"round_limit": mc.round_limit,
+		# The weather the battle starts under (#1509), by NAME, and the set it was drawn from beside it --
+		# the denominator, the available_jobs shape. Empty odds = a locked board. board.tres holds the same
+		# weather as the machine-exact seed; this is the queryable half.
+		"weather": Weather.name_of(sm.current_weather),
+		"weather_odds": WeatherDraw.odds_by_name(sm.current_weather_odds),
 		"resumed": resumed,
 		"roster": roster,
 		"stash": stash,

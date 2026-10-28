@@ -102,9 +102,8 @@ static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: Boa
 		_add(found, SubstanceMap.of_kind(Terrain.Kind.DIRT), PLENTY)
 	for state: Terrain.TileState in board.tile_states_at(cell):
 		_add(found, SubstanceMap.of_tile_state(state), PLENTY)
-	if board.gas != null:
-		for gas: Gas.Kind in Gas.kinds_in(board.gas.packed_at(cell)):
-			_add(found, SubstanceMap.of_gas(gas), PLENTY)
+	for gas: Gas.Kind in Gas.kinds_in(board.gas_at(cell)):
+		_add(found, SubstanceMap.of_gas(gas), PLENTY)
 	# A lit prop is a fire, made of what a burning tile is.
 	if board.prop_lit_at(cell):
 		_add(found, SubstanceMap.of_tile_state(Terrain.TileState.BURNING), PLENTY)

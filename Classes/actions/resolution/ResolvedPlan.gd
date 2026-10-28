@@ -10,8 +10,23 @@ class_name ResolvedPlan
 var attacks: Array[AttackAction] = []
 var counters: Array[CounterAttackAction] = []
 
-# Terrain consequences derived this pass (#50). Empty unless the resolver ran with a board.
+# Terrain consequences derived this pass (#50), one per hit and cell: what playback plays and the board
+# ghosts. Empty unless the resolver ran with a board. Entered only through deposit().
 var cell_effects: Array[ResolvedCellEffect] = []
+
+# Where those leave the tiles they touch (#1498), the cell half of the pass's hypothetical beside `hypo`.
+# Null until the first deposit. Read through BoardContext.planned, never folded from cell_effects by hand.
+var tiles: PlannedTiles = null
+
+
+# The ONE door a pass's tile change enters by: recorded for playback, and landed on the planned tiles.
+# Landed as it is recorded, which is every reader's moment today -- each asks once the deposits it
+# folded have all been made.
+func deposit(effect: ResolvedCellEffect, board: BoardContext) -> void:
+	cell_effects.append(effect)
+	if tiles == null:
+		tiles = PlannedTiles.new(board.terrain_states, board.gas)
+	tiles.land(effect)
 
 # What the END OF TURN pass will do to this squad's own units (#419) — derived LAST, after
 # everything above, because that is when it happens. Its own list for the reason watch_shots is:
