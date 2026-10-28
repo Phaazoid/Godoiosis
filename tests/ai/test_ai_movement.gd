@@ -311,15 +311,16 @@ func test_a_kill_from_a_burning_tile_beats_a_scratch_from_safe_ground() -> void:
 
 
 # A member whose formation cell burns is placed beside it instead. The member is a healer with nobody
-# to mend, so nothing but the formation decides where it ends.
+# to mend, so nothing but the formation decides where it ends. Two cells behind the leader, so the
+# fire's spread next round smokes the cell beside the leader's and not its own (#1514).
 func test_a_member_is_never_placed_on_a_burning_formation_cell() -> void:
 	var board := _build_board(Rect2i(0, 0, 14, 5))
 	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
-	var healer := _spawn(board, ENEMY, Vector2i(1, 2), {Stats.Stat.DEX: 30})
+	var healer := _spawn(board, ENEMY, Vector2i(0, 2), {Stats.Stat.DEX: 30})
 	healer.equipped_weapon = _healer_weapon()
 	board.squad_manager.join_squad(healer, leader.squad)
 	var target := _spawn(board, PLAYER, Vector2i(7, 2), {Stats.Stat.MHP: 40})
-	_burn(board, Vector2i(5, 2))
+	_burn(board, Vector2i(4, 2))
 	assert_that(AITactics.best_attack_destination(leader, target, _ctx(board))) \
 		.override_failure_message("fixture: the leader must stand at (6, 2), so the healer's offset cell is the fire") \
 		.is_equal(Vector2i(6, 2))
@@ -327,7 +328,7 @@ func test_a_member_is_never_placed_on_a_burning_formation_cell() -> void:
 	_plan(leader.squad, board)
 
 	assert_that(healer.get_projected_destination()).override_failure_message(
-			"the healer was placed on the burning tile").is_not_equal(Vector2i(5, 2))
+			"the healer was placed on the burning tile").is_not_equal(Vector2i(4, 2))
 
 
 # --- #1230: avoids_hazards off -- the hazard is ordinary ground ------------------------------------
@@ -370,16 +371,16 @@ func test_a_member_that_ignores_hazards_takes_its_burning_formation_cell() -> vo
 	_heedless()
 	var board := _build_board(Rect2i(0, 0, 14, 5))
 	var leader := _spawn(board, ENEMY, Vector2i(2, 2), {Stats.Stat.DEX: 30})
-	var healer := _spawn(board, ENEMY, Vector2i(1, 2), {Stats.Stat.DEX: 30})
+	var healer := _spawn(board, ENEMY, Vector2i(0, 2), {Stats.Stat.DEX: 30})
 	healer.equipped_weapon = _healer_weapon()
 	board.squad_manager.join_squad(healer, leader.squad)
 	_spawn(board, PLAYER, Vector2i(7, 2), {Stats.Stat.MHP: 40})
-	_burn(board, Vector2i(5, 2))
+	_burn(board, Vector2i(4, 2))
 
 	_plan(leader.squad, board)
 
 	assert_that(healer.get_projected_destination()).override_failure_message(
-			"a member that ignores hazards still stepped off its formation cell").is_equal(Vector2i(5, 2))
+			"a member that ignores hazards still stepped off its formation cell").is_equal(Vector2i(4, 2))
 
 
 # --- #1230: routes_around_watches -- the AI's walk goes round a watch, or straight through it -------
