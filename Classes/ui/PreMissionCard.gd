@@ -90,6 +90,10 @@ const VIP_TOGGLE_OUTLINE := 3   # ...one heavier on the toggle, whose word is a 
 const VIP_TEXT := "VIP"         # PLACEHOLDER, like every line a player reads
 const REQUIRED_TEXT := "✓ Required"
 
+# The ghost of the piece in hand (#962), from the mock the dev approved.
+const GHOST_PREFIX := "+ "
+const GHOST_ALPHA := 0.85
+
 # Every stat, in Stats.Stat declaration order, in two columns. Read off the enum rather than listed
 # here, so a new stat appears without an edit -- #120's BLD did, as the ninth.
 const STAT_COLUMNS := 2
@@ -102,6 +106,9 @@ var perform_move: Callable = Callable()
 # What the screen currently has in hand, so a picked-up row reads as picked up on this side too.
 # Told rather than asked: the card has no business knowing the screen exists.
 var selected_item: Item
+# ...and what it has in hand when it is NOT this unit's (#962), told the same way: the piece is
+# ghosted into the slot a click here would fill, with what it would do in this unit's hands.
+var in_hand: Item
 
 var _deploy_button: Button
 var _controller: MissionController
@@ -539,16 +546,21 @@ func _refresh_abilities() -> void:
 			InfoPanel.ability_tooltip(ability.display_name, kind, ability.description)))
 
 
+# With a weapon in hand, the KEYS of the stats its blend reads are lit (#962), so a row of cards says
+# why one unit hits harder with it than another. Keys only: #745's preview rewrites the VALUES in
+# place, and would put a tint on them back to rest.
 func _refresh_stats() -> void:
 	_clear(_stats_grid)
 	_stat_values.clear()
+	var lit := _lit_stats()
 	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		var key := Label.new()
 		key.text = String(Stats.Stat.keys()[stat])
 		key.add_theme_font_size_override("font_size", 11)
-		key.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+		key.add_theme_color_override("font_color", QueueStyle.ink(
+			QueueStyle.Role.NAME_TEXT if lit.has(stat) else QueueStyle.Role.HEADER_TEXT))
 		key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(key)
 		var value := Label.new()
@@ -562,9 +574,16 @@ func _refresh_stats() -> void:
 
 func _refresh_items() -> void:
 	_clear(_items_column)
+	# Where the piece in hand would land: add_item's own gate, then its own slot (the first empty one).
+	var landing := -1
+	if in_hand != null and unit.add_block_reason(in_hand) == "":
+		landing = unit.inventory.find(null)
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		var item: Item = unit.inventory[i] if i < unit.inventory.size() else null
-		_items_column.add_child(_item_row(item))
+		var row := _item_row(item)
+		if i == landing:
+			_ghost(row)
+		_items_column.add_child(row)
 
 
 func _refresh_foot() -> void:
@@ -788,17 +807,18 @@ func _item_row(item: Item) -> Control:
 	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.BODY_TEXT))
 	line.add_child(name_label)
 
+	# What it hits for in this unit's hands, at rest (#962); what it scales off is the tooltip's.
+	var badge := _damage_badge(item)
+	if badge != null:
+		line.add_child(badge)
+
 	var chip := ItemDetail.chip_for(item)
 	if chip != null:
 		chip.pressed.connect(func() -> void: detail_requested.emit(item, unit))
 		line.add_child(chip)
 
 	if reason != "":
-		var warn := Label.new()
-		warn.text = "!"
-		warn.add_theme_font_size_override("font_size", 11)
-		warn.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
-		line.add_child(warn)
+		line.add_child(_warn_mark())
 
 	# What the piece SAYS is ItemText's (#137); the refusal stays here, because only a card has a
 	# wielder for a gate to be failed by.
@@ -808,6 +828,81 @@ func _item_row(item: Item) -> Control:
 	row.tooltip_text = UiText.wrap(tip)
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	return row
+
+
+# The piece in hand, ghosted into the slot a click here would fill (#962): its name, what it would hit
+# for in this unit's hands, and the card's own refusal mark where this unit could not use it. The ROW
+# stays empty -- it carries nothing, so a click on it is the empty slot's own put-down -- and it wears
+# the carried row's popup, which is where what the piece scales off is read (dev, 2026-10-28).
+func _ghost(row: GearRow) -> void:
+	var reason := equip_block_reason(in_hand)
+	_clear(row)
+	row.modulate = Color(1, 1, 1, GHOST_ALPHA)
+	row.add_theme_stylebox_override("panel", QueueStyle.row_box(reason != "", false))
+
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 4)
+	row.add_child(line)
+	var name_label := Label.new()
+	name_label.text = GHOST_PREFIX + in_hand.shown_name()
+	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.add_theme_font_size_override("font_size", 10)
+	name_label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.HEADER_TEXT))
+	line.add_child(name_label)
+	var badge := _damage_badge(in_hand)
+	if badge != null:
+		line.add_child(badge)
+	if reason != "":
+		line.add_child(_warn_mark())
+
+	var tip := ItemText.hover(in_hand, unit)
+	if reason != "":
+		tip += "\n%s" % reason
+	row.tooltip_text = UiText.wrap(tip)
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+# A weapon's main hit in THIS unit's hands, as a badge, or null for any other kind (#962). HELD, so a
+# carried weapon nobody is swinging, and one still in the stash, read what swinging it would land
+# (WeaponInstance.held_damage) -- the same number the row's popup prints.
+func _damage_badge(item: Item) -> Label:
+	var weapon := item as WeaponInstance
+	if weapon == null:
+		return null
+	var main := weapon.default_attack(unit.state) as WeaponAttackData
+	if main == null:
+		return null
+	var badge := Label.new()
+	badge.text = main.hit_badge(weapon.held_damage(unit.state, main))
+	badge.add_theme_font_size_override("font_size", 10)
+	badge.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.EMPHASIS_TEXT))
+	return badge
+
+
+# The card's refusal mark, on a carried row and on a ghost alike.
+static func _warn_mark() -> Label:
+	var warn := Label.new()
+	warn.text = "!"
+	warn.add_theme_font_size_override("font_size", 11)
+	warn.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.ROW_REFUSED_BORDER))
+	return warn
+
+
+# The stats the weapon in hand scales off, for this unit (#962); empty for anything else in hand.
+func _lit_stats() -> Array[Stats.Stat]:
+	var lit: Array[Stats.Stat] = []
+	var weapon := in_hand as WeaponInstance
+	if weapon == null:
+		return lit
+	var main := weapon.default_attack(unit.state) as WeaponAttackData
+	if main == null or main.deals_no_damage:
+		return lit
+	var blend := weapon.scaling_of(unit.state, main)
+	for stat: Stats.Stat in blend:
+		if blend[stat] > 0:
+			lit.append(stat)
+	return lit
 
 
 # THE one place the card asks "can this unit use this", and since #744 it is a pass-through: the gate

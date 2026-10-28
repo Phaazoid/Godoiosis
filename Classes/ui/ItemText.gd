@@ -38,11 +38,17 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 
 	var weapon := item as WeaponInstance
 	if weapon != null:
+		# The headline view is the weapon's MAIN attack, asked for explicitly -- base_damage no longer
+		# defaults to it, because null there means "no attack" now (#102).
+		var body := UnitState.of(unit)
+		var main_atk: WeaponAttackData = weapon.default_attack(body) as WeaponAttackData
 		if unit != null:
-			# The headline view is the weapon's MAIN attack, asked for explicitly -- base_damage
-			# no longer defaults to it, because null there means "no attack" now (#102).
-			var main_atk: WeaponAttackData = weapon.default_attack(unit.state) as WeaponAttackData
-			lines.append("Damage %d" % weapon.base_damage(unit.state, main_atk))
+			# HELD (#962): the number the loadout row prints, the weapon's own once it is in hand.
+			lines.append("Damage %d" % weapon.held_damage(body, main_atk))
+		# What it scales off, for this holder or -- nobody -- the build: the stash row's own words, and
+		# the half the loadout's rows leave to this popup (dev, 2026-10-28).
+		if main_atk != null and not main_atk.deals_no_damage:
+			lines.append("Scales off %s" % Stats.blend_text(weapon.scaling_of(body, main_atk)))
 		var status: String = weapon.status_text()
 		if status != "":
 			lines.append(status)
