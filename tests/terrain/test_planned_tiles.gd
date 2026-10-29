@@ -286,3 +286,86 @@ func test_the_squad_pass_gives_its_board_back_on_every_exit() -> void:
 
 	assert_object(refused).override_failure_message("fixture: the hold was not refused").is_null()
 	assert_object(board.tiles).override_failure_message("a refused hold left the pass's tiles on the board").is_null()
+
+
+# THE SEAL (stage 4): inside a pass a store's cell read counts a break, with the answer unchanged, and
+# nothing counts once the pass is over. Opened by hand here; each case closes it before it asserts.
+func test_a_store_read_inside_a_pass_counts_and_answers_the_same() -> void:
+	_terrain.apply(_effect(A, [Terrain.TileState.COVER]))
+	_gas.set_level(A, STEAM, Gas.Level.MEDIUM)
+	var start := PlannedTiles.seal_breaks
+
+	PlannedTiles.open_seal()
+	var states := _terrain.states_at(A)
+	var has := _terrain.has_state(A, Terrain.TileState.COVER)
+	var packed := _gas.packed_at(A)
+	var level := _gas.level_at(A, STEAM)
+	PlannedTiles.close_seal()
+	var inside := PlannedTiles.seal_breaks - start
+	_terrain.states_at(A)
+	_gas.packed_at(A)
+
+	assert_int(inside).override_failure_message("%d of the stores' 4 cell reads counted inside a pass" % inside) \
+		.is_equal(4)
+	assert_int(PlannedTiles.seal_breaks - start).override_failure_message("a read after the pass counted") \
+		.is_equal(4)
+	assert_array(states).contains_exactly([Terrain.TileState.COVER])
+	assert_bool(has).is_true()
+	assert_int(packed).is_equal(_gas.packed_at(A))
+	assert_int(level).is_equal(Gas.Level.MEDIUM)
+
+
+# ...while the planned tiles read past it, and so does a board wearing them: the one door. A board wearing
+# NONE is a live read (a fresh board_source board made mid-pass).
+func test_the_planned_tiles_read_past_the_seal_and_a_bare_board_does_not() -> void:
+	_terrain.apply(_effect(A, [Terrain.TileState.COVER]))
+	_gas.set_level(A, STEAM, Gas.Level.MEDIUM)
+	var tiles := PlannedTiles.new(_terrain, _gas)
+	var worn := _board(_terrain, _gas)
+	worn.tiles = tiles
+	var bare := _board(_terrain, _gas)
+	var start := PlannedTiles.seal_breaks
+
+	PlannedTiles.open_seal()
+	tiles.land(_effect(B, [Terrain.TileState.FROZEN], [], {SMOKE: Gas.Level.THIN}))
+	tiles.states_at(A)
+	tiles.has_state(A, Terrain.TileState.COVER)
+	tiles.gas_at(A)
+	worn.cover_def_at(A)
+	worn.air_at(A)
+	var through_the_door := PlannedTiles.seal_breaks - start
+	bare.tile_states_at(A)
+	bare.gas_at(A)
+	var bare_reads := PlannedTiles.seal_breaks - start - through_the_door
+	PlannedTiles.close_seal()
+
+	assert_int(through_the_door).override_failure_message(
+			"%d read(s) through the planned tiles counted as live" % through_the_door).is_equal(0)
+	assert_int(bare_reads).override_failure_message(
+			"a board wearing no planned tiles read the live stores inside a pass uncounted").is_equal(2)
+
+
+# A judge's board (#1498 stage 3b) meeting a pass counts: built inside one, or handed to one as its board,
+# which the pass would build on and so land the prefix twice. Outside a pass, building one counts nothing.
+func test_a_judges_board_met_by_a_pass_counts() -> void:
+	var sm := H.make_manager(self)
+	var hero := H.spawn_solo(self, sm, Team.Faction.PLAYER, Vector2i(0, 0))
+	var start := PlannedTiles.seal_breaks
+
+	sm.candidate_board(hero.squad)
+	var outside := PlannedTiles.seal_breaks - start
+	PlannedTiles.open_seal()
+	sm.rescue_board(hero.squad)
+	PlannedTiles.close_seal()
+	var built_inside := PlannedTiles.seal_breaks - start - outside
+	var wearing: BoardContext = sm.board_source.call()
+	wearing.tiles = PlannedTiles.new(wearing.terrain_states, wearing.gas)
+	var before_pass := PlannedTiles.seal_breaks
+	sm.resolve_plan(hero.squad, wearing)
+	var handed := PlannedTiles.seal_breaks - before_pass
+
+	assert_int(outside).override_failure_message("building a judge's board outside a pass counted").is_equal(0)
+	assert_int(built_inside).override_failure_message("a judge's board built inside a pass went uncounted") \
+		.is_equal(1)
+	assert_int(handed).override_failure_message("a pass handed a board already wearing tiles went uncounted") \
+		.is_equal(1)

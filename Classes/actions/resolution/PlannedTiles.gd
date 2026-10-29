@@ -13,6 +13,10 @@ class_name PlannedTiles
 #
 # A snapshot, like the body copy: a store written after a cell was copied (a dev brush stroke under a
 # cached plan) is not seen here until the next resolve.
+#
+# THE SEAL (#1498 stage 4), Unit.state's twin: while SquadManager._resolve_actions runs, the stores' cell
+# reads count on seal_breaks and this class reads them past it (their _live twins), so a tile read that
+# skips the planned tiles is loud. So does a judge's board (SquadManager.candidate_board) met inside a pass.
 
 class Cell:
 	var states: Array[Terrain.TileState] = []
@@ -21,6 +25,34 @@ class Cell:
 var _terrain: TerrainStateManager
 var _gas: GasField
 var _cells: Dictionary[Vector2i, Cell] = {}
+
+static var seal_breaks := 0
+static var _seal_reported := false
+
+
+# Depth-counted like Unit.open_seal. Each store keeps its own copy of the count for its getters' cost;
+# this pair is the only writer of both.
+static func open_seal() -> void:
+	if TerrainStateManager._sealed == 0:
+		_seal_reported = false
+	TerrainStateManager._sealed += 1
+	GasField._sealed += 1
+
+
+static func close_seal() -> void:
+	TerrainStateManager._sealed = maxi(0, TerrainStateManager._sealed - 1)
+	GasField._sealed = maxi(0, GasField._sealed - 1)
+
+
+static func is_sealed() -> bool:
+	return TerrainStateManager._sealed > 0
+
+
+static func seal_broken() -> void:
+	seal_breaks += 1
+	if not _seal_reported:
+		_seal_reported = true
+		push_error("A resolve pass read the live tiles past its planned tiles (#1498); the backtrace names the reader.")
 
 
 func _init(terrain: TerrainStateManager, gas: GasField) -> void:
@@ -35,9 +67,9 @@ func land(effect: ResolvedCellEffect) -> void:
 	if record == null:
 		record = Cell.new()
 		if _terrain != null:
-			record.states = _terrain.states_at(cell)
+			record.states = _terrain._live_states_at(cell)
 		if _gas != null:
-			record.gas = _gas.packed_at(cell)
+			record.gas = _gas._live_packed_at(cell)
 		_cells[cell] = record
 	if _terrain != null:
 		record.states = TerrainStateManager.fold(record.states, effect, _terrain.has_ground(cell))
@@ -54,21 +86,21 @@ func states_at(cell: Vector2i) -> Array[Terrain.TileState]:
 	if _terrain == null:
 		var none: Array[Terrain.TileState] = []
 		return none
-	return _terrain.states_at(cell)
+	return _terrain._live_states_at(cell)
 
 
 func has_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 	var record: Cell = _cells.get(cell)
 	if record != null:
 		return record.states.has(state)
-	return _terrain != null and _terrain.has_state(cell, state)
+	return _terrain != null and _terrain._live_has_state(cell, state)
 
 
 func gas_at(cell: Vector2i) -> int:
 	var record: Cell = _cells.get(cell)
 	if record != null:
 		return record.gas
-	return _gas.packed_at(cell) if _gas != null else 0
+	return _gas._live_packed_at(cell) if _gas != null else 0
 
 
 # The cells a landing touched, in the order they were first touched.

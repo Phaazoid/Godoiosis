@@ -1,5 +1,6 @@
-# Every kind of real resolve pass, on every saved board (#1480 stage 4): the walk the two body laws
-# share, tests/law/test_a_pass_reads_no_live_body.gd and tests/law/test_a_pass_writes_no_live_body.gd.
+# Every kind of real resolve pass, on every saved board (#1480 stage 4): the walk four laws share, a pass
+# reading and writing no live body (tests/law/test_a_pass_reads_no_live_body.gd, ..._writes_no_live_body.gd)
+# and no live tile (#1498 stage 4: ..._reads_no_live_tiles.gd, ..._writes_no_live_tiles.gd).
 # Boards are iterated, never named (the content razor), so a new board is covered for free.
 #
 # Each pass is handed to `around` as (board label, kind, a Callable that runs it), so each law wraps

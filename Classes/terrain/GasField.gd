@@ -21,12 +21,26 @@ var dirty := DirtyCells.new()
 # cell -> has ground. Unset judges nothing, which is what a TileSet-less test board wants.
 var ground_source: Callable
 
+# SEALED while a resolve pass runs (#1498 stage 4), TerrainStateManager's shape: a cell read here inside
+# one is a live read past PlannedTiles and counts on PlannedTiles.seal_breaks. Written only by
+# PlannedTiles.open_seal.
+static var _sealed := 0
+
 
 func level_at(cell: Vector2i, kind: Gas.Kind) -> int:
+	if _sealed > 0:
+		PlannedTiles.seal_broken()
 	return Gas.level_in(_cells.get(cell, 0), kind)
 
 
 func packed_at(cell: Vector2i) -> int:
+	if _sealed > 0:
+		PlannedTiles.seal_broken()
+	return _cells.get(cell, 0)
+
+
+# packed_at past the seal: PlannedTiles' door only.
+func _live_packed_at(cell: Vector2i) -> int:
 	return _cells.get(cell, 0)
 
 

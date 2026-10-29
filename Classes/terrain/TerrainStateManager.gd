@@ -41,13 +41,33 @@ var _start_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns }
 # `version` is read today -- the dev header's "(modified)" -- so the cell list goes unconsumed.
 var dirty := DirtyCells.new()
 
+# SEALED while a resolve pass runs (#1498 stage 4): a pass reads tiles through PlannedTiles, which reads
+# the _live twins below, so a cell read here inside one is a live read past it. It counts on
+# PlannedTiles.seal_breaks; the answer is unchanged. This store's own copy of the open-pass count, which
+# PlannedTiles.open_seal alone writes: an own-class static is the cheapest read a getter can make.
+static var _sealed := 0
+
 func states_at(cell: Vector2i) -> Array[Terrain.TileState]:
+	if _sealed > 0:
+		PlannedTiles.seal_broken()
 	var result: Array[Terrain.TileState] = []
 	if _states.has(cell):
 		result.assign(_states[cell])
 	return result
 
 func has_state(cell: Vector2i, state: Terrain.TileState) -> bool:
+	if _sealed > 0:
+		PlannedTiles.seal_broken()
+	return _states.has(cell) and _states[cell].has(state)
+
+# The two reads above past the seal: PlannedTiles' door only, as PlanResolver._live_state is a body's.
+func _live_states_at(cell: Vector2i) -> Array[Terrain.TileState]:
+	var result: Array[Terrain.TileState] = []
+	if _states.has(cell):
+		result.assign(_states[cell])
+	return result
+
+func _live_has_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 	return _states.has(cell) and _states[cell].has(state)
 
 # Play back one resolved cell effect (R3). Remove-then-add, mirroring how AttackAction.execute
