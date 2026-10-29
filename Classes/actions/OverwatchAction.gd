@@ -38,6 +38,9 @@ var resolved_spent := false
 var resolved_anchor: Vector2i = Vector2i.ZERO
 var resolved_footprint: Array[Vector2i] = []
 var resolved_path_lengths: Array[int] = []
+# Whether its carving fizzles from that anchor, on the ground the pass has at its slot (#1498 stage 3b):
+# a stored watch is judged where it arms, as a stored aim is where it lands. Written beside the anchor.
+var resolved_fizzles := false
 
 
 func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:

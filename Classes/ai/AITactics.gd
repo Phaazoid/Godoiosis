@@ -943,7 +943,9 @@ static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadMan
 		return false
 	var target: Unit = null
 	var plan := squad_manager.resolve_plan(unit.squad, board)
-	for ally in RulesService.adjacent_downed_allies(unit, board, plan):
+	# The banks the tail of that resolve leaves, the gate's own ground (#1498 stage 3b).
+	var ground := squad_manager.rescue_board(unit.squad)
+	for ally in RulesService.adjacent_downed_allies(unit, ground, plan):
 		if target == null or _rescue_urgency(ally) < _rescue_urgency(target):
 			target = ally   # most urgent clock first; ties keep the earliest
 	if target == null:
@@ -951,7 +953,7 @@ static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadMan
 	# The AI has no tile pick, so it takes the FIRST landing -- which is exactly the answer the rule
 	# gave everyone before the player was handed the choice (#116), NEIGHBOURS declaration order.
 	# Non-empty by construction: adjacent_downed_allies already refuses a body with no landing.
-	var landings := RulesService.rescue_landings(unit, target, board)
+	var landings := RulesService.rescue_landings(unit, target, ground)
 	var rescue := RescueAction.new()
 	rescue.init(unit, target, landings[0])
 	return squad_manager.queue_action(unit.squad, rescue)
@@ -1785,8 +1787,10 @@ static func _first_opportunity(unit: Unit, cells: Array, squad: Squad, board: Bo
 		if candidates.is_empty():
 			continue
 		var base := _score_plan(faction, base_plan, stakes, profile)
-		for candidate in candidates:
-			var key := _group_key(candidate, board)
+		var keys := _group_keys(candidates, board, base_plan.prefix_tiles)
+		for i in candidates.size():
+			var candidate := candidates[i]
+			var key := keys[i]
 			if dead.has(key):
 				continue
 			var trial: Array[BaseAction] = wins.duplicate()
@@ -1854,6 +1858,18 @@ static func _group_key(candidate: AttackAction, board: BoardContext) -> String:
 	return "%d|%s|%s|%d|%s|%s|%s" % [attack.get_instance_id() if attack != null else 0, candidate.target_cell,
 			GridUtils.cardinal_direction_i_between(origin, candidate.target_cell), board.elevation_at(origin),
 			empowered, air, anchor]
+
+
+# A cell's candidates' keys, read on the ground the base plan's attack walk leaves (#1498 stage 3b):
+# fire or air an earlier order makes there is what the resolve will empower a carving with. LENT to the
+# shared board for the reads and handed back before any trial resolves on it.
+static func _group_keys(candidates: Array[AttackAction], board: BoardContext, tiles: PlannedTiles) -> Array[String]:
+	var worn := ResolvedPlan.lend(board, tiles)
+	var keys: Array[String] = []
+	for candidate in candidates:
+		keys.append(_group_key(candidate, board))
+	ResolvedPlan.lend(board, worn)
+	return keys
 
 
 # Could another cell of this candidate's group still pay? Only a single-victim volley is shareable --

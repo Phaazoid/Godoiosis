@@ -394,12 +394,13 @@ func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
 # source's readiness or channel reason), so a greyed row and a refused order are one answer (#1409).
 # A carving that would FIZZLE greys too (Deep Alchemy Phase 2), judged from where the unit will STAND
 # after its queued moves (get_projected_destination is Unit.projected_cell over its own squad's
-# queue, the origin the queue gate reads) and asked of the same CellSubstances.fizzle_reason. Asked
-# only of an otherwise usable attack.
+# queue, the origin the queue gate reads) and asked of the same CellSubstances.fizzle_reason, on the
+# gate's own ground (SquadManager.candidate_board, #1498 stage 3b). Asked only of an otherwise usable attack.
 func _use_reason(unit: Unit, attack: AttackData) -> String:
 	var reason := AttackAction.fire_block_reason(unit, attack)
 	if reason == "":
-		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), game._board(), unit.state)
+		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(),
+				game.squad_manager.candidate_board(unit.squad), unit.state)
 	return reason
 
 # Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring
@@ -499,7 +500,7 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and not RulesService.guard_candidates(unit, game._board()).is_empty():
 		options.append(GUARD)
 
-	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)).is_empty() and unit.can_rescue_carry():
+	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game.squad_manager.rescue_board(unit.squad), game.squad_manager.resolved_plan_for(unit.squad)).is_empty() and unit.can_rescue_carry():
 		options.append(RESCUE)
 
 	if _can_take_main_action(unit) and unit.has_transmutations():
@@ -669,7 +670,7 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			# queues anything -- step two chooses where it comes out (#116).
 			var on_body := func(body: Unit) -> void:
 				_pick_rescue_landing(unit, body)
-			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)), on_body)
+			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game.squad_manager.rescue_board(unit.squad), game.squad_manager.resolved_plan_for(unit.squad)), on_body)
 		GUARD:
 			# Same query as the populate gate above — the pick layer must agree with the rule layer
 			# (the #126 lesson pinned by tests/ui/test_target_pick_projection.gd).
@@ -696,8 +697,11 @@ func _pick_attack(unit: Unit, attack: AttackData) -> void:
 # there is nothing to choose. The fork is rescue_needs_a_pick, NOT "more than one landing" -- the dev
 # chose to ask even with a single bank, because a step that appears and disappears reads as a bug and
 # a one-wide jetty is exactly where it would vanish.
+#
+# The banks are the ones the tail leaves (SquadManager.rescue_board, #1498 stage 3b): ice an earlier
+# order freezes is one, ice it melts is not, and the gate judges the click on that same ground.
 func _pick_rescue_landing(rescuer: Unit, body: Unit) -> void:
-	var board: BoardContext = game._board()
+	var board: BoardContext = game.squad_manager.rescue_board(rescuer.squad)
 	if not RulesService.rescue_needs_a_pick(body, board):
 		game.queue_rescue(rescuer, body, body.get_projected_destination())
 		return

@@ -326,7 +326,8 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		return pick
 	var origin := unit.get_projected_destination()
 	var aiming: AttackData = pick.attack
-	var board := _board()
+	# The queue gate's own ground: the tiles the queued orders leave (#1498 stage 3b).
+	var board := squad_manager.candidate_board(unit.squad)
 	# A carving that fizzles from here has no aim the queue would take (SquadManager's fizzle gate), so
 	# say why up front rather than listing cells every one of which would be refused.
 	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, unit.state)
@@ -365,7 +366,7 @@ func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Diction
 	if reason != "":
 		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
 	var origin := unit.get_projected_destination()
-	var board := _board()
+	var board := squad_manager.candidate_board(unit.squad)
 	# A watch whose carving fizzles from here is refused at the queue (SquadManager's fizzle gate), so
 	# it has no spot to offer -- legal_targets' rule for a fire pick, one verb over.
 	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, unit.state)
@@ -945,15 +946,16 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	# The player's click gate (#1365), the one overwatch and the hover ask: a directional aim needs a
 	# facing whose spread survives, a point aim needs the cell and a footprint with ground in it
 	# (#1228), so a shot into a hole is refused here as the click can never make it. The board carries
-	# the elevations for the vertical-tolerance half (#258).
-	if not Reach.can_aim_at(origin, aim, aiming, _board()):
+	# the elevations for the vertical-tolerance half (#258). The gate's own ground (#1498 stage 3b).
+	var board := squad_manager.candidate_board(unit.squad)
+	if not Reach.can_aim_at(origin, aim, aiming, board):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
 	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
 	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
 	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
 	# included), same as the player's click and the AI.
 	var order := AttackAction.declare(unit, origin, aim)
-	var victims := Conduction.sweep(unit, origin, aim, aiming, _board()).victims
+	var victims := Conduction.sweep(unit, origin, aim, aiming, board).victims
 	if SquadPlanValidator.aim_whiffs(order, not victims.is_empty()):
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
@@ -1003,7 +1005,8 @@ func rescue(rescuer_handle: String, target_handle: String, landing: Variant = nu
 	var target := unit_by_handle(target_handle)
 	if target == null:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
-	var board := _board()
+	# The banks the tail leaves, the gate's own (#1498 stage 3b).
+	var board := squad_manager.rescue_board(rescuer.squad)
 	if not RulesService.adjacent_downed_allies(rescuer, board, squad_manager.resolved_plan_for(rescuer.squad)).has(target):
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
 	# Read BEFORE queueing: the queue's resolve publishes the haul, and the body then reads as standing.
@@ -1093,7 +1096,7 @@ func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
 	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
 	# dud-aim refusal that stood below is inside it -- a facing watching no cells is not aimable.
-	if not Reach.can_aim_at(origin, aim, aiming, _board()):
+	if not Reach.can_aim_at(origin, aim, aiming, squad_manager.candidate_board(unit.squad)):
 		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
 	var action := OverwatchAction.new()
 	action.init(unit, aim, aiming)

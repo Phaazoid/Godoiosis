@@ -380,6 +380,9 @@ static func plan_lists() -> Dictionary:
 			# The pass's tiles as its cell_effects leave them, landed per cell (#1498).
 			"tiles": {"play": never("cell_effects landed per cell, not a consequence of its own: that row is the answer"),
 					"ai": gap("#117", "where the pass leaves the ground is not priced: _map_pays judges one deposit alone, never the plan's tiles")},
+			# The ground a candidate order is judged on (#1498 stage 3b): an aim's, a watch's, a rescue's.
+			"prefix_tiles": {"play": covered(SESSION, "candidate_board("), "ai": covered(TACTICS, ".prefix_tiles")},
+			"tail_tiles": {"play": covered(SESSION, "rescue_board("), "ai": covered(TACTICS, "rescue_board(")},
 		},
 	}
 
