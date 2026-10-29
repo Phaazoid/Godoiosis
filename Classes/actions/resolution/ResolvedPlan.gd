@@ -19,6 +19,25 @@ var cell_effects: Array[ResolvedCellEffect] = []
 # cell_effects by hand.
 var tiles: PlannedTiles = null
 
+# The tiles as the pass had them when its attack walk ended (#1498 stage 3b): where a CANDIDATE aim, watch
+# or Guard meets the ground, the tiles twin of the published projection. tail_tiles is a candidate
+# rescue's, after the counters, where its haul is judged. Copies the pass takes once and never writes;
+# null for a pass with no board. Read through SquadManager.candidate_board / rescue_board.
+var prefix_tiles: PlannedTiles = null
+var tail_tiles: PlannedTiles = null
+
+
+# The ONE way a board is made to wear planned tiles, in the pass and out of it. Hands back what it wore.
+static func lend(board: BoardContext, lent: PlannedTiles) -> PlannedTiles:
+	var worn := board.tiles
+	board.tiles = lent
+	return worn
+
+
+# A copy of the tiles as they stand now, for prefix_tiles and tail_tiles.
+func snapshot_tiles() -> PlannedTiles:
+	return tiles.copy() if tiles != null else null
+
 
 # The ONE door a pass's tile change enters by: recorded, for playback and for land() below. It counts
 # once its volley lands (ruling 3), never as it is recorded.
@@ -33,10 +52,8 @@ func deposit(effect: ResolvedCellEffect) -> void:
 func lend_tiles(board: BoardContext) -> PlannedTiles:
 	if board == null:
 		return null
-	var worn := board.tiles
 	_make_tiles(board)
-	board.tiles = tiles
-	return worn
+	return lend(board, tiles)
 
 
 func return_tiles(board: BoardContext, worn: PlannedTiles) -> void:

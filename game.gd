@@ -867,13 +867,14 @@ func next_squad_member(anchor: Unit, step: int) -> Unit:
 
 # F / Shift+F WHILE AIMING (#929): the next or previous attack this unit could aim, across every
 # weapon it carries (Unit.aim_options), wrapping. The aim is re-entered on it so its reach repaints,
-# and the hover re-asks what it would do. Nothing is equipped until the click. Handed the board, so a
-# carving that would fizzle from here is never offered for a click the queue gate would refuse.
+# and the hover re-asks what it would do. Nothing is equipped until the click. Handed the gate's own
+# ground (candidate_board), so a carving that would fizzle from here is never offered for a click the
+# queue gate would refuse.
 func cycle_aimed_attack(step: int) -> void:
 	if game_state != GameState.ATTACK_TARGETING or not is_instance_valid(selected_unit):
 		return
 	var unit: Unit = selected_unit
-	var options := unit.aim_options(aim_intent == AimIntent.WATCH, _board())
+	var options := unit.aim_options(aim_intent == AimIntent.WATCH, squad_manager.candidate_board(unit.squad))
 	if options.is_empty():
 		return
 	var at := _aim_index(unit, options)
@@ -897,7 +898,7 @@ func _aim_index(unit: Unit, options: Array[Unit.AimOption]) -> int:
 
 
 func _show_aim_strip(unit: Unit) -> void:
-	var options := unit.aim_options(aim_intent == AimIntent.WATCH, _board())
+	var options := unit.aim_options(aim_intent == AimIntent.WATCH, squad_manager.candidate_board(unit.squad))
 	var attack := unit.get_fired_attack()
 	var source: EquippableData = aim_source if aim_source != null else unit.get_equipped_weapon()
 	aim_strip.show_aim(attack.display_name if attack != null else "",
@@ -2587,11 +2588,13 @@ func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
 #
 # It rides ThreatField.reach_from rather than a second walk -- see there for why the origins are
 # passed in rather than looked up, which is the difference between a permission and a prediction.
+# Its ground is the ring row's (#1498 stage 3b): what the queued orders leave, not the live board.
 func show_player_reach(unit: Unit, origin: Vector2i) -> void:
 	if unit == null or not is_instance_valid(unit):
 		overlay_manager.clear_reach()
 		return
-	overlay_manager.show_reach(ThreatField.reach_from(unit, _board(), [origin] as Array[Vector2i]))
+	overlay_manager.show_reach(ThreatField.reach_from(unit, squad_manager.candidate_board(unit.squad),
+			[origin] as Array[Vector2i]))
 
 # Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
 # tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an

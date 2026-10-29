@@ -109,7 +109,8 @@ static func render_focus(session, handle: String) -> String:
 	lines.append("  " + _unit_line(session, unit))
 	var board: BoardContext = session._board()
 	lines.append("  " + _stats_line(unit, board))
-	for line in _attack_lines(unit, board):
+	# Each fizzle judged on the queue gate's ground, the tiles the queued orders leave (#1498 stage 3b).
+	for line in _attack_lines(unit, session.squad_manager.candidate_board(unit.squad)):
 		lines.append("    " + line)
 	return "\n".join(lines)
 

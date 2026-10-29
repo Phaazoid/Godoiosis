@@ -366,10 +366,13 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# The wash shows the CURRENT as well as the blast (Law #2 -- a shock that will arc has to
 			# say so before the click). Read against LIVE wetness, since that is what is true at the
 			# moment the player is aiming; a queued-but-unexecuted WATER order is threaded into the
-			# pass instead, and the queue row it produces is where that reading is honest.
+			# pass instead, and the queue row it produces is where that reading is honest. The WATER it
+			# runs through is the queued prefix's (candidate_board, #1498 stage 3b), the ground the gate
+			# judges this click on, so ice an earlier order makes stops it here too.
 			# Held, because who it catches asks attack_hits_allies -- a fact about the firing weapon's mods.
+			var ground: BoardContext = game.squad_manager.candidate_board(attacker.squad)
 			var reach: Conduction.Sweep = attacker.with_weapon_in_hand(source,
-				func() -> Conduction.Sweep: return Conduction.sweep(attacker, origin, cell, aiming, board))
+				func() -> Conduction.Sweep: return Conduction.sweep(attacker, origin, cell, aiming, ground))
 			preview_cells = reach.cells
 			# Every footprint flashes in the order the attack travels (#1057 part 2), whatever it
 			# targets -- the tiles say HOW it lands, the victims' own pulse says WHO.

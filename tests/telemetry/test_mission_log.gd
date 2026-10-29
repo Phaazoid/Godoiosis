@@ -16,6 +16,7 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
+const DEEP_WATER := Vector2i(5, 6)   # TestTiles' deep water: a body lying in it is hauled to a bank
 const MISSION := "res://tests/telemetry/not_a_real_file.tres"   # a name, never loaded
 const SCRATCH_ROOT := "user://__telemetry_test/"
 const SCRATCH_MISSION := "user://__telemetry_53.tres"   # the one case that RELOADS needs a real file
@@ -642,14 +643,16 @@ func test_a_rescue_records_the_bank_the_player_picked() -> void:
 	var body := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
 	mc._begin_turn()
 	body.force_down()
+	# Deep water under the body, so (0, 1) is a bank to pick: on dry ground a body's one landing is its
+	# own cell, and the gate refuses a haul to a cell that is not a bank (#1498 stage 3b).
+	game.grid.paint(Vector2i(1, 0), GRASS_SOURCE, DEEP_WATER)
 	var rescue := RescueAction.new()
 	rescue.init(hero, body, Vector2i(0, 1))
 	assert_bool(game.squad_manager.queue_action(hero.squad, rescue)).override_failure_message(
 		"fixture: the rescue never queued").is_true()
 
 	# Read at QUEUE time, not after a pass: `_order` is what both records go through, and the haul
-	# is a fact of the ORDER rather than of its execution. (A rescue plan here does not survive
-	# execute_orders' validity guard, which is a fixture matter and not what this case is about.)
+	# is a fact of the ORDER rather than of its execution.
 	var queued := _of("order_queued")
 	assert_int(queued.size()).override_failure_message("fixture: the rescue was not recorded").is_equal(1)
 	var order: Dictionary = queued[0].get("order", {})

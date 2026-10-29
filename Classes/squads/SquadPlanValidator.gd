@@ -44,7 +44,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 		_revalidate_unit_attacks(actions, plan)
 		_revalidate_guard_range(actions)
 		_revalidate_rescue_targets(actions, plan)
-		_revalidate_watch_material(actions, board)
+		_revalidate_watch_material(actions)
 		_revalidate_fire_gates(actions)
 
 	for action in actions:
@@ -201,17 +201,18 @@ static func _revalidate_guard_range(actions: Array[BaseAction]) -> void:
 		if not guard.resolved_in_range:
 			guard.add_validation_error("Too far from the unit being guarded")
 
-# A stored WATCH's twin of the clause above (Deep Alchemy Phase 2): the resolve stamped where the watch
-# arms (OverwatchAction.resolved_anchor), and a carving that fizzles from there could only ever fire a
-# fizzle -- so a re-plan that walked the watcher off its material reds it, still queued. Asked from
-# the resolve's own stamp, beside the attacks for their reason; an empty footprint is "nothing to
-# arm" (a felled watcher, #1005) and is asked nothing.
-static func _revalidate_watch_material(actions: Array[BaseAction], board: BoardContext) -> void:
+# A stored WATCH's twin of the clause above (Deep Alchemy Phase 2): the resolve judged its carving where
+# the watch arms (OverwatchAction.resolved_fizzles, at its queue slot, on the ground the orders ahead of
+# it leave, #1498 stage 3b), and one that fizzles there could only ever fire a fizzle -- so a re-plan
+# that walked the watcher off its material, or an earlier order that took it away, reds it, still
+# queued. The resolve's own stamp, beside the attacks for their reason; an empty footprint is "nothing
+# to arm" (a felled watcher, #1005) and is asked nothing.
+static func _revalidate_watch_material(actions: Array[BaseAction]) -> void:
 	for action in actions:
 		var watch := action as OverwatchAction
 		if watch == null or watch.resolved_footprint.is_empty():
 			continue
-		if CellSubstances.fizzle_reason(watch.fired_attack, watch.resolved_anchor, board, watch.actor.state) != "":
+		if watch.resolved_fizzles:
 			watch.add_validation_error("Fizzles where they'll be standing")
 
 # The gate that ADMITTED a stored aim or watch, asked again (#1283): the dock can swap the weapon in

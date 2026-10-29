@@ -487,13 +487,21 @@ static func _plan_refusal(action: BaseAction) -> String:
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 	validate_squad_plan_preview(squad, action)
-	if action.is_valid and _candidate_carving_holds(squad, action) and _candidate_aim_connects(squad, action) \
-			and _candidate_watch_declarable(squad, action) and _candidate_rescue_target_ok(squad, action) \
+	if action.is_valid and _candidate_holds_on_the_ground(squad, action) and _candidate_rescue_target_ok(squad, action) \
 			and _candidate_guard_in_range(squad, action):
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
 	return false
+
+# The three clauses that read the GROUND, asked on one board: the tiles the queued prefix leaves
+# (candidate_board, #1498 stage 3b). Only an aim or a watch is asked them, so only those build it.
+func _candidate_holds_on_the_ground(squad: Squad, action: BaseAction) -> bool:
+	if not (action is AttackAction or action is OverwatchAction):
+		return true
+	var ground := candidate_board(squad)
+	return _candidate_carving_holds(squad, action, ground) and _candidate_aim_connects(squad, action, ground) \
+			and _candidate_watch_declarable(squad, action, ground)
 
 # The range half of a candidate Guard (#1354), the whiff clause's shape. A STORED Guard's range is the
 # resolve's, judged at its queue slot (GuardAction.resolved_in_range); a candidate's slot is the END of
@@ -516,7 +524,7 @@ func _candidate_guard_in_range(squad: Squad, action: BaseAction) -> bool:
 # greyed row and a refused order cannot disagree. Asked of an aim and of a WATCH, whose shot fires
 # from that same cell (Pressure Spray is watch-only); a stored order's answer is the validator's
 # ("Fizzles where they'll be standing"). Every other candidate passes straight through.
-func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
+func _candidate_carving_holds(squad: Squad, action: BaseAction, ground: BoardContext) -> bool:
 	var attack: AttackData = null
 	if action is AttackAction:
 		attack = (action as AttackAction).fired_attack
@@ -526,7 +534,7 @@ func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	var reason := CellSubstances.fizzle_reason(attack, origin, board_source.call(), action.actor.state)
+	var reason := CellSubstances.fizzle_reason(attack, origin, ground, action.actor.state)
 	if reason == "":
 		return true
 	action.add_validation_error(reason)
@@ -534,12 +542,12 @@ func _candidate_carving_holds(squad: Squad, action: BaseAction) -> bool:
 
 # The whiff half of the gate: only a CANDIDATE may be asked this -- a stored aim's answer comes
 # from the resolve. Non-attack candidates pass straight through.
-func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
+func _candidate_aim_connects(squad: Squad, action: BaseAction, ground: BoardContext) -> bool:
 	if not (action is AttackAction):
 		return true
 	var aim := action as AttackAction
 	var one: Array[BaseAction] = [action]
-	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, one), _all_units(), board_source.call())
+	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, one), _all_units(), ground)
 	if not SquadPlanValidator.aim_whiffs(aim, found):
 		return true
 	aim.add_validation_error("Nothing to hit on that cell")
@@ -548,13 +556,13 @@ func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
 # The aim half of a candidate WATCH (#1433): Reach.can_aim_at, the gate the click, the hover and the
 # Play API ask, from where the watcher will STAND -- the fizzle clause's origin. An order the player
 # could never declare is refused whoever authors it; the AI's builder asks the same gate first.
-func _candidate_watch_declarable(squad: Squad, action: BaseAction) -> bool:
+func _candidate_watch_declarable(squad: Squad, action: BaseAction, ground: BoardContext) -> bool:
 	var watch := action as OverwatchAction
 	if watch == null:
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	if Reach.can_aim_at(origin, watch.target_cell, watch.fired_attack, board_source.call()):
+	if Reach.can_aim_at(origin, watch.target_cell, watch.fired_attack, ground):
 		return true
 	watch.add_validation_error("Can't aim a watch there")
 	return false
@@ -568,9 +576,14 @@ func _candidate_rescue_target_ok(squad: Squad, action: BaseAction) -> bool:
 	if not (action is RescueAction):
 		return true
 	var rescue := action as RescueAction
-	if RulesService.is_rescueable(rescue.target, resolved_plan_for(squad)):
+	if not RulesService.is_rescueable(rescue.target, resolved_plan_for(squad)):
+		rescue.add_validation_error("Rescue target won't be down")
+		return false
+	# ...and its bank, on the ground the tail has (rescue_board, #1498 stage 3b): the validator's haul
+	# clause asked of a candidate, so a bank the pass will refuse is refused whoever authors it.
+	if RulesService.rescue_landings(rescue.actor, rescue.target, rescue_board(squad)).has(rescue.haul_to):
 		return true
-	rescue.add_validation_error("Rescue target won't be down")
+	rescue.add_validation_error("Can't pull them out to there any more")
 	return false
 
 func set_has_acted(squad: Squad, acted: bool) -> void:
@@ -1063,10 +1076,15 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 				watch_order.resolved_anchor = Vector2i.ZERO
 				watch_order.resolved_footprint = []
 				watch_order.resolved_path_lengths = []
+				watch_order.resolved_fizzles = false
 				continue
 			var watch_origin := PlanResolver.projected_position(watch_order.actor, hypo)
 			var watched := watch_order.watched_paths_from(watch_origin, board)
 			watch_order.resolved_anchor = watch_origin
+			# Its material, asked as PlanResolver._fizzles asks an aim's: the pass's copy, on the ground
+			# the orders ahead of this slot have left (#1498 stage 3b).
+			watch_order.resolved_fizzles = CellSubstances.fizzle_reason(watch_order.fired_attack, watch_origin,
+					board, PlanResolver.state_of(watch_order.actor, hypo), hypo) != ""
 			watch_order.resolved_footprint = AttackShape.joined_cells(watched)
 			watch_order.resolved_path_lengths = AttackShape.joined_lengths(watched)
 			if not watch_order.resolved_footprint.is_empty():
@@ -1127,6 +1145,10 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			plan.attacks.append_array(dropped)
 			_settle_shoves(dropped, plan, hypo, reactions, board, terrain_reactions)
 
+	# The ground a candidate aim, watch or Guard would meet, taken where the published projection stops
+	# (#1498 stage 3b): every aim, payload and watch shot of the prefix landed, no counter yet.
+	plan.prefix_tiles = plan.snapshot_tiles()
+
 	# Every walk this prefix moved its walker off again (#1349), stamped once the last aim has
 	# settled: the shove it published landed AFTER the walk, so Unit.projected_cell lets it win. Read off
 	# the hypo, which has the walker wherever the last shove left it. Assigned unconditionally, so a
@@ -1156,6 +1178,8 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 		plan.counters.append_array(c_volley)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
+	# ...and a candidate rescue's ground: the tail its haul runs in, after the counters (#1498 stage 3b).
+	plan.tail_tiles = plan.snapshot_tiles()
 
 	# R7 liveness for the side-channel tail (#1005), and AFTER THE COUNTERS is the whole of why it
 	# is here rather than at each order's queue slot: the tail runs last, so the pass can still fell
@@ -1336,6 +1360,29 @@ func resolved_plan_for(squad: Squad) -> ResolvedPlan:
 	if squad != null and is_instance_valid(squad) and _last_resolved_squad == squad:
 		return _last_resolved_plan
 	return null
+
+
+# The ground a CANDIDATE order is judged on (#1498 stage 3b): a fresh board wearing the tiles the queued
+# prefix leaves (ResolvedPlan.prefix_tiles), the published projection's tiles twin. Judge on it, never
+# resolve on it: a pass handed this board would build on the snapshot and land the prefix twice.
+func candidate_board(squad: Squad) -> BoardContext:
+	var plan := resolved_plan_for(squad)
+	return _board_wearing(squad, plan.prefix_tiles if plan != null else null)
+
+
+# ...and a candidate RESCUE's: the tail its haul runs in, after the counters (ResolvedPlan.tail_tiles).
+func rescue_board(squad: Squad) -> BoardContext:
+	var plan := resolved_plan_for(squad)
+	return _board_wearing(squad, plan.tail_tiles if plan != null else null)
+
+
+# An empty queue wears nothing: after a pass the cache still holds the plan it executed, and the next
+# turn's first order meets the live board.
+func _board_wearing(squad: Squad, tiles: PlannedTiles) -> BoardContext:
+	var board: BoardContext = board_source.call()
+	if tiles != null and not squad.action_queue.is_empty():
+		ResolvedPlan.lend(board, tiles)
+	return board
 
 
 # A dead unit leaves the board entirely, so it just detaches.
