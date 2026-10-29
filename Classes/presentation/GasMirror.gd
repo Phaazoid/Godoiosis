@@ -8,8 +8,10 @@ class_name GasMirror
 # hide under it so the board reads.
 #
 # Polls rather than listens: the gas, heights and grid versions, the staging, the basin, the mix and
-# the view. Any change rebuilds the board textures and the region boxes; every frame only re-sends the
-# camera, the light, the clock and the key. Gas is 3D only -- the flat 2D view has no drawing of it (#292).
+# the view. Any change rebuilds the gas's textures and the region boxes, at a cost that follows the gas
+# rather than the board (#1518); the ground's textures wait for the ground to move. Every frame only
+# re-sends the camera, the light, the clock and the key. Gas is 3D only -- the flat 2D view has no
+# drawing of it (#292).
 #
 # Gas lies on the ground as DRAWN, not its rules height: over water it pools in the basin (#1363).
 
@@ -17,6 +19,8 @@ class_name GasMirror
 const RESOLUTION_DIVISORS: Array[int] = [1, 2, 4]
 
 const MASK_SCALE := 8
+# How far a cubic resize reaches, in cells: a mask texel is zero further than this from its gas.
+const MASK_REACH := 2
 const FLASH_LIFT := 1.1             # how far above the ground a strike glows
 const FLASH_SAFE_LEVEL := 0.15      # photosensitivity: every cloud holds a steady dim glow instead
 const FLOOR_SHADER := "res://Classes/presentation/gas_floor.gdshader"
@@ -95,6 +99,9 @@ var _time := 0.0
 var _seen := []
 var _rect := Rect2i()
 var _textures: Array[Texture] = []
+# The ground half of the board textures, and the terrain it was built for: a gas change reuses it.
+var _ground_textures: Array[Texture] = []
+var _ground_seen := []
 var _looks := PackedFloat32Array()
 var _looks_version := 0
 var _packed_mix := -1
@@ -258,22 +265,83 @@ func _rebuild() -> void:
 
 
 func _build_textures(shown: Dictionary[Vector2i, int]) -> void:
-	_textures = _board_textures_for(shown)
+	var ground_key := [_rect, heights.dirty.version if heights != null else 0,
+		grid.dirty.version if grid != null else 0, BoardSpace.basin_version]
+	if ground_key != _ground_seen:
+		_ground_seen = ground_key
+		_ground_textures = _ground_textures_for()
+	_textures = _gas_textures_for(shown)
+	_textures.append_array(_ground_textures)
 
 
-# The board textures for any field -- the live one, or the forecast's next round.
-func _board_textures_for(shown: Dictionary[Vector2i, int]) -> Array[Texture]:
+# The gas half of the board textures (cells, amounts, masks) for any field -- the live one, or the
+# forecast's next round. Only the cells within one of gas are written: every other texel keeps the
+# zero an empty image starts at, which is what a cell with no gas near writes.
+func _gas_textures_for(shown: Dictionary[Vector2i, int]) -> Array[Texture]:
 	var size := _rect.size.max(Vector2i.ONE)
 	var kinds := Gas.Kind.size()
 	var cells := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
-	var ground := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBAF)
-	var mid := Image.create_empty(size.x, size.y, false, Image.FORMAT_RF)
 	var amounts: Array[Image] = []
-	var masks: Array[Image] = []
+	var sources: Array[Image] = []
+	var where: Array[Array] = []   # each kind's gas cells, in texel space
 	for k in kinds:
 		amounts.append(Image.create_empty(size.x, size.y, false, Image.FORMAT_R8))
-		masks.append(Image.create_empty(size.x, size.y, false, Image.FORMAT_R8))
+		sources.append(Image.create_empty(size.x, size.y, false, Image.FORMAT_R8))
+		var at_cells: Array[Vector2i] = []
+		where.append(at_cells)
+	var held: Dictionary[Vector2i, int] = {}
+	var touched: Dictionary[Vector2i, bool] = {}
+	for cell: Vector2i in shown:
+		held[cell] = Gas.kind_mask(shown[cell])
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				touched[cell + Vector2i(dx, dy)] = true
+	# A staged cell is lifted whether or not gas is near it.
 	var staged := BoardSpace.staging_active()
+	if staged:
+		for cell in BoardSpace.staged_cells():
+			if _rect.has_point(cell):
+				cells.set_pixelv(cell - _rect.position, Color8(0, 0, 0, 255))
+	for cell: Vector2i in touched:
+		if not _rect.has_point(cell):
+			continue
+		var near := 0
+		var neighbours := 0
+		var bit := 0
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				var n := cell + Vector2i(dx, dy)
+				near |= held.get(n, 0)
+				if dx != 0 or dy != 0:
+					if shown.get(n, 0) != 0:
+						neighbours |= 1 << bit
+					bit += 1
+		var lifted := 255 if staged and BoardSpace.is_staged(cell) else 0
+		cells.set_pixelv(cell - _rect.position, Color8(held.get(cell, 0), near, neighbours, lifted))
+	for cell: Vector2i in shown:
+		var at := cell - _rect.position
+		var own: int = shown[cell]
+		for kind in Gas.kinds_in(own):
+			var density := float(Gas.level_in(own, kind)) / Gas.MAX_LEVEL
+			amounts[kind].set_pixelv(at, Color(density, 0, 0))
+			sources[kind].set_pixelv(at, Color(1, 0, 0))
+			where[kind].append(at)
+	var masks: Array[Image] = []
+	for k in kinds:
+		masks.append(upscaled_mask(sources[k], where[k]))
+	var amount_array := Texture2DArray.new()
+	amount_array.create_from_images(amounts)
+	var mask_array := Texture2DArray.new()
+	mask_array.create_from_images(masks)
+	var out: Array[Texture] = [ImageTexture.create_from_image(cells), amount_array, mask_array]
+	return out
+
+
+# The ground half of the board textures: the surface as drawn, four corners and the centre per cell.
+func _ground_textures_for() -> Array[Texture]:
+	var size := _rect.size.max(Vector2i.ONE)
+	var ground := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBAF)
+	var mid := Image.create_empty(size.x, size.y, false, Image.FORMAT_RF)
 	for y in size.y:
 		for x in size.x:
 			var cell := _rect.position + Vector2i(x, y)
@@ -284,33 +352,42 @@ func _board_textures_for(shown: Dictionary[Vector2i, int]) -> Array[Texture]:
 				BoardSpace.world_y_of_height(corners.w) - drop))
 			mid.set_pixel(x, y, Color(BoardSpace.world_y_of_height(Terrain.height_at_uv(corners, 0.5, 0.5)) - drop,
 				0, 0))
-			var near := 0
-			var neighbours := 0
-			var bit := 0
-			for dy in range(-1, 2):
-				for dx in range(-1, 2):
-					var packed: int = shown.get(cell + Vector2i(dx, dy), 0)
-					near |= Gas.kind_mask(packed)
-					if dx != 0 or dy != 0:
-						if packed != 0:
-							neighbours |= 1 << bit
-						bit += 1
-			var own: int = shown.get(cell, 0)
-			var lifted := 255 if staged and BoardSpace.is_staged(cell) else 0
-			cells.set_pixel(x, y, Color8(Gas.kind_mask(own), near, neighbours, lifted))
-			for kind in Gas.kinds_in(own):
-				var density := float(Gas.level_in(own, kind)) / Gas.MAX_LEVEL
-				amounts[kind].set_pixel(x, y, Color(density, 0, 0))
-				masks[kind].set_pixel(x, y, Color(1, 0, 0))
-	for mask in masks:
-		mask.resize(size.x * MASK_SCALE, size.y * MASK_SCALE, Image.INTERPOLATE_CUBIC)
-	var amount_array := Texture2DArray.new()
-	amount_array.create_from_images(amounts)
-	var mask_array := Texture2DArray.new()
-	mask_array.create_from_images(masks)
-	var out: Array[Texture] = [ImageTexture.create_from_image(cells), amount_array, mask_array,
-		ImageTexture.create_from_image(ground), ImageTexture.create_from_image(mid)]
+	var out: Array[Texture] = [ImageTexture.create_from_image(ground), ImageTexture.create_from_image(mid)]
 	return out
+
+
+# One kind's mask at MASK_SCALE, cubic, resized only round its gas. A cubic texel reads only the cells
+# within MASK_REACH of its own, so each cloud's box, resized with that much more around it, is byte for
+# byte what resizing the whole mask gives (#1518).
+static func upscaled_mask(mask: Image, cells: Array[Vector2i]) -> Image:
+	var size := mask.get_size()
+	var bounds := Rect2i(Vector2i.ZERO, size)
+	var out := Image.create_empty(size.x * MASK_SCALE, size.y * MASK_SCALE, false, mask.get_format())
+	for box in _reach_boxes(cells):
+		var region := box.intersection(bounds)
+		var crop := box.grow(MASK_REACH).intersection(bounds)
+		var part := mask.get_region(crop)
+		part.resize(crop.size.x * MASK_SCALE, crop.size.y * MASK_SCALE, Image.INTERPOLATE_CUBIC)
+		out.blit_rect(part, Rect2i((region.position - crop.position) * MASK_SCALE, region.size * MASK_SCALE),
+			region.position * MASK_SCALE)
+	return out
+
+
+# The cells a mask can be nonzero in, one box per cloud: each cell's reach, merged wherever two overlap.
+static func _reach_boxes(cells: Array[Vector2i]) -> Array[Rect2i]:
+	var boxes: Array[Rect2i] = []
+	for at in cells:
+		var box := Rect2i(at, Vector2i.ONE).grow(MASK_REACH)
+		var i := 0
+		while i < boxes.size():
+			if boxes[i].intersects(box):
+				box = box.merge(boxes[i])
+				boxes.remove_at(i)
+				i = 0
+			else:
+				i += 1
+		boxes.append(box)
+	return boxes
 
 
 func _ground_span(cell: Vector2i) -> Vector2:
@@ -641,13 +718,17 @@ func _sun_light() -> Color:
 	return sun.light_color * sun.light_energy if sun != null and sun.visible else Color.BLACK
 
 
+# The board's lamps now. Read once per build, never per puff: the source walks every prop (#1518).
+func _lamps() -> Array:
+	return lights_source.call() if lights_source.is_valid() else []
+
+
 # The light a flat-shaded pixel gets at a point, in sRGB: a floor of sky, the sun, and nearby lamps.
-func _tint_at(at: Vector3) -> Color:
+func _tint_at(at: Vector3, lamps: Array) -> Color:
 	var t := Color(0.42, 0.45, 0.52) + _sun_light() * 0.55
-	if lights_source.is_valid():
-		for light: OmniLight3D in lights_source.call():
-			var att := pow(clampf(1.0 - light.global_position.distance_to(at) / light.omni_range, 0.0, 1.0), 2.0)
-			t += light.light_color * light.light_energy * att * 0.35
+	for light: OmniLight3D in lamps:
+		var att := pow(clampf(1.0 - light.global_position.distance_to(at) / light.omni_range, 0.0, 1.0), 2.0)
+		t += light.light_color * light.light_energy * att * 0.35
 	return Color(minf(t.r, 1.0), minf(t.g, 1.0), minf(t.b, 1.0), 1.0)
 
 
@@ -678,7 +759,7 @@ func _update_forecast() -> void:
 	_forecast_cells = shown
 	_forecast.mesh = _floor_mesh(shown)
 	if _forecast.mesh != null:
-		_bind_floor(_forecast_material, _board_textures_for(shown))
+		_bind_floor(_forecast_material, _gas_textures_for(shown))
 
 
 func _bind_floor(material: ShaderMaterial, textures: Array[Texture]) -> void:
@@ -694,6 +775,7 @@ func _floor_mesh(shown: Dictionary[Vector2i, int]) -> Mesh:
 	if shown.is_empty():
 		return null
 	var lift := overlays.gas_floor_lift() if overlays != null else 0.008
+	var lamps := _lamps()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var fan: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
@@ -701,7 +783,7 @@ func _floor_mesh(shown: Dictionary[Vector2i, int]) -> Mesh:
 		var corners := heights.corners_at(cell) if heights != null else Vector4i.ZERO
 		var offset := BoardSpace.drawn_offset(cell) + Vector3(0.0, lift, 0.0)
 		var centre := _floor_point(cell, corners, Vector2(0.5, 0.5), offset)
-		st.set_color(_tint_at(centre).srgb_to_linear())
+		st.set_color(_tint_at(centre, lamps).srgb_to_linear())
 		for i in 4:
 			st.add_vertex(centre)
 			st.add_vertex(_floor_point(cell, corners, fan[i], offset))
@@ -784,11 +866,12 @@ func _build_puffs(shown: Dictionary[Vector2i, int]) -> void:
 	_puff_entries = instances
 	multimesh.instance_count = instances.size()
 	var bounds := AABB()
+	var lamps := _lamps()
 	for i in instances.size():
 		var entry: Array = instances[i]
 		var at: Vector3 = entry[0]
 		var kind: Gas.Kind = entry[1]
-		var tint := _tint_at(at).srgb_to_linear()
+		var tint := _tint_at(at, lamps).srgb_to_linear()
 		multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, at))
 		multimesh.set_instance_custom_data(i, Color(float(kind), float(entry[2]), entry[3], float(entry[4])))
 		multimesh.set_instance_color(i, Color(tint.r, tint.g, tint.b, 0.0))

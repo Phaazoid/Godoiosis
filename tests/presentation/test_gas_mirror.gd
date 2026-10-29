@@ -199,6 +199,81 @@ func test_the_board_texture_says_what_the_store_holds() -> void:
 	assert_int(neighbours).is_equal(1 << 4)
 
 
+# A mask is resized only round its gas (#1518), yet every texel must be what resizing the WHOLE mask
+# gives, byte for byte, wherever the gas lies. This leans on how far Godot's cubic resize reaches, so
+# an engine whose resize reaches further reds here.
+func test_a_mask_resized_round_its_gas_is_the_whole_mask_resized() -> void:
+	var size := Vector2i(23, 17)
+	var dense: Array[Vector2i] = []
+	for y in size.y:
+		for x in size.x:
+			if posmod(hash(Vector2i(x, y)), 5) == 0:
+				dense.append(Vector2i(x, y))
+	var patterns := {
+		"no gas": [],
+		"the corners and edges": [Vector2i(0, 0), Vector2i(22, 0), Vector2i(0, 16), Vector2i(22, 16),
+			Vector2i(11, 0), Vector2i(0, 8), Vector2i(22, 9), Vector2i(1, 15)],
+		"one cloud": [Vector2i(10, 7), Vector2i(11, 7), Vector2i(10, 8), Vector2i(11, 8), Vector2i(12, 8)],
+		"two clouds far apart": [Vector2i(3, 3), Vector2i(4, 3), Vector2i(18, 13), Vector2i(19, 14)],
+		"a diagonal chain": [Vector2i(5, 2), Vector2i(7, 4), Vector2i(9, 6), Vector2i(11, 8), Vector2i(13, 10)],
+		"a dense field": dense,
+	}
+	var nothing := Image.create_empty(size.x * GasMirror.MASK_SCALE, size.y * GasMirror.MASK_SCALE, false,
+		Image.FORMAT_R8).get_data()
+	for name: String in patterns:
+		var cells: Array[Vector2i] = []
+		cells.assign(patterns[name])
+		var mask := Image.create_empty(size.x, size.y, false, Image.FORMAT_R8)
+		for at in cells:
+			mask.set_pixelv(at, Color(1, 0, 0))
+		var whole := mask.duplicate() as Image
+		whole.resize(size.x * GasMirror.MASK_SCALE, size.y * GasMirror.MASK_SCALE, Image.INTERPOLATE_CUBIC)
+		assert_bool(cells.is_empty() == (whole.get_data() == nothing)).override_failure_message(
+			"%s: the whole resize disagrees with whether there is gas; vacuous" % name).is_true()
+		assert_int(_differing_bytes(GasMirror.upscaled_mask(mask, cells), whole)).override_failure_message(
+			"%s: the mask resized round its gas is not the whole mask resized" % name).is_equal(0)
+
+
+static func _differing_bytes(a: Image, b: Image) -> int:
+	var x := a.get_data()
+	var y := b.get_data()
+	if x.size() != y.size():
+		return maxi(x.size(), y.size())
+	var count := 0
+	for i in x.size():
+		if x[i] != y[i]:
+			count += 1
+	return count
+
+
+# The ground half of the board textures is kept until the ground moves (#1518), so a height change
+# under gas that stays put still has to reach the volume's ground.
+func test_the_volume_ground_follows_a_height_change_under_still_gas() -> void:
+	var cell := await _loaded_cell()
+	_field().set_level(cell, Gas.Kind.STEAM, Gas.Level.THICK)
+	await _settle()
+	var gas_version := _field().dirty.version
+	var base: int = _game.board_heights.elevation_at(cell)
+	var corners := Vector4i(base + Terrain.UNITS_PER_LEVEL, base, base, base)
+	assert_bool(Terrain.is_legal_corners(corners) and corners != _game.board_heights.corners_at(cell)) \
+		.override_failure_message("the test's corner form %s is illegal or no change; vacuous" % corners).is_true()
+	_game.board_heights.set_corners(cell, corners)
+	await _settle()
+	assert_int(_field().dirty.version).override_failure_message("the gas moved; this case is about still gas") \
+		.is_equal(gas_version)
+	var at: Vector2i = cell - _game.grid.get_used_rect().position
+	var ground := (_gas.board_textures()[3] as Texture2D).get_image().get_pixelv(at)
+	var drop := BoardSpace.basin_drop(cell)
+	var heights := [corners.x, corners.y, corners.z, corners.w]
+	var drawn := [ground.r, ground.g, ground.b, ground.a]
+	for i in 4:
+		assert_float(drawn[i]).override_failure_message("corner %d of the volume's ground kept its old height" % i) \
+			.is_equal_approx(BoardSpace.world_y_of_height(heights[i]) - drop, 0.0001)
+	var mid := (_gas.board_textures()[4] as Texture2D).get_image().get_pixelv(at).r
+	assert_float(mid).override_failure_message("the volume's ground kept its old centre").is_equal_approx(
+		BoardSpace.world_y_of_height(Terrain.height_at_uv(corners, 0.5, 0.5)) - drop, 0.0001)
+
+
 func test_the_regions_follow_the_paint() -> void:
 	var cell := await _loaded_cell()
 	_field().set_level(cell, Gas.Kind.STEAM, Gas.Level.THICK)
