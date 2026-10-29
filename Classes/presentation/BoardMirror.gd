@@ -409,6 +409,7 @@ var sync_passes := 0
 
 # Keyed by cell, not a flat list: a reconcile has to answer "the marker for X", and the
 # positional array this replaced could only answer it by freeing everything (#149's shape).
+# Every write that adds or removes a marker sets _lamps_stale: a fire carries a lamp (#1525).
 var _fire_markers: Dictionary[Vector2i, Node3D] = {}
 
 # Per-flame animation state, carried on the quad itself (#324): where it stands when nothing pushes
@@ -442,7 +443,13 @@ var _cover_markers: Dictionary[Vector2i, Node3D] = {}
 # they are two facts (WHICH tile, what SHAPE) and only the comparison has to know about both.
 const PROP_TILE_META := "prop_tile"
 const PROP_CORNERS_META := "prop_corners"
+# Every write that adds or removes a prop sets _lamps_stale, as _fire_markers' writes do (#1525).
 var _props: Dictionary[Vector2i, Node3D] = {}
+
+# Every lamp under a prop or fire marker, shown or not, in lights()' walk order. Re-walked only when
+# _lamps_stale: the walk visits every prop, a millisecond on Prolog, and gas asks every frame (#1525).
+var _lamp_candidates: Array[OmniLight3D] = []
+var _lamps_stale := true
 
 # One node per HOLE, holding that hole's lips (#876) -- up to four, one per edge that meets ground.
 # A SEPARATE store from _props rather than a second kind inside it, for two measured reasons: sync()
@@ -1115,10 +1122,12 @@ func _reconcile_state(markers: Dictionary[Vector2i, Node3D], cells: Array[Vector
 			if built != null:
 				built.visible = not _hidden_columns.has(cell)   # born under a hidden column (#1132)
 				markers[cell] = built
+				_lamps_stale = true
 	for cell: Vector2i in markers.keys():
 		if not wanted.has(cell):
 			markers[cell].queue_free()
 			markers.erase(cell)
+			_lamps_stale = true
 
 
 # Which meshlib item draws this cell — the SURFACE question, asked the way the 2D asks it.
@@ -1460,6 +1469,7 @@ func _rebuild_fires() -> void:
 		var rebuilt := _make_fire(cell, at)
 		rebuilt.visible = not _hidden_columns.has(cell)   # a knob drag must not show a hidden fire
 		_fire_markers[cell] = rebuilt
+		_lamps_stale = true
 
 
 # --- Water (#552) ------------------------------------------------------------------------------
@@ -2047,13 +2057,21 @@ func prop_at(cell: Vector2i) -> Node3D:
 
 # Every lamp the board's own things cast, lit props and burning tiles both -- for an effect that
 # lights itself rather than being lit by the renderer (#508: the gas volume marches its own lamps).
+# Only the LIST is kept (#1525): what is shown is asked live, and a fresh array goes out each call,
+# since GasMirror sorts what it is handed.
 func lights() -> Array[OmniLight3D]:
+	if _lamps_stale:
+		_lamp_candidates.clear()
+		for root: Node3D in _props.values() + _fire_markers.values():
+			for child in root.get_children():
+				var light := child as OmniLight3D
+				if light != null:
+					_lamp_candidates.append(light)
+		_lamps_stale = false
 	var out: Array[OmniLight3D] = []
-	for root: Node3D in _props.values() + _fire_markers.values():
-		for child in root.get_children():
-			var light := child as OmniLight3D
-			if light != null and light.is_visible_in_tree():
-				out.append(light)
+	for light in _lamp_candidates:
+		if light.is_visible_in_tree():
+			out.append(light)
 	return out
 
 
@@ -2076,6 +2094,7 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 			return
 		standing.queue_free()
 		_props.erase(cell)
+		_lamps_stale = true
 	var built := _make_prop(grid, cell, surface_point(cell, heights), heights)
 	if built == null:
 		return
@@ -2087,6 +2106,7 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 	# set changed would come back on the next landing (#1132) -- the builder asks too.
 	built.visible = _prop_shown(cell)
 	_props[cell] = built
+	_lamps_stale = true
 
 
 # Forget every standing prop, so the next reconcile rebuilds them (#272 slice 2). The dev tool's
@@ -2110,6 +2130,7 @@ func drop_props() -> void:
 	for cell: Vector2i in _props.keys():
 		_props[cell].queue_free()
 	_props.clear()
+	_lamps_stale = true
 
 
 func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
@@ -2125,6 +2146,7 @@ func _free_prop_at(cell: Vector2i) -> void:
 		return
 	_props[cell].queue_free()
 	_props.erase(cell)
+	_lamps_stale = true
 
 
 # --- Hole lips (#876) ---------------------------------------------------------------------------

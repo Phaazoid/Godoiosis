@@ -718,7 +718,7 @@ func _sun_light() -> Color:
 	return sun.light_color * sun.light_energy if sun != null and sun.visible else Color.BLACK
 
 
-# The board's lamps now. Read once per build, never per puff: the source walks every prop (#1518).
+# The board's lamps now. Read once per build, never per puff (#1518).
 func _lamps() -> Array:
 	return lights_source.call() if lights_source.is_valid() else []
 
