@@ -943,16 +943,24 @@ static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[At
 # volley's changes landing once its last member resolves (PlanResolver.settle_landing). Given back here
 # rather than in the pass, so an early return cannot leave the caller's board wearing them.
 #
+# ...and SEALED (#1498 stage 4, PlannedTiles.open_seal): a live tile read past those tiles counts on
+# PlannedTiles.seal_breaks. So does a board handed in already wearing tiles: a judge's board
+# (candidate_board, or the AI seek's lend left on), which the pass would build on, landing the prefix twice.
+#
 # `held` is unit -> a carried weapon its copy holds for the pass (preview_aim); a refused hold is no
 # plan, before anything is published.
 func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
 		held: Dictionary = {}) -> ResolvedPlan:
 	Unit.open_seal()
+	PlannedTiles.open_seal()
+	if board != null and board.tiles != null:
+		PlannedTiles.seal_broken()
 	var plan := ResolvedPlan.new()
 	var worn := plan.lend_tiles(board)
 	var resolved := _resolve_pass(plan, squad, actions, board, reactions, terrain_reactions, held)
 	plan.return_tiles(board, worn)
+	PlannedTiles.close_seal()
 	Unit.close_seal()
 	return resolved
 
@@ -1377,8 +1385,11 @@ func rescue_board(squad: Squad) -> BoardContext:
 
 
 # An empty queue wears nothing: after a pass the cache still holds the plan it executed, and the next
-# turn's first order meets the live board.
+# turn's first order meets the live board. Built inside a pass, it is a judge reading the cached plan's
+# ground rather than the pass's own, which the tile seal counts (#1498 stage 4).
 func _board_wearing(squad: Squad, tiles: PlannedTiles) -> BoardContext:
+	if PlannedTiles.is_sealed():
+		PlannedTiles.seal_broken()
 	var board: BoardContext = board_source.call()
 	if tiles != null and not squad.action_queue.is_empty():
 		ResolvedPlan.lend(board, tiles)
