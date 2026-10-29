@@ -1260,9 +1260,15 @@ is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` und
   The landing frame on #1517's probe board went from 148–211 ms to 9–48 ms, the high end being the
   first gas a board ever draws. A probe dumped every texture, the floor and forecast meshes and the
   puffs on 10 scripted board states, before and after: all identical, apart from ozone's flash
-  alpha, which the clock rewrites every frame. Still open: `_add_lamps` reads the lamps every frame
-  while gas shows, 1.8 ms a frame on Prolog. Caching that list needs a lamp-set version on
-  `BoardMirror`, because a fire's lamp arrives without any gas change.
+  alpha, which the clock rewrites every frame.
+- **The per-frame lamp read is cheap too** ([#1525](https://github.com/Phaazoid/Godoiosis/issues/1525),
+  2026-10-29). `_add_lamps` asks for the lamps every frame while gas shows, and the walk cost about
+  1 ms on Prolog. `BoardMirror.lights()` now keeps the LIST until a prop or a fire comes or goes;
+  each call still asks which lamps are shown, and the values (a fire's flicker) are read live. So
+  `_add_lamps` costs 0.03 ms. The list is not keyed on the gas: a fire's lamp arrives with no gas
+  change. A probe dumped the lamps handed to the volume every frame, before and after, through a fire
+  lit and put out, a lit prop painted, replaced, hidden by the camera, dropped and erased, and a fire
+  knob drag: identical on all 112 frames.
 - **The puffs are one MultiMesh**, billboarded, boiled, bobbed, wandered and given each gas's moving
   extra by `gas_puff.gdshader` from the pushed clock; `GasPuffArt` draws them from each look's
   palette into one Texture2DArray at startup (a sprite sheet replaces it once a mix wins). A cell's

@@ -982,6 +982,103 @@ func _object_tile(lit: bool) -> Dictionary:
 	return {}
 
 
+# lights() keeps its list between calls (#1525), so every door that brings a prop or a fire, or takes
+# one away, must say so. Each step holds the kept list against a fresh walk, in order; the camera's
+# hide is asked live, so its steps prove the filter rather than the list.
+func test_the_lamp_list_follows_every_door_that_moves_a_lamp() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var lit := _object_tile(true)
+	var unlit := _object_tile(false)
+	assert_bool(not lit.is_empty() and not unlit.is_empty()).override_failure_message(
+			"the tileset has no lit object, or no unlit one; the case is vacuous").is_true()
+	var burning := _burning()
+	var bare: Array[Vector2i] = []
+	for cell: Vector2i in _game.grid.get_used_cells():
+		if not burning.has(cell):
+			bare.append(cell)
+	var prop_cell := bare[0]
+	var fire_cell := bare[1]
+	_assert_lamps_current(mirror, "loading Prolog")
+
+	_game.grid.paint(prop_cell, lit.source_id, lit.coords)
+	await _settle()
+	_assert_lamps_current(mirror, "painting a lit object")
+	var lamp := _light_under(mirror.prop_at(prop_cell))
+	assert_bool(mirror.lights().has(lamp)).override_failure_message(
+			"a painted lamp is not listed").is_true()
+	_game.grid.paint(prop_cell, unlit.source_id, unlit.coords)
+	await _settle()
+	_assert_lamps_current(mirror, "replacing it with an unlit object")
+	_game.grid.paint(prop_cell, lit.source_id, lit.coords)
+	await _settle()
+	_assert_lamps_current(mirror, "painting the lit object back")
+
+	lamp = _light_under(mirror.prop_at(prop_cell))
+	var none: Dictionary[Vector2i, bool] = {}
+	var hidden: Dictionary[Vector2i, bool] = {prop_cell: true}
+	var floor_row := mirror.floor_row_of(_game.board_heights)
+	mirror.set_camera_hidden(none, hidden, _game.grid, _game.board_heights, floor_row)
+	_assert_lamps_current(mirror, "the camera hiding it")
+	assert_bool(mirror.lights().has(lamp)).override_failure_message(
+			"a lamp the camera hid is still listed").is_false()
+	mirror.set_camera_hidden(none, none, _game.grid, _game.board_heights, floor_row)
+	_assert_lamps_current(mirror, "the camera showing it again")
+	assert_bool(mirror.lights().has(lamp)).override_failure_message(
+			"a lamp the camera showed again is not listed").is_true()
+
+	mirror.drop_prop_at(prop_cell)
+	_assert_lamps_current(mirror, "dropping that prop")
+	_scene.rebuild()
+	_assert_lamps_current(mirror, "rebuilding after the drop")
+	mirror.drop_props()
+	_assert_lamps_current(mirror, "dropping every prop")
+	_scene.rebuild()
+	_assert_lamps_current(mirror, "rebuilding every prop")
+	_game.grid.erase(prop_cell)
+	await _settle()
+	_assert_lamps_current(mirror, "erasing the cell")
+
+	var effect := ResolvedCellEffect.new()
+	effect.cell = fire_cell
+	effect.states_added.assign([Terrain.TileState.BURNING])
+	_game.terrain_states.apply(effect)
+	await _settle()
+	_assert_lamps_current(mirror, "lighting a fire")
+	assert_bool(mirror.lights().has(_light_under(mirror.fire_marker_at(fire_cell)))).override_failure_message(
+			"a fire's lamp is not listed").is_true()
+	var range_was := mirror.flame_light_range
+	mirror.flame_light_range = range_was + 1.0
+	_assert_lamps_current(mirror, "dragging a fire knob")
+	mirror.flame_light_range = range_was
+	_assert_lamps_current(mirror, "putting the knob back")
+	effect = ResolvedCellEffect.new()
+	effect.cell = fire_cell
+	effect.states_removed.assign(_game.terrain_states.states_at(fire_cell))
+	_game.terrain_states.apply(effect)
+	await _settle()
+	_assert_lamps_current(mirror, "putting the fire out")
+
+
+# The kept list against a fresh walk of the stores. Validity first, while the list claims to be
+# current (a stale one still holds what it will drop): a light freed under a list nobody marked stale
+# would otherwise fail as an engine error rather than a message.
+func _assert_lamps_current(mirror: BoardMirror, step: String) -> void:
+	for light in [] if mirror._lamps_stale else mirror._lamp_candidates:
+		assert_bool(is_instance_valid(light)).override_failure_message(
+				"after %s the kept lamp list holds a freed lamp" % step).is_true()
+		if not is_instance_valid(light):
+			return
+	var kept := mirror.lights()
+	mirror._lamps_stale = true
+	var walked := mirror.lights()
+	assert_array(kept).override_failure_message(
+			"after %s the kept lamp list is not what a fresh walk finds: %s, not %s" % [step, kept, walked]
+			).is_equal(walked)
+
+
 # A per-TYPE field only reaches the board if something invalidates what is already standing:
 # _reconcile_prop's diff key is the TILE, so a prop whose tile is unchanged is deliberately left
 # alone — correct for painting, and blind to the tile itself gaining a value. This is the #308 shape
