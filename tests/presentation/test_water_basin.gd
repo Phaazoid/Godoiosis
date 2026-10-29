@@ -389,6 +389,33 @@ func test_moving_the_depth_knob_re_places_gas_already_drawn() -> void:
 	field.clear()
 
 
+# The same wire for the volume: its ground half is kept until the ground moves (#1518), and a depth move
+# moves the ground, so the volume's ground under gas that stays put drops with it.
+func test_moving_the_depth_knob_drops_the_volume_ground_under_still_gas() -> void:
+	var lake := await _lake()
+	var shallow: Vector2i = lake["shallow"]
+	var field: GasField = _game.gas_field
+	field.set_level(shallow, Gas.Kind.STEAM, Gas.Level.THICK)
+	await _settle()
+	var gas_version := field.dirty.version
+	var at: Vector2i = shallow - _game.grid.get_used_rect().position
+	assert_float((_gas().board_textures()[3] as Texture2D).get_image().get_pixelv(at).r).override_failure_message(
+			"the volume's ground is not in the basin to begin with; vacuous").is_equal_approx(_rules_y(shallow) - DEPTH, 0.0001)
+
+	BoardSpace.WATER_BASIN_DEPTH = DEPTH * 0.5
+	await _settle()
+	assert_int(field.dirty.version).override_failure_message("the gas moved; this case is about still gas") \
+			.is_equal(gas_version)
+	var want := _rules_y(shallow) - DEPTH * 0.5
+	var ground := (_gas().board_textures()[3] as Texture2D).get_image().get_pixelv(at)
+	for y: float in [ground.r, ground.g, ground.b, ground.a]:
+		assert_float(y).override_failure_message("the volume's ground kept the old basin depth") \
+				.is_equal_approx(want, 0.0001)
+	assert_float((_gas().board_textures()[4] as Texture2D).get_image().get_pixelv(at).r).override_failure_message(
+			"the volume's ground centre kept the old basin depth").is_equal_approx(want, 0.0001)
+	field.clear()
+
+
 # The two answers the shock is handed (#887): where a cell is drawn, for the bolts, and where a body
 # standing on it is drawn, for its sparks -- asked through the callables battle3d really wired.
 func test_a_shock_over_water_arcs_off_the_water_and_sparks_off_the_body() -> void:

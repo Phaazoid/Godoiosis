@@ -1242,6 +1242,27 @@ is a Game-tab row on a **Gas** tab; what one GAS looks like is its `GasLook` und
   unchanged) bought nothing on the zoo and was reverted, and dropping detail noise or the exact
   ground bought about 0.1 ms. Steps and resolution are the levers. The default stays half / 32 / 4,
   the dev's call over a 1.2 ms budget after seeing the candidates side by side.
+- **A rebuild costs the gas, not the board** ([#1518](https://github.com/Phaazoid/Godoiosis/issues/1518),
+  2026-10-29). Since #1517 every gas-laying volley rebuilds mid-playback, and on Prolog one rebuild
+  was a 330–460 ms frame. It had three causes, all fixed without changing a byte of what is drawn:
+  - **The lamps were read once per puff and once per floor cell**, and `BoardMirror.lights()` walks
+    every prop: 1.8 ms a call. They are now read once per build and handed to `_tint_at`.
+  - **The cells texture was filled over the whole grid rect, and the ground rebuilt with it.** Now
+    only cells within one of gas are written, and every other texel keeps an empty image's zero,
+    which is what a gasless cell wrote. The ground half (corners and centre) is kept until the
+    rect, heights, grid or basin version moves.
+  - **Every kind's mask was resized ×8 cubic over the whole rect**, absent kinds included. Godot's
+    cubic (4.7.1 `_scale_cubic`) is 4-tap Catmull-Rom at an exact ⅛, so a texel reads only the cells
+    within `MASK_REACH` (2) of its own. So `upscaled_mask` resizes each cloud's box with 2 more
+    around it, and the result is byte for byte the whole resize. An engine whose resize reaches
+    further would break that silently, so `test_gas_mirror` compares the two directly.
+
+  The landing frame on #1517's probe board went from 148–211 ms to 9–48 ms, the high end being the
+  first gas a board ever draws. A probe dumped every texture, the floor and forecast meshes and the
+  puffs on 10 scripted board states, before and after: all identical, apart from ozone's flash
+  alpha, which the clock rewrites every frame. Still open: `_add_lamps` reads the lamps every frame
+  while gas shows, 1.8 ms a frame on Prolog. Caching that list needs a lamp-set version on
+  `BoardMirror`, because a fire's lamp arrives without any gas change.
 - **The puffs are one MultiMesh**, billboarded, boiled, bobbed, wandered and given each gas's moving
   extra by `gas_puff.gdshader` from the pushed clock; `GasPuffArt` draws them from each look's
   palette into one Texture2DArray at startup (a sprite sheet replaces it once a mix wins). A cell's
