@@ -25,6 +25,11 @@ var haul_to: Vector2i = GridUtils.NO_CELL
 # validator reds the order on it (SquadPlanValidator._revalidate_rescue_targets).
 var resolved_within_reach := true
 
+# ...and does the chosen bank still take the body there (#1498)? Judged at the rescue's slot on the
+# pass's own ground, so a bank the pass melted, or a lake it froze under the body, reds the order
+# rather than being re-judged on the live board. Rewritten every resolve, read by the same validator.
+var resolved_haul_lands := true
+
 # REQUIRED, not defaulted: every caller states its own answer rather than inheriting a pick this
 # class made for them — the menu passes what the player clicked, the AI and the Play API pass
 # RulesService.rescue_landings(...)[0], which is the deterministic answer that used to be the rule.

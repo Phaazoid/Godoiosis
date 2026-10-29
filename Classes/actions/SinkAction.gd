@@ -2,37 +2,30 @@ extends BaseAction
 class_name SinkAction
 
 # One unit going under because the ground left it (#922): ice melted beneath it, so it stands on water
-# it cannot stand on. Derived, never queued -- PlanResolver.settle_sinks makes these, the queue hangs
-# each one under the attack whose deposit took the floor away, and both execution twins play them back.
+# it cannot stand on. Derived, never queued -- PlanResolver.settle_landing and resolve_move make these,
+# the queue hangs each one under its cause, and both execution twins play it right after that cause.
 #
 # #116's drowning from the other side: there the unit arrives in the water, here the floor leaves. So
 # the water does what it does to a shove -- takes everything left, through the ordinary ladder (a
 # down, Crisis, and a body already down is finished; never a limb, the water not being a blow) -- and
 # the answer is a rescue from the bank.
 
-# WHEN it goes under. The ice melts at the end of the volley that melted it (#1498), and its stander
-# goes under once the attack phase has played; a melt only a COUNTER or a tail shot makes is not known
-# until those resolve, so its stander goes under once the pass has settled (dev ruling, 2026-09-27).
-enum Moment { DEPOSITS_LAND, PASS_END }
-
-var moment: Moment = Moment.DEPOSITS_LAND
 var cell: Vector2i
-# The attack whose deposit took the floor away -- read by the queue panel, which hangs this row under it.
-var cause: AttackAction = null
+# What it goes under after (#1498): the action whose landing melted the ice -- a volley's last member,
+# a counter, a shot (ruling 4) -- or the walk that stepped onto water a walk shot melted (ruling 5).
+var cause: BaseAction = null
 var resolved: ResolvedOutcome = null
 
 
-# `body` is the unit's body as the pass has it at `moment`, read and not written; the actor is its unit.
-# `wets` is RulesService.wets_in on the ground the deposits leave, less #1092's Chilled exclusion --
-# asked by the caller, which holds that board.
-static func make(body: UnitState, at: Vector2i, melted_by: AttackAction,
-		when: Moment, wets: bool) -> SinkAction:
+# `body` is the unit's body as the pass has it when it goes under, read and not written; the actor is
+# its unit. `wets` is RulesService.wets_in on the ground it goes under on, less #1092's Chilled
+# exclusion -- asked by the caller, which holds that board.
+static func make(body: UnitState, at: Vector2i, after: BaseAction, wets: bool) -> SinkAction:
 	var sink := SinkAction.new()
 	sink.actor = body.unit
 	sink.action_type = BaseAction.ActionType.SINK
-	sink.moment = when
 	sink.cell = at
-	sink.cause = melted_by
+	sink.cause = after
 	var outcome := ResolvedOutcome.new()
 	outcome.hp_before = body.get_current_hp()
 	# The water takes everything (PlanResolver._resolve_one's drowning, #116). drown_damage is what the

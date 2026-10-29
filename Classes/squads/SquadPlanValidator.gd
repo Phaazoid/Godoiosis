@@ -43,7 +43,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 	if plan != null:
 		_revalidate_unit_attacks(actions, plan)
 		_revalidate_guard_range(actions)
-		_revalidate_rescue_targets(actions, board, plan)
+		_revalidate_rescue_targets(actions, plan)
 		_revalidate_watch_material(actions, board)
 		_revalidate_fire_gates(actions)
 
@@ -251,7 +251,7 @@ static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
 # a target may legally not be down YET, provided this pass's own hits put it down before the side
 # channel runs. A cancelled attack un-predicts the down on the next resolve and the rescue falls
 # into red, still queued (one-way validity). No plan = rescues untouched, same as attacks.
-static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardContext, plan: ResolvedPlan) -> void:
+static func _revalidate_rescue_targets(actions: Array[BaseAction], plan: ResolvedPlan) -> void:
 	for action in actions:
 		if not (action is RescueAction):
 			continue
@@ -273,11 +273,11 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 		# divergence a bug. CaptureAction's frozen-stamp ruling, one verb along.
 		#
 		# Out here with the lifecycle clause rather than beside adjacency inside the loop, and for the
-		# same reason: it reads the resolve's output, which reads validity back. Judged on the PASS's
-		# cells (#1349), the same ones the resolve published the haul off, so the two cannot disagree
-		# about a bank a counter's shove has put out of the rescuer's reach.
-		if rescue.target != null and is_instance_valid(rescue.target) \
-				and not RulesService.rescue_landings(rescue.actor, rescue.target, board, plan.hypo).has(rescue.haul_to):
+		# same reason: it reads the resolve's output, which reads validity back. The resolve's own
+		# verdict (resolved_haul_lands), on the pass's cells and ground (#1349, #1498) -- the one it
+		# published the haul off, so the two cannot disagree about a bank a counter's shove has put
+		# out of the rescuer's reach, or one the pass melted.
+		if rescue.target != null and is_instance_valid(rescue.target) and not rescue.resolved_haul_lands:
 			rescue.add_validation_error("Can't pull them out to there any more")
 
 # Source 2 -- a CANDIDATE only: would this aim connect if queued right now? There is no plan for an

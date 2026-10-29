@@ -13,9 +13,10 @@ class_name SplitForecast
 #     leader's successor is judged where everyone stands at that blow -- except during the WALK,
 #     where the successor is named at once and its reach waits for the walk to end
 #     (SquadManager.hold_handovers);
-#   - a unit the pass's own melt drops into the water (#922) goes under once the attack phase has
-#     played and its deposits have landed -- or once the pass has settled, for a melt only a counter or
-#     tail shot made;
+#   - a unit the pass's own melt drops into the water (#922) goes under right after the blow whose
+#     landing melted it (#1498 ruling 4), and a walker the water caught (ruling 5) once the walk ends,
+#     beside the walk's handovers -- so two downs inside one walk can trade places, which moves only
+#     which row wears the Split;
 #   - at pass end, OrderExecutor._process_downed_pending ejects each downed unit in the order it went
 #     down -- skipping one finished off later in the pass -- and a downed leader hands over;
 #   - then SquadManager.enforce_contact ejects every member out of its leader's range;
@@ -91,7 +92,7 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 
 	var landed := board.planned(plan.tiles)
 	var walk_ends := plan.mid_walk_shots().size()
-	var deposits_land := walk_ends + plan.attack_playback().size()
+	var walk_sinks := _walk_sinks(plan)
 	var landings := _landings(plan, blows)
 	var so_far := PlannedTiles.new(board.terrain_states, board.gas)
 	var ground := board.planned(so_far)   # what playback has landed by the blow being replayed
@@ -103,15 +104,13 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	var downs: Array[BaseAction] = []
 	var downed: Dictionary[Unit, bool] = {}
 	var held: Array[_Handover] = []
-	var sunk := false
 	for i in blows.size():
 		if i > 0:
 			_land(so_far, landings[i - 1])
+			_sink(plan.sinks_caused_by(blows[i - 1]), bands, pos, body, ground, dead, downed, downs)
 		if i == walk_ends:
+			_sink(walk_sinks, bands, pos, body, ground, dead, downed, downs)
 			_hand_over_held(held, bands, pos, body, ground)
-		if i == deposits_land:
-			_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, ground, dead, downed, downs)
-			sunk = true
 		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
 		var victim := blow.target
@@ -133,10 +132,10 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 					downs.append(blow)
 	if not blows.is_empty():
 		_land(so_far, landings[-1])
-	_hand_over_held(held, bands, pos, body, ground)   # a pass that is nothing but its walk
-	if not sunk:   # nothing played after the volley, so the loop never reached the deposits' moment
-		_sink(plan.sinks_at(SinkAction.Moment.DEPOSITS_LAND), bands, pos, body, ground, dead, downed, downs)
-	_sink(plan.sinks_at(SinkAction.Moment.PASS_END), bands, pos, body, landed, dead, downed, downs)
+		_sink(plan.sinks_caused_by(blows[-1]), bands, pos, body, ground, dead, downed, downs)
+	_sink(walk_sinks, bands, pos, body, ground, dead, downed, downs)   # a pass that is nothing but its walk
+	_hand_over_held(held, bands, pos, body, ground)
+	_sink(plan.sinks, bands, pos, body, landed, dead, downed, downs)   # a cause that is no blow: a Burrow's cover
 
 	# A body finished off later in the pass is never ejected -- and needs no check here: its death
 	# already took it out of its copied squad, so _leave finds nothing to do.
@@ -164,6 +163,15 @@ static func _landings(plan: ResolvedPlan, blows: Array[AttackAction]) -> Array[A
 	for blow in blows:
 		out.append(plan.landing_after(blow))
 	return out
+
+
+# The walkers the water caught (#1498 ruling 5), each a sinking whose cause is its walk.
+static func _walk_sinks(plan: ResolvedPlan) -> Array[SinkAction]:
+	var caught: Array[SinkAction] = []
+	for sink in plan.sinks:
+		if sink.cause is MoveAction:
+			caught.append(sink)
+	return caught
 
 
 # Lands one blow's deposits on a replay's tiles; true when there were any.
@@ -415,6 +423,7 @@ static func _settle_downs(downs: Array[BaseAction], bands: Dictionary[Unit, _Ban
 # The pass's own terrain dropping units into the water (#922), at the moment they go under: the burn's
 # two halves -- a death leaves at once, a down waits for the settle with the rest, in the order it went
 # down. The ground is what playback has landed by then, the deposits that took the floor away among it.
+# Asking twice is harmless: a unit leaves or goes down once.
 static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos: Dictionary[Unit, Vector2i],
 		body: Dictionary[Unit, UnitState], ground: BoardContext, dead: Dictionary[Unit, bool],
 		downed: Dictionary[Unit, bool], downs: Array[BaseAction]) -> void:

@@ -81,7 +81,8 @@ static func can_traverse(cell: Vector2i, body: UnitState, board: BoardContext) -
 # Does this cell DROWN this unit — water it cannot stand on (#116)? One answer for all three sites a
 # shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends --
 # and for the fourth, since #922: whether the ground a pass's deposits leave has gone out from under
-# a unit standing on it (PlanResolver.settle_sinks, which hands it the landed board).
+# a unit standing on it (PlanResolver.settle_landing, before and after each landing), and a walker
+# stepping onto water a walk shot melted (PlanResolver.resolve_move, #1498).
 #
 # It REPEALS #115's declared exception ("a shove asks the cell-level is_walkable, never the per-unit
 # can_traverse — being thrown is not walking"), which was harmless while water STOPPED a shove:

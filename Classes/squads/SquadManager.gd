@@ -925,21 +925,28 @@ static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[At
 # PlanResolver's doors is reported (Unit.seal_breaks). The pass is synchronous, and a script error
 # aborts only _resolve_pass, so the close always runs. Depth-counted, so a nested pass is fine.
 #
+# THE GROUND (#1498 stage 3) is opened and closed the same way: the board wears the plan's tiles for the
+# pass (ResolvedPlan.lend_tiles), so every read in it sees the ground as the pass has left it so far, each
+# volley's changes landing once its last member resolves (PlanResolver.settle_landing). Given back here
+# rather than in the pass, so an early return cannot leave the caller's board wearing them.
+#
 # `held` is unit -> a carried weapon its copy holds for the pass (preview_aim); a refused hold is no
 # plan, before anything is published.
 func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
 		held: Dictionary = {}) -> ResolvedPlan:
 	Unit.open_seal()
-	var plan := _resolve_pass(squad, actions, board, reactions, terrain_reactions, held)
+	var plan := ResolvedPlan.new()
+	var worn := plan.lend_tiles(board)
+	var resolved := _resolve_pass(plan, squad, actions, board, reactions, terrain_reactions, held)
+	plan.return_tiles(board, worn)
 	Unit.close_seal()
-	return plan
+	return resolved
 
 
-func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext,
+func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
 		held: Dictionary) -> ResolvedPlan:
-	var plan := ResolvedPlan.new()
 	var hypo: Dictionary = plan.hypo   # threaded here, kept on the plan for end-of-pass reads (#124)
 	for unit: Unit in held:
 		if not PlanResolver.hold_in_hand(unit, held[unit], hypo):
@@ -1129,10 +1136,6 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 			var walk := action as MoveAction
 			walk.resolved_displaced = PlanResolver.projected_position(walk.actor, hypo) != walk.get_destination()
 
-	# The attack phase's deposits have all landed by here (#922, #1498): whoever the melt took the floor
-	# from goes under NOW, before any reaction is derived -- a sunk unit is down, and a body does not counter.
-	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.DEPOSITS_LAND)
-
 	# Counters are derived as single-target "aims" (who answers whom). Expand each into its own
 	# volley from the reactor's threaded cell — the same AoE + friendly-fire gather the attack loop
 	# above uses — so an AoE counter splashes everyone in the blast, not just its chosen target.
@@ -1196,22 +1199,26 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 			if action.action_type != BaseAction.ActionType.RESCUE:
 				continue
 			var rescue := action as RescueAction
+			rescue.resolved_haul_lands = true
 			if rescue.target == null or not is_instance_valid(rescue.target):
 				continue
-			if rescue.resolved_actor_felled or not rescue.resolved_within_reach:
-				continue   # nobody is left to do the hauling (#1005), or nobody beside the body to do it
-			if rescue.haul_to == PlanResolver.projected_position(rescue.target, hypo):
-				continue   # an ordinary rescue: the stamp is where the body already is
 			# Only a LEGAL stamp is drawn, and that is load-bearing rather than defensive. The board
 			# must not promise a bank a re-planned move has put out of reach -- and because
 			# rescue_landings short-circuits once a haul is published (the body then reads as
 			# standing on the bank), publishing a stale one would make it validate itself. Left
-			# undrawn, the validator recomputes from the water and reds the row, which is the answer.
+			# undrawn, the validator reads this verdict and reds the row, which is the answer.
 			#
-			# Judged on the pass's own cells, and THREADED as well as published (#1349): everything
-			# after this in the pass -- an arm-fired shot's path, the END OF TURN forecast -- meets
-			# the body on the bank, as execution does (RESCUE plays before OVERWATCH).
-			if RulesService.rescue_landings(action.actor, rescue.target, board, hypo).has(rescue.haul_to):
+			# Judged on the pass's own cells and ground (#1349, #1498), and THREADED as well as
+			# published: everything after this in the pass -- an arm-fired shot's path, the END OF
+			# TURN forecast -- meets the body on the bank, as execution does (RESCUE plays before
+			# OVERWATCH). A bank this pass melted, or a lake it froze under the body, is one execution meets.
+			var landings := RulesService.rescue_landings(action.actor, rescue.target, board, hypo)
+			rescue.resolved_haul_lands = landings.has(rescue.haul_to)
+			if rescue.resolved_actor_felled or not rescue.resolved_within_reach:
+				continue   # nobody is left to do the hauling (#1005), or nobody beside the body to do it
+			if rescue.haul_to == PlanResolver.projected_position(rescue.target, hypo):
+				continue   # an ordinary rescue: the stamp is where the body already is
+			if rescue.resolved_haul_lands:
 				rescue.target.set_projected_rescue(rescue.haul_to)
 				PlanResolver.thread_haul(rescue.target, rescue.haul_to, hypo)
 
@@ -1228,7 +1235,8 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 			cover.cell = PlanResolver.projected_position(action.actor, hypo)
 			cover.states_added.append(Terrain.TileState.COVER)
 			cover.cause = action   # so it lands when the Burrow plays (ResolvedPlan.landing_after)
-			plan.deposit(cover, board)
+			plan.deposit(cover)
+			PlanResolver.settle_landing(action, plan, hypo, board)
 
 	# A watch armed over an enemy who is ALREADY standing there fires on the spot (#1003, dev's
 	# ruling). HERE, and the position is the ruling rather than a convenience: *"it would be the
@@ -1270,10 +1278,6 @@ func _resolve_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext
 	# Same verdict, same reason, for a watch its own pass's shove combo already fired (#413).
 	for armed in watch_orders:
 		(watch_orders[armed] as OverwatchAction).resolved_spent = (armed as Watch).spent
-
-	# ...and the melts only a counter or a tail shot made (#922), once the pass has settled -- ahead of
-	# the END OF TURN forecast, which must read a sunk unit as down.
-	PlanResolver.settle_sinks(plan, hypo, board, SinkAction.Moment.PASS_END)
 
 	# The END OF TURN forecast (#419), last of all: it reads where the pass leaves every member and
 	# which deposits the pass made, so it can only be derived once both are settled.

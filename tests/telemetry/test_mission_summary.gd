@@ -132,7 +132,7 @@ func test_every_written_hit_reconciles_against_the_snapshots() -> void:
 func test_a_sinking_is_attributed_damage_not_a_gap() -> void:
 	var events := _events()
 	var pass_line: Dictionary = events[8]
-	pass_line["sinks"] = [{"unit": _ref(A, "Aldin"), "at": [3, 1], "moment": "DEPOSITS_LAND",
+	pass_line["sinks"] = [{"unit": _ref(A, "Aldin"), "at": [3, 1], "cause": "attack",
 		"damage": 15, "lethality": "DOWNED"}]
 	var ending: Dictionary = events[9]
 	ending["units"] = [_unit(A, "Aldin", "PLAYER", 0, 20, "DOWNED"), _unit(B, "Brigand", "ENEMY", 1, 10, "DOWNED")]

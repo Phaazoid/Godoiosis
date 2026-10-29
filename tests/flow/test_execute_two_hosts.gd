@@ -498,21 +498,9 @@ func _assert_the_lake_freezes_and_the_counter_throws(ran: Dictionary) -> Counter
 
 
 # #1498's verify-first probe, kept as the arc's guard. The froster's attack freezes the lake, and the
-# enemy's counter throws the squadmate into it. The counter resolves on the ground the pass started on
-# while both hosts play it after the freeze has landed, so the preview contradicts itself -- yet every
-# body and every tile still ends where the plan says (Law #2). What the row SHOULD say is the next case.
-func test_a_counter_throws_a_squadmate_into_a_lake_the_pass_froze() -> void:
-	var ran: Dictionary = await _run(_author_frozen_lake("lake"), _lake_orders())
-
-	_assert_the_lake_freezes_and_the_counter_throws(ran)
-	_assert_hosts_agree(ran)
-
-
-# ...and what that counter's row should say (#1498 ruling 2, a tile change counts at the hit that makes
-# it): the squadmate lands on the ice the froster made, and does not drown. Today the counter resolves
-# on the ground the pass started on, so this is stage 3's acceptance test, skipped until then.
-func test_a_counter_throws_a_squadmate_onto_ice_the_pass_froze(do_skip := true,
-		skip_reason := "#1498 stage 3: a tile change counts at the hit that makes it") -> void:
+# enemy's counter throws the squadmate onto it: ruling 2, a tile change counts at the hit that makes it,
+# so the squadmate lands on the ice and does not drown -- in the row, and in both hosts.
+func test_a_counter_throws_a_squadmate_onto_ice_the_pass_froze() -> void:
 	var ran: Dictionary = await _run(_author_frozen_lake("ice"), _lake_orders())
 
 	var counter := _assert_the_lake_freezes_and_the_counter_throws(ran)
@@ -850,4 +838,269 @@ func test_a_walk_shot_lands_its_tiles_at_its_step() -> void:
 			"the walk shot's smoke was down in the game before the shot struck").is_equal(false)
 	assert_that(_smoke_when(seen, ran.game[walker_cell], laid)).override_failure_message(
 			"the walk shot's smoke was not down when the walker's attack struck in the game").is_equal(true)
+	_assert_hosts_agree(ran)
+
+
+# --- A tile change counts at the hit that makes it (#1498 stage 3) -------------------------------
+#
+# Each case is a combination the pass used to resolve on the ground it started on: a later hit meets an
+# earlier one's tile change (ruling 2), a melt sinks whoever stands on it right there (ruling 4), and
+# water a walk shot melted catches the walker (ruling 5) -- in the plan, and in both hosts.
+
+const POOL := Vector2i(4, 1)
+const ICE_AT := Vector2i(4, 1)
+
+
+func _map_blow(element: Elemental.Element) -> WeaponAttackData:
+	var attack := _blow(1)
+	attack.elemental_damage_type = element
+	attack.targets = EquippableData.TargetMode.MAP
+	return attack
+
+
+# Deep water at `cell`, iced over -- frozen before anyone is spawned on it, since spawn refuses water.
+func _ice(cell: Vector2i) -> void:
+	game.grid.paint(cell, GRASS_SOURCE, DEEP_WATER)
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = cell
+	freeze.states_added.assign([Terrain.TileState.FROZEN])
+	game.terrain_states.apply(freeze)
+
+
+# Two squadmates, each carrying one attack.
+func _pair(first_at: Vector2i, first: WeaponAttackData, second_at: Vector2i, second: WeaponAttackData) -> void:
+	var lead := _spawn(PLAYER, first_at)
+	_arm(lead, first)
+	var mate := _spawn(PLAYER, second_at)
+	_arm(mate, second)
+	game.squad_manager.join_squad(mate, lead.squad)
+
+
+# What `actor`'s attack laid at `cell`, by the plan; null for nothing.
+static func _laid_at(plan: ResolvedPlan, actor: Unit, cell: Vector2i) -> ResolvedCellEffect:
+	for effect in plan.cell_effects:
+		var by := effect.cause as AttackAction
+		if by != null and by.actor == actor and effect.cell == cell:
+			return effect
+	return null
+
+
+static func _attack_by(plan: ResolvedPlan, actor: Unit) -> AttackAction:
+	for attack in plan.attacks:
+		if attack.actor == actor:
+			return attack
+	return null
+
+
+static func _sink_of(plan: ResolvedPlan, unit: Unit) -> SinkAction:
+	for sink in plan.sinks:
+		if sink.actor == unit:
+			return sink
+	return null
+
+
+func test_ice_then_fire_melts_the_ice_rather_than_boiling_the_water() -> void:
+	var path := _author("melt_not_boil", func() -> void:
+		game.grid.paint(POOL, GRASS_SOURCE, DEEP_WATER)
+		_pair(Vector2i(4, 0), _map_blow(Elemental.Element.ICE), Vector2i(4, 2), _map_blow(Elemental.Element.FIRE)))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": Vector2i(4, 0), "at": POOL},
+			{"verb": "attack", "from": Vector2i(4, 2), "at": POOL}])
+
+	var fire := _laid_at(ran.plan, ran.game[Vector2i(4, 2)], POOL)
+	assert_object(fire).override_failure_message("the fire left the frozen pool alone").is_not_null()
+	if fire != null:
+		assert_bool(fire.states_removed.has(Terrain.TileState.FROZEN)).override_failure_message(
+				"the fire did not melt the ice the frost had just made").is_true()
+		assert_bool(fire.gas_added.has(Gas.Kind.STEAM)).override_failure_message(
+				"the fire boiled water the frost had already frozen").is_false()
+	_assert_hosts_agree(ran)
+
+
+func test_fire_then_water_douses_the_blaze() -> void:
+	var grass := Vector2i(4, 1)
+	var path := _author("douse", func() -> void:
+		_pair(Vector2i(4, 0), _map_blow(Elemental.Element.FIRE), Vector2i(4, 2), _map_blow(Elemental.Element.WATER)))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": Vector2i(4, 0), "at": grass},
+			{"verb": "attack", "from": Vector2i(4, 2), "at": grass}])
+
+	var lit := _laid_at(ran.plan, ran.game[Vector2i(4, 0)], grass)
+	assert_bool(lit != null and lit.states_added.has(Terrain.TileState.BURNING)).override_failure_message(
+			"fixture: the fire did not light the grass").is_true()
+	var water := _laid_at(ran.plan, ran.game[Vector2i(4, 2)], grass)
+	assert_bool(water != null and water.states_removed.has(Terrain.TileState.BURNING)).override_failure_message(
+			"the water did not douse the blaze the fire had just lit").is_true()
+	_assert_hosts_agree(ran)
+
+
+# The attack-phase twin of the counter case above: the squadmate's shove lands its victim on the ice.
+func test_a_shove_lands_on_ice_an_earlier_attack_froze() -> void:
+	var path := _author("shove_onto_ice", func() -> void:
+		game.grid.paint(LAKE, GRASS_SOURCE, DEEP_WATER)
+		var shove := _blow(2)
+		shove.knockback = 1
+		_pair(FROSTER_AT, _map_blow(Elemental.Element.ICE), FOE_AT, shove)
+		_spawn(ENEMY, MATE_AT, 200))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": FROSTER_AT, "at": LAKE},
+			{"verb": "attack", "from": FOE_AT, "at": MATE_AT}])
+
+	var blow := _attack_by(ran.plan, ran.game[FOE_AT])
+	assert_object(blow).override_failure_message("fixture: the shove expanded to nothing").is_not_null()
+	if blow != null:
+		assert_that(blow.resolved.knockback_to).override_failure_message(
+				"fixture: the shove did not throw its victim onto the lake").is_equal(LAKE)
+		assert_int(blow.resolved.drown_damage).override_failure_message(
+				"the shove drowned its victim in a lake the pass had already frozen").is_equal(0)
+	assert_that(PlanResolver.projected_lifecycle(ran.game[MATE_AT], (ran.plan as ResolvedPlan).hypo)) \
+		.is_equal(Unit.LifecycleState.ACTIVE)
+	_assert_hosts_agree(ran)
+
+
+# A carving draws on fire beside its caster (#694), so fire an earlier attack lit there empowers it.
+# Against the same cast with nothing lit first, on the same board.
+func test_a_carving_draws_on_fire_an_earlier_attack_lit() -> void:
+	var caster_at := Vector2i(1, 1)
+	var foe_at := Vector2i(3, 1)
+	var lighter_at := Vector2i(0, 0)
+	var kindling := Vector2i(1, 0)   # beside the caster, within Materia.REACH
+	var path := _author("lit_carving", func() -> void:
+		var caster := _alchemist(caster_at)
+		var lighter := _spawn(PLAYER, lighter_at)
+		_arm(lighter, _map_blow(Elemental.Element.FIRE))
+		game.squad_manager.join_squad(lighter, caster.squad)
+		_spawn(ENEMY, foe_at, 200))
+
+	var alone: Dictionary = await _run(path, [{"verb": "attack", "from": caster_at, "at": foe_at}])
+	var unlit := _attack_by(alone.plan, alone.game[caster_at])
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": lighter_at, "at": kindling},
+			{"verb": "attack", "from": caster_at, "at": foe_at}])
+	var cast := _attack_by(ran.plan, ran.game[caster_at])
+
+	assert_bool(unlit != null and cast != null).override_failure_message("fixture: a cast expanded to nothing").is_true()
+	if unlit == null or cast == null:
+		return
+	assert_int(cast.resolved.damage).override_failure_message(
+			"the cast did not draw on the fire lit beside its caster earlier in the pass").is_greater(unlit.resolved.damage)
+	_assert_hosts_agree(ran)
+
+
+# Ruling 4: the melt sinks its stander right after the blast that melts it, before the NEXT attack -- in
+# the game read at that attack's impact, headlessly by where the lines fall. The next attack strikes
+# somebody else, so nobody finishes the body off.
+func test_a_melt_sinks_its_stander_before_the_next_attack() -> void:
+	var hero_at := Vector2i(3, 1)
+	var mate_at := Vector2i(4, 0)
+	var other_at := Vector2i(5, 0)
+	var path := _author("sink_before_next", func() -> void:
+		_ice(ICE_AT)
+		var fire := _blow(2)
+		fire.elemental_damage_type = Elemental.Element.FIRE
+		fire.targets = EquippableData.TargetMode.BOTH
+		_pair(hero_at, fire, mate_at, _blow(2))
+		_spawn(ENEMY, ICE_AT, 30)
+		_spawn(ENEMY, other_at, 200))
+	var on_the_ice: Array[Dictionary] = []   # who stood on the ice, and how, at each impact
+	game.order_executor.volley_struck.connect(func(attack: AttackAction) -> void:
+		for unit: Unit in game._all_units():
+			if unit.movement.cell == ICE_AT:
+				on_the_ice.append({"actor": attack.actor, "lifecycle": unit.lifecycle_state}))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": hero_at, "at": ICE_AT},
+			{"verb": "attack", "from": mate_at, "at": other_at}])
+
+	var plan: ResolvedPlan = ran.plan
+	var sink := _sink_of(plan, ran.game[ICE_AT])
+	assert_object(sink).override_failure_message("fixture: the melt sank nobody").is_not_null()
+	if sink == null:
+		return
+	assert_object(sink.cause).override_failure_message("the sinking is not caused by the blast that melted the ice") \
+		.is_same(_attack_by(plan, ran.game[hero_at]))
+	var at_the_mate: Variant = null
+	for impact in on_the_ice:
+		if impact.actor == ran.game[mate_at]:
+			at_the_mate = impact.lifecycle
+	assert_that(at_the_mate).override_failure_message("fixture: the mate's blow never struck in the game").is_not_null()
+	assert_that(at_the_mate).override_failure_message(
+			"the game's next attack struck while the stander still stood on the ice it had lost").is_equal(
+			Unit.LifecycleState.DOWNED)
+	var events: Array = ran.events
+	var at := {"blast": _line(events, _hit(ran, hero_at, ICE_AT)),
+			"sinking": _line(events, "%s goes under" % _sess.handle_for(ran.play[ICE_AT])),
+			"next attack": _line(events, _hit(ran, mate_at, other_at))}
+	if _assert_lines_found(events, at):
+		assert_int(at["sinking"]).override_failure_message(
+				"the headless host sank the stander before the blast:\n%s" % "\n".join(events)).is_greater(at["blast"])
+		assert_int(at["sinking"]).override_failure_message(
+				"the headless host sank the stander only after the next attack:\n%s" % "\n".join(events)).is_less(at["next attack"])
+	_assert_hosts_agree(ran)
+
+
+# ...and a refreeze later in the same pass closes the ice over the body that went under (its look is #1506).
+func test_a_refreeze_closes_over_a_sunk_body() -> void:
+	var hero_at := Vector2i(3, 1)
+	var froster_at := Vector2i(4, 0)
+	var path := _author("refreeze", func() -> void:
+		_ice(ICE_AT)
+		var fire := _blow(2)
+		fire.elemental_damage_type = Elemental.Element.FIRE
+		fire.targets = EquippableData.TargetMode.BOTH
+		_pair(hero_at, fire, froster_at, _map_blow(Elemental.Element.ICE))
+		_spawn(ENEMY, ICE_AT, 30))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": hero_at, "at": ICE_AT},
+			{"verb": "attack", "from": froster_at, "at": ICE_AT}])
+
+	assert_object(_sink_of(ran.plan, ran.game[ICE_AT])).override_failure_message(
+			"the melt sank nobody because a later attack refroze it").is_not_null()
+	assert_bool(game.terrain_states.has_state(ICE_AT, Terrain.TileState.FROZEN)).override_failure_message(
+			"the refreeze did not close over the water in the game").is_true()
+	assert_bool((ran.game[ICE_AT] as Unit).is_downed()).override_failure_message(
+			"the body under the ice is not down in the game").is_true()
+	_assert_hosts_agree(ran)
+
+
+# Ruling 5: a walk shot melts ice ahead of the walker, and the water catches them -- they halt there
+# and go under, in the plan and in both hosts.
+func test_water_a_walk_shot_melted_catches_the_walker() -> void:
+	var walker_at := Vector2i(0, 1)
+	var crossing := Vector2i(2, 1)
+	var thin_ice := Vector2i(3, 1)
+	var path := _author("walker_caught", func() -> void:
+		_ice(thin_ice)
+		_spawn(PLAYER, walker_at)
+		var watcher := _spawn(ENEMY, Vector2i(2, 3))
+		var flare := _blow(1)
+		flare.elemental_damage_type = Elemental.Element.FIRE
+		flare.targets = EquippableData.TargetMode.BOTH
+		P.stamped(flare, 2, [Vector2i(0, 0), Vector2i(1, 0)] as Array[Vector2i])
+		flare.swing = false
+		flare.can_overwatch = true   # the capture saves a watch by its place among the watch attacks
+		_arm(watcher, flare)
+		# Two paths, so the ice is struck even though the walker on the first one stops that path (#1057).
+		var footprint: Array[Vector2i] = [crossing, thin_ice]
+		var lengths: Array[int] = [1, 1]
+		watcher.arm_watch(watcher.movement.cell, crossing, footprint, watcher.overwatch_attacks()[0], false, false,
+				lengths)
+		assert_object(watcher.watch).override_failure_message("fixture: the watch did not arm").is_not_null())
+
+	var ran: Dictionary = await _run(path, [{"verb": "move", "from": walker_at, "to": Vector2i(4, 1)}])
+
+	var plan: ResolvedPlan = ran.plan
+	var melted := false
+	for effect in plan.cell_effects:
+		melted = melted or (effect.cell == thin_ice and effect.states_removed.has(Terrain.TileState.FROZEN))
+	assert_bool(melted).override_failure_message("fixture: the walk shot never melted the ice ahead").is_true()
+	var sink := _sink_of(plan, ran.game[walker_at])
+	assert_object(sink).override_failure_message("the walker walked on over water a walk shot had melted").is_not_null()
+	if sink != null:
+		assert_bool(sink.cause is MoveAction).override_failure_message("the walker's sinking is not its walk's").is_true()
+		assert_that(sink.cell).is_equal(thin_ice)
+	for host: String in ["game", "play"]:
+		var caught: Unit = ran[host][walker_at]
+		assert_that(caught.movement.cell).override_failure_message(
+				"the %s host's walker did not stop where the water took it" % host).is_equal(thin_ice)
+		assert_bool(caught.is_downed()).override_failure_message(
+				"the %s host's walker is standing in the water" % host).is_true()
 	_assert_hosts_agree(ran)

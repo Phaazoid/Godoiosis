@@ -633,10 +633,10 @@ func _break_volleys(plan: ResolvedPlan) -> void:
 		ctr.volley = empty
 
 
-# The board as it stands: a gas this pass deposits is not there for a later cast in the same pass, the
-# limit fizzle and empowerment declare. One squadmate's carving leaves the gas on the cell the other
-# casts from; the second cast reads the air without it.
-func test_gas_this_pass_leaves_does_not_move_a_later_cast_in_it() -> void:
+# The pass's own ground (#1498 stage 3): a gas an earlier volley in the same pass leaves is there for a
+# later cast. One squadmate's carving leaves the gas on the cell the other casts from; the second cast
+# reads the air with it, exactly as that gas lying there before the pass would move it.
+func test_gas_an_earlier_volley_leaves_moves_a_later_cast_in_it() -> void:
 	var kind: Gas.Kind = _air_gases()[0]
 	var id: String = GasRules.for_kind(kind).air.keys()[0]
 	var thrower_carving := _carving(DRAWS["inert_air"])
@@ -667,8 +667,10 @@ func test_gas_this_pass_leaves_does_not_move_a_later_cast_in_it() -> void:
 			deposited += int(effect.gas_added.get(kind, 0))
 	assert_int(deposited).override_failure_message(
 			"fixture: the first carving left no %s where the second is cast from" % Gas.name_of(kind)).is_greater(0)
-	assert_int(_outcome_of(plan, caster).air_steps.size()).override_failure_message(
-			"a gas this pass deposits moved a cast later in the same pass").is_equal(0)
+	var expected := Atmosphere.steps_for(caster_carving.parsed(), _board_with(_gas_on(cast_from, kind, deposited)).air_at(cast_from))
+	assert_dict(expected).override_failure_message("fixture: the %s laid does not move this draw" % Gas.name_of(kind)).is_not_empty()
+	assert_dict(_outcome_of(plan, caster).air_steps).override_failure_message(
+			"the gas an earlier volley left did not reach a cast later in the same pass").is_equal(expected)
 	_break_volleys(plan)
 
 
