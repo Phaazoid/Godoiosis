@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="3_pvpur"]
 [ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="4_6qlil"]
 [ext_resource type="Texture2D" uid="uid://b33dttfj4adfl" path="res://Art/Units/MapSprites/Wizard_Moving.png" id="4_bijhs"]
-[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="8_eo7yh"]
+[ext_resource type="Resource" uid="uid://dk136huv8a4cx" path="res://Resources/RuneVariants/FreezeRune.tres" id="8_eo7yh"]
 [ext_resource type="Resource" uid="uid://dxa7oypoypadt" path="res://Resources/RuneVariants/Air Rune.tres" id="9_bijhs"]
 
 [resource]
@@ -22,7 +22,7 @@ move_sprite = ExtResource("4_bijhs")
 downed_sprite = ExtResource("1_6qlil")
 base_aura = Dictionary[int, int]({
 1: 1,
-2: 2,
+2: 1,
 5: 1,
 6: 1,
 7: 1

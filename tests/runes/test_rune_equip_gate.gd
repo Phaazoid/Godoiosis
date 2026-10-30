@@ -84,7 +84,7 @@ func test_one_channelable_carving_of_two_equips() -> void:
 	var u: Unit = _alchemist({ FIRE: 1 }, [FIRE])
 	var carvings: Array[TransmutationData] = [
 		_carving("Push(F)"),              # deficit 0 — channelable
-		_carving("Push(F) + Push(F2)"),  # Fire 3: deficit 2 past the wildcard — not
+		_carving("Break(F, A) + Push(F2)"),  # Fire 2, Air 1: deficit 2 past the wildcard — not
 	]
 	var rune: RuneData = _rune(carvings)
 	assert_int(rune.channelable(u.state).size()).override_failure_message("premise: exactly one carving channelable").is_equal(1)

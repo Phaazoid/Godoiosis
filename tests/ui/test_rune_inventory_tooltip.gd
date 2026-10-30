@@ -63,10 +63,11 @@ func _alchemist_with_a_partial_rune() -> Unit:
 	var rune := RuneData.new()
 	rune.size = RuneData.Size.LARGE
 	rune.display_name = "Test Rune"
-	# One, two and three verbs asking Fire 1, 2 and 3 -- six verbs, the LARGE rune's whole capacity.
-	assert_bool(rune.inscribe(_carving("Push(F)", "Ember"))).is_true()                            # deficit 0
-	assert_bool(rune.inscribe(_carving("Focus(F) + Push(F)", "Pyre"))).is_true()                  # deficit 1 — wildcarded
-	assert_bool(rune.inscribe(_carving("Focus(F) + Spread(F) + Push(F)", "Inferno"))).is_true()   # deficit 2 — dead
+	# One, two and three verbs asking Fire 1, Fire 2, and Fire 2 with Air 1 -- six verbs, the LARGE
+	# rune's whole capacity.
+	assert_bool(rune.inscribe(_carving("Push(F)", "Ember"))).is_true()                                 # deficit 0
+	assert_bool(rune.inscribe(_carving("Bind(F, F) + Push(F2)", "Pyre"))).is_true()                    # deficit 1 — wildcarded
+	assert_bool(rune.inscribe(_carving("Break(F, A) + Bind(F, F) + Push(F2)", "Inferno"))).is_true()   # deficit 2 — dead
 	alch.add_item(rune)
 	assert_object(alch.get_equipped_weapon()).override_failure_message("fixture failed to equip the rune").is_same(rune)
 	return alch

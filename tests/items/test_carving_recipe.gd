@@ -39,10 +39,38 @@ func test_the_cost_is_the_verb_count() -> void:
 	assert_int(_parse("Break(F, A) + Bind(Q, F) + Push(QF)").verb_count()).is_equal(3)
 
 
-func test_the_demand_sums_atoms_across_every_argument() -> void:
+# Depth (#1530): per element, the most atoms any ONE verb works on. Push(F2) asks Fire 2, the Break
+# Fire 1 and Air 1, so the carving asks Fire 2, Air 1 -- not the Fire 3 of every argument summed.
+func test_the_demand_is_the_hungriest_verb_per_element() -> void:
 	var demand := _parse("Break(F, A) + Push(F2)").demand()
-	assert_int(demand.get(Elemental.Element.FIRE, 0)).is_equal(3)
+	assert_int(demand.get(Elemental.Element.FIRE, 0)).is_equal(2)
 	assert_int(demand.get(Elemental.Element.AIR, 0)).is_equal(1)
+	assert_int(demand.size()).is_equal(2)
+
+
+# The flame Bind(F, F) makes is the flame Push(F2) moves; summing the verbs would charge it twice.
+func test_the_demand_is_never_summed_across_verbs() -> void:
+	var demand := _parse("Bind(F, F) + Push(F2)").demand()
+	assert_int(demand.get(Elemental.Element.FIRE, 0)).is_equal(2)
+	assert_int(demand.size()).is_equal(1)
+
+
+# One verb works on its arguments together, so a Break or a Bind asks for both at once.
+func test_one_verbs_arguments_count_together() -> void:
+	var bind := _parse("Bind(Q, Q)").demand()
+	assert_int(bind.get(Elemental.Element.AETHER, 0)).is_equal(2)
+	var bound := _parse("Bind(F, F)").demand()
+	assert_int(bound.get(Elemental.Element.FIRE, 0)).is_equal(2)
+
+
+# Each element takes its OWN deepest verb: the deeper fire sets Fire, the shallower one beside it adds
+# nothing, and the Air comes from a different verb. A test-only F3 shows the rule has no ceiling of 2.
+func test_each_element_takes_its_own_deepest_verb() -> void:
+	var catalog := _catalog()
+	catalog["deep_fire"] = _sub("F3")
+	var demand := CarvingRecipe.parse("Push(F2) + Push(F3) + Push(A2)", catalog).demand()
+	assert_int(demand.get(Elemental.Element.FIRE, 0)).is_equal(3)
+	assert_int(demand.get(Elemental.Element.AIR, 0)).is_equal(2)
 	assert_int(demand.size()).is_equal(2)
 
 

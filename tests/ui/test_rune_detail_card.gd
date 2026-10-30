@@ -384,7 +384,7 @@ func test_a_blank_rune_opens_and_says_it_is_blank() -> void:
 # derived-never-authored rule unchanged), while the bars draw the AURA the recipe asks -- so the bars
 # count the demand and the capacity line under them counts the verbs, and the two differ on purpose.
 func test_a_carvings_cost_bars_are_one_per_demanded_atom() -> void:
-	var carvings: Array[TransmutationData] = [_circle("Break(F, E) + Push(F)", "Cinder")]   # Fire 2, Earth 1
+	var carvings: Array[TransmutationData] = [_circle("Break(F, E) + Push(F2)", "Cinder")]   # Fire 2, Earth 1
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3, EARTH: 1}))
 
@@ -436,7 +436,7 @@ func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
 # This recipe spends Earth to free its fire and delivers a fire atom: the carrier's two spare Earth buy
 # nothing and draw nothing, and only the one spare Fire is marked.
 func test_spare_marks_count_only_the_elements_the_carving_delivers() -> void:
-	var carvings: Array[TransmutationData] = [_circle("Break(F, E) + Push(F)", "Cinder")]   # Fire 2, Earth 1
+	var carvings: Array[TransmutationData] = [_circle("Break(F, E) + Push(F2)", "Cinder")]   # Fire 2, Earth 1
 	var card := await _open(_rune(carvings), _alchemist({FIRE: 3, EARTH: 3}))
 
 	var marks := _marks_of(_rows_of(card)[0])
@@ -478,7 +478,7 @@ func test_a_row_prints_what_it_does_and_never_what_it_costs() -> void:
 	# A carrier one Air short, so the WILDCARD half of mechanical_text is genuinely present to be
 	# left out -- a fixture with no deficit cannot tell the two readouts apart, which is how the
 	# first version of this case passed against a mutant printing the whole sentence.
-	var carvings: Array[TransmutationData] = [_circle("Break(F, A) + Push(F)", "Zap")]   # Fire 2, Air 1
+	var carvings: Array[TransmutationData] = [_circle("Break(F, A) + Push(F)", "Zap")]   # Fire 1, Air 1
 	var rune := _rune(carvings)
 	var alch := _alchemist({FIRE: 2})
 	var card := await _open(rune, alch)

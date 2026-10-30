@@ -79,7 +79,7 @@ func test_the_anchor_reason_lists_every_element_that_would_open_the_carving() ->
 
 func test_a_coverage_shortfall_names_both_wildcard_numbers() -> void:
 	var alch: Unit = _alchemist({ FIRE: 1 })
-	var carving: TransmutationData = _carving("Push(F) + Push(F2)")   # Fire 3: deficit 2, capacity 1
+	var carving: TransmutationData = _carving("Break(F, A) + Push(F2)")   # Fire 2, Air 1: deficit 2, capacity 1
 
 	var reason := carving.channel_block_reason(alch.state, FIRE)
 	assert_str(reason).contains("wildcard")
@@ -103,11 +103,11 @@ func test_a_channelable_carving_has_no_reason_at_all() -> void:
 func test_is_attack_fireable_answers_false_for_an_unchannelable_carving() -> void:
 	# The change that lets the menu grey a row: before #166 this was unconditionally true for a
 	# carving, because the rune's list arrived pre-filtered and the question never got here.
-	# (Fixture asks Fire 3 at fire-1 — deficit 2 past the wildcard — since 2026-08-10's model
-	# made a Fire 2 demand channelable.)
+	# (Fixture asks Fire 2 and Air 1 at fire-1 — deficit 2 past the wildcard — since 2026-08-10's
+	# model made a Fire 2 demand channelable.)
 	var alch: Unit = _alchemist({ FIRE: 1 })
 	var affordable: TransmutationData = _carving("Push(F)", "Ember")
-	var dear: TransmutationData = _carving("Push(F) + Push(F2)", "Inferno")
+	var dear: TransmutationData = _carving("Break(F, A) + Push(F2)", "Inferno")
 	alch.equipped_weapon = _rune([affordable, dear])
 
 	assert_bool(alch.is_attack_fireable(affordable)).is_true()
@@ -119,7 +119,7 @@ func test_the_unit_level_reason_is_the_carvings_own_words() -> void:
 	# Unit delegates to the equippable, which delegates to the carving WITH the rune's temper —
 	# the pairing the carving cannot see on its own.
 	var alch: Unit = _alchemist({ FIRE: 1 })
-	var dear: TransmutationData = _carving("Push(F) + Push(F2)", "Inferno")
+	var dear: TransmutationData = _carving("Break(F, A) + Push(F2)", "Inferno")
 	var rune: RuneData = _rune([dear])
 	alch.equipped_weapon = rune
 
@@ -144,7 +144,7 @@ func test_an_unchannelable_carving_cannot_be_QUEUED() -> void:
 	# real refusal rather than by the menu alone — "you cannot author an invalid order". Ordered
 	# through the Law #3 chokepoint, the only door the AI has either.
 	var alch: Unit = _alchemist({ FIRE: 1 })
-	var dear: TransmutationData = _carving("Push(F) + Push(F2)", "Inferno")
+	var dear: TransmutationData = _carving("Break(F, A) + Push(F2)", "Inferno")
 	alch.equipped_weapon = _rune([_carving("Push(F)", "Ember"), dear])
 	var foe: Unit = H.spawn_solo(self, _sm, Team.Faction.ENEMY, Vector2i(1, 0))
 
@@ -243,7 +243,7 @@ func test_no_refusal_is_ever_dressed_up_as_a_positive_sentence() -> void:
 		# anchor: real training, wrong element
 		_alchemist({ Elemental.Element.WATER: 5 }, Vector2i(1, 0)): _carving("Break(F, E)"),
 		# coverage: deficit 2 against a capacity of 1
-		_alchemist({ FIRE: 1 }, Vector2i(2, 0)): _carving("Push(F) + Push(F2)"),
+		_alchemist({ FIRE: 1 }, Vector2i(2, 0)): _carving("Break(F, A) + Push(F2)"),
 	}
 	for alch: Unit in cases:
 		var carving: TransmutationData = cases[alch]
@@ -278,10 +278,10 @@ func test_spare_aura_in_an_element_the_recipe_only_spends_is_not_surplus() -> vo
 	var alch: Unit = _alchemist({ FIRE: 7, Elemental.Element.AIR: 4 })
 	var carving: TransmutationData = _carving("Break(F, A) + Push(F2)")
 
-	assert_int(carving.base_damage(alch.state) - (carving.power + carving.demand_of(FIRE))).is_equal(4)
-	assert_str(carving.aura_text(alch.state, FIRE)).contains("4")
-	# Counting the spare Air too would make it seven.
-	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("7")
+	assert_int(carving.base_damage(alch.state) - (carving.power + carving.demand_of(FIRE))).is_equal(5)
+	assert_str(carving.aura_text(alch.state, FIRE)).contains("5")
+	# Counting the spare Air too would make it eight.
+	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("8")
 
 
 # A carving whose recipe the carrier covers exactly has no surplus to describe, so the sentence stops
@@ -333,7 +333,7 @@ func test_the_three_channel_states_are_the_ladders_own_three_outcomes() -> void:
 func test_a_refused_carving_is_never_reported_as_merely_leaning() -> void:
 	var alch: Unit = _alchemist({ FIRE: 1 })
 	# Deficit 2 against a capacity of 1 -- it has a shortfall AND it is refused.
-	var carving: TransmutationData = _carving("Push(F) + Push(F2)")
+	var carving: TransmutationData = _carving("Break(F, A) + Push(F2)")
 
 	assert_int(carving.total_deficit(alch.state)).is_greater(0)
 	assert_str(carving.channel_block_reason(alch.state, FIRE)).is_not_empty()

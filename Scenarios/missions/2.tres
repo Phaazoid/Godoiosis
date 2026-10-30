@@ -278,7 +278,7 @@ move_sprite = ExtResource("25_ubnfa")
 downed_sprite = ExtResource("23_nrv7u")
 base_aura = Dictionary[int, int]({
 1: 1,
-2: 2,
+2: 1,
 5: 1,
 6: 1,
 7: 1
@@ -308,7 +308,7 @@ inventory = Array[ExtResource("5_iwu1s")]([SubResource("Resource_ne4ag")])
 equipped_index = 0
 aura = Dictionary[int, int]({
 1: 1,
-2: 2,
+2: 1,
 5: 1,
 6: 1,
 7: 1

@@ -124,7 +124,7 @@ func test_an_unchannelable_carving_is_still_listed_and_carries_its_reason() -> v
 	_give_aura(alch, FIRE, 1)
 	var payable := _line_carving("Emberline", 4, 3)                 # Fire 2
 	var unpayable := _line_carving("Emberstorm", 6, 3)
-	unpayable.recipe = "Break(F, W) + Push(F)"   # Fire 2, Water 1
+	unpayable.recipe = "Break(F, W) + Push(F2)"   # Fire 2, Water 1
 	var rune := _rune_of([payable, unpayable])                      # payable first: it sets temper
 
 	# Preconditions, or the case passes vacuously on a rune nobody could hold.
