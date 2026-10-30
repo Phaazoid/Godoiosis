@@ -116,7 +116,7 @@ map_sprite = ExtResource("12_nsc22")
 move_sprite = ExtResource("13_ofka7")
 downed_sprite = ExtResource("10_7f5ti")
 base_aura = Dictionary[int, int]({
-1: 3
+1: 2
 })
 base_affinity = Array[int]([1])
 starting_inventory = Array[ExtResource("6_ynwst")]([ExtResource("22_aoega"), ExtResource("23_rs5gf")])
@@ -146,7 +146,7 @@ inventory = Array[ExtResource("6_ynwst")]([SubResource("Resource_qcx71"), SubRes
 equipped_index = 0
 worn_armor_index = 1
 aura = Dictionary[int, int]({
-1: 3
+1: 2
 })
 affinity = Array[int]([1])
 affinity_saved = true

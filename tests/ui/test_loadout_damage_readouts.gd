@@ -218,7 +218,7 @@ func _rune() -> RuneData:
 	var rune := RuneData.new()
 	rune.display_name = "Test Rune"
 	rune.size = RuneData.Size.LARGE
-	for spec: Array in [["Break(F, E) + Push(F)", "Cinder"], ["Push(F2)", "Ember"]]:
+	for spec: Array in [["Break(F, E) + Push(F2)", "Cinder"], ["Push(F2)", "Ember"]]:
 		var carving := TransmutationData.new()
 		carving.display_name = spec[1]
 		carving.power = 4

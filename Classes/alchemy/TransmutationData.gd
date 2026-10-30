@@ -6,7 +6,8 @@ extends AttackData
 # with substances as their arguments, `Break(F, A) + Push(F2)`. CarvingRecipe parses it; everything
 # below reads that parse:
 #   cost      -- verbs, what a rune spends to hold it
-#   demand    -- atoms across every argument, what the wielder's aura must cover
+#   demand    -- depth: per element, the most atoms any one verb works on (#1530), what the wielder's
+#                aura must cover
 #   delivered -- what the last delivering verb leaves at the target: the hit's element, and the
 #                elements its damage scales off (once each)
 # Shape, range, shove, power and states stay AUTHORED on AttackData; verbs never move geometry.
@@ -37,7 +38,7 @@ func recipe_error() -> String:
 	return parsed().error
 
 
-# What this carving asks of each element (atoms across every argument).
+# What this carving asks of each element (its hungriest verb's atoms, per element).
 func demand() -> Dictionary[Elemental.Element, int]:
 	return parsed().demand()
 
@@ -269,6 +270,6 @@ static func property_tips() -> Dictionary:
 	tips.merge({
 		"popup": "Floating text shown over the target when this carving lands. Blank = nothing.",
 		"icon": "The carving's icon in the rune and attack menus.",
-		"recipe": "The carving in codev's notation: verbs with substances as their arguments, joined by +. Break(F, A) + Push(F2) frees fire from the air and pushes the flame. Break and Bind take two arguments; Extract, Infuse, Push, Pull, Spread, Focus, Quicken and Still take one. Each verb costs one slot of rune capacity; the atoms across every argument are the aura the wielder must cover; what the last verb leaves at the target is what the hit carries and scales off.",
+		"recipe": "The carving in codev's notation: verbs with substances as their arguments, joined by +. Break(F, A) + Push(F2) frees fire from the air and pushes the flame. Break and Bind take two arguments; Extract, Infuse, Push, Pull, Spread, Focus, Quicken and Still take one. Each verb costs one slot of rune capacity; the aura the wielder must cover is, per element, the most atoms any one verb works on (its arguments together); what the last verb leaves at the target is what the hit carries and scales off.",
 	})
 	return tips

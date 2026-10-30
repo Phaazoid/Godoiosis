@@ -7,7 +7,7 @@ class_name CarvingRecipe
 #
 # Everything a rune, a channel check or a hit reads off a carving is DERIVED here, once per parse:
 #   cost      -- how many verbs
-#   demand    -- atoms summed across every argument (what the alchemist's aura pays)
+#   demand    -- depth: per element, the most atoms any ONE verb works on (what the alchemist's aura must reach)
 #   delivered -- what the last delivering verb leaves at the target
 #   fizzle    -- the first argument a cast is missing, given what is present (fizzle_reason)
 #   drawn     -- which ambient substances it takes from the air (drawn_from), what Atmosphere scales
@@ -155,10 +155,13 @@ static func _molecule_with(counts: Dictionary[Elemental.Element, int], catalog: 
 
 func _derive(catalog: Dictionary) -> void:
 	for step: Step in steps:
+		var held: Dictionary[Elemental.Element, int] = {}
 		for id: String in step.args:
 			var atoms := AlchemyFormula.atoms_of(catalog.get(id) as Substance, catalog)
 			for element: Elemental.Element in atoms.counts:
-				_demand[element] = _demand.get(element, 0) + atoms.counts[element]
+				held[element] = held.get(element, 0) + atoms.counts[element]
+		for element: Elemental.Element in held:
+			_demand[element] = maxi(_demand.get(element, 0), held[element])
 	for i in range(steps.size() - 1, -1, -1):
 		if not steps[i].leaves.is_empty():
 			_delivered = steps[i].leaves.duplicate()
@@ -181,7 +184,8 @@ func verb_count() -> int:
 	return steps.size()
 
 
-# Atoms summed across every argument: `Break(F, A) + Push(F2)` asks Fire 3, Air 1.
+# Depth (#1530): per element, the most atoms any one verb works on, its arguments together. Never
+# summed across verbs -- `Bind(F, F) + Push(F2)` asks Fire 2, since the flame it binds is the flame it pushes.
 func demand() -> Dictionary[Elemental.Element, int]:
 	return _demand
 

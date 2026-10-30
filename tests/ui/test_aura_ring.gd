@@ -388,7 +388,7 @@ func _demand_row(target: Unit, carving: TransmutationData,
 # a stored deficit could not say which ticks a halo belongs on.
 func test_a_carving_asks_sector_by_sector_and_atoms_are_weight() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
-	var circle := _circle("Break(F, E) + Push(F)")   # Fire 2, Earth 1
+	var circle := _circle("Break(F, E) + Push(F2)")   # Fire 2, Earth 1
 
 	assert_int(_demand_row(celest, circle, FIRE).wanted).is_equal(2)
 	assert_int(_demand_row(celest, circle, EARTH).wanted).is_equal(1)
@@ -402,7 +402,7 @@ func test_a_carving_asks_sector_by_sector_and_atoms_are_weight() -> void:
 # scale; that one flag is what keeps a halo off aura the hit never reads.
 func test_only_a_delivered_element_scales() -> void:
 	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
-	var circle := _circle("Break(F, E) + Push(F)")
+	var circle := _circle("Break(F, E) + Push(F2)")
 
 	assert_bool(_demand_row(celest, circle, FIRE).scales).is_true()
 	assert_bool(_demand_row(celest, circle, EARTH).scales).override_failure_message(
@@ -419,7 +419,7 @@ func test_only_a_delivered_element_scales() -> void:
 func test_showing_a_carving_changes_nothing_about_the_pool_underneath() -> void:
 	var celest := _alchemist([EARTH, FIRE, AETHER], {FIRE: 2, EARTH: 1, AETHER: 2})
 	var plain := AuraRing.rows(celest)
-	var over := AuraRing.rows(celest, _circle("Break(F, E) + Push(F)"))
+	var over := AuraRing.rows(celest, _circle("Break(F, E) + Push(F2)"))
 
 	assert_int(over.size()).is_equal(plain.size())
 	for i in plain.size():
@@ -432,7 +432,7 @@ func test_showing_a_carving_changes_nothing_about_the_pool_underneath() -> void:
 # not an empty model, which is what the old null contract gave. `rows(null)` on its own is still
 # empty, unchanged: nothing to say about nobody, when nothing is being asked either.
 func test_a_carving_with_no_carrier_is_still_a_model() -> void:
-	var circle := _circle("Break(A, W) + Push(W)")
+	var circle := _circle("Break(A, W) + Push(W2)")
 	var demanded := AuraRing.rows(null, circle)
 
 	assert_int(demanded.size()).is_equal(Elemental.SIGIL_ELEMENTS.size())
@@ -454,7 +454,7 @@ func test_a_carving_with_no_carrier_is_still_a_model() -> void:
 func test_the_readout_names_only_the_marks_that_are_actually_drawn() -> void:
 	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
 
-	var exact := AuraRing.readout(celest, _circle("Break(F, E) + Push(F)"))
+	var exact := AuraRing.readout(celest, _circle("Break(F, E) + Push(F2)"))
 	assert_int(exact.find("hollow")).is_equal(-1)
 	assert_int(exact.find("halo")).is_equal(-1)
 
@@ -474,7 +474,7 @@ func test_the_readout_names_only_the_marks_that_are_actually_drawn() -> void:
 # must not promise a halo for it. The Earth it is short of is still hollow.
 func test_aura_past_an_element_the_recipe_only_spends_draws_no_halo() -> void:
 	var celest := _alchemist([EARTH, FIRE], {FIRE: 2, EARTH: 1})
-	var spent := AuraRing.readout(celest, _circle("Break(F, E) + Push(E)"))   # Fire 1, Earth 2
+	var spent := AuraRing.readout(celest, _circle("Break(F, E) + Push(E2)"))   # Fire 1, Earth 2
 
 	assert_int(spent.find("hollow")).is_greater(-1)
 	assert_int(spent.find("halo")).override_failure_message(

@@ -361,7 +361,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_f8j6y")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 3
+1: 2
 })
 affinity = Array[int]([1])
 affinity_saved = true
@@ -416,7 +416,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_0lehi")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 3
+1: 2
 })
 affinity = Array[int]([1])
 affinity_saved = true
@@ -787,7 +787,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_4fepy")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 3
+1: 2
 })
 affinity = Array[int]([1])
 affinity_saved = true
@@ -842,7 +842,7 @@ current_hp = 30
 inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_bssrp")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 3
+1: 2
 })
 affinity = Array[int]([1])
 affinity_saved = true

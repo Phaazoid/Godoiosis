@@ -8,7 +8,7 @@
 >
 > **Wording note (immersion):** in-game language stays inside the fantasy — *channeling, transmutation, carving, marks* — never "chemistry," even though the designers know exactly what it is.
 >
-> **Canon checked through #1347 (2026-10-21).**
+> **Canon checked through #1347 (2026-10-21); #1530 (aura demand as depth) folded in 2026-10-30.**
 >
 > **SUPERSEDED as a MECHANISM by Deep Alchemy Phase 2 (2026-10-11).** A carving is now a recipe of verbs with substances as their arguments (`Break(F, A) + Push(F2)`). Canon: [deep-alchemy.md](deep-alchemy.md) → *What is built*. Phase 2 replaced:
 > - **the anatomy**: weighted sigils + shaping flourishes are gone; `TransmutationData.recipe` replaces both;
@@ -20,7 +20,7 @@
 > - **the carved/drawn split**: a recipe is one line of verbs, with no drawn layer apart from the carved one, so re-flourishing (*Far future*, grill resolution 6, [#513](https://github.com/Phaazoid/Godoiosis/issues/513)) and materia's job of etching runes have nothing to attach to; whether either returns in verb terms is unruled;
 > - **why alkahest is uncarvable**: no longer the five-sigil count (three verbs can name all five elements) but [#1314](https://github.com/Phaazoid/Godoiosis/issues/1314)'s answer that alkahest is the prima materia, with no formula, so no Bind makes it.
 >
-> The content IDEAS in the tables survive as recipe inspiration. The channeling model (anchor + wildcards), the temper rule (the same shape, now read over aura demand: the atoms across every argument), the discovery/codex doctrine (in principle; grill 3's sigil grid and flourish rows have no verb-grammar restatement yet, and [#75](https://github.com/Phaazoid/Godoiosis/issues/75) still describes a sigil + flourish table) and the effects-first rider are unchanged. Nothing below is rewritten; read it as the pre-Phase-2 record.
+> The content IDEAS in the tables survive as recipe inspiration. The channeling model (anchor + wildcards), the temper rule (the same shape, now read over aura demand: per element, the most atoms any one verb works on, #1530), the discovery/codex doctrine (in principle; grill 3's sigil grid and flourish rows have no verb-grammar restatement yet, and [#75](https://github.com/Phaazoid/Godoiosis/issues/75) still describes a sigil + flourish table) and the effects-first rider are unchanged. Nothing below is rewritten; read it as the pre-Phase-2 record.
 
 ## The fantasy this system serves
 

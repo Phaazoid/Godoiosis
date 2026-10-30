@@ -112,7 +112,7 @@ map_sprite = ExtResource("13_68336")
 move_sprite = ExtResource("14_f4d70")
 downed_sprite = ExtResource("11_r5jfu")
 base_aura = Dictionary[int, int]({
-1: 3
+1: 1
 })
 base_affinity = Array[int]([1])
 base_is_alkahest_affine = true
@@ -139,7 +139,7 @@ current_hp = 40
 inventory = Array[ExtResource("5_63umr")]([SubResource("Resource_4fber")])
 equipped_index = 0
 aura = Dictionary[int, int]({
-1: 3
+1: 1
 })
 affinity = Array[int]([1])
 is_alkahest_affine = true

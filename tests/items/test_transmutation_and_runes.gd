@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 # Aura-scaled transmutations + the rune container (docs/design/alchemy-kit.md), on the Deep Alchemy
 # Phase 2 recipe model (docs/design/deep-alchemy.md -> What is built):
 #   - a carving is a RECIPE: verbs with substance arguments, `Break(F, A) + Push(F2)`
-#   - cost = verbs; demand = atoms across every argument; delivery = what the last delivering verb
+#   - cost = verbs; demand = depth, the most atoms any one verb works on, per element (#1530); delivery = what the last delivering verb
 #     leaves at the target
 #   - damage scales off the wielder's aura in each DELIVERED element, once each
 #   - channeling: anchor + wildcards over the DEMAND (dev 2026-08-10, replacing #60's
@@ -162,7 +162,7 @@ func test_the_free_wildcard_covers_one_point_of_depth_too() -> void:
 	# breadth are one currency now — but only one point of it on an unmatched rune.
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
 	assert_bool(_carving("Push(F2)").can_channel(u.state, Elemental.Element.FIRE)).is_true()
-	var athanor: TransmutationData = _carving("Push(F) + Push(F2)")   # demand Fire 3
+	var athanor: TransmutationData = _carving("Break(F, A) + Push(F2)")   # Fire 2, Air 1: a point of each
 	assert_bool(athanor.can_channel(u.state, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
 
 func test_spare_temper_aura_is_the_second_pool() -> void:
@@ -186,13 +186,13 @@ func test_the_pools_never_stack_and_the_pool_is_the_SPARE() -> void:
 
 func test_isaac_alkahest_breadth_now_carries_one_point_of_depth() -> void:
 	# Universal breadth, trained depth — amended 2026-08-10: pool A hands Isaac +1 depth in
-	# every element (Fire 2 channels at fire-1), but only the one point (Fire 3 still refused).
+	# every element (Fire 2 channels at fire-1), but only the one point (Fire 2 with Air 2 still refused).
 	var isaac: Unit = _alchemist({
 		Elemental.Element.FIRE: 1, Elemental.Element.WATER: 1, Elemental.Element.EARTH: 1,
 		Elemental.Element.AIR: 1, Elemental.Element.AETHER: 1,
 	})
 	assert_bool(_carving("Push(F2)").can_channel(isaac.state, Elemental.Element.FIRE)).is_true()
-	var athanor: TransmutationData = _carving("Push(F) + Push(F2)")
+	var athanor: TransmutationData = _carving("Push(F2) + Push(A2)")
 	assert_bool(athanor.can_channel(isaac.state, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
 
 # --- rune capacity, counted in VERBS (Phase 2) ---
@@ -308,7 +308,7 @@ func test_rune_is_legal_catches_inscriptions_with_no_temper_set() -> void:
 # --- identity ---
 
 func test_primary_element_is_the_most_demanded() -> void:
-	# Fire is named first, but the recipe asks Earth 3 to Fire 1.
+	# Fire is named first, but the recipe asks Earth 2 to Fire 1.
 	var t: TransmutationData = _carving("Break(F, E) + Push(E2)")
 	assert_int(t.primary_element()).is_equal(Elemental.Element.EARTH)
 
