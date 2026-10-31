@@ -1,33 +1,16 @@
 # Every thing the game names says what it is made of (SubstanceMap, Deep Alchemy phase 1).
 #
-# A new Element, State, TileState, terrain Kind or gas Kind reds here until it gets a row: a substance
-# id, or a NONE / PENDING line saying why not. Every id must be a real substance file. Vials carry
-# their own field, so they are held here too, with the vials that have no substance yet declared.
+# The element vocabulary (ELEMENTS) is code; the grounds, tile states, gases and unit states are AUTHORED
+# rows in Resources/SubstanceMap.tres (#1532). A new Element, State, TileState, terrain Kind or gas Kind
+# reds here until it gets a row. An authored row may be EMPTY (a hole holds nothing), but every id it
+# names must be a real substance file. Vials carry their own field, so they are held here too, with the
+# vials that have no substance yet declared.
 extends GdUnitTestSuite
 
 const VIALS_WITHOUT_SUBSTANCE := {
 	"res://Resources/Vials/IchorVial.tres": "ichor has no formula yet (codev)",
 	"res://Resources/Vials/AlkahestVial.tres": "alkahest is the prima materia, not a formula",
 }
-
-
-func _check_table(table: Dictionary, members: Array, names: Array, label: String) -> Array[String]:
-	var catalog := SubstanceCatalog.get_all()
-	var faults: Array[String] = []
-	for member: int in members:
-		var name: String = names[member]
-		if not table.has(member):
-			faults.append("%s.%s has no SubstanceMap row" % [label, name])
-			continue
-		var entry: String = table[member]
-		var id := SubstanceMap.id_of(entry)
-		if id == "":
-			var reason := entry.trim_prefix(SubstanceMap.NONE).trim_prefix(SubstanceMap.PENDING).strip_edges()
-			if reason == "" or reason == entry.strip_edges():
-				faults.append("%s.%s: '%s' is neither a substance id nor a reasoned NONE/PENDING" % [label, name, entry])
-		elif not catalog.has(id):
-			faults.append("%s.%s names '%s', which is not a substance file" % [label, name, id])
-	return faults
 
 
 func _members_except(values: Array, skip: Array) -> Array:
@@ -38,31 +21,60 @@ func _members_except(values: Array, skip: Array) -> Array:
 	return out
 
 
+# Every member has a row, and every id a row names is a substance file.
+func _check_rows(table: Dictionary, members: Array, names: Array, label: String) -> Array[String]:
+	var catalog := SubstanceCatalog.get_all()
+	var faults: Array[String] = []
+	for member: int in members:
+		var name: String = names[member]
+		if not table.has(member):
+			faults.append("%s.%s has no row in %s" % [label, name, SubstanceMap.PATH])
+			continue
+		for id: String in table[member]:
+			if not catalog.has(id):
+				faults.append("%s.%s names '%s', which is not a substance file" % [label, name, id])
+	return faults
+
+
+func test_the_authored_map_loads() -> void:
+	SubstanceMap.refresh()
+	assert_object(load(SubstanceMap.PATH) as SubstanceMap).override_failure_message(
+			"%s is not a SubstanceMap" % SubstanceMap.PATH).is_not_null()
+
+
 func test_every_element_says_what_it_is() -> void:
-	var members := _members_except(Elemental.Element.values(), [Elemental.Element.NONE])
-	assert_array(_check_table(SubstanceMap.ELEMENTS, members, Elemental.Element.keys(), "Element")).is_empty()
+	var catalog := SubstanceCatalog.get_all()
+	var faults: Array[String] = []
+	for element: int in _members_except(Elemental.Element.values(), [Elemental.Element.NONE]):
+		var id := SubstanceMap.of_element(element as Elemental.Element)
+		var name: String = Elemental.Element.keys()[element]
+		if id == "":
+			faults.append("Element.%s has no SubstanceMap.ELEMENTS row" % name)
+		elif not catalog.has(id):
+			faults.append("Element.%s names '%s', which is not a substance file" % [name, id])
+	assert_array(faults).is_empty()
 
 
 func test_every_unit_state_says_what_it_is() -> void:
 	var members := _members_except(Elemental.State.values(), [Elemental.State.NONE])
-	assert_array(_check_table(SubstanceMap.STATES, members, Elemental.State.keys(), "State")).is_empty()
+	assert_array(_check_rows(SubstanceMap.authored().unit_states, members, Elemental.State.keys(), "State")).is_empty()
 
 
 func test_every_tile_state_says_what_it_is() -> void:
 	var skip: Array = [Terrain.TileState.NONE]
 	skip.append_array(Terrain.RETIRED_STATES)
 	var members := _members_except(Terrain.TileState.values(), skip)
-	assert_array(_check_table(SubstanceMap.TILE_STATES, members, Terrain.TileState.keys(), "TileState")).is_empty()
+	assert_array(_check_rows(SubstanceMap.authored().tile_states, members, Terrain.TileState.keys(), "TileState")).is_empty()
 
 
 func test_every_ground_says_what_it_is() -> void:
 	var members := _members_except(Terrain.Kind.values(), [Terrain.Kind.NONE])
-	assert_array(_check_table(SubstanceMap.KINDS, members, Terrain.Kind.keys(), "Kind")).is_empty()
+	assert_array(_check_rows(SubstanceMap.authored().grounds, members, Terrain.Kind.keys(), "Kind")).is_empty()
 
 
 func test_every_gas_says_what_it_is() -> void:
-	# The six gas looks hang on this answer (#508): a gas with no substance has no chemistry to draw.
-	assert_array(_check_table(SubstanceMap.GASES, Gas.Kind.values(), Gas.Kind.keys(), "Gas")).is_empty()
+	# The gas looks hang on this answer (#508): a gas with no substance has no chemistry to draw.
+	assert_array(_check_rows(SubstanceMap.authored().gases, Gas.Kind.values(), Gas.Kind.keys(), "Gas")).is_empty()
 
 
 func test_every_vial_names_its_substance_or_says_why_not() -> void:

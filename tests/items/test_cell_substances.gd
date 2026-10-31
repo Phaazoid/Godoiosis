@@ -4,8 +4,9 @@
 # The board is stubbed, test_materia_sources.gd's fixture one store wider: kinds and lit props are
 # authored directly, who stands where is the board's own units at their own cells (the fizzle reads
 # them where the plan puts them, #1480), STATES ride a real TerrainStateManager and gas a real GasField.
-# Every case hands available_near its own catalog, so nothing here reads an authored substance file
-# (tests/README.md rule 9) -- the ids match SubstanceMap's rows, which is what the code looks up.
+# Every case hands available_near its own catalog AND its own SubstanceMap, so nothing here reads an
+# authored substance file or the authored rows (tests/README.md rule 9, #1532): what grass is made of
+# is content, and these cases ask only what the code does with a row.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -35,7 +36,7 @@ func _sub(formula: String, name: String = "") -> Substance:
 	return s
 
 
-# The fixture's own chemistry: the ambient four, the grounds SubstanceMap names, and their parts.
+# The fixture's own chemistry: the ambient four, the grounds its map names, and their parts.
 func _catalog() -> Dictionary:
 	return {
 		"inert_air": _sub("A2"), "vital_air": _sub("FA"), "vapor": _sub("AW"), "atom_aether": _sub("Q"),
@@ -49,6 +50,34 @@ func _catalog() -> Dictionary:
 		"green_plant": _sub("AE + 2FA + W2", "Green plant"),
 		"dry_plant": _sub("AE + 2FA", "Dry plant"),
 	}
+
+
+# The fixture's own rows: what each thing it paints is made of. Rock holds nothing here, so the cases
+# about what lies ON a cell read alone. Grass stands on dirt, a row naming two substances.
+func _map(burning: Array = ["flame"]) -> SubstanceMap:
+	var map := SubstanceMap.new()
+	map.grounds = {
+		Terrain.Kind.GRASS: PackedStringArray(["green_plant", "dirt"]),
+		Terrain.Kind.TALL_GRASS: PackedStringArray(["dry_plant", "dirt"]),
+		Terrain.Kind.MUD: PackedStringArray(["mud"]),
+		Terrain.Kind.ROCK: PackedStringArray(),
+		Terrain.Kind.WATER: PackedStringArray(["water"]),
+		Terrain.Kind.DIRT: PackedStringArray(["dirt"]),
+		Terrain.Kind.VOID: PackedStringArray(),
+	}
+	map.tile_states = {
+		Terrain.TileState.BURNING: PackedStringArray(burning),
+		Terrain.TileState.FROZEN: PackedStringArray(["ice"]),
+	}
+	map.gases = {
+		Gas.Kind.STEAM: PackedStringArray(["steam"]),
+		Gas.Kind.SMOKE: PackedStringArray(["smoke"]),
+	}
+	map.unit_states = {
+		Elemental.State.WET: PackedStringArray(["water"]),
+		Elemental.State.CHILLED: PackedStringArray(["ice"]),
+	}
+	return map
 
 
 func _store(cell_states: Dictionary = {}) -> TerrainStateManager:
@@ -67,8 +96,8 @@ func _board(kinds: Dictionary, cell_states: Dictionary = {}, lit: Dictionary = {
 	return _SubstanceBoard.new(_store(cell_states), gas, kinds, lit, standing)
 
 
-func _supply(board: BoardContext, caster: Unit = null) -> Dictionary[String, int]:
-	return CellSubstances.available_near(HERE, board, UnitState.of(caster), _catalog())
+func _supply(board: BoardContext, caster: Unit = null, map: SubstanceMap = _map()) -> Dictionary[String, int]:
+	return CellSubstances.available_near(HERE, board, UnitState.of(caster), _catalog(), {}, map)
 
 
 func _present(board: BoardContext, caster: Unit = null) -> Array[String]:
@@ -77,11 +106,11 @@ func _present(board: BoardContext, caster: Unit = null) -> Array[String]:
 	return ids
 
 
-func _fizzle(recipe: String, board: BoardContext, caster: Unit = null) -> String:
+func _fizzle(recipe: String, board: BoardContext, caster: Unit = null, map: SubstanceMap = _map()) -> String:
 	var parsed := CarvingRecipe.parse(recipe, _catalog())
 	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
 			% [recipe, parsed.error]).is_empty()
-	return parsed.fizzle_reason(CellSubstances.available_near(HERE, board, UnitState.of(caster), _catalog()), _catalog())
+	return parsed.fizzle_reason(_supply(board, caster, map), _catalog())
 
 
 # --- the baseline ---------------------------------------------------------------------------
@@ -125,7 +154,7 @@ func test_a_push_of_salt_does_not_fizzle_beside_dirt() -> void:
 
 
 # Plant matter is present as itself and lends NOTHING (c3potheds@): a grass field holds no water.
-# The dirt it stands on still lends its parts -- the #1315 default.
+# The dirt the fixture's grass row also names still lends its parts.
 func test_plant_matter_lends_no_water_and_grass_stands_on_dirt() -> void:
 	var present := _present(_board({ HERE: Terrain.Kind.GRASS, NEXT_DOOR: Terrain.Kind.TALL_GRASS }))
 	assert_bool(present.has("green_plant")).is_true()
@@ -175,6 +204,42 @@ func test_heat_is_in_the_air_and_flame_is_not() -> void:
 	assert_str(_fizzle("Push(F2)", bare)).is_not_empty()
 	var by_fire := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
 	assert_str(_fizzle("Push(F2)", by_fire)).is_empty()
+
+
+# --- what a row names (#1532) ------------------------------------------------------------------
+
+# A row may name several substances, and the cell then holds each of them as a real source.
+func test_a_row_naming_two_substances_lends_both() -> void:
+	var board := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
+	var supply := _supply(board, null, _map(["flame", "atom_fire"]))
+	for id: String in ["flame", "atom_fire"]:
+		assert_int(supply.get(id, 0)).override_failure_message(
+				"a Burning row naming '%s' did not supply it" % id).is_equal(CellSubstances.PLENTY)
+
+
+# #1535's question, asked of the mechanism: a fire whose row lends heat is a real source of it, so a
+# recipe asking more heat than the air's one holds beside it, and fizzles beside one whose row does not.
+# A lit prop reads Burning's row, so it answers the same.
+func test_heat_beyond_the_airs_one_holds_only_beside_a_fire_that_lends_it() -> void:
+	var by_fire := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
+	var by_lamp := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, {}, { NEXT_DOOR: true })
+	var lends := _map(["flame", "atom_fire"])
+	for board: BoardContext in [by_fire, by_lamp]:
+		assert_str(_fizzle("Push(3F)", board)).contains("source of")
+		assert_str(_fizzle("Push(3F)", board, null, lends)).is_empty()
+	assert_str(_fizzle("Push(3F)", _board({}), null, lends)).override_failure_message(
+			"Push(3F) held with no fire near").contains("source of")
+
+
+# The map a caller hands in is the one read, never the authored file behind it: a fixture rock made of
+# water offers water, and the fixture's own empty rock does not.
+func test_the_map_handed_in_is_the_one_read() -> void:
+	var map := _map()
+	map.grounds[Terrain.Kind.ROCK] = PackedStringArray(["water"])
+	var board := _board({ NEXT_DOOR: Terrain.Kind.ROCK })
+	assert_bool(_present(board).has("water")).is_false()
+	assert_bool(_supply(board, null, map).has("water")).override_failure_message(
+			"available_near read some other map than the one it was handed").is_true()
 
 
 func test_a_gas_on_a_neighbour_is_present() -> void:
