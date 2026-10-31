@@ -168,13 +168,15 @@ func air_reading() -> Dictionary[String, int]:
 
 # The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and
 # the error path (mirrored into status_label when given, #168) all live there, not here. Answers
-# whether the file was written, so the header only calls the board clean when it is (#1182).
-func save_scenario(scenario_name: String, status_label: Label = null, authored := false) -> bool:
+# whether the file was written, so the header only calls the board clean when it is (#1182). `board` is
+# capture_scenario's own, below.
+func save_scenario(scenario_name: String, status_label: Label = null, authored := false,
+		board: BoardSnapshot = null) -> bool:
 	if scenario_name.strip_edges() == "":
 		push_warning("Scenario needs a name")
 		return false
 
-	var scenario := capture_scenario(scenario_name, authored)
+	var scenario := capture_scenario(scenario_name, authored, board)
 	var path := scenario_path(scenario_name)
 	if not DevWidgets.save_over(scenario, path, status_label):
 		return false
@@ -258,10 +260,13 @@ func restore_board(snapshot: BoardSnapshot) -> void:
 # then. Default false keeps every other caller (BugReporter's #87 mid-battle snapshot above all)
 # a byte-exact capture. Ad-hoc units snapshot fully in both modes; nothing else holds them. An
 # authored save also writes no fire countdowns (#1483).
-func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
+# board: the board to write, the live one when null. The dev header hands an authored save the board AS
+# AUTHORED (BoardHistory.authored, #1507), so what play did to the tile states and gas stays out of it;
+# every other caller writes the live board.
+func capture_scenario(scenario_name: String, authored := false, board: BoardSnapshot = null) -> ScenarioData:
 	var scenario := ScenarioData.new()
 	scenario.scenario_name = scenario_name
-	capture_board().write_into(scenario)
+	(board if board != null else capture_board()).write_into(scenario)
 	# #1483: a fire's live countdown is a battle fact, so an authored save keeps none and each fire
 	# loads on its authored start (#1484) or its ground's own clock. Dropped HERE, not in capture_board:
 	# the authoring undo and every full capture put the clocks back exactly as they were.

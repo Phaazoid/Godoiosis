@@ -44,7 +44,11 @@ func test_the_readers_agree_with_is_open_water() -> void:
 	chilled.add_element_state(Elemental.State.CHILLED)
 	var units: Array[Unit] = [walker, chilled]
 	var board := _WaterBoard.new(states, units)
-	var water_id := SubstanceMap.of_kind(Terrain.Kind.WATER)
+	# The fixture's own row (#1532): a water ground is made of water, and nothing else here is made of
+	# anything, so the answer is the open-water gate's alone.
+	var water_id := "water"
+	var map := SubstanceMap.new()
+	map.grounds = { Terrain.Kind.WATER: PackedStringArray([water_id]) }
 	var catalog := { water_id: _water() }
 	var no_wet: Dictionary[Vector2i, bool] = {}
 	var laying := AttackData.new()
@@ -58,7 +62,7 @@ func test_the_readers_agree_with_is_open_water() -> void:
 		var answers := {
 			"Conduction.conducts": Conduction.conducts(cell, board, no_wet),
 			"Materia.sources_at": Materia.sources_at(cell, board).has(Elemental.Element.WATER),
-			"CellSubstances.available_near": CellSubstances.available_near(cell, board, null, catalog).has(water_id),
+			"CellSubstances.available_near": CellSubstances.available_near(cell, board, null, catalog, {}, map).has(water_id),
 			"RulesService.wets_in": RulesService.wets_in(cell, asker.state, board),
 			"PlanResolver._lay_tile_effect fizzles": PlanResolver._lay_tile_effect(cell, laying, board, null) == null,
 		}

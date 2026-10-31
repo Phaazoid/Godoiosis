@@ -1,16 +1,20 @@
-extends Object
+extends Resource
 class_name SubstanceMap
 
 # What each thing the game already names is MADE of (docs/design/deep-alchemy.md) -- the one answer,
-# for the five enum vocabularies. A vial is per-file content, so it carries its own substance
-# (VialData.substance) instead of a row here.
+# in two declared halves:
 #
-# An entry is a substance id, or a NONE / PENDING line saying why there is none. PENDING lines are
-# open design questions; c3potheds owns them. tests/law/test_substance_map.gd holds every member to
-# an entry and every id to a real file.
+#   ELEMENTS, CARRIED_AS_TOO   code. What a hit of each element IS, read backwards to say what a
+#                              carving hits as. The element vocabulary, not a source.
+#   grounds, tile_states,      AUTHORED (#1532), in Resources/SubstanceMap.tres. What each ground kind,
+#   gases, unit_states         tile state, gas and unit state holds: what a carving beside it can draw
+#                              on (CellSubstances). A row may name several substances (Burning is flame
+#                              and heat, #1535); an empty row holds nothing (a hole, an entrenchment).
+#
+# A vial is per-file content, so it carries its own substance (VialData.substance) instead of a row.
+# tests/law/test_substance_map.gd holds every member to a row and every id to a real file.
 
-const NONE := "none: "
-const PENDING := "pending: "
+const PATH := "res://Resources/SubstanceMap.tres"
 
 const ELEMENTS: Dictionary[Elemental.Element, String] = {
 	Elemental.Element.FIRE: "flame",
@@ -31,72 +35,59 @@ const CARRIED_AS_TOO: Dictionary[String, Elemental.Element] = {
 	"ice": Elemental.Element.ICE,
 }
 
-const STATES: Dictionary[Elemental.State, String] = {
-	Elemental.State.WET: "water",
-	Elemental.State.CHILLED: "ice",
-	Elemental.State.SMOKED: "smoke",
-}
+@export var grounds: Dictionary[Terrain.Kind, PackedStringArray] = {}
+@export var tile_states: Dictionary[Terrain.TileState, PackedStringArray] = {}
+@export var gases: Dictionary[Gas.Kind, PackedStringArray] = {}
+@export var unit_states: Dictionary[Elemental.State, PackedStringArray] = {}
 
-const TILE_STATES: Dictionary[Terrain.TileState, String] = {
-	Terrain.TileState.BURNING: "flame",
-	Terrain.TileState.FROZEN: "ice",
-	Terrain.TileState.COVER: NONE + "an entrenchment is a shape dug in the ground",
-	Terrain.TileState.SCORCHED: "ash",
-}
-
-const KINDS: Dictionary[Terrain.Kind, String] = {
-	Terrain.Kind.GRASS: "green_plant",
-	Terrain.Kind.MUD: "mud",
-	Terrain.Kind.ROCK: "stone",
-	Terrain.Kind.TREE: "green_plant",
-	Terrain.Kind.WATER: "water",
-	Terrain.Kind.DIRT: "dirt",
-	Terrain.Kind.VOID: NONE + "a hole holds nothing",
-	Terrain.Kind.TALL_GRASS: "dry_plant",
-}
-
-const GASES: Dictionary[Gas.Kind, String] = {
-	Gas.Kind.STEAM: "steam",
-	Gas.Kind.SMOKE: "smoke",
-	Gas.Kind.POISON: "chlorine",
-	Gas.Kind.FROST: "frost",
-	Gas.Kind.OZONE: "ozone",
-	Gas.Kind.SULFUR: "sulfur_gas",
-	Gas.Kind.ESSENCE: "essence",
-	Gas.Kind.HEAT_HAZE: "atom_fire",  # free heat: what a melt or a shock gives off (#1427)
-}
+# The authored map, held so a reader per cell pays no path lookup. The dev tools edit and save this
+# same object (DevWidgets.save_over writes through to the owner of the path), so a live edit reaches
+# the next read.
+static var _authored: SubstanceMap = null
 
 
-# The substance id an entry names, or "" for a NONE or PENDING line (or no entry).
-static func id_of(entry: String) -> String:
-	if entry == "" or entry.begins_with(NONE) or entry.begins_with(PENDING):
-		return ""
-	return entry
+static func authored() -> SubstanceMap:
+	if _authored == null:
+		_authored = load(PATH) as SubstanceMap
+		if _authored == null:
+			push_error("SubstanceMap: %s did not load, so nothing on the board is made of anything" % PATH)
+			_authored = SubstanceMap.new()
+	return _authored
+
+
+static func refresh() -> void:
+	_authored = null
+
+
+func of_kind(kind: Terrain.Kind) -> Array[String]:
+	return _ids(grounds.get(kind, PackedStringArray()))
+
+
+func of_tile_state(state: Terrain.TileState) -> Array[String]:
+	return _ids(tile_states.get(state, PackedStringArray()))
+
+
+func of_gas(kind: Gas.Kind) -> Array[String]:
+	return _ids(gases.get(kind, PackedStringArray()))
+
+
+func of_state(state: Elemental.State) -> Array[String]:
+	return _ids(unit_states.get(state, PackedStringArray()))
 
 
 static func of_element(element: Elemental.Element) -> String:
-	return id_of(ELEMENTS.get(element, ""))
-
-
-static func of_state(state: Elemental.State) -> String:
-	return id_of(STATES.get(state, ""))
-
-
-static func of_tile_state(state: Terrain.TileState) -> String:
-	return id_of(TILE_STATES.get(state, ""))
-
-
-static func of_kind(kind: Terrain.Kind) -> String:
-	return id_of(KINDS.get(kind, ""))
-
-
-static func of_gas(kind: Gas.Kind) -> String:
-	return id_of(GASES.get(kind, ""))
+	return ELEMENTS.get(element, "")
 
 
 # The element a hit delivering this substance carries, or NONE.
 static func element_carried_by(substance_id: String) -> Elemental.Element:
 	for element: Elemental.Element in ELEMENTS:
-		if of_element(element) == substance_id:
+		if ELEMENTS[element] == substance_id:
 			return element
 	return CARRIED_AS_TOO.get(substance_id, Elemental.Element.NONE)
+
+
+static func _ids(row: PackedStringArray) -> Array[String]:
+	var out: Array[String] = []
+	out.assign(Array(row))
+	return out
