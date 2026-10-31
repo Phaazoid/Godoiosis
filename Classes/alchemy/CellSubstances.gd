@@ -7,6 +7,10 @@ extends Object
 # that can. Every caller asks fizzle_reason with a POSITION -- the menu row, the queue gate, the
 # validator (through the resolve), the resolver, the AI and the Play API -- one predicate, many cells.
 #
+# What each ground, tile state, gas and unit state holds is SubstanceMap's AUTHORED rows (#1532).
+# They feed presence only: Materia's empowerment rules are their own, a declared second reading
+# (dev ruling 2026-10-30), so authoring a source changes what a carving can draw on, not its +1.
+#
 # Materia's shape: static, the board passed in, read through BoardContext METHODS only (a stub board
 # carries a null grid and a null state store), and its "stand by your source" footprint, Materia.REACH.
 #
@@ -29,10 +33,6 @@ const PLENTY := 1000000   # more than any recipe asks
 # complex to Break or Bind, so a grass field holds no water for a cast to draw on.
 const LENDS_NOTHING: Array[String] = ["green_plant", "dry_plant"]
 
-# Ground that grows something stands on dirt too -- a DECLARED default until the mineralogy pass says
-# what each ground sits on (#1315), so Rock Throw's salt keeps working wherever it works today.
-const ON_DIRT: Array[Terrain.Kind] = [Terrain.Kind.GRASS, Terrain.Kind.TALL_GRASS, Terrain.Kind.TREE]
-
 # A compound's parts, by formula text, for the shared catalog only -- resolving a part scans the whole
 # catalog, and the AI asks this per origin.
 static var _parts_memo: Dictionary = {}
@@ -45,21 +45,24 @@ static var _parts_memo: Dictionary = {}
 # Deduped, in that order; a substance found twice keeps the larger amount.
 #
 # `caster` is counted whatever the scan finds: the body handed in is the one whose conduits count, and
-# a pass hands its copy.
+# a pass hands its copy. `map` is what each thing is made of, the authored one unless a caller (a
+# test's own chemistry, like `catalog`) hands another.
 static func available_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
-		catalog: Dictionary = {}, hypo: Dictionary = {}) -> Dictionary[String, int]:
+		catalog: Dictionary = {}, hypo: Dictionary = {}, map: SubstanceMap = null) -> Dictionary[String, int]:
 	var shared := catalog.is_empty()
 	if shared:
 		catalog = SubstanceCatalog.get_all()
+	if map == null:
+		map = SubstanceMap.authored()
 	var found: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
 		_add(found, id, AIR)
 	if board != null:
 		for near: Vector2i in GridUtils.cells_within_manhattan_range(cell, Materia.REACH):
-			_add_cell(found, near, board, hypo)
+			_add_cell(found, near, board, hypo, map)
 	if caster != null:
 		for state: Elemental.State in caster.element_states:
-			_add(found, SubstanceMap.of_state(state), PLENTY)
+			_add_all(found, map.of_state(state), PLENTY)
 		# What the caster carries in a conduit (#1312) -- the carrier's alone, never a neighbour's.
 		for item: Item in caster.inventory:
 			var conduit := item as ConduitData
@@ -90,27 +93,26 @@ static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContex
 
 
 # Everything here is a real source, so all of it is PLENTY.
-static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext, hypo: Dictionary) -> void:
+static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext, hypo: Dictionary,
+		map: SubstanceMap) -> void:
 	var kind := board.terrain_kind_at(cell)
 	# Water is offered only as OPEN water (BoardContext.is_open_water): ice is a floor, not a well, so
 	# frozen water offers its ice, through the tile state below, and not its water.
 	if kind != Terrain.Kind.WATER:
-		_add(found, SubstanceMap.of_kind(kind), PLENTY)
+		_add_all(found, map.of_kind(kind), PLENTY)
 	if board.is_open_water(cell):
-		_add(found, SubstanceMap.of_kind(Terrain.Kind.WATER), PLENTY)
-	if ON_DIRT.has(kind):
-		_add(found, SubstanceMap.of_kind(Terrain.Kind.DIRT), PLENTY)
+		_add_all(found, map.of_kind(Terrain.Kind.WATER), PLENTY)
 	for state: Terrain.TileState in board.tile_states_at(cell):
-		_add(found, SubstanceMap.of_tile_state(state), PLENTY)
+		_add_all(found, map.of_tile_state(state), PLENTY)
 	for gas: Gas.Kind in Gas.kinds_in(board.gas_at(cell)):
-		_add(found, SubstanceMap.of_gas(gas), PLENTY)
+		_add_all(found, map.of_gas(gas), PLENTY)
 	# A lit prop is a fire, made of what a burning tile is.
 	if board.prop_lit_at(cell):
-		_add(found, SubstanceMap.of_tile_state(Terrain.TileState.BURNING), PLENTY)
+		_add_all(found, map.of_tile_state(Terrain.TileState.BURNING), PLENTY)
 	var unit := PlanResolver.unit_threaded_at(cell, board, hypo)
 	if unit != null:
 		for state: Elemental.State in PlanResolver.projected_states(unit, hypo):
-			_add(found, SubstanceMap.of_state(state), PLENTY)
+			_add_all(found, map.of_state(state), PLENTY)
 
 
 # The substances a compound is mixed from (`dirt` is `E2 + AE`: salt and ash). A molecule has none,
@@ -135,3 +137,9 @@ static func _add(found: Dictionary[String, int], id: String, amount: int) -> boo
 		return false
 	found[id] = amount
 	return true
+
+
+# Every substance a SubstanceMap row names.
+static func _add_all(found: Dictionary[String, int], ids: Array[String], amount: int) -> void:
+	for id: String in ids:
+		_add(found, id, amount)

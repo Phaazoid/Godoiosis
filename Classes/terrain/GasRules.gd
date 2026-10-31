@@ -38,7 +38,7 @@ const FOLDER := "res://Resources/GasRules/"
 
 # How this gas moves the air's reading on the cell it lies on (#1324): substance id -> percentage
 # points PER LEVEL, negative to lower. WeatherRules.air's shape; BoardContext.air_at adds it over the
-# board's reading. The one answer to what a gas does to the air -- SubstanceMap.GASES says what the gas
+# board's reading. The one answer to what a gas does to the air -- SubstanceMap's gas row says what the gas
 # IS, for presence, and a formula cannot say what a gas has taken away. A missing key moves nothing.
 @export var air: Dictionary[String, int] = {}
 

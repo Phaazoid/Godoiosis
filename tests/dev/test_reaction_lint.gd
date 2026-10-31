@@ -33,9 +33,28 @@ func _sub(formula: String) -> Substance:
 	return s
 
 
-# Ids the real SubstanceMap names, so the consistency rule has something to find.
+# The ids the fixture's map names, so the consistency rule has something to find.
 func _catalog() -> Dictionary:
 	return {"flame": _sub("F2"), "water": _sub("W2"), "steam": _sub("FW")}
+
+
+# The teeth cases' own rows (#1532), so none of them reads what the authored map says a thing is.
+# Cover holds nothing; Burning names two substances.
+func _map() -> SubstanceMap:
+	var map := SubstanceMap.new()
+	map.tile_states = {
+		Terrain.TileState.BURNING: PackedStringArray(["flame", "atom_fire"]),
+		Terrain.TileState.COVER: PackedStringArray(),
+	}
+	map.gases = {
+		Gas.Kind.STEAM: PackedStringArray(["steam"]),
+		Gas.Kind.SMOKE: PackedStringArray(["smoke"]),
+	}
+	map.unit_states = {
+		Elemental.State.WET: PackedStringArray(["water"]),
+		Elemental.State.SMOKED: PackedStringArray(["smoke"]),
+	}
+	return map
 
 
 func _elemental(equation: String, element := Elemental.Element.NONE) -> ElementalReaction:
@@ -53,11 +72,11 @@ func _severities(findings: Array[Dictionary]) -> Array[int]:
 
 
 func test_a_balanced_equation_is_clean() -> void:
-	assert_array(ReactionLint.check(_elemental("F2 + W2 -> 2FW"), _catalog())).is_empty()
+	assert_array(ReactionLint.check(_elemental("F2 + W2 -> 2FW"), _catalog(), _map())).is_empty()
 
 
 func test_an_unbalanced_equation_blocks_and_shows_both_sides() -> void:
-	var found := ReactionLint.check(_elemental("F2 + W2 -> FW"), _catalog())
+	var found := ReactionLint.check(_elemental("F2 + W2 -> FW"), _catalog(), _map())
 	assert_array(_severities(found)).contains([ReactionLint.Severity.BLOCKS])
 	var text: String = found[0]["text"]
 	assert_str(text).contains("unbalanced")
@@ -66,25 +85,25 @@ func test_an_unbalanced_equation_blocks_and_shows_both_sides() -> void:
 
 
 func test_an_empty_equation_is_left_to_the_ledger() -> void:
-	assert_array(ReactionLint.check(_elemental(""), _catalog())).is_empty()
-	assert_array(ReactionLint.check(null, _catalog())).is_empty()
+	assert_array(ReactionLint.check(_elemental(""), _catalog(), _map())).is_empty()
+	assert_array(ReactionLint.check(null, _catalog(), _map())).is_empty()
 
 
 func test_an_equation_needs_exactly_one_arrow() -> void:
 	for equation: String in ["F2 + W2", "F2 -> W2 -> FW"]:
-		var found := ReactionLint.check(_elemental(equation), _catalog())
+		var found := ReactionLint.check(_elemental(equation), _catalog(), _map())
 		assert_array(_severities(found)).contains([ReactionLint.Severity.BLOCKS])
 
 
 func test_a_term_naming_nothing_blocks() -> void:
-	var found := ReactionLint.check(_elemental("F2 + phlogiston -> 2FW"), _catalog())
+	var found := ReactionLint.check(_elemental("F2 + phlogiston -> 2FW"), _catalog(), _map())
 	assert_array(_severities(found)).contains([ReactionLint.Severity.BLOCKS])
 	assert_str(found[0]["text"]).contains("phlogiston")
 
 
 func test_inputs_that_leave_out_the_incoming_element_degrade() -> void:
 	# A FIRE reaction whose equation never mentions flame is about some other reaction.
-	var found := ReactionLint.check(_elemental("W2 -> W2", Elemental.Element.FIRE), _catalog())
+	var found := ReactionLint.check(_elemental("W2 -> W2", Elemental.Element.FIRE), _catalog(), _map())
 	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
 	assert_str(found[0]["text"]).contains("flame")
 
@@ -94,7 +113,7 @@ func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 	r.incoming_element = Elemental.Element.FIRE
 	r.gases = {Gas.Kind.STEAM: Gas.Level.MEDIUM}
 	r.equation = "F2 + W2 -> F2 + W2"
-	var found := ReactionLint.check(r, _catalog())
+	var found := ReactionLint.check(r, _catalog(), _map())
 	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
 	assert_str(found[0]["text"]).contains("steam")
 
@@ -102,7 +121,7 @@ func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 func test_a_unit_reaction_whose_released_gas_is_missing_from_the_outputs_degrades() -> void:
 	var r := _elemental("F2 + W2 -> F2 + W2", Elemental.Element.FIRE)
 	r.gases = {Gas.Kind.STEAM: Gas.Level.THIN}
-	var found := ReactionLint.check(r, _catalog())
+	var found := ReactionLint.check(r, _catalog(), _map())
 	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
 	assert_str(found[0]["text"]).contains("steam")
 
@@ -112,24 +131,24 @@ func test_a_unit_reaction_whose_released_gas_is_missing_from_the_outputs_degrade
 func test_a_gas_the_equation_makes_is_unreleased_until_the_reaction_releases_it() -> void:
 	var made: Array[Gas.Kind] = [Gas.Kind.STEAM]
 	var r := _elemental("F2 + W2 -> 2FW", Elemental.Element.FIRE)
-	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_equal(made)
+	assert_array(ReactionLint.unreleased_gases(r, _catalog(), _map())).is_equal(made)
 	r.gases = {Gas.Kind.SMOKE: Gas.Level.THIN}
-	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_equal(made)
+	assert_array(ReactionLint.unreleased_gases(r, _catalog(), _map())).is_equal(made)
 	r.gases = {Gas.Kind.SMOKE: Gas.Level.THIN, Gas.Kind.STEAM: Gas.Level.THIN}
-	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_empty()
+	assert_array(ReactionLint.unreleased_gases(r, _catalog(), _map())).is_empty()
 
 	var t := TerrainReaction.new()
 	t.equation = "F2 + W2 -> 2FW"
-	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_equal(made)
+	assert_array(ReactionLint.unreleased_gases(t, _catalog(), _map())).is_equal(made)
 	t.gases = {Gas.Kind.STEAM: Gas.Level.NONE}   # a key at NONE releases nothing
-	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_equal(made)
+	assert_array(ReactionLint.unreleased_gases(t, _catalog(), _map())).is_equal(made)
 	t.gases = {Gas.Kind.STEAM: Gas.Level.MEDIUM}
-	assert_array(ReactionLint.unreleased_gases(t, _catalog())).is_empty()
+	assert_array(ReactionLint.unreleased_gases(t, _catalog(), _map())).is_empty()
 
 
 func test_a_gas_on_both_sides_is_not_made() -> void:
 	var r := _elemental("FW + W2 -> FW + W2", Elemental.Element.WATER)
-	assert_array(ReactionLint.unreleased_gases(r, _catalog())).is_empty()
+	assert_array(ReactionLint.unreleased_gases(r, _catalog(), _map())).is_empty()
 
 
 # The state half (#1423): water a unit reaction makes is Wet it owes, until it applies it. Water on
@@ -137,16 +156,16 @@ func test_a_gas_on_both_sides_is_not_made() -> void:
 func test_a_state_the_equation_leaves_on_the_body_is_unapplied_until_the_reaction_applies_it() -> void:
 	var owed: Array[Elemental.State] = [Elemental.State.WET]
 	var r := _elemental("2FW -> F2 + W2", Elemental.Element.FIRE)
-	assert_array(ReactionLint.unapplied_states(r, _catalog())).is_equal(owed)
+	assert_array(ReactionLint.unapplied_states(r, _catalog(), _map())).is_equal(owed)
 	r.add_states.assign([Elemental.State.WET])
-	assert_array(ReactionLint.unapplied_states(r, _catalog())).is_empty()
+	assert_array(ReactionLint.unapplied_states(r, _catalog(), _map())).is_empty()
 
 	var kept := _elemental("F2 + W2 -> F2 + W2", Elemental.Element.FIRE)
-	assert_array(ReactionLint.unapplied_states(kept, _catalog())).is_empty()
+	assert_array(ReactionLint.unapplied_states(kept, _catalog(), _map())).is_empty()
 
 	var t := TerrainReaction.new()
 	t.equation = "2FW -> F2 + W2"
-	assert_array(ReactionLint.unapplied_states(t, _catalog())).is_empty()
+	assert_array(ReactionLint.unapplied_states(t, _catalog(), _map())).is_empty()
 
 
 # Smoke is both a gas and the Smoked state, so a reaction that releases it has accounted for it.
@@ -155,17 +174,36 @@ func test_a_substance_released_as_gas_is_not_owed_as_a_state() -> void:
 	catalog["smoke"] = _sub("AE2")
 	var r := _elemental("F2 -> smoke", Elemental.Element.FIRE)
 	var owed: Array[Elemental.State] = [Elemental.State.SMOKED]
-	assert_array(ReactionLint.unapplied_states(r, catalog)).is_equal(owed)
+	assert_array(ReactionLint.unapplied_states(r, catalog, _map())).is_equal(owed)
 	r.gases = {Gas.Kind.SMOKE: Gas.Level.THIN}
-	assert_array(ReactionLint.unapplied_states(r, catalog)).is_empty()
+	assert_array(ReactionLint.unapplied_states(r, catalog, _map())).is_empty()
 
 
 func test_a_map_entry_with_no_substance_is_skipped_rather_than_faulted() -> void:
-	# COVER is a shape dug in the ground (a NONE line), so a reaction on it cannot be held to naming one.
+	# COVER is a shape dug in the ground (an empty row), so a reaction on it cannot be held to naming one.
 	var r := TerrainReaction.new()
 	r.required_tile_state = Terrain.TileState.COVER
 	r.equation = "W2 -> W2"
-	assert_array(ReactionLint.check(r, _catalog())).is_empty()
+	assert_array(ReactionLint.check(r, _catalog(), _map())).is_empty()
+
+
+# A row naming several substances is satisfied by ANY one of them (dev ruling 2026-10-30, #1532): the
+# fixture's Burning is flame and heat, and an ignition that makes flame is about Burning.
+func test_naming_one_substance_of_a_row_is_enough() -> void:
+	var r := TerrainReaction.new()
+	r.add_tile_states.assign([Terrain.TileState.BURNING])
+	r.equation = "F2 + W2 -> F2 + W2"
+	assert_array(ReactionLint.check(r, _catalog(), _map())).is_empty()
+
+
+# ...and naming none of them names every one in the finding, so the fix is in the text.
+func test_naming_none_of_a_row_degrades_and_lists_them_all() -> void:
+	var r := TerrainReaction.new()
+	r.add_tile_states.assign([Terrain.TileState.BURNING])
+	r.equation = "W2 -> W2"
+	var found := ReactionLint.check(r, _catalog(), _map())
+	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
+	assert_str(found[0]["text"]).contains("flame or atom_fire")
 
 
 func _shipped() -> Array[Resource]:
@@ -245,5 +283,5 @@ func test_every_state_an_equation_leaves_on_a_body_is_applied() -> void:
 	for reaction: Resource in _shipped():
 		for state: Elemental.State in ReactionLint.unapplied_states(reaction):
 			unapplied.append("%s makes %s and does not apply %s" % [reaction.resource_path,
-					SubstanceMap.of_state(state), Elemental.state_display_name(state)])
+					SubstanceMap.authored().of_state(state), Elemental.state_display_name(state)])
 	assert_array(unapplied).is_empty()

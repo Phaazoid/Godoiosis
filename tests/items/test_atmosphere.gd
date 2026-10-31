@@ -287,23 +287,27 @@ func test_some_gas_raises_the_air_and_some_lowers_it() -> void:
 	assert_bool(lowers).override_failure_message("no gas lowers the air, so the subtracting half is unchecked").is_true()
 
 
-# A gas MADE of an ambient substance (SubstanceMap.GASES, what it is) raises that substance where it
+# A gas MADE of an ambient substance (its SubstanceMap row, what it is) raises that substance where it
 # lies, and touches nobody (#1427): heat haze is free heat, and released heat moves damage, never
 # presence (Phaazoid@, 2026-10-14) -- no state, no damage, nothing held while standing.
 func test_a_gas_made_of_an_ambient_substance_raises_it_and_touches_nobody() -> void:
 	var found := 0
 	for kind: Gas.Kind in Gas.Kind.values():
-		var id := SubstanceMap.of_gas(kind)
-		if not Atmosphere.SUBSTANCES.has(id):
+		var ambient: Array[String] = []
+		for id: String in SubstanceMap.authored().of_gas(kind):
+			if Atmosphere.SUBSTANCES.has(id):
+				ambient.append(id)
+		if ambient.is_empty():
 			continue
 		found += 1
 		var rules := GasRules.for_kind(kind)
 		assert_object(rules).override_failure_message("%s is %s, which is in the air, and has no rules to raise it"
-				% [Gas.name_of(kind), id]).is_not_null()
+				% [Gas.name_of(kind), ambient]).is_not_null()
 		if rules == null:
 			continue
-		assert_int(int(rules.air.get(id, 0))).override_failure_message(
-				"%s is %s and does not raise it where it lies" % [Gas.name_of(kind), id]).is_greater(0)
+		for id: String in ambient:
+			assert_int(int(rules.air.get(id, 0))).override_failure_message(
+					"%s is %s and does not raise it where it lies" % [Gas.name_of(kind), id]).is_greater(0)
 		assert_int(rules.state).override_failure_message("%s gives a state" % Gas.name_of(kind)).is_equal(Elemental.State.NONE)
 		assert_dict(rules.damage).override_failure_message("%s deals damage" % Gas.name_of(kind)).is_empty()
 		assert_bool(rules.while_standing).override_failure_message("%s holds a unit standing in it"

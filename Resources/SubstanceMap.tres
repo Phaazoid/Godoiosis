@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="SubstanceMap" format=3 uid="uid://bxitatgs0uibv"]
+
+[ext_resource type="Script" uid="uid://bnnyjfx3y8266" path="res://Classes/alchemy/SubstanceMap.gd" id="1_fw2p7"]
+
+[resource]
+script = ExtResource("1_fw2p7")
+grounds = Dictionary[int, PackedStringArray]({
+1: PackedStringArray("green_plant", "dirt"),
+2: PackedStringArray("mud"),
+3: PackedStringArray("stone"),
+4: PackedStringArray("green_plant", "dirt"),
+5: PackedStringArray("water"),
+6: PackedStringArray("dirt"),
+7: PackedStringArray(),
+8: PackedStringArray("dry_plant", "dirt")
+})
+tile_states = Dictionary[int, PackedStringArray]({
+1: PackedStringArray("flame", "atom_fire"),
+2: PackedStringArray("ice"),
+3: PackedStringArray(),
+5: PackedStringArray("ash")
+})
+gases = Dictionary[int, PackedStringArray]({
+0: PackedStringArray("steam"),
+1: PackedStringArray("smoke"),
+2: PackedStringArray("chlorine"),
+3: PackedStringArray("frost"),
+4: PackedStringArray("ozone"),
+5: PackedStringArray("sulfur_gas"),
+6: PackedStringArray("essence"),
+7: PackedStringArray("atom_fire")
+})
+unit_states = Dictionary[int, PackedStringArray]({
+1: PackedStringArray("water"),
+2: PackedStringArray("ice"),
+3: PackedStringArray("smoke")
+})
