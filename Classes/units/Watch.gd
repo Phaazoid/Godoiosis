@@ -26,6 +26,9 @@ var footprint: Array[Vector2i] = []  # the watched cells, frozen -- its paths ba
 # footprint in order, which is what a watch saved before #1057 was: every watch is single-target
 # (#1040), so a saved line reads back as the line it always was, nearest first.
 var path_lengths: Array[int] = []
+# Where the shot lays its tile effect (#894), frozen with the footprint. Read only for an attack that
+# lays on a shape of its own (AttackData.lays_effect_apart); any other lays where the shot strikes.
+var effect_cells: Array[Vector2i] = []
 var attack: AttackData = null        # what fires; stamped at declare, never re-picked
 var spent := false                   # absorbed its one trigger
 # Broken by a blow (#810, dev 2026-09-09): the watcher was hit, so the watch is off. A SECOND fact
@@ -46,21 +49,24 @@ static var _next_sequence := 1
 # A watch with no arm stamp: the resolver's projection of an order that is still only queued.
 # Its position in the pass's list is its order, so it needs no sequence of its own.
 static func make(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
-		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = []) -> Watch:
+		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = [],
+		effect: Array[Vector2i] = []) -> Watch:
 	var w := Watch.new()
 	w.watcher = watching_unit
 	w.anchor_cell = origin
 	w.aim_cell = aim
 	w.footprint = watched_cells.duplicate()
 	w.path_lengths = lengths.duplicate()
+	w.effect_cells = effect.duplicate()
 	w.attack = fired_attack
 	return w
 
 
 # A watch that is actually going live on a unit, stamped with its arm order.
 static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
-		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = []) -> Watch:
-	var w := make(watching_unit, origin, aim, watched_cells, fired_attack, lengths)
+		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = [],
+		effect: Array[Vector2i] = []) -> Watch:
+	var w := make(watching_unit, origin, aim, watched_cells, fired_attack, lengths, effect)
 	w.sequence = _next_sequence
 	_next_sequence += 1
 	return w
@@ -69,7 +75,7 @@ static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 # The resolver's working copy for one pass. The pass marks copies spent as they fire; the live
 # watch is spent by EXECUTION, once, off the outcome that used it (GuardWard's rule).
 func copy() -> Watch:
-	var w := make(watcher, anchor_cell, aim_cell, footprint, attack, path_lengths)
+	var w := make(watcher, anchor_cell, aim_cell, footprint, attack, path_lengths, effect_cells)
 	w.spent = spent
 	w.cancelled = cancelled
 	w.sequence = sequence

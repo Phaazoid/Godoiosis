@@ -1104,3 +1104,38 @@ func test_water_a_walk_shot_melted_catches_the_walker() -> void:
 		assert_bool(caught.is_downed()).override_failure_message(
 				"the %s host's walker is standing in the water" % host).is_true()
 	_assert_hosts_agree(ran)
+
+
+# A FIRE WALL (#894): fire an attack lays on dirt, which no reaction lights, plays the same in both
+# hosts -- and so does its CLOCK, which no tile line compares: the attack's own life, since the
+# ground gives fire none. Its life is authored off the default so the capture has to carry it.
+const DIRT_ATLAS := Vector2i(4, 0)   # TestTiles' DIRT: no ignition reaction keys on it, so it is not fuel
+
+func test_a_fire_wall_on_ground_that_is_not_fuel() -> void:
+	var caster_at := Vector2i(1, 1)
+	var wall: Array[Vector2i] = [Vector2i(2, 1), Vector2i(3, 1), Vector2i(4, 1)]
+	var path := _author("fire_wall", func() -> void:
+		for cell in wall:
+			game.grid.paint(cell, GRASS_SOURCE, DIRT_ATLAS)
+		var caster := _spawn(PLAYER, caster_at)
+		var lay := _blow(1)
+		P.line(lay, wall.size())
+		lay.targets = EquippableData.TargetMode.MAP
+		lay.tile_effect = Elemental.Element.FIRE
+		lay.tile_effect_turns = 4
+		_arm(caster, lay))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": caster_at, "at": wall[0]}])
+
+	var caster: Unit = ran.game[caster_at]
+	var life := caster.get_fired_attack().tile_effect_turns
+	assert_int(life).override_failure_message("fixture: the save dropped the attack's life").is_equal(4)
+	for cell in wall:
+		var laid := _laid_at(ran.plan, caster, cell)
+		assert_bool(laid != null and laid.states_added.has(Terrain.TileState.BURNING)).override_failure_message(
+				"the plan laid no fire on the dirt at %s" % cell).is_true()
+		assert_int(game.terrain_states.turns_remaining(cell, Terrain.TileState.BURNING)).override_failure_message(
+				"the game's wall at %s is not on the attack's life" % cell).is_equal(life)
+		assert_int(_sess.terrain_states.turns_remaining(cell, Terrain.TileState.BURNING)).override_failure_message(
+				"the headless wall at %s is not on the attack's life" % cell).is_equal(life)
+	_assert_hosts_agree(ran)

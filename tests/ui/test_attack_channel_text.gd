@@ -1,5 +1,5 @@
 # AttackChannelText.ally_line (#1083): when an attack says whether it hits allies, and which word it
-# uses. Plus the card's gas line (#508) at the bottom. Pure, no scene: the rule is a function of the attack's own footprint and targets. The two
+# uses. Plus the card's gas line (#508) and tile-effect line (#894) at the bottom. Pure, no scene: the rule is a function of the attack's own footprint and targets. The two
 # surfaces that draw it are pinned where they draw -- the battle ring in test_menu_catalogue_rows, the
 # rune card in test_rune_detail_card.
 #
@@ -94,3 +94,33 @@ func test_the_cards_list_names_the_gas_an_attack_leaves() -> void:
 	assert_bool(named).override_failure_message("the card never says the attack leaves steam").is_true()
 	for line: String in AttackChannelText.lines(_attack(null), 0, none, false, false):
 		assert_str(line).not_contains(steam)
+
+
+# An attack that lays a tile effect names it, its life and, when it has one, its own shape (#894). Asked
+# by the element's name, the number and the shape's name rather than the sentence, which is the dev's.
+func test_the_cards_list_names_the_effect_an_attack_lays_and_where() -> void:
+	var none: Array[Elemental.Element] = []
+	var effect: Elemental.Element = AttackData.TILE_EFFECTS.keys()[0]
+	var element := Elemental.display_name(effect).to_lower()
+	var layer := _attack(null)
+	layer.tile_effect = effect
+	layer.tile_effect_turns = 4
+	var said := _line_naming(AttackChannelText.lines(layer, 0, none, false, false), element)
+	assert_str(said).override_failure_message("the card never says the attack lays %s" % element).is_not_empty()
+	assert_str(said).contains("4")
+
+	var wall := _row()
+	wall.display_name = "Probe Wall"
+	layer.tile_effect_shape = wall
+	said = _line_naming(AttackChannelText.lines(layer, 0, none, false, false), element)
+	assert_str(said).override_failure_message("a shaped effect never names its shape").contains("Probe Wall")
+
+	for line: String in AttackChannelText.lines(_attack(null), 0, none, false, false):
+		assert_str(line.to_lower()).not_contains(element)
+
+
+func _line_naming(lines: Array[String], word: String) -> String:
+	for line in lines:
+		if line.to_lower().contains(word):
+			return line
+	return ""

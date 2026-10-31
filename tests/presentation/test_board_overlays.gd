@@ -633,14 +633,34 @@ func test_terrain_state_sorts_under_the_plan_exactly_as_2d_orders_it() -> void:
 	# reds and the sorts stay free to be retuned.
 	var terrain_under_arrows_in_2d: bool = OverlayManager.TERRAIN_Z_INDEX < MoveAction.ARROW_BASE_Z_INDEX
 	var terrain: int = BoardOverlays.LAYERS[BoardOverlays.Layer.TERRAIN]["sort"]
-	var preview: int = BoardOverlays.LAYERS[BoardOverlays.Layer.TERRAIN_PREVIEW]["sort"]
 	var arrows: int = BoardOverlays.LAYERS[BoardOverlays.Layer.PATH_ARROWS]["sort"]
 	assert_bool(terrain_under_arrows_in_2d).override_failure_message(
 			"the 2D order changed; decide the 3D order deliberately rather than following this test").is_true()
 	assert_bool(terrain < arrows).override_failure_message(
 			"terrain state (%d) sorts at or above path arrows (%d) — the 3D contradicts the 2D" % [terrain, arrows]).is_true()
-	assert_int(preview).override_failure_message(
-			"the preview channel drifted from the live one").is_equal(terrain)
+
+
+func test_the_ground_ghost_sorts_over_the_aim_fill_and_under_the_arrows() -> void:
+	# #894: an open aim ghosts what it would leave, and a fire laid where it hits lands on the tiles the
+	# aim fill covers, so the ghost left the live layer for a slot over the fill and under the arrows --
+	# the 2D's order (test_aim_ground_ghost pins that side). A RELATIONSHIP, in priority AND in plane:
+	# an equal plane with any layer it can share a cell with is a z-fight.
+	var layers := BoardOverlays.LAYERS
+	var ghost: Dictionary = layers[BoardOverlays.Layer.TERRAIN_PREVIEW]
+	var ghost_plane: float = ghost.get("lift_sort", ghost["sort"])
+	for under: BoardOverlays.Layer in [BoardOverlays.Layer.AIM, BoardOverlays.Layer.PAYLOAD]:
+		var spec: Dictionary = layers[under]
+		assert_bool(int(ghost["sort"]) > int(spec["sort"])).override_failure_message(
+				"the ghost does not out-sort aim layer %d" % under).is_true()
+		assert_bool(ghost_plane > float(spec.get("lift_sort", spec["sort"]))).override_failure_message(
+				"the ghost lies at or under aim layer %d's plane" % under).is_true()
+	for over: BoardOverlays.Layer in [BoardOverlays.Layer.PATH_ARROWS, BoardOverlays.Layer.KNOCKBACK]:
+		var spec: Dictionary = layers[over]
+		assert_bool(int(ghost["sort"]) < int(spec["sort"])).override_failure_message(
+				"the ghost sorts at or over arrow layer %d" % over).is_true()
+	var pick: Dictionary = layers[BoardOverlays.Layer.TARGET_PICK]
+	assert_bool(ghost_plane != float(pick.get("lift_sort", pick["sort"]))).override_failure_message(
+			"the ghost shares the target-pick mark's plane").is_true()
 
 
 func test_the_zone_layers_copy_the_2d_zone_colors() -> void:

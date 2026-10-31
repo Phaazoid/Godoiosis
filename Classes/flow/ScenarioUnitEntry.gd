@@ -93,6 +93,9 @@ class_name ScenarioUnitEntry
 # Where each of the watch's paths ends in watch_cells (#1057) -- Watch.path_lengths saved. Absent in
 # every save before it, which reads as ONE path: the line that save always held, single-target.
 @export var watch_path_lengths: Array[int] = []
+# Where its tile effect lands (#894) -- Watch.effect_cells saved. Empty in every save before it, which
+# is right: no attack laid an effect on a shape of its own.
+@export var watch_effect_cells: Array[Vector2i] = []
 @export var watch_attack_index := -1
 @export var watch_spent := false
 @export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
@@ -205,6 +208,7 @@ func capture_unit_state(unit: Unit) -> void:
 	# a watch attack is not in get_selectable_attacks() at all and the find would never resolve.
 	watch_cells = []
 	watch_path_lengths = []
+	watch_effect_cells = []
 	watch_attack_index = -1
 	watch_spent = false
 	watch_cancelled = false
@@ -215,6 +219,7 @@ func capture_unit_state(unit: Unit) -> void:
 			watch_aim = unit.watch.aim_cell
 			watch_cells = unit.watch.footprint.duplicate()
 			watch_path_lengths = unit.watch.path_lengths.duplicate()
+			watch_effect_cells = unit.watch.effect_cells.duplicate()
 			watch_spent = unit.watch.spent
 			watch_cancelled = unit.watch.cancelled
 
@@ -311,7 +316,7 @@ func apply_unit_state(unit: Unit) -> void:
 		if watch_attack_index >= 0 and watch_attack_index < watchable.size():
 			unit.arm_watch(watch_anchor, watch_aim, watch_cells.duplicate(),
 					watchable[watch_attack_index], watch_spent, watch_cancelled,
-					watch_path_lengths.duplicate())
+					watch_path_lengths.duplicate(), watch_effect_cells.duplicate())
 
 	if current_hp >= 0:
 		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a

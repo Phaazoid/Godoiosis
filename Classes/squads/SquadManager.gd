@@ -1084,6 +1084,7 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 				watch_order.resolved_anchor = Vector2i.ZERO
 				watch_order.resolved_footprint = []
 				watch_order.resolved_path_lengths = []
+				watch_order.resolved_effect = []
 				watch_order.resolved_fizzles = false
 				continue
 			var watch_origin := PlanResolver.projected_position(watch_order.actor, hypo)
@@ -1095,10 +1096,11 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 					board, PlanResolver.state_of(watch_order.actor, hypo), hypo) != ""
 			watch_order.resolved_footprint = AttackShape.joined_cells(watched)
 			watch_order.resolved_path_lengths = AttackShape.joined_lengths(watched)
+			watch_order.resolved_effect = watch_order.effect_cells_from(watch_origin, board)
 			if not watch_order.resolved_footprint.is_empty():
 				var armed := Watch.make(watch_order.actor, watch_origin, watch_order.target_cell,
 						watch_order.resolved_footprint, watch_order.fired_attack,
-						watch_order.resolved_path_lengths)
+						watch_order.resolved_path_lengths, watch_order.resolved_effect)
 				plan.watches.append(armed)
 				watch_orders[armed] = watch_order
 				armed_this_pass.append(armed)

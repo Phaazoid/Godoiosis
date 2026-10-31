@@ -1,6 +1,7 @@
 # #1444: "is this cell water a body is IN rather than ON" has ONE answer, BoardContext.is_open_water,
-# and the four readers that ask it -- the current, a water source, a carving's draw and a soak -- agree
-# with it on every cell the question forks on. A reader that keeps its own copy drifts here first.
+# and the readers that ask it -- the current, a water source, a carving's draw, a soak, and since #894
+# where a laid tile effect fizzles -- agree with it on every cell the question forks on. A reader that
+# keeps its own copy drifts here first.
 #
 # Kinds are AUTHORED per cell rather than painted (test_wets_in.gd's idiom) and FROZEN rides a real
 # TerrainStateManager. The probes sit apart, so CellSubstances' reach never meets a second one.
@@ -31,7 +32,7 @@ func _water() -> Substance:
 	return water
 
 
-func test_the_four_readers_agree_with_is_open_water() -> void:
+func test_the_readers_agree_with_is_open_water() -> void:
 	var states: TerrainStateManager = auto_free(TerrainStateManager.new())
 	add_child(states)
 	var freeze := ResolvedCellEffect.new()
@@ -50,6 +51,8 @@ func test_the_four_readers_agree_with_is_open_water() -> void:
 	map.grounds = { Terrain.Kind.WATER: PackedStringArray([water_id]) }
 	var catalog := { water_id: _water() }
 	var no_wet: Dictionary[Vector2i, bool] = {}
+	var laying := AttackData.new()
+	laying.tile_effect = Elemental.Element.FIRE
 	var expected := { OPEN: true, FROZEN: false, CHILLED_IN: true, DRY: false }
 	for cell: Vector2i in expected:
 		var open := board.is_open_water(cell)
@@ -61,6 +64,7 @@ func test_the_four_readers_agree_with_is_open_water() -> void:
 			"Materia.sources_at": Materia.sources_at(cell, board).has(Elemental.Element.WATER),
 			"CellSubstances.available_near": CellSubstances.available_near(cell, board, null, catalog, {}, map).has(water_id),
 			"RulesService.wets_in": RulesService.wets_in(cell, asker.state, board),
+			"PlanResolver._lay_tile_effect fizzles": PlanResolver._lay_tile_effect(cell, laying, board, null) == null,
 		}
 		for reader: String in answers:
 			assert_bool(bool(answers[reader]) == open).override_failure_message(

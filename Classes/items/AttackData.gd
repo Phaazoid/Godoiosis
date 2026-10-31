@@ -166,6 +166,32 @@ enum Kind { BLUNT, SLASH, PIERCE, FIRE, SHOCK, COLD, CORROSION, NONE }
 # since #1335 because a burning plant gives off steam AND smoke. Read through Gas.released.
 @export var gases: Dictionary[Gas.Kind, Gas.Level] = {}
 
+# AN ELEMENTAL TILE EFFECT (#894): the tile state this attack LAYS, whatever the ground would take of
+# its element -- fire laid on stone is a fire wall. A regular state once laid: fire laid on grass
+# burns and spreads as grass does. Like `gases`, it lands whatever `targets` says; it is refused on
+# open water and over a hole. NONE lays nothing; TILE_EFFECTS is which elements have one.
+@export var tile_effect: Elemental.Element = Elemental.Element.NONE
+# How many rounds the laid state lasts where its ground gives it no clock of its own. Ground that
+# does burns on ITS clock (TerrainStateManager.apply decides which runs).
+@export_range(1, 9) var tile_effect_turns: int = 2
+# WHERE the effect lands, apart from where the attack hits: a shared library shape, set down and cut
+# by this attack's own placement rules (Reach.get_effect_cells_from). Null = the tiles it struck.
+@export var tile_effect_shape: AttackShape = null
+
+# Which tile state each element's tile effect lays: the bridge from an attack's element to the ground,
+# named here where it is crossed (Terrain's header). One row until another element's effect is ruled.
+const TILE_EFFECTS: Dictionary[Elemental.Element, Terrain.TileState] = {
+	Elemental.Element.FIRE: Terrain.TileState.BURNING,
+}
+
+# The tile state this attack lays, or NONE.
+func tile_effect_state() -> Terrain.TileState:
+	return TILE_EFFECTS.get(tile_effect, Terrain.TileState.NONE)
+
+# Whether it lays its effect on a shape of its own, apart from the tiles it struck.
+func lays_effect_apart() -> bool:
+	return tile_effect_state() != Terrain.TileState.NONE and tile_effect_shape != null
+
 # What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
 # the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
 # field, WeaponInstance.effective_kind for the field with a mod's override composed on top.
@@ -365,6 +391,7 @@ static func property_sections() -> Array[Dictionary]:
 		# section right under it: what a hit does, then what it leaves behind.
 		{"title": "On hit", "fields": PackedStringArray(["heals", "deals_no_damage", "power", "damage_kind", "knockback", "sound"])},
 		{"title": "Payload", "fields": PackedStringArray(["payload", "payload_turns", "gases"])},
+		{"title": "Tile effect", "fields": PackedStringArray(["tile_effect", "tile_effect_turns", "tile_effect_shape"])},
 		{"title": "How it is used", "fields": PackedStringArray(["can_counter", "can_overwatch"])},
 		# LAST because it is the biggest: one picker plus every look row the element has, which for
 		# SHOCK is thirty-five. Placed above "How it is used" it would push two checkboxes off the
@@ -400,7 +427,9 @@ static func in_section(sections: Array[Dictionary], title: String, fields: Packe
 #   is_directional()     -- min_range and max_and_a_half reach nothing, being read only through the
 #                           ring (GridUtils.cells_within_blended_range), and a facing aim has none.
 #   no attack_shape      -- swing reaches nothing: Reach._place answers the anchor cell alone for a
-#                           null shape, and one cell has nothing to stop at.
+#                           null shape, and one cell has nothing to stop at -- unless a tile effect
+#                           has a shape of its own, which swing cuts like the hit's (#894).
+#   no tile effect       -- its life and its shape are read only through tile_effect_state().
 #   MELEE                -- Reach._vertical_rule_ok returns before either tolerance. arc_clearance
 #                           is deliberately NOT here: the lane trace reads it whatever the rule.
 #   deals_no_damage      -- both base_damage implementations return 0 before power or the blend.
@@ -422,8 +451,11 @@ func hidden_fields() -> PackedStringArray:
 	var hidden: PackedStringArray = []
 	if is_directional():
 		hidden.append_array(["min_range", "max_and_a_half"])
-	if attack_shape == null:
+	var lays := tile_effect_state() != Terrain.TileState.NONE
+	if attack_shape == null and not lays_effect_apart():
 		hidden.append("swing")
+	if not lays:
+		hidden.append_array(["tile_effect_turns", "tile_effect_shape"])
 	if vertical_rule == VerticalRule.MELEE:
 		hidden.append_array(["up_tolerance", "down_tolerance"])
 	if deals_no_damage:
@@ -479,5 +511,8 @@ static func property_tips() -> Dictionary:
 		"payload": "Another attack this one DROPS where it hits, which then goes off as a whole attack of its own: its own damage, element, shove and shape, with the thrower still the attacker.\nA unit attack drops one per unit it hits (a miss drops nothing). A tile attack drops one per tile it strikes, whether anyone is there or not.\nOn a unit it goes off where they LAND, after this hit's shove. A payload may carry a payload of its own, to any depth, but never back round to an attack already in the chain.",
 		"payload_turns": "Which way the payload's shape faces. On, it faces the way this attack was going. Off, it lands as drawn, top of the grid to board north.\nOnly asked of an attack with no shape of its own: a shaped attack always turns its payloads the way it was travelling.",
 		"gases": "The GAS this attack leaves on every tile it strikes, and how thick: thin, medium or thick per gas, added to what is already there and capped at thick. None leaves none of that gas.\nIt lands whatever Targets says, on empty tiles and occupied ones alike, but never where gas cannot be -- no ground, a hole, or a tile a unit could not stand on that is not water.",
+		"tile_effect": "An elemental effect this attack LAYS on the ground, whatever the ground would take -- Fire lays a fire even on stone or dirt. Once laid it is a regular one: fire on grass burns and spreads as grass does.\nIt lands whatever Targets says, but never on open water (a fire laid there fizzles, as does one on ice this same hit melts) or over a hole. None lays nothing.",
+		"tile_effect_turns": "How many rounds the laid effect lasts where the ground gives it no clock of its own -- stone, dirt, a firebreak. Ground that does (grass) burns on its own clock instead.",
+		"tile_effect_shape": "WHERE the effect lands, picked from the shared shape library, apart from where the attack hits. It is set down exactly as the attack's own shape is: on the attacker and turned to the aim, or on the aimed cell as drawn, and cut by walls and height by the same rules.\nNo shape = the tiles the attack struck.",
 		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it never counters and the AI never fires it. As a weapon's main, its Attack row stands the watch. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

@@ -530,12 +530,15 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 # question an aim's gather asks -- this is that gather with a different answer to who stands where.
 #
 # The sweep works on copies, so the armed watch is left alone -- re-arming it over the current would
-# let the arc grow the watched cells with every trigger.
+# let the arc grow the watched cells with every trigger. Its tile effect lands where the watch froze it
+# (#894), never re-placed, since the sweep walks paths and an effect shape is not one.
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
 	var paths := watch.paths()
 	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
 	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo,
 			PlanResolver.unit_threaded_at.bind(board, hypo), arrival)
+	if watch.attack.lays_effect_apart():
+		reach.effect = watch.effect_cells.duplicate()
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
@@ -1605,7 +1608,8 @@ class _Hypo:
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
 # hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->
-# BURNING), and may release gas; an attack that authors gas leaves it on every struck cell too (#508).
+# BURNING), and may release gas; an attack that authors gas leaves it on every struck cell too (#508),
+# and one that authors a tile effect lays it on its own effect tiles (#894, _lay_tile_effect).
 # A reaction on a UNIT releases its gas from _resolve_one instead (_release_reaction_gas, #1329).
 # Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect per cell
 # that changes. Empty when nothing does: no gas, and a unit-only attack, no element, or no reaction.
@@ -1630,7 +1634,9 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 		ground = elements
 	var fired := action.fired_attack
 	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
-	if elements.is_empty() and not leaves_gas:
+	# ...and its TILE EFFECT (#894), on tiles of its own (AttackAction.effect_cells), whatever Targets says.
+	var lays := fired != null and fired.tile_effect_state() != Terrain.TileState.NONE
+	if elements.is_empty() and not leaves_gas and not lays:
 		return effects
 	# What each struck tile's dispersal carries off, by where it lands (#1332). Every tile is read
 	# before anything moves, and landed only after the loop, so a cloud across a struck line shifts
@@ -1650,6 +1656,12 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	for cell in _current_cells(action):
 		if not struck.has(cell):
 			cells.append(cell)
+	var laid := {}
+	if lays:
+		for cell in action.effect_cells:
+			laid[cell] = true
+			if not cells.has(cell):
+				cells.append(cell)
 	for cell in cells:
 		var effect: ResolvedCellEffect = null
 		var gas_here := board.gas_at(cell)
@@ -1672,6 +1684,8 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 			effect.gas_added.clear()
 			if effect.states_added.is_empty() and effect.states_removed.is_empty() and not effect.gas_cleared:
 				effect = null
+		if laid.has(cell):
+			effect = _lay_tile_effect(cell, fired, board, effect)
 		if effect != null:
 			effect.cause = action
 			effects.append(effect)
@@ -1709,6 +1723,27 @@ static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardConte
 			break
 		pos += dir
 	return pos
+
+# An attack's TILE EFFECT on one of its effect tiles (#894), folded into `effect` (created if there was
+# none): the state it lays, with the attack's life for ground that gives none -- the store decides
+# which clock runs (TerrainStateManager.apply). Refused on OPEN WATER as this cell's own reactions
+# leave it, so fire laid where the same hit melts the ice fizzles with the rest (dev, 2026-10-30).
+# A hole never gets here: the effect tiles are trimmed to what has a surface (Reach.surfaced).
+static func _lay_tile_effect(cell: Vector2i, attack: AttackData, board: BoardContext,
+		effect: ResolvedCellEffect) -> ResolvedCellEffect:
+	var held := board.tile_states_at(cell)
+	if effect != null:
+		held = TerrainStateManager.fold(held, effect)
+	if Terrain.open_water_of(board.terrain_kind_at(cell), held):
+		return effect
+	var state := attack.tile_effect_state()
+	if effect == null:
+		effect = ResolvedCellEffect.new()
+		effect.cell = cell
+	if not effect.states_added.has(state):
+		effect.states_added.append(state)
+	effect.state_turns[state] = attack.tile_effect_turns
+	return effect
 
 # The cells a shock's CURRENT ran through (#1335): both ends of every link the volley stamped
 # (AttackAction.arc_links), each once, in link order. Empty on anything that carries no shock.
