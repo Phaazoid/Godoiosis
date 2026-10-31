@@ -1539,8 +1539,16 @@ func clear_hover_ghosts() -> void:
 # Burrow (#84) made a second previewable state real. Ephemeral: redrawn on plan change.
 # A {"cell", "gas": Gas.Kind} entry is a gas the pass leaves (#508), drawn with the kind's own puff;
 # a {"cell", "clears_gas"} entry is a cell an Air hit disperses (#1335).
+#
+# The ghost draws OVER the aim fill (#894): an open aim ghosts what it would leave, and a fire laid where
+# it hits lands on the very tiles the fill covers. So it takes the hover layer's z, and wins the tie by
+# tree order (IconOverlay follows HoverOverlay, and ArrowIconOverlay follows it, so arrows still win
+# theirs). Live terrain state stays at TERRAIN_Z_INDEX.
 func show_terrain_preview(deposits: Array) -> void:
 	clear_terrain_preview()
+	var ghost_z := TERRAIN_Z_INDEX
+	if hover_overlay is CanvasItem:
+		ghost_z = (hover_overlay as CanvasItem).z_index
 	for deposit in deposits:
 		var icon: Texture2D = null
 		if deposit.has("clears_gas"):
@@ -1557,7 +1565,7 @@ func show_terrain_preview(deposits: Array) -> void:
 		var sprite := Sprite2D.new()
 		sprite.texture = icon
 		sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
-		sprite.z_index = TERRAIN_Z_INDEX
+		sprite.z_index = ghost_z
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE
 		icon_overlay.add_child(sprite)
 		terrain_preview_sprites.append(sprite)

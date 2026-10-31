@@ -329,7 +329,11 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.
 	Layer.TERRAIN: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
-	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
+	# The GHOST leaves the live layer here (#894), over the aim fill (4) and under the arrows (6), as the
+	# 2D draws it: an open aim ghosts what it would leave, and a fire laid where it hits lands on the very
+	# tiles the fill covers. Its plane is 4.5 rather than 5 because a ghost can share a cell with a
+	# target-pick mark (5), and one plane is a z-fight; the priority ties that mark's, at another height.
+	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 5, "lift_sort": 4.5, "kind": Kind.SPRITE},
 	# A layer that hangs in the AIR rather than lying on the floor (the first; #1247's badges are the
 	# second, beside it at 15), so it sorts above every floor layer. It sat at 0 while nothing could overlap it; #325 then put a ring
 	# decal (3) directly under every crown, which drew straight over it. 15 is the top of

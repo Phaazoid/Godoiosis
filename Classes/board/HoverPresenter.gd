@@ -103,8 +103,10 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
 		# Off the map -- every mode draws nothing out there. A card is left alone: it describes the
 		# cell that was clicked, not the one under the pointer (#1105). An aim's forecast is about the
-		# cell under the pointer, so it does go (#929).
+		# cell under the pointer, so it does go (#929), and its ground ghosts with it (#894).
 		game.aim_forecast = null
+		if game.game_state == game.GameState.ATTACK_TARGETING:
+			game.preview_ground()
 		return
 
 	# Only IDLE produces squad icons. They're collected rather than drawn inline because that
@@ -391,6 +393,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 				_add_payloads(rows, preview_cells, travel, insets, victims)
 
 	game.aim_forecast = forecast
+	game.preview_ground()   # what it would leave on the ground, or the queued plan's when it forecasts nothing
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)

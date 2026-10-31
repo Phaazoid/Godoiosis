@@ -2508,6 +2508,16 @@ func previewed_plan() -> ResolvedPlan:
 		return aim_forecast
 	return squad_manager.resolved_plan_for(squad_manager.active_squad)
 
+# The ground ghosts (#50) of the plan above (#894): an open aim's while it forecasts, the queued plan's
+# again once it does not. The aim's hover draws through here, so the ghost and the health bars read one
+# plan; leaving the aim needs no call, because exit_current_mode's refresh_action_queue redraws the queue's.
+func preview_ground() -> void:
+	var plan := previewed_plan()
+	if plan == null:
+		overlay_manager.clear_terrain_preview()
+	else:
+		overlay_manager.show_terrain_preview(plan.pending_deposits())
+
 # The board next round is ruled on (#1332): the live one over the previewed plan's planned tiles (#1498),
 # so a queued push outlines from where it will leave the gas and a tile a queued hit lights spreads its
 # fire (#1430). Alt's outline (GasMirror) and the red tether (_member_links) both read it. While a pass

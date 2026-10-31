@@ -54,6 +54,10 @@ static func lines(attack: AttackData, knockback: int, elements: Array[Elemental.
 	if not Gas.released(attack.gases).is_empty():
 		out.append("Leaves %s where it hits" % Gas.released_names(attack.gases))
 
+	var laid := _tile_effect_line(attack)
+	if laid != "":
+		out.append(laid)
+
 	if can_overwatch:
 		out.append("Watch only — declared as a standing watch, never fired directly")
 	var allies := ally_line(attack, hits_allies)
@@ -92,6 +96,23 @@ static func range_text(attack: AttackData) -> String:
 	var span := "Range %d" % attack.max_range if attack.min_range == attack.max_range \
 		else "Range %d-%d" % [attack.min_range, attack.max_range]
 	return "%s, bevelled corners" % span if attack.max_and_a_half else span
+
+
+# The tile effect an attack lays (#894): what, where, and its life where the ground gives that state no
+# clock of its own (grass burns on its own clock). Read off the attack, since no mod composes it. The
+# closing clause is FIRE's, the one effect the table holds; a second effect words its own.
+static func _tile_effect_line(attack: AttackData) -> String:
+	if attack.tile_effect_state() == Terrain.TileState.NONE:
+		return ""
+	var where := "where it hits"
+	var shape := attack.tile_effect_shape
+	if shape != null:
+		var shape_name := shape.display_name if shape.display_name != "" \
+				else shape.resource_path.get_file().get_basename()
+		where = "in a %s" % shape_name if shape_name != "" else "in its own shape"
+	var turns := attack.tile_effect_turns
+	return "Leaves %s %s — %d round%s on ground that cannot burn" % [
+		Elemental.display_name(attack.tile_effect).to_lower(), where, turns, "" if turns == 1 else "s"]
 
 
 # An attack's name as a card prints it, its file's name standing in for one never given.
