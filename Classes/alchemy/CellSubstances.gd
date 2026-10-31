@@ -68,7 +68,27 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: UnitStat
 			var conduit := item as ConduitData
 			if conduit != null and conduit.substance != null:
 				_add(found, conduit.substance.id(), PLENTY)
-	# A compound lends its parts at its own amount; one whose amount rose is walked again.
+	_lend_parts(found, catalog, shared)
+	return found
+
+
+# What these substances make present: each of them, then every part they lend, in available_near's
+# order. The dev tools' readout of a SubstanceMap row, read through the same walk a cast is.
+static func present_from(ids: Array[String], catalog: Dictionary = {}) -> Array[String]:
+	var shared := catalog.is_empty()
+	if shared:
+		catalog = SubstanceCatalog.get_all()
+	var found: Dictionary[String, int] = {}
+	for id: String in ids:
+		_add(found, id, PLENTY)
+	_lend_parts(found, catalog, shared)
+	var out: Array[String] = []
+	out.assign(found.keys())
+	return out
+
+
+# A compound lends its parts at its own amount; one whose amount rose is walked again.
+static func _lend_parts(found: Dictionary[String, int], catalog: Dictionary, shared: bool) -> void:
 	var pending: Array[String] = []
 	pending.assign(found.keys())
 	while not pending.is_empty():
@@ -76,7 +96,6 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: UnitStat
 		for part: String in _parts_of(id, catalog, shared):
 			if _add(found, part, found[id]):
 				pending.append(part)
-	return found
 
 
 # Why `attack` fizzles cast from `cell`, or "". Only a carving can fizzle, and only one that parses; a

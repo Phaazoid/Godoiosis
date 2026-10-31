@@ -334,3 +334,19 @@ func test_a_jet_needs_real_water_and_cannot_be_made_from_air() -> void:
 	assert_str(_fizzle("Break(A, W) + Push(3W2)", bare)).contains("source of water")
 	assert_str(_fizzle("Break(A, W) + Push(3W2)", by_water)).is_empty()
 	assert_str(_fizzle("Break(A, W) + Push(W2)", bare)).is_empty()
+
+
+# The dev tools' readout of a row (#1532) is the same walk: what a row makes present is exactly what a
+# cast on that ground finds, beside what the air holds.
+func test_what_a_row_makes_present_is_what_a_cast_finds() -> void:
+	var map := _map()
+	for kind: Terrain.Kind in [Terrain.Kind.GRASS, Terrain.Kind.MUD, Terrain.Kind.DIRT]:
+		var row := map.of_kind(kind)
+		var expected: Array[String] = row.duplicate()
+		expected.append_array(Atmosphere.SUBSTANCES)
+		var from_row := CellSubstances.present_from(expected, _catalog())
+		from_row.sort()
+		var found: Array[String] = []
+		found.assign(_supply(_board({ HERE: kind })).keys())
+		found.sort()
+		assert_array(found).override_failure_message("%s's row" % Terrain.Kind.keys()[kind]).is_equal(from_row)

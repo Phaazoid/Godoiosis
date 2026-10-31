@@ -41,6 +41,7 @@ class_name DevOverlay
 @onready var weights_tool: WeightsTool = get_node("%Weights")
 @onready var camera_tool: CameraTool = get_node("%Camera")
 @onready var weather_tool: WeatherTool = get_node("%Weather")
+@onready var alchemy_tool: AlchemyTool = get_node("%Alchemy")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 @onready var search_box: DevSearchBox = %DevSearch
@@ -74,6 +75,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "What a mission OFFERS — the units it fields, the gear its stash starts with, and the mods its fitting card lists. A scenario names one on the Properties page."},
 	{"scope": "Project", "label": "Attacks", "page": "%Attack Editor",
 		"tip": "Author attacks — Transmutation, Weapon Attack, or Weapon Families (edit a family's main in place and pick its extra attacks); toggle at top."},
+	{"scope": "Project", "label": "Alchemy", "page": "%Alchemy",
+		"tip": "What Deep Alchemy is authored from. Sources: what each ground, tile state, gas and unit state is MADE of, which is what a carving cast beside one can draw on. Edits reach the next cast; Save writes them down."},
 	{"scope": "Project", "label": "Tiles", "page": "%Objects",
 		"tip": "Everything one TILE answers for, narrowest scope first: its own light and size, the burn rules every tile of its ground obeys, and the game-wide defaults it falls back to."},
 	{"scope": "Project", "label": "Moods", "page": "%Moods",
@@ -139,6 +142,7 @@ func _ready() -> void:
 	replay_tool.init(game)
 	camera_tool.init(game)
 	weather_tool.init(game)
+	alchemy_tool.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
 	scenario_header.file_changed.connect(_on_scenario_file_changed)
@@ -373,6 +377,10 @@ func _on_tab_changed(_tab: int):
 		weights_tool.refresh_on_show()
 	if showing(weather_tool):
 		weather_tool.refresh_on_show()
+	if showing(alchemy_tool):
+		alchemy_tool.refresh_on_show()
+	if showing(object_tool):
+		object_tool.refresh_on_show()
 	if not showing(tile_brush):
 		tile_brush.deactivate()
 	_update_zone_visibility()
