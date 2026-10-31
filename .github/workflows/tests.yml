@@ -43,25 +43,18 @@ on:
         options: [hosted, local]
         default: hosted
 
-# THE ONE HAND-MAINTAINED SHARD LIST, AND THE ONLY PLACE IT IS WRITTEN. pres-rest subtracts
-# exactly these, so "pres-rest runs what pres-a does not" is true by CONSTRUCTION rather than by
-# remembering to edit two places. Balance only: moving a suite between pres-a and pres-rest
-# changes wall clock, never coverage.
+# THE SHARDS ARE DEALT, NOT LISTED (2026-10-31). Numbered shards 1..TEST_BUCKETS each run what
+# tools/ci-shards/deal.sh deals them: largest suite first, each to the lightest shard so far, by
+# the CI times recorded in tools/ci-shards/times.tsv. The hand-cut folder shards this replaced had
+# drifted to 384s on one shard against 96s on another two months after their last re-cut. Every
+# .gd under tests/ but export's lands in exactly one shard (deal.sh refuses otherwise), so balance
+# can change wall clock, never coverage. When the shard times in the step summary spread apart,
+# re-run tools/ci-shards/refresh.sh; see tools/ci-shards/README.md.
 #
-# Re-measured 2026-08-28 after #621/#622 halved the suite. presentation fell 294s -> 136s, so
-# three presentation shards became two, and the tree's OTHER areas -- one shard carrying 94s --
-# became the critical path instead. ui+flow got their own shard out of it.
-#
-# ALWAYS FULL res:// PATHS ENDING IN .gd. gdUnit4's -i does a SUBSTRING match on the test's
-# source_file (GdUnitTestCIRunner.is_skipped), so a bare name like `test_camera` would
-# silently swallow test_camera_rig, test_camera_follow AND test_camera_start. The .gd
-# terminator is what makes an entry unable to match a longer sibling filename.
+# TEST_BUCKETS MUST EQUAL THE NUMBERED SHARDS IN THE MATRIX. A bucket missing from the matrix is a
+# set of suites nobody runs, which is green, so every numbered job checks the two agree first.
 env:
-  PRES_A: >-
-    res://tests/presentation/test_camera_follow.gd
-    res://tests/presentation/test_input_bridge.gd
-    res://tests/presentation/test_overlay_mirror.gd
-    res://tests/presentation/test_board_mirror.gd
+  TEST_BUCKETS: 5
 
 jobs:
   test:
@@ -88,7 +81,8 @@ jobs:
       # to the first failure turns one debugging pass into several.
       fail-fast: false
       matrix:
-        shard: [pres-a, pres-rest, dev, ui-flow, rest, export]
+        # 1..TEST_BUCKETS, plus export. Change the count in both places at once.
+        shard: [1, 2, 3, 4, 5, export]
 
     steps:
       - uses: actions/checkout@v4
@@ -275,38 +269,38 @@ jobs:
           set +e
 
           targets=""
-          # WHICH SUITES THIS SHARD OWNS. pres-a names its suites; every other shard is defined
-          # by SUBTRACTION, so a file nobody assigned still runs somewhere: a new presentation
-          # suite lands in pres-rest, a new dev suite in dev, a new ui/flow suite in ui-flow, and
-          # an entirely new AREA FOLDER in rest. A RENAMED suite drops out of both the -a list and
-          # the matching -i, so it reappears in pres-rest rather than vanishing.
-          #
-          # rest EXCLUDES four areas now rather than two. That list is the only thing to keep in
-          # step with the matrix: an area given its own shard must also be subtracted here, or it
-          # runs twice -- which is slow, not silent, and the case-count sum in the step summary is
-          # what shows it.
+          # WHICH SUITES THIS SHARD OWNS. Every numbered job deals the whole hand itself and keeps
+          # its own bucket; the deal is deterministic, so the jobs agree without talking. Each file
+          # is named with its own -a, never a folder: `-a res://tests` would load all ~580 scripts
+          # before the first test (34s, measured), however few of them the shard then runs. A new
+          # suite, a renamed one or a new area folder lands in some shard on the next push with no
+          # edit here.
           case "${{ matrix.shard }}" in
-            pres-a)    for s in $PRES_A; do targets="$targets -a $s"; done ;;
-            pres-rest) targets="-a res://tests/presentation"
-                       for s in $PRES_A; do targets="$targets -i $s"; done ;;
-            dev)       targets="-a res://tests/dev" ;;
-            ui-flow)   targets="-a res://tests/ui -a res://tests/flow" ;;
+            [1-9]*)
+              if [ "${{ strategy.job-total }}" -ne $((TEST_BUCKETS + 1)) ] || [ "${{ matrix.shard }}" -gt "$TEST_BUCKETS" ]; then
+                echo "::error::The matrix and TEST_BUCKETS ($TEST_BUCKETS) disagree, so a bucket would run twice or not at all. The numbered shards must be exactly 1..TEST_BUCKETS, plus export."
+                exit 1
+              fi
+              bash tools/ci-shards/deal.sh --summary "$TEST_BUCKETS" --skip tests/export
+              dealt=$(bash tools/ci-shards/deal.sh "${{ matrix.shard }}" "$TEST_BUCKETS" --skip tests/export) || exit 1
+              for s in $dealt; do targets="$targets -a $s"; done ;;
             # The one shard that proves the ARTIFACT rather than the source (#868). It exports a
             # pack and runs it, so it is the only shard whose verdict can differ from a source run --
-            # which is the entire point, and why it is worth ~40s of its own rather than folded into
-            # rest. Needs no export templates: --export-pack writes resources, never an executable.
+            # which is the entire point, and why it is worth ~40s of its own rather than dealt into
+            # a numbered shard. Needs no export templates: --export-pack writes resources, never an
+            # executable.
             export)    targets="-a res://tests/export" ;;
-            rest)      targets="-a res://tests"
-                       for d in presentation dev ui flow export; do targets="$targets -i res://tests/$d/"; done ;;
             *)         echo "::error::Unknown shard '${{ matrix.shard }}'"; exit 1 ;;
           esac
 
           # $targets is deliberately UNQUOTED -- it must word-split into separate CLI flags.
+          started=$SECONDS
           godot-bin/godot --headless --path . \
             -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
             $targets \
             --ignoreHeadlessMode 2>&1 | tee gdunit.log
           proc=${PIPESTATUS[0]}
+          elapsed=$((SECONDS - started))
           set -e
 
           verdict=$(grep -oE 'Exit code: [0-9]+' gdunit.log | tail -1 | grep -oE '[0-9]+' || true)
@@ -332,10 +326,13 @@ jobs:
           fi
 
           # THE SHARD COUNTS MUST SUM TO THE UNSHARDED TOTAL. A shard that quietly stops
-          # covering something is GREEN -- lost coverage cannot fail a test, so this count is
-          # the only thing that can catch it. Published here so the five numbers are addable
-          # from the PR page without opening five logs.
-          echo "- \`${{ matrix.shard }}\`: **$cases** cases" >> "$GITHUB_STEP_SUMMARY"
+          # covering something is GREEN -- lost coverage cannot fail a test, so these counts are
+          # the last thing that can catch it, after deal.sh's own refusal. The suites must sum to
+          # the number of test_*.gd files. Published here so the six lines are addable from the PR
+          # page without opening six logs; the seconds show whether the deal still balances.
+          suites=$(grep -oE 'Executed test suites[[:space:]]*:[[:space:]]*\([0-9]+/[0-9]+\)' gdunit.log \
+                   | tail -1 | grep -oE '\([0-9]+' | grep -oE '[0-9]+' || true)
+          echo "- \`${{ matrix.shard }}\`: **$cases** cases, ${suites:-?} suites, ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$proc" -ne "$verdict" ]; then
             echo "::warning::Engine crashed during shutdown after all tests ran and were counted (issue #93). Results are unaffected; reporting gdUnit4's verdict ($verdict), not the process exit ($proc)."
