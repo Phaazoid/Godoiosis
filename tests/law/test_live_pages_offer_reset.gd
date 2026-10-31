@@ -19,7 +19,7 @@ const RESET := "DevWidgets.offer_reset("
 
 # Pages whose marker sits on a COPY of the file: the form is a duplicate, nothing on the board moved,
 # and Load re-reads the file. Load is their way back (dev, 2026-10-21).
-const EDITS_A_COPY: Array[String] = ["RosterTool.gd", "DialogTool.gd"]
+const EDITS_A_COPY: Array[String] = ["RosterTool.gd", "DialogTool.gd", "AlchemySubstances.gd", "AlchemyReactions.gd"]
 
 
 func test_every_page_with_an_unsaved_marker_offers_reset() -> void:

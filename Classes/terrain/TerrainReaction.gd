@@ -92,3 +92,44 @@ func applies_to_tile(kind: Terrain.Kind, held_states: Array[Terrain.TileState]) 
 func admits(held_states: Array[Terrain.TileState]) -> bool:
 	return forbidden_tile_state == Terrain.TileState.NONE \
 			or not held_states.has(forbidden_tile_state)
+
+
+# The dev tools' form (Project > Alchemy > Reactions), ElementalReaction.property_sections' twin.
+static func property_sections() -> Array[Dictionary]:
+	return [
+		{"title": "When it fires", "fields": PackedStringArray(["incoming_element", "also_triggered_by", "required_kind", "required_tile_state", "forbidden_tile_state", "in_the_air"])},
+		{"title": "What it does", "fields": PackedStringArray(["add_tile_states", "remove_tile_states", "add_state_turns", "spread_and_a_half", "disperses_gas"])},
+		{"title": "What it releases", "fields": PackedStringArray(["gases"])},
+		{"title": "Chemistry", "fields": PackedStringArray(["equation"])},
+		{"title": "How it shows", "fields": PackedStringArray(["popup", "icon"])},
+	]
+
+
+# Per-field text for that form (#473).
+static func property_tips() -> Dictionary:
+	return {
+		"incoming_element": "The element a hit must carry to set this off. Ignition (fuel) reads this one alone, so heat lights nothing.",
+		"also_triggered_by": "Other elements that set it off too, e.g. Heat melts and boils what fire does. It still fires at most once per hit.",
+		"required_kind": "The ground it needs. None = any ground.",
+		"required_tile_state": "A state the tile must already hold. None = none needed: the setup half.",
+		"forbidden_tile_state": "A state that REFUSES it. The ignitions name Scorched, so spent ground cannot catch again.",
+		"in_the_air": "It happens in the AIR over the cell, so it answers every cell a hit passes over, whatever the attack's Targets says. Gas dispersing on an Air hit is one.",
+		"add_tile_states": "Tile states the cell gains.",
+		"remove_tile_states": "Tile states it loses, e.g. water dousing Burning.",
+		"add_state_turns": "How long an added state lasts, in turn cycles. Unlisted = it lasts until something removes it. For fire this IS the ground's fuel.",
+		"spread_and_a_half": "Fire burning on THIS ground reaches the corners too, not just the four sides: tall flames throw sparks further.",
+		"disperses_gas": "Clears every gas on the cell before anything this hit releases there. Fires only where the cell holds gas.",
+		"gases": "Gas released on the cell, each level added to what is there, e.g. water dousing a fire makes steam.",
+		"equation": "The reaction as Deep Alchemy writes it, e.g. F2 + W2 -> 2FW. Read by the lint only: nothing in play reads it. The lines under it are what CI checks.",
+		"popup": "What the cell shows when it fires, e.g. Ignites!",
+		"icon": "The icon the cell's effect carries when this fires. Set in Godot's own inspector: this form cannot pick a texture.",
+	}
+
+
+# Enum members that form must not offer, per field. Terrain.RETIRED_STATES are tombstones kept in an
+# append-only enum, and no authoring surface may offer one. Every TileState field is listed here:
+# tests/dev/test_alchemy_editor.gd refuses one that is not.
+static func property_retired() -> Dictionary:
+	var dead: Array = Terrain.RETIRED_STATES.duplicate()
+	return {"required_tile_state": dead, "forbidden_tile_state": dead, "add_tile_states": dead,
+		"remove_tile_states": dead, "add_state_turns": dead}

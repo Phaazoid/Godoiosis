@@ -1,4 +1,4 @@
-# The Alchemy page's Sources section (#1532 slice 2): what each ground, tile state, gas and unit state
+# The Alchemy page's Sources tab (#1532 slice 2, AlchemySources): what each ground, tile state, gas and unit state
 # is made of, edited live on SubstanceMap's rows.
 #
 # The content razor (tests/README.md rule 9): no case asserts what an authored row SAYS. A row is
@@ -14,7 +14,7 @@ const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROBE_PATH := "user://__test_alchemy_sources.tres"
 const HERE := Vector2i(4, 4)
 
-var _tool: AlchemyTool
+var _tool: AlchemySources
 var _scene: Node3D
 
 
@@ -44,7 +44,7 @@ class _StubGame extends RefCounted:
 
 
 func before_test() -> void:
-	_tool = AlchemyTool.new()
+	_tool = AlchemySources.new()
 	add_child(_tool)
 
 
@@ -54,7 +54,7 @@ func after_test() -> void:
 		_tool._on_reset_pressed()
 		_tool.free()
 	if is_instance_valid(_scene):
-		(_scene.get_node("Main/DevOverlay") as DevOverlay).alchemy_tool._on_reset_pressed()
+		(_scene.get_node("Main/DevOverlay") as DevOverlay).alchemy_tool.sources._on_reset_pressed()
 		get_tree().root.remove_child(_scene)
 		_scene.free()
 	if FileAccess.file_exists(PROBE_PATH):
@@ -62,7 +62,7 @@ func after_test() -> void:
 	await await_idle_frame()   # #93/#101 orphan workaround
 
 
-func _field(page: AlchemyTool, table: StringName, key: int) -> LineEdit:
+func _field(page: AlchemySources, table: StringName, key: int) -> LineEdit:
 	for field: LineEdit in page._fields:
 		var row: Dictionary = page._fields[field]
 		if row["table"] == table and row["key"] == key:
@@ -263,6 +263,7 @@ func test_the_tiles_line_follows_an_edit_made_on_this_page() -> void:
 		shown = pick
 	assert_str(tiles._made_of.text).not_contains("Made of: %s" % shown)
 	overlay.show_leaf(overlay.alchemy_tool)
-	_type(_field(overlay.alchemy_tool, &"grounds", kind), pick)
+	overlay.alchemy_tool.show_tab(overlay.alchemy_tool.sources)
+	_type(_field(overlay.alchemy_tool.sources, &"grounds", kind), pick)
 	overlay.show_leaf(tiles)
 	assert_str(tiles._made_of.text).starts_with("Made of: %s" % shown)
