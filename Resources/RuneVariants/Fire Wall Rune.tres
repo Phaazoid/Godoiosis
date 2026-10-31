@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://cbqck2mys5np1"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_vke4y"]
+[ext_resource type="Resource" uid="uid://vbxapx2hkyok" path="res://Resources/TransmutationData/Fire Wall.tres" id="2_v8fuc"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_rsqjq"]
+
+[resource]
+script = ExtResource("3_rsqjq")
+size = 1
+inscriptions = Array[ExtResource("1_vke4y")]([ExtResource("2_v8fuc")])
+temper = 1
+display_name = "Fire Wall Rune"
+weight = 1
