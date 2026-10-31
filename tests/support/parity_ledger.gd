@@ -363,7 +363,7 @@ static func plan_lists() -> Dictionary:
 			"attacks": {"play": covered(SESSION, ".attacks"), "ai": covered(TACTICS, ".attacks")},
 			"counters": {"play": covered(SESSION, ".counters"), "ai": covered(TACTICS, ".counters")},
 			"cell_effects": {"play": covered(SESSION, ".play_landing("),
-					"ai": gap("#117", "lingering deposits are not priced: ground left burning or soaked, steam blown onto anyone, or a cloud blown for a later turn; a blow is aimed only to smoke an enemy leader (#1514)")},
+					"ai": gap("#117", "lingering deposits are not priced: ground left burning or soaked, a fire wall an attack lays (#894), steam blown onto anyone, or a cloud blown for a later turn; a blow is aimed only to smoke an enemy leader (#1514)")},
 			"tile_hits": {"play": covered(SESSION, ".tile_hits"),
 					"ai": gap("#117", "the end-of-turn burn, steam's scald and its soak are not scored (ending on burning ground or in scalding steam is avoided through _is_hazard)")},
 			# Who those rows speak for (#1428): the board's health bars read it, through TurnBoundary.forecast.

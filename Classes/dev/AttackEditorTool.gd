@@ -63,6 +63,7 @@ const EFFECT_NONE := "No damage"
 const NO_SHAPE_KEY := "(none - the aimed cell alone)"
 const NEW_SHAPE_KEY := "(new shape)"
 const UNNAMED_SHAPE_KEY := "(unnamed - Save as... to name it)"
+const NO_EFFECT_SHAPE_KEY := "(none - where the attack hits)"
 const NO_EMPOWERED_KEY := "(none — fires the same however full the tank is)"
 const NO_PAYLOAD_KEY := "(none - drops nothing)"
 # The worst case a payload chain may fan out to before the readout warns (#1058, ruling 41: a warning,
@@ -84,6 +85,7 @@ var current_template: WeaponData = null   # FAMILY only: which family "current" 
 # would break the commit-point ruling (Update, not every keystroke) and make Save As impossible,
 # take_over_path moving the object every other attack is still holding.
 var _shape: LibraryField = null
+var _effect_shape: LibraryField = null   # where its tile effect lands (#894), from the same library
 var _looks: Dictionary[Elemental.Element, LibraryField] = {}
 var _items := {}
 # Which dropdown entry "current" was loaded from ("" = a New attack). Pool modes load a COPY with
@@ -108,7 +110,20 @@ func _ready():
 		if current != null:
 			current.attack_shape = picked as AttackShape
 	_shape.make = func() -> Resource: return AttackShape.new()
-	_shape.refresh = populate
+	_shape.refresh = _restage_shared_shape
+	_effect_shape = LibraryField.new(self, status_label)
+	_effect_shape.noun = "shape"
+	_effect_shape.library_dir = AttackShapeCatalog.LIBRARY_DIR
+	_effect_shape.none_key = NO_EFFECT_SHAPE_KEY
+	_effect_shape.new_key = NEW_SHAPE_KEY
+	_effect_shape.unnamed_key = UNNAMED_SHAPE_KEY
+	_effect_shape.list = func() -> Dictionary: return AttackShapeCatalog.get_library()
+	_effect_shape.held = func() -> Resource: return null if current == null else current.tile_effect_shape
+	_effect_shape.assign = func(picked: Resource) -> void:
+		if current != null:
+			current.tile_effect_shape = picked as AttackShape
+	_effect_shape.make = func() -> Resource: return AttackShape.new()
+	_effect_shape.refresh = _restage_shared_shape
 	_refresh_list()
 	_on_new_pressed()
 
@@ -444,6 +459,8 @@ func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
 		"payload":
 			_populate_payload()
 			return PackedStringArray(["payload"])
+		"tile_effect":
+			return _populate_tile_effect(rows)
 		"recipe":
 			_populate_recipe(current as TransmutationData)
 			return PackedStringArray(["recipe"])
@@ -667,6 +684,58 @@ func _populate_shape() -> void:
 	_shape.draw_save_row(editor_container)
 
 
+# The Tile effect section (#894): which element's effect the attack lays, its life where the ground
+# gives that state no clock, and where it lands -- a second stamp off the same shape library, placed
+# by the hit's own rules. The pick offers only elements with an effect (AttackData.TILE_EFFECTS), and
+# writes through DevWidgets.write, so the life and the shape hide and return by reflow, never a rebuild.
+func _populate_tile_effect(rows: Dictionary) -> PackedStringArray:
+	var by_name := {Elemental.display_name(Elemental.Element.NONE): Elemental.Element.NONE}
+	for element: Elemental.Element in AttackData.TILE_EFFECTS:
+		by_name[Elemental.display_name(element)] = element
+	# A held element the table lays nothing for keeps a row, so the pick shows what the file says.
+	by_name[Elemental.display_name(current.tile_effect)] = current.tile_effect
+	var first := editor_container.get_child_count()
+	DevWidgets.add_option(editor_container, "Element", by_name.keys(),
+		Elemental.display_name(current.tile_effect), func(picked: String) -> void:
+			DevWidgets.write(current, "tile_effect", by_name[picked]))
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(current, "tile_effect"))
+
+	first = editor_container.get_child_count()
+	var life := DevWidgets.add_spinbox(editor_container, "Lasts (rounds)", current.tile_effect_turns,
+		func(v: float) -> void: DevWidgets.write(current, "tile_effect_turns", int(v)))
+	DevWidgets.apply_range_hint(life, current, "tile_effect_turns")
+	DevWidgets._tip_rows_from(editor_container, first, DevWidgets.property_tip(current, "tile_effect_turns"))
+	rows["tile_effect_turns"] = DevWidgets._added_since(editor_container, first)
+
+	first = editor_container.get_child_count()
+	var tip := DevWidgets.property_tip(current, "tile_effect_shape")
+	_effect_shape.draw_picker(editor_container, "Lands on", tip)
+	if _effect_shape.staged == null:
+		DevWidgets.add_label(editor_container, "No shape: the effect lands on every tile the attack hits.")
+	else:
+		_effect_shape.draw_users(editor_container, "Unnamed shape -- this attack alone. Save it to share it.")
+		var grid_first := editor_container.get_child_count()
+		DevWidgets.add_cell_grid(editor_container, "Stamp", _effect_shape.staged, "stamp", current,
+			"path_cells", "path_lengths")
+		DevWidgets._tip_rows_from(editor_container, grid_first, tip)
+		_effect_shape.draw_save_row(editor_container)
+	rows["tile_effect_shape"] = DevWidgets._added_since(editor_container, first)
+	return PackedStringArray(["tile_effect", "tile_effect_turns", "tile_effect_shape"])
+
+
+# The hit and its tile effect may name ONE library shape, and then they edit one copy: two copies would
+# have Update write the file twice, the second, unedited one undoing the first.
+func _share_one_shape_copy() -> void:
+	if current != null and current.tile_effect_shape != null and current.tile_effect_shape == current.attack_shape:
+		_effect_shape.staged = _shape.staged
+
+
+# Either shape field's refresh: a pick has just re-staged that one field.
+func _restage_shared_shape() -> void:
+	_share_one_shape_copy()
+	populate()
+
+
 # The LOOK rows (#900): per element this attack carries that HAS an attack-scoped effect, a picker
 # over the shared look library and then every knob that effect owns, each with an inherit tick.
 #
@@ -769,6 +838,8 @@ func _shown(value: Variant) -> String:
 # because which look slots exist is the attack's own answer and it moves when its element does.
 func _stage_fields() -> void:
 	_shape.stage()
+	_effect_shape.stage()
+	_share_one_shape_copy()
 	_looks.clear()
 	if current == null:
 		return
@@ -814,10 +885,11 @@ func _assign_look(element: Elemental.Element, picked: EffectLook) -> void:
 # judge this rather than `current`, whose shape is still the library object the grid is not editing.
 # The looks need no substitution: a staged look is reached through the same dictionary either way.
 func _staged_attack() -> AttackData:
-	if current == null or _shape.staged == null:
+	if current == null or (_shape.staged == null and _effect_shape.staged == null):
 		return current
-	var probe := current.duplicate() as AttackData   # shallow: only the shape reference differs
+	var probe := current.duplicate() as AttackData   # shallow: only the shape references differ
 	probe.attack_shape = _shape.staged as AttackShape
+	probe.tile_effect_shape = _effect_shape.staged as AttackShape
 	return probe
 
 
@@ -826,6 +898,8 @@ func _staged_attack() -> AttackData:
 # attack would understate what an Update reaches.
 func _shared_victims() -> String:
 	var clause := _shape.victim_clause()
+	if _effect_shape.staged != _shape.staged:
+		clause += _effect_shape.victim_clause()
 	for element in _looks:
 		var field: LibraryField = _looks[element]
 		clause += field.victim_clause()
@@ -836,6 +910,8 @@ func _shared_victims() -> String:
 # failure, which save_over has already reported.
 func _save_shared_files() -> bool:
 	if not _shape.save_named():
+		return false
+	if _effect_shape.staged != _shape.staged and not _effect_shape.save_named():
 		return false
 	for element in _looks:
 		var field: LibraryField = _looks[element]

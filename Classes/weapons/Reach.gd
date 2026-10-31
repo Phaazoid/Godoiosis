@@ -71,7 +71,7 @@ static func get_attack_cells_from(origin_cell: Vector2i, target_hint_cell: Vecto
 		var dir := GridUtils.cardinal_direction_i_between(origin_cell, target_hint_cell)
 		if dir == Vector2i.ZERO:
 			return []
-		return _place(attack, origin_cell, dir)
+		return _place(attack.attack_shape, origin_cell, dir)
 	var all_cells := GridUtils.cells_within_blended_range(origin_cell, attack.max_range, attack.max_and_a_half)
 	return all_cells.filter(func(cell): return GridUtils.manhattan_distance(origin_cell, cell) >= attack.min_range)
 
@@ -310,6 +310,17 @@ static func get_affected_cells_from(origin_cell: Vector2i, target_cell: Vector2i
 	return cells if board == null else surfaced(cells, board)
 
 
+# Where an aim's TILE EFFECT lands (#894): the attack's `tile_effect_shape` set down exactly as its
+# own shape is -- same anchor, same turn, the same Swing and height rules, the same surface trim (dev,
+# 2026-10-30: walls cut the effect as they cut the hit). One placement with the shape handed in, so
+# the two layers cannot drift. A PATH shape here is placed as its tiles: a path stops at its victim,
+# and an effect has none. Asked only of an attack that names an effect shape; without one, the
+# effect lands on what the attack struck (Conduction's Sweep.effect).
+static func get_effect_cells_from(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
+	var cells := _set_down(origin_cell, target_cell, attack, attack.tile_effect_shape, board, facing, false)
+	return cells if board == null else surfaced(cells, board)
+
+
 # The cells of `cells` that have a surface (GridUtils.has_surface), in their own order.
 static func surfaced(cells: Array[Vector2i], board: BoardContext) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
@@ -323,16 +334,25 @@ static func surfaced(cells: Array[Vector2i], board: BoardContext) -> Array[Vecto
 static func _footprint(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext, facing := Vector2i.ZERO) -> Array[Vector2i]:
 	if attack == null:
 		return [target_cell]
+	return _set_down(origin_cell, target_cell, attack, attack.attack_shape, board, facing,
+			attack.is_single_target_swing())
+
+
+# `shape` set down for one aim of `attack` and cut by its rules: _footprint's body, the shape handed in
+# so a tile effect's layer is placed by the same code (#894). `walks` = the paths decide what is
+# reached, which is the hit's single-target swing and never an effect's.
+static func _set_down(origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, shape: AttackShape,
+		board: BoardContext, facing: Vector2i, walks: bool) -> Array[Vector2i]:
 	if attack.is_directional():
 		var dir := placement_dir(attack, origin_cell, target_cell, facing)
 		if dir == Vector2i.ZERO:
 			return []
-		var swung := _place(attack, origin_cell, dir)
+		var swung := _place(shape, origin_cell, dir)
 		if board == null:
 			return swung
 		if not attack.swing:
 			return _height_only(swung, origin_cell, attack, board)
-		if attack.is_single_target_swing():
+		if walks:
 			return _walked(swung, get_paths_from(origin_cell, target_cell, attack, board, facing))
 		return _truncate(swung, origin_cell, dir, attack, board)
 	# AN ANCHORED SHAPE NEVER TURNS (#818): it lands exactly as drawn, grid-up reading as board
@@ -349,12 +369,12 @@ static func _footprint(origin_cell: Vector2i, target_cell: Vector2i, attack: Att
 	#
 	# The one exception is a PAYLOAD's given facing (#1058): that is the direction the attack that
 	# dropped it was going, not where anyone stands, so turning to it spins nothing with the cursor.
-	var placed := _place(attack, target_cell, placement_dir(attack, origin_cell, target_cell, facing))
+	var placed := _place(shape, target_cell, placement_dir(attack, origin_cell, target_cell, facing))
 	if board == null:
 		return placed
 	if not attack.swing:
 		return _height_only(placed, target_cell, attack, board)
-	if attack.is_single_target_swing():
+	if walks:
 		return _walked(placed, get_paths_from(origin_cell, target_cell, attack, board, facing))
 	return _spread(placed, target_cell, attack, board)
 
@@ -626,12 +646,11 @@ static func is_directional_attack(attack: AttackData) -> bool:
 	return attack != null and attack.is_directional()
 
 
-# The attack's shape set down on `anchor`, turned to `dir`. A NULL SHAPE IS THE ANCHOR CELL ALONE
-# (#808) -- most authored attacks are single-target and deliberately name no shape file, so this is
-# the ordinary case rather than a fallback. An EMPTY stamp is a different thing and covers nothing,
-# which AttackLint blocks.
-static func _place(attack: AttackData, anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
-	var shape := attack.attack_shape
+# A shape set down on `anchor`, turned to `dir`: the attack's own, or its tile effect's (#894). A
+# NULL SHAPE IS THE ANCHOR CELL ALONE (#808) -- most authored attacks are single-target and
+# deliberately name no shape file, so this is the ordinary case rather than a fallback. An EMPTY stamp
+# is a different thing and covers nothing, which AttackLint blocks.
+static func _place(shape: AttackShape, anchor: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 	if shape == null:
 		return [anchor]
 	return shape.place(anchor, dir)

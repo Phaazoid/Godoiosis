@@ -457,3 +457,92 @@ func test_the_turn_tick_shows_only_for_a_shapeless_carrier_dropping_a_shaped_pay
 	_editor.populate()
 	assert_bool(_row("Payload Turns").visible).override_failure_message(
 		"a single-cell payload has no facing, so the tick reaches nothing").is_false()
+
+
+# --- the Tile effect section (#894) -----------------------------------------------------------
+
+func _item_index(option: OptionButton, text: String) -> int:
+	for i in option.item_count:
+		if option.get_item_text(i) == text:
+			return i
+	return -1
+
+
+# The pick offers None and exactly the elements the rule can lay, read off the rule's own table.
+func test_the_tile_effect_pick_offers_none_and_every_element_with_an_effect() -> void:
+	_open(WeaponAttackData.new())
+	var pick := _option("Element")
+	assert_object(pick).override_failure_message("no Element row in the Tile effect section").is_not_null()
+	var offered: Array[String] = []
+	for i in pick.item_count:
+		offered.append(pick.get_item_text(i))
+	var expected: Array[String] = [Elemental.display_name(Elemental.Element.NONE)]
+	for element: Elemental.Element in AttackData.TILE_EFFECTS:
+		expected.append(Elemental.display_name(element))
+	assert_array(offered).contains_exactly_in_any_order(expected)
+
+
+# THE WIRE: the pick writes the field, and its life and shape rows return by reflow, not a rebuild.
+func test_picking_an_effect_brings_its_life_and_shape_rows_back_live() -> void:
+	var attack := WeaponAttackData.new()
+	_open(attack)
+	var life := _row("Lasts (rounds)")
+	var lands := _row("Lands on")
+	assert_object(life).override_failure_message("no life row in the form at all").is_not_null()
+	assert_object(lands).override_failure_message("no shape row in the form at all").is_not_null()
+	assert_bool(life.visible or lands.visible).override_failure_message(
+		"an attack that lays nothing offers a life and a shape for it").is_false()
+
+	var effect: Elemental.Element = AttackData.TILE_EFFECTS.keys()[0]
+	var pick := _option("Element")
+	pick.item_selected.emit(_item_index(pick, Elemental.display_name(effect)))
+	assert_int(attack.tile_effect).is_equal(effect)
+	assert_bool(is_instance_valid(life) and is_instance_valid(lands)).override_failure_message(
+		"the form REBUILT instead of reflowing -- that frees the control being edited (#741)").is_true()
+	assert_bool(life.visible and lands.visible).override_failure_message(
+		"picking an effect left its life or its shape hidden").is_true()
+
+	pick.item_selected.emit(_item_index(pick, Elemental.display_name(Elemental.Element.NONE)))
+	assert_bool(life.visible or lands.visible).override_failure_message("the rows never went away again").is_false()
+
+
+func test_the_life_box_takes_the_fields_own_range() -> void:
+	var attack := WeaponAttackData.new()
+	attack.tile_effect = AttackData.TILE_EFFECTS.keys()[0]
+	_open(attack)
+	var box := _row("Lasts (rounds)").get_child(1) as SpinBox
+	var declared := ""
+	for prop in attack.get_property_list():
+		if prop.name == "tile_effect_turns" and prop.hint == PROPERTY_HINT_RANGE:
+			declared = prop.hint_string
+	assert_str(declared).override_failure_message("fixture: tile_effect_turns declares no range").is_not_empty()
+	var bounds := declared.split(",")
+	assert_float(box.min_value).is_equal(float(bounds[0]))
+	assert_float(box.max_value).is_equal(float(bounds[1]))
+
+
+# Both layers naming ONE library shape edit one copy, loaded that way or picked: two copies would have
+# Update write the file twice, the second, unedited one undoing the first.
+func test_a_hit_and_an_effect_naming_one_library_shape_edit_one_copy() -> void:
+	var library := AttackShapeCatalog.get_library()
+	assert_bool(library.is_empty()).override_failure_message(
+		"fixture: the shape library is empty, so there is nothing to share").is_false()
+	var name: String = library.keys()[0]
+	var shared: AttackShape = library[name]
+	var attack := WeaponAttackData.new()
+	attack.attack_shape = shared
+	attack.tile_effect = AttackData.TILE_EFFECTS.keys()[0]
+	attack.tile_effect_shape = shared
+	_open(attack)
+	assert_object(_editor._shape.staged).override_failure_message(
+		"the form edits the library object itself").is_not_same(shared)
+	assert_object(_editor._effect_shape.staged).override_failure_message(
+		"loaded naming one shape twice, the form holds two copies of it").is_same(_editor._shape.staged)
+
+	var none := _option("Lands on")
+	none.item_selected.emit(_item_index(none, AttackEditorTool.NO_EFFECT_SHAPE_KEY))
+	assert_object(attack.tile_effect_shape).is_null()
+	var again := _option("Lands on")
+	again.item_selected.emit(_item_index(again, name))
+	assert_object(_editor._effect_shape.staged).override_failure_message(
+		"picked to name the hit's shape, the form holds two copies of it").is_same(_editor._shape.staged)

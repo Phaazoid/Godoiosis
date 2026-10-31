@@ -38,6 +38,9 @@ var resolved_spent := false
 var resolved_anchor: Vector2i = Vector2i.ZERO
 var resolved_footprint: Array[Vector2i] = []
 var resolved_path_lengths: Array[int] = []
+# Where its tile effect lands from that anchor (#894), frozen beside the footprint so the shot lays the
+# tiles the watch showed. Empty unless the attack lays on a shape of its own.
+var resolved_effect: Array[Vector2i] = []
 # Whether its carving fizzles from that anchor, on the ground the pass has at its slot (#1498 stage 3b):
 # a stored watch is judged where it arms, as a stored aim is where it lands. Written beside the anchor.
 var resolved_fizzles := false
@@ -87,10 +90,18 @@ func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
 	return one
 
 
+# Where the watch's tile effect lands from `origin` (#894): the effect shape set down as an aim's is.
+# Empty for an attack laying where it strikes, which only the shot's own walk can answer.
+func effect_cells_from(origin: Vector2i, board: BoardContext) -> Array[Vector2i]:
+	if fired_attack == null or not fired_attack.lays_effect_apart():
+		return []
+	return Reach.get_effect_cells_from(origin, target_cell, fired_attack, board)
+
+
 func execute() -> void:
 	begin_execution()
 	actor.arm_watch(resolved_anchor, target_cell, resolved_footprint, fired_attack, resolved_spent,
-			false, resolved_path_lengths)
+			false, resolved_path_lengths, resolved_effect)
 	finish_execution()
 
 

@@ -150,6 +150,18 @@ static func add_spinbox(container: Node, label_text: String, initial_value: floa
 	container.add_child(row)
 	return spinbox
 
+# Bound a spinbox by the field's own @export_range, read off the property rather than restated, so a
+# bespoke row cannot drift from the declaration. A field with no range hint leaves the box as it was.
+static func apply_range_hint(spinbox: SpinBox, resource: Resource, prop_name: String) -> void:
+	for prop in resource.get_property_list():
+		if prop.name != prop_name or prop.hint != PROPERTY_HINT_RANGE:
+			continue
+		var bounds: PackedStringArray = String(prop.hint_string).split(",")
+		if bounds.size() >= 2:
+			spinbox.min_value = float(bounds[0])
+			spinbox.max_value = float(bounds[1])
+		return
+
 # Feel work is DRAG work: a value you sweep while watching the board, with the number beside it
 # so a landed setting can be read off. add_spinbox is the typing form; this is the hunting form.
 # Returns the slider so a caller can write a value back into the widget (the Moods panel's Reset).

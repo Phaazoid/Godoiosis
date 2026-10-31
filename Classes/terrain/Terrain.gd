@@ -51,8 +51,8 @@ const RETIRED_STATES: Array[TileState] = [TileState.BLAZE]
 
 # "Is this tile on fire?" has ONE spelling (#174): FIRE_STATES is which states count, is_burning
 # the predicate over a cell's states, TerrainStateManager.burning_cells the enumeration form.
-# No reader may enumerate fire members itself. One member since #890 retired BLAZE -- the spelling
-# survives its own plural because #894's fire wall is a second one waiting to happen.
+# No reader may enumerate fire members itself. One member since #890 retired BLAZE; #894's fire wall
+# is a laid BURNING rather than a second member (AttackData.tile_effect).
 const FIRE_STATES: Array[TileState] = [TileState.BURNING]
 
 # WHICH fire state a cell holds, or NONE — the named form, for readouts that must say Burning or
@@ -72,6 +72,12 @@ static func is_burning(states: Array[TileState]) -> bool:
 # fire cannot touch; both still ask ONE rule, so the number previewed is the number dealt (#419).
 static func occupant_damage(states: Array[TileState]) -> int:
 	return BURNING_TILE_DAMAGE if is_burning(states) else 0
+
+# Is a tile of `kind` holding `states` water a body is IN rather than ON (#1444): WATER, unless it has
+# FROZEN over -- ice is dry ground (dev, 2026-09-10). BoardContext.is_open_water asks it of a cell; a
+# laid tile effect asks it of the states its own hit is leaving (#894), which no board holds yet.
+static func open_water_of(kind: Kind, states: Array[TileState]) -> bool:
+	return kind == Kind.WATER and not states.has(TileState.FROZEN)
 
 # Static authored tile content, read straight off the tileset's "terrain_type" int
 # custom-data layer (Resources/TestTiles.tres). Serialized in the .tres: APPEND-ONLY.

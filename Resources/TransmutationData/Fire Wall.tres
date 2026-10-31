@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://vbxapx2hkyok"]
+
+[ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="1_0uc8l"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_01r3t"]
+[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="3_am5mi"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="4_55hak"]
+
+[resource]
+script = ExtResource("4_55hak")
+recipe = "Bind(F, F) + Spread(F2)"
+popup = "Fire Wall!"
+icon = ExtResource("3_am5mi")
+display_name = "Fire Wall"
+power = 3
+max_range = 0
+attack_shape = ExtResource("1_0uc8l")
+swing = true
+targets = 2
+damage_kind = 3
+tile_effect = 1
