@@ -59,6 +59,10 @@ var _globals_baseline: Array = []
 # and what the running board already holds -- and because switching tiles mid-edit must not lose the
 # ground you were tuning a moment ago.
 var _staged_rules: Array[TerrainReaction] = []
+# The picked tile's "Made of" line and its ground, read-only here: the rows are the Alchemy page's
+# (#1532). Re-read on show, since that page edits them while this one sits built.
+var _made_of: Label = null
+var _made_of_kind := Terrain.Kind.NONE
 
 
 func _ready() -> void:
@@ -113,11 +117,16 @@ func has_host() -> bool:
 	return _host != null
 
 
+func refresh_on_show() -> void:
+	_refresh_made_of()
+
+
 func _rebuild() -> void:
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.queue_free()
 	_inherit_labels.clear()
+	_made_of = null
 	if _host == null:
 		DevWidgets.add_label(_rows, "No 3D host attached - the flat 2D game has no tiles to tune.")
 		return
@@ -197,12 +206,22 @@ func _build_field_rows(entry: Dictionary) -> void:
 # fire changes under you and Save writes it down.
 func _build_ground_section(entry: Dictionary) -> void:
 	var kind := GridUtils.terrain_kind_of(entry["data"])
-	if not ObjectKnobs.ground_rules_apply_to(kind):
+	if kind == Terrain.Kind.NONE:
 		return
 	var ground := _kind_label(kind)
 	DevWidgets.add_heading(_rows, "Every %s tile" % ground)
-	var fuel := TerrainReactionCatalog.fuel_for_kind(kind, _reactions)
 	var first := _rows.get_child_count()
+	_made_of = Label.new()
+	_made_of.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_made_of.mouse_filter = Control.MOUSE_FILTER_PASS
+	_made_of_kind = kind
+	_rows.add_child(_made_of)
+	_refresh_made_of()
+	_tip_rows(first, "What every %s tile is made of: what a carving cast beside one can draw on, and the parts a compound lends. Read-only here; it is edited on Project > Alchemy, which saves Resources/SubstanceMap.tres." % ground)
+	if not ObjectKnobs.ground_rules_apply_to(kind):
+		return
+	var fuel := TerrainReactionCatalog.fuel_for_kind(kind, _reactions)
+	first = _rows.get_child_count()
 	DevWidgets.add_checkbox(_rows, "Burnable", fuel != null,
 		func(on: bool) -> void: _set_burnable(kind, on))
 	_tip_rows(first, "Whether fire spreads on this ground. It is the ground's KIND that answers, not this tile -- the sheet's four grass tiles cannot disagree about whether grass burns, because the rules ask for a kind and get one reaction back. Ticking this writes or DELETES that reaction file, so it asks first.")
@@ -231,6 +250,11 @@ func _build_ground_section(entry: Dictionary) -> void:
 		func(on: bool) -> void: _set_reach(fuel, on))
 	_tip_rows(first, "Whether fire in this ground throws to a cell's CORNERS as well as its sides -- the dev's 1.5 tiles a turn (#891). Read off the ground that is ALIGHT, never the ground catching: tall flames throw sparks further, so tall grass reaches diagonally into ordinary grass while ordinary grass takes no corner however flammable that corner is.")
 	DevWidgets.add_label(_rows, "    authored in %s" % fuel.resource_path)
+
+
+func _refresh_made_of() -> void:
+	if _made_of != null and is_instance_valid(_made_of):
+		_made_of.text = AlchemyTool.made_of_line(SubstanceMap.authored().of_kind(_made_of_kind))
 
 
 # --- The game-wide defaults (#902, off the Game tab's World group) ------------------------------
