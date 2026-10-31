@@ -78,16 +78,22 @@ func apply(effect: ResolvedCellEffect) -> void:
 	# keeps the timer bookkeeping below correct instead of needing a second back door.
 	dirty.mark(effect.cell)
 	var grounded := has_ground(effect.cell)
-	var current := fold(states_at(effect.cell), effect, grounded)
+	var held := states_at(effect.cell)
+	var current := fold(held, effect, grounded)
 	if current.is_empty():
 		_states.erase(effect.cell)
 	else:
 		_states[effect.cell] = current
 	for s in effect.states_removed:
 		_clear_timer(effect.cell, s)
+	# A deposit's own life (#894's laid tile effect) is offered only to a state the cell did not keep
+	# holding: laid over a brazier, the brazier stays permanent; over a wall already standing, its
+	# clock stays. One this same effect removed is laid fresh.
 	if grounded:
 		for s in effect.states_added:
-			_start_timer(effect.cell, s)
+			var kept := held.has(s) and not effect.states_removed.has(s)
+			var own_life: int = -1 if kept else effect.state_turns.get(s, -1)
+			_start_timer(effect.cell, s, own_life)
 
 # The remove-then-add fold one effect makes to a state list — apply()'s rule, shared so a planned cell
 # (PlannedTiles.land) reads exactly as the applied one will (#419, #1498).
@@ -316,8 +322,8 @@ func _catches_fire(cell: Vector2i, planned: PlannedTiles = null) -> bool:
 
 
 # A state whose clock has run out. Fire that was consuming FUEL leaves the spent ground behind it;
-# fire on ground that was never fuel has consumed nothing, so there is nothing to leave -- and it
-# never reaches here anyway, having no clock to run out.
+# fire on ground that was never fuel has consumed nothing, so there is nothing to leave -- a laid
+# fire wall on stone (#894) goes out clean, the one such fire with a clock to run out.
 func _burn_out(cell: Vector2i, state: Terrain.TileState) -> void:
 	_remove_state(cell, state)
 	if state == Terrain.TileState.BURNING and fuel_at(cell) != null:
@@ -336,8 +342,14 @@ func _deposit(cell: Vector2i, state: Terrain.TileState) -> void:
 # question is asked, so every deposit path -- the resolver, the dev brush, a load -- reads the same
 # answer. No entry for this state (or no fuel at all) means no timer, which is the permanence COVER
 # and FROZEN have always had and which BLAZE used to need a second enum member for.
-func _start_timer(cell: Vector2i, state: Terrain.TileState) -> void:
+#
+# `own_life` is the deposit's own clock (ResolvedCellEffect.state_turns, #894), and the GROUND STILL
+# WINS: fire laid on grass burns on grass's clock (dev, 2026-10-30). Only where the ground gives none
+# does the deposit's life run. -1 = none, every path but apply's.
+func _start_timer(cell: Vector2i, state: Terrain.TileState, own_life := -1) -> void:
 	var clock := _ground_clock(cell, state)
+	if clock < 0:
+		clock = own_life
 	if clock >= 0:
 		_set_entry(_state_turns, cell, state, clock)
 

@@ -219,6 +219,9 @@ class Sweep extends RefCounted:
 	# The same direction for each of `struck`, from the first moment the attack reached that tile --
 	# what a tile attack's payloads turn to.
 	var struck_facings: Dictionary[Vector2i, Vector2i] = {}
+	# Where the attack's TILE EFFECT lands (#894, AttackAction.effect_cells): `struck` itself unless the
+	# attack names an effect shape of its own, which _sweep places (Reach.get_effect_cells_from).
+	var effect: Array[Vector2i] = []
 
 
 # THE ONE ANSWER to "what does this aim reach", asked by every site that has to agree about it: the
@@ -248,18 +251,23 @@ static func sweep_payload(actor: Unit, origin_cell: Vector2i, attack: AttackData
 
 static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData,
 		board: BoardContext, hypo: Dictionary, facing: Vector2i, occupant_at: Callable, thrown: bool) -> Sweep:
+	var result: Sweep
 	if attack != null and attack.is_single_target_swing():
 		var paths := Reach.get_paths_from(origin_cell, target_cell, attack, board, facing)
-		return sweep_paths(actor, attack, paths, board, hypo, occupant_at,
+		result = sweep_paths(actor, attack, paths, board, hypo, occupant_at,
 				Reach.travel_facings(origin_cell, target_cell, attack, _tiles_of(paths), facing), thrown)
-	var footprint := Reach.get_affected_cells_from(origin_cell, target_cell, attack, board, facing)
-	var facings := Reach.travel_facings(origin_cell, target_cell, attack, footprint, facing)
-	var result := _sweep_area(actor, attack, footprint, facings, board, hypo, occupant_at, thrown)
-	var landed: Dictionary[Vector2i, Array] = {}
-	var steps := Reach.travel_steps(origin_cell, target_cell, attack, footprint, facing)
-	for cell in steps:
-		_land(landed, cell, steps[cell])
-	_time(result, landed)
+	else:
+		var footprint := Reach.get_affected_cells_from(origin_cell, target_cell, attack, board, facing)
+		var facings := Reach.travel_facings(origin_cell, target_cell, attack, footprint, facing)
+		result = _sweep_area(actor, attack, footprint, facings, board, hypo, occupant_at, thrown)
+		var landed: Dictionary[Vector2i, Array] = {}
+		var steps := Reach.travel_steps(origin_cell, target_cell, attack, footprint, facing)
+		for cell in steps:
+			_land(landed, cell, steps[cell])
+		_time(result, landed)
+	if attack != null and attack.tile_effect_state() != Terrain.TileState.NONE \
+			and attack.tile_effect_shape != null:
+		result.effect = Reach.get_effect_cells_from(origin_cell, target_cell, attack, board, facing)
 	return result
 
 
@@ -284,6 +292,7 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 		result.struck = _tiles_of(paths)
 		result.cells = result.struck.duplicate()
 		result.struck_facings = _path_facings(paths, arrival)
+		result.effect = result.struck
 		_time(result, _path_steps(paths))
 		return result
 	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
@@ -298,6 +307,7 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 	# A tile with no surface is walked but never struck (#1228): it takes no deposit and drops no
 	# payload. The PATHS keep it, because a path's step is its index -- see _path_steps.
 	result.struck = Reach.surfaced(_tiles_of(struck_paths), board)
+	result.effect = result.struck
 	result.struck_facings = _path_facings(struck_paths, arrival)
 	var current := flood(actor, attack, result.struck, board, hypo, thrown)
 	_add_caught(result, caught(current.cells, board, hypo, result.victims))
@@ -393,6 +403,7 @@ static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector
 	var result := Sweep.new()
 	result.cells = footprint.duplicate()
 	result.struck = footprint.duplicate()
+	result.effect = result.struck
 	result.struck_facings = facings
 	if board == null:
 		return result

@@ -409,3 +409,46 @@ func test_the_flag_forks_a_self_anchored_swing_too() -> void:
 	assert_array(Reach.get_affected_cells_from(Vector2i.ZERO, Vector2i(0, -1), swung, board)) \
 		.override_failure_message("the directional branch never asks the flag") \
 		.contains_exactly([Vector2i(0, -1), Vector2i(0, -3)])
+
+
+# --- a tile effect's own layer (#894) -------------------------------------------------------------
+#
+# Reach.get_effect_cells_from sets the effect's shape down by the hit's own placement code: so for any
+# aim, the layer is exactly the footprint the same attack would have with that shape as its own --
+# both anchors, both Swing settings, every facing, over a board whose column cuts it.
+
+func test_an_effect_layer_is_set_down_and_cut_exactly_as_the_hit_would_be() -> void:
+	var walled := _board({Vector2i(2, 0): 2, Vector2i(0, -2): 2, Vector2i(-2, 1): 2})
+	var hit: Array[Vector2i] = [Vector2i(0, -1)]
+	var hook: Array[Vector2i] = [Vector2i(0, -1), Vector2i(0, -2), Vector2i(0, -3), Vector2i(1, -3)]
+	var cut_somewhere := false
+	for max_range: int in [0, 3]:
+		for swinging: bool in [true, false]:
+			var attack := P.stamped(_attack(), max_range, hit)
+			attack.swing = swinging
+			attack.tile_effect = Elemental.Element.FIRE
+			attack.tile_effect_shape = P.shape(hook)
+			var as_its_own := P.stamped(_attack(), max_range, hook)
+			as_its_own.swing = swinging
+			for aim: Vector2i in [R, U, L, D]:
+				var layer := Reach.get_effect_cells_from(Vector2i.ZERO, aim, attack, walled)
+				assert_array(layer).override_failure_message(
+					"range %d, swing %s, aim %s: the effect layer was placed by a rule of its own" % [max_range, swinging, aim]) \
+					.contains_exactly(Reach.get_affected_cells_from(Vector2i.ZERO, aim, as_its_own, walled))
+				if layer.size() < hook.size():
+					cut_somewhere = true
+	assert_bool(cut_somewhere).override_failure_message(
+		"fixture: no column cut any layer, so the board proves nothing about walls").is_true()
+
+
+func test_a_path_shape_lays_on_every_tile_its_paths_cover() -> void:
+	# A path stops at its victim; an effect has none, so its layer is the paths' tiles as an area.
+	var paths: Array[Array] = [[Vector2i(0, -1), Vector2i(0, -2)], [Vector2i(1, -1)]]
+	var attack := P.stamped(_attack(), 0, [Vector2i(0, -1)] as Array[Vector2i])
+	attack.tile_effect = Elemental.Element.FIRE
+	attack.tile_effect_shape = P.pathed(paths)
+	var as_tiles := P.stamped(_attack(), 0, attack.tile_effect_shape.tiles())
+	var board := _board({})
+	for aim: Vector2i in [R, U, L, D]:
+		assert_array(Reach.get_effect_cells_from(Vector2i.ZERO, aim, attack, board)) \
+			.contains_exactly(Reach.get_affected_cells_from(Vector2i.ZERO, aim, as_tiles, board))

@@ -192,3 +192,16 @@ func test_the_hatch_never_marks_a_cell_with_no_surface() -> void:
 	for cell in Reach.blocked_cells_from(EDGE, attack, board):
 		assert_bool(board.has_surface(cell)).override_failure_message(
 			"the hatch marked %s, which has no surface" % str(cell)).is_true()
+
+
+# --- a tile effect's layer (#894) -----------------------------------------------------------------
+
+func test_a_tile_effect_layer_lands_nothing_in_a_hole_as_the_hit_does() -> void:
+	var attack := _line(1)
+	attack.tile_effect = Elemental.Element.FIRE
+	attack.tile_effect_shape = _line(3).attack_shape
+	var hole := EDGE + EAST * 2
+	_dig(hole)
+	var layer := Reach.get_effect_cells_from(EDGE, EDGE + EAST, attack, _rules())
+	assert_array(layer).override_failure_message("the effect layer put a tile in the hole").not_contains([hole])
+	assert_array(layer).contains_exactly(_footprint(_line(3), EDGE, EDGE + EAST))

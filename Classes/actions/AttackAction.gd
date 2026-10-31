@@ -32,6 +32,9 @@ var arc_links: Array[Conduction.Link] = []
 # victims that cut the paths are the pass's own answer and gone by the time anything re-asks.
 # Stamped beside the footprint by every site that builds a volley; empty deposits nothing.
 var struck_cells: Array[Vector2i] = []
+# Where the attack's TILE EFFECT lands (#894, Conduction's Sweep.effect): the struck tiles, or its own
+# effect shape's. Stamped with them and read the same way, never re-derived.
+var effect_cells: Array[Vector2i] = []
 var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false
@@ -443,6 +446,7 @@ static func stamp_sweep(group: Array, reach: Conduction.Sweep) -> void:
 	for i in group.size():
 		var member: AttackAction = group[i]
 		member.struck_cells = reach.struck
+		member.effect_cells = reach.effect
 		member.struck_facings = reach.struck_facings
 		if member.target != null and i < reach.victims.size() and reach.victims[i] == member.target:
 			member.direct = reach.direct[i]
