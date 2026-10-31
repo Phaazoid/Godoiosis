@@ -35,9 +35,11 @@ signal capturing
 var scenario_manager: ScenarioManager
 var game
 # Authored vs snapshot (#177). ON: cast units (spawned from character files) save as references
-# and re-read their files on every load. OFF: the exact #87 mid-battle snapshot, cast included.
-# Ad-hoc units snapshot fully either way.
+# and re-read their files on every load, and the board saves as AUTHORED (#1507). OFF: the exact #87
+# mid-battle snapshot, cast and board included. Ad-hoc units snapshot fully either way.
 var authored_save := true
+
+const SAVED_AS_AUTHORED := "Saved as authored. Play had changed the tile states or gas on %d %s; those were saved as you last painted them."
 
 # The dirty marker's memory: what each counter read at the last load/save, and whether anything
 # else (zones, scenario fields) has marked since. _process polls the counters because DirtyCells is
@@ -62,7 +64,9 @@ func init(p_scenario_manager: ScenarioManager, p_game) -> void:
 		+ "REFERENCES to that file — every load re-reads the character as authored, so editing\n"
 		+ "the file later updates this mission too. Their mid-battle state (HP, wounds, elemental\n"
 		+ "states, weapon charge) is deliberately NOT saved. Ad-hoc units always save as full\n"
-		+ "snapshots either way.\n\n"
+		+ "snapshots either way.\n"
+		+ "Tile states and gas save as you last PAINTED them: what playing turns did to them\n"
+		+ "(fire spreading or burning out, gas drifting) is left out.\n\n"
 		+ "OFF (snapshot mode): everything saves as an exact mid-battle snapshot, cast included —\n"
 		+ "the save replays this precise moment forever and stops following character-file edits.\n"
 		+ "Use for save-and-resume of a fight in progress.\n\n"
@@ -216,13 +220,36 @@ func _on_update_pressed() -> void:
 
 
 func _update_confirmed(target: String) -> void:
-	capturing.emit()   # flush staged unit edits first -- the save must match what panels show
 	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
-	if scenario_manager.save_scenario(target, status_label, authored_save):
-		_stamp_clean()   # only a written file agrees with the board (#1182)
+	_save(target)
 	refresh_dropdown(target)
 	refresh_loaded_label()
 	file_changed.emit()
+
+
+# Update's and Save As's one write. capturing goes first: it flushes staged unit edits, so the save
+# matches what the panels show. An authored save writes the board as authored and says so when play
+# had moved its tile states or gas, since the file then differs from the screen on purpose (#1507).
+func _save(scenario_name: String) -> bool:
+	capturing.emit()
+	var board := authored_board()
+	if not scenario_manager.save_scenario(scenario_name, status_label, authored_save, board):
+		return false
+	_stamp_clean()   # only a written file agrees with the board (#1182)
+	if board != null:
+		var moved := board.cells_moved_from(scenario_manager.capture_board())
+		if moved > 0:
+			status_label.text = SAVED_AS_AUTHORED % [moved, "cell" if moved == 1 else "cells"]
+	return true
+
+
+# The board an Update or Save As writes (#1507): the undo history's board as authored while Authored is
+# ticked, else null, which saves the live board.
+func authored_board() -> BoardSnapshot:
+	if not authored_save:
+		return null
+	var controller: DevController = game.dev_controller
+	return controller.history.authored()
 
 
 func _on_delete_pressed() -> void:
@@ -250,9 +277,7 @@ func _on_save_as_pressed() -> void:
 		return
 	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario", status_label):
 		return
-	capturing.emit()   # same flush as Update: a Save As mid-edit keeps what the panel shows
-	if scenario_manager.save_scenario(entered, status_label, authored_save):
-		_stamp_clean()
+	_save(entered)
 	scenario_name_input.text = ""
 	refresh_dropdown(entered)
 	refresh_loaded_label()

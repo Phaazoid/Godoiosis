@@ -475,18 +475,20 @@ func _begin_stroke() -> void:
 	game.mission_log.note_dev_intervention()
 	history.begin(game.scenario_manager.capture_board())
 
-func _end_stroke() -> void:
+# `whole`: the fields a board-wide wipe leaves the authored board holding exactly as shown (#1507).
+func _end_stroke(whole: Array[StringName] = []) -> void:
 	if _brush_painting or _brush_erasing:
 		return   # the other button is still down -- the gesture has not ended yet
 	if not _stroke_open:
 		return   # a release whose press landed in the other OS window
 	_stroke_open = false
-	_commit_step()
+	_commit_step(whole)
 
 # A board-wide act is one step exactly as a stroke is; resize_map and clear_tile_states bracket
-# themselves with these two.
-func _commit_step() -> void:
-	if history.commit(game.scenario_manager.capture_board()):
+# themselves with these two. Every authoring write to a store play also writes (tile states, gas) goes
+# inside one, or the authored board never sees it and an authored save leaves it out (#1507).
+func _commit_step(whole: Array[StringName] = []) -> void:
+	if history.commit(game.scenario_manager.capture_board(), _has_ground, whole):
 		history_changed.emit()
 
 # WHY the history may not move right now -- "" means it may. Asked INSIDE the two doors below, so the
@@ -876,7 +878,7 @@ func clear_tile_states() -> void:
 	_begin_stroke()
 	game.terrain_states.clear()
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
-	_end_stroke()
+	_end_stroke(BoardSnapshot.TILE_STATE_FIELDS)
 
 # The Tile Brush list's Clear (#1484): one authored start off, the state left standing on its ground's
 # clock. Here for the same reason as the wipe above, so it is one undo step.
@@ -920,4 +922,5 @@ func step_gas() -> void:
 func clear_gas() -> void:
 	_begin_stroke()
 	game.gas_field.clear()
-	_end_stroke()
+	var gas: Array[StringName] = [&"gas"]
+	_end_stroke(gas)
