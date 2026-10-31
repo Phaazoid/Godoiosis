@@ -265,8 +265,7 @@ static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, at
 		for cell in steps:
 			_land(landed, cell, steps[cell])
 		_time(result, landed)
-	if attack != null and attack.tile_effect_state() != Terrain.TileState.NONE \
-			and attack.tile_effect_shape != null:
+	if attack != null and attack.lays_effect_apart():
 		result.effect = Reach.get_effect_cells_from(origin_cell, target_cell, attack, board, facing)
 	return result
 

@@ -530,12 +530,15 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 # question an aim's gather asks -- this is that gather with a different answer to who stands where.
 #
 # The sweep works on copies, so the armed watch is left alone -- re-arming it over the current would
-# let the arc grow the watched cells with every trigger.
+# let the arc grow the watched cells with every trigger. Its tile effect lands where the watch froze it
+# (#894), never re-placed, since the sweep walks paths and an effect shape is not one.
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
 	var paths := watch.paths()
 	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
 	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo,
 			PlanResolver.unit_threaded_at.bind(board, hypo), arrival)
+	if watch.attack.lays_effect_apart():
+		reach.effect = watch.effect_cells.duplicate()
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only

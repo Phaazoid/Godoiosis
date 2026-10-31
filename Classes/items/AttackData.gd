@@ -188,6 +188,10 @@ const TILE_EFFECTS: Dictionary[Elemental.Element, Terrain.TileState] = {
 func tile_effect_state() -> Terrain.TileState:
 	return TILE_EFFECTS.get(tile_effect, Terrain.TileState.NONE)
 
+# Whether it lays its effect on a shape of its own, apart from the tiles it struck.
+func lays_effect_apart() -> bool:
+	return tile_effect_state() != Terrain.TileState.NONE and tile_effect_shape != null
+
 # What this attack would deliver if it delivered `kind`: NONE for a heal or a pure-utility attack,
 # the kind itself otherwise. ONE home for that rule -- delivered_kind() reads it for the authored
 # field, WeaponInstance.effective_kind for the field with a mod's override composed on top.
@@ -448,7 +452,7 @@ func hidden_fields() -> PackedStringArray:
 	if is_directional():
 		hidden.append_array(["min_range", "max_and_a_half"])
 	var lays := tile_effect_state() != Terrain.TileState.NONE
-	if attack_shape == null and not (lays and tile_effect_shape != null):
+	if attack_shape == null and not lays_effect_apart():
 		hidden.append("swing")
 	if not lays:
 		hidden.append_array(["tile_effect_turns", "tile_effect_shape"])

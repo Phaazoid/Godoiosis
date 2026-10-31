@@ -271,3 +271,41 @@ func test_a_sweep_hands_its_effect_tiles_to_every_member_it_stamps() -> void:
 	var group: Array[AttackAction] = [AttackAction.create(attacker, origin, null, aim)]
 	AttackAction.stamp_sweep(group, shaped)
 	assert_array(group[0].effect_cells).contains_exactly(placed)
+
+
+# A watch's geometry is frozen at arm, so its effect tiles are too: the shot lays its fire on the tiles
+# the watch showed from its anchor, never on the tiles it struck. Driven through the real queue and
+# execution, because what is under test is that the arm hands the tiles on to the shot.
+func test_a_watch_shot_lays_its_effect_where_the_watch_froze_it() -> void:
+	var sm := H.make_manager(self)
+	var watcher := H.spawn_solo(self, sm, Team.Faction.ENEMY, Vector2i.ZERO, {Stats.Stat.STR: 4}, true, 6)
+	var attack := _laying(watcher)
+	P.line(attack, 3)
+	attack.tile_effect_shape = P.shape([Vector2i(-1, -1), Vector2i(1, -1)] as Array[Vector2i])
+	var aim := Vector2i(1, 0)
+	var order := OverwatchAction.new()
+	order.init(watcher, aim, attack)
+	watcher.squad._queue_action(order)
+	var crosser := H.spawn_solo(self, sm, PLAYER, Vector2i(3, 1), {Stats.Stat.MHP: 60}, false)
+	var units: Array[Unit] = [watcher, crosser]
+	var board := BoardContext.new(sm.grid, units, sm)
+	sm.resolve_plan(watcher.squad, board)
+	for action in watcher.squad.action_queue:
+		action.execute()
+	var frozen := Reach.get_effect_cells_from(Vector2i.ZERO, aim, attack, board)
+	assert_array(frozen).override_failure_message("fixture: the effect shape placed nothing").is_not_empty()
+	assert_array(watcher.watch.effect_cells).override_failure_message(
+		"the armed watch holds no effect tiles -- execution never handed them on").contains_exactly(frozen)
+
+	var walk := MoveAction.new()
+	walk.init(crosser, [Vector2i(3, 1), Vector2i(3, 0)] as Array[Vector2i], null)   # into the line's far end
+	crosser.squad._queue_action(walk)
+	var plan := sm.resolve_plan(crosser.squad, board)
+
+	assert_int(plan.watch_shots.size()).override_failure_message("fixture: the crossing took no shot").is_equal(1)
+	for cell in frozen:
+		assert_bool(_lays_fire(plan, cell)).override_failure_message(
+			"the shot laid no fire on %s, a tile the watch showed" % cell).is_true()
+	for cell in plan.watch_shots[0].struck_cells:
+		assert_bool(_lays_fire(plan, cell)).override_failure_message(
+			"the shot laid its fire on %s, a tile it struck, not where the watch froze it" % cell).is_false()

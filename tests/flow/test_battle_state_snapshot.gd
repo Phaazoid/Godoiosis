@@ -529,6 +529,27 @@ func test_a_watchs_paths_round_trip() -> void:
 			"the watch came back without its path lengths -- it would fire as one path").is_equal(lengths)
 
 
+# Where a watch lays its tile effect survives the save (#894): those tiles are frozen at arm, so a
+# watch that lost them would lay its fire nowhere when it fires after the load.
+func test_a_watchs_effect_tiles_round_trip() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var weapon := _family_weapon(WeaponData.WeaponType.CARBINE)
+	var watch := WeaponAttackData.new()
+	watch.can_overwatch = true
+	weapon.template.extra_attacks = [watch]
+	a.add_item(weapon)
+
+	var footprint: Array[Vector2i] = [Vector2i(1, 0)]
+	var effect: Array[Vector2i] = [Vector2i(1, 1), Vector2i(1, -1)]
+	a.arm_watch(Vector2i.ZERO, Vector2i(1, 0), footprint, watch, false, false, [], effect)
+
+	var loaded := _round_trip(a)
+
+	assert_object(loaded.watch).is_not_null()
+	assert_array(loaded.watch.effect_cells).override_failure_message(
+			"the watch came back without its effect tiles -- it would lay its fire nowhere").is_equal(effect)
+
+
 # --- what the pipe CARRIES (#697) ----------------------------------------------------------------
 
 # capture_unit_state used to drop any inventory entry that was not an EquippableData, with a
