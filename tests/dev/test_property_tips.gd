@@ -128,6 +128,16 @@ func test_every_field_the_vial_editor_draws_carries_text() -> void:
 	assert_array(missing).is_empty()
 
 
+# The Alchemy page's Substances and Reactions tabs (#1532). Every exported field reaches a control
+# there, the icon's read-only line included, so none is excused.
+func test_every_field_the_alchemy_editor_draws_carries_text() -> void:
+	var missing: Array[String] = []
+	_untipped(Substance.new(), [], missing)
+	_untipped(ElementalReaction.new(), [], missing)
+	_untipped(TerrainReaction.new(), [], missing)
+	assert_array(missing).is_empty()
+
+
 # WeaponData reaches Item's table through its own merge -- the same hand-written step below, one
 # content root over, and the one this mode's inherited fields (weight, icon, description) ride.
 func test_a_template_reaches_the_base_item_tips() -> void:

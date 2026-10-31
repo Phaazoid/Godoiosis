@@ -71,3 +71,35 @@ func fires_for(elements: Array[Elemental.Element]) -> bool:
 
 func badge_name() -> String:
 	return short_name if short_name != "" else popup
+
+
+# The dev tools' form (Project > Alchemy > Reactions), section by section, AttackData.property_sections'
+# shape: every exported field sits in exactly one section (tests/dev/test_alchemy_editor.gd).
+static func property_sections() -> Array[Dictionary]:
+	return [
+		{"title": "When it fires", "fields": PackedStringArray(["incoming_element", "also_triggered_by", "required_state"])},
+		{"title": "What it does", "fields": PackedStringArray(["damage_mult", "damage_bonus", "add_states", "remove_states", "add_state_turns"])},
+		{"title": "What it releases", "fields": PackedStringArray(["gases"])},
+		{"title": "Chemistry", "fields": PackedStringArray(["equation"])},
+		{"title": "How it shows", "fields": PackedStringArray(["popup", "short_name", "vfx_tag", "icon"])},
+	]
+
+
+# Per-field text for that form (#473), beside the @export each one describes.
+static func property_tips() -> Dictionary:
+	return {
+		"incoming_element": "The element a hit must carry to set this off. The one the equation and the lint explain.",
+		"also_triggered_by": "Other elements that set it off too, e.g. Heat, which dries and melts what fire does. It still fires at most once per hit.",
+		"required_state": "A state the target must already hold. None = the element alone sets it off: the SETUP half of a combo, which leaves a state for a later one.",
+		"damage_mult": "Multiplies the hit's damage. Every matching reaction multiplies in, then the bonuses add: round(base x every mult + every bonus).",
+		"damage_bonus": "Added to the hit's damage after every multiplier. Negative takes some away.",
+		"add_states": "States the target gains when this fires.",
+		"remove_states": "States it loses, e.g. a quick-dry takes Wet. Leave the required state unticked to keep it.",
+		"add_state_turns": "How long an added state lasts, in turns. Unlisted = the state's own length. When two reactions add the same state, the longer wins.",
+		"gases": "Gas released on the cell the target was hit on, e.g. steam off a wet body drying.",
+		"equation": "The reaction as Deep Alchemy writes it, e.g. F2 + W2 -> 2FW. Read by the lint only: nothing in play reads it. The lines under it are what CI checks.",
+		"popup": "What the reaction SHOUTS when it fires, e.g. Electrocuted! The queue row and the glossary read it too.",
+		"short_name": "The badge word for the action queue's row, when the popup is too long to fit. Empty = the popup fits.",
+		"vfx_tag": "Authored but read by nothing yet (#1443).",
+		"icon": "The reaction's icon. Read by nothing yet (#1443). Set in Godot's own inspector: this form cannot pick a texture.",
+	}
