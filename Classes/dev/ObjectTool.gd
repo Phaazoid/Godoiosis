@@ -254,7 +254,7 @@ func _build_ground_section(entry: Dictionary) -> void:
 
 func _refresh_made_of() -> void:
 	if _made_of != null and is_instance_valid(_made_of):
-		_made_of.text = AlchemyTool.made_of_line(SubstanceMap.authored().of_kind(_made_of_kind))
+		_made_of.text = AlchemySources.made_of_line(SubstanceMap.authored().of_kind(_made_of_kind))
 
 
 # --- The game-wide defaults (#902, off the Game tab's World group) ------------------------------
@@ -335,17 +335,14 @@ func _delete_ignition(path: String) -> void:
 # that closure holds the same instance (ContentRepair.load_tolerant is ResourceLoader.load, which
 # serves Godot's cache), so the running board reads the new number with no re-wire at all. Doing it
 # everywhere would work and would hide that the cache is load-bearing here.
-func _rewire_fuel() -> void:
-	if _host == null or _host.game == null or _host.game.grid == null:
-		return
-	if _host.game.terrain_states == null:
-		return
-	_host.game.terrain_states.fuel_source = TerrainReactionCatalog.fuel_source_for(_host.game.grid)
-
-
 func _after_ground_change(message: String) -> void:
-	TerrainReactionCatalog.refresh()   # the folder just gained or lost a file
-	_rewire_fuel()
+	# The folder just gained or lost a file: TerrainReactionCatalog.rescan is the one door.
+	var states: TerrainStateManager = null
+	var grid: TileMapLayer = null
+	if _host != null and _host.game != null:
+		states = _host.game.terrain_states
+		grid = _host.game.grid
+	TerrainReactionCatalog.rescan(states, grid)
 	_rebuild()   # re-reads the refreshed catalog, so the tick and the file agree again
 	_status.text = message
 

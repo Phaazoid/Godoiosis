@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="ElementalReaction" format=3]
+[gd_resource type="Resource" script_class="ElementalReaction" format=3 uid="uid://bqt3var7g48o5"]
 
-[ext_resource type="Script" path="res://Classes/elemental/ElementalReaction.gd" id="1_dchll"]
+[ext_resource type="Script" uid="uid://bfm0j6xji22k" path="res://Classes/elemental/ElementalReaction.gd" id="1_dchll"]
 
 [resource]
 script = ExtResource("1_dchll")
@@ -9,7 +9,9 @@ required_state = 1
 damage_bonus = 5
 add_states = Array[int]([2])
 remove_states = Array[int]([1])
-add_state_turns = Dictionary[int, int]({2: 3})
-short_name = "Deep"
+add_state_turns = Dictionary[int, int]({
+2: 3
+})
 equation = "2Q + W2 -> 2QW"
 popup = "Deep Chill!"
+short_name = "Deep"

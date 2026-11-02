@@ -1052,7 +1052,7 @@ func test_a_tick_rewires_the_live_board() -> void:
 	assert_object(game.terrain_states.fuel_source.call(grass)).override_failure_message(
 		"the sentinel did not take, so this case cannot tell a re-wire from no re-wire").is_null()
 
-	panel._rewire_fuel()
+	panel._after_ground_change("x")   # the door a tick's create and delete both end on
 
 	assert_object(game.terrain_states.fuel_source.call(grass)).override_failure_message(
 		"a tick left the board reading the fuel source it had at boot, so a ground that just became "

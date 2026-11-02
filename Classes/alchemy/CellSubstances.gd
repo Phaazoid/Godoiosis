@@ -29,10 +29,6 @@ extends Object
 const AIR := 1
 const PLENTY := 1000000   # more than any recipe asks
 
-# Plant matter is present as ITSELF but lends none of its parts (c3potheds@): organic matter is too
-# complex to Break or Bind, so a grass field holds no water for a cast to draw on.
-const LENDS_NOTHING: Array[String] = ["green_plant", "dry_plant"]
-
 # A compound's parts, by formula text, for the shared catalog only -- resolving a part scans the whole
 # catalog, and the AI asks this per origin.
 static var _parts_memo: Dictionary = {}
@@ -135,11 +131,11 @@ static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: Boa
 
 
 # The substances a compound is mixed from (`dirt` is `E2 + AE`: salt and ash). A molecule has none,
-# and plant matter lends none.
+# and a compound whose `lends_its_parts` is off (plant matter, c3potheds@) lends none.
 static func _parts_of(id: String, catalog: Dictionary, shared: bool) -> Array[String]:
 	var none: Array[String] = []
 	var substance := catalog.get(id) as Substance
-	if substance == null or not substance.is_compound() or LENDS_NOTHING.has(id):
+	if substance == null or not substance.is_compound() or not substance.lends_its_parts:
 		return none
 	if shared and _parts_memo.has(substance.formula):
 		return _parts_memo[substance.formula]

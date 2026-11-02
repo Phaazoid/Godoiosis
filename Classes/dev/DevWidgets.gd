@@ -365,13 +365,16 @@ static func parse_enum_hint(hint_string: String) -> Array:
 			entries.append({"name": part, "value": i})
 	return entries
 
-# Dropdown for an int-backed enum property: shows the names, reports back the enum int.
-static func add_enum_option(container: Node, label_text: String, hint_string: String, current: int, on_change: Callable) -> void:
+# Dropdown for an int-backed enum property: shows the names, reports back the enum int. `skip` holds
+# members never offered (a retired tombstone, retired_values), unless one is already the value.
+static func add_enum_option(container: Node, label_text: String, hint_string: String, current: int, on_change: Callable,
+		skip: Array = []) -> void:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = label_text
 	var option := OptionButton.new()
-	var entries := parse_enum_hint(hint_string)
+	var entries := parse_enum_hint(hint_string).filter(func(e: Dictionary) -> bool:
+		return e["value"] == current or not skip.has(e["value"]))
 	for i in entries.size():
 		option.add_item(entries[i]["name"])
 		if entries[i]["value"] == current:
@@ -557,13 +560,21 @@ static func is_exported(prop: Dictionary) -> bool:
 # section law is what reports that, since drawing code cannot tell a typo from a field this mode
 # deliberately leaves to a bespoke control.
 static func add_property_row(container: Node, resource: Resource, prop_name: String, rebuild: Callable) -> Array[Node]:
+	var prop := exported_property(resource, prop_name)
+	if prop.is_empty():
+		return []
+	var first := container.get_child_count()
+	_add_property_control(container, resource, prop, rebuild)
+	return _added_since(container, first)
+
+
+# One exported field's get_property_list() entry, for a form that routes a field by its TYPE before
+# drawing it. {} = no such exported field.
+static func exported_property(resource: Resource, prop_name: String) -> Dictionary:
 	for prop in resource.get_property_list():
-		if prop.name != prop_name or not is_exported(prop):
-			continue
-		var first := container.get_child_count()
-		_add_property_control(container, resource, prop, rebuild)
-		return _added_since(container, first)
-	return []
+		if prop.name == prop_name and is_exported(prop):
+			return prop
+	return {}
 
 
 # Hide the rows of every field the resource says does not apply right now, and KEEP them right --
@@ -637,6 +648,16 @@ static func property_tip(resource: Resource, prop_name: String) -> String:
 	return wrap_tooltip(text)
 
 
+# The enum members a reflective row must not offer for one field, from the resource's own
+# property_retired() table -- property_tip's shape. A tombstone kept in an append-only enum
+# (Terrain.RETIRED_STATES) is in the hint string like every live member, so only the resource can
+# say it is gone. [] = a resource with no table, which offers every member as before.
+static func retired_values(resource: Resource, prop_name: String) -> Array:
+	if resource == null or not resource.has_method("property_retired"):
+		return []
+	return (resource.call("property_retired") as Dictionary).get(prop_name, [])
+
+
 # Tooltip every control a row just added, add_knob_row's shape -- these builders return void or a
 # single row, and Godot's tooltip does not walk up to a parent, so the row is identified by the
 # children that appeared rather than by a handle.
@@ -672,7 +693,8 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 	match prop.type:
 		TYPE_INT:
 			if prop.hint == PROPERTY_HINT_ENUM:
-				add_enum_option(container, label, prop.hint_string, value, func(v): write(resource, prop.name, v))
+				add_enum_option(container, label, prop.hint_string, value, func(v): write(resource, prop.name, v),
+						retired_values(resource, prop.name))
 			else:
 				add_spinbox(container, label, value, func(v): write(resource, prop.name, int(v)))
 		TYPE_FLOAT:
@@ -757,6 +779,157 @@ static func add_enum_map(container: Node, label_text: String, hint_string: Strin
 					else:
 						map[key] = picked
 					on_change.call(map))
+
+
+# Is this exported Array typed Array[<enum>]? Its element arrives as "<TYPE_INT>/<PROPERTY_HINT_ENUM>:
+# <names>" -- the typed-array sharp edge below, so the prefix is the test, never a class name.
+static func is_enum_array(prop: Dictionary) -> bool:
+	return prop.type == TYPE_ARRAY and String(prop.hint_string).begins_with(_enum_prefix())
+
+
+# Is this exported Dictionary typed enum -> int? An int value half is "<TYPE_INT>:" with no hint.
+static func is_enum_number_map(prop: Dictionary) -> bool:
+	var halves: PackedStringArray = String(prop.hint_string).split(";")
+	return prop.type == TYPE_DICTIONARY and halves.size() == 2 and halves[0].begins_with(_enum_prefix()) \
+			and halves[1] == "%d:" % TYPE_INT
+
+
+static func _enum_prefix() -> String:
+	return "%d/%d:" % [TYPE_INT, PROPERTY_HINT_ENUM]
+
+
+# The {name, value} members of a typed hint's enum half ("2/2:None:0,Wet:1" -> None, Wet).
+static func _typed_enum_members(typed_hint: String) -> Array:
+	return parse_enum_hint(typed_hint.substr(typed_hint.find(":") + 1))
+
+
+# What a SET of this enum may be offered: never None (a set holding "nothing" says nothing) and never
+# a member `skip` names (retired_values), unless `held` already holds it -- a row never hides what a
+# file stores.
+static func _offered(members: Array, skip: Array, held: Callable) -> Array:
+	return members.filter(func(e: Dictionary) -> bool:
+		return held.call(e["value"]) or (e["name"] != "None" and not skip.has(e["value"])))
+
+
+# An Array[<enum>] as one tick per member (#1532), e.g. the states a reaction adds. A tick writes a
+# FRESH copy of the live array -- duplicate() keeps it typed -- in the ENUM's order whatever order the
+# ticks were clicked in, so one set always saves the same way. `read` hands back the live array: a
+# write replaces it, so a captured copy would go stale after the first tick.
+static func add_enum_ticks(container: Node, label_text: String, hint_string: String, read: Callable,
+		on_change: Callable, skip: Array = []) -> HBoxContainer:
+	var members := _typed_enum_members(hint_string)
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_child(label)
+	var flow := HFlowContainer.new()
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(flow)
+	var held: Array = read.call()
+	for entry: Dictionary in _offered(members, skip, func(v: int) -> bool: return held.has(v)):
+		var value: int = entry["value"]
+		var tick := CheckBox.new()
+		tick.text = entry["name"]
+		tick.button_pressed = held.has(value)
+		tick.toggled.connect(func(on: bool) -> void:
+			var was: Array = read.call()
+			var now: Array = was.duplicate()
+			now.clear()
+			for member: Dictionary in members:
+				var v: int = member["value"]
+				if (on if v == value else was.has(v)):
+					now.append(v)
+			on_change.call(now))
+		flow.add_child(tick)
+	container.add_child(row)
+	return row
+
+
+# An enum -> int map (#1532), e.g. how many turns each added state lasts: one `Name [n unit] x` entry per
+# HELD key, then a dropdown that adds one (at 1) and a dim note saying what an unlisted key means.
+# A spin edit writes in place; adding or removing a key redraws the entries DEFERRED, because the
+# control that asked is part of what the redraw replaces (#741's trap). `read` hands back the live map.
+static func add_enum_number_map(container: Node, label_text: String, hint_string: String, read: Callable,
+		on_change: Callable, skip: Array = [], unit := "", add_text := "+ add", note := "") -> HBoxContainer:
+	var members := _typed_enum_members(hint_string.split(";")[0])
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_child(label)
+	var flow := HFlowContainer.new()
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(flow)
+	var held_box := HFlowContainer.new()
+	flow.add_child(held_box)
+	var add := OptionButton.new()
+	flow.add_child(add)
+	if note != "":
+		var dim := Label.new()
+		dim.text = note
+		dim.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75, 1))
+		dim.mouse_filter = Control.MOUSE_FILTER_PASS
+		flow.add_child(dim)
+	var redraw := func(self_ref: Callable) -> void:
+		if not is_instance_valid(held_box):
+			return
+		for child in held_box.get_children():
+			held_box.remove_child(child)
+			child.queue_free()
+		var map: Dictionary = read.call()
+		for member: Dictionary in members:
+			var key: int = member["value"]
+			if not map.has(key):
+				continue
+			var entry := HBoxContainer.new()
+			var name_label := Label.new()
+			name_label.text = "   " + String(member["name"])
+			name_label.mouse_filter = Control.MOUSE_FILTER_PASS
+			entry.add_child(name_label)
+			var spin := SpinBox.new()
+			spin.min_value = 1
+			spin.max_value = 99
+			spin.step = 1
+			spin.suffix = unit
+			spin.value = int(map[key])
+			spin.value_changed.connect(func(v: float) -> void:
+				var now: Dictionary = (read.call() as Dictionary).duplicate()
+				now[key] = int(v)
+				on_change.call(now))
+			entry.add_child(spin)
+			var drop := Button.new()
+			drop.text = "x"
+			drop.flat = true
+			drop.pressed.connect(func() -> void:
+				var now: Dictionary = (read.call() as Dictionary).duplicate()
+				now.erase(key)
+				on_change.call(now)
+				self_ref.call_deferred(self_ref))
+			entry.add_child(drop)
+			held_box.add_child(entry)
+		add.clear()
+		add.add_item(add_text)
+		var addable: Array[int] = []
+		for member: Dictionary in _offered(members, skip, func(_v: int) -> bool: return false):
+			if not map.has(member["value"]):
+				add.add_item(member["name"])
+				addable.append(member["value"])
+		add.select(0)
+		add.set_meta(&"addable", addable)
+		if row.tooltip_text != "":
+			apply_tooltip(held_box, row.tooltip_text)
+	add.item_selected.connect(func(index: int) -> void:
+		var addable: Array = add.get_meta(&"addable", [])
+		if index < 1 or index > addable.size():
+			return
+		var now: Dictionary = (read.call() as Dictionary).duplicate()
+		now[addable[index - 1]] = 1
+		on_change.call(now)
+		redraw.call_deferred(redraw))
+	redraw.call(redraw)
+	container.add_child(row)
+	return row
 
 
 # Is this exported Array an Array[Vector2i]?

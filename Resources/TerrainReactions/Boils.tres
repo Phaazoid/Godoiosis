@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="TerrainReaction" format=3]
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://dihfpjjytdfm4"]
 
 [ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_b0ils"]
 

@@ -29,14 +29,16 @@ class _SubstanceBoard extends BoardContext:
 		return lit.get(cell, false)
 
 
-func _sub(formula: String, name: String = "") -> Substance:
+func _sub(formula: String, name: String = "", lends := true) -> Substance:
 	var s := Substance.new()
 	s.formula = formula
 	s.display_name = name
+	s.lends_its_parts = lends
 	return s
 
 
-# The fixture's own chemistry: the ambient four, the grounds its map names, and their parts.
+# The fixture's own chemistry: the ambient four, the grounds its map names, and their parts. Its plants
+# lend nothing, c3potheds@'s rule for the real ones.
 func _catalog() -> Dictionary:
 	return {
 		"inert_air": _sub("A2"), "vital_air": _sub("FA"), "vapor": _sub("AW"), "atom_aether": _sub("Q"),
@@ -47,8 +49,8 @@ func _catalog() -> Dictionary:
 		"dirt": _sub("E2 + AE", "Dirt"),
 		"mud": _sub("dirt + W2", "Mud"),
 		"smoke": _sub("AE + A2", "Smoke"),
-		"green_plant": _sub("AE + 2FA + W2", "Green plant"),
-		"dry_plant": _sub("AE + 2FA", "Dry plant"),
+		"green_plant": _sub("AE + 2FA + W2", "Green plant", false),
+		"dry_plant": _sub("AE + 2FA", "Dry plant", false),
 	}
 
 
@@ -96,13 +98,14 @@ func _board(kinds: Dictionary, cell_states: Dictionary = {}, lit: Dictionary = {
 	return _SubstanceBoard.new(_store(cell_states), gas, kinds, lit, standing)
 
 
-func _supply(board: BoardContext, caster: Unit = null, map: SubstanceMap = _map()) -> Dictionary[String, int]:
-	return CellSubstances.available_near(HERE, board, UnitState.of(caster), _catalog(), {}, map)
+func _supply(board: BoardContext, caster: Unit = null, map: SubstanceMap = _map(),
+		catalog: Dictionary = _catalog()) -> Dictionary[String, int]:
+	return CellSubstances.available_near(HERE, board, UnitState.of(caster), catalog, {}, map)
 
 
-func _present(board: BoardContext, caster: Unit = null) -> Array[String]:
+func _present(board: BoardContext, caster: Unit = null, catalog: Dictionary = _catalog()) -> Array[String]:
 	var ids: Array[String] = []
-	ids.assign(_supply(board, caster).keys())
+	ids.assign(_supply(board, caster, _map(), catalog).keys())
 	return ids
 
 
@@ -128,7 +131,7 @@ func test_a_null_board_still_has_the_ambient_air() -> void:
 # The ids this file names are real substances -- a renamed file would otherwise leave a silent hole.
 func test_every_id_cell_substances_names_is_a_real_substance() -> void:
 	var real := SubstanceCatalog.get_all()
-	for id: String in Atmosphere.SUBSTANCES + CellSubstances.LENDS_NOTHING:
+	for id: String in Atmosphere.SUBSTANCES:
 		assert_bool(real.has(id)).override_failure_message("'%s' names no substance file" % id).is_true()
 
 
@@ -153,8 +156,8 @@ func test_a_push_of_salt_does_not_fizzle_beside_dirt() -> void:
 	assert_str(_fizzle("Push(E2)", _board({ NEXT_DOOR: Terrain.Kind.DIRT }))).is_empty()
 
 
-# Plant matter is present as itself and lends NOTHING (c3potheds@): a grass field holds no water.
-# The dirt the fixture's grass row also names still lends its parts.
+# A compound whose lends_its_parts is off is present as itself and lends NOTHING (plant matter,
+# c3potheds@): a grass field holds no water. The dirt the fixture's grass row also names still lends.
 func test_plant_matter_lends_no_water_and_grass_stands_on_dirt() -> void:
 	var present := _present(_board({ HERE: Terrain.Kind.GRASS, NEXT_DOOR: Terrain.Kind.TALL_GRASS }))
 	assert_bool(present.has("green_plant")).is_true()
@@ -164,6 +167,16 @@ func test_plant_matter_lends_no_water_and_grass_stands_on_dirt() -> void:
 	assert_bool(present.has("dirt")).override_failure_message("grass stands on no dirt").is_true()
 	assert_bool(present.has("salt")).is_true()
 	assert_str(_fizzle("Focus(W2) + Push(W2)", _board({ HERE: Terrain.Kind.GRASS }))).contains("water")
+
+
+# THE MISSING-WIRE CASE for the tick: the same plant, ticked on, lends its water. Read off the field,
+# never off a list of ids, so authoring the tick is what moves it.
+func test_a_compound_ticked_to_lend_lends_its_parts() -> void:
+	var catalog := _catalog()
+	(catalog["green_plant"] as Substance).lends_its_parts = true
+	var present := _present(_board({ HERE: Terrain.Kind.GRASS }), null, catalog)
+	assert_bool(present.has("water")).override_failure_message(
+			"a plant ticked to lend its parts lent no water").is_true()
 
 
 func test_a_hole_offers_nothing() -> void:

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="Substance" format=3]
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://bt0tiq0hov8xa"]
 
 [ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_subst"]
 

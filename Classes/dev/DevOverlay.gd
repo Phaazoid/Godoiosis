@@ -76,7 +76,7 @@ const LEAVES: Array[Dictionary] = [
 	{"scope": "Project", "label": "Attacks", "page": "%Attack Editor",
 		"tip": "Author attacks — Transmutation, Weapon Attack, or Weapon Families (edit a family's main in place and pick its extra attacks); toggle at top."},
 	{"scope": "Project", "label": "Alchemy", "page": "%Alchemy",
-		"tip": "What Deep Alchemy is authored from. Sources: what each ground, tile state, gas and unit state is MADE of, which is what a carving cast beside one can draw on. Edits reach the next cast; Save writes them down."},
+		"tip": "What Deep Alchemy is authored from. Sources: what each ground, tile state, gas and unit state is MADE of, edited live. Substances: each one's formula and whether it lends its parts. Reactions: every unit and ground reaction, whole, with its equation checked as you type."},
 	{"scope": "Project", "label": "Tiles", "page": "%Objects",
 		"tip": "Everything one TILE answers for, narrowest scope first: its own light and size, the burn rules every tile of its ground obeys, and the game-wide defaults it falls back to."},
 	{"scope": "Project", "label": "Moods", "page": "%Moods",

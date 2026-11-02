@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="Substance" format=3]
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://b1h5xjg32x6es"]
 
 [ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_subst"]
 
@@ -7,3 +7,4 @@ script = ExtResource("1_subst")
 display_name = "Green plant"
 formula = "AE + 2FA + W2"
 phase = 1
+lends_its_parts = false

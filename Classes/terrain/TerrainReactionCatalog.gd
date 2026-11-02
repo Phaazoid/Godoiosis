@@ -54,3 +54,12 @@ static func fuel_source_for(grid: TileMapLayer) -> Callable:
 	var reactions := get_all()
 	return func(cell: Vector2i) -> TerrainReaction:
 		return fuel_for_kind(GridUtils.get_terrain_kind_at_cell(grid, cell), reactions)
+
+
+# The folder gained or lost a file at runtime (a dev page's create): read it again, and re-compose the
+# board's fuel source, which captured the old list when it was built (fuel_source_for). The ONE door
+# both dev pages that write here call: the Tiles page's burnable tick and the Alchemy page's Save As.
+static func rescan(terrain_states: TerrainStateManager, grid: TileMapLayer) -> void:
+	refresh()
+	if terrain_states != null and grid != null:
+		terrain_states.fuel_source = fuel_source_for(grid)
