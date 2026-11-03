@@ -145,12 +145,12 @@ func execute():
 		finish_execution()
 		return
 
-	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
-
 	# A payload's thrower does not lunge at it (#1058): the throw was the lunge of the hit that
 	# dropped it, and this one may be going off across the board. The lunge returns at its PEAK
-	# (#480), so the blow below lands mid-swing while the return leg plays on.
+	# (#480), so the blow below lands mid-swing while the return leg plays on. Its actor read stays in
+	# this branch: a later member may play after its actor fell (#1569).
 	if not is_secondary_hit and dropped_by == null:
+		var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
 		await actor.visuals.play_attack_lunge(direction)
 
 	# The block moment (#414), slice one: the bodyguard lunges toward the unit it is covering, the
@@ -212,8 +212,11 @@ func execute():
 # Is there anything to play? False, and nothing more to do, when there is not. Its three clauses are
 # one method because their ORDER is the rule: the watch is spent between the two refusals.
 func open_playback() -> bool:
-	# The swinger must still be on the board to swing. (target may be null = a cell-targeted attack, #47.)
-	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
+	# The swinger must still be on the board to swing: asked of the LEAD alone, as the resolver asks
+	# liveness (#1569). A later member or a payload reads its `skipped` stamp below. (target may be
+	# null = a cell-targeted attack, #47.)
+	var lead := not is_secondary_hit and dropped_by == null
+	if lead and (actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion()):
 		return false
 	# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
 	# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Taken
