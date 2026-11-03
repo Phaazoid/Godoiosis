@@ -144,7 +144,8 @@ func faction_all_squads_acted(faction: Team.Faction) -> bool:
 			return false
 	return any_active
 
-func create_squad(leader: Unit, archetype := AIArchetype.Type.FACTION_DEFAULT, zone_name := "") -> Squad:
+func create_squad(leader: Unit, archetype := AIArchetype.Type.FACTION_DEFAULT, zone_name := "",
+		acted := false) -> Squad:
 	var squad := Squad.new()
 	add_child(squad)
 
@@ -152,6 +153,7 @@ func create_squad(leader: Unit, archetype := AIArchetype.Type.FACTION_DEFAULT, z
 	# Settled before the emit, as join_squad does for the hue (#1196).
 	squad.archetype = archetype
 	squad.zone_name = zone_name
+	squad.has_acted = acted
 
 	squads.append(squad)
 	_register_squad_signals(squad)
@@ -204,15 +206,20 @@ func leave_squad(unit: Unit):
 # The solo squad keeps the old squad's archetype and zone (#1196): a rescued Hold unit still holds.
 # Not its name (the formation is gone) and not its post (the old leader's cell; Sentry sets a fresh
 # one). Read before the detach, which can free an emptied squad.
+#
+# It keeps has_acted too (#1556): leaving a squad never refreshes a turn. A fresh squad read as
+# un-acted, so a member shoved out of contact or stranded by a handover got a second action.
 func eject(unit: Unit, cause: LeaveCause):
 	var archetype := AIArchetype.Type.FACTION_DEFAULT
 	var zone_name := ""
+	var acted := false
 	if unit.squad != null:
 		archetype = unit.squad.archetype
 		zone_name = unit.squad.zone_name
+		acted = unit.squad.has_acted
 		unit.left_squad = unit.squad   # #1230: an AI stray rejoins this one first
 	_detach_from_current_squad(unit, cause)
-	create_squad(unit, archetype, zone_name)
+	create_squad(unit, archetype, zone_name, acted)
 
 # The detach WITHOUT the re-solo (#738) -- for a unit that is leaving the BOARD, not just its squad.
 # leave_squad/eject directly above cannot serve that: they exist for a unit that stays standing, so
@@ -598,6 +605,13 @@ func _candidate_rescue_target_ok(squad: Squad, action: BaseAction, plan: Resolve
 
 func set_has_acted(squad: Squad, acted: bool) -> void:
 	squad._set_has_acted(acted)
+
+# A squad has acted from the moment its pass begins, not when it ends (#1556). Both hosts call this
+# once a plan is cleared to play; the pass ejects members (the settle sweeps, a mid-pass handover)
+# before _end_squad_turn's set_has_acted, and eject carries the mark. The orders stay queued while
+# they play, so this is the mark without set_has_acted's clear.
+func spend_turn(squad: Squad) -> void:
+	squad.has_acted = true
 
 func remove_actions_for_unit(unit: Unit) -> void:
 	var squad = unit.squad
@@ -1462,8 +1476,9 @@ func handle_unit_downed(unit: Unit) -> void:
 # What a pass's end does with one unit downed during it, for both hosts' sweeps (#46). It is ejected
 # whatever happened next -- revive does NOT re-enlist -- and one standing again was rescued in the
 # SAME pass (#124): still SPENT the turn it is rescued, and its solo squad only exists as of the
-# eject, so the mark lands here rather than in RescueAction.execute. The caller skips a unit finished
-# off later in the pass; the death path already cleaned it up.
+# eject, so the mark lands here rather than in RescueAction.execute. A body from the acting squad
+# already carries the mark out (eject, #1556); this is for one from a squad that had not acted. The
+# caller skips a unit finished off later in the pass; the death path already cleaned it up.
 func settle_downed(unit: Unit) -> void:
 	handle_unit_downed(unit)
 	if unit.is_active():

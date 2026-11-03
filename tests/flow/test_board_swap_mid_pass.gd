@@ -126,7 +126,9 @@ func test_a_pass_whose_board_changes_under_it_stops_at_its_next_await() -> void:
 	await _frames(10)
 
 	assert_bool(hero.movement.moving).override_failure_message("fixture: the walk never finished").is_false()
-	assert_bool(squad.has_acted).override_failure_message(
+	# The queue, not has_acted: a squad is spent from the moment its pass begins (#1556), and emptying
+	# the queue is the half of _end_squad_turn a stopped pass never reaches.
+	assert_bool(squad.action_queue.is_empty()).override_failure_message(
 			"the pass played on and ended its squad's turn after its board was gone").is_false()
 
 

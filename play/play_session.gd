@@ -1471,6 +1471,7 @@ func execute() -> Dictionary:
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
 
+	squad_manager.spend_turn(squad)   # execute_orders' own mark: a member the pass ejects stays spent (#1556)
 	_executing = true
 	var events: Array[String] = []
 
