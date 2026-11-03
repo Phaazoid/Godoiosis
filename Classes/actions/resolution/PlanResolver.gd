@@ -88,11 +88,6 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 	var ordered: Array[CounterAttackAction] = []
 	for i in derived.size():
 		var ctr := derived[i]
-		# A counter is an attack with a volley like any other, so it gets the same one-blast-one-
-		# moment read. plan.counters is FLAT (create_counter_volley's members are appended in
-		# order), so the volley's lead member is where its snapshot is taken.
-		if not ctr.is_secondary_hit:
-			_apply_guards(_volley_of(ctr), plan, hypo)
 		if not _counter_actor_live(ctr, hypo):
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
@@ -100,6 +95,12 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		elif _fizzles(ctr, board, hypo):
 			ctr.resolved = _fizzled_outcome()       # its carving has nothing to work with there
 		else:
+			# A counter is an attack with a volley like any other, so it gets the same one-blast-one-
+			# moment read. plan.counters is FLAT (create_counter_volley's members are appended in
+			# order), so the volley's lead member is where its snapshot is taken. BELOW liveness and
+			# the fizzle, as in resolve_attack_group (#1570): a counter that never lands spends no ward.
+			if not ctr.is_secondary_hit:
+				_apply_guards(_volley_of(ctr), plan, hypo)
 			_resolve_one(ctr, plan, reactions, hypo, board)
 			if board != null and not ctr.is_secondary_hit:
 				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, hypo):
@@ -697,6 +698,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	var attacker := action.actor
 	var target := action.target
 	if attacker == null or target == null or not is_instance_valid(attacker) or not is_instance_valid(target):
+		outcome.reads_hp = false   # a cell with nobody on it (#47): no HP to show, or the row reads 0->0 (#1568)
 		action.resolved = outcome
 		return
 
