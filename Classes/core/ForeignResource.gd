@@ -21,6 +21,8 @@ class_name ForeignResource
 const EMBEDDED_TYPES: Array[String] = ["Resource"]
 # Every script a foreign file may name lives here; all committed content's scripts do.
 const SCRIPT_ROOT := "res://Classes/"
+# ...plus each script outside it that a field of ours is typed as (DialogBeat.timeline).
+const EMBEDDED_SCRIPTS: Array[String] = ["res://addons/dialogic/Resources/timeline.gd"]
 const SCRIPT_EXTENSIONS: Array[String] = ["gd", "gdc", "cs"]
 const TAGS: Array[String] = ["gd_resource", "ext_resource", "sub_resource", "resource"]
 # Which section each may follow (resource_format_text.cpp's load(): anything else is never read, so
@@ -179,8 +181,12 @@ func _check_reference(tag: String, attr: String, value: String) -> void:
 func _check_path(path: String) -> void:
 	if not inside_project(path):
 		_fail("it references a file outside the project (%s)" % path)
-	elif SCRIPT_EXTENSIONS.has(path.get_extension()) and not path.begins_with(SCRIPT_ROOT):
+	elif SCRIPT_EXTENSIONS.has(path.get_extension()) and not _is_own_script(path):
 		_fail("it references a script outside %s (%s)" % [SCRIPT_ROOT, path])
+
+
+static func _is_own_script(path: String) -> bool:
+	return path.begins_with(SCRIPT_ROOT) or EMBEDDED_SCRIPTS.has(path)
 
 
 func _record_ext(fields: Dictionary) -> void:
@@ -188,7 +194,7 @@ func _record_ext(fields: Dictionary) -> void:
 	var uid := ResourceUID.text_to_id(str(fields.get("uid", "")))
 	if uid != ResourceUID.INVALID_ID and ResourceUID.has_id(uid):
 		path = ResourceUID.get_id_path(uid)
-	if str(fields.get("type", "")) == "Script" and not path.begins_with(SCRIPT_ROOT):
+	if str(fields.get("type", "")) == "Script" and not _is_own_script(path):
 		_fail("it references a script outside %s (%s)" % [SCRIPT_ROOT, path])
 	_ext[str(fields.get("id", ""))] = path
 
@@ -225,7 +231,7 @@ func _parse_property() -> void:
 	var value := _parse_value()
 	if _why == "" and key == "script":
 		var path := str(_ext.get(value.get("ext", ""), ""))
-		if not (path.begins_with(SCRIPT_ROOT) and path.get_extension() == "gd"):
+		if not (_is_own_script(path) and path.get_extension() == "gd"):
 			_fail("it attaches a script that is not one of the project's own")
 
 

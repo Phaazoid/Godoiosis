@@ -64,7 +64,7 @@ What it allows:
 
 - embedded objects of type `Resource` only;
 - references to plain `res://` paths only (`inside_project`);
-- scripts under `res://Classes/` only;
+- scripts under `res://Classes/` only, plus Dialogic's timeline script: the one script outside it that a field of ours (`DialogBeat.timeline`) is typed as, named exactly (`EMBEDDED_SCRIPTS`), never its folder. A timeline built in code has no file, so the saver embeds it under that script; PR #1561's first CI run caught the guard refusing it;
 - value constructors from an allowlist (`Object`, `Resource(…)`, `RID`, `Signal`, `Callable` and anything a later engine adds fail closed);
 - no `resource_path` property.
 

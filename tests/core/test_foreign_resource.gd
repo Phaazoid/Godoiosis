@@ -108,6 +108,11 @@ func test_what_resource_saver_writes_is_accepted() -> void:
 		"typed": typed, "keyed": keyed,
 	})
 	board.set_meta("embedded", ScenarioUnitEntry.new())
+	# A timeline built in code has no file, so the saver embeds it under Dialogic's own script.
+	var beat := DialogBeat.new()
+	beat.timeline = DialogicTimeline.new()
+	beat.timeline.from_text("A line.")
+	board.dialog_beats.append(beat)
 	var path := SCRATCH + "saved.tres"
 	assert_int(ResourceSaver.save(board, path)).is_equal(OK)
 	assert_str(ForeignResource.refusal(path)).override_failure_message(
@@ -152,6 +157,15 @@ func test_an_ext_resource_outside_the_project_is_refused() -> void:
 func test_a_script_outside_classes_is_refused() -> void:
 	_assert_refused(HEAD + '[ext_resource type="Script" path="res://game.gd" id="2"]\n' + BODY
 		+ 'metadata/p = ExtResource("2")\n', "references a script outside Classes/")
+
+
+# The timeline's script is let through by name, not its folder: Dialogic's other scripts stay out.
+func test_a_dialogic_script_no_field_of_ours_holds_is_refused() -> void:
+	const OTHER := "res://addons/dialogic/Resources/character.gd"
+	assert_bool(ResourceLoader.exists(OTHER)).override_failure_message(
+		"fixture: %s is gone, so this case reaches nothing" % OTHER).is_true()
+	_assert_refused(HEAD + '[ext_resource type="Script" path="%s" id="2"]\n' % OTHER + BODY
+		+ 'metadata/p = ExtResource("2")\n', "references another Dialogic script")
 
 
 # The loader prefers a registered uid over path=, so a good path cannot vouch for it.
