@@ -33,11 +33,16 @@ static func make(guarding_unit: Unit, warded_unit: Unit, ward_range: int) -> Gua
 	w.guard_range = ward_range
 	return w
 
-# A ward that is actually going live on a unit, stamped with its arm order.
-static func arm(guarding_unit: Unit, warded_unit: Unit, ward_range: int) -> GuardWard:
+# A ward that is actually going live on a unit, stamped with its arm order. A `stamp` above 0 is an
+# order a save restored (#1565): kept, with the counter moved past it (Watch.arm's rule).
+static func arm(guarding_unit: Unit, warded_unit: Unit, ward_range: int, stamp := 0) -> GuardWard:
 	var w := make(guarding_unit, warded_unit, ward_range)
-	w.sequence = _next_sequence
-	_next_sequence += 1
+	if stamp > 0:
+		w.sequence = stamp
+		_next_sequence = maxi(_next_sequence, stamp + 1)
+	else:
+		w.sequence = _next_sequence
+		_next_sequence += 1
 	return w
 
 # The resolver's working copy for one pass (ResolvedPlan.guards). The pass marks copies spent as

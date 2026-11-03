@@ -153,7 +153,8 @@ static func relink_guards(scenario: ScenarioData, unit_of_entry: Dictionary) -> 
 		if not unit_of_entry.has(ward_entry):
 			continue
 		var guarding_unit: Unit = unit_of_entry[entry]
-		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
+		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent,
+				entry.guard_sequence)
 
 func note_play() -> void:
 	play_version += 1
@@ -332,10 +333,33 @@ func capture_scenario(scenario_name: String, authored := false, board: BoardSnap
 		entry.guard_ward_index = scenario.unit_entries.find(entry_of[unit.guard.ward])
 		entry.guard_spent = unit.guard.spent
 
+	# Arm order (#1565): which watch, and which Guard, is older -- what decides which one an entry
+	# spends. An authored save writes none: the board as authored arms in entry order, as it always has.
+	if not authored:
+		_write_arm_order(entry_of)
+
 	return scenario
 
-# One unit's entry as capture_scenario writes it, minus the Guard link, which needs every entry.
-# Its own function so BoardLint can ask an entry what the next load makes of the unit
+# Each saved watch's and Guard's RANK among its kind, 1 = oldest (#1565). A rank rather than the
+# process's counter, so one board captures to the same bytes in any process.
+static func _write_arm_order(entry_of: Dictionary) -> void:
+	var watchers: Array[Unit] = []
+	var guards: Array[Unit] = []
+	for unit: Unit in entry_of:
+		var entry: ScenarioUnitEntry = entry_of[unit]
+		if not entry.watch_cells.is_empty():
+			watchers.append(unit)
+		if entry.guard_ward_index >= 0:
+			guards.append(unit)
+	watchers.sort_custom(func(a: Unit, b: Unit) -> bool: return a.watch.sequence < b.watch.sequence)
+	guards.sort_custom(func(a: Unit, b: Unit) -> bool: return a.guard.sequence < b.guard.sequence)
+	for i in watchers.size():
+		(entry_of[watchers[i]] as ScenarioUnitEntry).watch_sequence = i + 1
+	for i in guards.size():
+		(entry_of[guards[i]] as ScenarioUnitEntry).guard_sequence = i + 1
+
+# One unit's entry as capture_scenario writes it, minus the Guard link and the arm order, which need
+# every entry. Its own function so BoardLint can ask an entry what the next load makes of the unit
 # (spawns_as_body, #1432) instead of re-deriving the #177 fork.
 func capture_entry(unit: Unit, authored := false) -> ScenarioUnitEntry:
 	var entry := ScenarioUnitEntry.new()

@@ -62,13 +62,19 @@ static func make(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 	return w
 
 
-# A watch that is actually going live on a unit, stamped with its arm order.
+# A watch that is actually going live on a unit, stamped with its arm order. A `stamp` above 0 is an
+# order a save restored (#1565): kept, with the counter moved past it, so a watch armed after the load
+# is still the newer one.
 static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = [],
-		effect: Array[Vector2i] = []) -> Watch:
+		effect: Array[Vector2i] = [], stamp := 0) -> Watch:
 	var w := make(watching_unit, origin, aim, watched_cells, fired_attack, lengths, effect)
-	w.sequence = _next_sequence
-	_next_sequence += 1
+	if stamp > 0:
+		w.sequence = stamp
+		_next_sequence = maxi(_next_sequence, stamp + 1)
+	else:
+		w.sequence = _next_sequence
+		_next_sequence += 1
 	return w
 
 
