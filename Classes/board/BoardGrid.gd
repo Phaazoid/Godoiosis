@@ -41,6 +41,9 @@ func erase(cell: Vector2i) -> void:
 # rather than enumerating, since a wipe has no cell list and the consumer will full-sync regardless.
 func reset() -> void:
 	clear()
+	# Purged for restore()'s reason below: Resize Map repaints and captures its undo step in this
+	# frame, and the capture would emit every deleted cell as a source -1 record (#1549).
+	update_internals()
 	dirty.mark_all()
 
 
