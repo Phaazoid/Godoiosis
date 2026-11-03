@@ -208,8 +208,7 @@ func test_the_end_of_turn_burn_meets_the_stripped_insulation() -> void:
 	var board := BoardContext.new(_sm.grid, units, _sm, states, null, null, gas)
 	var blow := H.stamped_attack(attacker, mate)
 	var plan := _resolve([blow], board)
-	var no_actions: Array[BaseAction] = []
-	PlanResolver.resolve_tile_hits(plan, attacker.squad, no_actions, plan.hypo, board)
+	PlanResolver.resolve_tile_hits(plan, attacker.squad, plan.hypo, board)
 	_assert_severs(blow)
 	var forecast: TileHitAction = null
 	for hit in plan.tile_hits:

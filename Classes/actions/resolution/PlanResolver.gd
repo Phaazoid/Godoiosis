@@ -137,17 +137,17 @@ static func _volley_of(member: AttackAction) -> Array[AttackAction]:
 # squadmate's fire steams them, and the soak reads the states the pass leaves them holding.
 # What one unit's rows are, and their order, is TileHitAction.end_of_turn, which TurnBoundary.tile_hits
 # calls too: a scald before the burn, and the burn predicted on the HP the scald leaves (#1331).
-static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
+static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, hypo: Dictionary, board: BoardContext) -> void:
 	if board == null or squad == null:
 		return
-	var revived := _rescued_this_pass(actions, hypo)
-	plan.end_of_turn_subjects = _end_of_turn_subjects(plan, squad, hypo, board, revived)
+	plan.end_of_turn_subjects = _end_of_turn_subjects(plan, squad, hypo, board)
 	var landed := plan.ground(board)
 	for unit in plan.end_of_turn_subjects:
 		var body := state_of(unit, hypo)
-		if revived.has(unit):
-			# A queued Rescue stands its target ACTIVE, and the tail runs after everything the hypo
-			# threads — without this the forecast reads a DOWNED unit and predicts KILLED. The HP is
+		if plan.rescued_by.has(unit):
+			# The rescue that claimed it (ResolvedPlan.rescued_by, #1567) stands it ACTIVE, and the tail
+			# runs after everything the hypo threads — without this the forecast reads a DOWNED unit
+			# and predicts KILLED. The HP is
 			# whatever the body holds: the hypo already threads the cling (LethalityRules.hp_after),
 			# so the floor this used to carry was a third spelling of it (#1002). Stood up on a
 			# scratch copy, so the forecast cannot write the pass.
@@ -169,7 +169,7 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[B
 # RESCUES is reached too (#1428): an ordinary rescue threads nothing, so without it the body read as
 # untouched and the board's health bar asked the live board, where it is still down and dies.
 static func _end_of_turn_subjects(plan: ResolvedPlan, squad: Squad, hypo: Dictionary,
-		board: BoardContext, revived: Array[Unit]) -> Array[Unit]:
+		board: BoardContext) -> Array[Unit]:
 	var subjects: Array[Unit] = []
 	for member in squad.get_members():
 		if member != null and is_instance_valid(member):
@@ -183,27 +183,9 @@ static func _end_of_turn_subjects(plan: ResolvedPlan, squad: Squad, hypo: Dictio
 	for unit: Unit in board.units:
 		if not is_instance_valid(unit) or unit.get_faction() != faction or subjects.has(unit):
 			continue
-		if hypo.has(unit) or revived.has(unit) or deposited.has(projected_position(unit, hypo)):
+		if hypo.has(unit) or plan.rescued_by.has(unit) or deposited.has(projected_position(unit, hypo)):
 			subjects.append(unit)
 	return subjects
-
-
-# Who this squad's queued rescues put back on their feet. Asked of the PROJECTED lifecycle, matching
-# RescueAction.execute's own is_downed() read, which runs after the attack phase (#124). Takes the
-# ACTION LIST rather than the squad, so a hypothetical resolve reads its own queue (#117) -- the
-# sixth and last of resolve_plan's queue walks.
-static func _rescued_this_pass(actions: Array[BaseAction], hypo: Dictionary) -> Array[Unit]:
-	var revived: Array[Unit] = []
-	for action in actions:
-		if action.action_type != BaseAction.ActionType.RESCUE or not action.is_valid:
-			continue
-		if action.resolved_actor_felled or not (action as RescueAction).resolved_within_reach:
-			continue   # no rescuer left standing (#1005), or none beside the body (#1349): nobody stands up
-		var target: Unit = (action as RescueAction).target
-		if target != null and is_instance_valid(target) \
-				and projected_lifecycle(target, hypo) == Unit.LifecycleState.DOWNED:
-			revived.append(target)
-	return revived
 
 
 # --- Guard substitution (#414, docs/design/standing-reactions.md) ---------------------------

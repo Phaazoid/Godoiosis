@@ -252,13 +252,18 @@ static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
 # a target may legally not be down YET, provided this pass's own hits put it down before the side
 # channel runs. A cancelled attack un-predicts the down on the next resolve and the rescue falls
 # into red, still queued (one-way validity). No plan = rescues untouched, same as attacks.
+# The claim (#1567) is the same leaf: one rescue per body, and a second one is red.
 static func _revalidate_rescue_targets(actions: Array[BaseAction], plan: ResolvedPlan) -> void:
 	for action in actions:
 		if not (action is RescueAction):
 			continue
 		var rescue := action as RescueAction
-		if not RulesService.is_rescueable(rescue.target, plan):
-			rescue.add_validation_error("Rescue target won't be down")
+		# A felled rescuer is not asked about the claim (#1567): its order is not a validation error
+		# (#1005), and the body it no longer claims has passed to the next rescuer.
+		var asker: Unit = null if rescue.resolved_actor_felled else rescue.actor
+		var refusal := RulesService.rescue_block_reason(rescue.target, plan, asker)
+		if refusal != "":
+			rescue.add_validation_error(refusal)
 			continue
 		# The rescuer must still be BESIDE the body when the side channel reaches it (#1349): the
 		# resolve's verdict on its own cells, since a counter can shove either of them away after the

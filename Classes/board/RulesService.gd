@@ -530,7 +530,7 @@ static func adjacent_downed_allies(unit: Unit, board: BoardContext, plan: Resolv
 		if cell == origin:
 			continue
 		var other := board.projected_unit_at_cell(cell)
-		if other == null or other == unit or not is_rescueable(other, plan):
+		if other == null or other == unit or not is_rescueable(other, plan, unit):
 			continue
 		if Team.is_enemy(unit.get_faction(), other.get_faction()):
 			continue
@@ -549,12 +549,25 @@ static func adjacent_downed_allies(unit: Unit, board: BoardContext, plan: Resolv
 # (A predicted MAIM is a down too -- the resolver threads it as the same lifecycle. A Crisis-armed
 # ally at the gate predicts CRISIS and so is never a candidate -- it stands back up, #158.)
 # Without a plan, the live board answers, exactly as before #124.
-static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
+#
+# And ONE rescue per body (#1567): a body the pass has already given to another rescuer
+# (ResolvedPlan.rescued_by) is not this one's, since execution would meet it standing. `rescuer` is who
+# asks; null asks the lifecycle alone. "" is a yes; the words are the row's.
+static func rescue_block_reason(target: Unit, plan: ResolvedPlan, rescuer: Unit = null) -> String:
 	if target == null or not is_instance_valid(target):
-		return false
+		return "Rescue target won't be down"
 	if plan == null:
-		return target.is_downed()
-	return PlanResolver.projected_lifecycle(target, plan.hypo) == Unit.LifecycleState.DOWNED
+		return "" if target.is_downed() else "Rescue target won't be down"
+	if PlanResolver.projected_lifecycle(target, plan.hypo) != Unit.LifecycleState.DOWNED:
+		return "Rescue target won't be down"
+	var claimer: Variant = plan.rescued_by.get(target)   # untyped: a typed read of a freed ref throws (#149)
+	if rescuer != null and is_instance_valid(claimer) and claimer != rescuer:
+		return "%s is already picking them up" % (claimer as Unit).get_unit_name()
+	return ""
+
+# Its bool wrapper, for the candidate lists.
+static func is_rescueable(target: Unit, plan: ResolvedPlan, rescuer: Unit = null) -> bool:
+	return rescue_block_reason(target, plan, rescuer) == ""
 
 # EVERY cell a rescue may put this body on (#116). A rescue puts a body somewhere it can STAND: from
 # ordinary ground that is where it already lies, so the list is just that cell and nothing moves —

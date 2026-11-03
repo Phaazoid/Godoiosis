@@ -133,6 +133,13 @@ var watches: Array[Watch] = []
 # triggered shot draws no counter" holds structurally instead of by a filter somebody must remember.
 var watch_shots: Array[AttackAction] = []
 
+# Who picks each body up (#1567): body -> the rescue's actor, ONE per body. Claimed in the side-channel
+# tail in queue order by the first rescuer the pass leaves standing and beside a body it leaves down
+# (SquadManager._resolve_actions); a second rescue of a claimed body is refused (RulesService
+# .rescue_block_reason), as execution would meet a body already standing. Also the END OF TURN
+# forecast's list of who stands up. Fresh every resolve, so a claim never outlives its pass.
+var rescued_by: Dictionary[Unit, Unit] = {}
+
 
 # WHEN each of those shots plays (#567), answered once for the surfaces that ask — OrderExecutor,
 # which plays them, and BeatSheet, which mirrors it. The THREE partitions are total and disjoint:
