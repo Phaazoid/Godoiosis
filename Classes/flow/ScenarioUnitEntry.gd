@@ -80,6 +80,9 @@ class_name ScenarioUnitEntry
 # first), not by capture_unit_state/apply_unit_state, which only ever see one unit.
 @export var guard_ward_index := -1
 @export var guard_spent := false
+# Arm order (#1565): this Guard's RANK among the board's armed Guards, 1 = oldest, written by a FULL
+# capture beside the link. 0 = not saved, which arms in load order: an authored board, a save before it.
+@export var guard_sequence := 0
 
 # The Overwatch this unit had armed (#413). Unlike a Guard it names no second unit, so it needs no
 # re-link and capture_unit_state/apply_unit_state own it like the rest of the battle state.
@@ -105,6 +108,9 @@ class_name ScenarioUnitEntry
 @export var watch_attack_index := -1
 @export var watch_spent := false
 @export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
+# Arm order (#1565): this watch's RANK among the board's watches, 1 = oldest. A board-wide fact, so
+# ScenarioManager writes it once every entry exists, on a FULL capture only; 0 = not saved (guard_sequence's).
+@export var watch_sequence := 0
 
 # What this entry says about the unit's place in the MISSION -- the VIP flag, the AI profile, and a
 # leader's squad name, AI archetype, zone and post. The ONE writer for both loaders (#46): the headless one never
@@ -322,7 +328,7 @@ func apply_unit_state(unit: Unit) -> void:
 		if watch_attack_index >= 0 and watch_attack_index < watchable.size():
 			unit.arm_watch(watch_anchor, watch_aim, watch_cells.duplicate(),
 					watchable[watch_attack_index], watch_spent, watch_cancelled,
-					watch_path_lengths.duplicate(), watch_effect_cells.duplicate())
+					watch_path_lengths.duplicate(), watch_effect_cells.duplicate(), watch_sequence)
 
 	if current_hp >= 0:
 		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a

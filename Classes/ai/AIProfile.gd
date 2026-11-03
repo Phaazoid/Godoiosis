@@ -41,7 +41,7 @@ enum Seek {
 @export var values_splits := true
 ## One step of lookahead, so a member opens a set-up (a soak) for a squadmate's follow-up.
 @export var sets_up_combos := true
-## A healer stabilises a downed ally nobody can rescue this turn (ruling 16).
+## A healer stabilises a downed ally nobody will rescue this turn (ruling 16).
 @export var stabilises_bodies := true
 ## How far it goes looking for an opportunity.
 @export var seeks: Seek = Seek.KILLS_AND_SPLITS

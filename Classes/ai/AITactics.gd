@@ -379,7 +379,7 @@ static func _candidates_by_member(members: Array[Unit], board: BoardContext, bas
 # cardinal between two cells, which named the wrong facing for a spread's side lane. A POINT attack
 # tries every cell of its ring, so a placed blast can be dropped beside a target rather than on it.
 # An aim is kept only when its sweep pays: a hostile victim, or for a HEAL a heal target (an ally
-# below full HP, or a body nobody can rescue this turn -- rulings 3 and 16). A heal is therefore
+# below full HP, or a body nobody will rescue this turn -- rulings 3 and 16). A heal is therefore
 # never AIMED at an enemy; an enemy its splash catches is priced against it by the score. Aims that
 # reach the same victims across the same cells are one candidate.
 #
@@ -450,7 +450,7 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 
 
 # Who a heal may be aimed for: our side, and either standing below full HP or a body the clock is
-# still running on that nobody can rescue this turn (ruling 16) -- the second only for a healer whose
+# still running on that nobody will rescue this turn (ruling 16) -- the second only for a healer whose
 # profile stabilises bodies (#1230).
 static func _is_heal_target(other: Unit, hypo: Dictionary, stakes: _Stakes, stabilise := true) -> bool:
 	match PlanResolver.projected_lifecycle(other, hypo):
@@ -642,7 +642,7 @@ static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
 # A HEAL IS PRICED LIKE DAMAGE (ruling 3): the HP it actually restores joins the damage term for our
 # side and against us on an enemy's, so overheal is worth nothing by the same arithmetic that makes
 # overkill worth nothing. A heal on a BODY is a SAVE instead (ruling 16) -- it stops the clock -- and
-# counts only when nobody could rescue that body this turn (stakes.rescuable), once per body, ranked
+# counts only when nobody will rescue that body this turn (stakes.rescuable), once per body, ranked
 # above damage and below a squad break.
 #
 # A UNIT THE PASS'S OWN MELT DROWNS (#922) is a victim like any other: plan.sinks seeds the ledger,
@@ -861,14 +861,18 @@ static func _hp_cost(outcome: ResolvedOutcome, sees_crisis: bool) -> int:
 	return outcome.damage
 
 
-# What a squad's scoring knows beyond the plan itself (#1220), built once per squad decision: whether
-# the mission ends on a protected unit's death, and which bodies a squadmate could rescue this turn
-# (a heal on one of those saves nothing). Null scores a plan with neither -- a sandbox board.
+# What a squad's scoring knows beyond the plan itself (#1220), built once per round of the joint pass:
+# whether the mission ends on a protected unit's death, and which bodies a squadmate WILL rescue this
+# turn (a heal on one of those saves nothing). Null scores a plan with neither -- a sandbox board.
 class _Stakes:
 	var protected_counts := false
 	var rescuable := {}   # body -> true
+	var rescuers := {}    # body -> Array of the members beside it who could carry it
 
 
+# Who COULD rescue each body: a member able to carry, beside it, whose main action is still unspent
+# (#1563 -- a mate that already attacked is nobody's rescuer). _release_busy_rescuers narrows it to
+# who WILL, once the round's attack table exists.
 static func _stakes_for(squad: Squad, board: BoardContext, plan: ResolvedPlan) -> _Stakes:
 	var out := _Stakes.new()
 	out.protected_counts = board.mission != null \
@@ -876,11 +880,39 @@ static func _stakes_for(squad: Squad, board: BoardContext, plan: ResolvedPlan) -
 	if squad == null or not AIArchetype.main_action_priority(squad.archetype).has(BaseAction.ActionType.RESCUE):
 		return out
 	for member in squad.get_members():
-		if not member.is_active() or not member.can_rescue_carry():
+		if not member.is_active() or not member.can_rescue_carry() or member.has_main_action_queued():
 			continue
 		for body in RulesService.adjacent_downed_allies(member, board, plan):
 			out.rescuable[body] = true
+			if not out.rescuers.has(body):
+				out.rescuers[body] = []
+			(out.rescuers[body] as Array).append(member)
 	return out
+
+
+# A rescuer with an attack to make makes it (#711: ATTACK sits above RESCUE in every list that
+# rescues), so a body whose carriers ALL hold a live candidate in the round's table is nobody's to
+# rescue and becomes a heal target (#1563, ruling 16 read as "will"). True when a body was released:
+# that can hand a healer a new candidate, so the caller rebuilds the table and asks again. A member
+# with no entry cannot wield, so it is free. Not asked: whether a candidate would fell our own side,
+# which needs a resolve -- that errs toward a heal the body did not need, never a body left.
+static func _release_busy_rescuers(stakes: _Stakes, by_member: Dictionary, refused: Dictionary) -> bool:
+	var released := false
+	for body in stakes.rescuable.keys():
+		var free := false
+		for member: Unit in stakes.rescuers.get(body, []):
+			var live := false
+			for candidate: AttackAction in by_member.get(member, []):
+				if not refused.has(_candidate_key(candidate)):
+					live = true
+					break
+			if not live:
+				free = true
+				break
+		if not free:
+			stakes.rescuable.erase(body)
+			released = true
+	return released
 
 
 # Does this candidate's own work fell somebody on our side (#1220 ruling 1: the AI never fells its
@@ -1941,6 +1973,10 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		# below, and the next round sees the commitment through its own base resolve.
 		var stakes := _stakes_for(squad, board, base_plan)
 		var by_member := _candidates_by_member(squad.get_members(), board, base_plan, stakes)
+		# Who WILL rescue, not who could (#1563): a carrier with an attack to make is busy, and a body
+		# it leaves becomes a heal target, which can give a healer -- itself a carrier -- a candidate.
+		while _release_busy_rescuers(stakes, by_member, refused):
+			by_member = _candidates_by_member(squad.get_members(), board, base_plan, stakes)
 		var best: _Scored = null
 		for member in choosers:
 			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true, by_member, stakes)

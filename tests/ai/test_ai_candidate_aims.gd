@@ -1,11 +1,11 @@
 # Where the AI aims (#1220): heals at our own side and never at an enemy, a body stabilised only when
-# nobody can rescue it, a directional attack by FACING rather than by the cardinal toward an enemy, a
+# nobody will rescue it, a directional attack by FACING rather than by the cardinal toward an enemy, a
 # placed blast set down beside a target it cannot aim at, and a map-only attack kept for what it does
 # this pass -- the current, a payload, ice melted under a hostile. Every case drives the AI's real
 # door and asserts on what it queued or what that plan hits.
 #
 # Rulings on #117 (2026-10-04/05): 3 (heals priced like damage, never at enemies), 16 (a body only
-# when nobody can rescue it).
+# when nobody will rescue it, #1563; the rescuer who attacks instead is test_ai_rescuer_who_attacks).
 extends GdUnitTestSuite
 
 const P := preload("res://tests/support/shape_fixtures.gd")
