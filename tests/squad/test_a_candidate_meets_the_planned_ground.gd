@@ -325,7 +325,9 @@ func test_a_carving_whose_water_an_earlier_order_freezes_is_refused() -> void:
 
 # After a pass executes, the cache still holds the plan it ran. The squad's first order of its next turn
 # meets the LIVE ground: the fire its last pass lit has since been put out, the way a later pass's
-# douse lands (ResolvedPlan.play_landing), so Ignite has nothing left to draw on.
+# douse lands (ResolvedPlan.play_landing), so Ignite has nothing left to draw on. The hand-off resolves
+# nothing, so the ring opened next reads the ground through candidate_board with that plan cached. The
+# gate cannot show this: its own hypothetical pass fizzles the cast on the live board first.
 func test_the_next_turns_first_order_meets_the_live_ground() -> void:
 	var ignite := _carving("Ignite", "Push(F2)")
 	var carvings: Array[TransmutationData] = [ignite]
@@ -348,8 +350,11 @@ func test_the_next_turns_first_order_meets_the_live_ground() -> void:
 	assert_str(CellSubstances.fizzle_reason(ignite, CASTER, game._board(), caster.state)).override_failure_message(
 			"fixture: the live ground still feeds Ignite, so nothing below proves anything").is_not_empty()
 
+	assert_str(CellSubstances.fizzle_reason(ignite, CASTER, sm.candidate_board(caster.squad), caster.state)) 		.override_failure_message("candidate_board wore the fire the executed pass lit, since put out") 		.is_not_empty()
+	assert_bool(_row(caster, "Ignite").get("disabled", false)).override_failure_message(
+			"the ring offers a carving the executed pass's fire fed, on ground where it is out").is_true()
 	assert_str(_try(caster, _declare(caster, ignite, FOE))).override_failure_message(
-			"the gate judged the next turn's first order on the fire the executed pass lit, since put out") 		.starts_with("Fizzles")
+			"the gate took the order the ring greyed").starts_with("Fizzles")
 
 
 # ==============================================================================
