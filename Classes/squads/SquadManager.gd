@@ -586,15 +586,17 @@ func _candidate_watch_declarable(squad: Squad, action: BaseAction, ground: Board
 
 # The rescue half of the gate (#124), the whiff clause's sibling: a candidate rescue may target a
 # unit that is down OR one this squad's already-resolved plan predicts will be down by the side
-# channel. The stored resolve is the right witness for a candidate -- it covers exactly the queued
-# prefix the rescue lands after, and a rescue changes no lethality, so the prefix IS the pass.
+# channel, and that no queued rescue has already claimed (#1567). The stored resolve is the right
+# witness for a candidate: it covers exactly the queued prefix the rescue lands after, a rescue changes
+# no lethality, and the prefix's claims are every rescue queued ahead of this one.
 # Non-rescue candidates pass straight through. `plan` is the prefix judge_candidate hands the gate.
 func _candidate_rescue_target_ok(squad: Squad, action: BaseAction, plan: ResolvedPlan) -> bool:
 	if not (action is RescueAction):
 		return true
 	var rescue := action as RescueAction
-	if not RulesService.is_rescueable(rescue.target, plan):
-		rescue.add_validation_error("Rescue target won't be down")
+	var refusal := RulesService.rescue_block_reason(rescue.target, plan, rescue.actor)
+	if refusal != "":
+		rescue.add_validation_error(refusal)
 		return false
 	# ...and its bank, on the ground the tail has (rescue_board, #1498 stage 3b): the validator's haul
 	# clause asked of a candidate, so a bank the pass will refuse is refused whoever authors it.
@@ -1247,6 +1249,21 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 				or RescueAction.within_reach(PlanResolver.projected_position(pickup.actor, hypo),
 					PlanResolver.projected_position(pickup.target, hypo))
 
+	# ...and WHO picks each body up (#1567): one rescue per body, the first in queue order the pass leaves
+	# able to do it, since that is the one execution plays first and the next would meet a body already
+	# standing. Never asks is_valid: validity is judged FROM this claim (RulesService.rescue_block_reason).
+	# A felled claimant passes the body on, as execution drops its order at collection (#1005).
+	for action in actions:
+		if action.action_type != BaseAction.ActionType.RESCUE:
+			continue
+		var claim := action as RescueAction
+		if claim.resolved_actor_felled or not claim.resolved_within_reach:
+			continue
+		if claim.target == null or not is_instance_valid(claim.target) or plan.rescued_by.has(claim.target):
+			continue
+		if PlanResolver.projected_lifecycle(claim.target, hypo) == Unit.LifecycleState.DOWNED:
+			plan.rescued_by[claim.target] = claim.actor
+
 	# Rescue hauls (#116): a body that cannot stand where it lies -- in deep water -- is dragged onto
 	# a cell beside its rescuer, and the board must DRAW it there rather than jump it on Execute
 	# (Law #2). Published here and not a line earlier: a reaction is derived from where the pass
@@ -1279,8 +1296,8 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			# OVERWATCH). A bank this pass melted, or a lake it froze under the body, is one execution meets.
 			var landings := RulesService.rescue_landings(action.actor, rescue.target, board, hypo)
 			rescue.resolved_haul_lands = landings.has(rescue.haul_to)
-			if rescue.resolved_actor_felled or not rescue.resolved_within_reach:
-				continue   # nobody is left to do the hauling (#1005), or nobody beside the body to do it
+			if plan.rescued_by.get(rescue.target) != rescue.actor:
+				continue   # felled (#1005), not beside the body, or another rescue's body (#1567): no haul of its own
 			if rescue.haul_to == PlanResolver.projected_position(rescue.target, hypo):
 				continue   # an ordinary rescue: the stamp is where the body already is
 			if rescue.resolved_haul_lands:
@@ -1346,7 +1363,7 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 
 	# The END OF TURN forecast (#419), last of all: it reads where the pass leaves every member and
 	# which deposits the pass made, so it can only be derived once both are settled.
-	PlanResolver.resolve_tile_hits(plan, squad, actions, hypo, board)
+	PlanResolver.resolve_tile_hits(plan, squad, hypo, board)
 
 	return plan
 

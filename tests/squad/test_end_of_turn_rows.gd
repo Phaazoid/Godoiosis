@@ -161,7 +161,7 @@ func test_the_forecast_sees_a_fire_this_pass_is_about_to_light() -> void:
 	var plan := ResolvedPlan.new()
 	_lay(plan, _deposit(FIRE, Terrain.TileState.BURNING), board)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
+	PlanResolver.resolve_tile_hits(plan, stander.squad, plan.hypo, board)
 
 	assert_object(_hit_for(plan, stander)).override_failure_message(
 			"the forecast read the live store and missed the fire this pass lights").is_not_null()
@@ -179,7 +179,7 @@ func test_a_fire_this_pass_puts_out_is_not_forecast() -> void:
 	douse.states_removed.assign([Terrain.TileState.BURNING])
 	_lay(plan, douse, board)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
+	PlanResolver.resolve_tile_hits(plan, stander.squad, plan.hypo, board)
 
 	assert_int(plan.tile_hits.size()).override_failure_message(
 			"the forecast burned a unit standing on a fire this pass puts out").is_equal(0)
@@ -398,7 +398,7 @@ func test_the_forecast_sees_steam_this_pass_deposits() -> void:
 	steam.add_gas(Gas.Kind.STEAM, rules.state_from)
 	_lay(plan, steam, board)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, board)
+	PlanResolver.resolve_tile_hits(plan, stander.squad, plan.hypo, board)
 
 	var hit := _hit_for(plan, stander)
 	assert_object(hit).override_failure_message(

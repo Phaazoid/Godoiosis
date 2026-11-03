@@ -246,3 +246,89 @@ func test_a_crisis_armed_ally_is_not_offered_because_it_stands_back_up() -> void
 	assert_that(PlanResolver.projected_lifecycle(victim, plan.hypo)).is_equal(Unit.LifecycleState.ACTIVE)
 	assert_bool(RulesService.is_rescueable(victim, plan)).is_false()
 	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call(), plan)).is_empty()
+
+# ---- #1567: one rescue per body ----
+#
+# Two squadmates beside one body. The pass CLAIMS each body for the first rescue in queue order the
+# pass leaves able to do it (ResolvedPlan.rescued_by); a second rescue of it is refused, because
+# execution would meet a body the first has already stood up ("Rescue executed against a target
+# that is not down").
+
+func _two_rescuers_beside_a_body() -> Dictionary:
+	var first := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var second := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0))
+	_sm.join_squad(second, first.squad)
+	var body := _downed_ally(Vector2i(1, 0))
+	return {"first": first, "second": second, "body": body}
+
+func _queue_through_the_gate(rescuer: Unit, body: Unit) -> String:
+	var rescue := RescueAction.new()
+	rescue.init(rescuer, body, body.get_projected_destination())
+	return _sm.try_queue_action(rescuer.squad, rescue)
+
+func test_a_second_rescue_of_a_claimed_body_is_refused_at_the_gate() -> void:
+	var cast := _two_rescuers_beside_a_body()
+	var first: Unit = cast.first
+	var second: Unit = cast.second
+	assert_str(_queue_through_the_gate(first, cast.body)).override_failure_message(
+			"fixture: the first rescue was refused").is_empty()
+	_sm.resolve_plan(first.squad, _sm.board_source.call())   # the refresh every queue is followed by
+
+	var refusal := _queue_through_the_gate(second, cast.body)
+
+	assert_str(refusal).override_failure_message(
+			"a second rescue of a body the first already picks up was accepted (#1567)").contains("already picking them up")
+	var rescues := first.squad.action_queue.filter(func(a: BaseAction) -> bool: return a is RescueAction)
+	assert_int(rescues.size()).is_equal(1)
+
+# The validator's half, reached by queueing straight past the gate (the shape a stale gate or a
+# hand-built queue leaves): the first in queue order keeps the body and stays green; the second reds.
+func test_two_queued_rescues_of_one_body_red_the_second() -> void:
+	var cast := _two_rescuers_beside_a_body()
+	var first: Unit = cast.first
+	var lead := _queue_rescue(first, cast.body)
+	var late := _queue_rescue(cast.second, cast.body)
+
+	var plan: ResolvedPlan = _sm.resolve_plan(first.squad, _sm.board_source.call())
+	_sm.validate_squad_plan(first.squad, plan)
+
+	assert_object(plan.rescued_by.get(cast.body)).override_failure_message(
+			"the pass gave the body to someone other than the first rescue in queue order").is_same(first)
+	assert_bool(lead.is_valid).override_failure_message("the claiming rescue went red").is_true()
+	assert_bool(late.is_valid).override_failure_message(
+			"a second rescue of one body stayed green, and execution would meet the body standing (#1567)").is_false()
+	assert_str(", ".join(late.validation_errors)).contains("already picking them up")
+
+# The menu's half: the body is offered to the unit that claims it and to nobody else.
+func test_a_claimed_body_is_offered_only_to_its_rescuer() -> void:
+	var cast := _two_rescuers_beside_a_body()
+	var first: Unit = cast.first
+	_queue_rescue(first, cast.body)
+	var plan: ResolvedPlan = _sm.resolve_plan(first.squad, _sm.board_source.call())
+
+	assert_array(RulesService.adjacent_downed_allies(first, _sm.board_source.call(), plan)).contains([cast.body])
+	assert_array(RulesService.adjacent_downed_allies(cast.second, _sm.board_source.call(), plan)).override_failure_message(
+			"the ring offers a second rescue of a body a squadmate already picks up").is_empty()
+
+# A rescuer the pass fells hands the body on: its own order is not red (#1005) and the next rescuer
+# in queue order claims, as execution drops the felled order and plays the next.
+func test_a_felled_claimant_passes_the_body_on() -> void:
+	var cast := _two_rescuers_beside_a_body()
+	var first: Unit = cast.first
+	var second: Unit = cast.second
+	first.take_damage(first.get_current_hp() - 1)
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
+	_sm.join_squad(attacker, first.squad)
+	_lethal_aim(attacker, first)
+	var lead := _queue_rescue(first, cast.body)
+	var late := _queue_rescue(second, cast.body)
+
+	var plan: ResolvedPlan = _sm.resolve_plan(first.squad, _sm.board_source.call())
+	_sm.validate_squad_plan(first.squad, plan)
+
+	assert_bool(lead.resolved_actor_felled).override_failure_message("fixture: the first rescuer was not felled").is_true()
+	assert_object(plan.rescued_by.get(cast.body)).override_failure_message(
+			"the body stayed with a felled rescuer").is_same(second)
+	assert_bool(late.is_valid).override_failure_message("the rescue the body passed to went red").is_true()
+	assert_bool(lead.is_valid).override_failure_message(
+			"a felled rescuer's order went red over the claim; a felled order is not a validation error (#1005)").is_true()
