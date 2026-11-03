@@ -57,8 +57,7 @@ func is_over() -> bool:
 func evaluate(board: BoardContext) -> MissionRules.Outcome:
 	if is_over():
 		return outcome
-	if not contested:
-		contested = MissionRules.is_contested(board)
+	latch_contested(board)
 	var failure: MissionRules.LoseCondition = failure_for(board)
 	var result: MissionRules.Outcome = MissionRules.evaluate(board, contested,
 			objective_progress(board), failure)
@@ -68,6 +67,14 @@ func evaluate(board: BoardContext) -> MissionRules.Outcome:
 	if result == MissionRules.Outcome.DEFEAT:
 		failed_by = failure   # set beside the outcome, so the banner cannot name a stale reason
 	return result
+
+# Remember that both sides were up at once, if they are now. Asked by evaluate, and BEFORE every step
+# that can take a side off the board -- a pass and the end-of-turn burn -- because a step that wipes a
+# side before anything has looked would leave this false for good, and no mission could end (#1554).
+# A one-sided board never latches, which is what keeps a dev sandbox inert.
+func latch_contested(board: BoardContext) -> void:
+	if not contested:
+		contested = MissionRules.is_contested(board)
 
 # Mission START: the blank slate restore() writes a mid-battle snapshot back over (#87).
 func reset() -> void:
