@@ -177,6 +177,10 @@ func hidden_zone_names() -> Array[String]:
 func is_contested() -> bool:
 	return mission.contested
 
+# The latch alone, never an ending: OrderExecutor asks it before a pass and before the burn (#1554).
+func latch_contested() -> void:
+	mission.latch_contested(game._board())
+
 func rounds_elapsed() -> int:
 	return mission.rounds_elapsed
 

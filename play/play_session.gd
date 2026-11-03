@@ -1470,6 +1470,9 @@ func execute() -> Dictionary:
 	squad_manager.validate_squad_plan(squad, plan)
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
+	# Before the pass, as execute_orders latches it: a pass can wipe a side before mission_tag() below
+	# ever looks (#1554).
+	mission.latch_contested(_board())
 
 	_executing = true
 	var events: Array[String] = []
@@ -1767,7 +1770,8 @@ func _turn_result(events: Array[String]) -> Dictionary:
 
 # One faction's end-of-turn tiles (#898, the soak since #508): the hits
 # OrderExecutor.apply_end_of_turn_tiles plays, minus the camera. TileHitAction.execute is synchronous,
-# so the real one runs.
+# so the real one runs. Unlike that one it does not latch `contested` first: both callers have just
+# asked mission_tag(), which already did (#1554).
 func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 	var events: Array[String] = []
 	if terrain_states == null:

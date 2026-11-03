@@ -28,6 +28,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true, move_cost=1 in TestTiles.tres
 
@@ -62,10 +63,10 @@ func _paint_corridor(length: int) -> void:
 		game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
 
 
-func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
-	var unit: Unit = game.spawn_unit(H.make_unit_data({}, faction), cell)
+func _spawn(faction: Team.Faction, cell: Vector2i, overrides := {}, power := 3) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data(overrides, faction), cell)
 	assert_object(unit).is_not_null()   # off-map or unwalkable — the test's own setup is wrong
-	unit.equipped_weapon = H.make_weapon()
+	unit.equipped_weapon = H.make_weapon(power)
 	return unit
 
 
@@ -323,3 +324,71 @@ func test_a_unit_that_has_just_died_is_off_the_board_before_the_next_frame() -> 
 			"a unit whose death has resolved was still on the board").is_false()
 	assert_object(board.unit_at_cell(Vector2i(2, 0))).override_failure_message(
 			"the corpse was still blocking its own tile").is_null()
+
+
+# ------------------------------------------------------------------------------
+#  A squad freed AFTER the turn's snapshot (#1557)
+# ------------------------------------------------------------------------------
+
+# take_faction_turn snapshots its actable squads once and awaits a pass per squad. A player counter
+# that empties a LATER squad frees it mid-walk, and is_squad_actable's typed parameter faulted on it
+# before the predicate's own validity guard could answer: the walk died short of end_turn, and the
+# enemy turn stuck with End Turn hidden.
+#
+# Solo HOLD squads spawned A, C, B. A and C both swing at the player; B stands beside A, inside the row
+# the player's three-wide counter sweeps. C is LOAD-BEARING: headless beats last no time, so with no
+# pass between the free and the walk's visit B is only queued for deletion, still valid, and skipped.
+# C's pass is the frames that let the free land.
+func _freed_mid_turn_board(counter_power: int) -> Dictionary:
+	var solo := AIProfile.new()   # a regroup would fold B into A, and B must be its own squad
+	solo.regroups = false
+	solo.squads_up = false
+	AIProfiles.use_fixtures({"": solo})
+	for x in range(8):
+		for y in range(3):
+			game.grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	var player := _spawn(Team.Faction.PLAYER, Vector2i(3, 2), {Stats.Stat.MHP: 99}, counter_power)
+	P.wide(player.equipped_weapon.template.main_attack, 1, 3)
+	var a := _spawn(Team.Faction.ENEMY, Vector2i(3, 1), {Stats.Stat.MHP: 99}, 1)
+	var c := _spawn(Team.Faction.ENEMY, Vector2i(2, 2), {Stats.Stat.MHP: 99}, 1)
+	var b := _spawn(Team.Faction.ENEMY, Vector2i(4, 1), {Stats.Stat.MHP: 1}, 1)
+	for unit: Unit in [a, c, b]:
+		unit.squad.archetype = AIArchetype.Type.HOLD
+	game.ai_controller.set_faction_ai_enabled(Team.Faction.ENEMY, true)
+	game.turn_manager.set_active_faction(Team.Faction.ENEMY)
+	await await_idle_frame()
+	return {"b": b, "b_squad": b.squad, "c_squad": c.squad}
+
+
+func _assert_turn_handed_on(board: Dictionary) -> void:
+	assert_bool(is_instance_valid(board.b_squad)).override_failure_message(
+			"fixture: B's squad was never freed, so the walk never met a freed squad").is_false()
+	assert_bool(is_instance_valid(board.c_squad) and (board.c_squad as Squad).has_acted).override_failure_message(
+			"fixture: C never acted, so no pass ran between B's free and the walk reaching it").is_true()
+	assert_int(game.turn_manager.active_faction()).override_failure_message(
+			"the enemy turn never reached end_turn: the walk died on the freed squad, which leaves the "
+			+ "game on the enemy turn with End Turn hidden").is_not_equal(Team.Faction.ENEMY)
+
+
+func test_a_faction_turn_ends_when_a_counter_kills_a_later_squad() -> void:
+	var board: Dictionary = await _freed_mid_turn_board(50)
+	var b: Unit = board.b
+
+	await game.ai_controller.take_faction_turn(Team.Faction.ENEMY)
+
+	assert_bool(is_instance_valid(b)).override_failure_message(
+			"fixture: the counter never killed B").is_false()
+	_assert_turn_handed_on(board)
+
+
+# A body is not safe either: the pass's end ejects a downed B into a fresh solo squad, which empties
+# and frees the one the snapshot holds (SquadManager.settle_downed -> eject).
+func test_a_faction_turn_ends_when_a_later_squads_body_is_ejected() -> void:
+	var board: Dictionary = await _freed_mid_turn_board(2)
+	var b: Unit = board.b
+
+	await game.ai_controller.take_faction_turn(Team.Faction.ENEMY)
+
+	assert_bool(is_instance_valid(b) and b.is_downed()).override_failure_message(
+			"fixture: the counter did not down B -- it killed it, or missed").is_true()
+	_assert_turn_handed_on(board)
