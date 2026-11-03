@@ -13,7 +13,7 @@ class_name AIScore
 var mission := 0    # protected units killed while the mission says they must survive (#572)
 var removals := 0   # units taken off their feet, per victim
 var splits := 0     # units knocked out of their squad (#761)
-var saves := 0      # bodies a heal stabilised that nobody could have rescued this turn
+var saves := 0      # bodies a heal stabilised that nobody would have rescued this turn
 var limbs := 0      # limbs taken off units standing at plan start (#1230)
 var damage := 0     # damage dealt plus HP actually restored; overkill and overheal worth nothing
 var taken := 0      # damage our side takes from reactions; LOWER is better
