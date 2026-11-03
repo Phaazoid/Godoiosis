@@ -87,8 +87,10 @@ static func actable_squads(faction: Team.Faction, squad_manager: SquadManager) -
 	return out
 
 
-static func is_squad_actable(squad: Squad, faction: Team.Faction) -> bool:
-	return is_squad_previewable(squad, faction) and not squad.has_acted
+# `squad` is a Variant on purpose (#1557): take_faction_turn's snapshot can hand back a squad an
+# earlier pass FREED, and a typed parameter faults on it before is_squad_previewable's guard answers.
+static func is_squad_actable(squad: Variant, faction: Team.Faction) -> bool:
+	return is_squad_previewable(squad, faction) and not (squad as Squad).has_acted
 
 
 # The same question with the SPENT clause removed (#710 plan tier): could this squad act if its
@@ -99,12 +101,13 @@ static func is_squad_actable(squad: Squad, faction: Team.Faction) -> bool:
 # returns an empty list from turn 2 onward, and an empty preview reads as "nobody is attacking
 # you" under the always-attack ruling -- a silent lie. The flag is about the turn that FINISHED;
 # the preview is about the turn that is coming.
-static func is_squad_previewable(squad: Squad, faction: Team.Faction) -> bool:
+static func is_squad_previewable(squad: Variant, faction: Team.Faction) -> bool:
 	if not is_instance_valid(squad):
 		return false
-	if squad.leader == null or squad.leader.get_faction() != faction:
+	var live := squad as Squad
+	if live.leader == null or live.leader.get_faction() != faction:
 		return false
-	return squad.leader.is_active()
+	return live.leader.is_active()
 
 
 # ONE squad's DECISION -- the archetype call, and the stale-pick reset that has to precede it.
@@ -414,7 +417,7 @@ func take_faction_turn(faction: Team.Faction, handoff := 0.0) -> void:
 		if game.mission_controller.is_over():
 			return
 		# Revalidated per iteration, not merely filtered once above: the squad that just acted
-		# may have downed this one's leader.
+		# may have downed this one's leader, or freed the squad outright (#1557).
 		if not is_squad_actable(squad, faction):
 			continue
 
