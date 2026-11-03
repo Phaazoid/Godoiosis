@@ -395,12 +395,14 @@ func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
 # A carving that would FIZZLE greys too (Deep Alchemy Phase 2), judged from where the unit will STAND
 # after its queued moves (get_projected_destination is Unit.projected_cell over its own squad's
 # queue, the origin the queue gate reads) and asked of the same CellSubstances.fizzle_reason, on the
-# gate's own ground (SquadManager.candidate_board, #1498 stage 3b). Asked only of an otherwise usable attack.
+# gate's own ground (SquadManager.candidate_board, #1498 stage 3b) with its bodies (candidate_bodies,
+# #1529). Asked only of an otherwise usable attack.
 func _use_reason(unit: Unit, attack: AttackData) -> String:
 	var reason := AttackAction.fire_block_reason(unit, attack)
 	if reason == "":
+		var bodies: Dictionary = game.squad_manager.candidate_bodies(unit.squad)
 		reason = CellSubstances.fizzle_reason(attack, unit.get_projected_destination(),
-				game.squad_manager.candidate_board(unit.squad), unit.state)
+				game.squad_manager.candidate_board(unit.squad), PlanResolver.state_of(unit, bodies), bodies)
 	return reason
 
 # Whether the attack hits allies, under the row's own detail (#1083). The ONE channel line the ring
