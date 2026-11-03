@@ -106,7 +106,10 @@ static func load_run(run_id: String) -> ReplayRun:
 	ContentRepair.forget(board_path)
 
 	if run.board == null:
-		if cannot_load.is_empty():
+		var refused := ForeignResource.refusal(board_path)   # #1555: asked again only to NAME it
+		if refused != "":
+			run.problems.append("%s was refused, not loaded -- %s" % [BOARD_FILE, refused])
+		elif cannot_load.is_empty():
 			# Broken for some reason we have NOT diagnosed. Nothing to name, and the flat line is still
 			# more than silence.
 			run.problems.append("%s did not load as a ScenarioData" % BOARD_FILE)
@@ -128,9 +131,11 @@ func can_replay() -> bool:
 	return board != null and not events.is_empty()
 
 
+# A run can come from another machine (#1555), so no field is trusted to be the type it should be:
+# `==` between a String and an int, or an int() of null, is a hard script error in GDScript.
 func first(kind: String) -> Dictionary:
 	for e: Dictionary in events:
-		if e.get("event") == kind:
+		if str(e.get("event", "")) == kind:
 			return e
 	return {}
 
@@ -138,7 +143,7 @@ func first(kind: String) -> Dictionary:
 func all(kind: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for e: Dictionary in events:
-		if e.get("event") == kind:
+		if str(e.get("event", "")) == kind:
 			out.append(e)
 	return out
 
@@ -149,7 +154,9 @@ func all(kind: String) -> Array[Dictionary]:
 func rounds() -> int:
 	var seen := 0
 	for e: Dictionary in events:
-		seen = maxi(seen, int(e.get("round", 0)))
+		var at: Variant = e.get("round", 0)
+		if at is int or at is float:
+			seen = maxi(seen, int(at))
 	return seen
 
 
@@ -170,6 +177,7 @@ func is_one_turn() -> bool:
 func headline() -> Dictionary:
 	var start := first("mission_start")
 	var end := first("mission_end")
+	var touched: Variant = end.get("dev_touched", false)
 	return {
 		"run_id": run_id,
 		"scenario": str(start.get("scenario_name", start.get("scenario", "(unknown)"))),
@@ -178,13 +186,13 @@ func headline() -> Dictionary:
 		"player_name": str(start.get("player_name", "")),
 		"outcome": str(end.get("outcome", "UNSEALED")),
 		"rounds": rounds(),
-		"sandbox": bool(start.get("sandbox", false)),
-		"dev_mode": bool(start.get("dev_mode", false)),
+		"sandbox": start.get("sandbox") is bool and start.get("sandbox"),
+		"dev_mode": start.get("dev_mode") is bool and start.get("dev_mode"),
 		# THREE-VALUED, PASSED THROUGH RATHER THAN COERCED. The launch sweep writes null here on
 		# purpose -- the flag lived in memory and died with the process, so "we do not know" must not
 		# flatten into "no dev tool was used". `bool(null)` is also a hard script error, which is how
-		# this was found: it froze the tab on every swept run.
-		"dev_touched": end.get("dev_touched", false),
+		# this was found: it froze the tab on every swept run. Anything not a bool is not known either.
+		"dev_touched": touched if touched is bool else null,
 		# Read off WHERE THE FOLDER IS, never off a stored flag (#53 slice 5) -- the move is the
 		# state, so this cannot go stale the way a marker could. Neither sent nor held is owed.
 		"sent": TelemetryStore.is_sent(run_id),

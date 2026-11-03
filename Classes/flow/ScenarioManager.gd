@@ -217,6 +217,10 @@ func load_slot(slot: int) -> SaveGame:
 	var path := slot_path(slot)
 	if not FileAccess.file_exists(path):
 		return null
+	var refused := ForeignResource.refusal(path)   # #1555: a slot is a file anyone can drop in
+	if refused != "":
+		push_error("Save slot %d was refused at %s -- %s" % [slot, path, refused])
+		return null
 	var save := load(path) as SaveGame
 	if save == null or save.scenario == null:
 		push_error("Save slot %d is unreadable at %s" % [slot, path])

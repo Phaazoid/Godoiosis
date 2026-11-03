@@ -468,6 +468,25 @@ func test_booting_with_runs_on_disk_loads_no_board() -> void:
 		"the dev tools loaded a run at boot, for a tab nobody has opened").is_null()
 
 
+# #1555: a run's board came from another machine, so opening the page parses none -- the newest run
+# is followed on its events alone, and its board is read only when the dev picks it or presses Load.
+func test_following_the_newest_run_reads_no_board_until_load() -> void:
+	_stage_run(LONG_RUN, 3)
+	_stage_board(LONG_RUN)
+	var tool := overlay.replay_tool
+	tool.refresh_on_show()
+	assert_object(tool._run).override_failure_message("fixture: showing the page picked nothing").is_not_null()
+	if tool._run == null:
+		return
+	assert_object(tool._run.board).override_failure_message(
+		"showing the page parsed a board nobody chose").is_null()
+
+	_load_button(tool).pressed.emit()
+
+	assert_object(tool._run.board).override_failure_message(
+		"Load did not read the board it seeds from").is_not_null()
+
+
 # ==============================================================================
 #  Fixture
 # ==============================================================================
@@ -491,6 +510,15 @@ func _stage_run(run_id: String, rounds: int, dev_touched: Variant = false,
 	f.store_line(JSON.stringify({
 		"seq": seq, "t_ms": seq * 10, "round": rounds, "event": "mission_end",
 		"outcome": "ABANDONED", "dev_touched": dev_touched, "units": []}))
+	f.close()
+
+
+# A board beside the run's events, the way ResourceSaver writes the smallest one.
+func _stage_board(run_id: String) -> void:
+	var f := FileAccess.open(TelemetryStore.run_dir(run_id) + ReplayRun.BOARD_FILE, FileAccess.WRITE)
+	f.store_string('[gd_resource type="Resource" script_class="ScenarioData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_sd"]\n\n'
+		+ '[resource]\nscript = ExtResource("1_sd")\nscenario_name = "Fixture"\n')
 	f.close()
 
 

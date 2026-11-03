@@ -12,6 +12,7 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const TEST_SAVE_DIR := "user://__test_saves_144/"
 const FAKE_MISSION := "res://Scenarios/missions/__resume_fixture.tres"   # a path, never a file
+const P := preload("res://tests/support/foreign_payload.gd")
 
 var _main: Node
 var game: Node2D
@@ -114,6 +115,17 @@ func test_an_unreadable_slot_reads_as_null_not_a_crash() -> void:
 	var boardless := SaveGame.new()
 	assert_bool(DevWidgets.save_over(boardless, ScenarioManager.slot_path(2))).is_true()
 	assert_object(game.scenario_manager.load_slot(2)).is_null()
+
+
+# #1555: a slot is a file anyone can drop into the saves folder, and the Load screen opens all three.
+func test_a_slot_carrying_code_is_refused_unloaded() -> void:
+	P.lower()
+	P.write(ScenarioManager.slot_path(1), '[gd_resource type="Resource" script_class="SaveGame" format=3]\n\n'
+		+ '[ext_resource type="Script" path="res://Classes/flow/SaveGame.gd" id="1_sg"]\n\n'
+		+ '[resource]\nscript = ExtResource("1_sg")\nmetadata/p = %s\n' % P.object_value())
+	assert_object(game.scenario_manager.load_slot(1)).is_null()
+	assert_bool(P.ran()).override_failure_message("the slot's payload ran").is_false()
+	P.lower()
 
 
 func test_a_player_save_snapshots_cast_units() -> void:

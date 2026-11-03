@@ -98,11 +98,13 @@ func refresh_on_show() -> void:
 		return
 	# Follow the newest. add_item already SHOWS row 0 as selected (CLAUDE.md's OptionButton edge), so the
 	# select is not what matters -- the pick is. Only when the top row changed: re-picking an unchanged
-	# run would stop a replay in progress for nothing.
+	# run would stop a replay in progress for nothing. Its EVENTS only (#1555): opening the page must
+	# not parse a board nobody chose, so the board waits for a pick or for Load.
 	_hand_picked = ""
 	_list.select(0)
-	if _run == null or _run.run_id != str(_list.get_item_metadata(0)):
-		_on_pick(0)
+	var newest := str(_list.get_item_metadata(0))
+	if _run == null or _run.run_id != newest:
+		_show(ReplayRun.load_events(newest))
 
 
 func _build() -> void:
@@ -177,7 +179,11 @@ func _on_hand_pick(index: int) -> void:
 func _on_pick(index: int) -> void:
 	if index < 0 or index >= _list.item_count:
 		return
-	_run = ReplayRun.load_run(str(_list.get_item_metadata(index)))
+	_show(ReplayRun.load_run(str(_list.get_item_metadata(index))))
+
+
+func _show(run: ReplayRun) -> void:
+	_run = run
 	var head := _run.headline()
 	var marks := flags(head, true)
 	_status.text = "%s -- %s -- %s, %d rounds%s" % [
@@ -265,6 +271,8 @@ func _on_load() -> void:
 		refresh_on_show()
 	if _run == null:
 		return
+	if _run.board == null:
+		_show(ReplayRun.load_run(_run.run_id))   # a followed run was read without its board
 	_hand_picked = _run.run_id
 	if not _driver.seed(_run):
 		_render()

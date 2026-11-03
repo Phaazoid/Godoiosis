@@ -202,6 +202,11 @@ static func resolve(preset_name: String) -> LookPreset:
 	if not ResourceLoader.exists(path):
 		push_error("LookKnobs: this board names look preset '%s', which no longer exists -- falling back to the default" % preset_name)
 		return default_preset()
+	# #1555: the name comes off a board, which may come from another machine; "../" leaves the folder.
+	var refused := ForeignResource.refusal(path)
+	if refused != "":
+		push_error("LookKnobs: look preset '%s' was refused -- %s -- falling back to the default" % [preset_name, refused])
+		return default_preset()
 	var preset := load(path) as LookPreset
 	if preset == null:
 		push_error("LookKnobs: '%s' did not load as a LookPreset -- falling back to the default" % preset_name)
