@@ -141,6 +141,17 @@ static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
 		result.append(entry)
 	return result
 
+# The squads' order (#1566), after the rebuild. A saved `squad_id` is the squad's index in
+# SquadManager.squads, so it already IS the order a load must give back. Static so both loaders call
+# it, as relink_guards below is (#46).
+static func restore_squad_order(squad_manager: SquadManager, unit_of_entry: Dictionary) -> void:
+	var rank_of := {}
+	for entry: ScenarioUnitEntry in unit_of_entry:
+		var unit: Unit = unit_of_entry[entry]
+		if entry.is_leader and entry.squad_id >= 0 and unit.squad != null:
+			rank_of[unit.squad] = entry.squad_id
+	squad_manager.restore_order(rank_of)
+
 # Armed Guards (#414), after every spawn: a pair cannot be re-linked until both ends exist. A ward
 # whose entry never spawned (blocked cell, off-map) simply loses the Guard rather than failing the
 # load, matching how a squad saved without a leader degrades to solos. Static so both loaders call
@@ -154,17 +165,6 @@ static func relink_guards(scenario: ScenarioData, unit_of_entry: Dictionary) -> 
 			continue
 		var guarding_unit: Unit = unit_of_entry[entry]
 		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
-
-# The squads' order (#1566), after the rebuild. A saved `squad_id` is the squad's index in
-# SquadManager.squads, so it already IS the order a load must give back. Static so both loaders call
-# it (relink_guards' reason).
-static func restore_squad_order(squad_manager: SquadManager, unit_of_entry: Dictionary) -> void:
-	var rank_of := {}
-	for entry: ScenarioUnitEntry in unit_of_entry:
-		var unit: Unit = unit_of_entry[entry]
-		if entry.is_leader and entry.squad_id >= 0 and unit.squad != null:
-			rank_of[unit.squad] = entry.squad_id
-	squad_manager.restore_order(rank_of)
 
 func note_play() -> void:
 	play_version += 1
