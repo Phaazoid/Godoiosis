@@ -37,3 +37,54 @@ Registries: `Classes/core/Stats.gd` (`STAT_DEFAULTS` is the canonical stat list 
 **Its camera half is the third relationship and the more reusable one: the player SCALES what the dev authored** (`PlayerSettings.Scale` over three rows, `CameraRig3D.SCALE_FACTORS` with `NORMAL` absent and falling through to 1.0), so nothing leaves `GameKnobs`, Save is untouched, and -- unlike a palette -- **no knob is ever inert**, which is the reason to reach for a multiplier first. Canon: `presentation-effects.md` -> *The player SCALES what the dev authored*. **A choice row is a segmented strip of toggle Buttons in one `ButtonGroup`, never an `OptionButton`** — a dropdown opens an embedded `PopupMenu`, which does not dismiss on outside-click inside `GameView` (sharp edge: the SubViewport gotchas, the #26 reason the action menu is Control-based); `ReportForm._build_kind_row` is the same shape.) Also `Controls` ([#690](https://github.com/Phaazoid/Godoiosis/issues/690) — the ONE binding registry: every key and gesture, its context, the mode it needs, what it does, and the Input Map action it fires or `HARDCODED`. `Glossary`'s shape, and in `core/` for the same reason — it is not dev-only: the dev Info tab projects its DEV context today and [#691](https://github.com/Phaazoid/Godoiosis/issues/691)'s Settings Controls tab takes the player-facing ones, filtered by that field, with rebinding gated on the action half. It REPLACED a hand-maintained markdown table, and the point of paying for a registry is that `tests/law/test_controls_coverage.gd` walks it against the live Input Map both ways — a documented action that no longer exists, and an action nobody documented, each red. Since [#1368](https://github.com/Phaazoid/Godoiosis/issues/1368) it also refuses one press bound twice where both `when`s are AMBIENT (`""` or a view): V had been the enemy ranges and the dev selector depth at once, hidden from the old duplicate check by a different context and `when`. A binding behind a MODE `when` is trusted to take the press from the ambient one, which is code the registry cannot see.
 
 **#691 (2026-09-02) filled the PLAYER contexts and DELETED `docs/SHORTCUTS.md` outright** -- every section of it now has a home, and the registry is the one answer for a binding across both audiences. Its contexts split by what the player is DOING (BOARD / CAMERA), deliberately not by view: F4 is `DevTools.enabled()`-gated, so a shipped build has no flat 2D view, and a page headed "the flat 2D game" would document a screen the player cannot open. `PLAYER_CONTEXTS` is the declared filter the Settings page reads, so a second dev-only context cannot publish itself. With both audiences covered the law went to its strong form: EVERY Input Map action that is not a `ui_` built-in must be documented.)
+
+## ForeignResource: a file from outside the project is read before it is loaded
+
+**Added 2026-11-03 with [#1555](https://github.com/Phaazoid/Godoiosis/issues/1555).** Godot's text-resource loader runs code *while it parses*. Measured on 4.7.1 with a scratch probe, six shapes in a pulled run's `board.tres` ran code through `ReplayRun.load_run`, and five of them then loaded as a good `ScenarioData` with no problem reported:
+
+- an embedded `GDScript` sub-resource;
+- an inline `Object(GDScript, "script/source": …)` value;
+- an inline `Resource("C:/…/x.gd")` value;
+- an `ext_resource` at an absolute path;
+- an `ext_resource` at another file that embeds a script;
+- a `res://../../` climb out of the project.
+
+**Why a strict reader, not a scan.** The engine's tokenizer, read in `core/variant/variant_parser.cpp` and `scene/resources/resource_format_text.cpp`, accepts all of the following:
+
+- `;` comments;
+- a `\x` escape for any letter (`"GDScr\ipt"`);
+- whitespace inside a property name (`scr ipt =`) and quoted names;
+- paths relative to the file's own folder;
+- a registered `uid=` that overrides `path=`;
+- `Array[Resource("path")]`.
+
+A pattern scan can be routed around every one of those. So `ForeignResource.refusal_of` mirrors the tokenizer (`get_token`, its number states, the property-name reader in `parse_tag_assign_eof`, `_parse_tag`, and the section order in `ResourceLoaderText::load`) for the subset `ResourceSaver` writes. It refuses everything else. **A string boundary that disagreed with the engine's would hide what follows it**, so anything that could move one is refused rather than read: comments, escapes in a tag, quoted names, and any byte the saver never puts outside a string.
+
+What it allows:
+
+- embedded objects of type `Resource` only;
+- references to plain `res://` paths only (`inside_project`);
+- scripts under `res://Classes/` only;
+- value constructors from an allowlist (`Object`, `Resource(…)`, `RID`, `Signal`, `Callable` and anything a later engine adds fail closed);
+- no `resource_path` property.
+
+Measured on the day it was written:
+
+- every board under `Scenarios/` passes, and 269 of the 271 committed `.tres` files do (the two refused are a `TileSet` and a `Theme`, which are never foreign);
+- a check of the largest board (`TheGorge`, 83 KB) costs about 60 ms headless. That cost is per token, from GDScript's call overhead, and it is paid only on loads of foreign files.
+
+**The doors.** `inside_project` paths skip the read entirely, so the catalogs and every authored load are untouched.
+
+- **`ContentRepair.load_tolerant`.** It covers pulled runs, the Play API's `load`, a save's `mission_path`, and a board's roster name. Its repair adds two more checks, both found while building this:
+  - `_repair_children` reads `ext_resource` **lines** with a substring reader. A file that passes the guard can still carry a fake line inside a multi-line string, so that reader skips any target outside the project.
+  - `_repair` asks again about the **repaired text** before writing it, because its strip is a text edit. A tag split across lines loses its opening quote along with the dropped line, and every quote after it changes sides.
+- **`ScenarioManager.load_slot`.** A slot is a file anyone can drop into the saves folder, and the Load screen opens all three slots.
+- **`LookKnobs.resolve`.** A board names its look preset, the name composes a path, and `../` leaves the folder. The account name a full climb needs is not a secret.
+- **`ReplayTool`** follows the newest run on its events alone, and parses a board only on a pick or on Load. If a gap ever opens in the guard, opening the tab is still not a zero-click trigger.
+
+**Not guarded, and why.**
+
+- The intake Worker stores `board` verbatim, and `pull-runs.ps1` writes it as received. A second copy of this rule in PowerShell or JS would be a second answer to the same question (Law #4), and a file can reach disk by other routes anyway.
+- `ConfigFile` reads (`settings.cfg`, `telemetry.cfg`) are written by this machine's own game.
+
+**Re-check this against the engine's tokenizer after every Godot upgrade.** A new value constructor fails closed. A change to string, comment or name rules would not announce itself.

@@ -359,6 +359,10 @@ tools/intake-worker/pull-runs.ps1
 **every run that is not already on disk**; `-RunId <id>` takes exactly one, and `-Force` overwrites.
 Runs land in `user://telemetry/sent/<run_id>/` and appear in **Session > Replay** with no relaunch.
 
+**A pulled `board.tres` is anyone's file, and nothing here checks it (#1555).** Godot's loader runs
+code while it parses, so the GAME guards it: `ForeignResource` reads it before `ContentRepair` loads it.
+This script writes what the intake holds byte for byte, so the game's check is the only one.
+
 **There is deliberately no route that hands RUNS back.** `Uploader.ENDPOINT` is a `const` in the
 shipped game, so that URL is effectively public — harmless while the endpoint only *accepts*
 uploads, and not harmless at all the moment it hands runs back. A read route would need auth of its

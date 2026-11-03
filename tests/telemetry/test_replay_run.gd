@@ -17,6 +17,7 @@ const SD_SCRIPT := "res://Classes/flow/ScenarioData.gd"
 const GONE_POSE := "res://Scenarios/__test_no_such_pose.tres"
 const GONE_SCRIPT := "res://Classes/flow/__test_no_such_script.gd"
 const RUN_ID := "2026-09-10_00-00-00_fixture0"
+const P := preload("res://tests/support/foreign_payload.gd")
 
 
 func before_test() -> void:
@@ -31,6 +32,7 @@ func after_test() -> void:
 	ContentRepair.forget(_board_path())
 	_wipe(SCRATCH_ROOT)
 	TelemetryStore.reset_for_test()
+	P.lower()
 	await await_idle_frame()
 
 
@@ -169,3 +171,39 @@ func test_the_headline_says_when_a_run_is_held() -> void:
 	assert_bool(bool(held.get("held", false))).override_failure_message(
 		"a run in held/ does not read as held").is_true()
 	assert_bool(bool(held.get("sent", true))).is_false()
+
+
+# ==============================================================================
+#  A run from another machine (#1555)
+# ==============================================================================
+
+# Godot's loader runs code while it parses, and a pulled run's board was written somewhere else. It is
+# refused unloaded, and the problem says so rather than reading as a merely broken file.
+func test_a_board_carrying_code_is_refused_and_says_so() -> void:
+	var none: Array[String] = []
+	_stage_run(none, ["metadata/p = %s" % P.object_value()])
+	P.lower()
+	var run := ReplayRun.load_run(RUN_ID)
+	assert_bool(P.ran()).override_failure_message("the board's payload ran").is_false()
+	assert_object(run.board).is_null()
+	assert_str("\n".join(run.problems)).override_failure_message(
+		"the refusal is not named: %s" % str(run.problems)).contains("refused")
+
+
+# The run list reads every run's first lines, so one forged field must not be a script error that
+# takes the whole list down. Each value below is one GDScript would have thrown on.
+func test_a_forged_events_line_cannot_break_the_headline() -> void:
+	var dir := TelemetryStore.run_dir(RUN_ID)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var events := FileAccess.open(dir + ReplayRun.EVENTS_FILE, FileAccess.WRITE)
+	events.store_line(JSON.stringify({"event": 5, "round": null}))
+	events.store_line(JSON.stringify({"event": "mission_start", "round": [1], "sandbox": "yes",
+		"dev_mode": null}))
+	events.store_line(JSON.stringify({"event": "mission_end", "round": "2", "dev_touched": "no"}))
+	events.close()
+	var head := ReplayRun.load_events(RUN_ID).headline()
+	assert_bool(head.get("sandbox")).is_false()
+	assert_bool(head.get("dev_mode")).is_false()
+	assert_object(head.get("dev_touched")).override_failure_message(
+		"a dev_touched that is not a bool is not known either").is_null()
+	assert_int(head.get("rounds")).is_equal(0)

@@ -15,11 +15,17 @@ const SCRIPT_PATH := "res://Classes/weapons/WeaponModData.gd"
 const ATTACK_SCRIPT := "res://Classes/weapons/WeaponAttackData.gd"
 const GONE := "res://Resources/WeaponAttacks/__test_no_such_attack.tres"
 const HOLDER_PATH := "user://__test_repair_holder.tres"
+const CASCADE_MID := "res://Resources/WeaponMods/__test_cascade_mid.tres"
+const CASCADE_TOP := "res://Resources/WeaponMods/__test_cascade_top.tres"
 
 
 func after_test() -> void:
 	ContentRepair.forget(BROKEN_PATH)
 	ContentRepair.forget(HOLDER_PATH)
+	for path: String in [CASCADE_MID, CASCADE_TOP]:   # the case removes them itself; a failed run may not
+		ContentRepair.forget(path)
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
 	if FileAccess.file_exists(HOLDER_PATH):
 		DirAccess.remove_absolute(HOLDER_PATH)
 	if FileAccess.file_exists(BROKEN_PATH):
@@ -186,9 +192,12 @@ func test_save_over_is_unaffected_for_content_that_never_degraded() -> void:
 # On its OWN paths on purpose. Written first against the shared fixture, it passed for a rotten
 # reason: an earlier case had already repaired the middle file, and take_over_path had left that
 # object in Godot's resource cache, so the top file resolved from memory rather than from disk.
+#
+# Under res://, as #596's chain was: a file outside the project that references another one is
+# refused unloaded since #1555 (test_foreign_resource.gd), so a user:// chain never reaches the repair.
 func test_a_file_referencing_a_degraded_file_still_loads() -> void:
-	var mid := "user://__test_cascade_mid.tres"
-	var top := "user://__test_cascade_top.tres"
+	var mid := CASCADE_MID
+	var top := CASCADE_TOP
 	var m := FileAccess.open(mid, FileAccess.WRITE)
 	m.store_string('[gd_resource type="Resource" script_class="WeaponModData" format=3]\n\n'
 		+ '[ext_resource type="Script" path="%s" id="1_mod"]\n' % SCRIPT_PATH

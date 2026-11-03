@@ -40,6 +40,10 @@ static var _visiting: Dictionary = {}
 static func load_tolerant(path: String) -> Resource:
 	if not ResourceLoader.exists(path):
 		return null
+	var refused := ForeignResource.refusal(path)   # #1555: a file from outside could run code
+	if refused != "":
+		push_warning("%s was not loaded -- %s" % [path, refused])
+		return null
 	var res: Resource = ResourceLoader.load(path)
 	if res != null:
 		_repairs.erase(path)   # a clean load supersedes any earlier repair of the same path
@@ -105,6 +109,8 @@ static func _repair_children(path: String, kept: Array[Resource]) -> bool:
 		var target := DevWidgets._quoted_attr(line, "path")
 		if target == "" or target == path or not FileAccess.file_exists(target):
 			continue   # absent targets are this file's OWN damage, stripped by _repair below
+		if not ForeignResource.inside_project(target):
+			continue   # #1555: a line reader, not the loader; a real reference here was refused
 		if DevWidgets._quoted_attr(line, "type") == "Script":
 			continue
 		if ResourceLoader.load(target) != null:
@@ -163,6 +169,13 @@ static func _repair(path: String) -> Resource:
 
 	var properties: Array[String] = []
 	var repaired := _without(text, dangling, properties)
+	# #1555: the strip is a text replace, so cutting a reference out of a file from outside can turn
+	# what was string content into code. Ask again about what will actually be loaded.
+	if not ForeignResource.inside_project(path):
+		var refused := ForeignResource.refusal_of(repaired.to_utf8_buffer())
+		if refused != "":
+			push_warning("%s was not repaired -- the repaired text: %s" % [path, refused])
+			return null
 	DirAccess.make_dir_recursive_absolute(REPAIR_DIR)
 	var temp := REPAIR_DIR + path.md5_text() + ".tres"
 	var f := FileAccess.open(temp, FileAccess.WRITE)

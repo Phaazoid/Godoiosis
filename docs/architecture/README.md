@@ -18,7 +18,7 @@ The long version of every entry in `CLAUDE.md`'s *Architecture map* and *Code la
 | [`reports.md`](reports.md) | *BugReporter* · *Kind: BUG or FEEDBACK* · *BugReporter.open_card is the one funnel for a card* · *The screenshot comes from the root viewport* · *The dev-tools window is a second file* · *capture_frame() returns null in a headless run* · *Report-flow tests* |
 | [`ui.md`](ui.md) | *ModalLock* · *ModalCard* · *UiLayers* · *The ui/ folder* |
 | [`camera.md`](camera.md) | *The camera's vocabulary has one home* · *CameraTrace: what the camera just did* · *ShotDirector: the camera's shots are a priority table* |
-| [`core.md`](core.md) | *Registries* · *The core/ folder: Glossary, Pacing, PlayerSettings, Controls* |
+| [`core.md`](core.md) | *Registries* · *The core/ folder: Glossary, Pacing, PlayerSettings, Controls* · *ForeignResource* |
 | [`audio.md`](audio.md) | *AudioDirector* · *MusicDirector* |
 | [`net-and-telemetry.md`](net-and-telemetry.md) | *The net/ folder* · *The telemetry/ folder* |
 
