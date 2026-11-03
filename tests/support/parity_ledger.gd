@@ -382,6 +382,9 @@ static func plan_lists() -> Dictionary:
 					"ai": gap("#117", "where the pass leaves the ground is not priced: _map_pays judges one deposit alone, never the plan's tiles")},
 			# The ground a candidate order is judged on (#1498 stage 3b): an aim's, a watch's, a rescue's.
 			"prefix_tiles": {"play": covered(SESSION, "candidate_board("), "ai": covered(TACTICS, ".prefix_tiles")},
+			# ...and the bodies a candidate carving is judged with at that moment (#1529).
+			"prefix_hypo": {"play": covered(SESSION, "candidate_bodies("),
+					"ai": gap("#117", "a carving's pre-filters read a neighbour's live states, not the bodies the queued attacks leave")},
 			"tail_tiles": {"play": covered(SESSION, "rescue_board("), "ai": covered(TACTICS, "rescue_board(")},
 		},
 	}
