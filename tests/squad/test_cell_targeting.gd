@@ -38,6 +38,33 @@ func test_unit_in_aimed_cell_is_still_a_victim() -> void:
 	assert_object(plan.attacks[0].target).is_same(foe)
 	_break_volleys(plan)
 
+# #1568: nobody stands on the aimed cell, so the row has no HP to show. reads_hp is what the queue
+# row (ActionQueueRow) and the Play API's preview read; left at its default, the row drew a "0->0" HP
+# card for a unit that is not there. The hit on a unit beside it is the control.
+func test_an_empty_tile_aim_reads_no_hp() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 1), {Stats.Stat.LDR: 3})
+	_sm.join_squad(mate, attacker.squad)
+	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 2), {Stats.Stat.LDR: 3})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.create(attacker, attacker.movement.cell, null, Vector2i(1, 0)))
+	attacker.squad._queue_action(AttackAction.create(mate, mate.movement.cell, null, foe.movement.cell))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker, mate, foe]))
+	var at_cell: AttackAction = null
+	var at_foe: AttackAction = null
+	for atk in plan.attacks:
+		if atk.target == null:
+			at_cell = atk
+		elif atk.target == foe:
+			at_foe = atk
+	assert_object(at_cell).override_failure_message("fixture: no cell attack resolved").is_not_null()
+	assert_object(at_foe).override_failure_message("fixture: the control hit on the foe did not resolve").is_not_null()
+	assert_bool(at_cell.resolved.reads_hp).override_failure_message(
+			"an aim at an empty cell reads HP, so its row draws a 0->0 HP card (#1568)").is_false()
+	assert_bool(at_foe.resolved.reads_hp).is_true()
+	_break_volleys(plan)
+
 func _board_with(units_in: Array) -> BoardContext:
 	var units: Array[Unit] = []
 	units.assign(units_in)
