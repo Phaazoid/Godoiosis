@@ -6,12 +6,26 @@
 # and a read in that frame still emits the marked cells as source -1 records. So before restore()
 # purged, the order an Update wrote depended on which board was loaded first (Prolog, #1513), and a
 # save taken in the frame of a clear wrote thousands of deleted cells (the four AI fixtures, #1225).
+# reset() purges for the same reason: Resize Map captures its undo step in the reset's own frame, and
+# an Update writes that capture (#1549).
 #
 # The committed-board case derives its expectation from each file's own bytes, so it pins no
 # authored content: it fails only when the writer would not reproduce what is committed.
 extends GdUnitTestSuite
 
 const BoardBuilder := preload("res://play/board_builder.gd")
+const MAIN_SCENE := "res://Scenes/Main.tscn"
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)
+
+var _main: Node
+
+
+func after_test() -> void:
+	if _main != null:
+		get_tree().root.remove_child(_main)
+		_main.free()
+		_main = null
 
 
 func _grid() -> BoardGrid:
@@ -48,6 +62,43 @@ func test_a_restore_lands_the_datas_own_order_over_an_overlapping_board() -> voi
 	).is_true()
 
 
+# Through the real doors: DevController.resize_map resets, repaints and commits in one frame, and
+# what an Update writes is capture_scenario over the header's authored board, built here in memory.
+func test_an_update_after_a_shrinking_resize_writes_only_the_new_rectangle() -> void:
+	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
+	_main.name = "Main"
+	get_tree().root.add_child(_main)
+	await await_idle_frame()
+	var game: Node2D = _main.get_node("GameContainer/GameView/Game")
+	game.scenario_manager.clear_board()
+	game.grid.reset()
+	for x in range(8):
+		for y in range(6):
+			game.grid.paint(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	await await_idle_frame()
+	game.game_state = game.GameState.DEV_MODE
+	game.scenario_manager.board_loaded.emit()   # what a load does to the history
+
+	var dc: DevController = game.dev_controller
+	dc.resize_map(4, 3, GRASS_SOURCE, GRASS_ATLAS)
+	var header: ScenarioHeader = game.dev_overlay.scenario_header
+	var scenario: ScenarioData = game.scenario_manager.capture_scenario("resized", true,
+			header.authored_board())
+	var written: PackedByteArray = scenario.tile_data
+	await await_idle_frame()
+	var grid: BoardGrid = game.grid
+	var settled: PackedByteArray = grid.tile_map_data
+
+	assert_int(grid.get_used_cells().size()).override_failure_message(
+		"fixture: the resize did not leave its 4x3 rectangle, so the comparison below is vacuous"
+	).is_equal(12)
+	assert_bool(written == settled).override_failure_message(
+		"An Update straight after a shrinking Resize would write a tile_data line the board does not "
+		+ "hold: reset() left the deleted cells marked, and a capture in its frame emits them as "
+		+ "source -1 records (%d bytes written, %d settled)" % [written.size(), settled.size()]
+	).is_true()
+
+
 func test_every_committed_board_round_trips_its_tile_data() -> void:
 	var grid := _grid()
 	var manager: ScenarioManager = auto_free(ScenarioManager.new())
@@ -66,7 +117,6 @@ func test_every_committed_board_round_trips_its_tile_data() -> void:
 		var cells: Array[Vector2i] = reader.get_used_cells()
 		cells.reverse()
 		grid.reset()
-		await await_idle_frame()   # the reset's marked cells must be gone, or the paint keeps their order
 		for cell: Vector2i in cells:
 			grid.paint(cell, reader.get_cell_source_id(cell), reader.get_cell_atlas_coords(cell),
 					reader.get_cell_alternative_tile(cell))
