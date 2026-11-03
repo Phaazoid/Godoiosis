@@ -323,6 +323,35 @@ func test_a_carving_whose_water_an_earlier_order_freezes_is_refused() -> void:
 	game.refresh_action_queue(caster.squad)
 
 
+# After a pass executes, the cache still holds the plan it ran. The squad's first order of its next turn
+# meets the LIVE ground: the fire its last pass lit has since been put out, the way a later pass's
+# douse lands (ResolvedPlan.play_landing), so Ignite has nothing left to draw on.
+func test_the_next_turns_first_order_meets_the_live_ground() -> void:
+	var ignite := _carving("Ignite", "Push(F2)")
+	var carvings: Array[TransmutationData] = [ignite]
+	var fire_only: Array[Elemental.Element] = [FIRE]
+	var caster := _alchemist(CASTER, carvings, fire_only)
+	_spawn(ENEMY, FOE, 200)
+	var lighter := _mate(caster, MATE, _blow(1, FIRE, true))
+	_queue_fire(lighter, BESIDE)
+	await game.order_executor.execute_orders(caster.squad.get_leader())
+	var executed: ResolvedPlan = sm.resolved_plan_for(caster.squad)
+	assert_bool(executed != null and executed.prefix_tiles != null
+			and executed.prefix_tiles.has_state(BESIDE, Terrain.TileState.BURNING)).override_failure_message(
+			"fixture: the cache no longer holds the fire the pass lit, so nothing below proves anything").is_true()
+
+	var douse := ResolvedCellEffect.new()
+	douse.cell = BESIDE
+	douse.states_removed.assign([Terrain.TileState.BURNING] as Array[Terrain.TileState])
+	game.terrain_states.apply(douse)
+	sm.reset_faction_actions(PLAYER)   # the hand-off into the squad's next turn
+	assert_str(CellSubstances.fizzle_reason(ignite, CASTER, game._board(), caster.state)).override_failure_message(
+			"fixture: the live ground still feeds Ignite, so nothing below proves anything").is_not_empty()
+
+	assert_str(_try(caster, _declare(caster, ignite, FOE))).override_failure_message(
+			"the gate judged the next turn's first order on the fire the executed pass lit, since put out") 		.starts_with("Fizzles")
+
+
 # ==============================================================================
 #  A watch: judged where it arms
 # ==============================================================================
