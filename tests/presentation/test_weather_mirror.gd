@@ -18,7 +18,9 @@
 #   - every system born in the camera's box is held at its cap, so no zoom re-sizes one (#1304), and a
 #     held system still carries the authored births;
 #   - a flake is born under its look's ceiling and lives only to land, so zooming out stops stretching its
-#     life, and the fade rows reach the draw (#1305).
+#     life, and the fade rows reach the draw (#1305);
+#   - a tear-out's flight re-places its own cells in the ground mask and never walks the whole board, and
+#     a sky nothing reads builds no mask at all (#1562).
 extends GdUnitTestSuite
 
 const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
@@ -47,6 +49,7 @@ func after() -> void:
 
 
 func after_test() -> void:
+	BoardSpace.clear_staging()
 	_scene.game.scenario_manager.current_weather = Weather.Kind.CLEAR
 	_scene.game.scenario_manager.current_wind = Wind.Kind.CALM
 	_scene.game.scenario_manager.current_wind_direction = Wind.Direction.EAST
@@ -1189,3 +1192,111 @@ func test_a_look_off_the_storm_falls_never_strikes() -> void:
 			.is_true()
 	assert_float(off_flash).override_failure_message("a storm drawn as snow still flashes").is_equal(0.0)
 	assert_bool(off_light).override_failure_message("a storm drawn as snow still lights the board").is_false()
+
+
+# ---- The ground mask under a tear-out (#1562) -----------------------------------------------------
+
+# The board's first cells with a surface, which a tear-out can lift.
+func _liftable_cells(count: int) -> Array[Vector2i]:
+	var grid: TileMapLayer = _scene.game.grid
+	var cells: Array[Vector2i] = []
+	for cell in grid.get_used_cells():
+		if GridUtils.has_surface(grid, cell):
+			cells.append(cell)
+			if cells.size() == count:
+				break
+	return cells
+
+
+# The mask the mirror holds against a whole build of the board where it is drawn right now: "" when they
+# agree texel for texel and in span, else where they first differ. Builds a mask itself, so a caller
+# counting the mirror's walks reads the count before calling this.
+func _mask_mismatch(mirror: WeatherMirror) -> String:
+	var grid: TileMapLayer = _scene.game.grid
+	var rect := grid.get_used_rect()
+	var fresh := WeatherMask.build(grid, _scene.game.board_heights, rect, BoardSpace.drawn_offset)
+	var held: Image = mirror._mask_image
+	if held == null:
+		return "the mirror holds no mask"
+	if held.get_size() != fresh.get_size():
+		return "the mask is %s, the board %s" % [held.get_size(), fresh.get_size()]
+	if held.get_data() != fresh.get_data():
+		for y in fresh.get_height():
+			for x in fresh.get_width():
+				if held.get_pixel(x, y) != fresh.get_pixel(x, y):
+					return "cell %s holds %s, drawn at %s" % [rect.position + Vector2i(x, y), held.get_pixel(x, y),
+							fresh.get_pixel(x, y)]
+	if mirror._span != WeatherMask.span(fresh):
+		return "the span is %s, the board's %s" % [mirror._span, WeatherMask.span(fresh)]
+	return ""
+
+
+# A flight moves its tiles on every frame between landings, and the rain must land where each one is
+# drawn: the flying cells are re-PLACED in the kept mask, which every shader stays bound to, and the
+# board is never walked again (#893's two prices). Before #1562 every flight frame rebuilt the whole
+# board -- 18.5 ms on Prolog, under any sky. Driven by hand, the way battle3d's driver advances it.
+func test_a_flight_re_places_the_mask_and_never_rebuilds_it() -> void:
+	var mirror := _mirror()
+	_manager().current_weather = Weather.Kind.RAIN
+	mirror._process(0.016)
+	var cells := _liftable_cells(4)
+	assert_int(cells.size()).override_failure_message("fixture: the mission painted nothing to lift") \
+			.is_greater(1)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	mirror._process(0.016)
+	var texture := mirror.mask()
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	var walks := 0
+	var mid_air := false
+	var rebound := false
+	var mismatch := ""
+	var step := StagingFlight.total(plan) / 12.0
+	for i in 14:
+		BoardSpace.advance_flight(step)
+		for cell in cells:
+			var offset := BoardSpace.flight_offset(cell)
+			mid_air = mid_air or (offset != Vector3.ZERO and offset != -lift)
+		var before := WeatherMask.board_walks
+		mirror._process(0.016)
+		rebound = rebound or mirror.mask() != texture
+		walks += WeatherMask.board_walks - before
+		if mismatch.is_empty():
+			mismatch = _mask_mismatch(mirror)
+	BoardSpace.end_flight_now()
+	mirror._process(0.016)
+	var landed := _mask_mismatch(mirror)
+	BoardSpace.clear_staging()
+	mirror._process(0.016)
+	var home := _mask_mismatch(mirror)
+	assert_bool(mid_air).override_failure_message("fixture: no step caught a tile partway up").is_true()
+	assert_int(walks).override_failure_message(
+			"a flight walked the whole mask %d times in 14 frames: it rebuilds rather than re-placing" % walks) \
+			.is_equal(0)
+	assert_bool(rebound).override_failure_message(
+			"a flight handed out a new mask: every shader bound to the old one reads a stale board").is_false()
+	assert_object(mirror._rain_process.get_shader_parameter("mask")).override_failure_message(
+			"the rain is not bound to the mask the flight re-places").is_same(texture)
+	assert_str(mismatch).override_failure_message("mid-flight, the mask is not the board: " + mismatch).is_empty()
+	assert_str(landed).override_failure_message("landed, the mask is not the board: " + landed).is_empty()
+	assert_str(home).override_failure_message("put back, the mask is not the board: " + home).is_empty()
+
+
+# Under a clear sky nothing reads the mask but the wind's specks, which pull it through mask(): a calm,
+# clear board never builds one (#1562), and a read builds the board as it is.
+func test_a_sky_nothing_reads_builds_no_mask() -> void:
+	var mirror := _mirror()
+	_manager().current_wind = Wind.Kind.CALM
+	_clear_aurora(mirror)
+	BoardSpace.touch_basin()
+	var before := WeatherMask.board_walks
+	for i in 3:
+		mirror._process(0.016)
+	var idle := WeatherMask.board_walks - before
+	mirror.mask()
+	var pulled := WeatherMask.board_walks - before
+	var mismatch := _mask_mismatch(mirror)
+	assert_int(idle).override_failure_message("a clear, calm sky built a mask nothing reads").is_equal(0)
+	assert_int(pulled).override_failure_message("reading a stale mask did not bring it up to date").is_greater(0)
+	assert_str(mismatch).override_failure_message("the mask a read built is not the board: " + mismatch).is_empty()
