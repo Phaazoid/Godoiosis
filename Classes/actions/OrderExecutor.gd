@@ -117,6 +117,8 @@ func execute_orders(unit):
 		return
 
 	game.scenario_manager.note_play()   # a pass changes the board the dev header compares (#1182)
+	# ...and can wipe a side before the end-of-pass check ever looks (#1554).
+	game.mission_controller.latch_contested()
 	game.clear_selection_icons()
 	# ...and the squad lines a hover left up (#1109). The pointer stops polling while the pass plays, so
 	# they would otherwise stand at cells the pass is about to empty -- an intact tether beside its own
@@ -1074,6 +1076,8 @@ func _play_sinks(sinks: Array[SinkAction]) -> void:
 # neither, so using it would mean faking a plan. It reuses #520's camera seam at a shorter
 # duration rather than growing one of its own.
 func apply_end_of_turn_tiles(faction: Team.Faction) -> void:
+	# A turn ended with no pass meets nothing that has looked at the board yet (#1554).
+	game.mission_controller.latch_contested()
 	var units: Array[Unit] = game._all_units()
 	var states_store: TerrainStateManager = game.terrain_states
 	var gas: GasField = game.gas_field

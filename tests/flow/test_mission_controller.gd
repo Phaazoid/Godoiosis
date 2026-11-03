@@ -156,6 +156,65 @@ func test_a_player_only_board_never_ends_either() -> void:
 	assert_that(mc.outcome).is_equal(MissionRules.Outcome.ONGOING)
 
 
+# #1554: the latch used to be taken only at the END of a pass, so a first pass that routed the board
+# found it one-sided the first time anyone looked, and the mission could never end. No check() before
+# the pass here -- that is the whole case.
+func test_a_first_pass_that_routs_the_board_still_wins() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	hero.equipped_weapon = H.make_weapon(60)
+	foe.set_current_hp(1)
+	assert_bool(game.squad_manager.queue_action(hero.squad,
+			AttackAction.declare(hero, hero.movement.cell, foe.movement.cell))).override_failure_message(
+			"fixture: the attack never queued").is_true()
+
+	await game.order_executor.execute_orders(hero)
+
+	assert_bool(MissionRules.has_active_hostiles(game._board())).override_failure_message(
+		"precondition: the pass left a hostile standing, so nothing here is a rout").is_false()
+	assert_that(mc.outcome).override_failure_message(
+		"the first pass routed the board and the mission did not end").is_equal(MissionRules.Outcome.VICTORY)
+
+
+# The burn is the other step that can come first: a player who ends turn 1 without executing anything
+# meets it before any pass has looked at the board.
+func test_a_burn_before_any_pass_that_takes_the_last_player_unit_still_loses() -> void:
+	var no_ai: Array[Team.Faction] = []
+	game.ai_controller.set_ai_factions(no_ai)
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	hero.set_current_hp(1)
+	var fire := ResolvedCellEffect.new()
+	fire.cell = hero.movement.cell
+	fire.states_added.assign([Terrain.TileState.BURNING])
+	game.terrain_states.apply(fire)
+	assert_that(game.turn_manager.active_faction()).override_failure_message(
+		"precondition: the burn takes the faction whose turn ends, and that is not the player's").is_equal(
+		Team.Faction.PLAYER)
+
+	await game.end_turn()
+
+	assert_bool(game._board().faction_has_active_units(Team.Faction.PLAYER)).override_failure_message(
+		"precondition: the burn left the player a unit, so nothing here is a wipe").is_false()
+	assert_that(mc.outcome).override_failure_message(
+		"the first burn took the last player unit and the mission did not end").is_equal(
+		MissionRules.Outcome.DEFEAT)
+
+
+# The fix must not latch a board that was never a mission: a pass on a one-sided board leaves it inert.
+func test_a_pass_on_a_one_sided_board_never_latches() -> void:
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var move := MoveAction.new()
+	move.init(hero, [Vector2i(1, 1), Vector2i(2, 1)], null)
+	assert_bool(game.squad_manager.queue_action(hero.squad, move)).override_failure_message(
+		"fixture: the move never queued").is_true()
+
+	await game.order_executor.execute_orders(hero)
+
+	assert_bool(mc.is_contested()).is_false()
+	assert_that(mc.outcome).is_equal(MissionRules.Outcome.ONGOING)
+
+
 # ==============================================================================
 #  The objective composer
 # ==============================================================================

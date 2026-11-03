@@ -13,6 +13,7 @@ extends GdUnitTestSuite
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
 const BoardView := preload("res://play/board_view.gd")
+const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
@@ -203,6 +204,33 @@ func test_a_zone_already_claimed_cannot_be_captured_again() -> void:
 		"a zone already claimed was captured a second time: %s" % str(again)).is_false()
 	assert_bool(second_unit.has_main_action_queued()).override_failure_message(
 		"a refused capture still queued an order").is_false()
+
+
+# ==============================================================================
+#  The contested latch is taken before the pass (#1554)
+# ==============================================================================
+
+# No _contest() first, and that is the whole case: a first execute that routs the board used to find it
+# one-sided the first time mission_tag() looked, and the mission could never end.
+func test_a_first_execute_that_routs_the_board_wins_headlessly() -> void:
+	var scenario := _scenario()
+	_place(scenario, "P1", PLAYER, Vector2i(0, 0))
+	_place(scenario, "E1", ENEMY, Vector2i(1, 0))
+	var loaded: Array = await _load(scenario)
+	var sess = loaded[0]
+	var hero: Unit = loaded[1][0]
+	var foe: Unit = loaded[1][1]
+	hero.add_item(H.make_weapon(60))
+	foe.set_current_hp(1)
+	assert_bool(sess.queue_attack(sess.handle_for(hero), foe.movement.cell).ok).override_failure_message(
+		"fixture: the attack never queued").is_true()
+
+	var result: Dictionary = sess.execute()
+
+	assert_bool(MissionRules.has_active_hostiles(sess._board())).override_failure_message(
+		"precondition: the pass left a hostile standing, so nothing here is a rout").is_false()
+	assert_str(str(result.get("mission", ""))).override_failure_message(
+		"the first execute routed the board and the mission did not end: %s" % str(result)).is_equal("VICTORY")
 
 
 # ==============================================================================
