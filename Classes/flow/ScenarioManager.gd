@@ -358,6 +358,9 @@ func capture_entry(unit: Unit, authored := false) -> ScenarioUnitEntry:
 		entry.squad_archetype = unit.squad.archetype
 		entry.squad_zone = unit.squad.zone_name
 		entry.squad_has_acted = unit.squad.has_acted   # #87: a spent squad reloads spent
+		if not authored:   # #1564: the live post; an authored save keeps the spawn-cell rule
+			entry.squad_home_saved = true
+			entry.squad_home_cell = unit.squad.home_cell
 
 	if entry.state_saved:
 		entry.capture_unit_state(unit)
