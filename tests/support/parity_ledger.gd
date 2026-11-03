@@ -386,6 +386,8 @@ static func plan_lists() -> Dictionary:
 			"prefix_hypo": {"play": covered(SESSION, "candidate_bodies("),
 					"ai": gap("#117", "a carving's pre-filters read a neighbour's live states, not the bodies the queued attacks leave")},
 			"tail_tiles": {"play": covered(SESSION, "rescue_board("), "ai": covered(TACTICS, "rescue_board(")},
+			# Which rescue stands each body up (#1567): one claim per body, met through the rescue offer.
+			"rescued_by": {"play": covered(SESSION, "adjacent_downed_allies("), "ai": covered(TACTICS, "adjacent_downed_allies(")},
 		},
 	}
 
