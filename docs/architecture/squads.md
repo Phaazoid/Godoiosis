@@ -29,7 +29,7 @@ The lifecycle rule itself is ONE seam, `RulesService.is_rescueable(target, plan)
 **It is safe only while a batch stays synchronous** — if one ever spans a frame, the queue panel goes stale and Law #2 breaks. Invariants + measurements: [`docs/performance.md`](../performance.md).
 
 **Leaving a squad never refreshes a turn ([#1556](https://github.com/Phaazoid/Godoiosis/issues/1556), 2026-11-03).** Two reviews on that date found two ways for one squad to act twice in a turn:
-- **Execute pressed while an aim or pick was open.** The aim had been gated on a squad that had not acted. The pass changed that answer while the aim stayed open, so one more click queued a second plan for the spent squad. `game._on_queue_execute_requested` now calls `_leave_mode()` first, the way a queue-row click (#1122) and the F cycle already did.
+- **Execute pressed while an aim or pick was open.** The aim had been gated on a squad that had not acted. The pass changed that answer while the aim stayed open, so one more click queued a second plan for the spent squad. `game._on_queue_execute_requested` now calls `_leave_mode()` first, the way a queue-row click (#1122) and the F cycle already did. It does so only when a mode is open (`game_state != _base_state()`): leaving from rest redraws the plan's ghosts, and CI caught a refused press mid-flash swapping the ghost it was shaking (#1150's test).
 - **A member ejected after its squad acted got a fresh, un-acted solo squad,** because `create_squad` always started at `false`.
 
 The second cause had three shapes:

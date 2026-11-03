@@ -1491,8 +1491,11 @@ func _on_queue_execute_requested():
 	if squad == null:
 		return
 	# An open aim or pick was gated on a squad that had not acted, and the pass changes that answer
-	# under it: left open, one more click queued a second action for the spent squad (#1556).
-	_leave_mode()
+	# under it: left open, one more click queued a second action for the spent squad (#1556). Only
+	# when one IS open: leaving from rest redraws the ghosts, and a refused press mid-flash would
+	# swap the ghost it is shaking (#1150).
+	if game_state != _base_state():
+		_leave_mode()
 	order_executor.execute_orders(squad.get_leader())
 
 func _on_queue_cancel_requested(display_action: BaseAction):
