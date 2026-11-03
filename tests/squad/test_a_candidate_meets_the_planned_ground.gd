@@ -323,40 +323,6 @@ func test_a_carving_whose_water_an_earlier_order_freezes_is_refused() -> void:
 	game.refresh_action_queue(caster.squad)
 
 
-# After a pass executes, the cache still holds the plan it ran. The squad's first order of its next turn
-# meets the LIVE ground: the fire its last pass lit has since been put out, the way a later pass's
-# douse lands (ResolvedPlan.play_landing), so Ignite has nothing left to draw on. The hand-off resolves
-# nothing, so the ring opened next reads the ground through candidate_board with that plan cached. The
-# gate cannot show this: its own hypothetical pass fizzles the cast on the live board first.
-func test_the_next_turns_first_order_meets_the_live_ground() -> void:
-	var ignite := _carving("Ignite", "Push(F2)")
-	var carvings: Array[TransmutationData] = [ignite]
-	var fire_only: Array[Elemental.Element] = [FIRE]
-	var caster := _alchemist(CASTER, carvings, fire_only)
-	_spawn(ENEMY, FOE, 200)
-	var lighter := _mate(caster, MATE, _blow(1, FIRE, true))
-	_queue_fire(lighter, BESIDE)
-	await game.order_executor.execute_orders(caster.squad.get_leader())
-	var executed: ResolvedPlan = sm.resolved_plan_for(caster.squad)
-	assert_bool(executed != null and executed.prefix_tiles != null
-			and executed.prefix_tiles.has_state(BESIDE, Terrain.TileState.BURNING)).override_failure_message(
-			"fixture: the cache no longer holds the fire the pass lit, so nothing below proves anything").is_true()
-
-	var douse := ResolvedCellEffect.new()
-	douse.cell = BESIDE
-	douse.states_removed.assign([Terrain.TileState.BURNING] as Array[Terrain.TileState])
-	game.terrain_states.apply(douse)
-	sm.reset_faction_actions(PLAYER)   # the hand-off into the squad's next turn
-	assert_str(CellSubstances.fizzle_reason(ignite, CASTER, game._board(), caster.state)).override_failure_message(
-			"fixture: the live ground still feeds Ignite, so nothing below proves anything").is_not_empty()
-
-	assert_str(CellSubstances.fizzle_reason(ignite, CASTER, sm.candidate_board(caster.squad), caster.state)) 		.override_failure_message("candidate_board wore the fire the executed pass lit, since put out") 		.is_not_empty()
-	assert_bool(_row(caster, "Ignite").get("disabled", false)).override_failure_message(
-			"the ring offers a carving the executed pass's fire fed, on ground where it is out").is_true()
-	assert_str(_try(caster, _declare(caster, ignite, FOE))).override_failure_message(
-			"the gate took the order the ring greyed").starts_with("Fizzles")
-
-
 # ==============================================================================
 #  A watch: judged where it arms
 # ==============================================================================
@@ -578,6 +544,39 @@ func test_the_play_api_lists_a_carving_an_earlier_orders_fire_feeds() -> void:
 			"the Play API lists no aims for a carving a queued order's fire feeds: %s" % str(after.get("error", ""))).is_true()
 	if after.ok:
 		assert_array(after.aims).is_not_empty()
+
+
+# An order queued and never executed is cleared at the hand-off without a signal when its own faction
+# is the one coming in (Squad._reset_squad: here the only faction on the board), so no host re-resolves
+# and the cache still holds the plan it made. The squad's first order of the new turn meets the LIVE
+# ground, where the fire that plan would have lit was never lit, so Ignite has nothing to draw on.
+func test_the_next_turns_first_order_meets_the_live_ground_not_a_cleared_plans() -> void:
+	var b := _headless("CandidateGroundNextTurn")
+	var caster := _headless_unit(b, PLAYER, CASTER)
+	caster.unit_instance.aura = {FIRE: 4}
+	var fire_only: Array[Elemental.Element] = [FIRE]
+	caster.unit_instance.affinity = fire_only
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(_carving("Ignite", "Push(F2)"))).is_true()
+	assert_bool(caster.add_item(rune)).is_true()
+	caster.equipped_weapon = rune
+	var lighter := _headless_mate(b, caster, MATE, _blow(1, FIRE, true))
+	var sess = PlaySession.new(b)
+	var lit: Dictionary = sess.queue_attack(sess.handle_for(lighter), BESIDE)
+	assert_bool(lit.ok).override_failure_message("fixture: the lighter was refused: %s" % str(lit.get("error", ""))).is_true()
+
+	var ended: Dictionary = sess.end_turn()
+	assert_bool(ended.ok).override_failure_message("fixture: the turn did not end: %s" % str(ended.get("error", ""))).is_true()
+	var manager: SquadManager = b.squad_manager
+	var cached := manager.resolved_plan_for(caster.squad)
+	assert_bool(caster.squad.action_queue.is_empty() and cached != null and cached.prefix_tiles != null
+			and cached.prefix_tiles.cells().has(BESIDE)).override_failure_message(
+			"fixture: the hand-off left no cleared plan's fire in the cache, so nothing below proves anything").is_true()
+
+	var next: Dictionary = sess.legal_targets(sess.handle_for(caster), "Ignite")
+	assert_bool(next.ok).override_failure_message(
+			"the Play API lists aims for a carving fed by the fire of a plan the hand-off cleared").is_false()
 
 
 func test_the_play_api_rescues_onto_ice_an_earlier_order_freezes() -> void:
