@@ -606,11 +606,12 @@ func get_guard_range() -> int:
 
 # `spent` is not a defaulted convenience: a Guard that absorbed a hit during its OWN pass (your
 # splash landing after its queue slot) must arm already-used, and GuardAction.execute is the only
-# caller that can know — the resolver told it (GuardAction.resolved_spent).
-func arm_guard(warded_unit: Unit, ward_range: int, spent := false) -> void:
+# caller that can know — the resolver told it (GuardAction.resolved_spent). `stamp` is an arm order a
+# save restored (#1565); 0 stamps a fresh one.
+func arm_guard(warded_unit: Unit, ward_range: int, spent := false, stamp := 0) -> void:
 	if warded_unit == null or not is_instance_valid(warded_unit) or warded_unit == self:
 		return
-	guard = GuardWard.arm(self, warded_unit, ward_range)
+	guard = GuardWard.arm(self, warded_unit, ward_range, stamp)
 	guard.spent = spent
 
 # Absorbed its one trigger. The ward object stays (spent), rather than clearing: "you already used
@@ -633,13 +634,14 @@ func lapse_guard() -> void:
 #
 # `path_lengths` splits the cells into the paths the shot walks (#1057). Empty is ONE path, which is
 # the persisted meaning too, so a caller with a single line need not spell it. `effect_cells` is where
-# its tile effect lands (#894, Watch.effect_cells).
+# its tile effect lands (#894, Watch.effect_cells). `stamp` is an arm order a save restored (#1565);
+# 0 stamps a fresh one.
 func arm_watch(origin: Vector2i, aim_cell: Vector2i, watched_cells: Array[Vector2i],
 		attack: AttackData, spent := false, cancelled := false, path_lengths: Array[int] = [],
-		effect_cells: Array[Vector2i] = []) -> void:
+		effect_cells: Array[Vector2i] = [], stamp := 0) -> void:
 	if attack == null or watched_cells.is_empty():
 		return
-	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack, path_lengths, effect_cells)
+	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack, path_lengths, effect_cells, stamp)
 	watch.spent = spent
 	watch.cancelled = cancelled   # #810: a save taken after a blow broke the watch restores it broken
 
