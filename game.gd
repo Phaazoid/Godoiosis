@@ -1092,6 +1092,11 @@ func _on_end_turn_button_pressed() -> void:
 			"End Turn", "Keep Playing")
 		if not sure or _board_locked_for_player():
 			return
+	# An open aim or pick ends with the turn, as a right-click ends it (#1572): end_turn only rests the
+	# state, so the aim strip, its paint and the pick outlived it. Here, not in end_turn, which the AI's
+	# turn and a replay end through too.
+	if game_state != _base_state():
+		_leave_mode()
 	end_turn()
 
 # The gas round runs FIRST (#1335): a spreading fire's smoke lands on the cells the tile tick is about
@@ -1356,15 +1361,19 @@ func set_dev_mode(active: bool):
 	dev_mode_changed.emit(active)
 
 func exit_current_mode():
+	# The PICK only while the state still says an aim is open: an exit from any other mode may hold a
+	# hotseat enemy, whose AI pick is its counter.
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
-		aim_intent = AimIntent.FIRE   # the verb dies with the aim, same as the pick
-		aim_source = null   # ...and so do the weapon it was looked at with and what it would do (#929)
-		aim_forecast = null
-		aim_strip.hide_aim()
-		# ...and so does its paint (#591). The HOVER layer is shared with PICKING_TARGET, so a watch
-		# aim left standing here would tint the next rescue's tile pick in the watch's colours.
-		overlay_manager.set_aim_colors(null, false)
+	# The rest of the aim on EVERY exit (#1572): the pause rows and Return to Title move the state off
+	# ATTACK_TARGETING before tearing the board down, and the strip then outlived the board.
+	aim_intent = AimIntent.FIRE   # the verb dies with the aim, same as the pick
+	aim_source = null   # ...and so do the weapon it was looked at with and what it would do (#929)
+	aim_forecast = null
+	aim_strip.hide_aim()
+	# ...and so does its paint (#591). The HOVER layer is shared with PICKING_TARGET, so a watch
+	# aim left standing here would tint the next rescue's tile pick in the watch's colours.
+	overlay_manager.set_aim_colors(null, false)
 	overlay_manager.clear_target_pulse()
 	overlay_manager.clear_aim_flash()
 	overlay_manager.clear_ring_pulse()
