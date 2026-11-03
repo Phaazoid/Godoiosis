@@ -414,6 +414,20 @@ func clear_all_squads():
 		squad_deleted.emit(squad)
 		squad.queue_free()
 
+# `squads` back in a saved order (#1566). The list is creation order, and creation order is the AI's
+# acting order (AIController.actable_squads) and every tie a walk over it breaks; a load creates them in
+# SPAWN order. `rank_of` maps a Squad to its saved index; a squad with none keeps its place among the
+# rest, after the ranked ones. Ties keep the current order.
+func restore_order(rank_of: Dictionary) -> void:
+	var place := {}
+	for i in squads.size():
+		place[squads[i]] = i
+	var unranked := squads.size() + rank_of.size()
+	squads.sort_custom(func(a: Squad, b: Squad) -> bool:
+		var rank_a: int = rank_of.get(a, unranked)
+		var rank_b: int = rank_of.get(b, unranked)
+		return rank_a < rank_b if rank_a != rank_b else place[a] < place[b])
+
 # #325: a squad's marker hue -- cool palette for friendly factions, warm for the enemy. Prefers
 # a hue no living squad of the faction is wearing, so concurrent squads stay distinct until a
 # faction fields more squads than its palette; only then does the counter cycle into repeats.
