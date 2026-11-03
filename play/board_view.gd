@@ -109,8 +109,10 @@ static func render_focus(session, handle: String) -> String:
 	lines.append("  " + _unit_line(session, unit))
 	var board: BoardContext = session._board()
 	lines.append("  " + _stats_line(unit, board))
-	# Each fizzle judged on the queue gate's ground, the tiles the queued orders leave (#1498 stage 3b).
-	for line in _attack_lines(unit, session.squad_manager.candidate_board(unit.squad)):
+	# Each fizzle judged on the queue gate's ground and bodies, as the queued orders leave them (#1498
+	# stage 3b, #1529).
+	for line in _attack_lines(unit, session.squad_manager.candidate_board(unit.squad),
+			session.squad_manager.candidate_bodies(unit.squad)):
 		lines.append("    " + line)
 	return "\n".join(lines)
 
@@ -137,17 +139,19 @@ static func _stats_line(unit: Unit, board: BoardContext) -> String:
 # Each attack the unit could fire or stand watch with, in the game's own hover words
 # (Unit.attack_detail): the damage it really deals, mods and scaling included. A carving that would
 # fizzle from where the unit will stand says so, in the words the menu greys its row with.
-static func _attack_lines(unit: Unit, board: BoardContext) -> Array[String]:
+static func _attack_lines(unit: Unit, board: BoardContext, bodies: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	for attack in unit.get_selectable_attacks():
-		lines.append(_attack_line(unit, attack, "", board))
+		lines.append(_attack_line(unit, attack, "", board, bodies))
 	for attack in unit.overwatch_attacks():
-		lines.append(_attack_line(unit, attack, "watch ", board))
+		lines.append(_attack_line(unit, attack, "watch ", board, bodies))
 	return lines
 
-static func _attack_line(unit: Unit, attack: AttackData, prefix: String, board: BoardContext) -> String:
+static func _attack_line(unit: Unit, attack: AttackData, prefix: String, board: BoardContext,
+		bodies: Dictionary) -> String:
 	var line := "%s%s: %s" % [prefix, attack.display_name, unit.attack_detail(attack).replace("\n", " -- ")]
-	var fizzle := CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), board, unit.state)
+	var fizzle := CellSubstances.fizzle_reason(attack, unit.get_projected_destination(), board,
+			PlanResolver.state_of(unit, bodies), bodies)
 	if fizzle != "":
 		line += " (%s)" % fizzle
 	return line

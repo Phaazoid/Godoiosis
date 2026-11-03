@@ -3,10 +3,11 @@ class_name SplitForecast
 
 # WHO A PASS WILL KNOCK OUT OF A SQUAD, AND WHICH BLOW DOES IT (#367). The plan-time mirror of the
 # settle that runs after a pass, so the queue can say "Split" on the row that causes one (Law #2)
-# and the tether break can play at that same blow. Stamped once per resolve, by
-# SquadManager.resolve_plan and resolve_hypothetical (the AI scores a split, #761), into
+# and the tether break can play at that same blow. Stamped once per resolve, by the pass itself
+# (SquadManager._resolve_actions, so a hypothetical has one too: the AI scores a split, #761), into
 # ResolvedOutcome.splits (who leaves) and .relinks (which links end and begin -- a handover names its
-# successor once, here, for the presenter and the stage to read).
+# successor once, here, for the presenter and the stage to read). INSIDE the pass's seals (#1529): a
+# body is read through PlanResolver's doors and the ground through planned views, as in the pass.
 #
 # THE ORDER IT REPLAYS is the live one, and it is the only thing here that is not shared code:
 #   - a DEATH settles at once, mid-pass (game._on_unit_died -> handle_unit_death), so a killed
@@ -315,12 +316,13 @@ static func _start_positions(blows: Array[AttackAction], bands: Dictionary[Unit,
 
 
 # The body each copied unit has when the blows begin: its live one if a blow will move its stats,
-# else the one the pass leaves it with.
+# else the one the pass leaves it with. The live one through PlanResolver's door (an empty hypo), since
+# the stamp runs inside the pass's seal (#1529).
 static func _start_bodies(bands: Dictionary[Unit, _Band], changes: Dictionary[Unit, int],
 		hypo: Dictionary) -> Dictionary[Unit, UnitState]:
 	var bodies: Dictionary[Unit, UnitState] = {}
 	for unit in bands:
-		bodies[unit] = unit.state if changes.has(unit) else PlanResolver.state_of(unit, hypo)
+		bodies[unit] = PlanResolver.state_of(unit, {}) if changes.has(unit) else PlanResolver.state_of(unit, hypo)
 	return bodies
 
 

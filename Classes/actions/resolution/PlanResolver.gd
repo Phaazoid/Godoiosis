@@ -1552,6 +1552,24 @@ static func body_of(unit: Unit, hypo: Dictionary) -> UnitState:
 		return null
 	return state_of(unit, hypo)
 
+# The hypo as it stands NOW, for a reader that needs this moment of the pass rather than its end
+# (ResolvedPlan.prefix_hypo, #1529): each unit where the pass has put it, and its OWN copy of the body
+# where the pass has made one, so the rest of the pass cannot write into it. Read through the doors above.
+static func snapshot_hypo(hypo: Dictionary) -> Dictionary:
+	var out := {}
+	for unit: Unit in hypo:
+		var h := hypo[unit] as _Hypo
+		var s := _Hypo.new()
+		s.unit = h.unit
+		s.position = h.position
+		s.start_hp = h.start_hp
+		s.start_lifecycle = h.start_lifecycle
+		s.start_in_crisis = h.start_in_crisis
+		if h.has_copy():
+			s._copy = h.state.copy()
+		out[unit] = s
+	return out
+
 # The one place a pass reaches a LIVE body: the doors above come through here. It reads `_state`, past
 # Unit.state's seal (#1480 stage 4), which is what makes every other live read inside a pass loud.
 static func _live_state(unit: Unit) -> UnitState:

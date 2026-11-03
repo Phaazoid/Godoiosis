@@ -324,17 +324,28 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	var pick := _fire_pick(unit, handle, attack_name)
 	if not pick.ok:
 		return pick
-	var origin := unit.get_projected_destination()
 	var aiming: AttackData = pick.attack
-	# The queue gate's own ground: the tiles the queued orders leave (#1498 stage 3b).
-	var board := squad_manager.candidate_board(unit.squad)
+	# Armed for the declares below, whose stamp the whiff policy reads -- queue_attack's arming.
+	unit.active_attack = aiming
+	# Judged as queue_attack is (SquadManager.judge_candidate, #1529): an aim displaces a queued main, so
+	# it is listed on the queue without one. The probe stands for any aim this pick could make.
+	var listed: Dictionary = squad_manager.judge_candidate(unit.squad,
+			AttackAction.declare(unit, unit.movement.cell, unit.movement.cell),
+			func(plan: ResolvedPlan) -> Dictionary: return _list_aims(unit, handle, aiming, plan))
+	unit.active_attack = null
+	return listed
+
+
+func _list_aims(unit: Unit, handle: String, aiming: AttackData, plan: ResolvedPlan) -> Dictionary:
+	var origin := unit.get_projected_destination()
+	# The queue gate's own ground and bodies: what the queued orders leave (#1498 stage 3b, #1529).
+	var board := squad_manager.candidate_board(unit.squad, plan)
+	var bodies := squad_manager.candidate_bodies(unit.squad, plan)
 	# A carving that fizzles from here has no aim the queue would take (SquadManager's fizzle gate), so
 	# say why up front rather than listing cells every one of which would be refused.
-	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, unit.state)
+	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, PlanResolver.state_of(unit, bodies), bodies)
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't fire %s from %s: %s" % [handle, _attack_label(aiming), str(origin), fizzle]}
-	# Armed for the loop's declare(), whose stamp the whiff policy reads -- queue_attack's arming.
-	unit.active_attack = aiming
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
 	# can_aim_at, the click's own gate (#1365), is what narrows it to the aim actually available. Both
@@ -354,22 +365,30 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 		# No victims and not a whiff is an aim that lands on the ground alone, and says so (#46).
 		out.append(_with_facing({"cell": aim, "victims": names, "ground_only": names.is_empty()},
 				aiming, origin))
-	unit.active_attack = null
 	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
 
 
 # Where a watch may be set (#46), by overwatch's own click gate, each with the cells it would watch
 # (OverwatchAction.watched_paths_from, the resolver's footprint rule) and the hostiles standing in
-# them now -- who it would fire on the moment it is armed (#1003).
+# them now -- who it would fire on the moment it is armed (#1003). A watch is a main, so it is listed on
+# the queue without the one it would displace (judge_candidate, #1529), as the gate judges it.
 func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Dictionary:
 	var reason := AttackAction.fire_block_reason(unit, watch)
 	if reason != "":
 		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
+	var probe := OverwatchAction.new()
+	probe.init(unit, unit.movement.cell, watch)
+	return squad_manager.judge_candidate(unit.squad, probe,
+			func(plan: ResolvedPlan) -> Dictionary: return _list_watch_aims(unit, handle, watch, plan))
+
+
+func _list_watch_aims(unit: Unit, handle: String, watch: AttackData, plan: ResolvedPlan) -> Dictionary:
 	var origin := unit.get_projected_destination()
-	var board := squad_manager.candidate_board(unit.squad)
+	var board := squad_manager.candidate_board(unit.squad, plan)
+	var bodies := squad_manager.candidate_bodies(unit.squad, plan)
 	# A watch whose carving fizzles from here is refused at the queue (SquadManager's fizzle gate), so
 	# it has no spot to offer -- legal_targets' rule for a fire pick, one verb over.
-	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, unit.state)
+	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, PlanResolver.state_of(unit, bodies), bodies)
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't watch with %s from %s: %s" % [handle, _attack_label(watch), str(origin), fizzle]}
 	var out: Array[Dictionary] = []
@@ -946,16 +965,20 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	# The player's click gate (#1365), the one overwatch and the hover ask: a directional aim needs a
 	# facing whose spread survives, a point aim needs the cell and a footprint with ground in it
 	# (#1228), so a shot into a hole is refused here as the click can never make it. The board carries
-	# the elevations for the vertical-tolerance half (#258). The gate's own ground (#1498 stage 3b).
-	var board := squad_manager.candidate_board(unit.squad)
-	if not Reach.can_aim_at(origin, aim, aiming, board):
-		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	# The current is reach here too, matching legal_targets and the game's own queue gate, and the
-	# whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
-	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
-	# included), same as the player's click and the AI.
+	# the elevations for the vertical-tolerance half (#258). The gate's own ground (#1498 stage 3b), on
+	# the queue this aim joins (judge_candidate, #1529). declare() stamps fired_attack (#78) -- Play aims
+	# fire what the unit would (rune carvings included), same as the player's click and the AI.
 	var order := AttackAction.declare(unit, origin, aim)
-	var victims := Conduction.sweep(unit, origin, aim, aiming, board).victims
+	var reached: Variant = squad_manager.judge_candidate(unit.squad, order, func(plan: ResolvedPlan) -> Variant:
+		var board := squad_manager.candidate_board(unit.squad, plan)
+		if not Reach.can_aim_at(origin, aim, aiming, board):
+			return null
+		# The current is reach here too, matching legal_targets and the game's own queue gate.
+		return Conduction.sweep(unit, origin, aim, aiming, board).victims)
+	if reached == null:
+		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
+	var victims: Array[Unit] = reached
+	# The whiff is the game's own policy: a map-hitting aim at nobody still lands on the ground (#47).
 	if SquadPlanValidator.aim_whiffs(order, not victims.is_empty()):
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
@@ -1005,13 +1028,23 @@ func rescue(rescuer_handle: String, target_handle: String, landing: Variant = nu
 	var target := unit_by_handle(target_handle)
 	if target == null:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
-	# The banks the tail leaves, the gate's own (#1498 stage 3b).
-	var board := squad_manager.rescue_board(rescuer.squad)
-	if not RulesService.adjacent_downed_allies(rescuer, board, squad_manager.resolved_plan_for(rescuer.squad)).has(target):
+	# The banks the tail leaves, the gate's own (#1498 stage 3b), on the queue this rescue joins: a rescue
+	# is a main, so it is judged without the one it displaces (judge_candidate, #1529). The probe's bank is
+	# unread there. Read BEFORE queueing: the queue's resolve publishes the haul, and the body then reads
+	# as standing.
+	var probe := RescueAction.new()
+	probe.init(rescuer, target, rescuer.movement.cell)
+	var found: Dictionary = squad_manager.judge_candidate(rescuer.squad, probe,
+			func(plan: ResolvedPlan) -> Dictionary:
+				var board := squad_manager.rescue_board(rescuer.squad, plan)
+				if not RulesService.adjacent_downed_allies(rescuer, board, plan).has(target):
+					return {}
+				return {"banks": RulesService.rescue_landings(rescuer, target, board),
+						"hauled": RulesService.rescue_needs_a_pick(target, board)})
+	if found.is_empty():
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
-	# Read BEFORE queueing: the queue's resolve publishes the haul, and the body then reads as standing.
-	var banks := RulesService.rescue_landings(rescuer, target, board)
-	var hauled := RulesService.rescue_needs_a_pick(target, board)
+	var banks: Array[Vector2i] = found.banks
+	var hauled: bool = found.hauled
 	var bank: Vector2i = banks[0]
 	if landing != null:
 		if not (landing is Vector2i and banks.has(landing)):

@@ -26,6 +26,13 @@ var tiles: PlannedTiles = null
 var prefix_tiles: PlannedTiles = null
 var tail_tiles: PlannedTiles = null
 
+# ...and the bodies as the pass had them at that same moment (#1529), prefix_tiles' body twin: where a
+# CANDIDATE carving finds its neighbours and their states (PlanResolver.snapshot_hypo). Read through the
+# hypo's own doors (state_of, projected_states, unit_threaded_at) via SquadManager.candidate_bodies.
+# Taken only by a pass whose plan a judge reads (SquadManager's judged passes), since it copies a body per
+# unit the pass touched; empty on every other plan, which reads as the projection and the live bodies.
+var prefix_hypo: Dictionary = {}
+
 
 # The ONE way a board is made to wear planned tiles, in the pass and out of it. Hands back what it wore.
 static func lend(board: BoardContext, lent: PlannedTiles) -> PlannedTiles:

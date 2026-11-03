@@ -14,11 +14,13 @@ extends Object
 # Materia's shape: static, the board passed in, read through BoardContext METHODS only (a stub board
 # carries a null grid and a null state store), and its "stand by your source" footprint, Materia.REACH.
 #
-# THE GROUND AS IT STANDS: live tile states and gas, never a pass's own deposits -- the limit
-# empowerment already declares. A fire this plan lights is not present for a later cast in the same
-# plan. UNITS WHERE THE PLAN PUTS THEM (#1480 stage 4, dev ruling 2026-10-24): `hypo` is the pass's
-# own inside a resolve, so a neighbour walked in or soaked earlier in it lends what it has then, and
-# empty everywhere else, which reads each unit at its queued destination with the states it has now.
+# THE GROUND THE CALLER HANDS: the board's tile states and gas, as the board reads them. Inside a pass
+# that is the pass's own (PlannedTiles, #1498), so a fire an earlier order lit is present for a later
+# cast; a candidate's judge hands the ground the queued prefix leaves (SquadManager.candidate_board).
+# UNITS WHERE THE PLAN PUTS THEM (#1480 stage 4, dev ruling 2026-10-24): `hypo` is the pass's own
+# inside a resolve, so a neighbour walked in or soaked earlier in it lends what it has then; a
+# candidate's judge hands the prefix's (SquadManager.candidate_bodies, #1529). Empty reads each unit at
+# its queued destination with the states it has now, which the AI's judges still declare (#117).
 
 # Every cell holds the ambient air (Atmosphere.SUBSTANCES) at whatever concentration its board
 # authors. A thin reading lowers damage and never makes a substance absent (#1324).

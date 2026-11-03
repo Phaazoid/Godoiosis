@@ -148,11 +148,15 @@ func _union(store: Dictionary, units: Array[Unit]) -> Array[Vector2i]:
 # NOW, while the enemy turn moves the leader first), which is right for a PREDICTION about an enemy
 # and wrong for a PERMISSION about your own unit -- your red must grow from the cells you may
 # actually be ordered to and no others.
-static func reach_from(unit: Unit, board: BoardContext, origins: Array[Vector2i]) -> Array[Vector2i]:
+#
+# `bodies` is the ring row's too (SquadManager.candidate_bodies, #1529): a carving's fizzle reads the
+# caster and its neighbours as the queued orders leave them. The AI's build() reads them live (#117).
+static func reach_from(unit: Unit, board: BoardContext, origins: Array[Vector2i],
+		bodies: Dictionary = {}) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if unit == null or not is_instance_valid(unit) or board == null or origins.is_empty():
 		return out
-	out.assign(_reach_of(unit, board, origins, TraceMemo.new()).keys())
+	out.assign(_reach_of(unit, board, origins, TraceMemo.new(), bodies).keys())
 	return out
 
 
@@ -212,9 +216,10 @@ static func _origins_of(unit: Unit, board: BoardContext, zone: Dictionary) -> Ar
 #
 # This is reach_from's walk too, and deliberately ONLY these two passes: the watch lanes and the
 # current are predictions about an enemy turn (_threat_of), and your own red is a permission.
-static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], memo: TraceMemo) -> Dictionary:
+static func _reach_of(unit: Unit, board: BoardContext, origins: Array[Vector2i], memo: TraceMemo,
+		bodies: Dictionary) -> Dictionary:
 	var out := {}
-	for cells: Dictionary in _reach_by_attack(unit, board, origins, memo).values():
+	for cells: Dictionary in _reach_by_attack(unit, board, origins, memo, bodies).values():
 		out.merge(cells)
 	return out
 
@@ -240,7 +245,10 @@ static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 #
 # A UNION, so a cell one origin already reaches is never traced again (#1344): most of a big board's
 # cost was the same cell re-traced from every origin in range.
-static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i], memo: TraceMemo) -> Dictionary:
+#
+# `bodies` is the hypo a carving's fizzle reads (reach_from's); empty, the live ones.
+static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vector2i], memo: TraceMemo,
+		bodies: Dictionary = {}) -> Dictionary:
 	var by_attack := {}
 	var attacks: Array[AttackData] = []
 	for attack in unit.get_selectable_attacks():
@@ -252,7 +260,7 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 			# A carving that fizzles from this origin threatens nothing from it -- the AI's own candidate
 			# filter (AITactics._attack_candidates), asked of the same cell, so the field stays a superset
 			# of what it could aim.
-			if _fizzles(unit, attack, origin, board, fizzled):
+			if _fizzles(unit, attack, origin, board, fizzled, bodies):
 				continue
 			var out: Dictionary = by_attack.get_or_add(attack, {})
 			var known := memo.at(attack, origin)
@@ -262,15 +270,17 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 				if not Reach.is_directional_attack(attack) and not memo.aim_ok(known, attack, origin, cell, board):
 					continue
 				out[cell] = true
-	_add_counter_reach(unit, board, origins, by_attack, memo, fizzled)
+	_add_counter_reach(unit, board, origins, by_attack, memo, fizzled, bodies)
 	return by_attack
 
 
 # Asked once per attack and origin within a unit's walk: the counter rim re-asks the opening pass's.
-static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: BoardContext, asked: Dictionary) -> bool:
+static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: BoardContext, asked: Dictionary,
+		bodies: Dictionary) -> bool:
 	var by_origin: Dictionary = asked.get_or_add(attack, {})
 	if not by_origin.has(origin):
-		by_origin[origin] = CellSubstances.fizzle_reason(attack, origin, board, unit.state) != ""
+		by_origin[origin] = CellSubstances.fizzle_reason(attack, origin, board, PlanResolver.state_of(unit, bodies),
+				bodies) != ""
 	return by_origin[origin]
 
 
@@ -289,13 +299,13 @@ static func _fizzles(unit: Unit, attack: AttackData, origin: Vector2i, board: Bo
 # rather than this field's -- so dropping the rim there would under-state exactly where the warning
 # matters.
 static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[Vector2i], by_attack: Dictionary,
-		memo: TraceMemo, fizzled: Dictionary) -> void:
+		memo: TraceMemo, fizzled: Dictionary, bodies: Dictionary) -> void:
 	if not unit.attack_source_can_counter():
 		return
 	var counter := unit.get_counter_attack()
 	var out: Dictionary = by_attack.get_or_add(counter, {})
 	for origin in origins:
-		if _fizzles(unit, counter, origin, board, fizzled):
+		if _fizzles(unit, counter, origin, board, fizzled, bodies):
 			continue   # a counter that would fizzle there lands nothing (PlanResolver.resolve_counters)
 		var known := memo.at(counter, origin)
 		for cell in Reach.get_all_attack_cells_from(origin, counter):

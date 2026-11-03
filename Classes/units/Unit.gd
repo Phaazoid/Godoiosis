@@ -1081,8 +1081,9 @@ class AimOption:
 # can channel contribute nothing) and the queue's own gate decides which attacks do -- one an empty
 # magazine or a sprung spear cannot fire right now is left out. `watch` walks the watch view (#590).
 # Handed the BOARD, a carving that would fizzle from where this unit will stand is left out as well
-# (CellSubstances, the queue gate's own fizzle question); with none, presence is not asked.
-func aim_options(watch: bool, board: BoardContext = null) -> Array[AimOption]:
+# (CellSubstances, the queue gate's own fizzle question); with none, presence is not asked. `bodies` is
+# the gate's too (SquadManager.candidate_bodies, #1529): the neighbours as the queued orders leave them.
+func aim_options(watch: bool, board: BoardContext = null, bodies: Dictionary = {}) -> Array[AimOption]:
 	var origin := get_projected_destination()
 	var options: Array[AimOption] = []
 	for source: EquippableData in carried_equippables():
@@ -1090,7 +1091,8 @@ func aim_options(watch: bool, board: BoardContext = null) -> Array[AimOption]:
 			var attacks: Array[AttackData] = overwatch_attacks() if watch else get_selectable_attacks()
 			for attack: AttackData in attacks:
 				if AttackAction.fire_block_reason(self, attack) == "" \
-						and CellSubstances.fizzle_reason(attack, origin, board, state) == "":
+						and CellSubstances.fizzle_reason(attack, origin, board, PlanResolver.state_of(self, bodies),
+							bodies) == "":
 					options.append(AimOption.new(source, attack)))
 	return options
 

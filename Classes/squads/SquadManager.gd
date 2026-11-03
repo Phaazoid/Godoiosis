@@ -485,23 +485,29 @@ static func _plan_refusal(action: BaseAction) -> String:
 
 # Would this order be legal if queued right now? Reads the CANDIDATE's flag, not validate's return
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
+#
+# Every clause is asked of the prefix the candidate lands after (judge_candidate, #1529): an order that
+# displaces a queued main is judged on the queue without it, the queue it will join.
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
-	validate_squad_plan_preview(squad, action)
-	if action.is_valid and _candidate_holds_on_the_ground(squad, action) and _candidate_rescue_target_ok(squad, action) \
-			and _candidate_guard_in_range(squad, action):
+	var holds: bool = judge_candidate(squad, action, func(plan: ResolvedPlan) -> bool:
+		validate_squad_plan_preview(squad, action)
+		return action.is_valid and _candidate_holds_on_the_ground(squad, action, plan) \
+				and _candidate_rescue_target_ok(squad, action, plan) and _candidate_guard_in_range(squad, action))
+	if holds:
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
 	return false
 
 # The three clauses that read the GROUND, asked on one board: the tiles the queued prefix leaves
-# (candidate_board, #1498 stage 3b). Only an aim or a watch is asked them, so only those build it.
-func _candidate_holds_on_the_ground(squad: Squad, action: BaseAction) -> bool:
+# (candidate_board, #1498 stage 3b), and the carving's with the bodies it leaves (candidate_bodies,
+# #1529). Only an aim or a watch is asked them, so only those build it.
+func _candidate_holds_on_the_ground(squad: Squad, action: BaseAction, plan: ResolvedPlan) -> bool:
 	if not (action is AttackAction or action is OverwatchAction):
 		return true
-	var ground := candidate_board(squad)
-	return _candidate_carving_holds(squad, action, ground) and _candidate_aim_connects(squad, action, ground) \
-			and _candidate_watch_declarable(squad, action, ground)
+	var ground := candidate_board(squad, plan)
+	return _candidate_carving_holds(squad, action, ground, candidate_bodies(squad, plan)) \
+			and _candidate_aim_connects(squad, action, ground) and _candidate_watch_declarable(squad, action, ground)
 
 # The range half of a candidate Guard (#1354), the whiff clause's shape. A STORED Guard's range is the
 # resolve's, judged at its queue slot (GuardAction.resolved_in_range); a candidate's slot is the END of
@@ -524,7 +530,10 @@ func _candidate_guard_in_range(squad: Squad, action: BaseAction) -> bool:
 # greyed row and a refused order cannot disagree. Asked of an aim and of a WATCH, whose shot fires
 # from that same cell (Pressure Spray is watch-only); a stored order's answer is the validator's
 # ("Fizzles where they'll be standing"). Every other candidate passes straight through.
-func _candidate_carving_holds(squad: Squad, action: BaseAction, ground: BoardContext) -> bool:
+#
+# `bodies` is the prefix's (candidate_bodies, #1529): the caster and its neighbours with the states the
+# queued orders leave them, which is what the pass reads at the cast (PlanResolver._fizzles).
+func _candidate_carving_holds(squad: Squad, action: BaseAction, ground: BoardContext, bodies: Dictionary) -> bool:
 	var attack: AttackData = null
 	if action is AttackAction:
 		attack = (action as AttackAction).fired_attack
@@ -534,7 +543,8 @@ func _candidate_carving_holds(squad: Squad, action: BaseAction, ground: BoardCon
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	var reason := CellSubstances.fizzle_reason(attack, origin, ground, action.actor.state)
+	var reason := CellSubstances.fizzle_reason(attack, origin, ground, PlanResolver.state_of(action.actor, bodies),
+			bodies)
 	if reason == "":
 		return true
 	action.add_validation_error(reason)
@@ -571,17 +581,17 @@ func _candidate_watch_declarable(squad: Squad, action: BaseAction, ground: Board
 # unit that is down OR one this squad's already-resolved plan predicts will be down by the side
 # channel. The stored resolve is the right witness for a candidate -- it covers exactly the queued
 # prefix the rescue lands after, and a rescue changes no lethality, so the prefix IS the pass.
-# Non-rescue candidates pass straight through.
-func _candidate_rescue_target_ok(squad: Squad, action: BaseAction) -> bool:
+# Non-rescue candidates pass straight through. `plan` is the prefix judge_candidate hands the gate.
+func _candidate_rescue_target_ok(squad: Squad, action: BaseAction, plan: ResolvedPlan) -> bool:
 	if not (action is RescueAction):
 		return true
 	var rescue := action as RescueAction
-	if not RulesService.is_rescueable(rescue.target, resolved_plan_for(squad)):
+	if not RulesService.is_rescueable(rescue.target, plan):
 		rescue.add_validation_error("Rescue target won't be down")
 		return false
 	# ...and its bank, on the ground the tail has (rescue_board, #1498 stage 3b): the validator's haul
 	# clause asked of a candidate, so a bank the pass will refuse is refused whoever authors it.
-	if RulesService.rescue_landings(rescue.actor, rescue.target, rescue_board(squad)).has(rescue.haul_to):
+	if RulesService.rescue_landings(rescue.actor, rescue.target, rescue_board(squad, plan)).has(rescue.haul_to):
 		return true
 	rescue.add_validation_error("Can't pull them out to there any more")
 	return false
@@ -850,10 +860,8 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 func resolve_plan(squad: Squad, board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all()) -> ResolvedPlan:
-	var plan := _resolve_actions(squad, squad.action_queue, board, reactions, terrain_reactions)
-	# Who the pass will knock out of a squad, and which blow does it (#367). A hypothetical stamps it
-	# too, since the AI scores a split (#761).
-	SplitForecast.stamp(plan, board)
+	# Judged: its plan is the cache, which every candidate is judged against (prefix_hypo, #1529).
+	var plan := _resolve_actions(squad, squad.action_queue, board, reactions, terrain_reactions, {}, true)
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad
 	return plan
@@ -871,18 +879,15 @@ func resolve_plan(squad: Squad, board: BoardContext,
 # reads. Main actions are unaffected -- they do not move anyone. Scoring a movement candidate has to
 # queue the move for real or extend projected_cell's axes; it cannot ride this.
 #
-# The split forecast is stamped here as in resolve_plan (#761: the AI scores a squad break), so a
-# hypothetical differs from the real resolve in one thing only -- it never writes the cache.
+# The split forecast is stamped by the pass, as for resolve_plan (#761: the AI scores a squad break), so a
+# hypothetical differs from the real resolve in what it leaves behind: it never writes the cache, and it
+# takes no prefix bodies, since no judge reads its plan.
 func resolve_hypothetical(squad: Squad, candidates: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction] = ReactionCatalog.get_all(),
 		terrain_reactions: Array[TerrainReaction] = TerrainReactionCatalog.get_all(),
 		held: Dictionary = {}) -> ResolvedPlan:
-	var plan := _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions,
+	return _resolve_actions(squad, _hypothetical_actions(squad, candidates), board, reactions, terrain_reactions,
 			held)
-	if plan == null:
-		return null
-	SplitForecast.stamp(plan, board)
-	return plan
 
 
 # What an aim not yet queued would DO (#929): the squad's whole plan with `candidate` added, which is
@@ -949,17 +954,26 @@ static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[At
 #
 # `held` is unit -> a carried weapon its copy holds for the pass (preview_aim); a refused hold is no
 # plan, before anything is published.
+#
+# THE SPLIT FORECAST (#367) is stamped here, INSIDE both seals (#1529): who the pass knocks out of a squad
+# is derived from it, so a live body or tile read added to the stamp counts like one in the pass. After the
+# tiles are given back, so it reads the board as the caller handed it; every board it reads is a planned view.
+#
+# `judged` is a pass whose plan a judge reads (resolve_plan's, judge_candidate's): it keeps the bodies the
+# attack prefix leaves (ResolvedPlan.prefix_hypo, #1529).
 func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
-		held: Dictionary = {}) -> ResolvedPlan:
+		held: Dictionary = {}, judged := false) -> ResolvedPlan:
 	Unit.open_seal()
 	PlannedTiles.open_seal()
 	if board != null and board.tiles != null:
 		PlannedTiles.seal_broken()
 	var plan := ResolvedPlan.new()
 	var worn := plan.lend_tiles(board)
-	var resolved := _resolve_pass(plan, squad, actions, board, reactions, terrain_reactions, held)
+	var resolved := _resolve_pass(plan, squad, actions, board, reactions, terrain_reactions, held, judged)
 	plan.return_tiles(board, worn)
+	if resolved != null:
+		SplitForecast.stamp(resolved, board)
 	PlannedTiles.close_seal()
 	Unit.close_seal()
 	return resolved
@@ -967,7 +981,7 @@ func _resolve_actions(squad: Squad, actions: Array[BaseAction], board: BoardCont
 
 func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], board: BoardContext,
 		reactions: Array[ElementalReaction], terrain_reactions: Array[TerrainReaction],
-		held: Dictionary) -> ResolvedPlan:
+		held: Dictionary, judged: bool) -> ResolvedPlan:
 	var hypo: Dictionary = plan.hypo   # threaded here, kept on the plan for end-of-pass reads (#124)
 	for unit: Unit in held:
 		if not PlanResolver.hold_in_hand(unit, held[unit], hypo):
@@ -1156,8 +1170,11 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			_settle_shoves(dropped, plan, hypo, reactions, board, terrain_reactions)
 
 	# The ground a candidate aim, watch or Guard would meet, taken where the published projection stops
-	# (#1498 stage 3b): every aim, payload and watch shot of the prefix landed, no counter yet.
+	# (#1498 stage 3b): every aim, payload and watch shot of the prefix landed, no counter yet. ...and the
+	# bodies a candidate carving finds there, for a plan a judge reads (#1529).
 	plan.prefix_tiles = plan.snapshot_tiles()
+	if judged:
+		plan.prefix_hypo = PlanResolver.snapshot_hypo(hypo)
 
 	# Every walk this prefix moved its walker off again (#1349), stamped once the last aim has
 	# settled: the shove it published landed AFTER the walk, so Unit.projected_cell lets it win. Read off
@@ -1374,16 +1391,51 @@ func resolved_plan_for(squad: Squad) -> ResolvedPlan:
 
 # The ground a CANDIDATE order is judged on (#1498 stage 3b): a fresh board wearing the tiles the queued
 # prefix leaves (ResolvedPlan.prefix_tiles), the published projection's tiles twin. Judge on it, never
-# resolve on it: a pass handed this board would build on the snapshot and land the prefix twice.
-func candidate_board(squad: Squad) -> BoardContext:
-	var plan := resolved_plan_for(squad)
+# resolve on it: a pass handed this board would build on the snapshot and land the prefix twice. `plan` is
+# the one judge_candidate hands its judge; omitted, the cache's.
+func candidate_board(squad: Squad, plan: ResolvedPlan = null) -> BoardContext:
+	if plan == null:
+		plan = resolved_plan_for(squad)
 	return _board_wearing(squad, plan.prefix_tiles if plan != null else null)
 
 
 # ...and a candidate RESCUE's: the tail its haul runs in, after the counters (ResolvedPlan.tail_tiles).
-func rescue_board(squad: Squad) -> BoardContext:
-	var plan := resolved_plan_for(squad)
+func rescue_board(squad: Squad, plan: ResolvedPlan = null) -> BoardContext:
+	if plan == null:
+		plan = resolved_plan_for(squad)
 	return _board_wearing(squad, plan.tail_tiles if plan != null else null)
+
+
+# ...and the BODIES a candidate is judged with (#1529): the hypo as the attack prefix leaves it
+# (ResolvedPlan.prefix_hypo), candidate_board's body twin, handed to a judge as its `hypo` and read
+# through PlanResolver's doors -- a neighbour an earlier queued order soaked lends its water. An empty
+# queue has none, candidate_board's rule.
+func candidate_bodies(squad: Squad, plan: ResolvedPlan = null) -> Dictionary:
+	if plan == null:
+		plan = resolved_plan_for(squad)
+	if plan == null or squad.action_queue.is_empty():
+		return {}
+	return plan.prefix_hypo
+
+
+# THE PLAN A CANDIDATE IS JUDGED AGAINST (#1529): the queued prefix it lands after, handed to `judge`,
+# whose answer this returns. That is the cache, unless the candidate DISPLACES a queued main action
+# (Squad.displaces): then the queue it joins is the queue without that order, and a pass over that queue
+# is its prefix. The pass publishes its projection, so the real queue is resolved again before this
+# returns (preview_aim's contract), and the queue itself is never touched. The ring hides every main
+# while one is queued (#417) and the AI skips a unit holding one, so in play only the Play API gets here.
+func judge_candidate(squad: Squad, candidate: BaseAction, judge: Callable) -> Variant:
+	var rest: Array[BaseAction] = []
+	for queued in squad.action_queue:
+		if not (queued.is_main_action() and squad.displaces(queued, candidate)):
+			rest.append(queued)
+	if rest.size() == squad.action_queue.size():
+		return judge.call(resolved_plan_for(squad))
+	var plan := _resolve_actions(squad, rest, board_source.call(), ReactionCatalog.get_all(),
+			TerrainReactionCatalog.get_all(), {}, true)
+	var verdict: Variant = judge.call(plan)
+	resolve_plan(squad, board_source.call())
+	return verdict
 
 
 # An empty queue wears nothing: after a pass the cache still holds the plan it executed, and the next
