@@ -118,9 +118,9 @@ func test_the_docks_gear_verbs_stand_down_for_the_pass_and_come_back_after_it() 
 		samples.append(sample))
 
 	game.squad_action_queue_control.execute_requested.emit()
-	# Headless the pass is done before the first check; a windowed run plays its real beats.
+	# Wait on executing_plan, which the pass releases at its END: has_acted is set as it begins (#1556).
 	for _i in range(600):
-		if unit.squad.has_acted:
+		if game.order_executor.executing_plan == null:
 			break
 		await await_idle_frame()
 

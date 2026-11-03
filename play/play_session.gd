@@ -1474,6 +1474,7 @@ func execute() -> Dictionary:
 	# ever looks (#1554).
 	mission.latch_contested(_board())
 
+	squad_manager.spend_turn(squad)   # execute_orders' own mark: a member the pass ejects stays spent (#1556)
 	_executing = true
 	var events: Array[String] = []
 

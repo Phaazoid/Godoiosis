@@ -666,7 +666,8 @@ func _on_right_click() -> void:
 	if was_at_rest:
 		_pop_last_gesture()
 
-# Leave whatever mode is open, as a right-click does. A queue-row click (#1122) leaves one the same way.
+# Leave whatever mode is open, as a right-click does. A queue-row click (#1122) and Execute (#1556)
+# leave one the same way.
 func _leave_mode() -> void:
 	if game_state == GameState.CHOOSING_MOVE:
 		overlay_manager.clear_planned_path(selected_unit)
@@ -1489,6 +1490,12 @@ func _on_queue_execute_requested():
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return
+	# An open aim or pick was gated on a squad that had not acted, and the pass changes that answer
+	# under it: left open, one more click queued a second action for the spent squad (#1556). Only
+	# when one IS open: leaving from rest redraws the ghosts, and a refused press mid-flash would
+	# swap the ghost it is shaking (#1150).
+	if game_state != _base_state():
+		_leave_mode()
 	order_executor.execute_orders(squad.get_leader())
 
 func _on_queue_cancel_requested(display_action: BaseAction):

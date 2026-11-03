@@ -116,6 +116,7 @@ func execute_orders(unit):
 		game.squad_action_queue_control.play_refusal()
 		return
 
+	game.squad_manager.spend_turn(squad)   # spent from here, so a member the pass ejects stays spent (#1556)
 	game.scenario_manager.note_play()   # a pass changes the board the dev header compares (#1182)
 	# ...and can wipe a side before the end-of-pass check ever looks (#1554).
 	game.mission_controller.latch_contested()
