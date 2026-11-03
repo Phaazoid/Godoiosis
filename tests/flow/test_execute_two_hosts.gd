@@ -657,6 +657,51 @@ func test_a_volley_whose_lead_the_pass_killed() -> void:
 	_assert_hosts_agree(ran)
 
 
+# ...and the swinger's side of it (#1569): a blast whose LEAD victim is its own caster, and which kills
+# it. The resolver asks the swinger's liveness once, at the lead, so the queue shows the rest of the blast
+# landing; playback asks it once too, so the foe takes its hit in both hosts. Until #1569 every member
+# asked whether its actor's node still stood, and the caster its own hit freed dropped the foe's.
+func test_a_blast_that_kills_its_own_caster_still_lands_on_the_rest() -> void:
+	var caster_cell := Vector2i(3, 3)
+	var aim := Vector2i(3, 2)
+	var foe_cell := Vector2i(3, 1)
+	var path := _author("self_kill", func() -> void:
+		var caster := _spawn(PLAYER, caster_cell)
+		var blast := _blow(14)
+		blast.hits_self = true
+		# The caster's cell and the foe's, either side of the aim: a placed shape emits its south row
+		# first, so the caster's own hit is the volley's lead.
+		P.stamped(blast, 1, [Vector2i(0, 1), Vector2i(0, -1)] as Array[Vector2i])
+		blast.swing = false
+		_arm(caster, blast)
+		caster.set_current_hp(1)
+		_spawn(PLAYER, Vector2i(0, 0))   # a side that outlives its caster, so no defeat ends the pass
+		_spawn(ENEMY, foe_cell))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": caster_cell, "at": aim}])
+
+	var foe: Unit = ran.game[foe_cell]
+	var foe_hit: AttackAction = null
+	for attack in (ran.plan as ResolvedPlan).attacks:
+		if attack.target == foe:
+			foe_hit = attack
+	assert_int((ran.plan as ResolvedPlan).attacks.size()).override_failure_message(
+			"fixture: the blast reached %d victims, not the caster and the foe" % (ran.plan as ResolvedPlan).attacks.size()) \
+		.is_equal(2)
+	assert_object(foe_hit).override_failure_message("fixture: the blast never reached the foe").is_not_null()
+	assert_bool(foe_hit.is_secondary_hit).override_failure_message("fixture: the foe's hit leads the volley").is_true()
+	var promised := foe_hit.resolved.target_hp_after
+	assert_int(promised).override_failure_message("fixture: the queue showed the foe taking nothing").is_less(foe.get_max_hp())
+	for host: String in ["game", "play"]:
+		var units: Dictionary = ran[host]
+		assert_str(_picture(units, caster_cell)).override_failure_message(
+				"fixture: the caster's own hit did not kill it in the %s host" % host).is_equal("gone")
+		assert_int((units[foe_cell] as Unit).get_current_hp()).override_failure_message(
+				"the %s host dropped the rest of the blast with its caster: the queue said %d" % [host, promised]) \
+			.is_equal(promised)
+	_assert_hosts_agree(ran)
+
+
 # --- WHEN a pass's tiles land (#1498 stage 2) ----------------------------------------------------
 #
 # A volley's tile changes land once its LAST member has played (ruling 3: one blast is one moment), in
