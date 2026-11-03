@@ -161,8 +161,8 @@ static func arc_cells(actor: Unit, attack: AttackData, footprint: Array[Vector2i
 # attack hit that unit" and "is this unit in the current" are different questions.
 #
 # Occupancy through the hypo, for the same reason wet_cells reads it: an empty one IS the live board,
-# so this matches gather_attack_victims at the aim sites and PlanResolver.unit_threaded_at at the
-# watch site without a second spelling of "who ends up here" for either.
+# so this matches the victim gather at every site (PlanResolver.unit_threaded_at, #1571) without a
+# second spelling of "who ends up here".
 static func caught(arc: Array[Vector2i], board: BoardContext, hypo: Dictionary,
 		already: Array[Unit]) -> Array[Unit]:
 	var extra: Array[Unit] = []
@@ -278,8 +278,11 @@ static func _sweep(actor: Unit, origin_cell: Vector2i, target_cell: Vector2i, at
 # Victims come STEP-MAJOR (dev, 2026-09-22: paths travel at once -- step 1 of every path, then step
 # 2), ties by path index, and a unit two paths reach is in the list twice (ruling 7).
 #
-# `occupant_at` is who stands on a cell; empty means the board's projected answer, which is every
-# aim site's. The watch passes the resolver's threaded positions (PlanResolver.unit_threaded_at).
+# `occupant_at` is who stands on a cell; empty means where `hypo` has the units
+# (PlanResolver.unit_threaded_at), which with no hypo is the board's projected answer. Inside a pass
+# the threaded answer is the only right one (#1571): the published projection lets a shove beat a
+# walk only once resolved_displaced is stamped, after the whole aim loop, so a blast aimed where a
+# shove threw its walker gathered the cell the walker left.
 #
 # `arrival` is the way each path's FIRST tile was reached (Reach.travel_facings over the paths'
 # tiles), for the one step a path cannot answer from its own tile before; after that, a path is
@@ -294,7 +297,7 @@ static func sweep_paths(actor: Unit, attack: AttackData, paths: Array[Array], bo
 		result.effect = result.struck
 		_time(result, _path_steps(paths))
 		return result
-	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
+	var occupancy: Callable = occupant_at if occupant_at.is_valid() else PlanResolver.unit_threaded_at.bind(board, hypo)
 	var hits := RulesService.gather_path_victims(PlanResolver.body_of(actor, hypo), paths, attack, occupancy)
 	for hit in _step_major(hits):
 		result.victims.append(hit.victim)
@@ -406,7 +409,7 @@ static func _sweep_area(actor: Unit, attack: AttackData, footprint: Array[Vector
 	result.struck_facings = facings
 	if board == null:
 		return result
-	var occupancy: Callable = occupant_at if occupant_at.is_valid() else board.projected_unit_at_cell
+	var occupancy: Callable = occupant_at if occupant_at.is_valid() else PlanResolver.unit_threaded_at.bind(board, hypo)
 	result.victims = RulesService.gather_attack_victims(PlanResolver.body_of(actor, hypo), footprint, board, attack, occupancy)
 	for victim in result.victims:
 		result.direct.append(true)

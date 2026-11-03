@@ -45,7 +45,7 @@ func test_resolve_retargets_when_a_squadmate_moves_into_the_blast() -> void:
 
 	# The squadmate re-plans a move INTO the blast cell.
 	var move := MoveAction.new()
-	move.init(mate, [Vector2i(1, 0)], null)
+	move.init(mate, [Vector2i(3, 0), Vector2i(2, 0), Vector2i(1, 0)], null)   # path[0] is where the mover stands, as route_to builds it
 	mate.squad._queue_action(move)
 	_sm.validate_squad_plan(attacker.squad)   # so the move is_valid -> counts as projected
 
@@ -76,7 +76,7 @@ func test_resolve_drops_a_target_who_moves_out_of_the_blast() -> void:
 
 	# The squadmate walks OUT of the blast.
 	var move := MoveAction.new()
-	move.init(mate, [Vector2i(2, 0)], null)
+	move.init(mate, [Vector2i(1, 0), Vector2i(2, 0)], null)
 	mate.squad._queue_action(move)
 	_sm.validate_squad_plan(attacker.squad)
 

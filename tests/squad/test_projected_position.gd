@@ -12,6 +12,7 @@
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 const BoardBuilder := preload("res://play/board_builder.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -364,3 +365,56 @@ func test_a_shove_the_pass_lands_after_a_walk_beats_the_walk() -> void:
 			"the pass threw the walker after its walk and did not stamp the walk").is_true()
 	assert_that(ally.get_projected_destination()).override_failure_message(
 			"a walk beat a shove the same pass landed after it").is_equal(shove.resolved.knockback_to)
+
+# #1571: a blast aimed AFTER a same-pass shove gathers its victims where the pass has them. The walker
+# walks to the hero's aimed cell and is thrown off it; a squadmate's blast at the cell it was thrown
+# to must catch it, and one at the cell it walked to must find it gone. The aim loop's sweep used to
+# gather against the board's PUBLISHED projection, which lets the shove beat the walk only once
+# resolved_displaced is stamped -- after the whole aim loop -- so the two answers were swapped.
+func test_a_blast_after_a_same_pass_shove_meets_the_walker_where_it_was_thrown() -> void:
+	var b := _board_with_room("ProjShoveThenBlastRoot")
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var ally: Unit = BoardBuilder.spawn(b, _data("Ally", PLAYER), Vector2i(1, 2))
+	var third: Unit = BoardBuilder.spawn(b, _data("Third", PLAYER), Vector2i(2, 2))
+	_arm_mace(hero)
+	hero.active_attack.hits_allies = true
+	var blast := H.make_weapon(3)
+	P.point(blast.template.main_attack, 3)
+	blast.template.main_attack.targets = EquippableData.TargetMode.BOTH
+	blast.template.main_attack.hits_allies = true
+	third.add_item(blast)
+	third.active_attack = null
+	b.squad_manager.join_squad(ally, hero.squad)
+	b.squad_manager.join_squad(third, hero.squad)
+	var board := BoardContext.new(b.grid, _units_of(b), b.squad_manager, b.terrain_states)
+
+	var walk := MoveAction.new()
+	walk.init(ally, [Vector2i(1, 2), Vector2i(1, 1), Vector2i(1, 0)], null)
+	assert_bool(b.squad_manager.queue_action(ally.squad, walk)).override_failure_message(
+			"fixture: the walk was refused").is_true()
+	assert_bool(b.squad_manager.queue_action(hero.squad, AttackAction.declare(hero, Vector2i(0, 0), Vector2i(1, 0)))) \
+			.override_failure_message("fixture: the blowback was refused").is_true()
+	var plan: ResolvedPlan = b.squad_manager.resolve_plan(hero.squad, board)
+	var thrown_to := GridUtils.NO_CELL
+	for atk in plan.attacks:
+		if atk.target == ally and atk.resolved.knockback_applied:
+			thrown_to = atk.resolved.knockback_to
+	assert_that(thrown_to).override_failure_message("fixture: the blowback never threw the walker").is_not_equal(GridUtils.NO_CELL)
+	assert_that(thrown_to).override_failure_message("fixture: the shove left the walker where it walked") \
+			.is_not_equal(walk.get_destination())
+
+	assert_object(_third_hits(b, board, hero.squad, third, thrown_to)).override_failure_message(
+			"a blast at the cell the shove threw the walker to missed it (#1571)").is_same(ally)
+	assert_object(_third_hits(b, board, hero.squad, third, walk.get_destination())).override_failure_message(
+			"a blast at the cell the walker was thrown OFF still hit it (#1571)").is_null()
+
+# Queue `third`'s blast at `cell` (displacing its last) and resolve: whom does it hit?
+func _third_hits(b: Dictionary, board: BoardContext, squad: Squad, third: Unit, cell: Vector2i) -> Unit:
+	squad._queue_action(AttackAction.declare(third, third.movement.cell, cell))
+	var plan: ResolvedPlan = b.squad_manager.resolve_plan(squad, board)
+	var found: AttackAction = null
+	for atk in plan.attacks:
+		if atk.actor == third:
+			found = atk
+	assert_object(found).override_failure_message("fixture: the blast at %s was not in the plan" % cell).is_not_null()
+	return found.target if found != null else null
