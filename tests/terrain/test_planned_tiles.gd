@@ -141,6 +141,23 @@ func test_after_over_a_planned_board_builds_on_its_tiles() -> void:
 	assert_int(planned.gas_at(B)).override_failure_message("after() wrote the tiles it built on").is_equal(0)
 
 
+# A copy is a snapshot (prefix_tiles and tail_tiles are taken once, then the pass lands on, #1523): a
+# landing on a cell the source ALREADY holds moves the source and never the copy.
+func test_a_copy_keeps_its_cells_when_the_source_lands_on_them_again() -> void:
+	var tiles := PlannedTiles.new(_terrain, _gas)
+	tiles.land(_effect(A, [Terrain.TileState.FROZEN], [], {SMOKE: Gas.Level.THIN}))
+	var snapshot := tiles.copy()
+
+	tiles.land(_effect(A, [Terrain.TileState.COVER], [Terrain.TileState.FROZEN], {STEAM: Gas.Level.MEDIUM}))
+
+	assert_bool(tiles.has_state(A, Terrain.TileState.COVER)).override_failure_message(
+			"fixture: the second landing did not reach the source").is_true()
+	assert_array(snapshot.states_at(A)).override_failure_message(
+			"a landing on the source moved the copy's tile states").contains_exactly([Terrain.TileState.FROZEN])
+	assert_int(Gas.level_in(snapshot.gas_at(A), STEAM)).override_failure_message(
+			"a landing on the source moved the copy's gas").is_equal(0)
+
+
 # WHEN playback lands them (#1498 stage 2): a volley's deposits, whichever member laid each, once its LAST
 # member has played (one blast is one moment) and in the order they were laid; a lone hit's and a
 # Burrow's COVER once they have. Hand-built members, so no shape decides who leads.

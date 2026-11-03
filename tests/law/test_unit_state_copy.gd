@@ -54,11 +54,30 @@ func _assert_carried(live: Object, copy: Object, table: Dictionary, what: String
 						% [what, name]).is_true()
 				assert_bool(is_same(a, b)).override_failure_message(
 						"%s.%s: the copy shares the live container" % [what, name]).is_false()
+				_assert_inner_own(a, b, "%s.%s" % [what, name])
 			Fields.Kind.SHARED:
 				assert_bool(is_same(a, b)).override_failure_message(
 						"%s.%s: the copy has its own, where the field is shared" % [what, name]).is_true()
 			Fields.Kind.TWIN:
 				_assert_twin(a, b, "%s.%s" % [what, name])
+
+
+# An OWN container of containers owns its inner ones too: a shallow duplicate() passes the outer check
+# and shares every inner list with the live body (a weapon's `spaces`, #1494).
+func _assert_inner_own(live: Variant, copy: Variant, what: String) -> void:
+	if not (live is Array or live is Dictionary):
+		return
+	var keys: Array = range(live.size()) if live is Array else (live as Dictionary).keys()
+	for key: Variant in keys:
+		var inner: Variant = live[key]
+		if not (inner is Array or inner is Dictionary):
+			continue
+		if copy is Array and int(key) >= (copy as Array).size():
+			continue
+		if copy is Dictionary and not (copy as Dictionary).has(key):
+			continue
+		assert_bool(is_same(inner, copy[key])).override_failure_message(
+				"%s[%s]: the copy shares a live inner container" % [what, key]).is_false()
 
 
 func _assert_twin(live: Variant, twin: Variant, what: String) -> void:
@@ -250,9 +269,11 @@ func test_writing_the_copy_leaves_the_live_body_alone() -> void:
 		if live.inventory[i] is SpringspearWeaponInstance:
 			weapon_at = i
 	assert_int(weapon_at).override_failure_message("fixture: no family with a battle flag").is_not_equal(-1)
+	var fitted: int = (live.inventory[weapon_at] as WeaponInstance).spaces[0].size()
 
 	var copy := live.copy()
 	(copy.inventory[weapon_at] as SpringspearWeaponInstance).ready = true
+	(copy.inventory[weapon_at] as WeaponInstance).spaces[0].append(WeaponModData.new())
 	copy.set_current_hp(1)
 	copy.element_states.append(Elemental.State.CHILLED)
 	copy.instance.stats[Stats.Stat.STR] += 5
@@ -262,6 +283,8 @@ func test_writing_the_copy_leaves_the_live_body_alone() -> void:
 	copy.lifecycle_state = Unit.LifecycleState.DEAD
 
 	assert_bool((live.inventory[weapon_at] as SpringspearWeaponInstance).ready).is_false()
+	assert_int((live.inventory[weapon_at] as WeaponInstance).spaces[0].size()).override_failure_message(
+			"a mod fitted on the copy's weapon reached the live weapon").is_equal(fitted)
 	assert_int(live.instance.current_hp).is_equal(hp)
 	assert_array(live.element_states).is_equal(states)
 	assert_int(live.instance.stats[Stats.Stat.STR]).is_equal(str_stat)
