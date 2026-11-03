@@ -14,7 +14,9 @@ class_name ScenarioUnitEntry
 # apply_unit_state (the spawn's own initialize + starting kit are the whole answer).
 @export var state_saved := true
 @export var cell: Vector2i
-@export var squad_id := -1   #entries sharing an id form one squad; -1 = solo
+# Entries sharing an id form one squad; -1 = solo. The id is also the squad's index in
+# SquadManager.squads when it was saved, which is the acting order a load restores (#1566).
+@export var squad_id := -1
 @export var is_leader := false
 @export var squad_name := ""
 @export var squad_archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT

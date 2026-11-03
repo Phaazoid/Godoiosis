@@ -232,6 +232,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		var unit: Unit = unit_of_entry[entry]
 		if entry.is_leader and entry.squad_has_acted:
 			board.squad_manager.set_has_acted(unit.squad, true)
+	ScenarioManager.restore_squad_order(board.squad_manager, unit_of_entry)   # #1566, the same moment
 
 	ScenarioManager.relink_guards(scenario, unit_of_entry)   # armed Guards (#414), the game's own door and moment
 
