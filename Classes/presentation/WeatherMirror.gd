@@ -119,6 +119,12 @@ var _side: DirectionalLight3D
 var _rect := Rect2i()
 var _mask_versions := []
 var _mask: ImageTexture = null
+var _mask_image: Image = null
+# The cells last written at their staged offset, and the staging and flight they were written for:
+# what a placement re-writes rather than rebuilding the board (#1562).
+var _placed: Dictionary[Vector2i, bool] = {}
+var _placed_key := []
+var _rest_span := Vector2(INF, -INF)   # the unstaged cells' span, gathered when the staged set changes
 var _ground_key := 0
 var _streak_texels := -1
 var _strip_built := false
@@ -259,8 +265,10 @@ func _process(delta: float) -> void:
 		_switch(kind, look)
 	# Every frame, the clear ones too: a grade and an aurora ease OUT as well as in.
 	_grade.drive(_look, _wind(), delta)
-	# Whatever the weather: the wind's specks land on this mask too (#1286).
-	_sync_mask()
+	# Every look's falls draw off the mask. Under a clear sky its readers pull it themselves (#1562): the
+	# wind's specks through mask() (#1286), a fading aurora through board_rect().
+	if _look != null:
+		_sync_mask()
 	_aurora.drive(_look if _auroring() else null, delta)
 	if _look == null:
 		return
@@ -378,21 +386,31 @@ func _switch(kind: Weather.Kind, look: WeatherLook) -> void:
 
 # ---- Where drops land --------------------------------------------------------------------------
 
+# Two prices (#1562, the #893 rule): the board, its heights or its basins moving REBUILDS the mask;
+# the tear-out moving only re-PLACES its own cells, every frame of a flight, in the kept image.
 func _sync_mask() -> void:
 	if grid == null:
 		return
 	var rect := grid.get_used_rect()
 	var versions := [rect, grid.dirty.version, heights.dirty.version if heights != null else 0,
-			BoardSpace.staging_version, BoardSpace.basin_version]
-	# A tear-out moves cells between announcements (#521 slice B), and only placing it is cheap -- the
-	# mask is one texel per cell, so it is re-read every frame the flight is in the air.
-	if versions == _mask_versions and not BoardSpace.flight_active():
-		return
+			BoardSpace.basin_version]
+	if versions != _mask_versions:
+		_build_mask(rect, versions)
+	elif [BoardSpace.staging_version, BoardSpace.flight_elapsed()] != _placed_key:
+		_place_staged()
+
+
+func _build_mask(rect: Rect2i, versions: Array) -> void:
 	_mask_versions = versions
 	_rect = rect
-	var image := WeatherMask.build(grid, heights, rect, BoardSpace.drawn_offset)
-	_span = WeatherMask.span(image)
-	var texture := ImageTexture.create_from_image(image)
+	_mask_image = WeatherMask.build(grid, heights, rect, BoardSpace.drawn_offset)
+	_placed.clear()
+	for cell in BoardSpace.staged_cells():
+		_placed[cell] = true
+	_placed_key = [BoardSpace.staging_version, BoardSpace.flight_elapsed()]
+	_rest_span = WeatherMask.gather(_mask_image, rect, _placed)
+	_span = _staged_span()
+	var texture := ImageTexture.create_from_image(_mask_image)
 	_mask = texture
 	var masked: Array[ShaderMaterial] = [_rain_process, _splash_process, _snow_process, _drift_process,
 			_fog_process, _fog_pass_material, _grit_process, _embers.process]
@@ -403,13 +421,45 @@ func _sync_mask() -> void:
 		material.set_shader_parameter("cell_size", BoardSpace.CELL_SIZE)
 
 
+# Re-write the staged cells where they are drawn now, and the ones that just left the stage where
+# they are home, into the same texture: every reader keeps its binding. The rest of the board's span
+# is re-gathered only when the staged SET changes -- a tear-out and its put-back, never a frame.
+func _place_staged() -> void:
+	_placed_key = [BoardSpace.staging_version, BoardSpace.flight_elapsed()]
+	var now: Dictionary[Vector2i, bool] = {}
+	for cell in BoardSpace.staged_cells():
+		now[cell] = true
+	var moved := now.size() != _placed.size()
+	for cell: Vector2i in _placed:
+		if not now.has(cell):
+			moved = true
+			WeatherMask.write(_mask_image, grid, heights, _rect, BoardSpace.drawn_offset, cell)
+	for cell: Vector2i in now:
+		WeatherMask.write(_mask_image, grid, heights, _rect, BoardSpace.drawn_offset, cell)
+	_placed = now
+	if moved:
+		_rest_span = WeatherMask.gather(_mask_image, _rect, _placed)
+	_span = _staged_span()
+	_mask.update(_mask_image)
+
+
+func _staged_span() -> Vector2:
+	var span := _rest_span
+	for cell: Vector2i in _placed:
+		span = WeatherMask.fold(_mask_image, _rect, cell, span)
+	return WeatherMask.settled(span)
+
+
 # The board's surface mask and its first cell, as every weather shader reads it -- the ONE build of it,
-# which the wind's specks (#1286) read through here. Null until a board is drawn.
+# which the wind's specks (#1286) read through here. Each read brings it up to date first, which is
+# what builds it under a clear sky, where nothing else reads it (#1562). Null with no board.
 func mask() -> ImageTexture:
+	_sync_mask()
 	return _mask
 
 
 func mask_origin() -> Vector2:
+	_sync_mask()
 	return Vector2(_rect.position)
 
 
@@ -418,8 +468,9 @@ func kind() -> Weather.Kind:
 	return _kind
 
 
-# The board's rect, in cells, as the mask was last built over it.
+# The board's rect, in cells, as the mask is built over it.
 func board_rect() -> Rect2i:
+	_sync_mask()
 	return _rect
 
 

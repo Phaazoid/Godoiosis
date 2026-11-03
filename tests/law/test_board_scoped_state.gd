@@ -53,7 +53,7 @@ const BOARD_SCOPED := {
 }
 
 # Process-scoped and therefore safe to survive a board reset, but NOT named by a knob table.
-# Three kinds, and the distinction is worth keeping visible:
+# Four kinds, and the distinction is worth keeping visible:
 #   - derived caches, content-addressed and idempotent; re-deriving costs time, never correctness.
 #   - tuning values that no knob reaches. They are `static var` rather than `const` for a knob's
 #     sake and no knob arrived, so today nothing can move them -- the inverse of #264's born-dead
@@ -61,6 +61,8 @@ const BOARD_SCOPED := {
 #     real gaps against the 2026-08-12 rule that an aesthetic value gets a knob. Filed separately.
 #   - tuning a CLASS_KNOBS `layer` row writes. The tuning arm derives from `static` rows by name, and
 #     a layer row names its LAYER, not the store behind it, so it is declared here instead.
+#   - counters the suite reads only as deltas (Unit.seal_breaks is the model outside this domain);
+#     never reset, so a reader taking the absolute value would be the bug, not the survival.
 const PROCESS_SCOPED := [
 	"_cube_mesh", "_cage_texture", "_outline_texture", "_cube_key",   # UnitHealthBar: cage geometry, keyed by _cube_key
 	"_art_top_cache",                             # UnitSprite3D: per-texture art top, keyed by path
@@ -74,6 +76,7 @@ const PROCESS_SCOPED := [
 	"_caps_by_frame",                             # SnowCapArt (#1269): each prop art's snow cap, keyed by sheet and frame
 	"_badges",                                    # StrikeMarks2D (#1247): baked badge art, keyed by (icon, colour)
 	"_kind_colors",                               # BoardOverlays (#1374): a zone kind's colour, the Game tab's layer rows
+	"board_walks",                                # WeatherMask (#1562): whole-mask passes, a delta counter
 	"GUARD_RING_SCALE",                           # tuning, no knob
 	"texels_per_unit",                            # tuning, no knob
 ]

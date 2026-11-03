@@ -21,6 +21,12 @@ class_name ScenarioUnitEntry
 @export var squad_name := ""
 @export var squad_archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT
 @export var squad_zone := ""   # only meaningful on the leader's entry; "" = none
+# The Sentry post (Squad.home_cell, #1564), on the leader's entry beside the zone. A FULL capture writes
+# the live post; an authored save writes none, and none is the authored rule: the post is the leader's
+# spawn cell. A flag of its own because NO_HOME is a legal live post (a fresh solo's is fixed by its
+# first Sentry turn) -- affinity_saved's reason.
+@export var squad_home_saved := false
+@export var squad_home_cell: Vector2i
 # Does the mission END if this unit dies (#572)? Authored per PLACEMENT, not per character: the same
 # person can be the VIP on one board and an ordinary soldier on the next, so this belongs here and
 # not on UnitData.
@@ -122,7 +128,7 @@ func apply_placement(unit: Unit) -> void:
 	unit.squad.squad_name = squad_name
 	unit.squad.archetype = squad_archetype
 	unit.squad.zone_name = squad_zone
-	unit.squad.home_cell = cell
+	unit.squad.home_cell = squad_home_cell if squad_home_saved else cell
 
 # Does this entry spawn as a BODY, RulesService.can_spawn_at's is_body (#116)? A saved DOWNED unit may
 # lie on ground nothing may STAND on -- deep water -- and without this a load would silently drop it.
