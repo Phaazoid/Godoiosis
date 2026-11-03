@@ -15,12 +15,35 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const FIRE := Vector2i(3, 1)
+# The one file the header's real buttons save to: caught by _SaveCatcher, never written.
+const SCRATCH := "__authored_board_test__"
 
 var _main: Node
 var game: Node2D
 var _brush: TileBrushTool
 var _dc: DevController
 var _cursor: Array[Vector2i] = [Vector2i.ZERO]
+var _catcher: _SaveCatcher
+
+
+# A saver that takes the scratch path and writes nothing, so Update and Save As run end to end with no
+# file landing in Scenarios/. With nothing on disk, save_over's uid restore cannot re-read the file (one
+# push_error) and the save returns false, after the scenario it captured has already been caught.
+class _SaveCatcher extends ResourceFormatSaver:
+	var caught: Array[ScenarioData] = []
+
+	func _recognize(resource: Resource) -> bool:
+		return resource is ScenarioData
+
+	func _recognize_path(_resource: Resource, path: String) -> bool:
+		return path == ScenarioManager.scenario_path(SCRATCH)
+
+	func _get_recognized_extensions(_resource: Resource) -> PackedStringArray:
+		return PackedStringArray(["tres"])
+
+	func _save(resource: Resource, _path: String, _flags: int) -> Error:
+		caught.append(resource as ScenarioData)
+		return OK
 
 
 func before_test() -> void:
@@ -48,6 +71,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	if _catcher != null:
+		ResourceSaver.remove_resource_format_saver(_catcher)
+		_catcher = null
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -106,6 +132,7 @@ func _play_removes(cell: Vector2i, state: Terrain.TileState) -> void:
 
 
 # What the dev header's Update writes, without the disk: its board, through the save's own capture.
+# The header's real buttons have their own cases below.
 func _saved() -> ScenarioData:
 	var header: ScenarioHeader = game.dev_overlay.scenario_header
 	var scenario: ScenarioData = game.scenario_manager.capture_scenario("authored-board", true,
@@ -122,9 +149,21 @@ func _live() -> BoardSnapshot:
 	return live
 
 
-# ---- play never reaches the save ----
+func _header() -> ScenarioHeader:
+	var header: ScenarioHeader = game.dev_overlay.scenario_header
+	return header
 
-func test_a_fire_that_spread_and_burnt_out_saves_as_painted() -> void:
+
+func _catch_saves() -> _SaveCatcher:
+	assert_bool(FileAccess.file_exists(ScenarioManager.scenario_path(SCRATCH))).override_failure_message(
+			"precondition: a real %s exists, and Save As refuses it" % SCRATCH).is_false()
+	_catcher = _SaveCatcher.new()
+	ResourceSaver.add_resource_format_saver(_catcher, true)
+	return _catcher
+
+
+# A painted fire that spread and burnt out over the rounds play ran on it.
+func _play_a_fire_out() -> void:
 	_paint(Terrain.TileState.BURNING, FIRE)
 	for i in range(_burn_ticks()):
 		_round()
@@ -132,6 +171,25 @@ func test_a_fire_that_spread_and_burnt_out_saves_as_painted() -> void:
 			"precondition: the painted fire never burnt out, so nothing below proves anything").is_true()
 	assert_int(game.terrain_states.burning_cells().size()).override_failure_message(
 			"precondition: the fire never spread, so nothing below proves anything").is_greater(0)
+
+
+func _assert_wrote_the_painted_fire(button: String) -> void:
+	assert_int(_catcher.caught.size()).override_failure_message(
+			"precondition: %s never reached the saver, so nothing below proves anything" % button).is_equal(1)
+	if _catcher.caught.size() != 1:
+		return
+	var saved := _catcher.caught[0]
+	assert_array(saved.terrain_states.keys()).override_failure_message(
+			"%s wrote cells play lit or scorched: %s" % [button, saved.terrain_states]).contains_exactly([FIRE])
+	assert_array(saved.terrain_states.get(FIRE, [])).override_failure_message(
+			"%s wrote the painted fire as play left it" % button).contains_exactly([Terrain.TileState.BURNING])
+	assert_dict(saved.gas).override_failure_message("%s wrote gas play gave off" % button).is_empty()
+
+
+# ---- play never reaches the save ----
+
+func test_a_fire_that_spread_and_burnt_out_saves_as_painted() -> void:
+	_play_a_fire_out()
 
 	var saved := _saved()
 
@@ -194,6 +252,43 @@ func test_painting_a_played_cell_saves_the_paint_and_not_the_play() -> void:
 	assert_array(saved.terrain_states.get(spread, [])).override_failure_message(
 			"the cell saved the fire play spread onto it with the paint").contains_exactly(
 			[Terrain.TileState.COVER])
+
+
+# ---- the header's own buttons hand the authored board to the save ----
+
+# _saved() hands the board to capture_scenario itself, so a save path that dropped it would pass every
+# case above. These press the real buttons and read what reached the saver.
+func test_save_as_writes_the_board_as_authored() -> void:
+	_play_a_fire_out()
+	_catch_saves()
+	_header().scenario_name_input.text = SCRATCH
+
+	(_header().get_node("HeaderVbox/NewRow/SaveAsScenarioButton") as Button).pressed.emit()
+
+	_assert_wrote_the_painted_fire("Save As")
+
+
+func test_update_writes_the_board_as_authored() -> void:
+	_play_a_fire_out()
+	_catch_saves()
+	var header := _header()
+	# Update fires only at the loaded file, so the scratch name stands in for the loaded mission.
+	header.scenario_dropdown.add_item(SCRATCH)
+	header.scenario_dropdown.select(header.scenario_dropdown.item_count - 1)
+	game.scenario_manager.last_loaded_path = ScenarioManager.scenario_path(SCRATCH)
+
+	header.update_button.pressed.emit()
+	var dialog: ConfirmationDialog = null
+	for child in header.get_children():
+		if child is ConfirmationDialog:
+			dialog = child
+	assert_object(dialog).override_failure_message("Update asked nothing before overwriting").is_not_null()
+	if dialog == null:
+		return
+	dialog.confirmed.emit()
+	dialog.hide()
+
+	_assert_wrote_the_painted_fire("Update")
 
 
 # ---- the authored board follows the history ----

@@ -4,7 +4,8 @@
 # live unit, which execution has not hit yet. So a counter-er maimed by the blow it answers, or a
 # walker maimed by a watch shot before its swing, struck at its whole STR in preview and execution
 # alike. Both now read the pass's copy: the expectation is derived from a copy of the live body put
-# through the same sever (UnitState.lose_next_limb), never pinned.
+# through the same sever (UnitState.lose_next_limb), never pinned. A maim that strips the rune a
+# counter-er would answer with leaves it no counter at all: the counter gate reads the copy too.
 #
 # Fixture is tests/flow/test_limb_loss_mid_pass.gd's: the real game scene, so execution lands what the
 # preview said through the real executor.
@@ -79,6 +80,34 @@ func _maimed_and_whole(unit: Unit, attack: AttackData) -> Array[int]:
 	return out
 
 
+# A rune `unit` channels at the least Fire aura it can, so the lost limb's aura tax (one off the highest
+# pool) takes it below the rune and settling the maim strips it (UnitState._enforce_gear_gates).
+func _rune_the_maim_strips(unit: Unit) -> RuneData:
+	var carving := TransmutationData.new()
+	carving.display_name = "Ember"
+	carving.power = 4
+	carving.recipe = "Break(F, A) + Push(F2)"   # makes its own fire: never fizzles
+	carving.targets = EquippableData.TargetMode.UNIT
+	carving.can_counter = true
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.MEDIUM
+	rune.inscribe(carving)
+	var affinity: Array[Elemental.Element] = [Elemental.Element.FIRE]
+	unit.unit_instance.affinity = affinity
+	for fire in range(1, 10):
+		var aura: Dictionary[Elemental.Element, int] = {Elemental.Element.FIRE: fire}
+		unit.unit_instance.aura = aura
+		if rune.can_equip(unit.state):
+			break
+	assert_bool(rune.can_equip(unit.state)).override_failure_message("fixture: no Fire aura channels the rune") 		.is_true()
+	unit.equipped_weapon = rune
+	var maimed := unit.state.copy()
+	maimed.lose_next_limb()
+	assert_object(maimed.equipped_weapon).override_failure_message(
+			"fixture: the lost limb leaves the rune channelable, so the case measures nothing").is_null()
+	return rune
+
+
 func _hit_on(list: Array[AttackAction], target: Unit) -> AttackAction:
 	for atk in list:
 		if atk.target == target:
@@ -127,6 +156,33 @@ func test_a_counter_after_the_blow_that_maimed_it_swings_at_the_reduced_strength
 	assert_int(attacker.get_current_hp()) \
 		.override_failure_message("the counter landed a different number than previewed") \
 		.is_equal(previewed_hp)
+
+
+# The blow takes the defender's arm and with it the aura that held its rune: it has nothing left to
+# answer with, so the plan draws no counter and execution lands none.
+func test_a_counter_er_whose_maim_strips_its_rune_draws_no_counter() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 1), LethalityRules.LIMB_LOSS_DAMAGE + 4)
+	var defender := _spawn(ENEMY, Vector2i(1, 1))
+	_rune_the_maim_strips(defender)
+	await await_idle_frame()
+	var board: BoardContext = game._board()
+	assert_bool(game.squad_manager.can_counter(defender, attacker, board, {})).override_failure_message(
+			"fixture: the defender would not counter even whole, so the case measures nothing").is_true()
+	var hp_before := attacker.get_current_hp()
+	assert_bool(game.squad_manager.queue_action(attacker.squad,
+			AttackAction.declare(attacker, attacker.movement.cell, defender.movement.cell))) 		.override_failure_message("fixture failed to queue the blow").is_true()
+
+	var plan: ResolvedPlan = game.squad_manager.resolved_plan_for(attacker.squad)
+	var blow := _hit_on(plan.attacks, defender)
+	assert_object(blow).override_failure_message("the blow never resolved").is_not_null()
+	if blow == null:
+		return
+	assert_int(blow.resolved.severed_limb) 		.override_failure_message("fixture blow (%d) takes no limb" % blow.resolved.damage).is_not_equal(-1)
+	assert_int(blow.resolved.lethality) 		.override_failure_message("fixture blow did not leave the defender standing") 		.is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_object(_swing_by(plan.counters, defender)) 		.override_failure_message("the defender countered with the rune the blow stripped from it").is_null()
+
+	await game.order_executor.execute_orders(attacker.squad.get_leader())
+	assert_int(attacker.get_current_hp()) 		.override_failure_message("execution landed a counter the plan did not draw").is_equal(hp_before)
 
 
 # A watch shot takes the walker's arm mid-walk; its queued swing then lands at the STR it has left.

@@ -546,6 +546,39 @@ func test_the_play_api_lists_a_carving_an_earlier_orders_fire_feeds() -> void:
 		assert_array(after.aims).is_not_empty()
 
 
+# An order queued and never executed is cleared at the hand-off without a signal when its own faction
+# is the one coming in (Squad._reset_squad: here the only faction on the board), so no host re-resolves
+# and the cache still holds the plan it made. The squad's first order of the new turn meets the LIVE
+# ground, where the fire that plan would have lit was never lit, so Ignite has nothing to draw on.
+func test_the_next_turns_first_order_meets_the_live_ground_not_a_cleared_plans() -> void:
+	var b := _headless("CandidateGroundNextTurn")
+	var caster := _headless_unit(b, PLAYER, CASTER)
+	caster.unit_instance.aura = {FIRE: 4}
+	var fire_only: Array[Elemental.Element] = [FIRE]
+	caster.unit_instance.affinity = fire_only
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(_carving("Ignite", "Push(F2)"))).is_true()
+	assert_bool(caster.add_item(rune)).is_true()
+	caster.equipped_weapon = rune
+	var lighter := _headless_mate(b, caster, MATE, _blow(1, FIRE, true))
+	var sess = PlaySession.new(b)
+	var lit: Dictionary = sess.queue_attack(sess.handle_for(lighter), BESIDE)
+	assert_bool(lit.ok).override_failure_message("fixture: the lighter was refused: %s" % str(lit.get("error", ""))).is_true()
+
+	var ended: Dictionary = sess.end_turn()
+	assert_bool(ended.ok).override_failure_message("fixture: the turn did not end: %s" % str(ended.get("error", ""))).is_true()
+	var manager: SquadManager = b.squad_manager
+	var cached := manager.resolved_plan_for(caster.squad)
+	assert_bool(caster.squad.action_queue.is_empty() and cached != null and cached.prefix_tiles != null
+			and cached.prefix_tiles.cells().has(BESIDE)).override_failure_message(
+			"fixture: the hand-off left no cleared plan's fire in the cache, so nothing below proves anything").is_true()
+
+	var next: Dictionary = sess.legal_targets(sess.handle_for(caster), "Ignite")
+	assert_bool(next.ok).override_failure_message(
+			"the Play API lists aims for a carving fed by the fire of a plan the hand-off cleared").is_false()
+
+
 func test_the_play_api_rescues_onto_ice_an_earlier_order_freezes() -> void:
 	var b := _headless("CandidateGroundRescue")
 	BoardBuilder.paint_cell(b.grid, LAKE, BoardBuilder.WATER_ATLAS)
