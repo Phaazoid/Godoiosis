@@ -181,6 +181,59 @@ func test_save_over_is_unaffected_for_content_that_never_degraded() -> void:
 
 
 # ==============================================================================
+#  How long the record lasts (#1589)
+# ==============================================================================
+
+# Every catalog listing loads the path AGAIN and gets the repaired object back out of the cache, where
+# the repair put it. That is not a clean load, and treating it as one erased the record: the refusal
+# lifted at the first refresh, and the next Update wrote the loss.
+func test_a_second_load_of_a_repaired_file_keeps_the_refusal() -> void:
+	_stage_missing_array_element()
+	var first := ContentRepair.load_tolerant(BROKEN_PATH)
+	assert_object(first).is_not_null()
+	var second := ContentRepair.load_tolerant(BROKEN_PATH)
+	assert_object(second).override_failure_message(
+		"precondition: the second load should hand back the cached repaired copy").is_same(first)
+
+	assert_array(ContentRepair.dropped_properties(BROKEN_PATH)).override_failure_message(
+		"a cache hit erased the repair record").contains(["granted_attacks"])
+	assert_bool(DevWidgets.save_over(first, BROKEN_PATH, null)).override_failure_message(
+		"save_over wrote a degraded resource after a second load").is_false()
+	assert_str(FileAccess.get_file_as_string(BROKEN_PATH)).contains(GONE)
+
+
+# Once the gap is filled and the save lands, the file is whole, so the record goes with it -- or
+# BoardLint keeps naming a file the dev has already fixed.
+func test_a_filled_save_clears_the_record() -> void:
+	_stage_missing_array_element()
+	var res := ContentRepair.load_tolerant(BROKEN_PATH) as WeaponModData
+	var filled: Array[WeaponAttackData] = [WeaponAttackData.new()]
+	res.granted_attacks = filled
+
+	assert_bool(DevWidgets.save_over(res, BROKEN_PATH, null)).is_true()
+	assert_array(ContentRepair.repaired_paths()).override_failure_message(
+		"a filled, saved file is still on the repaired list BoardLint reads").not_contains([BROKEN_PATH])
+
+
+# The record still yields to a CLEAN parse: once nothing holds the repaired copy and the file is
+# whole again (the missing target restored, say), the next load is the real file and owes nothing.
+func test_a_clean_parse_after_the_fix_still_clears_the_record() -> void:
+	_stage_missing_array_element()
+	var res := ContentRepair.load_tolerant(BROKEN_PATH)
+	assert_array(ContentRepair.dropped_properties(BROKEN_PATH)).contains(["granted_attacks"])
+	res = null   # the only holder: the repaired copy is freed and leaves the cache
+	assert_bool(ResourceLoader.has_cached(BROKEN_PATH)).override_failure_message(
+		"precondition: the repaired copy should be gone from the cache once nothing holds it").is_false()
+	_write('[gd_resource type="Resource" script_class="WeaponModData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="%s" id="1_mod"]\n\n' % SCRIPT_PATH
+		+ '[resource]\nscript = ExtResource("1_mod")\ndisplay_name = "Whole"\n')
+
+	assert_object(ContentRepair.load_tolerant(BROKEN_PATH)).is_not_null()
+	assert_array(ContentRepair.dropped_properties(BROKEN_PATH)).override_failure_message(
+		"a clean parse no longer supersedes the record").is_empty()
+
+
+# ==============================================================================
 #  The CASCADE -- the shape #596 actually had
 # ==============================================================================
 
