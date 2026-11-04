@@ -1179,6 +1179,3 @@ Vector2i(11, 7): Vector4i(2, 2, 2, 2),
 Vector2i(12, 7): Vector4i(2, 1, 1, 2),
 Vector2i(13, 7): Vector4i(1, 0, 0, 1)
 })
-active_faction = 1
-contested = true
-rounds_elapsed = 2

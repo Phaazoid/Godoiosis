@@ -800,7 +800,5 @@ Vector2i(13, 17): Vector4i(-1, -1, -1, -1),
 Vector2i(13, 18): Vector4i(-1, -1, -1, -1),
 Vector2i(13, 19): Vector4i(-1, -1, -1, -1)
 })
-active_faction = 1
 objectives = Array[int]([0])
 camera_start = SubResource("Resource_vhyx4")
-rounds_elapsed = 1

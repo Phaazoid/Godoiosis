@@ -636,4 +636,3 @@ Vector2i(16, -7): Vector4i(10, 10, 10, 10),
 Vector2i(17, -7): Vector4i(4, 2, 2, 4),
 Vector2i(18, -7): Vector4i(2, 0, 0, 2)
 })
-contested = true

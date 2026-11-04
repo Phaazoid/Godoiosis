@@ -666,5 +666,3 @@ roster = "Company"
 deployment_cap = 3
 camera_start = SubResource("Resource_xky18")
 ai_factions = Array[int]([1])
-contested = true
-rounds_elapsed = 2
