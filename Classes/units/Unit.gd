@@ -374,11 +374,14 @@ func remove_item(index: int):
 	if remove_block_reason(index) != "":
 		return
 	var item := inventory[index]
+	var vacated := item == equipped_weapon or item == worn_armor
 	if item == equipped_weapon:
 		equipped_weapon = null
 	if item == worn_armor:
 		worn_armor = null
 	inventory[index] = null
+	if vacated:
+		_settle_stat_change()   # a worn slot emptied: like remove_armor (#1587)
 
 # The effect doors are UnitState's (#1480 stage 5), shared with the pass's copy; the live body adds the
 # readout, and stays silent when nothing moved.
@@ -941,8 +944,14 @@ func has_equipped_weapon() -> bool:
 # both route through here, so the equip gate has exactly one home. Scenario load deliberately
 # does not — a save is authoritative (ScenarioUnitEntry.apply_unit_state). The gate itself is the
 # body's (UnitState.equip), so a resolve pass's copy holding a carried weapon asks the same one.
+# It settles when the hand changed, like wear_armor (#1587): a mod in hand pays into the gear stage.
 func set_equipped_weapon(weapon: EquippableData) -> bool:
-	return state.equip(weapon)
+	var held := equipped_weapon
+	if not state.equip(weapon):
+		return false
+	if equipped_weapon != held:
+		_settle_stat_change()
+	return true
 
 # Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected. The reason is
 # the rule (#662); can_wield_equipped is derived from it.
@@ -974,7 +983,10 @@ func equip_weapon_from_inventory(index: int) -> bool:
 	return set_equipped_weapon(item)   # armor refusal + the equip gate live at the one door (#157)
 
 func unequip_weapon():
+	if equipped_weapon == null:
+		return
 	equipped_weapon = null
+	_settle_stat_change()   # like remove_armor (#1587)
 
 func wear_armor(index: int) -> bool:
 	# The ONE chokepoint where armor gets worn, so the wear gate has exactly one place to live.
@@ -1114,14 +1126,16 @@ func carried_equippables() -> Array[EquippableData]:
 # Runs `work` with `source` in the weapon slot and puts the held one back after (#929): how a preview
 # asks what another carried weapon would do without the unit ever being seen holding it -- a save or a
 # report taken mid-aim records what was equipped, not what was being looked at. The swap goes through
-# set_equipped_weapon (#157); putting the held one back is a RESTORE of the exact prior state rather
-# than an equip, so it is a plain write. SYNCHRONOUS only: an await inside `work` would leave the swap
-# standing for every frame it spans. A null source, or the one already in hand, just runs `work`.
+# the body's equip gate (UnitState.equip, #157), NEVER set_equipped_weapon: that door settles, and a
+# re-clamped HP is the one thing the restore cannot put back (#1587). Putting the held one back is a
+# RESTORE of the exact prior state rather than an equip, so it is a plain write. SYNCHRONOUS only: an
+# await inside `work` would leave the swap standing for every frame it spans. A null source, or the
+# one already in hand, just runs `work`.
 func with_weapon_in_hand(source: EquippableData, work: Callable) -> Variant:
 	var held := equipped_weapon
 	if source == null or source == held:
 		return work.call()
-	if not set_equipped_weapon(source):
+	if not state.equip(source):
 		return null
 	var result: Variant = work.call()
 	equipped_weapon = held
