@@ -1349,6 +1349,10 @@ func _clearance_live(cam: CameraController) -> bool:
 # One frame of the clearance: a fresh search on every edge, then the cheap hide-only check of the
 # angle held.
 func _clear_the_shot(cam: CameraController, trained: Unit, shot_edge: bool) -> void:
+	# The hold: nothing turns and nothing comes back while the cubes are in the air. ABOVE the edge
+	# block, which would renew the close-up's hides on the way in (#1594); the release renews them.
+	if _shots.active == ShotDirector.Shot.DEATH_SHOW:
+		return
 	var line: Array[Vector2i] = cam.directed_line
 	var new_line := line != _clearance_line
 	if shot_edge or new_line or not _clearance_on:
@@ -1358,13 +1362,10 @@ func _clear_the_shot(cam: CameraController, trained: Unit, shot_edge: bool) -> v
 			_span_walker_id = _walker_id(cam.framed_span)
 		if _clearance.renew(new_line):
 			_push_hidden()
-	match _shots.active:
-		ShotDirector.Shot.DEATH_SHOW:
-			return   # the hold: nothing turns and nothing comes back while the cubes are in the air
-		ShotDirector.Shot.WIDE:
-			if _clearance.clear_hidden():
-				_push_hidden()
-			return
+	if _shots.active == ShotDirector.Shot.WIDE:
+		if _clearance.clear_hidden():
+			_push_hidden()
+		return
 	var subjects := _clearance_subjects(cam, trained)
 	var extras := _clearance_extras(cam)
 	var world := _clearance_world(cam, trained)

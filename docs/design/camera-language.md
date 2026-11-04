@@ -188,7 +188,10 @@ content, neither is a magic number.
 - **hidden** — what no turn could clear, taken out of the frame outright: a column moved to the
   invisible lattice, a prop or a unit made invisible. Not a camera mover and not a sixth door --
   it moves nothing -- so its writers are `BoardMirror.set_camera_hidden` and
-  `UnitMirror.camera_hidden`, both fed by `battle3d._push_hidden`.
+  `UnitMirror.camera_hidden`, both fed by `battle3d._push_hidden`. The death show's **hold** keeps
+  whatever the close-up hid until the release that follows it
+  ([#1594](https://github.com/Phaazoid/Godoiosis/issues/1594)), so the cubes never erupt behind a
+  wall the tumble had cleared.
 
 `ShotClearance` owns the rule and the latch; the history is in `visual-clarity.md` -> *The battle
 zoom sees past what stands in the way*.
