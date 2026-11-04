@@ -121,8 +121,8 @@ class SightTrace:
 
 
 # May this attack cross the height difference between two cells (#258)? Two clauses, both required:
-# the attack's own VERTICAL RULE (MELEE -- same step or a facing half step, judged by the
-# movement system's own RulesService.height_step_ok; RANGED for everything else, -1 = unlimited),
+# the attack's own VERTICAL RULE (MELEE -- adjacent, the edge movement steps across, judged by
+# RulesService.height_step_ok; further out, the same elevation; RANGED for everything else, -1 = unlimited),
 # and a CLEAR SIGHT TRACE (the bead path below). A null attack (bare fists) is melee. A
 # null board reads flat, matching BoardContext's null-heights contract. This is the POINT form:
 # the trace runs from the shooter's own cell. A spread's cells are judged lane by lane instead
@@ -148,13 +148,12 @@ static func _lane_aim_ok(attack: AttackData, shooter_cell: Vector2i, lane_base: 
 
 static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
 	if attack == null or attack.vertical_rule == AttackData.VerticalRule.MELEE:
-		# Melee (dev, 2026-08-20): same step at any range; a one-LEVEL edge only when adjacent AND
-		# ramp-connected ("a facing half step"); a sheer edge refuses in BOTH directions.
-		if board.elevation_at(target_cell) == board.elevation_at(origin_cell):
-			return true
-		if GridUtils.manhattan_distance(origin_cell, target_cell) != 1:
-			return false
-		return RulesService.height_step_ok(origin_cell, target_cell, board)
+		# Melee (dev, 2026-08-20): "same step, or a facing half step". ADJACENT, the shared edge is
+		# the whole answer, movement's own (#1585): equal low sides do not connect a ramp's flank or
+		# its top edge. Further out there is no shared edge, so the same elevation.
+		if GridUtils.manhattan_distance(origin_cell, target_cell) == 1:
+			return RulesService.height_step_ok(origin_cell, target_cell, board)
+		return board.elevation_at(target_cell) == board.elevation_at(origin_cell)
 	var delta := board.elevation_at(target_cell) - board.elevation_at(origin_cell)
 	if delta > 0:
 		return attack.up_tolerance < 0 or delta <= attack.up_tolerance

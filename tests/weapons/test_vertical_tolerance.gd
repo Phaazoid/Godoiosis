@@ -100,6 +100,73 @@ func test_step_judges_the_direct_edge_only() -> void:
 	assert_bool(Reach.vertical_aim_ok(_step_attack(), Vector2i(0, 0), Vector2i(2, 0), board)).is_false()
 
 
+# --- Adjacent melee asks the EDGE, as movement does (#1585) ------------------------------------
+#
+# A ramp's elevation is its LOW side, so a ramp at 0 and flat ground at 0 read "the same step"
+# whichever of the ramp's edges faces the ground. Adjacent, the shared edge is the answer.
+
+# The ramp at (1,1) rises EAST from 0: corners NW 0, NE 2, SE 2, SW 0.
+func _ramp_with(neighbour: Vector2i, neighbour_elevation: int) -> BoardContext:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
+	heights.set_cell(neighbour, neighbour_elevation)
+	return _board_with(heights)
+
+
+func test_melee_refuses_a_ramp_flank_at_its_own_low_height() -> void:
+	var ramp := Vector2i(1, 1)
+	var flank := Vector2i(1, 0)
+	var board := _ramp_with(flank, 0)
+	assert_int(board.elevation_at(flank)).override_failure_message(
+			"the fixture must put the flank at the ramp's own low height").is_equal(board.elevation_at(ramp))
+	assert_bool(Reach.vertical_aim_ok(_step_attack(), flank, ramp, board)).is_false()
+	assert_bool(Reach.vertical_aim_ok(_step_attack(), ramp, flank, board)).is_false()
+	assert_bool(Reach.vertical_aim_ok(null, flank, ramp, board)).override_failure_message(
+			"bare fists are melee and refuse the flank too").is_false()
+
+
+# The sheer one-level drop off a ramp's top edge: the ground at its foot is the ramp's own low height.
+func test_melee_refuses_a_ramp_top_edge_over_ground_at_its_foot() -> void:
+	var ramp := Vector2i(1, 1)
+	var foot := Vector2i(2, 1)
+	var board := _ramp_with(foot, 0)
+	assert_bool(Reach.vertical_aim_ok(_step_attack(), foot, ramp, board)).is_false()
+	assert_bool(Reach.vertical_aim_ok(_step_attack(), ramp, foot, board)).is_false()
+
+
+# verticality.md's own sentence, pinned: melee and movement answer identically about which edges
+# connect. Every legal corner form against every other, on all four sides.
+func test_melee_and_movement_answer_identically_on_every_adjacent_pair() -> void:
+	var forms: Array[Vector4i] = []
+	for low in [0, 2]:
+		for climb in [1, Terrain.UNITS_PER_LEVEL]:
+			for mask in 15:
+				if not Terrain.SADDLE_MASKS.has(mask):
+					forms.append(Terrain.corners_of_form(low, mask, climb))
+	var centre := Vector2i(1, 1)
+	var level_but_unmatched := 0
+	for a in forms:
+		for b in forms:
+			var heights := BoardHeights.new()
+			heights.set_corners(centre, a)
+			for dir in GridUtils.CARDINAL_DIRECTIONS:
+				heights.set_corners(centre + dir, b)
+			var board := _board_with(heights)
+			for dir in GridUtils.CARDINAL_DIRECTIONS:
+				var other: Vector2i = centre + dir
+				var steps := RulesService.height_step_ok(centre, other, board)
+				if not steps and board.elevation_at(centre) == board.elevation_at(other):
+					level_but_unmatched += 1
+				if Reach.vertical_aim_ok(_step_attack(), centre, other, board) != steps \
+						or Reach.vertical_aim_ok(_step_attack(), other, centre, board) != steps:
+					fail("melee and movement disagree: %s beside %s to the %s (movement says %s)"
+							% [str(a), str(b), str(dir), str(steps)])
+					return
+	assert_int(level_but_unmatched).override_failure_message(
+			"no pair at one height with an unmatched edge -- the sweep cannot see the #1585 shortcut") \
+		.is_greater(0)
+
+
 func test_a_null_board_reads_flat() -> void:
 	assert_bool(Reach.vertical_aim_ok(_attack(0, 0), Vector2i(0, 0), Vector2i(9, 9), null)).is_true()
 
