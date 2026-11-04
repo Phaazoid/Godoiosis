@@ -117,8 +117,11 @@ static func get_spawnable() -> Dictionary:
 # one line, because a WeaponData answers copy_for_grant() with an instance itself. The branch that
 # used to call make() here was the same rule spelled twice, and the copy door is the spelling that
 # reaches the three AUTHORING doors as well as this picker one.
-static func instantiate_entry(entry) -> EquippableData:
+#
+# Typed Item, as the copy door is since #697: the Unit Editor's picker lists carried kinds too (a
+# vial, a conduit), and an EquippableData cast turned every one of them into an empty slot (#1588).
+# A caller that needs a hand asks the result's equip_slot().
+static func instantiate_entry(entry) -> Item:
 	if entry is Item:
-		# Cast: the copy door is typed Item since #697; this path only ever reaches equippables.
-		return entry.copy_for_grant() as EquippableData
+		return entry.copy_for_grant()
 	return null
