@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25.**
+**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25; #1585 (adjacent melee asks the edge movement asks) folded in 2026-11-03.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -494,6 +494,18 @@ that moot** — the guards are gone and the shared core is now the whole rule, s
 answer identically with nothing left to keep movement-only.) Bare fists are
 STEP (MELEE since #473) too — punching is melee. The earlier melee worry ("I don't like not being able to melee up a
 slope") is exactly what the half step preserves.
+
+> **"Answer identically" was not true until [#1585](https://github.com/Phaazoid/Godoiosis/issues/1585)
+> (2026-11-03).** The gate answered *same elevation* before it ever asked the edge, and a ramp's
+> elevation is its LOW side. So flat ground at a ramp's foot height still reached it from beside its
+> flank, across its sheer top edge, and across a slope crossing it: three edges movement refuses.
+> Slice 3 moved the sideways guards into the edge comparison, but melee never reached that comparison
+> at equal heights, so the parenthetical above kept describing the code. **Dev ruling, 2026-11-03:
+> melee follows movement.** Adjacent, the shared edge is the whole answer (`height_step_ok`); further
+> out there is no shared edge, so the rule stays *same elevation*. `tests/weapons/test_vertical_tolerance.gd`
+> pins the sentence directly by sweeping every legal corner form against every other.
+> *Deliberately unchanged:* a melee cell two or more away, and a spread's side lane (judged from the
+> shooter, #756), still read "same step" as equal low sides.
 
 ### The aim, not the footprint — amended by [#756](https://github.com/Phaazoid/Godoiosis/issues/756)
 

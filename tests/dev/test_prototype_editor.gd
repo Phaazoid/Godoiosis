@@ -2,10 +2,11 @@
 # carried item. Pins the four things that are decisions rather than plumbing: the blank prototype
 # is authored instead of instantiated, a loaded template is handed out LIVE (not copied), the main
 # attack auto-fills from the chosen family as a shared ref while a deliberate pick survives, and a
-# template nobody could carry is refused at the save.
+# template nobody could carry is refused at the save, and Save As forks a loaded template (#1590).
 #
-# No case writes to disk: the refusal case returns before any save, and the allowed direction is
-# asserted at the refusal-predicate level rather than by pressing Save As on a tracked file.
+# One case writes to disk, to a user:// fixture it deletes. The refusal case returns before any save,
+# and the allowed direction is asserted at the refusal-predicate level rather than by pressing Save
+# As on a tracked file.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -30,6 +31,7 @@ func before_test() -> void:
 	await await_idle_frame()
 
 func after_test() -> void:
+	_undo_fork()
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -179,3 +181,58 @@ func test_the_refusal_ignores_the_other_kinds_this_tab_authors() -> void:
 # saved-instances folder every other kind here writes to.
 func test_a_prototype_saves_into_the_prototypes_folder() -> void:
 	assert_str(_tool()._save_dir_for(_new_prototype())).is_equal(WeaponCatalog.PROTOTYPE_DIR)
+
+# ==============================================================================
+#  Save As forks a loaded template (#1590)
+# ==============================================================================
+
+const FORK_PATH := "user://__test_prototype_fork.tres"
+const FORK_NAME := "__Test Fork"
+var _template: WeaponData = null
+var _home := ""
+
+# Save As on a loaded prototype saved the LIVE template itself: save_over's take_over_path moved the
+# catalog object off its own file and renamed it, and every weapon built on it shares that object.
+# Loaded through the real Load, so the template is the one the catalog hands out.
+func test_save_as_on_a_loaded_prototype_writes_a_new_template() -> void:
+	var tool_ref := _tool()
+	var target := ""
+	for key in WeaponCatalog.get_prototypes():
+		target = key
+		break
+	if target == "":   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("nothing in Prototypes/, so there is no template to Save As from")
+		return
+	for i in tool_ref.load_dropdown.item_count:
+		if tool_ref.load_dropdown.get_item_text(i) == target:
+			tool_ref.load_dropdown.select(i)
+	tool_ref._on_load_pressed()
+	_template = tool_ref.current_item as WeaponData
+	assert_object(_template).is_same(WeaponCatalog.get_prototypes()[target])   # handed out live (#486)
+	_home = _template.resource_path
+	var home_name := _template.display_name
+
+	assert_bool(tool_ref._save_as_to(FORK_PATH, FORK_NAME)).is_true()
+
+	assert_str(_template.resource_path).is_equal(_home)
+	assert_str(_template.display_name).is_equal(home_name)
+	assert_object(load(_home)).is_same(_template)
+	var forked := tool_ref.current_item as WeaponData
+	assert_object(forked).is_not_null()
+	assert_object(forked).is_not_same(_template)
+	assert_str(forked.resource_path).is_equal(FORK_PATH)
+	assert_str(forked.display_name).is_equal(FORK_NAME)
+	assert_bool(FileAccess.file_exists(FORK_PATH)).is_true()
+	if _template.main_attack != null and _template.main_attack.resource_path != "":
+		assert_object(forked.main_attack).is_same(_template.main_attack)   # a template only PICKS its main
+
+# The cache outlives this suite: a template a failing run moved goes back to its file, with the
+# name it had there, before the fixture goes.
+func _undo_fork() -> void:
+	if _template != null and _home != "" and _template.resource_path != _home:
+		_template.take_over_path(_home)
+		DevWidgets.revert_to_saved(_template, _home)
+	_template = null
+	_home = ""
+	if FileAccess.file_exists(FORK_PATH):
+		DirAccess.remove_absolute(FORK_PATH)

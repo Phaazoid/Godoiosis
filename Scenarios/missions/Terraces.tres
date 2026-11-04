@@ -425,5 +425,3 @@ camera_start = SubResource("Resource_bqqqp")
 ai_factions = Array[int]([1])
 in_demo = true
 dialog_beats = Array[ExtResource("1_ncrpp")]([SubResource("Resource_v74po")])
-contested = true
-rounds_elapsed = 1

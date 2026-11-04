@@ -316,6 +316,48 @@ func test_closing_the_dock_closes_both() -> void:
 			"the tile card outlived the dock it was opened beside").is_false()
 
 
+# A unit that leaves the board takes the dock with it (#1573). Left on a corpse, the dock still drew while
+# is_showing() said no, so a right-click aimed at it fell through to the queue and popped an order.
+func test_a_death_closes_the_dock_and_its_card() -> void:
+	var victim := _spawn(ENEMY, Vector2i(5, 2), "Brigand")
+	await _click(victim.movement.cell)
+	await _pick(MainActionMenu.INSPECT)
+	assert_bool(_panel().is_showing_unit(victim) and _card().is_showing_tile()).override_failure_message(
+			"precondition: Inspect opened no dock and card").is_true()
+
+	victim.die()
+	await await_idle_frame()
+
+	assert_bool(is_instance_valid(victim)).override_failure_message(
+			"precondition: the unit was not freed").is_false()
+	assert_bool(_panel().visible).override_failure_message("the dock outlived its unit").is_false()
+	assert_bool(_card().visible).override_failure_message(
+			"the tile card outlived the unit it follows").is_false()
+	var held: Unit = _panel().current_unit   # TYPED: a freed ref compares == null as TRUE (#149)
+	assert_object(held).override_failure_message("the dock still holds the dead unit").is_null()
+
+
+# The other way off the board: the pre-mission phase's undeploy, through the one door both its surfaces
+# call. The dock's squad readers assume a squad, so the next refresh (closing Settings restyles) threw.
+func test_undeploying_the_inspected_unit_closes_the_dock() -> void:
+	var unit := _spawn(PLAYER, Vector2i(3, 2), "Aldin")
+	await _click(unit.movement.cell)
+	await _pick(MainActionMenu.INSPECT)
+	assert_bool(_panel().is_showing_unit(unit)).override_failure_message(
+			"precondition: Inspect opened no dock").is_true()
+
+	game.undeploy_unit(unit)
+	await await_idle_frame()
+	_panel().restyle()
+
+	assert_object(unit.squad).override_failure_message(
+			"precondition: the undeployed unit still has a squad").is_null()
+	assert_bool(_panel().visible).override_failure_message(
+			"the dock outlived its unit's undeploy").is_false()
+	assert_bool(_panel().is_showing()).override_failure_message(
+			"the dock still holds the undeployed unit").is_false()
+
+
 # The dock stays open through Execute, so the unit can walk while its tile card is up. The card goes
 # with it: one fixed on the old cell would describe where the unit used to stand.
 func test_the_tile_card_follows_its_unit() -> void:

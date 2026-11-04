@@ -1669,6 +1669,9 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 		if status_label != null:
 			status_label.text = "Failed to preserve the UIDs on %s" % path
 		return false
+	# The refusal above passed, so every property the repair took out was set again: the file is whole,
+	# and BoardLint must stop naming it (#1589).
+	ContentRepair.forget(path)
 	if status_label != null:
 		status_label.text = ""   # clears a stale refusal now that a save actually landed
 	return true

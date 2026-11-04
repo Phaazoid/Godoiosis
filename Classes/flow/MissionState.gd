@@ -287,15 +287,21 @@ func rounds_remaining() -> int:
 # MissionRules.evaluate's answer, which is handed this and keeps its own wipe branch for callers
 # that pass nothing. Both read the one faction predicate below.
 #
-# The wipe outranks an authored condition, matching evaluate's own order: a squad lost on the round
-# the clock expires reports the squad, which is the more concrete thing that happened.
+# The MOST SENIOR reason that fired, in evaluate's own order: the wipe, then a must-hold condition,
+# then a deadline. Load-bearing, not wording (#1592): evaluate decides from this one reason, so a
+# clock authored before the VIP would otherwise hide the VIP's death behind a same-check win.
 func failure_for(board: BoardContext) -> MissionRules.LoseCondition:
 	if not board.faction_has_active_units(Team.Faction.PLAYER):
 		return MissionRules.LoseCondition.SQUAD_LOST
+	var deadline: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
 	for condition in lose_conditions:
-		if _condition_fired(condition, board):
-			return condition   # ANY, not all -- the first one that fires ends it
-	return MissionRules.LoseCondition.NONE
+		if not _condition_fired(condition, board):
+			continue
+		if MissionRules.outranks_a_win(condition):
+			return condition   # ANY, not all -- the first must-hold one that fires ends it
+		if deadline == MissionRules.LoseCondition.NONE:
+			deadline = condition
+	return deadline
 
 func _condition_fired(condition: MissionRules.LoseCondition, board: BoardContext) -> bool:
 	match condition:

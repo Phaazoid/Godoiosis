@@ -141,8 +141,9 @@ func choice_attacks(wielder: UnitState) -> Array[AttackData]:
 	return fireable_only(wielder, repertoire(wielder))
 
 # A rune counters with whatever it is CURRENTLY firing — the live pick included (#30 quirk).
-# A weapon deliberately does NOT; see WeaponInstance.counter_attack. Unit.get_fired_attack's own
-# answer, with the pick handed in.
+# A pick lives only while its aim is open, the AI's included (#1598), so between aims this is the
+# default. A weapon deliberately does NOT; see WeaponInstance.counter_attack. Unit.get_fired_attack's
+# own answer, with the pick handed in.
 func counter_attack(wielder: UnitState, live_pick: AttackData) -> AttackData:
 	return live_pick if live_pick != null else default_attack(wielder)
 

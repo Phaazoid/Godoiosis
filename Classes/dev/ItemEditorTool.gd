@@ -26,7 +26,7 @@ class_name ItemEditorTool
 # LIVE, so the two panels cannot hold divergent copies of one file.
 #
 # current_item is a Resource rather than an EquippableData because a mod, a prototype template and a
-# vial are none of them equippable. display_name is reached through _edited_name/_set_edited_name.
+# vial are none of them equippable. display_name is reached through _edited_name/_name_item.
 var current_item: Resource = null
 var _variants := {}
 # Which catalog entry current_item was loaded from ("" = a New item). Load hands out a COPY with
@@ -174,11 +174,14 @@ func _edited_name() -> String:
 	return item.display_name if item != null else ""
 
 func _set_edited_name(value: String) -> void:
-	var mod := current_item as WeaponModData
+	_name_item(current_item, value)
+
+static func _name_item(edited: Resource, value: String) -> void:
+	var mod := edited as WeaponModData
 	if mod != null:
 		mod.display_name = value
 		return
-	var item := current_item as Item
+	var item := edited as Item
 	if item != null:
 		item.display_name = value
 
@@ -247,11 +250,35 @@ func _on_save_as_pressed():
 	var path := dir + entered_name + ".tres"
 	if DevWidgets.refuse_existing_file(path, "item", status_label):
 		return
-	_set_edited_name(entered_name)
-	if DevWidgets.save_over(current_item, path, status_label):
-		_loaded_name = entered_name   # save_over take_over_path'd it: the editor now holds this file
-		name_input.text = ""
-		_refresh_variant_list(entered_name)
+	_save_as_to(path, entered_name)
+
+# Save As writes a NEW file, so it must never move what the form holds off a file it already owns
+# (#1590): save_over take_over_paths the object it saves. A loaded template is handed out live
+# (#486), and so is whatever an earlier Save As wrote, so either is copied first and the COPY saved.
+# The form then edits the copy, which owns the new file.
+func _save_as_to(path: String, entered_name: String) -> bool:
+	var subject := _save_as_subject()
+	_name_item(subject, entered_name)
+	if not DevWidgets.save_over(subject, path, status_label):
+		return false
+	var forked := subject != current_item
+	current_item = subject
+	_loaded_name = entered_name
+	name_input.text = ""
+	_refresh_variant_list(entered_name)
+	if forked:
+		populate()   # the form's rows are bound to the object they were built on
+	return true
+
+# A template forks as a NEW template: a new file, not a copy of a shared one, so "a WeaponData is
+# never duplicated" still holds, and duplicate(true) keeps its path'd main attack shared. Anything
+# else gets the copy Load hands out.
+func _save_as_subject() -> Resource:
+	if current_item.resource_path == "":
+		return current_item
+	if current_item is WeaponData:
+		return current_item.duplicate(true)
+	return _editable_copy(current_item)
 
 func populate():
 	for child in editor_container.get_children():

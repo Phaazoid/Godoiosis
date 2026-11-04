@@ -255,7 +255,7 @@ static func _swing(turn: float, current: float) -> float:
 # The turn the shot is held at, relative to its directed yaw.
 var turn := 0.0
 # What is hidden right now. Grows within a shot and empties when the shot changes -- so nothing pops
-# back and forth while a body tumbles.
+# back and forth while a body tumbles. The death show's hold keeps it until its release (#1594).
 var hidden := Found.new()
 # A fresh search is owed: the shot changed, and the next frame that has something to look at chooses
 # from scratch.

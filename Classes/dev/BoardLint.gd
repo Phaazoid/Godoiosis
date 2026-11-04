@@ -238,7 +238,8 @@ static func _check_placement(game, board: BoardContext, found: Array[Dictionary]
 			continue
 		var cell: Vector2i = unit.movement.cell
 		var is_body := scenario_manager.capture_entry(unit, authored).spawns_as_body()
-		var reason := RulesService.spawn_block_reason(board.with_units(placed), cell, is_body)
+		# The live body (#1597), as the loader asks the finished one: a Water Walker on water stands.
+		var reason := RulesService.spawn_block_reason(board.with_units(placed), cell, is_body, unit.state)
 		if reason == "":
 			placed.append(unit)
 			continue

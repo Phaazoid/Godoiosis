@@ -18,6 +18,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const BoardBuilder := preload("res://play/board_builder.gd")
 
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
@@ -133,6 +134,22 @@ func test_a_unit_painted_over_stands_where_spawn_would_refuse_it() -> void:
 	game.grid.set_cell(Vector2i(2, 0), GRASS_SOURCE, ROCK_ATLAS)
 	_assert_reports(BoardLint.Severity.BLOCKS, "DROPPED")
 	_assert_reports(BoardLint.Severity.BLOCKS, unit.get_unit_name())
+
+
+func test_a_water_walker_on_water_is_not_reported_dropped() -> void:
+	# #1597: the lint asks the loader's terrain clause of the unit's own body, so Waterwalk stands where
+	# a plain unit beside it, on the same water, is reported.
+	var walker := _spawn(Team.Faction.PLAYER, 2)
+	_spawn(Team.Faction.PLAYER, 4)
+	var granted := AbilityData.new()
+	granted.id = Abilities.Id.WATERWALK
+	walker.unit_instance.data.innate_abilities = [granted]
+	assert_bool(walker.has_live_ability(Abilities.Id.WATERWALK)).override_failure_message(
+		"fixture: the walker has no Waterwalk").is_true()
+	game.grid.set_cell(Vector2i(2, 0), GRASS_SOURCE, BoardBuilder.WATER_ATLAS)
+	game.grid.set_cell(Vector2i(4, 0), GRASS_SOURCE, BoardBuilder.WATER_ATLAS)
+	_assert_silent(BoardLint.Severity.BLOCKS, "at (2, 0)")
+	_assert_reports(BoardLint.Severity.BLOCKS, "at (4, 0)")
 
 
 func test_a_unit_on_an_erased_cell_reads_as_off_the_map() -> void:

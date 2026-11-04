@@ -325,14 +325,16 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 	if not pick.ok:
 		return pick
 	var aiming: AttackData = pick.attack
-	# Armed for the declares below, whose stamp the whiff policy reads -- queue_attack's arming.
+	# Armed for the declares below, whose stamp the whiff policy reads -- queue_attack's arming. A query
+	# writes nothing (#1605): the pick that stood goes back, as the AI leaves its winner's for a rune's counter.
+	var standing := unit.active_attack
 	unit.active_attack = aiming
 	# Judged as queue_attack is (SquadManager.judge_candidate, #1529): an aim displaces a queued main, so
 	# it is listed on the queue without one. The probe stands for any aim this pick could make.
 	var listed: Dictionary = squad_manager.judge_candidate(unit.squad,
 			AttackAction.declare(unit, unit.movement.cell, unit.movement.cell),
 			func(plan: ResolvedPlan) -> Dictionary: return _list_aims(unit, handle, aiming, plan))
-	unit.active_attack = null
+	unit.active_attack = standing
 	return listed
 
 
@@ -997,6 +999,8 @@ func cancel(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	squad_manager.remove_actions_for_unit(unit)
 	return {"ok": true, "summary": "cancelled %s's orders" % handle}
 

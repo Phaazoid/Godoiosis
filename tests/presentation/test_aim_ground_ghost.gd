@@ -9,6 +9,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const MD := preload("res://tests/support/menu_drive.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 const PLAYER := Team.Faction.PLAYER
@@ -144,3 +145,48 @@ func test_closing_the_aim_puts_the_queued_plans_ghosts_back() -> void:
 	assert_object(_ghost_at(_fire(), LAID)).override_failure_message("the aim's ghost outlived the aim").is_null()
 	assert_object(_ghost_at(steam, STEAMED)).override_failure_message(
 			"closing the aim took the queued plan's ghost with it").is_not_null()
+
+
+# The turn's FIRST aim (#1601): nothing queued, so no active squad, and exit_current_mode's queue refresh --
+# what the cases above lean on to redraw the ground -- never runs. The squad is left as the ring leaves it,
+# never set by hand, and the aim is opened and left through the real ring and the real right-click.
+func test_closing_the_turns_first_aim_takes_its_ghosts() -> void:
+	_spawn(ENEMY, LAID)
+	var layer := _spawn(PLAYER, LAID + Vector2i.LEFT)
+	(layer.get_equipped_weapon() as WeaponInstance).template.main_attack.tile_effect = Elemental.Element.FIRE
+
+	game._on_left_click(layer.movement.cell)
+	await await_idle_frame()
+	var ring := MD.controller_of(game)
+	assert_object(ring).override_failure_message("clicking the layer opened no ring").is_not_null()
+	var kit := MD.kit_category(game, layer)
+	var path := MD.path_to(ring.level_nodes(), String(MD.first_leaf_under(ring.level_nodes(), kit).get("name", kit)))
+	assert_bool(path.is_empty()).override_failure_message("the ring offers no attack").is_false()
+	for index in path:
+		ring.aim_at(ring.point_in_slice(index))
+		ring.commit()
+	await await_idle_frame()
+	game.hover_presenter.pointer_source = func() -> Vector2i: return LAID
+	game.hover_presenter.update_hover_visuals(LAID)
+	await await_idle_frame()
+
+	assert_int(game.game_state).override_failure_message("precondition: no aim is open").is_equal(
+			game.GameState.ATTACK_TARGETING)
+	assert_object(game.squad_manager.active_squad).override_failure_message(
+			"precondition: a squad is active, so the queue refresh would redraw the ground").is_null()
+	assert_int(_queued(layer)).override_failure_message("precondition: something was queued").is_equal(0)
+	assert_object(_ghost_at(_fire(), LAID)).override_failure_message(
+			"precondition: the aim ghosts no fire").is_not_null()
+
+	game._on_right_click()
+	await await_idle_frame()
+
+	assert_int(game.game_state).override_failure_message("the right-click left the aim open").is_equal(
+			game.GameState.IDLE)
+	assert_object(_ghost_at(_fire(), LAID)).override_failure_message(
+			"the cancelled aim's fire is still ghosted, for an order that does not exist").is_null()
+	var left := 0
+	for sprite: Sprite2D in game.overlay_manager.terrain_preview_sprites:
+		if is_instance_valid(sprite):
+			left += 1
+	assert_int(left).override_failure_message("ground ghosts stand with nothing queued").is_equal(0)

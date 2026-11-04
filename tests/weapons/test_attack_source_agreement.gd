@@ -66,8 +66,8 @@ func _armed(faction: Team.Faction, cell: Vector2i, t: WeaponData) -> Unit:
 # --- counter reach is judged by what the counter FIRES ---------------------
 
 func test_a_stale_pick_does_not_grant_counter_reach() -> void:
-	# The every-turn case: AIController clears active_attack only at the start of the AI's OWN
-	# turn, so every enemy carries its last pick through the whole player turn. A melee unit whose
+	# Once the every-turn case: until #1598 the AI kept its last pick through the whole player turn,
+	# and the guard still holds for a pick left standing by any door. A melee unit whose
 	# leftover pick is a range-3 extra must NOT counter from three tiles away with a range-1 main.
 	var atk_t := _reach_template()
 	var attacker := _armed(PLAYER, Vector2i(0, 0), atk_t)

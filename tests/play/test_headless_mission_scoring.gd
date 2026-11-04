@@ -284,6 +284,42 @@ func test_a_loaded_protected_unit_dying_loses_the_mission() -> void:
 	assert_int(sess.mission.failed_by).is_equal(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
 
 
+# #1592 in this host, by its own door: everyone is in the zone but a downed VIP, whose clock runs out
+# at a hand-off. That death is what MEETS the extraction, and a VIP must hold whatever the same check
+# wins, so it is lost here exactly as the game scores it.
+func test_a_vip_whose_death_completes_the_extraction_loses() -> void:
+	var scenario := _scenario()
+	_zone(scenario, "Out", ZoneManager.Kind.EXTRACTION, Rect2i(0, 0, 2, 1))
+	var extract: Array[MissionRules.Objective] = [MissionRules.Objective.EXTRACT]
+	scenario.objectives = extract
+	var escort: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.PROTECTED_UNIT_LOST]
+	scenario.lose_conditions = escort
+	_place(scenario, "Guard", PLAYER, Vector2i(0, 0))
+	var vip_entry := _place(scenario, "Vip", PLAYER, Vector2i(5, 5))
+	vip_entry.must_survive = true
+	_place(scenario, "E1", ENEMY, Vector2i(11, 5))
+	var loaded: Array = await _load(scenario)
+	var sess = loaded[0]
+	var vip: Unit = loaded[1][1]
+	_contest(sess)
+	vip.force_down()
+	vip.downed_turns_remaining = 1
+
+	var hand_offs := 0
+	while sess.mission_tag() == "" and hand_offs < 4:
+		sess.end_turn()
+		hand_offs += 1
+
+	assert_bool(sess.mission.protected_lost).override_failure_message(
+		"precondition: the VIP's downed clock never ran out across %d hand-offs" % hand_offs).is_true()
+	assert_int(sess.mission.objective_progress(sess._board())).override_failure_message(
+		"precondition: the VIP's death did not meet the extraction, so this is not #1592's case").is_equal(
+		MissionRules.Progress.MET)
+	assert_str(sess.mission_tag()).override_failure_message(
+		"the VIP's death completed the extraction and the headless mission called it a win").is_equal("DEFEAT")
+	assert_int(sess.mission.failed_by).is_equal(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
+
+
 # ==============================================================================
 #  A loaded squad plays its own archetype
 # ==============================================================================
