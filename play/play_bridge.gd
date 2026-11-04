@@ -13,7 +13,7 @@ extends SceneTree
 #   `args` must be a JSON object, or absent. Every command with a usable id is answered: a malformed
 #   one gets ok=0, never silence (#1602). A command with no usable id is skipped, and stdout says so.
 #   new                          - build a small programmatic board
-#   load   {"path": "res://..."} - load a saved scenario
+#   load   {"path": "res://..."} - load a saved scenario; a refused one keeps the board (#1603)
 #   overview | preview           - render the board / the active plan
 #   focus  {"unit": "A"}         - render a unit's move/attack reach
 #   ranges {"unit": "a"}         - where the enemy can strike or stand next turn, and who can hit each
@@ -363,20 +363,26 @@ func _cmd_new() -> String:
 # The weather is DRAWN here too (#1509), as the game's begin_mission draws it: before the phase, and never
 # on a resume, which replays the weather it saved. `weather` is a driver's own pick of the draw, refused
 # unless the board offers it; `kept` is a restart's weather, which the draw keeps.
+#
+# READ, THEN CLEAR (#1603): everything that can refuse is judged before the board is torn down, so a
+# refused load leaves the board it was asked over standing -- the game's loader keeps the same order.
 func _cmd_load(path: String, resume := false, weather := "", kept: int = WeatherDraw.NONE) -> Dictionary:
 	if path == "":
-		return {"ok": true, "text":
+		return {"ok": false, "text":
 				"load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"}
-	# Judged BEFORE anything is torn down, so a refused pick leaves the board it was asked over standing.
+	var read := BoardBuilder.read_scenario(path)
+	if read.has("error"):
+		return {"ok": false, "text": "> ERROR: cannot load: %s -- the board you had still stands" % read.error}
+	var scenario: ScenarioData = read.scenario
 	var pick := WeatherDraw.NONE
 	if weather != "":
-		var refusal := _weather_pick_refusal(path, resume, weather)
+		var refusal := _weather_pick_refusal(scenario, resume, weather)
 		if refusal != "":
 			return {"ok": false, "text": refusal}
 		pick = Weather.Kind.keys().find(_weather_key(weather))
 	_reset_board()
 	_board = BoardBuilder.build(root, "PlayRoot_%d" % Time.get_ticks_msec())
-	var loaded: Array = await BoardBuilder.load_scenario(_board, path)
+	var loaded: Array = await BoardBuilder.apply_scenario(_board, scenario)
 	_session = PlaySession.new(_board)
 	_loaded_path = path
 	var sky: Weather.Kind = BoardBuilder.weather_of(_board) if resume \
@@ -398,17 +404,14 @@ func _cmd_load(path: String, resume := false, weather := "", kept: int = Weather
 		head += "; this mission has no pre-mission screen, so its roster's authored draw of %d stands and the battle has begun" % drawn
 	return {"ok": true, "text": "%s\n\n%s" % [head, BoardView.render_overview(_session)]}
 
-# Why a driver may not pick this weather as the draw, or "": WeatherDraw's rule, read off the file
-# before the load so a refusal changes nothing.
-func _weather_pick_refusal(path: String, resume: bool, weather: String) -> String:
+# Why a driver may not pick this weather as the draw, or "": WeatherDraw's rule, asked of the scenario
+# _cmd_load has read and not yet applied, so a refusal changes nothing.
+func _weather_pick_refusal(scenario: ScenarioData, resume: bool, weather: String) -> String:
 	if resume:
 		return "a resume replays the weather it saved -- drop the weather argument"
 	var kind := Weather.Kind.keys().find(_weather_key(weather))
 	if kind < 0:
 		return "unknown weather '%s' -- one of %s" % [weather, ", ".join(Weather.Kind.keys())]
-	var scenario: ScenarioData = ContentRepair.load_tolerant(path)
-	if scenario == null:
-		return ""   # the load itself reports a file it cannot read
 	var reason := WeatherDraw.pick_block_reason(scenario.weather_odds, scenario.weather, kind as Weather.Kind)
 	return "" if reason == "" else "cannot pick %s: %s" % [Weather.display_name(kind as Weather.Kind), reason]
 
