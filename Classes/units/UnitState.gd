@@ -162,6 +162,13 @@ func apply_stat_effect(effect: StatEffect) -> bool:
 
 # Retire by SOURCE, not by delta. False, and nothing settled, when nothing matched.
 func remove_stat_effects_from(source: String) -> bool:
+	if not _drop_effects_from(source):
+		return false
+	settle()
+	return true
+
+# The retire with no settle, for a refresh that adds the new clock before anything judges the body.
+func _drop_effects_from(source: String) -> bool:
 	var kept: Array[StatEffect] = []
 	for effect in stat_effects:
 		if effect.source_name != source:
@@ -169,7 +176,6 @@ func remove_stat_effects_from(source: String) -> bool:
 	if kept.size() == stat_effects.size():
 		return false
 	stat_effects = kept
-	settle()
 	return true
 
 func has_stat_effect_from(source: String) -> bool:
@@ -206,11 +212,13 @@ func _apply_paired_effect(element_state: Elemental.State, turns: int) -> bool:
 		return false
 	var source := Elemental.state_effect_source(element_state)
 	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(element_state, StatEffect.PERMANENT)
-	# A re-application refreshes, never stacks: one effect, whichever clock runs longer.
+	# A re-application refreshes, never stacks: one effect, whichever clock runs longer. ONE settle,
+	# after the swap (#1586): settling between the halves judged a body without the effect and
+	# stripped a ceiling piece the unit could still wear.
 	for effect in stat_effects:
 		if effect.source_name == source and effect.turns_remaining > requested:
 			requested = effect.turns_remaining
-	remove_stat_effects_from(source)
+	_drop_effects_from(source)
 	return apply_stat_effect(StatEffect.make(source, mods, requested))
 
 # Gear you no longer qualify for comes OFF (#112). It stays in inventory — you're carrying it, just

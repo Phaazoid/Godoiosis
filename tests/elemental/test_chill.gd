@@ -187,6 +187,28 @@ func test_rechilling_refreshes_and_never_stacks() -> void:
 	assert_int(count).is_equal(1)
 	assert_int(remaining).is_equal(long_clock)
 
+func test_a_refresh_keeps_a_ceiling_piece_the_unit_can_still_wear() -> void:
+	# #1586: the refresh dropped the old effect and settled before the new one landed, so the gate
+	# judged an unchilled body and took off a piece that is legal before the hit and after it.
+	var u := H.spawn_unit(self, PLAYER, Vector2i.ZERO, {}, false)
+	u.add_element_state(CHILLED)
+	var harness := ArmorData.new()
+	harness.display_name = "Test Harness"
+	harness.stat_maximums[Stats.Stat.DEX] = u.get_body_stat(Stats.Stat.DEX)   # legal only while chilled
+	u.add_item(harness)
+	assert_bool(u.wear_armor(u.inventory.find(harness))).override_failure_message(
+		"fixture: the chilled unit could not put the harness on").is_true()
+	var copy := u.state.copy()   # the pass's body, through the same door
+
+	u.add_element_state(CHILLED)
+	copy.add_element_state(CHILLED)
+
+	assert_object(u.worn_armor).override_failure_message("a re-chill stripped a piece still legal").is_same(harness)
+	assert_object(copy.worn_armor).override_failure_message("the pass's re-chill stripped it").is_same(harness)
+	u.remove_element_state(CHILLED)
+	assert_object(u.worn_armor).override_failure_message(
+		"fixture: the gate is not live, so the case proves nothing").is_null()
+
 func test_wet_carries_no_paired_effect() -> void:
 	var u := H.spawn_unit(self, PLAYER, Vector2i.ZERO, {}, false)
 	u.add_element_state(WET)

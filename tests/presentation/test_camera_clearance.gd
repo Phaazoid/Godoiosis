@@ -372,6 +372,40 @@ func test_the_release_puts_every_hidden_tower_back() -> void:
 				"tower %s did not come back to the board" % cell).is_true()
 
 
+# The close-up's subject dies into a void (#1594): TRAINED -> DEATH_SHOW is a shot edge, and the edge
+# used to renew the hides before the hold's return was reached, so the wall the tumble had cleared
+# stood in front of the show. The death is scripted on the round-8 cases' pattern: a real void death
+# frees the body and arms the flag, and a headless pass never polls the mirror at all.
+func test_the_death_show_keeps_what_the_close_up_hid() -> void:
+	var centre := _open_ground()
+	var subject := _spawn(Team.Faction.PLAYER, centre)
+	var ring := _ring(centre)
+	_raise(ring)
+	await _frame(subject, _east_west(centre))
+	var hidden: Array[Vector2i] = []
+	for cell in ring:
+		if _mirror.is_column_hidden(cell):
+			hidden.append(cell)
+	assert_int(hidden.size()).override_failure_message(
+			"precondition: the close-up hid nothing, so the show has nothing to keep").is_greater(0)
+	_units._death_show = true
+	_cam().follow_unit = null
+	_scene._mirror_camera()
+	assert_int(_scene._shots.active).override_failure_message(
+			"precondition: the death show never took the shot, so no edge into the hold ran") \
+		.is_equal(ShotDirector.Shot.DEATH_SHOW)
+	for cell in hidden:
+		assert_bool(_mirror.is_column_hidden(cell)).override_failure_message(
+				"the death show brought back tower %s the close-up had hidden" % cell).is_true()
+		assert_bool(_drawn_in(_scene.get_node("Board") as GridMap, cell)).override_failure_message(
+				"tower %s stands in front of the death show" % cell).is_false()
+	# ...and the release that follows the show still brings everything back.
+	_units._death_show = false
+	_scene._mirror_camera()
+	assert_int(_mirror.hidden_counts().x).override_failure_message(
+			"the show ended and a tower stayed hidden -- the hold never let go").is_equal(0)
+
+
 func test_a_hidden_staged_column_goes_back_to_the_stage() -> void:
 	var cell := _open_ground()
 	BoardSpace.stage([cell] as Array[Vector2i], BoardSpace.lift_offset())

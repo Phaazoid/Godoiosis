@@ -1361,8 +1361,8 @@ func set_dev_mode(active: bool):
 	dev_mode_changed.emit(active)
 
 func exit_current_mode():
-	# The PICK only while the state still says an aim is open: an exit from any other mode may hold a
-	# hotseat enemy, whose AI pick is its counter.
+	# The PICK only while the state still says an aim is open, the one time a pick exists: the AI
+	# drops its own once it has queued (#1598).
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
 	# The rest of the aim on EVERY exit (#1572): the pause rows and Return to Title move the state off
@@ -1399,6 +1399,8 @@ func exit_current_mode():
 		overlay_manager.redraw_planned_paths()
 		overlay_manager.redraw_projected_units()
 		refresh_action_queue(squad_manager.active_squad)
+	else:
+		preview_ground()   # no queue to redraw the ground, so a closed aim's ghosts go here (#1601)
 
 # Aiming is over — committed or cancelled — so the pick dies with the mode it belonged to. Since
 # #102 no queued order reads it (each carries its own stamped fired_attack). One reader outside
@@ -1918,11 +1920,10 @@ func spawn_sandbox() -> void:
 # Returns null when the cell can't take a unit. NB: UnitFactory.create_unit already instantiated
 # the node, so every refusal path has to free it — an un-parented Unit is an orphan nothing else
 # will ever collect.
-# `is_body` is the DOWNED exception (#116): is_walkable answers "may a unit STAND here", and a body
-# is not standing. Deep water is the first ground anything can legally end up on without standing on
-# it, and without this a mid-battle save taken while someone is drowning DROPS that unit on load --
-# apply_scenario only push_warnings when a spawn refuses. The loader passes the entry's own saved
-# lifecycle; every other caller places a unit on its feet and keeps the default.
+# `terrain_later` (#1597): the gate skips its terrain clause, because the caller asks that clause
+# itself, of the FINISHED body. The loader does (ScenarioUnitEntry.stand_block_reason): a saved job --
+# a Water Walker's -- lands with apply_unit_state, after this, and a body lying in deep water (#116) is
+# exempted there. Every other caller places a unit on its feet and keeps the default.
 # May a unit be PLACED here? spawn_unit's own gate, split out (#737) because the pre-mission draw
 # has to know before it has a unit to build -- and a hand-rolled copy of it there would be a second
 # answer to a question this one has already had three of (#109).
@@ -1960,10 +1961,10 @@ func _build_unit(data: UnitData, grid_layer: TileMapLayer, cell: Vector2i) -> Un
 	unit.went_downed.connect(drop_threat_field.unbind(1))
 	return unit
 
-func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
+func spawn_unit(data: UnitData, pos: Vector2i, terrain_later := false) -> Unit:
 	var unit: Unit = _build_unit(data, grid, pos)
 
-	if not can_spawn_at(pos, is_body):
+	if not can_spawn_at(pos, terrain_later):   # is_body's skip of the terrain clause: asked later
 		unit.queue_free()
 		return null
 
@@ -2025,6 +2026,9 @@ func undeploy_unit(unit: Unit) -> void:
 	if not is_deployed(unit):
 		push_error("undeploy_unit: not a deployed unit")
 		return
+	# The dock first (#1573): its squad readers assume a squad, and the next refresh would throw.
+	if unit_info_panel.is_showing_unit(unit):
+		unit_info_panel.clear()
 	squad_manager.release(unit)
 	units_root.remove_child(unit)
 	reserve_root.add_child(unit)
@@ -2047,6 +2051,10 @@ func _on_unit_died(unit: Unit):
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
 	if unit == selected_unit:
 		selected_unit = null
+	# ...and so must the dock (#1573): left on a corpse it still draws while is_showing() says no, so a
+	# right-click aimed at it falls through to the queue and pops an order. Its card closes with it.
+	if unit_info_panel.is_showing_unit(unit):
+		unit_info_panel.clear()
 	drop_threat_field()   # ahead of the pin release, so its repaint reads a field without the corpse
 	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
 	squad_manager.handle_unit_death(unit)   # its overlays go first, inside (#46)
@@ -2528,7 +2536,8 @@ func previewed_plan() -> ResolvedPlan:
 
 # The ground ghosts (#50) of the plan above (#894): an open aim's while it forecasts, the queued plan's
 # again once it does not. The aim's hover draws through here, so the ghost and the health bars read one
-# plan; leaving the aim needs no call, because exit_current_mode's refresh_action_queue redraws the queue's.
+# plan. Leaving the aim redraws the queue's through exit_current_mode's refresh_action_queue, or, with no
+# active squad to refresh, through here (#1601).
 func preview_ground() -> void:
 	var plan := previewed_plan()
 	if plan == null:

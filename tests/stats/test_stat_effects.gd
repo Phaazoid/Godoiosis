@@ -356,3 +356,108 @@ func test_wearing_and_removing_armor_fires_stats_changed() -> void:
 	unit.remove_armor()
 
 	assert_int(fired[0]).is_equal(2)
+
+
+# --- every gear door settles (#1587) ---
+# A worn slot changing moves the gear stage (the worn piece, and the mods on the weapon in hand), so
+# each door re-clamps HP and tells the readouts. Each case starts at full HP and lowers the max, by
+# taking a +CON piece away or putting a -CON one on. No shipped mod moves a stat, so they are built here.
+
+const DOOR_CON := 10
+
+
+func _con_weapon(amount: int) -> WeaponInstance:
+	var mod := WeaponModData.new()
+	mod.display_name = "Test CON Mod"
+	mod.stat_modifiers[Stats.Stat.CON] = amount
+	var weapon := H.make_weapon()
+	assert_bool(weapon.fit(0, mod)).override_failure_message("fixture: the mod did not fit").is_true()
+	return weapon
+
+
+func _unarmed() -> Unit:
+	return H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.MHP: 20}, false)
+
+
+# `door` must lower this unit's max HP: the case fails loudly when it doesn't, rather than passing
+# on a max that never moved.
+func _assert_door_settles(unit: Unit, door: Callable, what: String) -> void:
+	unit.set_current_hp(unit.get_max_hp())
+	var max_before := unit.get_max_hp()
+	var heard := [0]
+	unit.stats_changed.connect(func() -> void: heard[0] += 1)
+
+	door.call()
+
+	assert_int(unit.get_max_hp()).override_failure_message(
+		"fixture: %s did not lower max HP, so the case proves nothing" % what).is_less(max_before)
+	assert_int(unit.get_current_hp()).override_failure_message(
+		"%s left HP above the new max" % what).is_equal(unit.get_max_hp())
+	assert_int(heard[0]).override_failure_message("%s never told the readouts" % what).is_greater(0)
+
+
+func test_tossing_worn_armor_settles() -> void:
+	var unit := _unarmed()
+	var plate := _armor({Stats.Stat.CON: DOOR_CON})
+	unit.add_item(plate)
+	assert_bool(unit.wear_armor(unit.inventory.find(plate))).is_true()
+	_assert_door_settles(unit, func() -> void: unit.remove_item(unit.inventory.find(plate)), "tossing worn armour")
+
+
+func test_tossing_the_weapon_in_hand_settles() -> void:
+	var unit := _unarmed()
+	var weapon := _con_weapon(DOOR_CON)
+	unit.add_item(weapon)   # auto-equips
+	_assert_door_settles(unit, func() -> void: unit.remove_item(unit.inventory.find(weapon)), "tossing the weapon in hand")
+
+
+func test_unequipping_settles() -> void:
+	var unit := _unarmed()
+	unit.add_item(_con_weapon(DOOR_CON))
+	_assert_door_settles(unit, unit.unequip_weapon, "unequipping")
+
+
+func test_equipping_over_a_modded_weapon_settles() -> void:
+	var unit := _unarmed()
+	unit.add_item(_con_weapon(DOOR_CON))
+	var plain := H.make_weapon()
+	unit.add_item(plain)
+	_assert_door_settles(unit, func() -> void: unit.equip_weapon_from_inventory(unit.inventory.find(plain)),
+		"equipping over a modded weapon")
+
+
+func test_auto_equipping_into_an_empty_hand_settles() -> void:
+	var unit := _unarmed()
+	_assert_door_settles(unit, func() -> void: unit.add_item(_con_weapon(-DOOR_CON)), "auto-equipping a -CON weapon")
+
+
+func test_tossing_an_unworn_item_is_silent() -> void:
+	# Weight is not a stat: nothing in the chain moved, so the readouts stay quiet.
+	var unit := _unarmed()
+	unit.add_item(_armor({Stats.Stat.CON: DOOR_CON}))
+	var heard := [0]
+	unit.stats_changed.connect(func() -> void: heard[0] += 1)
+	unit.remove_item(0)
+	assert_int(heard[0]).is_equal(0)
+
+
+func test_a_weapon_previewed_in_hand_settles_nothing() -> void:
+	# The hover preview borrows the hand and puts it back by a plain write, so it must never settle:
+	# a re-clamped HP is the one thing that restore cannot return.
+	var unit := _unarmed()
+	var plain := H.make_weapon()
+	var heavy := _con_weapon(-DOOR_CON)
+	unit.add_item(plain)
+	unit.add_item(heavy)
+	unit.set_current_hp(unit.get_max_hp())
+	var full := unit.get_current_hp()
+	var heard := [0]
+	unit.stats_changed.connect(func() -> void: heard[0] += 1)
+
+	var max_in_preview: int = unit.with_weapon_in_hand(heavy, unit.get_max_hp)
+
+	assert_int(max_in_preview).override_failure_message(
+		"fixture: the previewed weapon did not lower max HP, so the case proves nothing").is_less(full)
+	assert_object(unit.get_equipped_weapon()).is_same(plain)
+	assert_int(unit.get_current_hp()).override_failure_message("the preview cost HP").is_equal(full)
+	assert_int(heard[0]).override_failure_message("the preview told the readouts").is_equal(0)
