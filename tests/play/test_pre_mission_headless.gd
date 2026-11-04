@@ -160,8 +160,9 @@ func test_a_reserve_unit_takes_no_squad_verb() -> void:
 		return
 	var r: String = _sess.handle_for(_reserve()[0])
 	var d: String = _sess.handle_for(_deployed()[0])
+	# cancel (#1604): a reserve unit has no squad, so it once reached a null queue and answered ok.
 	for answer: Dictionary in [_sess.join(r, d) as Dictionary, _sess.join(d, r) as Dictionary,
-			_sess.leave(r) as Dictionary]:
+			_sess.leave(r) as Dictionary, _sess.cancel(r) as Dictionary]:
 		assert_bool(answer.ok).is_false()
 		assert_str(str(answer.error)).contains("in reserve")
 
