@@ -9,6 +9,8 @@
 #   * a squad wiped on the round the clock expires reports SQUAD_LOST, not ROUND_LIMIT — two
 #     conditions true in one evaluate, and the banner may only name one
 #   * a met objective on the final round WINS: the clock must not steal a win that was earned
+#   * a VIP death or a breached cargo at the same check as a win LOSES (#1592): those must HOLD, and
+#     the clock is the only deadline. The extraction case shows why: the VIP's death MET the win
 #   * ROUND_LIMIT declared with no limit is a BROKEN board, said out loud rather than dropped
 #   * the round count survives a save→load round trip through the real writer
 #
@@ -21,6 +23,9 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true in the shipped tileset
 
 var _main: Node
 var game: Node2D
@@ -194,6 +199,136 @@ func test_meeting_the_objective_on_the_last_round_still_wins() -> void:
 	assert_int(mc.outcome) \
 		.override_failure_message("the clock stole a win the player earned on the last round") \
 		.is_equal(MissionRules.Outcome.VICTORY)
+
+
+# The clock is a DEADLINE. The VIP and the cargo are not: they must HOLD to the end, so losing one
+# loses the mission even at the check that met the win (#1592, dev 2026-11-03).
+
+func _grass() -> void:
+	for x in range(12):
+		for y in range(8):
+			game.grid.paint(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+
+
+# A spread that lands on every cell at once and spares nobody, the one way a player's own pass can
+# finish their own VIP. Built here, never read from content.
+func _friendly_blast() -> WeaponInstance:
+	var weapon := H.make_weapon(99)
+	var attack: AttackData = P.wide(weapon.template.main_attack, 1, 3)
+	attack.swing = false
+	attack.hits_allies = true
+	return weapon
+
+
+# Through a REAL pass: the blast fells the last foe and finishes the downed VIP beside it, and the
+# pass-end check() is the one that sees both.
+func test_the_vip_dying_in_the_pass_that_routs_the_enemy_loses() -> void:
+	_grass()
+	var hero := _spawn(Team.Faction.PLAYER, Vector2i(2, 3))
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(3, 2))
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(2, 2))
+	vip.must_survive = true
+	_protect()
+	hero.equipped_weapon = _friendly_blast()
+	vip.force_down()   # a body takes the permanent path on the next hit
+	mc.check()         # latch `contested` while both sides stand
+	var order := AttackAction.declare(hero, hero.movement.cell, foe.movement.cell)
+	assert_str(game.squad_manager.try_queue_action(hero.squad, order)) \
+		.override_failure_message("precondition: the blast was refused") \
+		.is_empty()
+
+	await game.order_executor.execute_orders(hero)
+
+	assert_bool(mc.mission.protected_lost) \
+		.override_failure_message("precondition: the blast did not kill the VIP, so nothing is being pinned") \
+		.is_true()
+	assert_bool(MissionRules.has_active_hostiles(game._board())) \
+		.override_failure_message("precondition: the blast left the foe standing, so the rout was never met") \
+		.is_false()
+	assert_int(mc.outcome) \
+		.override_failure_message("the pass that killed the VIP was scored a win because it also routed the enemy") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+	assert_int(mc.mission.failed_by).is_equal(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
+
+
+# The sharpest form, through the REAL turn boundary: everyone is in the zone but a downed VIP, whose
+# clock runs out at the player's turn start. Alive outside the zone they held the objective PENDING;
+# their death is what meets it.
+func test_a_vip_whose_death_completes_the_extraction_loses() -> void:
+	_grass()
+	_paint("Out", ZoneManager.Kind.EXTRACTION, [Vector2i(0, 0), Vector2i(1, 0)])
+	_spawn(Team.Faction.PLAYER, Vector2i(0, 0))
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(5, 5))
+	_spawn(Team.Faction.ENEMY, Vector2i(11, 7))
+	vip.must_survive = true
+	_objectives([MissionRules.Objective.EXTRACT])
+	_protect()
+	vip.force_down()
+	vip.downed_turns_remaining = 1
+	mc.check()
+	assert_bool(mc.is_over()) \
+		.override_failure_message("precondition: the mission ended before the VIP's clock ran out") \
+		.is_false()
+
+	await _play_a_round()
+
+	assert_bool(mc.mission.protected_lost) \
+		.override_failure_message("precondition: a round passed and the VIP's downed clock never ran out") \
+		.is_true()
+	assert_int(mc.objective_progress(game._board())) \
+		.override_failure_message("precondition: the VIP's death did not meet the extraction, so this is not #1592's case") \
+		.is_equal(MissionRules.Progress.MET)
+	assert_int(mc.outcome) \
+		.override_failure_message("the VIP's death completed the extraction and was scored a win") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+	assert_int(mc.mission.failed_by).is_equal(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
+
+
+# The cargo's twin: the last foe goes DOWN on the defended point (in play, knocked onto it by the hit
+# that downs it). #571's rule that a downed hostile on the cargo loses it holds for the last foe too.
+# The foe is parked first and the cargo painted under it after `contested` latches; the down is set
+# directly, one hop from the order under test.
+func test_the_last_foe_downed_on_the_cargo_loses() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(10, 10))
+	mc.check()   # latch `contested` before the cargo exists
+	_defend([Vector2i(10, 10)])
+	foe.force_down()
+
+	assert_bool(MissionRules.has_active_hostiles(game._board())) \
+		.override_failure_message("precondition: the foe is still up, so the rout was never met") \
+		.is_false()
+	assert_object(mc.breaching_unit(game._board())) \
+		.override_failure_message("precondition: nobody is on the cargo") \
+		.is_not_null()
+	mc.check()
+	assert_int(mc.outcome) \
+		.override_failure_message("the last foe went down on the cargo and the rout was scored a win") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+	assert_int(mc.mission.failed_by).is_equal(MissionRules.LoseCondition.POINT_LOST)
+
+
+# failure_for hands evaluate ONE reason, and evaluate decides from it, so the most senior must come
+# back whatever order the conditions were authored in. With the clock listed first, a first-fired
+# reading hands back the clock, and the win then beats it, hiding the VIP's death.
+func test_a_clock_listed_first_does_not_hide_a_vip_death_behind_a_win() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var foe := _spawn(Team.Faction.ENEMY, Vector2i(5, 5))
+	var vip := _spawn(Team.Faction.PLAYER, Vector2i(10, 10))
+	vip.must_survive = true
+	mc.check()
+	var typed: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.ROUND_LIMIT,
+			MissionRules.LoseCondition.PROTECTED_UNIT_LOST]   # the clock FIRST, on purpose
+	mc.set_lose_conditions(typed, 1)
+	mc.mission.rounds_elapsed = 1   # the clock has run out...
+	vip.die()                       # ...the VIP falls...
+	foe.die()                       # ...and the rout is met, all at one check
+	mc.check()
+
+	assert_int(mc.outcome) \
+		.override_failure_message("a clock authored before the VIP hid the VIP's death behind a win") \
+		.is_equal(MissionRules.Outcome.DEFEAT)
+	assert_int(mc.mission.failed_by).is_equal(MissionRules.LoseCondition.PROTECTED_UNIT_LOST)
 
 
 # ==============================================================================

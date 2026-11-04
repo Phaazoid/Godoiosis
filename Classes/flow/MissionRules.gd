@@ -46,6 +46,15 @@ enum LoseCondition {
 const AUTHORABLE: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT, LoseCondition.POINT_LOST,
 		LoseCondition.PROTECTED_UNIT_LOST]
 
+# A failure that is a DEADLINE is met by finishing in time, so a win at the same check beats it (#101).
+# Every other condition is something that must HOLD to the end (the VIP, the cargo), and losing it
+# beats a win at the same check (#1592). A newly appended condition is a must-hold unless listed here.
+const DEADLINES: Array[LoseCondition] = [LoseCondition.ROUND_LIMIT]
+
+# Does this failure beat a win met at the same check? The one answer; evaluate and failure_for ask it.
+static func outranks_a_win(condition: LoseCondition) -> bool:
+	return condition != LoseCondition.NONE and not DEADLINES.has(condition)
+
 # Which painted zone kind a briefing row is ABOUT -- the one spelling of the pairing, read by the
 # missing-geometry check and by the objectives panel that lights and visits those zones (#955 part 3).
 # NO_ZONE for a row that names no place (a rout, a clock, a protected unit).
@@ -157,16 +166,20 @@ static func is_contested(board: BoardContext) -> bool:
 # routing the enemy on a capture map does not win it. Locking yourself out is a level-design
 # problem, solved by building the map so it can't happen -- not by adding a consolation win.
 #
-# `failure` is handed in the way `progress` is: MissionState computes it, this stays pure.
-# ORDER (#101): the squad wipe is asked FIRST, so mutual destruction stays a DEFEAT and reports
-# SQUAD_LOST rather than whatever else fired that instant. Every VICTORY path is asked BEFORE an
-# authored failure -- finishing on the last allowed round is finishing in time, and a clock must
-# not steal a win the player earned.
+# `failure` is handed in the way `progress` is: MissionState computes it, this stays pure. It is the
+# most senior condition that fired (MissionState.failure_for), which is what this order decides from.
+# ORDER (#101, #1592), four steps:
+#   1. the squad wipe, so mutual destruction stays a DEFEAT and reports SQUAD_LOST;
+#   2. a must-hold failure (the VIP, the cargo): the mission is lost even if the same pass won it;
+#   3. every VICTORY path;
+#   4. a deadline (the clock): finishing on the last allowed round is finishing in time.
 static func evaluate(board: BoardContext, contested: bool, progress: Progress = Progress.NONE,
 		failure: LoseCondition = LoseCondition.NONE) -> Outcome:
 	if not contested:
 		return Outcome.ONGOING
 	if not board.faction_has_active_units(Team.Faction.PLAYER):
+		return Outcome.DEFEAT
+	if outranks_a_win(failure):
 		return Outcome.DEFEAT
 	if progress == Progress.MET:
 		return Outcome.VICTORY

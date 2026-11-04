@@ -157,6 +157,26 @@ func test_defeat_still_beats_a_completed_objective() -> void:
 
 	assert_int(MissionRules.evaluate(_board(), true, MissionRules.Progress.MET)).is_equal(MissionRules.Outcome.DEFEAT)
 
+# The two kinds of authored failure sit on opposite sides of a win (#1592, dev 2026-11-03). A
+# must-hold one (the VIP, the cargo) loses a mission the same check won; a deadline (the clock) does
+# not, since finishing on the last round is finishing in time. Both win paths are asked: the met
+# objective and the rout fallback.
+func test_a_must_hold_failure_beats_a_same_check_win_and_a_deadline_does_not() -> void:
+	H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var enemy := H.spawn_solo(self, _sm, ENEMY, Vector2i(4, 0))
+	enemy.lifecycle_state = Unit.LifecycleState.DEAD
+
+	for progress: MissionRules.Progress in [MissionRules.Progress.MET, MissionRules.Progress.NONE]:
+		var label: String = MissionRules.Progress.keys()[progress]
+		for held: MissionRules.LoseCondition in [MissionRules.LoseCondition.PROTECTED_UNIT_LOST,
+				MissionRules.LoseCondition.POINT_LOST]:
+			assert_int(MissionRules.evaluate(_board(), true, progress, held)) \
+				.override_failure_message("%s did not outrank a %s win" % [MissionRules.LoseCondition.keys()[held], label]) \
+				.is_equal(MissionRules.Outcome.DEFEAT)
+		assert_int(MissionRules.evaluate(_board(), true, progress, MissionRules.LoseCondition.ROUND_LIMIT)) \
+			.override_failure_message("the clock stole a %s win" % label) \
+			.is_equal(MissionRules.Outcome.VICTORY)
+
 # ---- the `contested` latch: a dev scratch board is not a mission ----
 #
 # Without it, a board holding only enemies reads "the player has no active units" — which is
