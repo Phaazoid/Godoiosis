@@ -1997,7 +1997,12 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		# reads the same published shove. Restoring here fixed the gate and left the builder, which
 		# is why the lists are hoisted above -- see _candidates_by_member.
 		squad_manager.resolve_plan(squad, board, reactions, terrain)
-		if not squad_manager.queue_action(squad, best.action):
+		var queued := squad_manager.queue_action(squad, best.action)
+		# The aim is over, queued or refused, as a player's ends at exit_current_mode (#1598). The order
+		# carries its own stamp; a pick left standing would be this rune's COUNTER until next turn, a
+		# state no save carries.
+		best.action.actor.active_attack = null
+		if not queued:
 			refused[_candidate_key(best.action)] = true   # bounded: candidates are finite and keys are stable across rounds
 
 	# ...and once more on the way out: the loop breaks with a hypothetical as its last resolve.

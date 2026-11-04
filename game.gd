@@ -1361,8 +1361,8 @@ func set_dev_mode(active: bool):
 	dev_mode_changed.emit(active)
 
 func exit_current_mode():
-	# The PICK only while the state still says an aim is open: an exit from any other mode may hold a
-	# hotseat enemy, whose AI pick is its counter.
+	# The PICK only while the state still says an aim is open, the one time a pick exists: the AI
+	# drops its own once it has queued (#1598).
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
 	# The rest of the aim on EVERY exit (#1572): the pause rows and Return to Title move the state off

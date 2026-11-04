@@ -115,7 +115,7 @@ static func is_squad_previewable(squad: Variant, faction: Team.Faction) -> bool:
 # through SquadManager.queue_action inside the archetype, so Law #3 is unaffected by the split.
 static func plan_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	for member in squad.get_members():
-		member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
+		member.active_attack = null   # fresh pick each turn -- hygiene: the joint pass already drops its winner's (#1598)
 	AIArchetype.resolve(squad.archetype).call(squad, board, squad_manager)
 
 
