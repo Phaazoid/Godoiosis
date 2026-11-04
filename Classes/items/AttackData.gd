@@ -66,9 +66,9 @@ extends Resource
 # so these three fields describe a blast's own reach as readily as a shot's):
 #   RANGED — the target may sit up to up_tolerance above / down_tolerance below the attacker
 #            (-1 = unlimited). A lob's climb ceiling is its up_tolerance; a gun stays -1.
-#   MELEE  — dev ruling 2026-08-20: same step, or a facing half step — same elevation, or adjacent
-#            across a ramp-legal edge (RulesService.height_step_ok). A sheer 1-level edge is
-#            melee-illegal in BOTH directions; the tolerances are ignored.
+#   MELEE  — dev ruling 2026-08-20: same step, or a facing half step. Adjacent, only across an
+#            edge a unit could step (RulesService.height_step_ok, #1585); further out, the same
+#            elevation. A sheer edge is melee-illegal in BOTH directions; the tolerances are ignored.
 # A null attack (bare fists) reads as MELEE — punching is melee.
 # Named for what they MEAN, not the mechanism each uses (#473, was TOLERANCE/STEP): the dev read
 # "tolerance" as the lob setting, which is arc_clearance below. Members keep their order, so every
@@ -499,7 +499,7 @@ static func property_tips() -> Dictionary:
 		"hits_self": "The attacker is a legal victim of its own attack.",
 		"targets": "What an aim may land on -- a unit, a tile, or either.",
 		"knockback": "Tiles the target is shoved directly away from the attacker, stopping at the first wall, unit or board edge. 0 = no shove.",
-		"vertical_rule": "MELEE: same elevation at any range, or ONE adjacent ramp-connected half step. A sheer edge refuses in both directions and the two tolerances below are ignored entirely.\nRANGED: the tolerances below decide.\nThis also decides whether the in-game sight-line beads are DRAWN -- only a RANGED attack with a point (non-directional) pattern draws them.",
+		"vertical_rule": "MELEE: an adjacent target only across an edge a unit could step (flat ground beside a ramp's side does not reach it); further out, the same elevation. A sheer edge refuses in both directions and the two tolerances below are ignored entirely.\nRANGED: the tolerances below decide.\nThis also decides whether the in-game sight-line beads are DRAWN -- only a RANGED attack with a point (non-directional) pattern draws them.",
 		"up_tolerance": "RANGED only: how many levels ABOVE the attacker a target may stand. -1 = unlimited, which is what a gun wants. A lob's climb ceiling.",
 		"down_tolerance": "RANGED only: how many levels BELOW the attacker a target may stand. -1 = unlimited.",
 		"arc_clearance": "How high the shot arcs above its own sight line mid-flight -- this is the LOB setting, not the tolerances above. 0 = a flat, straight shot. Higher clears taller walls to the far side. There is deliberately no unlimited value.",
