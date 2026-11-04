@@ -1659,7 +1659,8 @@ func show_knockback_preview(shoves: Array, holds: Array[Vector2i] = []) -> void:
 func clear_knockback_preview() -> void:
 	for unit in knockback_hidden_units:
 		if is_instance_valid(unit):
-			unit.visuals.set_projected(false)   # restore the real sprite
+			# Hand back what the move ghost owes, not "shown": one flag hides for both ghosts (#1574).
+			unit.visuals.set_projected(_move_ghost_hides(unit))
 	knockback_hidden_units.clear()
 	for sprite in knockback_preview_sprites:
 		if is_instance_valid(sprite):
@@ -2427,10 +2428,17 @@ func redraw_projected_units():
 			planned_move_by_unit.erase(unit)
 			continue
 
-		unit.visuals.set_projected(move.is_valid)
-		if move.is_valid:
+		var hides := _move_ghost_hides(unit)
+		unit.visuals.set_projected(hides)
+		if hides:
 			show_projected_unit(unit, move.destination)
-			
+
+# Does a queued move's ghost stand in for this unit? The one spelling, which the shove preview asks too
+# when it lets go (#1574).
+func _move_ghost_hides(unit: Unit) -> bool:
+	var move: MoveAction = planned_move_by_unit.get(unit)
+	return move != null and move.is_valid
+
 func handle_unit_death(unit: Unit):
 	clear_unit_icons(unit)
 	clear_planned_path(unit)
