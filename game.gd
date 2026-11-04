@@ -1399,6 +1399,8 @@ func exit_current_mode():
 		overlay_manager.redraw_planned_paths()
 		overlay_manager.redraw_projected_units()
 		refresh_action_queue(squad_manager.active_squad)
+	else:
+		preview_ground()   # no queue to redraw the ground, so a closed aim's ghosts go here (#1601)
 
 # Aiming is over — committed or cancelled — so the pick dies with the mode it belonged to. Since
 # #102 no queued order reads it (each carries its own stamped fired_attack). One reader outside
@@ -2528,7 +2530,8 @@ func previewed_plan() -> ResolvedPlan:
 
 # The ground ghosts (#50) of the plan above (#894): an open aim's while it forecasts, the queued plan's
 # again once it does not. The aim's hover draws through here, so the ghost and the health bars read one
-# plan; leaving the aim needs no call, because exit_current_mode's refresh_action_queue redraws the queue's.
+# plan. Leaving the aim redraws the queue's through exit_current_mode's refresh_action_queue, or, with no
+# active squad to refresh, through here (#1601).
 func preview_ground() -> void:
 	var plan := previewed_plan()
 	if plan == null:
