@@ -20,7 +20,9 @@ class_name ContentRepair
 
 const REPAIR_DIR := "user://__repaired/"
 
-# resource_path -> {"missing": Array[String], "properties": Array[String]}
+# resource_path -> {"missing": Array[String], "properties": Array[String], "copy": WeakRef}
+# "copy" is the repaired object itself, weakly held: what tells a later load that came back from the
+# CACHE (the same degraded object) from one that parsed the file clean (#1589).
 static var _repairs: Dictionary = {}
 
 
@@ -46,7 +48,11 @@ static func load_tolerant(path: String) -> Resource:
 		return null
 	var res: Resource = ResourceLoader.load(path)
 	if res != null:
-		_repairs.erase(path)   # a clean load supersedes any earlier repair of the same path
+		# A clean parse supersedes an earlier repair of the same path. The repaired copy coming back
+		# out of the cache is NOT one -- the repair put it there under the real path -- and erasing on
+		# it lifted save_over's refusal at the first catalog listing (#1589).
+		if not _is_repaired_copy(path, res):
+			_repairs.erase(path)
 		return res
 
 	# EVERYTHING BELOW REPAIRS BY READING THE FILE AS TEXT, which only a source tree can do: a pack
@@ -151,6 +157,15 @@ static func forget(path: String) -> void:
 	_repairs.erase(path)
 
 
+# Is `res` the object the repair of `path` produced? A freed copy's weakref is dead, so once nothing
+# holds it, the next load is a fresh parse and answers for itself.
+static func _is_repaired_copy(path: String, res: Resource) -> bool:
+	if not _repairs.has(path):
+		return false
+	var held: WeakRef = (_repairs[path] as Dictionary).get("copy")
+	return held != null and held.get_ref() == res
+
+
 # ==============================================================================
 #  The repair
 # ==============================================================================
@@ -196,7 +211,7 @@ static func _repair(path: String) -> Resource:
 	var missing: Array[String] = []
 	for id in dangling:
 		missing.append(dangling[id])
-	_repairs[path] = {"missing": missing, "properties": properties}
+	_repairs[path] = {"missing": missing, "properties": properties, "copy": weakref(res)}
 	push_warning("%s loaded degraded -- lost %s (missing: %s)"
 		% [path, ", ".join(properties), ", ".join(missing)])
 	return res

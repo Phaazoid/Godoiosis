@@ -94,10 +94,8 @@ static func load_run(run_id: String) -> ReplayRun:
 		run.problems.append("no %s -- nothing to seed the board from" % BOARD_FILE)
 		return run
 
-	# ASKED OF THE FILE'S TEXT, NEVER OF ContentRepair'S REGISTRY. load_tolerant erases its own repair
-	# record the moment a later load comes back clean -- and the SECOND look at one run is a clean
-	# load, because the repaired board took over that path in the resource cache. Reading the text
-	# answers the same both times, and answers for a REFUSED load too, which the registry never holds.
+	# ASKED OF THE FILE'S TEXT, NEVER OF ContentRepair'S REGISTRY. The registry is forgotten just below,
+	# and it never holds a REFUSED load at all; the text answers the same on every look, refused or not.
 	var cannot_load := ContentRepair.missing_references(board_path)
 	run.board = ContentRepair.load_tolerant(board_path) as ScenarioData
 	# A run's board is a frozen snapshot of a mission somebody else played, so it is not content
