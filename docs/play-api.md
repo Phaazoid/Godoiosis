@@ -210,6 +210,19 @@ A persistent headless process can't be fed stdin across separate tool calls, so 
 - Claude polls the output until `last_id == N`. The monotonic `id` is the handshake — no half-reads,
   no missed responses.
 
+**Every command with a usable id is answered, malformed ones included (#1602).** One bad command used
+to stop the bridge for good: `"args": null` ended its poll loop, so did a null `id`, and a null `slot`
+made it re-run the command every frame without answering. Now:
+
+- An `args` that is not a JSON object gets `ok=0`, and so does a wrong kind where the bridge reads a
+  number (`x`, `y`, `slot`, `space`) or a flag (`resume`). The error names the key. A null coordinate
+  used to be read as the cell (0, 0), a real order on the wrong cell.
+- A command that still dies inside the bridge is answered `ok=0`, never left silent. Its id is
+  recorded before it runs, so it cannot replay.
+- A command with no usable id has no id to answer to. It is skipped, and the bridge's stdout names it.
+- `-- --run-dir=<dir>` moves `playrun/`, so a suite can run its own bridge beside a playtest's
+  (`tests/support/bridge_process.gd`).
+
 **Batch mode** is the same core fed a *list* of commands at once, dumping one final trace — used
 **first** to validate `PlaySession` cheaply before the interactive loop is wired.
 
@@ -448,9 +461,11 @@ action type must land on a covered row for that type, and every lose condition m
 
 ## Open questions
 
-- Run-dir location: `user://playruns/<id>/` vs. a `res://` path under the repo (gitignored).
+- Run-dir location: `user://playruns/<id>/` vs. a `res://` path under the repo (gitignored). *Settled
+  in practice:* `res://playrun/` (gitignored) by default, and `--run-dir` moves it (#1602).
 - Does `PlaySession` live in `Classes/` (gameplay-adjacent) or a new `tools/`/`play/` dir?
-- Per-command id transport details / timeout + error envelope.
+- Per-command id transport details / timeout + error envelope. *The error half is answered:* see
+  *File bridge* (#1602). The timeout stays the driver's (`send.sh`'s `SEND_TIMEOUT`).
 
 ## ~~BREAK doctrine hooks~~ — REPEALED 2026-08-09 (was: R9, 2026-07-05 — see [resolution-pipeline.md](design/resolution-pipeline.md))
 

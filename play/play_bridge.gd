@@ -6,9 +6,12 @@ extends SceneTree
 # its `id` comes back. The SAME bridge can later be hosted by the live game (M4) so a human
 # can watch. Every state write is also persisted to playrun/frames/run-<stamp>/ (numbered,
 # one file per frame) so a playtest is auditable after the fact.
-# Run:  <godot console exe> --headless --path . -s res://play/play_bridge.gd
+# Run:  <godot console exe> --headless --path . -s res://play/play_bridge.gd [-- --run-dir=<dir>]
+#       --run-dir moves playrun/ (a suite runs its own bridge beside a playtest's)
 #
 # Protocol (command.json):  {"id": <int>, "cmd": "<name>", "args": { ... }}
+#   `args` must be a JSON object, or absent. Every command with a usable id is answered: a malformed
+#   one gets ok=0, never silence (#1602). A command with no usable id is skipped, and stdout says so.
 #   new                          - build a small programmatic board
 #   load   {"path": "res://..."} - load a saved scenario
 #   overview | preview           - render the board / the active plan
@@ -48,11 +51,12 @@ const PlaySession := preload("res://play/play_session.gd")
 const BoardView := preload("res://play/board_view.gd")
 const FrameLog := preload("res://play/frame_log.gd")
 
-const RUN_DIR := "res://playrun"
-const CMD := "res://playrun/command.json"
-const STATE := "res://playrun/state.txt"
-const FRAMES_DIR := "res://playrun/frames"
+const RUN_DIR := "res://playrun"   # the default; `-- --run-dir=<dir>` moves it
+const RUN_DIR_ARG := "--run-dir="
 
+var _cmd_file := ""     # <run dir>/command.json, the driver writes it
+var _state_file := ""   # <run dir>/state.txt, this writes it
+var _unusable := ""     # the last command skipped for want of an id, so stdout names it once
 var _session
 var _board: Dictionary = {}
 # The restart buffer (#46, #763): what the last Begin captured, kept across boards the way
@@ -68,33 +72,71 @@ var _frames   # FrameLog; every state write also lands as a numbered frame
 func _initialize() -> void:
 	Engine.max_fps = 30   # poll ~30x/s without pegging a core
 	_weather_rng.randomize()
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(RUN_DIR))
-	if FileAccess.file_exists(CMD):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(CMD))   # don't replay a stale command
-	_frames = FrameLog.new(FRAMES_DIR)
+	var run_dir := _run_dir()
+	_cmd_file = run_dir.path_join("command.json")
+	_state_file = run_dir.path_join("state.txt")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(run_dir))
+	if FileAccess.file_exists(_cmd_file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_cmd_file))   # don't replay a stale command
+	_frames = FrameLog.new(run_dir.path_join("frames"))
 	_write_state(0, true, "ready", "bridge ready - send {\"id\":1,\"cmd\":\"new\"} or {\"id\":1,\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/<name>.tres\"}}")
-	print("[bridge] ready; polling ", CMD, "; frames -> ", _frames.run_dir)
+	print("[bridge] ready; polling ", _cmd_file, "; frames -> ", _frames.run_dir)
 	_poll_loop()
 
+# res://playrun, or the `--run-dir=<dir>` after `--`.
+static func _run_dir() -> String:
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with(RUN_DIR_ARG):
+			return arg.trim_prefix(RUN_DIR_ARG)
+	return RUN_DIR
+
+# NOTHING IN THIS LOOP MAY ERROR: one error here ends the loop, and the bridge with it (#1602).
 func _poll_loop() -> void:
 	while not _quitting:
 		await process_frame
 		var c := _read_command()
-		if not (c.has("id") and int(c.id) > _last_id):
+		var id := _command_id(c)
+		if id < 0 and not c.is_empty():
+			_note_unusable(c)
+		if id <= _last_id:
 			continue
 		# BATCH: {"id": N, "cmds": [{"cmd": ..., "args": ...}, ...]} beside the single form.
 		# One round trip instead of one per command, which for an agent driver costs more than the
 		# bytes do -- each is a separate tool call (#613).
 		if c.has("cmds") and c.cmds is Array:
-			await _handle_batch(int(c.id), c.cmds as Array)
+			await _handle_batch(id, c.cmds as Array)
 		else:
-			await _handle(int(c.id), str(c.get("cmd", "")), c.get("args", {}))
+			await _handle(id, str(c.get("cmd", "")), c.get("args", {}))
+
+# The id a reply would carry, or -1 for none.
+static func _command_id(c: Dictionary) -> int:
+	var raw: Variant = c.get("id")
+	return int(raw) if _is_number(raw) else -1
+
+# May this value be read with int()? JSON numbers arrive as floats, and a numeric string has always
+# been read. int() of anything else (null, an array) is an engine error, never a refusal.
+static func _is_number(value: Variant) -> bool:
+	match typeof(value):
+		TYPE_INT, TYPE_FLOAT:
+			return true
+		TYPE_STRING:
+			return (value as String).is_valid_int()
+	return false
+
+# There is no id to answer, so the driver's poll times out and its message sends it to stdout.
+func _note_unusable(c: Dictionary) -> void:
+	var text := JSON.stringify(c)
+	if text == _unusable:
+		return
+	_unusable = text
+	print("[bridge] skipped a command with no usable id (it needs a number above %d): %s" % [_last_id, text.left(200)])
 
 # STOPS AT THE FIRST FAILURE, and that is the point rather than laziness: the logged runs show a
 # refusal is almost always a wrong belief about the turn's state, so every command after it is
 # built on the same wrong belief. Running them anyway turns one mistake into a compounding mess --
 # which is exactly the pattern behind the 34 "no squad has queued orders" refusals.
 func _handle_batch(id: int, cmds: Array) -> void:
+	_last_id = id   # before anything runs: see _handle
 	var parts: Array[String] = []
 	var ok := true
 	var last := "batch"
@@ -115,42 +157,50 @@ func _handle_batch(id: int, cmds: Array) -> void:
 				parts.append("> batch stopped at [%d]; %d command(s) not run" % [i, cmds.size() - 1 - i])
 			break
 	_write_state(id, ok, "batch:" + last, "\n\n".join(parts))
-	_last_id = id
 
 
-# The one place a command runs, so the single and batched forms cannot drift.
-func _run_one(cmd: String, args) -> Dictionary:
+# The one place a command runs, so the single and batched forms cannot drift -- and the place every
+# command gets an ANSWER (#1602). A non-object `args`, or a wrong kind where a number or flag is read,
+# is refused before anything reads it. A command that still hits an engine error comes back as its
+# return type's default, {}, so a result with no `ok` is a command that died, answered not dropped.
+func _run_one(cmd: String, args: Variant) -> Dictionary:
+	if not (args is Dictionary):
+		return {"ok": false, "text": "> ERROR: \"args\" must be a JSON object, not %s" % JSON.stringify(args).left(80)}
+	var refusal := _arg_refusal(args)
+	if refusal != "":
+		return {"ok": false, "text": "> ERROR: " + refusal}
+	var res: Dictionary = await _run_command(cmd, args)
+	if not res.has("ok"):
+		return {"ok": false, "text": "> ERROR: %s failed inside the bridge (a malformed argument?) -- the bridge's stdout has the engine error" % cmd}
+	return res
+
+
+func _run_command(cmd: String, args: Dictionary) -> Dictionary:
 	match cmd:
 		"new":
 			return {"ok": true, "text": await _cmd_new()}
 		"load":
-			var load_args := args as Dictionary
-			return await _cmd_load(str(load_args.get("path", "")), bool(load_args.get("resume", false)),
-					str(load_args.get("weather", "")))
+			return await _cmd_load(str(args.get("path", "")), bool(args.get("resume", false)),
+					str(args.get("weather", "")))
 		"restart":
 			return await _cmd_restart()
 	if _session == null:
 		return {"ok": false, "text": "no board - send {\"cmd\":\"new\"} or a load command first"}
-	return _dispatch(cmd, args as Dictionary)
+	return _dispatch(cmd, args)
 
 
-func _handle(id: int, cmd: String, args: Dictionary) -> void:
+func _handle(id: int, cmd: String, args: Variant) -> void:
 	print("[bridge] id=%d cmd=%s" % [id, cmd])
-	var ok := true
-	var text := ""
-	match cmd:
-		"quit":
-			_write_state(id, true, cmd, "bridge shutting down")
-			_last_id = id
-			_quitting = true
-			quit()
-			return
-		_:
-			var res := await _run_one(cmd, args)
-			ok = res.ok
-			text = res.text
-	_write_state(id, ok, cmd, text)
+	# Recorded BEFORE the command runs: one that dies part-way is never read again, so it cannot
+	# re-run every frame (#1602).
 	_last_id = id
+	if cmd == "quit":
+		_write_state(id, true, cmd, "bridge shutting down")
+		_quitting = true
+		quit()
+		return
+	var res := await _run_one(cmd, args)
+	_write_state(id, res.ok, cmd, res.text)
 
 func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 	match cmd:
@@ -404,9 +454,9 @@ func _reset_board() -> void:
 # ---- io ----
 
 func _read_command() -> Dictionary:
-	if not FileAccess.file_exists(CMD):
+	if not FileAccess.file_exists(_cmd_file):
 		return {}
-	var f := FileAccess.open(CMD, FileAccess.READ)
+	var f := FileAccess.open(_cmd_file, FileAccess.READ)
 	if f == null:
 		return {}
 	var txt := f.get_as_text()
@@ -415,7 +465,7 @@ func _read_command() -> Dictionary:
 	return parsed if parsed is Dictionary else {}
 
 func _write_state(id: int, ok: bool, cmd: String, text: String) -> void:
-	var f := FileAccess.open(STATE, FileAccess.WRITE)
+	var f := FileAccess.open(_state_file, FileAccess.WRITE)
 	if f == null:
 		push_error("[bridge] cannot open state file")
 		return
@@ -432,6 +482,21 @@ func _write_state(id: int, ok: bool, cmd: String, text: String) -> void:
 		_frames.record(id, ok, cmd, body)
 
 # ---- helpers ----
+
+# Every argument read with int() or bool() (#1602). A wrong kind there is an engine error, and in _xy
+# that error came back as the cell (0, 0): a real order on the wrong cell. The bridge suite holds this
+# list to the reads in this file.
+const NUMBER_ARGS: Array[String] = ["x", "y", "slot", "space"]
+const FLAG_ARGS: Array[String] = ["resume"]
+
+static func _arg_refusal(args: Dictionary) -> String:
+	for key: String in NUMBER_ARGS:
+		if args.has(key) and not _is_number(args[key]):
+			return "\"%s\" must be a number, not %s" % [key, JSON.stringify(args[key]).left(40)]
+	for key: String in FLAG_ARGS:
+		if args.has(key) and typeof(args[key]) != TYPE_BOOL:
+			return "\"%s\" must be true or false, not %s" % [key, JSON.stringify(args[key]).left(40)]
+	return ""
 
 func _xy(args: Dictionary) -> Vector2i:
 	return Vector2i(int(args.get("x", 0)), int(args.get("y", 0)))
