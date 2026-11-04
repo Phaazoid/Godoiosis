@@ -220,6 +220,9 @@ made it re-run the command every frame without answering. Now:
 - A command that still dies inside the bridge is answered `ok=0`, never left silent. Its id is
   recorded before it runs, so it cannot replay.
 - A command with no usable id has no id to answer to. It is skipped, and the bridge's stdout names it.
+- A `load` it refuses gets `ok=0` with the reason, and **the board you had still stands** (#1603). The
+  reasons are: no file, not a scenario, refused as foreign (`ForeignResource`), or unreadable. The file
+  is read before anything is torn down, which is the order the game's loader keeps.
 - `-- --run-dir=<dir>` moves `playrun/`, so a suite can run its own bridge beside a playtest's
   (`tests/support/bridge_process.gd`).
 

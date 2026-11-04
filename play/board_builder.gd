@@ -167,11 +167,30 @@ static func arm(unit: Unit, power: int) -> void:
 
 # Load a saved scenario (.tres) onto an already-built board. COROUTINE — await it.
 static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
-	var scenario: ScenarioData = ContentRepair.load_tolerant(path)   # the game's loader's door (#608, #1365)
-	if scenario == null:
-		push_error("Play: could not load scenario at %s" % path)
+	var read := read_scenario(path)
+	if read.has("error"):
+		push_error("Play: %s" % read.error)
 		return []
-	return await apply_scenario(board, scenario)
+	return await apply_scenario(board, read.scenario)
+
+# The scenario at `path` as {"scenario": ScenarioData}, or {"error": why not} -- read BEFORE any board
+# is torn down, which is the order the game's loader keeps (#1603). The diagnosis runs on a miss only.
+static func read_scenario(path: String) -> Dictionary:
+	var res := ContentRepair.load_tolerant(path)   # the game's loader's door (#608, #1365)
+	if res is ScenarioData:
+		return {"scenario": res}
+	if res != null:
+		var script := res.get_script() as Script
+		var kind := script.get_global_name() if script != null and script.get_global_name() != &"" else StringName(res.get_class())
+		return {"error": "%s is a %s, not a scenario" % [path, kind]}
+	if not ResourceLoader.exists(path):
+		return {"error": "no file at %s" % path}
+	var refused := ForeignResource.refusal(path)
+	if refused != "":
+		return {"error": "%s was not loaded -- %s" % [path, refused]}
+	var missing := ContentRepair.missing_references(path)
+	var gone := " (it references what is gone: %s)" % ", ".join(missing) if not missing.is_empty() else ""
+	return {"error": "%s could not be read%s" % [path, gone]}
 
 # Apply a ScenarioData (terrain + units + squads + turn) to a built board. Mirrors
 # ScenarioManager.load_scenario minus the game/visual wiring. Awaits one frame after
