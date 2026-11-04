@@ -162,6 +162,14 @@ func test_the_pick_never_outlives_the_command() -> void:
 	assert_object(_hero.active_attack).is_null()
 
 
+# BUT A QUERY WRITES NOTHING (#1605): a pick that stood before legal_targets -- the AI leaves its
+# winner's, and a rune counters with it -- stands after, even when another attack is asked about.
+func test_legal_targets_leaves_a_standing_pick_standing() -> void:
+	_hero.active_attack = _lob
+	assert_bool((_sess.legal_targets("A", "Jab") as Dictionary).ok).is_true()
+	assert_object(_hero.active_attack).is_same(_lob)
+
+
 # ==============================================================================
 #  legal_targets answers for the attack it is asked about (test_affordances' law, named)
 # ==============================================================================
