@@ -462,18 +462,18 @@ func _add_kit_section() -> void:
 			held_label.text = "inline: %s" % slot_item.shown_name()
 			row.add_child(held_label)
 
-		var is_armor := slot_item != null and slot_item.equip_slot() == Item.EquipSlot.ARMOR
+		var fills := _granted_slot(slot_item)
 		var equip_btn := CheckBox.new()
-		if is_armor:
+		if fills == Item.EquipSlot.ARMOR:
 			equip_btn.text = "Wear"
 			equip_btn.button_pressed = slot_index == current.starting_worn_index
 			equip_btn.toggled.connect(func(pressed: bool): _on_worn_toggled(slot_index, pressed))
 		else:
 			equip_btn.text = "Equip"
 			equip_btn.button_group = equip_group
-			equip_btn.button_pressed = slot_item != null and slot_index == current.starting_equipped_index
+			equip_btn.button_pressed = fills == Item.EquipSlot.WEAPON and slot_index == current.starting_equipped_index
 			equip_btn.toggled.connect(func(pressed: bool): _on_equip_toggled(slot_index, pressed))
-		equip_btn.disabled = slot_item == null
+		equip_btn.disabled = fills == Item.EquipSlot.NONE   # empty, or carried and never slotted (#1591)
 		row.add_child(equip_btn)
 
 		editor_container.add_child(row)
@@ -494,6 +494,18 @@ static func _staged_form(entry: Item) -> Item:
 	if entry is WeaponInstance and entry.resource_path == "":
 		return entry.template
 	return entry
+
+# What the SPAWN grants for a kit entry. A slot may hold a bare TEMPLATE since #975, which becomes an
+# instance through the grant door; anything else is already what it grants. Every question about
+# what an entry does at spawn asks this form: a template answers equip_slot() NONE itself (#1591).
+static func _granted_form(authored: Item) -> Item:
+	if authored is WeaponData:
+		return authored.copy_for_grant()
+	return authored
+
+static func _granted_slot(authored: Item) -> Item.EquipSlot:
+	var granted := _granted_form(authored)
+	return granted.equip_slot() if granted != null else Item.EquipSlot.NONE
 
 # Item, not EquippableData: the catalog has carried VIALS since #697 and a vial is CARRIED, never
 # slotted, so the narrower type refused the very kind that widening was for -- and a template is
@@ -517,6 +529,10 @@ func _on_slot_picked(index: int, opt_index: int) -> void:
 
 func _on_equip_toggled(index: int, pressed: bool) -> void:
 	if pressed:
+		# The handler is the real gate (#166): the spawn hands this index straight to the hand.
+		if index >= current.starting_inventory.size() \
+				or _granted_slot(current.starting_inventory[index]) != Item.EquipSlot.WEAPON:
+			return
 		current.starting_equipped_index = index
 	elif current.starting_equipped_index == index:
 		current.starting_equipped_index = -1   # unpressed: back to "auto-equip decides"
@@ -533,16 +549,11 @@ func _on_worn_toggled(index: int, pressed: bool) -> void:
 func _add_prosthetics_section() -> void:
 	DevWidgets.add_label(editor_container, "Starting prosthetics")
 	var slot_names := UnitInstance.LimbSlot.keys()
-	# The form the SPAWN will grant, resolved once rather than per limb: a kit slot may hold a bare
-	# TEMPLATE since #975, and this gate asks about the INSTANCE that template becomes. Anything
-	# already an instance answers the class and limb_kind questions itself, so only a template needs
-	# the grant door.
+	# The form the SPAWN will grant, resolved once rather than per limb: this gate asks about the
+	# INSTANCE a staged template becomes.
 	var granted: Array[WeaponInstance] = []
 	for authored: Item in current.starting_inventory:
-		if authored is WeaponData:
-			granted.append(authored.copy_for_grant() as WeaponInstance)
-		else:
-			granted.append(authored as WeaponInstance)
+		granted.append(_granted_form(authored) as WeaponInstance)
 	for limb_slot in UnitInstance.LimbSlot.values():
 		var slot: UnitInstance.LimbSlot = limb_slot
 		var candidates: Array[int] = []

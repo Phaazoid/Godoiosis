@@ -2,7 +2,8 @@
 # Pins the pool chrome's guards (the Update load-gate, Save As refusals, New clearing the loaded
 # identity), the by-construction kit rule (a slot pick stages the catalog FILE, so saves write
 # ExtResource references), the Rebecca-rule aura guard, the capture projection off
-# ScenarioUnitEntry.capture_unit_state, and the Spawn-tab dropdown refresh wire.
+# ScenarioUnitEntry.capture_unit_state, the Spawn-tab dropdown refresh wire, and the Equip box's
+# slot gate (#1591).
 #
 # A KIT CASE HAS TO NAME WHICH ROW IT PICKS. get_editable() lists the authored variants before the
 # derived generics, so anything reaching for option 1 only ever touches a path'd file -- which is
@@ -291,6 +292,59 @@ func test_picking_a_vial_stages_it() -> void:
 	tool._on_slot_picked(0, option)
 
 	assert_object(tool.current.starting_inventory[0]).is_same(catalog[catalog.keys()[option - 1]])
+
+# A kit row's Equip (or Wear) box, found the way the panel presents it: the row's one CheckBox.
+func _kit_equip_box(slot_index: int) -> CheckBox:
+	for row in _tool().editor_container.get_children():
+		if not (row is HBoxContainer) or row.get_child_count() < 2:
+			continue
+		var label := row.get_child(0) as Label
+		if label == null or label.text != "Slot %d" % (slot_index + 1):
+			continue
+		for child in row.get_children():
+			if child is CheckBox:
+				return child
+	return null
+
+func test_a_carried_kind_cannot_be_ticked_equip() -> void:
+	# #1591. A vial or conduit fills no hand, but its row's Equip box stayed live, and the spawn hands
+	# the equipped index straight to set_equipped_weapon, which threw on the vial. Both halves: the box
+	# the dev sees, and the handler that is the real gate (#166).
+	var tool := _tool()
+	var catalog := tool._item_catalog()
+	var picked := 0
+	for kind in [VialData, ConduitData]:
+		var option := _first_option_of_kind(catalog, kind)
+		if option < 0:
+			continue
+		picked += 1
+		tool._on_new_pressed()
+		tool._on_slot_picked(0, option)
+
+		var box := _kit_equip_box(0)
+		assert_object(box).override_failure_message("the kit section drew no Equip box").is_not_null()
+		assert_bool(box.disabled).override_failure_message(
+				"%s's Equip box is live" % catalog.keys()[option - 1]).is_true()
+		tool._on_equip_toggled(0, true)
+		assert_int(tool.current.starting_equipped_index).is_equal(-1)
+	if picked == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no vial or conduit is authored, so no carried kind can be staged")
+
+func test_a_default_weapon_keeps_its_equip_box() -> void:
+	# The other side of #1591's gate: a staged TEMPLATE answers equip_slot() NONE itself, so a gate
+	# asking the raw entry would have shut every default weapon out of the hand. It asks the form the
+	# spawn grants.
+	var tool := _tool()
+	var option := _first_generic_option(tool._item_catalog())
+	if option < 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no template on disk derives a generic, so no default weapon can be picked")
+		return
+	tool._on_new_pressed()
+	tool._on_slot_picked(0, option)
+
+	assert_bool(_kit_equip_box(0).disabled).is_false()
+	tool._on_equip_toggled(0, true)
+	assert_int(tool.current.starting_equipped_index).is_equal(0)
 
 func test_unchecking_an_affinity_erases_its_aura() -> void:
 	# The Rebecca-rule guard: aura outside affinity is unauthorable here, which is exactly the
