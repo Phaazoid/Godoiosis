@@ -123,6 +123,12 @@ var current_offers_pre_mission := true
 # MissionController.open_mission_select is the one reader, and only in a non-devtools build.
 var current_in_demo := false
 
+# Whose turn the CURRENT board OPENS on (#1599): the authored half of ScenarioData.active_faction, the
+# live half being turn_manager's. apply_scenario sets it from the loaded board, clear_board rests it on
+# the player, and an AUTHORED capture writes it back, so an Update made mid-play never bakes the turn
+# it was made on. A full capture writes the live turn.
+var current_opening_faction: Team.Faction = Team.Faction.PLAYER
+
 # The #182 lesson content, same seam: authored scenario content that is not board state. THE store
 # — ScenarioDirector reads these LIVE (never copies), capture_scenario writes them back out, and
 # clear_board empties them so a sandbox spawn cannot inherit the last mission's lesson.
@@ -283,7 +289,7 @@ func restore_board(snapshot: BoardSnapshot) -> void:
 # REFERENCE to that file with no state captured, so every load re-reads the character as it is
 # then. Default false keeps every other caller (BugReporter's #87 mid-battle snapshot above all)
 # a byte-exact capture. Ad-hoc units snapshot fully in both modes; nothing else holds them. An
-# authored save also writes no fire countdowns (#1483).
+# authored save also writes no fire countdowns (#1483), no mission latches and no live turn (#1599).
 # board: the board to write, the live one when null. The dev header hands an authored save the board AS
 # AUTHORED (BoardHistory.authored, #1507), so what play did to the tile states and gas stays out of it;
 # every other caller writes the live board.
@@ -296,7 +302,9 @@ func capture_scenario(scenario_name: String, authored := false, board: BoardSnap
 	# the authoring undo and every full capture put the clocks back exactly as they were.
 	if authored:
 		scenario.terrain_state_turns = {}
-	scenario.active_faction = turn_manager.active_faction()
+	# #1599: whose turn it is is battle state too, so an authored save writes the turn the board was
+	# loaded with, and a full capture the live one.
+	scenario.active_faction = current_opening_faction if authored else turn_manager.active_faction()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
 	scenario.lose_conditions = game.mission_controller.lose_conditions.duplicate()   # #101: what loses it
 	scenario.round_limit = game.mission_controller.round_limit
@@ -318,9 +326,13 @@ func capture_scenario(scenario_name: String, authored := false, board: BoardSnap
 	scenario.camera_start = current_camera_start             # #234: where it opens, if authored
 	scenario.dialog_beats = current_dialog_beats.duplicate()       # #182/#397: Update must not wipe
 	scenario.tutorial_steps = current_tutorial_steps.duplicate()   # the lesson it cannot see on the board
-	scenario.captured_zones = game.mission_controller.captured_zone_names()
-	scenario.contested = game.mission_controller.is_contested()
-	scenario.rounds_elapsed = game.mission_controller.rounds_elapsed()
+	# #1599: the mission's latches are what PLAY did, and nothing authors them. An authored save writes
+	# none, so its board opens where a mission start does (MissionState.reset): round 0, uncontested,
+	# nothing captured.
+	if not authored:
+		scenario.captured_zones = game.mission_controller.captured_zone_names()
+		scenario.contested = game.mission_controller.is_contested()
+		scenario.rounds_elapsed = game.mission_controller.rounds_elapsed()
 
 	var entry_of: Dictionary = {}   # Unit -> its ScenarioUnitEntry, for the guard re-link below
 	for unit: Unit in units_root.get_children():
@@ -446,6 +458,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	current_deployment_cap = scenario.deployment_cap   # #736: its other half, and BoardLint reads it today
 	current_offers_pre_mission = scenario.offers_pre_mission   # #46: whether the phase opens on it
 	current_in_demo = scenario.in_demo            # #860: whether a shipped build lists it
+	current_opening_faction = scenario.active_faction   # #1599: the turn it opens on, which Update keeps
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -583,6 +596,8 @@ func clear_board():
 	# And whether it ships (#860) -- the sharpest Save As consequence of the three: inheriting a
 	# TRUE here would bake a scratch fixture into the demo's mission list without anyone ticking it.
 	current_in_demo = false
+	# And the opening turn (#1599): a sandbox board opens on the player, the field's own default.
+	current_opening_faction = Team.Faction.PLAYER
 	# And the lesson (#182/#397): content follows its board out.
 	current_dialog_beats = []
 	current_tutorial_steps = []

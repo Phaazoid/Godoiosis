@@ -36,6 +36,12 @@ Moved verbatim out of [`CLAUDE.md`](../../CLAUDE.md) on 2026-10-20, when that fi
 
 **`Unit.drawn_from_roster` is the one flag it added**, read only by `capture_scenario`'s `authored` branch: an authored save SKIPS the drawn units, or an Update after a play session bakes them into `unit_entries` and the next boot draws a second force on top.
 
+**An authored save writes none of the mission's latches ([#1599](https://github.com/Phaazoid/Godoiosis/issues/1599), 2026-11-03).**
+- `rounds_elapsed`, `contested` and `captured_zones` are left at their defaults, so the board opens where a mission start does (`MissionState.reset`). Nothing authors them, and #1558 latches `contested` before every pass and burn anyway.
+- `active_faction` is written as the board was LOADED with: `ScenarioManager.current_opening_faction`, the declared authored half of that field. `apply_scenario` sets it, `clear_board` rests it on the player, and the live turn stays `TurnManager`'s.
+- A full capture writes all four live, as before.
+- The committed boards that had baked them were re-saved once through the writer. Before that, Terraces opened on round 2, contested, and mission 2 opened on the enemy's turn.
+
 ## Carry-over between missions, and player save slots
 
 What is still missing is carry-over BETWEEN missions, which is [#70](https://github.com/Phaazoid/Godoiosis/issues/70)'s debt. Still deliberately out: the queued action plan (player intent, re-authorable, and serializing `BaseAction` graphs with live `Unit` refs is its own feature), `active_attack` (an aiming cursor), and projected-knockback cells (re-derived each resolve pass). **The snapshot has PLAYER doors since [#144](https://github.com/Phaazoid/Godoiosis/issues/144) (2026-08-11)**: three `SaveGame` slots under `user://saves/` (never `Scenarios/` — folder scan + #9 + read-only-when-packed), Save/Load on the pause menu, Load Game on the title, `MissionController.resume_from_slot` aiming `last_loaded_path` at the ORIGIN mission so Restart/F2 reload the mission not the slot. The rule it forced: **`reset_faction_actions` fires from the turn HANDOFF (`game._on_turn_started`), never from `start_faction_turn`** — a menu arrival trusts the file, or every resume hands acted squads their actions back.

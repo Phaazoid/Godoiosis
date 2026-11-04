@@ -121,7 +121,9 @@ Per page:
 **What the rule rests on, and what it leaves.**
 - Every authoring write to a play-written store goes inside a stroke (`_begin_stroke`/`_end_stroke`); nine doors do today. A dev write outside one is treated as play and is left out of an authored save, silently.
 - Play writes only the `PLAY_WRITTEN` fields. `tests/dev/test_authored_board.gd` pins that for the round tick, and `ResolvedCellEffect`'s shape bounds a pass's landings.
-- An authored Update still writes as played: the units' cells, an ad-hoc unit's state, and the mission latches (`rounds_elapsed`, `captured_zones`, `contested`, `active_faction`). That is the neighbouring question #1483 named.
+- An authored Update still writes as played: the units' cells and an ad-hoc unit's state. The mission latches no longer do, since [#1599](https://github.com/Phaazoid/Godoiosis/issues/1599) (2026-11-03), the neighbouring question #1483 named:
+  - `rounds_elapsed`, `captured_zones` and `contested` are not written, so an authored board opens where a mission start does;
+  - `active_faction` is the turn the board was LOADED with (`ScenarioManager.current_opening_faction`), so an Update made on the enemy's turn no longer makes a board enemy-first. No dev control writes an opening yet.
 
 Pinned by `tests/dev/test_authored_board.gd`.
 
