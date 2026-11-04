@@ -997,6 +997,8 @@ func cancel(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	if unit == null:
 		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not is_deployed(unit):
+		return {"ok": false, "error": "%s is in reserve" % handle}
 	squad_manager.remove_actions_for_unit(unit)
 	return {"ok": true, "summary": "cancelled %s's orders" % handle}
 
