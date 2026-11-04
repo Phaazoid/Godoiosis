@@ -1918,11 +1918,10 @@ func spawn_sandbox() -> void:
 # Returns null when the cell can't take a unit. NB: UnitFactory.create_unit already instantiated
 # the node, so every refusal path has to free it — an un-parented Unit is an orphan nothing else
 # will ever collect.
-# `is_body` is the DOWNED exception (#116): is_walkable answers "may a unit STAND here", and a body
-# is not standing. Deep water is the first ground anything can legally end up on without standing on
-# it, and without this a mid-battle save taken while someone is drowning DROPS that unit on load --
-# apply_scenario only push_warnings when a spawn refuses. The loader passes the entry's own saved
-# lifecycle; every other caller places a unit on its feet and keeps the default.
+# `terrain_later` (#1597): the gate skips its terrain clause, because the caller asks that clause
+# itself, of the FINISHED body. The loader does (ScenarioUnitEntry.stand_block_reason): a saved job --
+# a Water Walker's -- lands with apply_unit_state, after this, and a body lying in deep water (#116) is
+# exempted there. Every other caller places a unit on its feet and keeps the default.
 # May a unit be PLACED here? spawn_unit's own gate, split out (#737) because the pre-mission draw
 # has to know before it has a unit to build -- and a hand-rolled copy of it there would be a second
 # answer to a question this one has already had three of (#109).
@@ -1960,10 +1959,10 @@ func _build_unit(data: UnitData, grid_layer: TileMapLayer, cell: Vector2i) -> Un
 	unit.went_downed.connect(drop_threat_field.unbind(1))
 	return unit
 
-func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
+func spawn_unit(data: UnitData, pos: Vector2i, terrain_later := false) -> Unit:
 	var unit: Unit = _build_unit(data, grid, pos)
 
-	if not can_spawn_at(pos, is_body):
+	if not can_spawn_at(pos, terrain_later):   # is_body's skip of the terrain clause: asked later
 		unit.queue_free()
 		return null
 

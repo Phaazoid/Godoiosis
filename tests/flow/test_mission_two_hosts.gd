@@ -6,7 +6,8 @@
 # captured zones, who the mission protects and what every squad was told to be.
 #
 # The same law over what each loader does with an ENTRY (#46): both iterate valid_entries, ask the one
-# spawn gate (a refused entry is dropped by both, a saved body still lies in deep water in both), hand
+# spawn gate (a refused entry is dropped by both, a saved body still lies in deep water in both, and a
+# Water Walker still stands on water in both, its terrain clause asked of the finished body, #1597), hand
 # the spawn the entry's own UnitData so a cast reference keeps its provenance, and re-link every armed
 # Guard through ScenarioManager.relink_guards.
 #
@@ -18,6 +19,7 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
+const F := preload("res://tests/support/job_fixtures.gd")
 
 const SCRATCH := "user://__mission_two_hosts.tres"
 const TEST_SAVE_DIR := "user://__test_saves_mission_two_hosts/"
@@ -32,6 +34,8 @@ var sm: ScenarioManager
 var mc: MissionController
 var _sess
 var _written: Array[String] = []
+var _walker_job: JobData   # forced to WATERWALK by _water_walker, put back in after_test
+var _walker_snap: Dictionary
 
 
 func before_test() -> void:
@@ -56,6 +60,9 @@ func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
 	ScenarioManager.save_dir = ScenarioManager.DEFAULT_SAVE_DIR
+	if _walker_job != null:
+		F.restore(_walker_job, _walker_snap)
+		_walker_job = null
 	_sess = null
 	_written.append(SCRATCH)
 	for path in _written:
@@ -74,6 +81,31 @@ func _paint() -> void:
 	for x in range(WIDTH):
 		for y in range(HEIGHT):
 			game.grid.paint(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+
+
+# A Water Walker (#1597) whose Waterwalk is a JOB, so it rides the saved state that apply_unit_state
+# lands after the spawn. scout's pool is forced to WATERWALK alone, as test_movement_cost does, so the
+# case reads no authored kit.
+func _water_walker(cell: Vector2i) -> Unit:
+	_walker_job = JobCatalog.get_job("scout")
+	_walker_snap = F.snapshot(_walker_job)
+	var ability := AbilityData.new()
+	ability.id = Abilities.Id.WATERWALK
+	_walker_job.ability_pool = [ability]
+	var unit := _spawn(Team.Faction.PLAYER, cell)
+	unit.unit_instance.add_job("scout")
+	assert_bool(unit.has_live_ability(Abilities.Id.WATERWALK)).override_failure_message(
+		"precondition: the forced job did not grant Waterwalk").is_true()
+	return unit
+
+
+# A deep-water cell inside the painted board, and the proof that only a body or a Water Walker may be there.
+func _deep_water() -> Vector2i:
+	var water := Vector2i(2, 2)
+	game.grid.paint(water, GRASS_SOURCE, BoardBuilder.WATER_ATLAS)
+	assert_bool(game._board().is_walkable(water)).override_failure_message(
+		"precondition: anyone may STAND on the water tile, so no body is ever asked").is_false()
+	return water
 
 
 # A file of its own per case: load() serves the resource cache, so a second board saved over one
@@ -299,3 +331,43 @@ func test_both_hosts_lay_a_saved_body_in_deep_water() -> void:
 	assert_bool(g_body != null and g_body.is_downed() and g_units.size() == 2) \
 		.override_failure_message("precondition: the game did not lay the body in the water beside its witness").is_true()
 	_agree("the body in the water", _entry_picture(g_units), _entry_picture(_sess.live_units()))
+
+
+# #1597: a Water Walker that WALKED onto water (a real MOVE and pass, so can_traverse let it) is still
+# standing there after a load, on both hosts. Its job is saved state, landed after the spawn, so this
+# goes red if either loader asks the terrain clause before the body is finished.
+func test_both_hosts_keep_a_water_walker_standing_on_water() -> void:
+	_paint()
+	var water := _deep_water()
+	var walker := _water_walker(Vector2i(1, 2))
+	_spawn(Team.Faction.PLAYER, Vector2i(4, 1))   # the witness: a dropped walker vs a board that never loaded
+	var reach := RulesService.compute_move_range(walker, game._board())
+	var move := MoveAction.new()
+	move.init(walker, game.route_to(walker, reach, water), GridUtils.get_terrain_icon_at_cell(game.grid, water))
+	assert_bool(game.squad_manager.queue_action(walker.squad, move)) \
+		.override_failure_message("precondition: the walk onto the water was refused").is_true()
+	await game.order_executor.execute_orders(walker)
+	assert_bool(walker.movement.cell == water and walker.is_active()) \
+		.override_failure_message("precondition: the Water Walker is not standing on the water").is_true()
+	await _load_both(_save(sm.capture_scenario("two_hosts_walker"), "walker"))
+
+	var g_units := _game_units()
+	assert_object(_unit_at(g_units, water)).override_failure_message(
+		"the game dropped a Water Walker standing on water (%d units came back)" % g_units.size()).is_not_null()
+	_agree("the Water Walker on the water", _entry_picture(g_units), _entry_picture(_sess.live_units()))
+
+
+# The control for the case above: the deferred clause still refuses a unit that CANNOT stand where it
+# was saved. Put there by the dev Move's door (DevController.resolve_pending sets the cell, no rule asked).
+func test_both_hosts_still_drop_a_unit_that_cannot_stand_on_its_water() -> void:
+	_paint()
+	var water := _deep_water()
+	var stranded := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn(Team.Faction.PLAYER, Vector2i(4, 1))   # the witness
+	stranded.movement.set_cell(water)
+	await _load_both(_save(sm.capture_scenario("two_hosts_stranded"), "stranded"))
+
+	var g_units := _game_units()
+	assert_bool(_unit_at(g_units, water) == null and g_units.size() == 1).override_failure_message(
+		"the game kept a unit where nothing may stand, or lost the witness (%d units)" % g_units.size()).is_true()
+	_agree("which entries spawned", _entry_picture(g_units), _entry_picture(_sess.live_units()))

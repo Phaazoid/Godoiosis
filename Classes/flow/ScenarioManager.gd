@@ -141,6 +141,14 @@ static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
 		result.append(entry)
 	return result
 
+# Take back a unit a load spawned and then refused (#1597): its finished body cannot stand on its cell.
+# Before the squad rebuild, so it is still a solo; release() destroys that squad. Static so both
+# loaders call it.
+static func drop_refused(squad_manager: SquadManager, unit: Unit) -> void:
+	squad_manager.release(unit)
+	unit.get_parent().remove_child(unit)
+	unit.queue_free()
+
 # The squads' order (#1566), after the rebuild. A saved `squad_id` is the squad's index in
 # SquadManager.squads, so it already IS the order a load must give back. Static so both loaders call
 # it, as relink_guards below is (#46).
@@ -447,8 +455,8 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	for entry in valid_entries(scenario):
 		# Handed WITHOUT the old outer duplicate (#177): UnitFactory copies anyway, and the copy
 		# here was destroying resource_path — the provenance a reference entry exists to keep.
-		# The saved lifecycle is passed, not looked up (#116): a body may lie in deep water.
-		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell, entry.spawns_as_body())
+		# Spawned with the terrain clause DEFERRED (#1597): it is asked below, of the finished body.
+		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell, true)
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
@@ -456,6 +464,11 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 		entry.apply_placement(unit)   # the VIP flag and a leader's squad fields, BEFORE the fork (#46)
 		if entry.state_saved:
 			entry.apply_unit_state(unit)
+		var refusal := entry.stand_block_reason(unit, game._board())
+		if refusal != "":
+			push_warning("Could not spawn unit at %s (%s)" % [entry.cell, refusal])
+			drop_refused(squad_manager, unit)
+			continue
 
 		unit_of_entry[entry] = unit
 
