@@ -191,15 +191,35 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	for entry in ScenarioManager.valid_entries(scenario):
 		# The game's spawn gate (#46), asked BEFORE spawn() builds: spawn itself stays ungated so
 		# fixtures place freely, and a refused entry is dropped with a warning, as the game drops it.
+		# Its terrain clause is DEFERRED (#1597), as the game's is: asked below, of the finished body.
 		var here: BoardContext = board.squad_manager.board_source.call()
-		if not RulesService.can_spawn_at(here, entry.cell, entry.spawns_as_body()):
+		if not RulesService.can_spawn_at(here, entry.cell, true):
 			push_warning("Play: could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
 		# Un-duplicated, as the game hands it (#177): UnitFactory copies, and keeps the provenance.
 		var unit := spawn(board, entry.unit_data, entry.cell)
 		entry.apply_placement(unit)   # the VIP flag and a leader's AI squad fields -- ScenarioManager's own call (#46)
-		spawned.append(unit)
 		unit_of_entry[entry] = unit
+
+	# Nodes added this frame haven't run _ready yet; wait one so unit_instance/inventory exist.
+	await board.root.get_tree().process_frame
+
+	for entry: ScenarioUnitEntry in unit_of_entry.keys():
+		var unit: Unit = unit_of_entry[entry]
+		# The whole UnitInstance-side snapshot — stats/HP/inventory/limbs/proficiency/
+		# aura/jobs (#83); mirrors ScenarioManager.load_scenario, including the reference
+		# gate (#177): a reference entry captured nothing, so the spawn's initialize + kit stand.
+		if entry.state_saved:
+			entry.apply_unit_state(unit)
+		# The deferred terrain clause, the game loader's own door and moment (#1597). The squad maps are
+		# built after it, so a dropped unit never reaches the rebuild.
+		var refusal := entry.stand_block_reason(unit, board.squad_manager.board_source.call())
+		if refusal != "":
+			push_warning("Play: could not spawn unit at %s (%s)" % [entry.cell, refusal])
+			ScenarioManager.drop_refused(board.squad_manager, unit)
+			unit_of_entry.erase(entry)
+			continue
+		spawned.append(unit)
 		if entry.squad_id != -1:
 			if entry.is_leader:
 				leaders[entry.squad_id] = unit
@@ -207,17 +227,6 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 				members[entry.squad_id].append(unit)
 			else:
 				members[entry.squad_id] = [unit]
-
-	# Nodes added this frame haven't run _ready yet; wait one so unit_instance/inventory exist.
-	await board.root.get_tree().process_frame
-
-	for entry: ScenarioUnitEntry in unit_of_entry:
-		var unit: Unit = unit_of_entry[entry]
-		# The whole UnitInstance-side snapshot — stats/HP/inventory/limbs/proficiency/
-		# aura/jobs (#83); mirrors ScenarioManager.load_scenario, including the reference
-		# gate (#177): a reference entry captured nothing, so the spawn's initialize + kit stand.
-		if entry.state_saved:
-			entry.apply_unit_state(unit)
 
 	for squad_id in members.keys():
 		var leader: Unit = leaders.get(squad_id)

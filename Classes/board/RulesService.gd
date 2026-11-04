@@ -13,20 +13,30 @@ const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, 
 
 # May a unit be PLACED here? spawn_unit's gate, and the pre-mission phase's on both hosts (#46):
 # on the map, somewhere a unit may stand (unless it is a body, #116), and nobody already there.
-static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false) -> bool:
-	return spawn_block_reason(board, cell, is_body) == ""
+static func can_spawn_at(board: BoardContext, cell: Vector2i, is_body := false, body: UnitState = null) -> bool:
+	return spawn_block_reason(board, cell, is_body, body) == ""
 
 # WHY can_spawn_at refuses -- "" means it does not. Its own function so BoardLint can say which
 # clause a unit fails without re-asking any of them (#1432).
-#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
-static func spawn_block_reason(board: BoardContext, cell: Vector2i, is_body := false) -> String:
+static func spawn_block_reason(board: BoardContext, cell: Vector2i, is_body := false, body: UnitState = null) -> String:
 	if board.grid.get_cell_tile_data(cell) == null:
 		return "That cell is off the map."
-	if not is_body and not board.is_walkable(cell):
-		return "Nothing may stand on that cell."
+	var stand := stand_block_reason(board, cell, body, is_body)
+	if stand != "":
+		return stand
 	if board.unit_at_cell(cell) != null:
 		return "Another unit already stands there."
 	return ""
+
+# The gate's TERRAIN clause, alone (#1597): may this body stand on this cell's ground? Handed a body it
+# asks can_traverse, so a Water Walker stands on water; with none (a cell judged before any unit
+# exists) it asks the cell-only is_walkable. A body (#116) is never asked. Both loaders ask it AFTER a
+# unit's saved state lands (ScenarioUnitEntry.stand_block_reason), since a saved job is part of the body.
+static func stand_block_reason(board: BoardContext, cell: Vector2i, body: UnitState = null, is_body := false) -> String:
+	if is_body:
+		return ""
+	var stands := board.is_walkable(cell) if body == null else can_traverse(cell, body, board)
+	return "" if stands else "Nothing may stand on that cell."
 
 # May a unit be placed here WHILE A PLAN IS QUEUED (#1432)? can_spawn_at, and no queued plan ends a
 # unit here either: the cell is taken if someone stands on it now OR will once the plan runs. The dev

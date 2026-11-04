@@ -133,9 +133,15 @@ func apply_placement(unit: Unit) -> void:
 # Does this entry spawn as a BODY, RulesService.can_spawn_at's is_body (#116)? A saved DOWNED unit may
 # lie on ground nothing may STAND on -- deep water -- and without this a load would silently drop it.
 # A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right. The ONE
-# answer both loaders pass to their spawn gate (#46).
+# answer both loaders hand the terrain clause, stand_block_reason below (#46, #1597).
 func spawns_as_body() -> bool:
 	return state_saved and lifecycle_state == Unit.LifecycleState.DOWNED
+
+# May the unit this entry spawned stand on its cell (#1597)? The spawn gate's terrain clause, asked of
+# the FINISHED body: both loaders spawn without it and ask here once the saved state has landed, because
+# a saved job (Water Walker) is part of the body and does not exist at spawn time. "" = it stands.
+func stand_block_reason(unit: Unit, board: BoardContext) -> String:
+	return RulesService.stand_block_reason(board, cell, unit.state, spawns_as_body())
 
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_for_grant()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
