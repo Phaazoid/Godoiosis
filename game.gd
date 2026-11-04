@@ -2025,6 +2025,9 @@ func undeploy_unit(unit: Unit) -> void:
 	if not is_deployed(unit):
 		push_error("undeploy_unit: not a deployed unit")
 		return
+	# The dock first (#1573): its squad readers assume a squad, and the next refresh would throw.
+	if unit_info_panel.is_showing_unit(unit):
+		unit_info_panel.clear()
 	squad_manager.release(unit)
 	units_root.remove_child(unit)
 	reserve_root.add_child(unit)
@@ -2047,6 +2050,10 @@ func _on_unit_died(unit: Unit):
 	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
 	if unit == selected_unit:
 		selected_unit = null
+	# ...and so must the dock (#1573): left on a corpse it still draws while is_showing() says no, so a
+	# right-click aimed at it falls through to the queue and pops an order. Its card closes with it.
+	if unit_info_panel.is_showing_unit(unit):
+		unit_info_panel.clear()
 	drop_threat_field()   # ahead of the pin release, so its repaint reads a field without the corpse
 	drop_enemy_pin(unit)   # a pin outlives the pointer, so it has to be released here (#710)
 	squad_manager.handle_unit_death(unit)   # its overlays go first, inside (#46)
