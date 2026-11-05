@@ -12,6 +12,10 @@ class_name GasSpread
 #
 # WHERE gas may be is ruling 6: never across an edge a unit could not walk over, but over water.
 #
+# RELEASED where it cannot lie (#1537), gas spills to that cell's open sides at its full level:
+# released_onto, the one answer every release asks -- the resolver's deposits and the ignitions below.
+# So a burning tree smokes the ground around it; a cell with no open side, or a hole, loses it.
+#
 # IGNITION (#1335): every cell fire takes this round gives off what its ground's ignition reaction
 # releases -- the same `gases` a hit that lights it releases -- added AFTER spill and fade, so fresh
 # smoke sits thick for a round before it spreads. Asked of the tile states BEFORE their own tick lights
@@ -60,7 +64,7 @@ static func next(cells: Dictionary[Vector2i, int], board: BoardContext) -> Dicti
 
 
 # What a spreading fire gives off where it lands, into `out`: GasField.add_level's add-and-cap with a
-# fresh hold, on a cell that can hold gas (a burning TREE cannot, ruling 6, so its smoke goes nowhere).
+# fresh hold, wherever released_onto lays it (a burning TREE spills it to its open sides, #1537).
 # The fire spreads from the tiles as the board's planned tiles leave them (#1430, #1498): the outline's
 # board carries the previewed plan's, so a tile a queued hit lights spreads in it; the round's carries none.
 static func _add_ignitions(out: Dictionary[Vector2i, int], board: BoardContext) -> void:
@@ -68,14 +72,32 @@ static func _add_ignitions(out: Dictionary[Vector2i, int], board: BoardContext) 
 		return
 	for cell: Vector2i in board.terrain_states.cells_fire_takes(board.tiles):
 		var fuel := board.terrain_states.fuel_at(cell)
-		if fuel == null or not holds_gas(cell, board):
+		if fuel == null:
 			continue
-		var packed: int = out.get(cell, 0)
-		for kind: Gas.Kind in Gas.released(fuel.gases):
-			var level := mini(Gas.level_in(packed, kind) + fuel.gases[kind], Gas.MAX_LEVEL)
-			packed = Gas.with_level(packed, kind, level)
-		if packed != 0:
-			out[cell] = packed
+		for onto in released_onto(cell, board):
+			var packed: int = out.get(onto, 0)
+			for kind: Gas.Kind in Gas.released(fuel.gases):
+				var level := mini(Gas.level_in(packed, kind) + fuel.gases[kind], Gas.MAX_LEVEL)
+				packed = Gas.with_level(packed, kind, level)
+			if packed != 0:
+				out[onto] = packed
+
+
+# Where gas RELEASED on this cell comes to lie (#1537): the cell itself when it holds gas; otherwise each
+# open side it could cross onto, every one at the full level released; nowhere from a hole, or a cell
+# with no open side. The one answer for every release -- a hit's deposit, a unit's reaction, a fire's
+# ignition -- so a burning tree smokes the ground around it. Sides in SIDES order.
+static func released_onto(cell: Vector2i, board: BoardContext) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if holds_gas(cell, board):
+		out.append(cell)
+		return out
+	if not board.has_surface(cell):
+		return out
+	for side: Vector2i in SIDES:
+		if _may_enter(cell, cell + side, board):
+			out.append(cell + side)
+	return out
 
 
 # May gas lie on this cell at all: ground, not a hole, and somewhere a unit could stand -- or water,
@@ -91,4 +113,9 @@ static func holds_gas(cell: Vector2i, board: BoardContext) -> bool:
 # May gas cross from one cell to its neighbour: both hold gas, and the edge between them is one a
 # unit could step over (RulesService.height_step_ok -- a sheer ledge stops it, a ramp does not).
 static func can_cross(from: Vector2i, to: Vector2i, board: BoardContext) -> bool:
-	return holds_gas(from, board) and holds_gas(to, board) and RulesService.height_step_ok(from, to, board)
+	return holds_gas(from, board) and _may_enter(from, to, board)
+
+
+# The edge half of can_cross, which a spill off a cell that cannot hold gas asks alone (released_onto).
+static func _may_enter(from: Vector2i, to: Vector2i, board: BoardContext) -> bool:
+	return holds_gas(to, board) and RulesService.height_step_ok(from, to, board)

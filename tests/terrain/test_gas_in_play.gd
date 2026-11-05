@@ -241,3 +241,66 @@ func test_a_shocks_current_leaves_ozone_where_it_ran_in_the_previewed_plan() -> 
 	for cell: Vector2i in [FOE_CELL, beside]:
 		assert_bool(plan.pending_deposits().has({"cell": cell, "gas": Gas.Kind.OZONE})).override_failure_message(
 				"the previewed plan leaves no ozone on %s" % [cell]).is_true()
+
+
+# A real tree tile out of the board's own TileSet, found by what it is rather than a pinned atlas coord.
+func _paint_tree(cell: Vector2i) -> void:
+	var tiles: TileSet = game.grid.tile_set
+	for s in tiles.get_source_count():
+		var id := tiles.get_source_id(s)
+		var source := tiles.get_source(id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var data := source.get_tile_data(coords, 0)
+			if GridUtils.terrain_kind_of(data) == Terrain.Kind.TREE and not GridUtils.walkable_of(data):
+				game.grid.set_cell(cell, id, coords)
+				return
+	assert_bool(false).override_failure_message("fixture: the TileSet has no tree a unit cannot stand on").is_true()
+
+
+# #1537 through the real path: a queued fire hit on a tree. Gas cannot lie on the tree, so its smoke
+# spills onto the grass around it -- ghosted before Execute, on the planned tiles Alt's outline rules on,
+# and on the live store after the pass. Every level is the tree's own fuel's, read off the game.
+func test_a_fire_hit_on_a_tree_smokes_the_ground_around_it() -> void:
+	var tree := Vector2i(3, 2)
+	_paint_tree(tree)
+	await await_idle_frame()
+	var hero := _spawn(PLAYER, Vector2i(1, 1))
+	var attack: AttackData = (hero.get_equipped_weapon() as WeaponInstance).template.main_attack
+	attack.elemental_damage_type = Elemental.Element.FIRE
+	attack.targets = EquippableData.TargetMode.MAP
+	attack.max_range = 3
+	attack.deals_no_damage = true
+	var fuel: TerrainReaction = game.terrain_states.fuel_at(tree)
+	assert_bool(fuel != null and not Gas.released(fuel.gases).is_empty()).override_failure_message(
+			"fixture: a tree gives off nothing when it catches").is_true()
+	var live: BoardContext = game._board()
+	assert_bool(GasSpread.holds_gas(tree, live)).override_failure_message("fixture: gas could lie on the tree").is_false()
+	var sides: Array[Vector2i] = GasSpread.released_onto(tree, live)
+	assert_bool(sides.is_empty()).override_failure_message("fixture: the tree has no open side").is_false()
+	game.squad_manager.active_squad = hero.squad
+	var action := AttackAction.declare(hero, hero.movement.cell, tree)
+	assert_bool(game.squad_manager.queue_action(hero.squad, action)).override_failure_message(
+			"fixture: the fire swing never queued (%s)" % [", ".join(action.validation_errors)]).is_true()
+	game.refresh_action_queue(hero.squad)
+	var board: BoardContext = game.next_round_board()
+	assert_bool(board.has_tile_state(tree, Terrain.TileState.BURNING)).override_failure_message(
+			"fixture: the previewed plan does not light the tree").is_true()
+
+	for side in sides:
+		for kind: Gas.Kind in Gas.released(fuel.gases):
+			assert_bool(_ghosted(GasPuffArt.icon(kind), side)).override_failure_message(
+					"the board ghosts no %s on %s before Execute" % [Gas.name_of(kind), side]).is_true()
+			assert_int(Gas.level_in(board.gas_at(side), kind)).override_failure_message(
+					"Alt's outline rules on no %s at %s" % [Gas.name_of(kind), side]).is_equal(fuel.gases[kind])
+	assert_int(board.gas_at(tree)).override_failure_message("the plan laid gas on the tree itself").is_equal(0)
+
+	await game.order_executor.execute_orders(hero)
+	var field: GasField = game.gas_field
+	for side in sides:
+		for kind: Gas.Kind in Gas.released(fuel.gases):
+			assert_int(field.level_at(side, kind)).override_failure_message(
+					"the pass left %s other than the plan said on %s" % [Gas.name_of(kind), side]).is_equal(fuel.gases[kind])
+	assert_int(field.packed_at(tree)).is_equal(0)
