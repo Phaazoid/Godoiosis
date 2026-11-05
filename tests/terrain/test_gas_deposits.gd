@@ -148,7 +148,8 @@ func test_gas_never_lands_where_there_is_no_ground() -> void:
 
 func test_a_tile_a_unit_could_not_stand_on_takes_no_gas() -> void:
 	# A wall tile has ground, but gas travels only where a unit could walk or over water (ruling 6), so
-	# it is never laid there either (GasSpread.holds_gas).
+	# it is never laid there either (GasSpread.holds_gas) -- and in a field of walls no side can take
+	# the spill (GasSpread.released_onto, #1537), so it is lost.
 	var bare: TileMapLayer = auto_free(TileMapLayer.new())
 	add_child(bare)
 	var attacker := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
@@ -657,3 +658,92 @@ func test_the_current_carries_the_air_half_only() -> void:
 	assert_int(_steam_on(plan, far)).override_failure_message(
 			"the attack's own gas rode the current past what it struck").is_equal(0)
 	assert_int(_gas_on(plan, far, Gas.Kind.OZONE)).is_greater(0)
+
+
+# --- released where it cannot lie, it spills (#1537) -----------------------------------------------
+
+# FIRE on a tree, the case #1537 was filed for, with the test's own reaction (never the authored
+# Burning's numbers). In this room a wall stands in for the tree: ground a unit cannot stand on.
+func _burns_trees() -> TerrainReaction:
+	var reaction := TerrainReaction.new()
+	reaction.incoming_element = Elemental.Element.FIRE
+	reaction.required_kind = Terrain.Kind.TREE
+	var lit: Array[Terrain.TileState] = [Terrain.TileState.BURNING]
+	reaction.add_tile_states = lit
+	reaction.gases = {Gas.Kind.SMOKE: Gas.Level.THICK, STEAM: Gas.Level.THIN}
+	return reaction
+
+
+func _resolve_with(attacks: Array[AttackAction], board: BoardContext, terrain: Array[TerrainReaction]) -> ResolvedPlan:
+	var plan := ResolvedPlan.new()
+	plan.attacks = attacks
+	var no_reactions: Array[ElementalReaction] = []
+	PlanResolver.resolve(plan, no_reactions, board, terrain)
+	return plan
+
+
+# The tree catches where it stands; its gas lands on every open side, each an effect caused by the hit,
+# so the board ghosts it, the planned tiles fold it and the store takes it, all alike (Law #2).
+func test_a_burning_tree_lays_its_gas_on_its_open_sides() -> void:
+	var reaction := _burns_trees()
+	var walled := TARGET_CELL + Vector2i.UP
+	var walls: Array[Vector2i] = [TARGET_CELL, walled]
+	var board := _room(walls)
+	board.kinds[TARGET_CELL] = Terrain.Kind.TREE
+	var attacker := _attacker(Elemental.Element.FIRE, EquippableData.TargetMode.MAP)
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var aim := _aim(attacker, struck)
+	var terrain: Array[TerrainReaction] = [reaction]
+	var plan := _resolve_with(_one(aim), board, terrain)
+	var sides := GasSpread.released_onto(TARGET_CELL, board)
+	assert_bool(sides.size() == 3 and not sides.has(walled)).override_failure_message(
+			"fixture: the tree's open sides are %s" % [sides]).is_true()
+
+	var on_tree: Array[ResolvedCellEffect] = []
+	for effect in plan.cell_effects:
+		if effect.cell == TARGET_CELL:
+			on_tree.append(effect)
+	assert_int(on_tree.size()).is_equal(1)
+	assert_bool(on_tree[0].states_added.has(Terrain.TileState.BURNING)).override_failure_message(
+			"the tree did not catch").is_true()
+	assert_bool(on_tree[0].gas_added.is_empty()).override_failure_message("gas lay on the tree itself").is_true()
+	assert_int(plan.cell_effects.size()).is_equal(1 + sides.size())
+	var deposits := plan.pending_deposits()
+	for effect in plan.cell_effects:
+		if effect.cell == TARGET_CELL:
+			continue
+		assert_bool(sides.has(effect.cell)).override_failure_message("gas spilled onto %s" % [effect.cell]).is_true()
+		assert_object(effect.cause).override_failure_message("the spill on %s lands with nothing" % [effect.cell]) \
+			.is_same(aim)
+		_assert_releases(effect, reaction.gases)
+		for kind: Gas.Kind in Gas.released(reaction.gases):
+			assert_bool(deposits.has({"cell": effect.cell, "gas": kind})).override_failure_message(
+					"the board would not ghost %s on %s" % [Gas.name_of(kind), effect.cell]).is_true()
+			assert_int(Gas.level_in(board.planned(plan.tiles).gas_at(effect.cell), kind)).is_equal(reaction.gases[kind])
+	_play(plan, board)
+	for side in sides:
+		for kind: Gas.Kind in Gas.released(reaction.gases):
+			assert_int(board.gas.level_at(side, kind)).is_equal(reaction.gases[kind])
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+
+
+# Not a tree rule: an attack's own gas over a wall spills too, and a side the hit also struck takes it
+# in that tile's own effect, added -- one effect per tile.
+func test_an_attacks_own_gas_over_a_wall_spills_into_what_it_struck_beside_it() -> void:
+	var attacker := _attacker(Elemental.Element.NONE, EquippableData.TargetMode.UNIT)
+	attacker.get_fired_attack().gases = {STEAM: Gas.Level.THIN}
+	var beside := TARGET_CELL + Vector2i.RIGHT
+	var walls: Array[Vector2i] = [TARGET_CELL]
+	var board := _room(walls)
+	var struck: Array[Vector2i] = [TARGET_CELL, beside]
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	var seen := {}
+	for effect in plan.cell_effects:
+		assert_bool(seen.has(effect.cell)).override_failure_message("two effects on %s" % [effect.cell]).is_false()
+		seen[effect.cell] = true
+	assert_int(_steam_on(plan, TARGET_CELL)).is_equal(0)
+	assert_int(_steam_on(plan, beside)).override_failure_message("the struck side took its own steam and not the spill") \
+		.is_equal(Gas.Level.THIN + Gas.Level.THIN)
+	for side in GasSpread.released_onto(TARGET_CELL, board):
+		if side != beside:
+			assert_int(_steam_on(plan, side)).is_equal(Gas.Level.THIN)
