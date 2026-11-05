@@ -11,6 +11,7 @@
 extends GdUnitTestSuite
 
 const BOARD_TILES := "res://Resources/TestTiles.tres"
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")   # held, #621
 
 var _tiles: TileSet
 var _data: TileData
@@ -558,7 +559,7 @@ func test_reset_tile_fields_puts_the_makeup_back() -> void:
 # The real window: the picked tile's page carries the row, and a typed makeup lands on that tile of the
 # board's own tileset. The only case that reaches the row through _rebuild rather than calling it.
 func test_the_real_tiles_page_edits_the_picked_tiles_makeup() -> void:
-	_scene = (load("res://Scenes/Battle3D/Battle3D.tscn") as PackedScene).instantiate() as Node3D
+	_scene = SCENE.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()

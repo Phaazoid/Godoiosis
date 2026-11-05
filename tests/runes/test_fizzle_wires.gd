@@ -32,6 +32,13 @@ class _SpringBoard extends BoardContext:
 		kinds = k
 	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 		return kinds.get(cell, Terrain.Kind.NONE)
+	# The board's own makeup to match its kinds (#1315): the spring is made of what a water hit carries,
+	# and a cell of no kind holds nothing.
+	func made_of_at(cell: Vector2i) -> Array[String]:
+		var out: Array[String] = []
+		if terrain_kind_at(cell) == Terrain.Kind.WATER:
+			out.append(SubstanceMap.of_element(Elemental.Element.WATER))
+		return out
 
 
 func before_test() -> void:

@@ -27,6 +27,12 @@ class _StubBoard extends BoardContext:
 		kinds = k
 	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 		return kinds.get(cell, Terrain.Kind.NONE)
+	# The board's own makeup to match its kinds (#1315): a river is made of what a water hit carries.
+	func made_of_at(cell: Vector2i) -> Array[String]:
+		var out: Array[String] = []
+		if terrain_kind_at(cell) == Terrain.Kind.WATER:
+			out.append(SubstanceMap.of_element(Elemental.Element.WATER))
+		return out
 
 func _board(kinds: Dictionary = {}, gas: GasField = null) -> _StubBoard:
 	var none: Array[Unit] = []
