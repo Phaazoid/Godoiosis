@@ -13,7 +13,8 @@ class_name GasField
 # ground for this purpose), so the writer refuses a groundless cell and erasing a tile prunes it.
 # The refusal is the STORE's, through ground_source -- TerrainStateManager's shape, wired at the same
 # two build sites with the same predicate, so a brush stroke and an attack's deposit cannot disagree.
-# Where gas may lie and TRAVEL is the stricter GasSpread.holds_gas, asked by the rule and the deposit.
+# Where gas may lie and TRAVEL is the stricter GasSpread.holds_gas, asked by the rule and the deposit;
+# gas released where it may not lie spills to the cell's open sides (GasSpread.released_onto, #1537).
 
 var _cells: Dictionary[Vector2i, int] = {}
 var dirty := DirtyCells.new()

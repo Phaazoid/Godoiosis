@@ -288,3 +288,57 @@ func test_a_spreading_fire_adds_its_gas_to_what_lies_there() -> void:
 	var next := GasSpread.next(_field({E: THIN}), board)
 	assert_int(_level(next, E)).is_equal(mini(_held(THIN) + THIN, Gas.MAX_LEVEL))
 	assert_int(Gas.age_in(next[E], STEAM)).override_failure_message("a fresh release kept an old hold").is_equal(0)
+
+
+# RELEASED where it cannot lie (#1537): GasSpread.released_onto, the one answer every release asks.
+# A cell that holds gas keeps it.
+func test_gas_released_where_it_can_lie_stays_on_its_cell() -> void:
+	assert_array(GasSpread.released_onto(C, _board())).contains_exactly([C])
+
+
+# ...a cell that cannot (a wall here, a tree in play) spills it to every side it could cross onto, in
+# SIDES order: never into another wall, never down a sheer ledge.
+func test_gas_released_on_a_wall_spills_to_every_open_side() -> void:
+	var board := _board()
+	board.walls[C] = true
+	board.walls[E] = true
+	board.corners[W] = Vector4i(2, 2, 2, 2)   # sheer to C
+	assert_array(GasSpread.released_onto(C, board)).contains_exactly([S, N])
+
+
+# ...and with no open side, or over a hole, it is lost.
+func test_gas_released_with_nowhere_to_lie_is_lost() -> void:
+	var ringed := _board()
+	for cell in [C, E, W, N, S]:
+		ringed.walls[cell] = true
+	assert_array(GasSpread.released_onto(C, ringed)).is_empty()
+	var hole := _board()
+	hole.holes[C] = true
+	assert_array(GasSpread.released_onto(C, hole)).is_empty()
+
+
+# A fire spreading onto a cell that cannot hold gas (a tree) gives off its ground's gases on that cell's
+# open sides instead, each at the full level and added to what lies there -- the side it caught from
+# included. The fixture's fuel carries its own gases.
+func test_a_cell_fire_takes_that_cannot_hold_gas_spills_its_gases_onto_its_open_sides() -> void:
+	var store: TerrainStateManager = auto_free(T.store_on_fuel())
+	store.fuel_at(E).gases = {Gas.Kind.SMOKE: THICK, STEAM: THIN}
+	var lit := ResolvedCellEffect.new()
+	lit.cell = C
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	store.apply(lit)
+	var board := _board()
+	board.terrain_states = store
+	board.walls[E] = true
+	assert_bool(store.cells_fire_takes().has(E)).override_failure_message("fixture: fire does not take E").is_true()
+	var sides := GasSpread.released_onto(E, board)
+	assert_bool(sides.has(C) and sides.size() == 4).override_failure_message(
+			"fixture: the wall at E does not spill to all four sides (%s)" % [sides]).is_true()
+	var beyond := E + Vector2i.RIGHT
+	var next := GasSpread.next(_field({beyond: THIN}), board)
+	assert_int(_level(next, E, Gas.Kind.SMOKE)).override_failure_message("smoke lay inside the wall").is_equal(0)
+	for side in sides:
+		assert_int(_level(next, side, Gas.Kind.SMOKE)).override_failure_message(
+				"%s took none of the burning wall's smoke" % [side]).is_equal(THICK)
+	assert_int(_level(next, beyond)).override_failure_message("the spill did not add to the steam already there") \
+		.is_equal(mini(_held(THIN) + THIN, Gas.MAX_LEVEL))

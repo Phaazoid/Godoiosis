@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-10-31. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1545 (2026-11-02); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05.**
+**Canon checked through #1622 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -808,7 +808,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - A hit can ADD Smoked like any state (2-turn default clock): the hook for a smoke carving, its own ticket.
 - **Every ignition gives off smoke once.** The ignition reactions carry it, so a hit and a spreading fire release the same gases: GrassIgnites and Burning `{smoke: thick, steam: thin}`, TallGrassIgnites `{smoke: thick}`. A plant fire is mostly smoke; thin steam is the green plant's sap and never soaks or spreads.
   - **Spread:** `GasSpread.next` lays each cell `TerrainStateManager.cells_fire_takes()` names its fuel's gases, after spill and fade (with the board's planned tiles since #1430 and #1498, so the outline spreads a fire a queued hit lights). **The round runs gas before tiles** (`game._on_round_completed` and the Play API's twin), so the release lands on the frontier the tile tick then lights, and Alt's outline (`GasField.next_round`) is the round. The dev Step Gas button releases on the frontier too.
-  - **Declared:** a TREE tile is not walkable, and gas lies only where a unit could stand (#508 ruling 5), so a burning tree's smoke goes nowhere; a forest fire smokes where it spreads into grass.
+  - **Declared:** a TREE tile is not walkable, and gas lies only where a unit could stand (#508 ruling 5), so a burning tree's smoke goes nowhere; a forest fire smokes where it spreads into grass. *(Lifted by #1537, 2026-11-05: the tree's smoke spills onto the ground around it. Below.)*
   - A ground the Tiles page ticks burnable is seeded with thick smoke.
 - **A reaction holds a LIST of gases.** `gases: Dictionary[Gas.Kind, Gas.Level]` replaces the `gas`/`gas_level` pair on `AttackData`, `TerrainReaction` and `ElementalReaction` together. Readers walk it through `Gas.released` (kind order), and the Attack Editor draws one level row per gas.
 - **An Air hit disperses gas.** `Resources/TerrainReactions/Disperse.tres` (AIR) clears every gas on the cells the hit strikes, the wiki's Disperse. *(Since #1332, a hit that shoves blows it instead: below.)*
@@ -1025,6 +1025,13 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **A new reaction fires in play at once**: a Save As re-reads its folder, and a new ground reaction re-wires the board's fuel through the same door the Tiles page's burnable tick uses.
 - **Blaze is never offered**, though it is still in the TileState enum (`Terrain.RETIRED_STATES`).
 - **Not built:** a texture picker for a reaction's icon (it shows the file name, set in Godot's own inspector).
+
+**Built 2026-11-05: a burning tree smokes the ground around it ([#1537](https://github.com/Phaazoid/Godoiosis/issues/1537)).** Phaazoid@ ruled on 2026-10-30 that a burning tree's smoke should spill onto the walkable ground around it, and approved the plan's play-first defaults in a Claude session on 2026-11-05:
+- **One rule for every release, not a tree rule.** Gas released on a cell that cannot hold it (`GasSpread.holds_gas`: a tree, a wall) **spills to that cell's open sides**: `GasSpread.released_onto`, which all three release sites ask. Those are a hit's deposits (`PlanResolver._resolve_cell_effects`: a ground reaction, an air reaction, the attack's own gas), a unit's reaction (`_release_reaction_gas`), and a fire spreading at the round tick (`GasSpread.next`'s ignitions). So a shock on a tree leaves its ozone and heat haze on the tree's sides, and a gas carving over a tree lays the tree's share beside it.
+- **Four sides, each at the full level released, ADDED** to what lies there (a deposit's add-and-cap). A lone burning tree in grass leaves thick smoke and thin steam on every open side. Sides that two burning trees share take both, so thin plus thin steam is medium, which soaks and scalds.
+- **An open side is one gas may cross onto**: it holds gas, and the edge is one a unit could step (`RulesService.height_step_ok`, ruling 6). A sheer ledge or another tree stops it. A cell with no open side, or a hole, loses its gas, so a forest smokes at its edge.
+- **No new look.** The gas volume rising from the sides covers the tree's column. Nothing is conserved, as with every deposit; whether spread must conserve matter stays deferred, below.
+- A spill lands the way a push does (#1332): in the side's own effect when the same hit struck it, after that tile's clear, otherwise in a new effect caused by the hit. So the ghost before Execute, the planned tiles, Alt's outline, the leash, the split forecast, both executors and the AI's drift avoidance all read it with no reader of their own.
 
 **Next:**
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
