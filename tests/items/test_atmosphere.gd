@@ -3,7 +3,7 @@
 # damage by exactly those steps. Canon: docs/design/deep-alchemy.md -> What is built.
 #
 # Recipes are literal strings over the library's substances, never an authored carving (tests/README.md
-# rule 9), and every expectation is derived from Atmosphere.NORMAL and STEP rather than retyped, so a
+# rule 9), and every expectation is derived from Atmosphere.normal_of and step_of rather than retyped, so a
 # retune never reds this suite (rule 8).
 extends GdUnitTestSuite
 
@@ -83,15 +83,15 @@ func test_a_need_beyond_what_earlier_steps_made_is_drawn_from_the_air() -> void:
 func test_a_missing_key_reads_normal() -> void:
 	var none: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
-		assert_int(Atmosphere.percent_of(id, none)).is_equal(int(Atmosphere.NORMAL[id]))
+		assert_int(Atmosphere.percent_of(id, none)).is_equal(Atmosphere.normal_of(id))
 		assert_int(Atmosphere.steps_of(id, none)).is_equal(0)
 	assert_bool(Atmosphere.is_normal(none)).is_true()
 
 
 func test_a_step_counts_whole_steps_toward_zero_on_both_sides() -> void:
 	for id: String in Atmosphere.SUBSTANCES:
-		var normal := int(Atmosphere.NORMAL[id])
-		var step := int(Atmosphere.STEP[id])
+		var normal := Atmosphere.normal_of(id)
+		var step := Atmosphere.step_of(id)
 		assert_int(Atmosphere.steps_of(id, {id: normal + step})).override_failure_message(
 				"%s one step up" % id).is_equal(1)
 		assert_int(Atmosphere.steps_of(id, {id: normal + 2 * step})).is_equal(2)
@@ -113,22 +113,22 @@ func test_off_normal_names_every_substance_off_its_normal_percent_in_order() -> 
 	for i in range(Atmosphere.SUBSTANCES.size() - 1, -1, -1):   # authored back to front
 		var id: String = Atmosphere.SUBSTANCES[i]
 		if i % 2 == 0:
-			reading[id] = int(Atmosphere.NORMAL[id]) + 1
+			reading[id] = Atmosphere.normal_of(id) + 1
 			expected.push_front(id)
 	assert_array(Atmosphere.off_normal(reading)).contains_exactly(expected)
 	assert_bool(Atmosphere.is_normal(reading)).is_false()
 
 	var at_normal: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
-		at_normal[id] = int(Atmosphere.NORMAL[id])   # stored, but at Normal
+		at_normal[id] = Atmosphere.normal_of(id)   # stored, but at Normal
 	assert_array(Atmosphere.off_normal(at_normal)).is_empty()
 	assert_bool(Atmosphere.is_normal(at_normal)).is_true()
 
 
 func test_a_reading_words_its_percent_and_signs_its_steps_and_drops_a_zero() -> void:
 	for id: String in Atmosphere.SUBSTANCES:
-		var normal := int(Atmosphere.NORMAL[id])
-		var step := int(Atmosphere.STEP[id])
+		var normal := Atmosphere.normal_of(id)
+		var step := Atmosphere.step_of(id)
 		assert_str(Atmosphere.percent_text(id, {id: normal + 2 * step})).is_equal("%d%%" % (normal + 2 * step))
 		assert_str(Atmosphere.steps_text(id, {id: normal + 2 * step})).is_equal("+2")
 		assert_str(Atmosphere.steps_text(id, {})).override_failure_message(
@@ -142,9 +142,9 @@ func test_every_ambient_substance_is_real_and_tuned() -> void:
 	var real := SubstanceCatalog.get_all()
 	for id: String in Atmosphere.SUBSTANCES:
 		assert_bool(real.has(id)).override_failure_message("'%s' names no substance file" % id).is_true()
-		assert_bool(Atmosphere.NORMAL.has(id) and Atmosphere.STEP.has(id)).override_failure_message(
+		assert_bool(AtmosphereRules.authored().normal.has(id) and AtmosphereRules.authored().step.has(id)).override_failure_message(
 				"'%s' has no Normal or step" % id).is_true()
-		assert_int(int(Atmosphere.STEP[id])).is_greater(0)
+		assert_int(Atmosphere.step_of(id)).is_greater(0)
 	var grouped: Array[String] = []
 	for group: String in Atmosphere.GROUPS:
 		for id: String in Atmosphere.GROUPS[group]:
@@ -158,8 +158,8 @@ func test_every_ambient_substance_is_real_and_tuned() -> void:
 
 func test_a_nudge_adds_its_points_and_holds_each_substance_to_0_100() -> void:
 	for id: String in Atmosphere.SUBSTANCES:
-		var normal := int(Atmosphere.NORMAL[id])
-		var step := int(Atmosphere.STEP[id])
+		var normal := Atmosphere.normal_of(id)
+		var step := Atmosphere.step_of(id)
 		assert_int(Atmosphere.percent_of(id, Atmosphere.nudged({}, {id: step}))).override_failure_message(
 				"%s did not rise by its nudge" % id).is_equal(normal + step)
 		assert_int(Atmosphere.percent_of(id, Atmosphere.nudged({}, {id: -(normal + 1)}))).override_failure_message(
@@ -169,7 +169,7 @@ func test_a_nudge_adds_its_points_and_holds_each_substance_to_0_100() -> void:
 	# A substance the nudge does not name keeps what was authored.
 	var first: String = Atmosphere.SUBSTANCES[0]
 	var last: String = Atmosphere.SUBSTANCES[-1]
-	var authored: Dictionary[String, int] = {first: int(Atmosphere.NORMAL[first]) + int(Atmosphere.STEP[first])}
+	var authored: Dictionary[String, int] = {first: Atmosphere.normal_of(first) + Atmosphere.step_of(first)}
 	assert_int(Atmosphere.percent_of(first, Atmosphere.nudged(authored, {last: 1}))).is_equal(authored[first])
 
 
@@ -185,7 +185,7 @@ func test_a_weather_with_no_rules_leaves_the_authored_reading_alone() -> void:
 func test_every_weather_moves_the_air_by_exactly_its_authored_nudge() -> void:
 	var authored: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
-		authored[id] = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+		authored[id] = Atmosphere.normal_of(id) + Atmosphere.step_of(id)
 	var moving := 0
 	for kind: Weather.Kind in Weather.Kind.values():
 		var nudge := WeatherRules.air_of(kind)
@@ -270,7 +270,7 @@ func test_every_gas_moves_its_own_cell_by_its_air_times_its_level_and_no_other()
 			for id: String in Atmosphere.SUBSTANCES:
 				assert_int(Atmosphere.percent_of(id, here)).override_failure_message("%s at level %d left %s at %d"
 						% [Gas.name_of(kind), level, id, Atmosphere.percent_of(id, here)]) \
-						.is_equal(clampi(int(Atmosphere.NORMAL[id]) + int(air.get(id, 0)) * level, 0, 100))
+						.is_equal(clampi(Atmosphere.normal_of(id) + int(air.get(id, 0)) * level, 0, 100))
 			assert_dict(board.air_at(beside)).override_failure_message(
 					"%s moved the air of a cell it does not lie on" % Gas.name_of(kind)).is_equal(board.atmosphere)
 
@@ -325,7 +325,7 @@ func test_two_gases_on_one_cell_add_up() -> void:
 	var here := _board_with(field).air_at(HERE)
 	for id: String in Atmosphere.SUBSTANCES:
 		var sum := int(GasRules.for_kind(kinds[0]).air.get(id, 0)) + int(GasRules.for_kind(kinds[1]).air.get(id, 0))
-		assert_int(Atmosphere.percent_of(id, here)).is_equal(clampi(int(Atmosphere.NORMAL[id]) + sum, 0, 100))
+		assert_int(Atmosphere.percent_of(id, here)).is_equal(clampi(Atmosphere.normal_of(id) + sum, 0, 100))
 
 
 # A cell starts from what the board plays under (BoardContext.atmosphere: authored + weather), never
@@ -440,7 +440,7 @@ func _resolve(caster: Unit, carving: TransmutationData, foe: Unit, reading: Dict
 
 func _rich(id: String, steps: int) -> Dictionary[String, int]:
 	var reading: Dictionary[String, int] = {}
-	reading[id] = int(Atmosphere.NORMAL[id]) + steps * int(Atmosphere.STEP[id])
+	reading[id] = Atmosphere.normal_of(id) + steps * Atmosphere.step_of(id)
 	return reading
 
 

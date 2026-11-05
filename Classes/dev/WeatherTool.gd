@@ -132,7 +132,8 @@ func _fill() -> void:
 				DevWidgets.wrap_tooltip("Percentage points this weather adds to the board's %s while "
 					% SubstanceCatalog.name_of(id).to_lower()
 					+ "it falls, on top of what the board authors (negative lowers it). The board names "
-					+ "this weather beside the substance. One step is %d points." % int(Atmosphere.STEP[id])))
+					+ "this weather beside the substance. One step is %d points (Project > Air & gas)."
+						% Atmosphere.step_of(id)))
 	var look := WeatherLook.for_kind(kind)
 	if look == null:
 		DevWidgets.add_label(_rows, NO_LOOK)

@@ -305,7 +305,7 @@ func test_both_headless_boards_see_the_loaded_air() -> void:
 	var scenario := ScenarioData.new()
 	scenario.tile_data = src.grid.tile_map_data
 	var id: String = Atmosphere.SUBSTANCES[0]
-	var percent := int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+	var percent := Atmosphere.normal_of(id) + Atmosphere.step_of(id)
 	scenario.atmosphere[id] = percent
 	var dst: Dictionary = BoardBuilder.build(self, "AirDst")
 	auto_free(dst.root)

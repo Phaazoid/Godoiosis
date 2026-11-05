@@ -42,6 +42,7 @@ class_name DevOverlay
 @onready var camera_tool: CameraTool = get_node("%Camera")
 @onready var weather_tool: WeatherTool = get_node("%Weather")
 @onready var alchemy_tool: AlchemyTool = get_node("%Alchemy")
+@onready var air_gas_tool: AirGasTool = get_node("%AirGas")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 @onready var search_box: DevSearchBox = %DevSearch
@@ -85,6 +86,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, elemental effects. Save to source writes each value into the declaration that authors it."},
 	{"scope": "Project", "label": "Weather", "page": "%Weather",
 		"tip": "How each weather looks and what it does, tuned live on the board: the rain, its splashes and puddles, and the storm. Which weather a board wears is picked on Scenario > Properties."},
+	{"scope": "Project", "label": "Air & gas", "page": "%AirGas",
+		"tip": "The air's and the gases' balance numbers, tuned live: each substance's Normal and step, and each gas's linger, threshold, scald and air, with smoke's Smoked change. A board's own air reading is on Scenario > Properties."},
 	{"scope": "Session", "label": "Experiments", "page": "%Experiments",
 		"tip": "Dev feature flags for this machine — persisted to user://, read by nothing a player ships with."},
 	{"scope": "Session", "label": "Replay", "page": "%Replay",
@@ -142,6 +145,7 @@ func _ready() -> void:
 	replay_tool.init(game)
 	camera_tool.init(game)
 	weather_tool.init(game)
+	air_gas_tool.init(game)
 	alchemy_tool.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
@@ -377,6 +381,8 @@ func _on_tab_changed(_tab: int):
 		weights_tool.refresh_on_show()
 	if showing(weather_tool):
 		weather_tool.refresh_on_show()
+	if showing(air_gas_tool):
+		air_gas_tool.refresh_on_show()
 	if showing(alchemy_tool):
 		alchemy_tool.refresh_on_show()
 	if showing(object_tool):

@@ -10,7 +10,7 @@ var heal_amount: int = 0                          # the heal's whole size, UNCAP
 var states_added: Array[Elemental.State] = []
 var states_removed: Array[Elemental.State] = []
 # Authored duration overrides for states_added entries (max across fired reactions). Absent = the
-# state's default clock (Elemental.STATE_DEFAULT_TURNS); only meaningful for paired states.
+# state's default clock (Elemental.default_turns); only meaningful for paired states.
 var state_turns: Dictionary[Elemental.State, int] = {}
 var popups: Array[String] = []
 # The reactions that FIRED this hit, whole (#685 — was `reaction_icons: Array[Texture2D]`). The queue

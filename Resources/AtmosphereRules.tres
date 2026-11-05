@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AtmosphereRules" format=3 uid="uid://c123hp2wwv1dx"]
+
+[ext_resource type="Script" uid="uid://comy7lndtjxqf" path="res://Classes/alchemy/AtmosphereRules.gd" id="1_yum3p"]
+
+[resource]
+script = ExtResource("1_yum3p")
+normal = Dictionary[String, int]({
+"atom_aether": 10,
+"atom_fire": 20,
+"inert_air": 75,
+"vapor": 5,
+"vital_air": 20
+})
+step = Dictionary[String, int]({
+"atom_aether": 5,
+"atom_fire": 10,
+"inert_air": 10,
+"vapor": 5,
+"vital_air": 5
+})

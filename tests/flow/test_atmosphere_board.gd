@@ -31,7 +31,7 @@ func after_test() -> void:
 func _reading() -> Dictionary[String, int]:
 	var reading: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
-		reading[id] = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+		reading[id] = Atmosphere.normal_of(id) + Atmosphere.step_of(id)
 	return reading
 
 

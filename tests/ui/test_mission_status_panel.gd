@@ -380,7 +380,7 @@ func test_the_protect_row_wears_the_vip_star_and_keeps_its_words() -> void:
 # ==============================================================================
 #  The air's reading (#1324): what is off Normal, below the briefing
 # ==============================================================================
-# Every expectation is derived from Atmosphere.NORMAL / STEP / GROUPS, so a retune never reds this
+# Every expectation is derived from Atmosphere.normal_of / step_of / GROUPS, so a retune never reds this
 # (tests/README.md rule 8), and the air arrives through the real load path or the real Scenario-tab
 # spin, never by writing the store and refreshing by hand.
 
@@ -434,7 +434,7 @@ func test_a_normal_board_draws_no_air_rows() -> void:
 # Its own group's heading and nothing else -- a group all at Normal draws no heading.
 func test_off_normal_air_shows_without_objectives_under_its_own_heading() -> void:
 	var id: String = Atmosphere.SUBSTANCES[0]
-	var percent := int(Atmosphere.NORMAL[id]) + 2 * int(Atmosphere.STEP[id])
+	var percent := Atmosphere.normal_of(id) + 2 * Atmosphere.step_of(id)
 	await _load_with_air({id: percent})
 
 	assert_bool(panel._panel.visible) \
@@ -448,12 +448,12 @@ func test_off_normal_air_shows_without_objectives_under_its_own_heading() -> voi
 func test_air_off_normal_by_less_than_a_step_shows_its_percent_alone() -> void:
 	var id := ""
 	for candidate: String in Atmosphere.SUBSTANCES:
-		if int(Atmosphere.STEP[candidate]) > 1:
+		if Atmosphere.step_of(candidate) > 1:
 			id = candidate
 			break
 	if id == "":
 		return   # every step is 1, so every off-Normal percent is a whole step
-	var percent := int(Atmosphere.NORMAL[id]) + 1
+	var percent := Atmosphere.normal_of(id) + 1
 	await _load_with_air({id: percent})
 	assert_array(_row_texts()).contains(["%s — %d%%" % [SubstanceCatalog.name_of(id), percent]])
 
@@ -462,7 +462,7 @@ func test_the_air_reads_after_the_objectives() -> void:
 	var id: String = Atmosphere.SUBSTANCES[0]
 	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
 	_objectives([MissionRules.Objective.ROUT])
-	await _load_with_air({id: int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])})
+	await _load_with_air({id: Atmosphere.normal_of(id) + Atmosphere.step_of(id)})
 	var rows := _row_texts()
 	assert_int(rows.find("OBJECTIVES")).is_equal(0)
 	assert_int(rows.find(_group_of(id).to_upper())).is_greater(rows.find("OBJECTIVES"))
@@ -471,7 +471,7 @@ func test_the_air_reads_after_the_objectives() -> void:
 # A plain Label is never picked, so its tooltip would be dead however correct the text is.
 func test_an_air_row_carries_the_glossary_tooltip_and_stops_the_mouse() -> void:
 	var id: String = Atmosphere.SUBSTANCES[0]
-	await _load_with_air({id: int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])})
+	await _load_with_air({id: Atmosphere.normal_of(id) + Atmosphere.step_of(id)})
 	var row := _air_row(id)
 	assert_str(row.tooltip_text).is_equal(UiText.wrap(Glossary.short(Glossary.Term.ATMOSPHERE)))
 	assert_int(row.mouse_filter).is_equal(Control.MOUSE_FILTER_STOP)
@@ -481,11 +481,11 @@ func test_an_air_row_carries_the_glossary_tooltip_and_stops_the_mouse() -> void:
 func test_editing_the_air_on_the_scenario_tab_redraws_the_corner() -> void:
 	var id: String = Atmosphere.SUBSTANCES[0]
 	var spin: SpinBox = game.dev_overlay.scenario_tool._air_spins[id]
-	spin.value = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+	spin.value = Atmosphere.normal_of(id) + Atmosphere.step_of(id)
 	assert_bool(panel._panel.visible).override_failure_message("an air edit did not reach the HUD").is_true()
 	assert_object(_air_row(id)).is_not_null()
 
-	spin.value = int(Atmosphere.NORMAL[id])
+	spin.value = Atmosphere.normal_of(id)
 	assert_bool(panel._panel.visible).override_failure_message("air set back to Normal still showed").is_false()
 
 
@@ -542,7 +542,7 @@ func test_every_substance_off_normal_still_fits_beside_the_corner_strip() -> voi
 	_clock(4)
 	var reading: Dictionary[String, int] = {}
 	for id: String in Atmosphere.SUBSTANCES:
-		reading[id] = int(Atmosphere.NORMAL[id]) + int(Atmosphere.STEP[id])
+		reading[id] = Atmosphere.normal_of(id) + Atmosphere.step_of(id)
 	var longest: Weather.Kind = _moving_weathers()[0]
 	for kind: Weather.Kind in _moving_weathers():
 		if Weather.display_name(kind).length() > Weather.display_name(longest).length():

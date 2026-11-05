@@ -297,7 +297,7 @@ func _build_air_row() -> void:
 		+ "binds heat, Greater Fireball breaks vital air and binds heat, Freeze takes vapor and "
 		+ "aether, Heal binds aether. A carving fed by a "
 		+ "real source, like Pressure Spray by a river, ignores it. A thin reading never makes a "
-		+ "carving fizzle. Normal and the step size per substance are Atmosphere.NORMAL and STEP. "
+		+ "carving fizzle. Normal and the step size per substance are tuned on Project > Air & gas. "
 		+ "Saved with the board."))
 	add_child(_air_row)
 
@@ -312,7 +312,7 @@ func _refresh_air_row() -> void:
 
 # A substance at Normal is erased rather than stored, so the board follows a retuned Normal (#648).
 func _on_air_changed(id: String, percent: int) -> void:
-	if percent == int(Atmosphere.NORMAL[id]):
+	if percent == Atmosphere.normal_of(id):
 		scenario_manager.current_atmosphere.erase(id)
 	else:
 		scenario_manager.current_atmosphere[id] = percent

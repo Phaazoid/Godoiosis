@@ -84,6 +84,30 @@ Dev tools: `Classes/dev/DevOverlay.gd` (+ per-tool scripts in `Classes/dev/`) �
 
 **Two pages edit a ground reaction, declared:** Tiles (burn length and reach, live) and Reactions (the whole reaction, a copy). A Reactions Update writes through and replaces any unsaved Tiles dial on that one reaction, the ordinary edit-a-copy hazard; the confirm names the file.
 
+## The Air & gas page
+
+**Project › Air & gas ([#1534](https://github.com/Phaazoid/Godoiosis/issues/1534), 2026-11-05) is where the air's and the gases' balance numbers are tuned, live.** They were first guesses with no dev surface: the dev's word on smoke's was *"let the number be editable in dev tools, needs tuning"*. `AirGasTool` edits three kinds of rules file, and each is the cached object every reader already holds, so a slider moves the rule with no wire of its own:
+
+- **The air**: `Resources/AtmosphereRules.tres`, each ambient substance's Normal and its step. These were the `Atmosphere.NORMAL`/`STEP` consts; `Atmosphere.normal_of`/`step_of` read the file now. A readout under each substance says where a reading turns +1 and −1.
+- **A gas**: its `Resources/GasRules/<KIND>.tres`, which only the inspector used to edit. The rows are how long it lingers (`hold_rounds`), the level its state starts at (`state_from`), its scald by level (`damage`) and its air by level (`air`). What the gas IS (`state`, `while_standing`, `damage_element`) is one read-only line. A gas with no file (Poison, Sulfur) is not listed, because a file would start it thinning.
+- **A paired state**: `Resources/StateRules/<STATE>.tres`, its stat change and its default clock. These were `Elemental.CHILL_STAT_MODS`/`SMOKE_STAT_MODS`/`STATE_DEFAULT_TURNS`. `Elemental.paired_stat_mods` keeps its signature and its match arms (the registry of WHICH states pair) and returns the file's map; `Elemental.default_turns` reads the clock. Smoked's COH change is drawn under smoke. **Smoked's clock has no row**: standing in smoke never reads it, and nothing adds Smoked until [#1421](https://github.com/Phaazoid/Godoiosis/issues/1421). **Chilled has no row either**: it moved to a file because one question needs one home (Law #4), not because it was in scope.
+
+**Why files, and not `GameKnobs` rows.** The air's baseline is game-wide, which the knob fork would send to `GameKnobs`. It went to a file instead because its siblings are files of the same `substance → points` shape (`WeatherRules.air`, `GasRules.air`), and tuning smoke means its linger, threshold and COH change together, under one picker entry. `KnobSource` also has no shape for one entry inside a dictionary declaration. The plan approved on the issue states the fork.
+
+**Every edit re-resolves** (`_redraw`), through four doors:
+1. `Glossary.refresh()`. Its cached text quotes Normal, step, smoke's threshold and the state changes.
+2. `AlchemyTool.redraw_plan`, for the open plan and the enemy ranges.
+3. `game.refresh_mission_status()`, for the corner HUD's off-Normal list.
+4. **Last, `game.hover_presenter.refresh()`**, the existing door that repaints for a pointer that has not moved.
+
+The fourth door came out of the play-check, which drove the real window. The leash ring under a hovered leader in smoke kept its old shape after a COH edit, although the rule had moved (leash 2 → 4). The ring is drawn only when a mode opens or the hover changes CELL, and the dev's mouse is in the other OS window. An open aim's damage forecast has the same shape. The repaint comes after the re-resolve because the hover's lines read `next_round_board()` and `previewed_plan()`.
+
+The missing-wire case in `tests/dev/test_air_gas_tool.gd` logs each kind of row's calls. It asks for one of each door, and the hover after the plan. It was falsified twice, by deleting the redraw call and then the hover call. **The Glossary's Smoked entry reads smoke's `state_from`**, so moving the threshold re-words "medium or thick".
+
+**Declared: a move layer drawn when a mode opens stays as drawn.** With Move open, which tiles are green and a member's unreachable tiles were computed at entry (`game.leader_followable`, `squad_unreachable`). A COH edit leaves them until the mode is re-entered; the hover's ring and tethers do redraw. Re-entering a mode from a dev page would be a new door into game state. The Weather page and Alchemy › Sources call no hover repaint either, so an open aim's forecast keeps a weather air edit's old number until the pointer moves a cell. That is a follow-up.
+
+**Save and Reset are the Weather page's**: `_touched` maps each edited resource to its file, Save asks first (`DevWidgets.confirm`, naming every file) and writes through `save_over`, and Reset re-reads each from disk. Air and scald rows are sparse (0 erases the key, `WeatherTool._write_air`'s rule), so an untouched gas saves byte-identical.
+
 ## Reset-to-saved
 
 **Every page that edits LIVE offers a Reset that puts it back to its FILE ON DISK ([#1376](https://github.com/Phaazoid/Godoiosis/issues/1376), 2026-10-21).** The dev's ask: *"There should be a reset button in any page where I'm editing visuals, which will reset it specifically to how it was before I last saved."* His ruling on the open question, the same day: Reset means **last saved, the file on disk, on every page, the Moods tab included; Default stays its own button.** He scoped it to the LIVE pages (an edit lands on the shared object before any save: Moods, Game, Tiles, Weather, Weights) and ruled one Reset per Save on the Tiles page, so putting back a burn clock never throws away a tile-light edit.
@@ -98,6 +122,7 @@ Per page:
 - **Weather** mirrors its Save (#1370): every touched file, not only the one on show. `WeatherMirror` polls `look.fall` per frame, so a reverted fall re-switches the mirror with no extra wire.
 - **Weights** reads only the field it edits (weight, or a sparse BLD that comes back absent) out of the file. Its old Reset restored a snapshot taken at first touch, which would have adopted another page's in-memory change as "saved".
 - **Alchemy's Sources tab** ([#1532](https://github.com/Phaazoid/Godoiosis/issues/1532) slice 2) is `revert_to_saved` on the whole `SubstanceMap`, then a rebuild of every row and a re-resolve of the plan, since a reverted row changes what a queued carving fizzles on.
+- **Air & gas** ([#1534](https://github.com/Phaazoid/Godoiosis/issues/1534)) mirrors its Save as Weather does: `revert_to_saved` on every touched rules file, not only the one on show, then a refill and the same re-resolve an edit runs.
 
 **`tests/law/test_live_pages_offer_reset.gd`** scans `Classes/dev/`: a file calling `mark_unsaved` must call `offer_reset`, or be declared in `EDITS_A_COPY` (Rosters, Dialog timelines and Alchemy's Substances and Reactions tabs, whose marker sits on a form copy and whose Load re-reads the file). A declared page that stops wearing a marker goes red as stale. **Its stated limit is a live page with NO marker**: the Attack Editor's Weapon Families mode and its named effect looks edit the cached object (a named look's staged copy is a SHALLOW `duplicate()`, so its `overrides` Dictionary is still the library's) and wear no marker yet, so the scan cannot see them. That is the follow-up, not a pass.
 

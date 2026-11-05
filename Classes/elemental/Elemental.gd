@@ -85,26 +85,37 @@ static func state_display_name(s: State) -> String:
 # Turn math: StatEffect ticks at the OWNER's turn start (TurnBoundary.turn_start_ticks), before the
 # unit acts — so 2 turns = debuffed for exactly its next activation, 3 covers two.
 
-const CHILL_STAT_MODS: Dictionary[Stats.Stat, int] = { Stats.Stat.DEX: -1 }
-# Smoke blinds, and a leader who can't see holds its squad closer (#1335, dev 2026-10-22). Only a
-# LEADER's COH is ever read (Squad.range_of), so on a member this says nothing.
-const SMOKE_STAT_MODS: Dictionary[Stats.Stat, int] = { Stats.Stat.COH: -2 }
+# How MUCH and how LONG are each paired state's StateRules file (#1534), tuned on the dev tools' Air &
+# gas page; WHICH states pair is the match below. Chilled slows (DEX). Smoked blinds, and a leader who
+# can't see holds its squad closer (#1335): only a LEADER's COH is ever read (Squad.range_of), so on a
+# member it says nothing. Smoked's clock runs only when something ADDS it (a smoke carving, #1421);
+# standing in smoke holds it for exactly as long as the unit stands there, and stores nothing.
 
-# Default clock per paired state; a reaction may author a longer one (ElementalReaction.add_state_turns).
-# SMOKED's runs only when something ADDS it (a smoke carving, still to come); standing in smoke holds
-# it for exactly as long as the unit stands there, and stores nothing.
-const STATE_DEFAULT_TURNS: Dictionary[State, int] = { State.CHILLED: 2, State.SMOKED: 2 }
-
-# The pairing registry: one match arm per paired state (a nested typed const dictionary isn't
-# expressible in GDScript). Empty result = not a paired state.
+# The pairing registry: one match arm per paired state, each reading its file. Empty result = not a
+# paired state.
 static func paired_stat_mods(s: State) -> Dictionary[Stats.Stat, int]:
 	match s:
-		State.CHILLED:
-			return CHILL_STAT_MODS
-		State.SMOKED:
-			return SMOKE_STAT_MODS
+		State.CHILLED, State.SMOKED:
+			return _paired_rules(s).stat_mods
 	var none: Dictionary[Stats.Stat, int] = {}
 	return none
+
+
+# A paired state's default clock; a reaction may author a longer one (ElementalReaction.add_state_turns).
+# StatEffect.PERMANENT for a state that does not pair.
+static func default_turns(s: State) -> int:
+	if paired_stat_mods(s).is_empty():
+		return StatEffect.PERMANENT
+	return _paired_rules(s).turns
+
+
+# A paired state's file. A missing one is a fault, not a design: the state would hold no clock.
+static func _paired_rules(s: State) -> StateRules:
+	var rules := StateRules.for_state(s)
+	if rules == null:
+		push_error("Elemental: paired state %s has no file under %s" % [State.keys()[s], StateRules.FOLDER])
+		return StateRules.new()
+	return rules
 
 # Provenance tag for the paired StatEffect ("Chilled") — what Unit.remove_stat_effects_from keys on.
 static func state_effect_source(s: State) -> String:

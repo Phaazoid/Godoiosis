@@ -1,6 +1,6 @@
 # CHILLED — the first PAIRED element state: the marker on element_states answers "is it chilled"
 # (reactions key on it), a paired StatEffect carries the DEX debuff AND is the state's clock
-# (Elemental.paired_stat_mods / STATE_DEFAULT_TURNS). Unit's element-state doors own the lockstep.
+# (Elemental.paired_stat_mods / default_turns). Unit's element-state doors own the lockstep.
 # Resolver cases run against the AUTHORED catalog (ice_sets_chilled / ice_wet_deep_chill /
 # fire_chilled_temp_shock .tres), so a bad enum int in the content fails here. The end-to-end
 # case drives the headless Play API — the same SquadManager.resolve_plan + playback the game runs.
@@ -51,7 +51,7 @@ func test_the_chill_reactions_are_authored() -> void:
 	assert_bool(deep.add_states.has(CHILLED)).is_true()
 	assert_bool(deep.remove_states.has(WET)).is_true()          # the payoff spends the soak
 	assert_int(deep.damage_bonus).is_greater(0)
-	assert_int(int(deep.add_state_turns.get(CHILLED, 0))).is_greater(Elemental.STATE_DEFAULT_TURNS[CHILLED])
+	assert_int(int(deep.add_state_turns.get(CHILLED, 0))).is_greater(Elemental.default_turns(CHILLED))
 
 	var shock := _authored(Elemental.Element.FIRE, CHILLED)
 	assert_object(shock).is_not_null()
@@ -140,14 +140,14 @@ func test_chilling_pairs_a_dex_effect_with_the_marker() -> void:
 
 	assert_bool(u.element_states.has(CHILLED)).is_true()
 	assert_bool(u.has_stat_effect_from(Elemental.state_effect_source(CHILLED))).is_true()
-	assert_int(u.get_body_stat(Stats.Stat.DEX)).is_equal(dex_before + Elemental.CHILL_STAT_MODS[Stats.Stat.DEX])
+	assert_int(u.get_body_stat(Stats.Stat.DEX)).is_equal(dex_before + int(Elemental.paired_stat_mods(CHILLED)[Stats.Stat.DEX]))
 
 func test_the_clock_expiring_ends_the_state() -> void:
 	var u := H.spawn_unit(self, PLAYER, Vector2i.ZERO, {}, false)
 	var dex_before := u.get_body_stat(Stats.Stat.DEX)
 	u.add_element_state(CHILLED)
 
-	for _i in Elemental.STATE_DEFAULT_TURNS[CHILLED] - 1:
+	for _i in Elemental.default_turns(CHILLED) - 1:
 		u.tick_stat_effects()
 	assert_bool(u.element_states.has(CHILLED)).is_true()   # alive through the clock's last turn
 
@@ -171,12 +171,12 @@ func test_removing_the_state_retires_the_effect() -> void:
 func test_rechilling_refreshes_and_never_stacks() -> void:
 	var u := H.spawn_unit(self, PLAYER, Vector2i.ZERO, {}, false)
 	var dex_before := u.get_body_stat(Stats.Stat.DEX)
-	var long_clock: int = Elemental.STATE_DEFAULT_TURNS[CHILLED] + 2
+	var long_clock: int = Elemental.default_turns(CHILLED) + 2
 
 	u.add_element_state(CHILLED, long_clock)
 	u.add_element_state(CHILLED)   # default clock, shorter — must not shorten or stack
 
-	assert_int(u.get_body_stat(Stats.Stat.DEX)).is_equal(dex_before + Elemental.CHILL_STAT_MODS[Stats.Stat.DEX])
+	assert_int(u.get_body_stat(Stats.Stat.DEX)).is_equal(dex_before + int(Elemental.paired_stat_mods(CHILLED)[Stats.Stat.DEX]))
 	var source := Elemental.state_effect_source(CHILLED)
 	var remaining := 0
 	var count := 0
@@ -240,7 +240,7 @@ func test_a_real_ice_attack_deep_chills_through_the_play_api() -> void:
 
 	assert_bool(foe.element_states.has(CHILLED)).is_true()
 	assert_bool(foe.element_states.has(WET)).is_false()
-	assert_int(foe.get_body_stat(Stats.Stat.DEX)).is_equal(dex_wet + Elemental.CHILL_STAT_MODS[Stats.Stat.DEX])
+	assert_int(foe.get_body_stat(Stats.Stat.DEX)).is_equal(dex_wet + int(Elemental.paired_stat_mods(CHILLED)[Stats.Stat.DEX]))
 	# The authored deep-chill clock arrived through playback, not the default.
 	var deep := _authored(Elemental.Element.ICE, WET)
 	var source := Elemental.state_effect_source(CHILLED)
@@ -283,4 +283,4 @@ func test_a_real_fire_attack_thaws_a_chilled_unit_to_wet_through_the_play_api() 
 
 	assert_bool(foe.element_states.has(WET)).is_true()
 	assert_bool(foe.element_states.has(CHILLED)).is_false()
-	assert_int(foe.get_body_stat(Stats.Stat.DEX)).is_equal(dex_chilled - Elemental.CHILL_STAT_MODS[Stats.Stat.DEX])
+	assert_int(foe.get_body_stat(Stats.Stat.DEX)).is_equal(dex_chilled - int(Elemental.paired_stat_mods(CHILLED)[Stats.Stat.DEX]))

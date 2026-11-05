@@ -832,7 +832,7 @@ func test_the_damage_number_names_what_the_air_added() -> void:
 	var id: String = drawn[0]
 
 	var reading: Dictionary[String, int] = {}
-	reading[id] = int(Atmosphere.NORMAL[id]) + 2 * int(Atmosphere.STEP[id])
+	reading[id] = Atmosphere.normal_of(id) + 2 * Atmosphere.step_of(id)
 	game.scenario_manager.current_atmosphere = reading
 	var row: ActionQueueRow = await _queue_carving(carving)
 	if row == null:
