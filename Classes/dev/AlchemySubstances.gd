@@ -147,7 +147,7 @@ func _populate() -> void:
 	for prop in current.get_property_list():
 		if DevWidgets.is_exported(prop):
 			var nodes := DevWidgets.add_property_row(_form, current, prop.name, _populate)
-			if prop.name == "formula":
+			if prop.name == "formula" or prop.name == "extract_only":
 				widen_edits(nodes, FORMULA_WIDTH)
 	_readout = GridContainer.new()
 	_readout.columns = 2
@@ -211,9 +211,15 @@ static func lends_text(substance: Substance, id: String, catalog: Dictionary) ->
 	for found: String in CellSubstances.present_from(ids, catalog):
 		if found != id:
 			parts.append(SubstanceCatalog.name_of(found))
-	if parts.is_empty():
+	var held := PackedStringArray()
+	for found: String in CellSubstances.held_from(ids, catalog):
+		held.append(SubstanceCatalog.name_of(found))
+	if parts.is_empty() and held.is_empty():
 		return {"text": "nothing", "none": true}
-	return {"text": "%s   (what a cast beside it finds as well as %s)" % [", ".join(parts), own], "none": false}
+	var text := "%s   (what a cast beside it finds as well as %s)" % [", ".join(parts), own] if not parts.is_empty() else ""
+	if not held.is_empty():
+		text += ("   " if text != "" else "") + "held for an Extract: %s" % ", ".join(held)
+	return {"text": text, "none": false}
 
 
 func _line(key: String, value: String, key_color: Variant = null, value_color: Variant = null) -> void:

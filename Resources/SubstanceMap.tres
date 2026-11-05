@@ -4,16 +4,6 @@
 
 [resource]
 script = ExtResource("1_fw2p7")
-grounds = Dictionary[int, PackedStringArray]({
-1: PackedStringArray("green_plant", "dirt"),
-2: PackedStringArray("mud"),
-3: PackedStringArray("stone"),
-4: PackedStringArray("green_plant", "dirt"),
-5: PackedStringArray("water"),
-6: PackedStringArray("dirt"),
-7: PackedStringArray(),
-8: PackedStringArray("dry_plant", "dirt")
-})
 tile_states = Dictionary[int, PackedStringArray]({
 1: PackedStringArray("flame", "atom_fire"),
 2: PackedStringArray("ice"),

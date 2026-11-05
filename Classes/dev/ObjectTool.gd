@@ -7,7 +7,7 @@ class_name ObjectTool
 # THE PAGE IS A SCOPE GRADIENT, narrowest first, and that is the whole design -- three stores whose
 # only shared property is that a tile is how you find them:
 #
-#   This tile            a TileSet custom-data column   Save tile fields
+#   This tile            a TileSet custom-data column   Save tile fields   (its look, and what it is made of)
 #   Every <Kind> tile    the ignition .tres             Save ground rules
 #   Game-wide defaults   the @export declaration        Save game-wide defaults
 #
@@ -59,10 +59,11 @@ var _globals_baseline: Array = []
 # and what the running board already holds -- and because switching tiles mid-edit must not lose the
 # ground you were tuning a moment ago.
 var _staged_rules: Array[TerrainReaction] = []
-# The picked tile's "Made of" line and its ground, read-only here: the rows are the Alchemy page's
-# (#1532). Re-read on show, since that page edits them while this one sits built.
-var _made_of: Label = null
-var _made_of_kind := Terrain.Kind.NONE
+# The picked tile's "Made of" row (#1315): its made_of column, edited here and written live like every
+# per-tile field. The readout is re-read on show, since the Substances tab edits what a part lends.
+var _made_of: LineEdit = null
+var _made_of_readout: Label = null
+var _made_of_data: TileData = null
 
 
 func _ready() -> void:
@@ -127,6 +128,8 @@ func _rebuild() -> void:
 		child.queue_free()
 	_inherit_labels.clear()
 	_made_of = null
+	_made_of_readout = null
+	_made_of_data = null
 	if _host == null:
 		DevWidgets.add_label(_rows, "No 3D host attached - the flat 2D game has no tiles to tune.")
 		return
@@ -162,6 +165,7 @@ func _build_object_section() -> void:
 	# Narrowest scope first. Each section heads itself with what it moves, so the widening reach is
 	# read on the way down the page rather than discovered after a value has already moved.
 	DevWidgets.add_heading(_rows, "This tile")
+	_build_made_of_row(entry["data"])
 	var fields := ObjectKnobs.fields_for(entry["shape"], GridUtils.prop_lit_of(entry["data"]))
 	if fields.is_empty():
 		DevWidgets.add_label(_rows,
@@ -209,19 +213,11 @@ func _build_ground_section(entry: Dictionary) -> void:
 	if kind == Terrain.Kind.NONE:
 		return
 	var ground := _kind_label(kind)
-	DevWidgets.add_heading(_rows, "Every %s tile" % ground)
-	var first := _rows.get_child_count()
-	_made_of = Label.new()
-	_made_of.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_made_of.mouse_filter = Control.MOUSE_FILTER_PASS
-	_made_of_kind = kind
-	_rows.add_child(_made_of)
-	_refresh_made_of()
-	_tip_rows(first, "What every %s tile is made of: what a carving cast beside one can draw on, and the parts a compound lends. Read-only here; it is edited on Project > Alchemy, which saves Resources/SubstanceMap.tres." % ground)
 	if not ObjectKnobs.ground_rules_apply_to(kind):
 		return
+	DevWidgets.add_heading(_rows, "Every %s tile" % ground)
 	var fuel := TerrainReactionCatalog.fuel_for_kind(kind, _reactions)
-	first = _rows.get_child_count()
+	var first := _rows.get_child_count()
 	DevWidgets.add_checkbox(_rows, "Burnable", fuel != null,
 		func(on: bool) -> void: _set_burnable(kind, on))
 	_tip_rows(first, "Whether fire spreads on this ground. It is the ground's KIND that answers, not this tile -- the sheet's four grass tiles cannot disagree about whether grass burns, because the rules ask for a kind and get one reaction back. Ticking this writes or DELETES that reaction file, so it asks first.")
@@ -252,9 +248,71 @@ func _build_ground_section(entry: Dictionary) -> void:
 	DevWidgets.add_label(_rows, "    authored in %s" % fuel.resource_path)
 
 
+# --- What this tile is made of (#1315) ----------------------------------------------------------
+
+# Every tile gets the row, flat ground included: the column is chemistry, not a look field, so it is
+# not an ObjectKnobs.FIELDS row (those describe something STANDING on a cell). Parsed and read out by
+# the Sources tab's own parser and readout, so the two pages cannot disagree.
+func _build_made_of_row(data: TileData) -> void:
+	var tiles := _tile_set()
+	if tiles == null or tiles.get_custom_data_layer_by_name(GridUtils.MADE_OF) < 0:
+		DevWidgets.add_label(_rows, "This tileset has no %s column." % GridUtils.MADE_OF)
+		return
+	_made_of_data = data
+	var first := _rows.get_child_count()
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "Made of"
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_child(label)
+	_made_of = LineEdit.new()
+	_made_of.text = " + ".join(GridUtils.made_of(data))
+	_made_of.placeholder_text = "nothing"
+	_made_of.custom_minimum_size = Vector2(AlchemySources.FIELD_WIDTH, 0)
+	_made_of.text_changed.connect(_on_made_of_typed)
+	row.add_child(_made_of)
+	_rows.add_child(row)
+	_made_of_readout = Label.new()
+	_made_of_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_made_of_readout.mouse_filter = Control.MOUSE_FILTER_PASS
+	_rows.add_child(_made_of_readout)
+	_refresh_made_of()
+	_tip_rows(first, ("What THIS tile is made of: substance file names (Resources/Substances/) joined by +. "
+		+ "A carving cast within %d tile of it can draw on each one, on the parts a compound lends, and "
+		+ "with an Extract on the parts it holds. Empty means nothing. A change reaches the next cast; "
+		+ "Save tile fields writes it into the tileset.") % Materia.REACH)
+
+
 func _refresh_made_of() -> void:
-	if _made_of != null and is_instance_valid(_made_of):
-		_made_of.text = AlchemySources.made_of_line(SubstanceMap.authored().of_kind(_made_of_kind))
+	if _made_of_readout == null or not is_instance_valid(_made_of_readout) or _made_of_data == null:
+		return
+	_show_made_of(GridUtils.made_of(_made_of_data))
+
+
+func _show_made_of(ids: Array[String]) -> void:
+	_made_of_readout.remove_theme_color_override("font_color")
+	_made_of_readout.text = "    " + AlchemySources.readout_text(ids)
+	if ids.is_empty():
+		_made_of_readout.add_theme_color_override("font_color", AlchemySources.EMPTY_COLOR)
+
+
+# Written on every keystroke that parses, and never by rebuilding the page, which would take the
+# field's focus mid-word. A row naming nothing real is shown in red and not written.
+func _on_made_of_typed(text: String) -> void:
+	var parsed := AlchemySources.parse_row(text, SubstanceCatalog.get_all())
+	if parsed["error"] != "":
+		_made_of_readout.text = "    " + String(parsed["error"])
+		_made_of_readout.add_theme_color_override("font_color", AlchemySources.BAD_COLOR)
+		return
+	var ids: Array[String] = parsed["ids"]
+	_made_of_data.set_custom_data(GridUtils.MADE_OF, PackedStringArray(ids))
+	_touch()
+	_show_made_of(ids)
+	AlchemyTool.redraw_plan(_game())
+
+
+func _game():
+	return _host.game if _host != null else null
 
 
 # --- The game-wide defaults (#902, off the Game tab's World group) ------------------------------
@@ -576,6 +634,7 @@ func _on_reset_fields_pressed() -> void:
 	if _host != null:
 		_host.rebuild_props()
 	_rebuild()
+	AlchemyTool.redraw_plan(_game())   # a made_of put back may un-fizzle a queued cast
 	_status.text = "Tile fields back to what %s says on disk." % tiles.resource_path.get_file()
 
 

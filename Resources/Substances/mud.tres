@@ -5,5 +5,5 @@
 [resource]
 script = ExtResource("1_subst")
 display_name = "Mud"
-formula = "dirt + W2"
+formula = "loam + W2"
 phase = 1

@@ -4,6 +4,6 @@
 
 [resource]
 script = ExtResource("1_subst")
-display_name = "Stone"
+display_name = "Sandstone"
 formula = "E2 + QFAE2"
 phase = 1

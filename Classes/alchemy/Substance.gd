@@ -25,10 +25,24 @@ enum Phase { UNBOUND, SOLID, LIQUID, GAS }
 # A molecule has no parts, so the tick says nothing there.
 @export var lends_its_parts := true
 
+# Which of its parts this compound HOLDS (#1315): substance ids joined by `+`, present only to an
+# Extract, which draws them out for the carving's later verbs. Loam holds its water, so a plain
+# Push finds none in the dirt.
+@export_placeholder("water") var extract_only: String = ""
+
 
 # The file name: what an equation writes to name this substance outright.
 func id() -> String:
 	return resource_path.get_file().get_basename()
+
+
+func extract_only_ids() -> Array[String]:
+	var out: Array[String] = []
+	for raw: String in extract_only.split("+", false):
+		var id := raw.strip_edges()
+		if id != "" and not out.has(id):
+			out.append(id)
+	return out
 
 
 func is_compound() -> bool:
@@ -41,5 +55,6 @@ static func property_tips() -> Dictionary:
 		"display_name": "What a player reads, e.g. Vital air. Equations, recipes and Sources rows name the FILE (its id), never this.",
 		"formula": "What it is made of. A molecule in Q F A W E order (FW), or a * composition (QE*FE*WE); or a compound, other substance ids joined by + with optional counts (dirt + W2).",
 		"phase": "Solid, liquid or gas; Unbound for the free elements and the energetic substances (flame, lightning, essence).",
-		"lends_its_parts": "On: a cast beside this compound finds its parts as well as it (mud lends dirt and water). Off: it is present as itself alone, as plant matter is. A molecule has no parts either way.",
+		"lends_its_parts": "On: a cast beside this compound finds its parts as well as it (mud lends loam and water). Off: it is present as itself alone, as plant matter is. A molecule has no parts either way.",
+		"extract_only": "Parts this compound HOLDS: substance ids joined by +. Only an Extract finds them, and it draws them out for the carving's later verbs. Loam holds its water, so Push(W2) finds none in the dirt but Extract(W2) + Push(W2) does. Empty: every part is free.",
 	}

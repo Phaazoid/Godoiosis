@@ -15,6 +15,7 @@ const BOARD_TILES := "res://Resources/TestTiles.tres"
 var _tiles: TileSet
 var _data: TileData
 var _mirror: BoardMirror
+var _scene: Node3D   # only the real-window case boots one
 
 
 func before_test() -> void:
@@ -45,6 +46,13 @@ func after_test() -> void:
 	_mirror.free()
 	if FileAccess.file_exists(SCRATCH_TILES):
 		DirAccess.remove_absolute(SCRATCH_TILES)
+	if is_instance_valid(_scene):
+		# The real page edits the CACHED board tileset: put the file's columns back before any later
+		# suite reads it.
+		ObjectKnobs.revert_fields(load(BOARD_TILES) as TileSet)
+		get_tree().root.remove_child(_scene)
+		_scene.free()
+		await await_idle_frame()   # #93/#101 orphan workaround
 
 
 # --- Reset tile fields (#1376) -------------------------------------------------------------
@@ -432,3 +440,144 @@ func _props_of(knobs: Array[Dictionary]) -> Array[String]:
 	for knob: Dictionary in knobs:
 		out.append(knob["prop"])
 	return out
+
+
+# --- What this tile is made of (#1315) ----------------------------------------------------------
+#
+# A ground's makeup is a TileSet column, edited on the Tiles page. These drive the page's own row
+# against the synthetic sheet, given the column, with a stub host whose game counts plan re-reads.
+# The ids typed are picked from the real catalog, never named (the content razor).
+
+class _StubGrid extends RefCounted:
+	var tile_set: TileSet
+
+class _StubSquads extends RefCounted:
+	var active_squad = null
+
+class _StubGame extends RefCounted:
+	var grid := _StubGrid.new()
+	var squad_manager := _StubSquads.new()
+	var refreshed := 0
+	var dropped := 0
+	func refresh_action_queue(_squad) -> void:
+		refreshed += 1
+	func drop_threat_field() -> void:
+		dropped += 1
+
+class _StubHost extends Node3D:
+	var game
+
+
+func _add_made_of_column() -> void:
+	var at := _tiles.get_custom_data_layers_count()
+	_tiles.add_custom_data_layer()
+	_tiles.set_custom_data_layer_name(at, GridUtils.MADE_OF)
+	_tiles.set_custom_data_layer_type(at, TYPE_PACKED_STRING_ARRAY)
+
+
+func _made_of_page(game: _StubGame) -> ObjectTool:
+	_add_made_of_column()
+	game.grid.tile_set = _tiles
+	var host: _StubHost = auto_free(_StubHost.new())
+	host.game = game
+	var panel: ObjectTool = auto_free(ObjectTool.new())
+	add_child(panel)
+	panel._host = host   # not attach_host: the row is what is under test, not the page rebuild
+	panel._build_made_of_row(_data)
+	return panel
+
+
+func _type_made_of(panel: ObjectTool, text: String) -> void:
+	panel._made_of.text = text
+	panel._made_of.text_changed.emit(text)   # setting text from code emits nothing; a keystroke does
+
+
+# THE MISSING-WIRE CASE: a typed makeup lands on the tile the board reads, with no save, and the
+# plan is re-read so a queued carving is judged against it.
+func test_a_typed_makeup_reaches_the_tile_and_the_plan() -> void:
+	var game := _StubGame.new()
+	var panel := _made_of_page(game)
+	var pick: String = SubstanceCatalog.get_all().keys()[0]
+	_type_made_of(panel, pick)
+	assert_array(GridUtils.made_of(_data)).is_equal([pick])
+	var layer: TileMapLayer = auto_free(TileMapLayer.new())
+	layer.tile_set = _tiles
+	layer.set_cell(Vector2i(2, 3), 0, Vector2i.ZERO)
+	assert_array(BoardContext.new(layer, [] as Array[Unit], null).made_of_at(Vector2i(2, 3))).override_failure_message(
+			"the page wrote a column the board does not read").is_equal([pick])
+	assert_int(game.refreshed).is_equal(1)
+	assert_int(game.dropped).is_equal(1)
+	assert_bool(panel.has_unsaved_changes()).is_true()
+
+
+func test_an_unknown_or_repeated_substance_is_not_written() -> void:
+	var game := _StubGame.new()
+	var panel := _made_of_page(game)
+	var any: String = SubstanceCatalog.get_all().keys()[0]
+	for text: String in ["no_such_substance_here", "%s + %s" % [any, any]]:
+		_type_made_of(panel, text)
+		assert_array(GridUtils.made_of(_data)).override_failure_message("\"%s\" was written" % text).is_empty()
+		assert_str(panel._made_of_readout.text).contains("Not written")
+	assert_int(game.refreshed).override_failure_message("a refused row re-resolved the plan").is_equal(0)
+	assert_bool(panel.has_unsaved_changes()).is_false()
+
+
+# The readout names the row's own substances and the parts a cast would find with them.
+func test_the_makeup_readout_names_what_a_cast_would_find() -> void:
+	var compound := ""
+	for id: String in SubstanceCatalog.get_all():
+		if CellSubstances.present_from([id] as Array[String]).size() > 1:
+			compound = id
+			break
+	assert_str(compound).override_failure_message("no substance lends a part").is_not_empty()
+	var panel := _made_of_page(_StubGame.new())
+	_type_made_of(panel, compound)
+	var catalog := SubstanceCatalog.get_all()
+	for id: String in CellSubstances.present_from([compound] as Array[String]):
+		var shown: String = (catalog[id] as Substance).display_name
+		assert_str(panel._made_of_readout.text).contains(shown if shown != "" else id)
+
+
+# Reset tile fields puts the makeup back too: it is a tile column like the look fields.
+func test_reset_tile_fields_puts_the_makeup_back() -> void:
+	_add_made_of_column()
+	var saved: String = SubstanceCatalog.get_all().keys()[0]
+	_data.set_custom_data(GridUtils.MADE_OF, PackedStringArray([saved]))
+	assert_int(ResourceSaver.save(_tiles, SCRATCH_TILES)).is_equal(OK)
+	# REPLACE: the other reset case cached a sheet at this path that has no makeup column.
+	var live := ResourceLoader.load(SCRATCH_TILES, "", ResourceLoader.CACHE_MODE_REPLACE) as TileSet
+	var live_data := (live.get_source(0) as TileSetAtlasSource).get_tile_data(Vector2i.ZERO, 0)
+	live_data.set_custom_data(GridUtils.MADE_OF, PackedStringArray())
+
+	assert_bool(ObjectKnobs.revert_fields(live)).is_true()
+
+	assert_array(GridUtils.made_of(live_data)).override_failure_message(
+			"Reset tile fields left the makeup as edited").is_equal([saved])
+
+
+# The real window: the picked tile's page carries the row, and a typed makeup lands on that tile of the
+# board's own tileset. The only case that reaches the row through _rebuild rather than calling it.
+func test_the_real_tiles_page_edits_the_picked_tiles_makeup() -> void:
+	_scene = (load("res://Scenes/Battle3D/Battle3D.tscn") as PackedScene).instantiate() as Node3D
+	_scene.auto_play = false
+	get_tree().root.add_child(_scene)
+	await await_idle_frame()
+	var overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
+	var page := overlay.object_tool
+	assert_bool(page.has_host()).override_failure_message("the Tiles page has no 3D host").is_true()
+	assert_bool(page._objects.is_empty()).override_failure_message("the Tiles page lists no tile").is_false()
+	page._picked = 0
+	page._rebuild()
+	overlay.show_leaf(page)
+	assert_object(page._made_of).override_failure_message("the picked tile's page has no makeup row").is_not_null()
+	var data: TileData = page._objects[0]["data"]
+	var ids := GridUtils.made_of(data)
+	var pick := ""
+	for id: String in SubstanceCatalog.get_all():
+		if not ids.has(id):
+			pick = id
+			break
+	ids.append(pick)
+	_type_made_of(page, " + ".join(ids))
+	assert_array(GridUtils.made_of(data)).override_failure_message(
+			"the typed makeup did not land on the picked tile").contains([pick])

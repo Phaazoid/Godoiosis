@@ -18,12 +18,16 @@ class_name ReactionLint
 # An EMPTY equation is not a fault here. The test's pending ledger owns which reactions may still
 # lack one, so a missing equation is a declared gap rather than a quiet warning.
 #
-# `map` is what each thing is made of: the authored one unless a caller hands its own.
+# `map` is what each tile state, gas and unit state is made of: the authored one unless a caller hands
+# its own. A GROUND reaction keys on a Terrain.Kind, and a ground is made of what its TILES say
+# (#1315): every substance any tile of that kind names, off the authored tileset unless a caller hands
+# `grounds` (Terrain.Kind -> Array[String]).
 
 enum Severity { BLOCKS, DEGRADES }
 
 
-static func check(reaction: Resource, catalog: Dictionary = {}, map: SubstanceMap = null) -> Array[Dictionary]:
+static func check(reaction: Resource, catalog: Dictionary = {}, map: SubstanceMap = null,
+		grounds: Dictionary = {}) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	if reaction == null:
 		return found
@@ -48,7 +52,7 @@ static func check(reaction: Resource, catalog: Dictionary = {}, map: SubstanceMa
 	if inputs.counts != outputs.counts:
 		_add(found, Severity.BLOCKS, "unbalanced: the inputs hold %s, the outputs %s" % [
 				AlchemyFormula.format_atoms(inputs.counts), AlchemyFormula.format_atoms(outputs.counts)])
-	for wanted: Dictionary in _expected_inputs(reaction, map):
+	for wanted: Dictionary in _expected_inputs(reaction, map, grounds):
 		_check_named(found, inputs, wanted, "inputs")
 	for wanted: Dictionary in _expected_outputs(reaction, map):
 		_check_named(found, outputs, wanted, "outputs")
@@ -70,11 +74,23 @@ static func check_substance(substance: Substance, catalog: Dictionary = {}) -> A
 		return found
 	if not substance.is_compound() and not AlchemyFormula.in_alchemical_order(substance.formula):
 		_add(found, Severity.DEGRADES, "%s is not written in Q F A W E order" % substance.formula)
+	# What it holds for an Extract (#1315): a name nothing answers to blocks, as in the formula; a real
+	# substance that is not one of its parts holds nothing.
+	var parts: Array[String] = []
+	if substance.is_compound():
+		var side := AlchemyFormula.side(substance.formula, catalog)
+		if side.error == "":
+			parts = side.ids
+	for id: String in substance.extract_only_ids():
+		if not catalog.has(id):
+			_add(found, Severity.BLOCKS, "Extract only names no substance '%s'" % id)
+		elif not parts.has(id):
+			_add(found, Severity.DEGRADES, "Extract only: %s is not one of its parts, so it holds none" % id)
 	return found
 
 
 # {ids, what}: the substances the inputs must name one of, and the game thing they stand for.
-static func _expected_inputs(reaction: Resource, map: SubstanceMap) -> Array[Dictionary]:
+static func _expected_inputs(reaction: Resource, map: SubstanceMap, grounds: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if reaction is ElementalReaction:
 		var r := reaction as ElementalReaction
@@ -83,9 +99,19 @@ static func _expected_inputs(reaction: Resource, map: SubstanceMap) -> Array[Dic
 	elif reaction is TerrainReaction:
 		var r := reaction as TerrainReaction
 		_expect(out, _one(SubstanceMap.of_element(r.incoming_element)), "the incoming %s" % Elemental.display_name(r.incoming_element))
-		_expect(out, map.of_kind(r.required_kind), "the %s ground" % Terrain.Kind.keys()[r.required_kind].capitalize())
+		if r.required_kind != Terrain.Kind.NONE:   # NONE is any ground, so nothing to name
+			_expect(out, _ground(r.required_kind, grounds), "the %s ground" % Terrain.Kind.keys()[r.required_kind].capitalize())
 		_expect(out, map.of_tile_state(r.required_tile_state), "the required %s" % Terrain.TileState.keys()[r.required_tile_state].capitalize())
 	return out
+
+
+# What a ground kind is made of: the caller's, else every authored tile of that kind.
+static func _ground(kind: Terrain.Kind, grounds: Dictionary) -> Array[String]:
+	if not grounds.is_empty():
+		var out: Array[String] = []
+		out.assign(grounds.get(kind, []))
+		return out
+	return GridUtils.made_of_kind(load(GridUtils.TILESET_PATH) as TileSet, kind)
 
 
 static func _expected_outputs(reaction: Resource, map: SubstanceMap) -> Array[Dictionary]:
