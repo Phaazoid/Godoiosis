@@ -918,20 +918,21 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 # The gas a hit's fired reactions release (#1329): fire drying a wet unit boils its water off as steam,
 # on the cell the target was hit on. Once per VICTIM, secondary hits included, since each victim's
 # water is its own -- where an attack's own gas lands once per volley. Into the one cell-effect channel,
-# so the board ghosts it and both executors play it, and gated like every deposit on
-# GasSpread.holds_gas, so the preview never promises gas the board would not hold (Law #2).
+# so the board ghosts it and both executors play it, and laid where every release lies
+# (GasSpread.released_onto, #1537), so the preview never promises gas the board would not hold (Law #2).
 static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalReaction], cell: Vector2i,
 		plan: ResolvedPlan, board: BoardContext) -> void:
-	if board == null or not GasSpread.holds_gas(cell, board):
+	if board == null:
 		return
-	var effect := ResolvedCellEffect.new()
-	effect.cell = cell
-	for reaction in fired:
-		effect.add_gases(reaction.gases)
-	if effect.gas_added.is_empty():
-		return
-	effect.cause = action
-	plan.deposit(effect)
+	for onto in GasSpread.released_onto(cell, board):
+		var effect := ResolvedCellEffect.new()
+		effect.cell = onto
+		for reaction in fired:
+			effect.add_gases(reaction.gases)
+		if effect.gas_added.is_empty():
+			return
+		effect.cause = action
+		plan.deposit(effect)
 
 # The states a unit would hold once a hit's removes and then its adds have landed: #1092's judge of
 # what an add is blocked by. The landing itself goes through the body's doors (_resolve_one).
@@ -1644,6 +1645,8 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	# before anything moves, and landed only after the loop, so a cloud across a struck line shifts
 	# intact rather than eating itself.
 	var blown: Array[Dictionary] = []   # {"to": Vector2i, "gas": int}
+	# Gas released on a tile that cannot hold it, by where it spills (#1537), landed with the pushes.
+	var spilled: Array[Dictionary] = []   # {"from": Vector2i, "gas": Dictionary[Gas.Kind, int]}
 	var at: Dictionary[Vector2i, ResolvedCellEffect] = {}
 	# The deposit lands on the tiles the attack STRUCK -- every one, occupied or not -- as stamped by
 	# whoever built the volley (#1057). Not re-derived from Reach: a single-target swing stops at its
@@ -1681,8 +1684,10 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 				effect.cell = cell
 			effect.add_gases(fired.gases)
 		# Gas lies only where it could travel (GasSpread.holds_gas), whoever released it -- so the
-		# preview never promises gas the board would not hold (Law #2).
+		# preview never promises gas the board would not hold (Law #2). Released on a tile that cannot
+		# hold it, it spills to the tile's open sides (GasSpread.released_onto, #1537), landed below.
 		if effect != null and not effect.gas_added.is_empty() and not GasSpread.holds_gas(cell, board):
+			spilled.append({"from": cell, "gas": effect.gas_added.duplicate()})
 			effect.gas_added.clear()
 			if effect.states_added.is_empty() and effect.states_removed.is_empty() and not effect.gas_cleared:
 				effect = null
@@ -1694,20 +1699,33 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 			at[cell] = effect
 	# A push is the clear above plus an ordinary deposit where the gas lands, so every reader of the
 	# channel already folds it. A tile it lands on that this hit struck takes it in that tile's own
-	# effect, after its own gas has gone (ResolvedCellEffect folds the clear first).
+	# effect, after its own gas has gone (ResolvedCellEffect folds the clear first). A spill lands the
+	# same way, its full levels on every open side (#1537).
 	for push: Dictionary in blown:
-		var to: Vector2i = push["to"]
-		var effect: ResolvedCellEffect = at.get(to, null)
-		if effect == null:
-			effect = ResolvedCellEffect.new()
-			effect.cell = to
-			effect.cause = action
-			effects.append(effect)
-			at[to] = effect
 		var packed: int = push["gas"]
+		var landing := _arrival(push["to"], action, at, effects)
 		for kind: Gas.Kind in Gas.kinds_in(packed):
-			effect.add_gas(kind, Gas.level_in(packed, kind))
+			landing.add_gas(kind, Gas.level_in(packed, kind))
+	for spill: Dictionary in spilled:
+		var gas: Dictionary = spill["gas"]
+		for to in GasSpread.released_onto(spill["from"], board):
+			var landing := _arrival(to, action, at, effects)
+			for kind: Gas.Kind in gas:
+				landing.add_gas(kind, gas[kind])
 	return effects
+
+# The effect gas arriving on `to` lands in (#1332, #1537): that tile's own effect when this hit made
+# one, else a new one caused by the hit, recorded in both lists.
+static func _arrival(to: Vector2i, action: AttackAction, at: Dictionary[Vector2i, ResolvedCellEffect],
+		effects: Array[ResolvedCellEffect]) -> ResolvedCellEffect:
+	var effect: ResolvedCellEffect = at.get(to, null)
+	if effect == null:
+		effect = ResolvedCellEffect.new()
+		effect.cell = to
+		effect.cause = action
+		effects.append(effect)
+		at[to] = effect
+	return effect
 
 # Where the gas a hit clears from `cell` comes to rest (#1332): as far as the hit SHOVES, along the
 # shove's own direction, so a body and the gas it stands in fly together. Gas weighs nothing, so no
