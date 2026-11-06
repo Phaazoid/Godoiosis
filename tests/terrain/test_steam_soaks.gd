@@ -21,6 +21,8 @@ const STEAM := Gas.Kind.STEAM
 var _main: Node
 var game: Node2D
 var rules: GasRules
+var _lent: GasRules = null   # a second gas's live rules a case changed, and what to put back
+var _lent_was := {}
 
 
 func before_test() -> void:
@@ -41,6 +43,10 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	if _lent != null:
+		for field: String in _lent_was:
+			_lent.set(field, _lent_was[field])
+		_lent = null
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -164,6 +170,43 @@ func test_a_state_that_keeps_the_soak_off_wins_and_stays() -> void:
 			"steam soaked a unit holding a state that keeps the soak off").is_false()
 	assert_bool(unit.element_states.has(blocker)).override_failure_message(
 			"the soak stripped the state that should have kept it off").is_true()
+
+
+# Two gases giving one state give ONE row (#1622): each kind is asked with what the rows before it add,
+# as the weather already is. Only steam gives a state today, so a second gas is made to give steam's
+# through its live rules file, the object the Air & gas page edits, and is put back in after_test.
+func test_two_gases_giving_one_state_give_one_row() -> void:
+	var second := _lend_steams_state()
+	assert_int(second).override_failure_message("fixture: no second gas has a rules file").is_not_equal(-1)
+	if second == -1:
+		return
+	var unit := _spawn(CELL, Team.Faction.PLAYER)
+	_steam(CELL, rules.state_from)
+	game.gas_field.set_level(CELL, second as Gas.Kind, Gas.Level.THIN)
+
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
+	assert_int(_rows_giving(plan.tile_hits, rules.state).size()).override_failure_message(
+			"the queue forecast one state twice for two gases that give it").is_equal(1)
+	assert_int(_rows_giving(_live_hits(), rules.state).size()).override_failure_message(
+			"the turn end would give one state twice for two gases that give it").is_equal(1)
+
+
+# Any gas but steam that has a rules file, made to give steam's state from Thin up, held as standing
+# leaves it and scalding nobody: its kind, or -1.
+func _lend_steams_state() -> int:
+	for kind: Gas.Kind in Gas.Kind.values():
+		var other := GasRules.for_kind(kind)
+		if kind == STEAM or other == null:
+			continue
+		_lent = other
+		_lent_was = {"state": other.state, "state_from": other.state_from,
+				"while_standing": other.while_standing, "damage": other.damage.duplicate()}
+		other.state = rules.state
+		other.state_from = Gas.Level.THIN
+		other.while_standing = false
+		other.damage.clear()
+		return kind
+	return -1
 
 
 # ==============================================================================

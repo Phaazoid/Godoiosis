@@ -15,10 +15,12 @@ var _subs: AlchemySubstances
 var _reacts: AlchemyReactions
 var _scene: Node3D
 var _flipped: Substance = null   # a live catalog object a case changed, put back after
+var _reformed: Substance = null  # ...and one whose formula a case changed
+var _formula_was := ""
 
 
 # What the pages re-read the plan through, and the board a ground Save As re-wires: counts, so a
-# case can ask whether a save reached them.
+# case can ask whether a save reached them, and `on_refresh`, read at the moment the plan is re-read.
 class _StubSquads extends RefCounted:
 	var active_squad = null
 
@@ -28,8 +30,11 @@ class _StubGame extends RefCounted:
 	var grid: TileMapLayer = null
 	var refreshed := 0
 	var dropped := 0
+	var on_refresh := Callable()
 	func refresh_action_queue(_squad) -> void:
 		refreshed += 1
+		if on_refresh.is_valid():
+			on_refresh.call()
 	func drop_threat_field() -> void:
 		dropped += 1
 
@@ -52,6 +57,9 @@ func after_test() -> void:
 	if _flipped != null:
 		_flipped.lends_its_parts = true
 		_flipped = null
+	if _reformed != null:
+		_reformed.formula = _formula_was   # before the refresh below, so every carving re-parses it
+		_reformed = null
 	if is_instance_valid(_scene):
 		get_tree().root.remove_child(_scene)
 		_scene.free()
@@ -441,6 +449,58 @@ func test_a_confirmed_update_writes_and_rereads_the_plan() -> void:
 	assert_bool(_subs.is_dirty()).is_false()
 	assert_int(game.refreshed).is_equal(1)
 	assert_int(game.dropped).is_equal(1)
+
+
+# A carving's parse is derived off the substances its arguments name (#1622): an Update that changes
+# one must reach every carving BEFORE the plan is re-read, or the re-resolve gates and scales the cast
+# on the old formula until a restart. Any carving the catalog lists will do; the oracle is a fresh parse.
+func test_a_confirmed_update_reparses_every_carving_before_the_plan_is_reread() -> void:
+	var carving := _carving_an_update_moves()
+	assert_object(carving).override_failure_message(
+		"fixture: no carving's parse moves when one of its arguments' formula doubles").is_not_null()
+	if carving == null:
+		return
+	var fresh := CarvingRecipe.parse(carving.recipe)
+	var seen := {}
+	var game := _stub_game(_subs)
+	game.on_refresh = func() -> void:
+		seen["error"] = carving.recipe_error()
+		seen["demand"] = carving.demand().duplicate()
+	var probe := DIR + "probe.tres"
+	assert_int(ResourceSaver.save(_subs.current.duplicate(true), probe)).is_equal(OK)
+	_subs._update_confirmed(probe)
+
+	assert_bool(seen.is_empty()).override_failure_message("the Update never re-read the plan").is_false()
+	assert_str(seen.get("error", "")).override_failure_message(
+		"the re-read plan saw the carving's old parse").is_equal(fresh.error)
+	assert_dict(seen.get("demand", {})).override_failure_message(
+		"the re-read plan saw the carving's old demand").is_equal(fresh.demand())
+
+
+# The first carving whose parse the doubling of one of its arguments moves, parsed BEFORE the change as
+# the game would have; the substance is moved as the Update's write-through moves it (`_reformed`, put
+# back after). Null when none moves.
+func _carving_an_update_moves() -> TransmutationData:
+	var catalog := SubstanceCatalog.get_all()
+	var carvings := TransmutationCatalog.get_all()
+	for key: String in carvings:
+		var carving := carvings[key] as TransmutationData
+		var before := carving.parsed()
+		for step: CarvingRecipe.Step in before.steps:
+			for id: String in step.args:
+				var substance := catalog.get(id) as Substance
+				if substance == null:
+					continue
+				var was := substance.formula
+				var joint := " + " if substance.is_compound() else "*"
+				substance.formula = was + joint + was
+				var fresh := CarvingRecipe.parse(carving.recipe)
+				if fresh.error != before.error or fresh.demand() != before.demand():
+					_reformed = substance
+					_formula_was = was
+					return carving
+				substance.formula = was
+	return null
 
 
 # --- Save As --------------------------------------------------------------------------------
