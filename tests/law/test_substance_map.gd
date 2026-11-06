@@ -91,6 +91,32 @@ func test_every_tile_names_real_substances() -> void:
 	assert_array(faults).is_empty()
 
 
+# Walkable ground with a kind is somewhere a unit stands and casts from, so it must say what it is
+# made of (#1315): an empty makeup makes every carving fizzle there, silently.
+func test_every_walkable_ground_names_its_makeup() -> void:
+	var tiles := load(GridUtils.TILESET_PATH) as TileSet
+	var grounds := 0
+	var faults: Array[String] = []
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			for alt in source.get_alternative_tiles_count(coords):
+				var data := source.get_tile_data(coords, source.get_alternative_tile_id(coords, alt))
+				if not GridUtils.walkable_of(data) or GridUtils.terrain_kind_of(data) == Terrain.Kind.NONE:
+					continue
+				grounds += 1
+				if GridUtils.made_of(data).is_empty():
+					faults.append("tile %d/%s (%s) is walkable ground with no Made of"
+							% [source_id, coords, Terrain.Kind.keys()[GridUtils.terrain_kind_of(data)]])
+	assert_int(grounds).override_failure_message(
+			"no walkable ground tile in %s: this law checked nothing" % GridUtils.TILESET_PATH).is_greater(0)
+	assert_array(faults).is_empty()
+
+
 # What only an Extract draws out of a compound must be a real substance (#1315).
 func test_every_extract_only_part_is_a_substance() -> void:
 	var catalog := SubstanceCatalog.get_all()

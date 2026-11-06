@@ -17,9 +17,11 @@
 #             diorama paints these by id (board_painter.gd's GRASS/STONE/RAMP), and BoardMirror
 #             keeps them as its declared fallback -- so they are APPEND-ONLY, which is why #427
 #             slice 2's gentle wedge and filler landed at 7 and 8 rather than beside the steep one.
-#   ids 9+    one block per real tileset tile, top face wearing that tile's own
+#   ids 13+   one block per real tileset tile, top face wearing that tile's own
 #             art, PLUS one wedge per authorable climb. This is what makes the 3D
 #             board show the GAME's tiles instead of six generated stand-ins.
+#             Keyed by NAME across runs: an item keeps the id it had, a new one appends past
+#             the highest, so a regeneration rewrites only what changed (#1315, _add_tile_item).
 # A cell's SURFACE comes from its atlas coords (id 7+); what it is MADE OF -- the
 # side/wall material -- still comes from its Terrain.Kind. Two questions, and Kind
 # was answering both until #250.
@@ -51,6 +53,12 @@ const ATLAS_NAME := "ground_atlas_%d.png"
 # silently overwrote four tile items with fallbacks -- Godot's own create_item refused them, which is
 # the only reason it was loud.
 const FIRST_TILE_ITEM := 13
+
+# The library this run replaces, name -> id, tileset items only; empty on a first run.
+var _prior_ids: Dictionary[String, int] = {}
+var _next_new_id := FIRST_TILE_ITEM
+var _tile_items := 0
+var _new_tile_items := 0
 
 # Share of non-opaque pixels above which a tile is reported as "mostly open" — a sprite on an
 # empty field rather than ground with a soft edge. Diagnostic only; every tile is based over
@@ -350,6 +358,9 @@ func _gen_meshlib() -> int:
 		ml = MeshLibrary.new()
 	else:
 		for id in ml.get_item_list():
+			if id >= FIRST_TILE_ITEM:
+				_prior_ids[ml.get_item_name(id)] = id
+				_next_new_id = maxi(_next_new_id, id + 1)
 			ml.remove_item(id)
 	_add_item(ml, 0, "grass_block", _block_mesh(_mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 1, "stone_block", _block_mesh(_mat(stone_top), _mat(stone_side)))
@@ -396,6 +407,10 @@ func _gen_meshlib() -> int:
 			dirt_top, fallback_water) < 0:
 		return 1
 
+	# Every mesh and material above is new and id-less, so the saver would draw them all from a
+	# path-seeded generator and one new reference would rename every id after it (#1343). Carried by
+	# position, which is right because every item kept its id.
+	DevWidgets.carry_sub_ids(ml, MESHLIB_PATH)
 	var err := ResourceSaver.save(ml, MESHLIB_PATH)
 	if err != OK:
 		push_error("Failed to save %s (error %d)" % [MESHLIB_PATH, err])
@@ -429,7 +444,6 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		push_error("Tileset missing or unreadable at %s" % TILESET_PATH)
 		return -1
 
-	var next_id := FIRST_TILE_ITEM
 	var props := 0
 	var rims := 0
 	var translucent: PackedStringArray = []
@@ -550,9 +564,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# rather than the mesh's. It was top_uv for water until #552, which is the trap the
 			# _block_mesh comment warns about -- an unpassed side_uv put the ENTIRE tilesheet on a
 			# water slope.
-			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
+			_add_tile_item(ml, BoardMirror.tile_item_name(source_id, coords),
 					_block_mesh(top, side, top_uv))
-			next_id += 1
 			if kind == Terrain.Kind.WATER:
 				basin_twins.append({"name": BoardMirror.basin_twin_name(
 						BoardMirror.tile_item_name(source_id, coords)), "mat": basin_mat, "uv": top_uv})
@@ -580,10 +593,9 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			for climb: int in BoardMirror.RAMP_ITEM_NAMES:
 				for form: Terrain.Form in [Terrain.Form.WEDGE, Terrain.Form.OUTER,
 						Terrain.Form.INNER]:
-					_add_item(ml, next_id,
+					_add_tile_item(ml,
 							BoardMirror.ramp_item_name(source_id, coords, climb, form),
 							_form_mesh(_canonical_corners(form, climb), top, side, top_uv))
-					next_id += 1
 
 			# THE HOLE'S RIM (#876 slice 2). A VOID tile's art is the ring around a painted pit, and
 			# the dev's ask was to empty the middle and hang the walls off what is left. Its patch
@@ -601,9 +613,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 				var bands := _rim_bands(ring)
 				var ring_uv := _uv_rect(ring_slot, atlas_size)
 				for part: String in RIM_PARTS:
-					_add_item(ml, next_id, BoardMirror.rim_item_name(source_id, coords, part),
+					_add_tile_item(ml, BoardMirror.rim_item_name(source_id, coords, part),
 							_rim_mesh(prop_mat, ring_uv, _rim_footprint(part, bands, region.size)))
-					next_id += 1
 				rims += 1
 				rim_report.append("%d/%d:%d bands n%d s%d w%d e%d, uncovered %d"
 						% [source_id, coords.x, coords.y, bands.x, bands.y, bands.z, bands.w,
@@ -651,8 +662,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 							atlas_size, _opaque_bounds(source_image, region), patch, rng)
 				if mesh == null:
 					return -1
-				_add_item(ml, next_id, BoardMirror.prop_item_name(source_id, coords), mesh)
-				next_id += 1
+				_add_tile_item(ml, BoardMirror.prop_item_name(source_id, coords), mesh)
 				props += 1
 			# Only GROUND tiles are worth reporting now: an open prop is expected (it stands up
 			# and its art never reaches a top face), while an open ground tile is the surprising
@@ -687,14 +697,12 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			ml.get_item_name(BoardMirror.KIND_TO_ITEM[Terrain.Kind.WATER])),
 			"mat": _basin_twin_mat(fallback_water), "uv": Rect2(0, 0, 1, 1)})
 	for twin: Dictionary in basin_twins:
-		_add_item(ml, next_id, twin["name"], _block_mesh(twin["mat"], twin["mat"], twin["uv"]))
-		next_id += 1
+		_add_tile_item(ml, twin["name"], _block_mesh(twin["mat"], twin["mat"], twin["uv"]))
 
-	var added := next_id - FIRST_TILE_ITEM
-	print("Tileset items %d..%d (%d ground + %d prop + %d rim + %d basin twin) from %s" \
-			% [FIRST_TILE_ITEM, next_id - 1,
-					added - props - rims * RIM_PARTS.size() - basin_twins.size(), props,
-					rims * RIM_PARTS.size(), basin_twins.size(), TILESET_PATH])
+	var added := _tile_items
+	print("Tileset items: %d (%d ground + %d prop + %d rim + %d basin twin), %d new, from %s" \
+			% [added, added - props - rims * RIM_PARTS.size() - basin_twins.size(), props,
+					rims * RIM_PARTS.size(), basin_twins.size(), _new_tile_items, TILESET_PATH])
 	if not rim_report.is_empty():
 		# The bands are MEASURED off each tile's own cut, and how deep they came out decides how
 		# much of a rim survives the merge toggle -- worth printing rather than reading back off
@@ -871,6 +879,19 @@ func _add_item(ml: MeshLibrary, id: int, item_name: String, mesh: Mesh) -> void:
 	ml.create_item(id)
 	ml.set_item_name(id, item_name)
 	ml.set_item_mesh(id, mesh)
+
+
+# A tileset item keeps the id its name had in the library this run replaces; a new name appends
+# past the highest. carry_sub_ids pairs by POSITION (item/<id>/mesh), so an item that moved would
+# hand its ids to whatever took its place.
+func _add_tile_item(ml: MeshLibrary, item_name: String, mesh: Mesh) -> void:
+	var id: int = _prior_ids.get(item_name, -1)
+	if id < 0:
+		id = _next_new_id
+		_next_new_id += 1
+		_new_tile_items += 1
+	_add_item(ml, id, item_name, mesh)
+	_tile_items += 1
 
 
 # A box: surface 0 = top (terrain face), surface 1 = sides + bottom.
