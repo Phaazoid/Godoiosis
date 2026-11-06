@@ -23,18 +23,18 @@ const GROUPS: Dictionary[String, Array] = {
 	"Ambient": ["atom_fire", "atom_aether"],
 }
 
-# A Normal board's percentages, and how many points make one step. Balance numbers, tuned here
-# (Materia.REACH's idiom).
-const NORMAL: Dictionary[String, int] = {
-	"inert_air": 75, "vital_air": 20, "vapor": 5, "atom_fire": 20, "atom_aether": 10,
-}
-const STEP: Dictionary[String, int] = {
-	"inert_air": 10, "vital_air": 5, "vapor": 5, "atom_fire": 10, "atom_aether": 5,
-}
+# A Normal board's percentage of this substance, and how many points make one step. Balance numbers,
+# authored in AtmosphereRules (#1534) and tuned on the dev tools' Air & gas page.
+static func normal_of(id: String) -> int:
+	return int(AtmosphereRules.authored().normal.get(id, 0))
+
+
+static func step_of(id: String) -> int:
+	return int(AtmosphereRules.authored().step.get(id, 0))
 
 
 static func percent_of(id: String, reading: Dictionary) -> int:
-	return int(reading.get(id, NORMAL.get(id, 0)))
+	return int(reading.get(id, normal_of(id)))
 
 
 # The reading a board plays under: what it authors, moved by its weather (WeatherRules.air). THE one
@@ -57,10 +57,10 @@ static func nudged(reading: Dictionary, nudge: Dictionary) -> Dictionary[String,
 # Whole steps away from Normal, truncated toward zero: heat at Normal 20 with a step of 10 reads
 # +1 at 30, 0 at 29, -1 at 10.
 static func steps_of(id: String, reading: Dictionary) -> int:
-	var step: int = STEP.get(id, 0)
+	var step := step_of(id)
 	if step <= 0:
 		return 0
-	return (percent_of(id, reading) - int(NORMAL.get(id, 0))) / step
+	return (percent_of(id, reading) - normal_of(id)) / step
 
 
 # The non-zero steps of everything `recipe` draws from the air, by substance id.
@@ -92,7 +92,7 @@ static func is_normal(reading: Dictionary) -> bool:
 static func off_normal(reading: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for id: String in SUBSTANCES:
-		if percent_of(id, reading) != int(NORMAL[id]):
+		if percent_of(id, reading) != normal_of(id):
 			out.append(id)
 	return out
 

@@ -31,7 +31,7 @@ class_name ElementalReaction
 @export var remove_states: Array[Elemental.State] = []   # omit to NOT consume the state
 
 # Optional duration override for `add_states` entries that expire (paired states — see
-# Elemental.STATE_DEFAULT_TURNS). Absent/0 = the state's default. When several fired reactions
+# Elemental.default_turns). Absent/0 = the state's default. When several fired reactions
 # add the same state, the LONGEST authored duration wins — max is commutative, so E8's
 # order-independence holds.
 @export var add_state_turns: Dictionary[Elemental.State, int] = {}

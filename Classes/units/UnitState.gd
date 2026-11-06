@@ -211,7 +211,7 @@ func _apply_paired_effect(element_state: Elemental.State, turns: int) -> bool:
 	if mods.is_empty():
 		return false
 	var source := Elemental.state_effect_source(element_state)
-	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(element_state, StatEffect.PERMANENT)
+	var requested: int = turns if turns > 0 else Elemental.default_turns(element_state)
 	# A re-application refreshes, never stacks: one effect, whichever clock runs longer. ONE settle,
 	# after the swap (#1586): settling between the halves judged a body without the effect and
 	# stripped a ceiling piece the unit could still wear.

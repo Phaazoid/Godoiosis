@@ -580,10 +580,10 @@ func test_the_force_count_sits_on_the_deployed_strip_and_says_what_it_counts() -
 func _a_reading() -> Dictionary[String, int]:
 	var reading: Dictionary[String, int] = {}
 	var rich: String = Atmosphere.SUBSTANCES[0]
-	reading[rich] = int(Atmosphere.NORMAL[rich]) + 2 * int(Atmosphere.STEP[rich])
+	reading[rich] = Atmosphere.normal_of(rich) + 2 * Atmosphere.step_of(rich)
 	for id: String in Atmosphere.SUBSTANCES:
-		if id != rich and int(Atmosphere.NORMAL[id]) >= int(Atmosphere.STEP[id]):
-			reading[id] = int(Atmosphere.NORMAL[id]) - int(Atmosphere.STEP[id])
+		if id != rich and Atmosphere.normal_of(id) >= Atmosphere.step_of(id):
+			reading[id] = Atmosphere.normal_of(id) - Atmosphere.step_of(id)
 			break
 	assert_int(reading.size()).override_failure_message(
 		"no other substance's Normal is a whole step above zero, so the reading has nothing thin in it"

@@ -241,8 +241,26 @@ static func _atmosphere_normals() -> String:
 	var parts: Array[String] = []
 	for id: String in Atmosphere.SUBSTANCES:
 		parts.append("%s %d%%, a step every %d" % [SubstanceCatalog.name_of(id).to_lower(),
-				int(Atmosphere.NORMAL[id]), int(Atmosphere.STEP[id])])
+				Atmosphere.normal_of(id), Atmosphere.step_of(id)])
 	return "; ".join(parts)
+
+# Which smoke blinds, read off its rules file so a retune re-words the page (#1534): "medium or thick".
+static func _smoke_blinds_in() -> String:
+	var from := _smoke_blinds_from()
+	if from <= Gas.Level.THIN:
+		return "any"
+	return "thick" if from >= Gas.Level.THICK else "medium or thick"
+
+# ...and which does not, as a closing clause: "; thin smoke is harmless", or nothing when all of it blinds.
+static func _smoke_harmless() -> String:
+	var from := _smoke_blinds_from()
+	if from <= Gas.Level.THIN:
+		return ""
+	return "; thin and medium smoke are harmless" if from >= Gas.Level.THICK else "; thin smoke is harmless"
+
+static func _smoke_blinds_from() -> int:
+	var rules := GasRules.for_kind(Gas.Kind.SMOKE)
+	return int(rules.state_from) if rules != null else int(Gas.Level.MEDIUM)
 
 # What each weather does to the air, read off its rules file (Atmosphere.weather_text) so a retune
 # re-words the page (#1324).
@@ -523,19 +541,19 @@ static func _build_entries() -> Dictionary:
 			+ "it, your own squad included."}
 	e[Term.CHILLED] = {"category": Category.ELEMENTAL, "title": "Chilled",
 		"short": "Cold-slowed: %+d DEX until it thaws after the unit's next turn."
-			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX],
+			% int(Elemental.paired_stat_mods(Elemental.State.CHILLED).get(Stats.Stat.DEX, 0)),
 		"long": "The cold-slowed condition, left by ice. %+d DEX while it lasts, normally through "
-			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX]
+			% int(Elemental.paired_stat_mods(Elemental.State.CHILLED).get(Stats.Stat.DEX, 0))
 			+ "the unit's next activation, twice that when the ice caught it soaked. Fire ends the "
 			+ "chill early, painfully: the sudden swing from cold to heat is its own reaction."}
 	# #1335: held while standing in smoke, so its clock is the cloud's, not the unit's.
 	e[Term.SMOKED] = {"category": Category.ELEMENTAL, "title": "Smoked",
-		"short": "Can't see: %+d COH while standing in medium or thick smoke."
-			% Elemental.SMOKE_STAT_MODS[Stats.Stat.COH],
+		"short": "Can't see: %+d COH while standing in %s smoke."
+			% [int(Elemental.paired_stat_mods(Elemental.State.SMOKED).get(Stats.Stat.COH, 0)), _smoke_blinds_in()],
 		"long": "Smoke blinds whoever stands in it. A leader who can't see holds its squad closer: "
 			+ "%+d COH, so a member left too far away splits off. It lasts exactly as long as the "
-			% Elemental.SMOKE_STAT_MODS[Stats.Stat.COH]
-			+ "unit stands in medium or thick smoke; thin smoke is harmless. A burning plant gives "
+			% int(Elemental.paired_stat_mods(Elemental.State.SMOKED).get(Stats.Stat.COH, 0))
+			+ "unit stands in %s smoke%s. A burning plant gives " % [_smoke_blinds_in(), _smoke_harmless()]
 			+ "off thick smoke, and an Air hit clears it."}
 	e[Term.REACTIONS] = {"category": Category.ELEMENTAL, "title": "Reactions",
 		"short": "Element meets state, always the same way: reactions are fixed rules, never chance.",

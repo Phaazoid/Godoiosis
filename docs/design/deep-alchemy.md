@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-05. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1623 (2026-11-05).**
+**Canon checked through #1623 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -684,7 +684,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - Heal: aether, so an aether-rich map heals more
 
   Pressure Spray, Zap and Rock Throw are fed by a real source and ignore the air. *(By the same rule Gust draws inert air, Blow Dry vital air, Splash vapor, and the Fire Wall (#894) heat.)* A thin reading lowers damage and never makes a carving fizzle (the floor is 0).
-- **A step is a set size per substance.** Both numbers are `Atmosphere.NORMAL` and `STEP`, balance constants in the `Materia.REACH` idiom, and they are first guesses:
+- **A step is a set size per substance.** Both numbers are authored in `Resources/AtmosphereRules.tres` (read through `Atmosphere.normal_of` and `step_of`) and tuned live on the dev tools' Project › Air & gas page (#1534). They are first guesses:
 
   | Substance | Normal | Step |
   |---|---|---|
@@ -704,7 +704,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 
 **Built 2026-10-16: slice 2, the reading shown to the player.** Readability only; the rule did not change.
 - **The pre-mission screen's CONDITIONS region**, above the stash: the board's weather, then the reading under `Atmosphere.GROUPS`' two headings. Each substance shows its percent, plus its steps from Normal when it is off Normal ("30% +2"). `PreMissionScreen._refresh_conditions` reads `ScenarioManager.current_weather` and `current_atmosphere`, the stores `game._board()` hands the resolver, so the reading shown is the one every carving resolves against. *(Since slice 4 it reads `ScenarioManager.air_reading()`, the effective reading `game._board()` hands the resolver: below.)* Hovering the reading shows the glossary's short text.
-- **Glossary → Atmosphere** (Elemental). Its Normal and step per substance are composed from `Atmosphere.NORMAL` and `STEP`. It names no carving's recipe, because which carving draws what is #75's discovery layer.
+- **Glossary → Atmosphere** (Elemental). Its Normal and step per substance are composed from `Atmosphere.normal_of` and `step_of`, so a retune on the Air & gas page re-words it. It names no carving's recipe, because which carving draws what is #75's discovery layer.
 - **The queue row's number** names the air's share, one line per `ResolvedOutcome.air_steps` entry ("Rich vital air: +2", "Thin vapor: -1"). A heal shows its air lines too: a heal has no damage kind, and `damage_tip` used to return nothing for one.
 - **`SubstanceCatalog.name_of(id)`** is the one substance-name spelling these readouts, the Play API and the Scenario tab share.
 
@@ -925,7 +925,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   | Ozone (every shock hit, in the air) | `F` | thin, on every cell it struck and along its current |
 
   Medium spills a thin cross onto its four sides at the round tick, and thin never spreads. Two releases on one cell stack: a melt under a Chilled unit leaves thick.
-- **+10% heat a level**, one `Atmosphere.STEP` and ozone's mirror. A carving that draws heat and is cast from inside it gets thin +1, medium +2 and thick +3. The tile card reads "Heat Haze, medium: heat +20%", then "Heat 40%, +2".
+- **+10% heat a level**, one heat step (`Atmosphere.step_of`) and ozone's mirror. A carving that draws heat and is cast from inside it gets thin +1, medium +2 and thick +3. The tile card reads "Heat Haze, medium: heat +20%", then "Heat 40%, +2".
 - **It holds one round a level** (`hold_rounds` 1, where every other gas holds 2), because heat leaves fast. A melt's haze is medium until the round ends, then a thin cross for one round, then gone.
 - **On a shock cell it cancels ozone at first.** Thin ozone (−10) and thin haze (+10) are summed before steps, so the strike's own round reads Normal heat: the strike's heat. Once the haze fades at the round's end, ozone's −1 shows for its second round. Ozone's −10 is unchanged. The timing is the knob: `hold_rounds` on either file, or ozone's `air`.
 - **Damage only, never presence** (the 2026-10-14 ruling). It gives no state, deals no damage and holds no one, and a gas triggers no reaction, so it lights no grass, dries no unit and melts no ice. `tests/items/test_atmosphere.gd` holds any gas made of an ambient substance to raising that substance and touching nobody.

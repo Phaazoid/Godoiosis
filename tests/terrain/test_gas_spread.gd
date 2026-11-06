@@ -177,7 +177,7 @@ func test_a_gas_that_moves_the_air_fades_its_cell_back_to_the_boards_reading() -
 		field.set_level(C, kind, THICK)
 		var board := _board()
 		board.gas = field
-		var authored: Dictionary[String, int] = {"vapor": int(Atmosphere.NORMAL["vapor"]) + int(Atmosphere.STEP["vapor"])}
+		var authored: Dictionary[String, int] = {"vapor": Atmosphere.normal_of("vapor") + Atmosphere.step_of("vapor")}
 		board.atmosphere = authored
 		assert_dict(board.air_at(C)).override_failure_message(
 				"fixture: a thick %s moves nothing" % Gas.name_of(kind)).is_not_equal(authored)

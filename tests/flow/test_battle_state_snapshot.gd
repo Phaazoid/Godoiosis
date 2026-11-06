@@ -254,7 +254,7 @@ func test_a_chilled_unit_round_trips_with_its_clock() -> void:
 	# RESULT) — so a load must come back with exactly ONE chill effect, mid-count, never a
 	# fresh re-application reseeded from its duration.
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
-	var applied: int = Elemental.STATE_DEFAULT_TURNS[Elemental.State.CHILLED] + 1
+	var applied: int = Elemental.default_turns(Elemental.State.CHILLED) + 1
 	a.add_element_state(Elemental.State.CHILLED, applied)
 	a.tick_stat_effects()   # mid-count
 

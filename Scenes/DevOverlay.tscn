@@ -24,6 +24,7 @@
 [ext_resource type="Script" path="res://Classes/dev/CameraTool.gd" id="18_cam"]
 [ext_resource type="Script" path="res://Classes/dev/WeatherTool.gd" id="19_wthr"]
 [ext_resource type="Script" uid="uid://bpj5krtnoqaen" path="res://Classes/dev/AlchemyTool.gd" id="20_alch"]
+[ext_resource type="Script" uid="uid://cp1syosu5bgya" path="res://Classes/dev/AirGasTool.gd" id="21_airgas"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
@@ -163,6 +164,12 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("20_alch")
+
+[node name="AirGas" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990001534]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("21_airgas")
 
 [node name="Unit Authoring" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000044]
 unique_name_in_owner = true

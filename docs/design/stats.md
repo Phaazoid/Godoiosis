@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24; #1480 stage 3 (the pass threads a copy of each target) folded in 2026-10-24; #1480 stage 4 (the actor reads its copy too) folded in 2026-10-25; #1480 stage 5 (paired states land on the copy, readouts after the pass read it) folded in 2026-10-25.**
+**Canon checked through #1377 (2026-10-21); #1455 (a severing hit lands before its strip) folded in 2026-10-24; #1480 stage 3 (the pass threads a copy of each target) folded in 2026-10-24; #1480 stage 4 (the actor reads its copy too) folded in 2026-10-25; #1480 stage 5 (paired states land on the copy, readouts after the pass read it) folded in 2026-10-25; #1534 (a paired state's numbers move to `StateRules` files) folded in 2026-11-05.**
 
 ## Core stance
 
@@ -151,7 +151,7 @@ prosthetic's mods. It never strips a weapon. **Since [#1174](https://github.com/
 that limb can go from a STANDING unit with orders still queued**: a watch shot mid-walk, then its
 swing. `tests/flow/test_limb_loss_mid_pass.gd` drives that sequence end to end. The second is a
 **paired state's effect**: a hit that chills a unit gives it CHILLED's DEX shift, and a hit that thaws
-it takes the shift away (`Elemental.paired_stat_mods`; SMOKED's COH has no carving to land it yet).
+it takes the shift away (`Elemental.paired_stat_mods`, authored per state in `Resources/StateRules/` since #1534; SMOKED's COH has no carving to land it yet).
 
 - **The severing hit lands on the body it was struck at.** `Unit.take_damage` lands the damage first
   and takes the limb after (dev ruling, #1455: *"They keep their bonuses until after the hit that

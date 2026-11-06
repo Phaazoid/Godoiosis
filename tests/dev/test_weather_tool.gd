@@ -71,14 +71,14 @@ func test_an_air_slider_moves_the_reading_the_board_composes() -> void:
 	var id: String = Atmosphere.SUBSTANCES[0]
 	if sliders[id] == null:
 		return
-	var points := int(rules.air.get(id, 0)) + int(Atmosphere.STEP[id])
+	var points := int(rules.air.get(id, 0)) + Atmosphere.step_of(id)
 	(sliders[id] as Range).value = points
 	await await_idle_frame()
 	var none: Dictionary[String, int] = {}
 	var landed := Atmosphere.percent_of(id, Atmosphere.effective(none, sky))
 	rules.air = was
 	assert_int(landed).override_failure_message("the air slider moved and the reading did not").is_equal(
-			clampi(int(Atmosphere.NORMAL[id]) + points, 0, 100))
+			clampi(Atmosphere.normal_of(id) + points, 0, 100))
 	assert_bool(page.has_unsaved_changes()).override_failure_message("an air edit left Save unmarked").is_true()
 
 

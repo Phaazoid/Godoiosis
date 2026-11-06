@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="StateRules" format=3 uid="uid://bsrbc7bcmhbhe"]
+
+[ext_resource type="Script" uid="uid://cvb0yaet33jqd" path="res://Classes/elemental/StateRules.gd" id="1_volpi"]
+
+[resource]
+script = ExtResource("1_volpi")
+stat_mods = Dictionary[int, int]({
+4: -1
+})
