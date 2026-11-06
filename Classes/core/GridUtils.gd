@@ -9,6 +9,12 @@ class_name GridUtils
 # single definition (CameraController and UnitVisuals each used to declare their own `TILE_SIZE = 16`).
 const TILE_SIZE := 16
 
+# The board's tileset, for a reader holding no board (ReactionLint). Every scene's grid wears this file.
+const TILESET_PATH := "res://Resources/TestTiles.tres"
+
+# The custom-data column naming what a tile is made of (#1315): a PackedStringArray of substance ids.
+const MADE_OF := "made_of"
+
 # "No cell" sentinel — far outside any real board, so it can never collide with a live cell.
 # One definition: game.gd/HoverPresenter used bare Vector2i(-999,-999) literals while Squad
 # spelled the same idea Vector2i(-999999,-999999).
@@ -164,6 +170,43 @@ static func walkable_of(data: TileData) -> bool:
 	if data == null or not data.has_custom_data("walkable"):
 		return false
 	return data.get_custom_data("walkable")
+
+
+# What a TILE is made of (#1315): the substance ids its `made_of` column names, authored with its art
+# so a new-looking ground needs no new Terrain.Kind. The one answer; CellSubstances reads it per cell.
+static func made_of(data: TileData) -> Array[String]:
+	var out: Array[String] = []
+	if data == null or not data.has_custom_data(MADE_OF):
+		return out
+	out.assign(Array(data.get_custom_data(MADE_OF) as PackedStringArray))
+	return out
+
+
+static func made_of_at_cell(grid: TileMapLayer, cell: Vector2i) -> Array[String]:
+	if grid == null:
+		var none: Array[String] = []
+		return none
+	return made_of(grid.get_cell_tile_data(cell))
+
+
+# Every substance any tile of `kind` is made of, deduped in atlas order: a ground KIND read off its
+# tiles, for the one reader that reasons per kind (ReactionLint, whose ground reactions key on one).
+static func made_of_kind(tiles: TileSet, kind: Terrain.Kind) -> Array[String]:
+	var out: Array[String] = []
+	if tiles == null:
+		return out
+	for s in tiles.get_source_count():
+		var source := tiles.get_source(tiles.get_source_id(s)) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var data := source.get_tile_data(source.get_tile_id(i), 0)
+			if terrain_kind_of(data) != kind:
+				continue
+			for id: String in made_of(data):
+				if not out.has(id):
+					out.append(id)
+	return out
 
 # What FORM this tile's art wants in 3D (#264, widening #255's `stands_up` bool). A presentation
 # fact with no existing answer, which is why it is authored rather than inferred -- every candidate

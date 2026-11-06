@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://cop4p13sc2l5s"]
+
+[ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_p76cc"]
+
+[resource]
+script = ExtResource("1_p76cc")
+display_name = "Limestone"
+formula = "WE2 + AE"
+phase = 1

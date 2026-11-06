@@ -27,7 +27,7 @@ class Step:
 	# splits), a Bind's two halves, every other verb's one argument.
 	var needs: Array[String] = []
 	# What the step makes, resolved at parse: a Bind's product, a Break's freed atoms and the pairs
-	# lone atoms settle into. Empty for verbs that move or hold rather than make.
+	# lone atoms settle into, and what an Extract draws out. Empty for verbs that move or hold.
 	var makes: Array[String] = []
 	# What the step leaves at the target -- what a hit carries if this is the last step that leaves
 	# anything. Push/Infuse/Focus/Spread send their substance; Bind its product; Break its halves,
@@ -101,6 +101,8 @@ static func _resolve_makes(step: Step, catalog: Dictionary) -> String:
 		match step.verb:
 			Flourish.Type.PUSH, Flourish.Type.INFUSE, Flourish.Type.FOCUS, Flourish.Type.SPREAD:
 				step.leaves = step.args.duplicate()
+			Flourish.Type.EXTRACT:
+				step.makes = step.args.duplicate()   # what it draws out is free for the later verbs (#1315)
 		return ""
 	var joined := _molecule_with(_sum(step.args, catalog), catalog)
 	if joined.error != "":
@@ -210,12 +212,22 @@ func hit_elements() -> Array[Elemental.Element]:
 # water the Push needs -- while `Break(A, W) + Push(3W2)` does not: the air's one vapor makes one water.
 # Nothing is used up, so `Focus(3W2) + Push(3W2)` needs three at each step, not six. The FIRST
 # shortfall is named. Asked of a legal parse; an illegal one has no steps to miss.
-func fizzle_reason(available: Dictionary[String, int], catalog: Dictionary = {}) -> String:
+#
+# `held` is what is present to an EXTRACT alone (CellSubstances.Presence, #1315): an Extract step finds
+# its need free or held and makes it free for the steps after it, so `Extract(W2) + Push(W2)` works
+# beside loam, whose water a plain `Push(W2)` cannot reach.
+func fizzle_reason(available: Dictionary[String, int], catalog: Dictionary = {},
+		held: Dictionary[String, int] = {}) -> String:
 	var have: Dictionary[String, int] = {}
 	have.assign(available)
 	for step: Step in steps:
 		for id: String in step.needs:
-			if have.get(id, 0) < step.amount:
+			var supply: int = have.get(id, 0)
+			if step.verb == Flourish.Type.EXTRACT:
+				supply = maxi(supply, held.get(id, 0))
+			if supply < step.amount:
+				if held.get(id, 0) >= step.amount:
+					return "Fizzles: only an Extract draws out the %s here" % _named(id, catalog)
 				if step.amount > 1:
 					return "Fizzles: needs a source of %s nearby" % _named(id, catalog)
 				return "Fizzles: needs %s nearby" % _named(id, catalog)

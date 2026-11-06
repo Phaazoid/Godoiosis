@@ -6,12 +6,14 @@ class_name SubstanceMap
 #
 #   ELEMENTS, CARRIED_AS_TOO   code. What a hit of each element IS, read backwards to say what a
 #                              carving hits as. The element vocabulary, not a source.
-#   grounds, tile_states,      AUTHORED (#1532), in Resources/SubstanceMap.tres. What each ground kind,
-#   gases, unit_states         tile state, gas and unit state holds: what a carving beside it can draw
-#                              on (CellSubstances). A row may name several substances (Burning is flame
-#                              and heat, #1535); an empty row holds nothing (a hole, an entrenchment).
+#   tile_states, gases,        AUTHORED (#1532), in Resources/SubstanceMap.tres. What each tile state,
+#   unit_states                gas and unit state holds: what a carving beside it can draw on
+#                              (CellSubstances). A row may name several substances (Burning is flame
+#                              and heat, #1535); an empty row holds nothing (an entrenchment).
 #
-# A vial is per-file content, so it carries its own substance (VialData.substance) instead of a row.
+# A GROUND has no row here (#1315): what a tile is made of is authored WITH ITS ART, the tileset's
+# made_of column (GridUtils.made_of), so a new-looking ground needs no new Terrain.Kind. A vial is
+# per-file content too, so it carries its own substance (VialData.substance) instead of a row.
 # tests/law/test_substance_map.gd holds every member to a row and every id to a real file.
 
 const PATH := "res://Resources/SubstanceMap.tres"
@@ -35,7 +37,6 @@ const CARRIED_AS_TOO: Dictionary[String, Elemental.Element] = {
 	"ice": Elemental.Element.ICE,
 }
 
-@export var grounds: Dictionary[Terrain.Kind, PackedStringArray] = {}
 @export var tile_states: Dictionary[Terrain.TileState, PackedStringArray] = {}
 @export var gases: Dictionary[Gas.Kind, PackedStringArray] = {}
 @export var unit_states: Dictionary[Elemental.State, PackedStringArray] = {}
@@ -57,10 +58,6 @@ static func authored() -> SubstanceMap:
 
 static func refresh() -> void:
 	_authored = null
-
-
-func of_kind(kind: Terrain.Kind) -> Array[String]:
-	return _ids(grounds.get(kind, PackedStringArray()))
 
 
 func of_tile_state(state: Terrain.TileState) -> Array[String]:

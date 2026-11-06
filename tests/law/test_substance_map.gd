@@ -1,10 +1,10 @@
 # Every thing the game names says what it is made of (SubstanceMap, Deep Alchemy phase 1).
 #
-# The element vocabulary (ELEMENTS) is code; the grounds, tile states, gases and unit states are AUTHORED
-# rows in Resources/SubstanceMap.tres (#1532). A new Element, State, TileState, terrain Kind or gas Kind
-# reds here until it gets a row. An authored row may be EMPTY (a hole holds nothing), but every id it
-# names must be a real substance file. Vials carry their own field, so they are held here too, with the
-# vials that have no substance yet declared.
+# The element vocabulary (ELEMENTS) is code; the tile states, gases and unit states are AUTHORED rows in
+# Resources/SubstanceMap.tres (#1532), and a ground's makeup is its tile's made_of column (#1315). A new
+# Element, State, TileState or gas Kind reds here until it gets a row. A row or tile may be EMPTY (a hole
+# holds nothing), but every id it names must be a real substance file. Vials carry their own field, so
+# they are held here too, with the vials that have no substance yet declared.
 extends GdUnitTestSuite
 
 const VIALS_WITHOUT_SUBSTANCE := {
@@ -67,9 +67,39 @@ func test_every_tile_state_says_what_it_is() -> void:
 	assert_array(_check_rows(SubstanceMap.authored().tile_states, members, Terrain.TileState.keys(), "TileState")).is_empty()
 
 
-func test_every_ground_says_what_it_is() -> void:
-	var members := _members_except(Terrain.Kind.values(), [Terrain.Kind.NONE])
-	assert_array(_check_rows(SubstanceMap.authored().grounds, members, Terrain.Kind.keys(), "Kind")).is_empty()
+# A ground's makeup is its tile's made_of column (#1315). A tile may hold nothing (a hole), but every
+# id it names is a substance file, named once.
+func test_every_tile_names_real_substances() -> void:
+	var tiles := load(GridUtils.TILESET_PATH) as TileSet
+	assert_int(tiles.get_custom_data_layer_by_name(GridUtils.MADE_OF)).override_failure_message(
+			"%s has no '%s' column" % [GridUtils.TILESET_PATH, GridUtils.MADE_OF]).is_not_equal(-1)
+	var catalog := SubstanceCatalog.get_all()
+	var faults: Array[String] = []
+	for s in tiles.get_source_count():
+		var source := tiles.get_source(tiles.get_source_id(s)) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			for alt in source.get_alternative_tiles_count(coords):
+				var ids := GridUtils.made_of(source.get_tile_data(coords, source.get_alternative_tile_id(coords, alt)))
+				for id: String in ids:
+					if not catalog.has(id):
+						faults.append("tile %s names '%s', which is not a substance file" % [coords, id])
+					elif ids.count(id) > 1:
+						faults.append("tile %s names '%s' twice" % [coords, id])
+	assert_array(faults).is_empty()
+
+
+# What only an Extract draws out of a compound must be a real substance (#1315).
+func test_every_extract_only_part_is_a_substance() -> void:
+	var catalog := SubstanceCatalog.get_all()
+	var faults: Array[String] = []
+	for key: String in catalog:
+		for id: String in (catalog[key] as Substance).extract_only_ids():
+			if not catalog.has(id):
+				faults.append("%s holds '%s' for an Extract, which is not a substance file" % [key, id])
+	assert_array(faults).is_empty()
 
 
 func test_every_gas_says_what_it_is() -> void:

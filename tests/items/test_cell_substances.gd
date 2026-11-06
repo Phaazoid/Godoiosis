@@ -1,12 +1,12 @@
 # Which substances are present for a cast (CellSubstances.available_near) -- the presence half of
 # Deep Alchemy Phase 2's fizzle rule. Canon: docs/design/deep-alchemy.md -> What is built.
 #
-# The board is stubbed, test_materia_sources.gd's fixture one store wider: kinds and lit props are
-# authored directly, who stands where is the board's own units at their own cells (the fizzle reads
-# them where the plan puts them, #1480), STATES ride a real TerrainStateManager and gas a real GasField.
-# Every case hands available_near its own catalog AND its own SubstanceMap, so nothing here reads an
-# authored substance file or the authored rows (tests/README.md rule 9, #1532): what grass is made of
-# is content, and these cases ask only what the code does with a row.
+# The board is stubbed, test_materia_sources.gd's fixture one store wider: kinds, what each tile is made
+# of (#1315) and lit props are authored directly, who stands where is the board's own units at their own
+# cells (the fizzle reads them where the plan puts them, #1480), STATES ride a real TerrainStateManager
+# and gas a real GasField. Every case hands available_near its own catalog, its own SubstanceMap and its
+# own tiles, so nothing here reads an authored substance file, row or tile (tests/README.md rule 9,
+# #1532): what grass is made of is content, and these cases ask only what the code does with a column.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -19,14 +19,35 @@ const TWO_AWAY := Vector2i(6, 4)
 class _SubstanceBoard extends BoardContext:
 	var kinds: Dictionary
 	var lit: Dictionary
-	func _init(states: TerrainStateManager, gas_field: GasField, k: Dictionary, l: Dictionary, standing: Array[Unit]) -> void:
+	var columns: Dictionary   # cell -> what the tile there is made of (its made_of column)
+	func _init(states: TerrainStateManager, gas_field: GasField, k: Dictionary, l: Dictionary, t: Dictionary,
+			standing: Array[Unit]) -> void:
 		super(null, standing, null, states, null, null, gas_field)
 		kinds = k
 		lit = l
+		columns = t
 	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 		return kinds.get(cell, Terrain.Kind.NONE)
+	func made_of_at(cell: Vector2i) -> Array[String]:
+		var out: Array[String] = []
+		out.assign(columns.get(cell, []))
+		return out
 	func prop_lit_at(cell: Vector2i) -> bool:
 		return lit.get(cell, false)
+
+
+# The fixture's own tiles: what a tile of each kind it paints is made of, unless a case authors the
+# cell's column itself. Rock holds nothing here, so the cases about what lies ON a cell read alone.
+# Grass stands on dirt, a column naming two substances.
+const GROUNDS := {
+	Terrain.Kind.GRASS: ["green_plant", "dirt"],
+	Terrain.Kind.TALL_GRASS: ["dry_plant", "dirt"],
+	Terrain.Kind.MUD: ["mud"],
+	Terrain.Kind.ROCK: [],
+	Terrain.Kind.WATER: ["water"],
+	Terrain.Kind.DIRT: ["dirt"],
+	Terrain.Kind.VOID: [],
+}
 
 
 func _sub(formula: String, name: String = "", lends := true) -> Substance:
@@ -34,6 +55,13 @@ func _sub(formula: String, name: String = "", lends := true) -> Substance:
 	s.formula = formula
 	s.display_name = name
 	s.lends_its_parts = lends
+	return s
+
+
+# A compound that holds `held` for an Extract alone (#1315).
+func _held(formula: String, name: String, held: String) -> Substance:
+	var s := _sub(formula, name)
+	s.extract_only = held
 	return s
 
 
@@ -48,25 +76,16 @@ func _catalog() -> Dictionary:
 		"lightning": _sub("QF", "Lightning"),
 		"dirt": _sub("E2 + AE", "Dirt"),
 		"mud": _sub("dirt + W2", "Mud"),
+		"loam": _held("AE + W2", "Loam", "water"),
 		"smoke": _sub("AE + A2", "Smoke"),
 		"green_plant": _sub("AE + 2FA + W2", "Green plant", false),
 		"dry_plant": _sub("AE + 2FA", "Dry plant", false),
 	}
 
 
-# The fixture's own rows: what each thing it paints is made of. Rock holds nothing here, so the cases
-# about what lies ON a cell read alone. Grass stands on dirt, a row naming two substances.
+# The fixture's own rows: what each tile state, gas and unit state it lays is made of.
 func _map(burning: Array = ["flame"]) -> SubstanceMap:
 	var map := SubstanceMap.new()
-	map.grounds = {
-		Terrain.Kind.GRASS: PackedStringArray(["green_plant", "dirt"]),
-		Terrain.Kind.TALL_GRASS: PackedStringArray(["dry_plant", "dirt"]),
-		Terrain.Kind.MUD: PackedStringArray(["mud"]),
-		Terrain.Kind.ROCK: PackedStringArray(),
-		Terrain.Kind.WATER: PackedStringArray(["water"]),
-		Terrain.Kind.DIRT: PackedStringArray(["dirt"]),
-		Terrain.Kind.VOID: PackedStringArray(),
-	}
 	map.tile_states = {
 		Terrain.TileState.BURNING: PackedStringArray(burning),
 		Terrain.TileState.FROZEN: PackedStringArray(["ice"]),
@@ -93,9 +112,14 @@ func _store(cell_states: Dictionary = {}) -> TerrainStateManager:
 	return tsm
 
 
+# Each painted cell is made of its kind's GROUNDS row unless `made_of` (cell -> ids) authors its column.
 func _board(kinds: Dictionary, cell_states: Dictionary = {}, lit: Dictionary = {},
-		gas: GasField = null, standing: Array[Unit] = []) -> _SubstanceBoard:
-	return _SubstanceBoard.new(_store(cell_states), gas, kinds, lit, standing)
+		gas: GasField = null, standing: Array[Unit] = [], made_of: Dictionary = {}) -> _SubstanceBoard:
+	var tiles := {}
+	for cell: Vector2i in kinds:
+		tiles[cell] = GROUNDS.get(kinds[cell], [])
+	tiles.merge(made_of, true)
+	return _SubstanceBoard.new(_store(cell_states), gas, kinds, lit, tiles, standing)
 
 
 func _supply(board: BoardContext, caster: Unit = null, map: SubstanceMap = _map(),
@@ -109,11 +133,14 @@ func _present(board: BoardContext, caster: Unit = null, catalog: Dictionary = _c
 	return ids
 
 
-func _fizzle(recipe: String, board: BoardContext, caster: Unit = null, map: SubstanceMap = _map()) -> String:
-	var parsed := CarvingRecipe.parse(recipe, _catalog())
+# Through presence_near, so an Extract finds what a tile holds, as CellSubstances.fizzle_reason does.
+func _fizzle(recipe: String, board: BoardContext, caster: Unit = null, map: SubstanceMap = _map(),
+		catalog: Dictionary = _catalog()) -> String:
+	var parsed := CarvingRecipe.parse(recipe, catalog)
 	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
 			% [recipe, parsed.error]).is_empty()
-	return parsed.fizzle_reason(_supply(board, caster, map), _catalog())
+	var presence := CellSubstances.presence_near(HERE, board, UnitState.of(caster), catalog, {}, map)
+	return parsed.fizzle_reason(presence.free, catalog, presence.held)
 
 
 # --- the baseline ---------------------------------------------------------------------------
@@ -151,13 +178,13 @@ func test_parts_lend_their_own_parts() -> void:
 		assert_bool(present.has(id)).override_failure_message("mud's '%s' missing" % id).is_true()
 
 
-# Rock Throw's Push(E2) works off a dirt ground because dirt lends its salt.
+# A Push(E2) works off a ground whose compound lends salt (the fixture's dirt does; real loam does not).
 func test_a_push_of_salt_does_not_fizzle_beside_dirt() -> void:
 	assert_str(_fizzle("Push(E2)", _board({ NEXT_DOOR: Terrain.Kind.DIRT }))).is_empty()
 
 
 # A compound whose lends_its_parts is off is present as itself and lends NOTHING (plant matter,
-# c3potheds@): a grass field holds no water. The dirt the fixture's grass row also names still lends.
+# c3potheds@): a grass field holds no water. The dirt the fixture's grass tile also names still lends.
 func test_plant_matter_lends_no_water_and_grass_stands_on_dirt() -> void:
 	var present := _present(_board({ HERE: Terrain.Kind.GRASS, NEXT_DOOR: Terrain.Kind.TALL_GRASS }))
 	assert_bool(present.has("green_plant")).is_true()
@@ -244,15 +271,65 @@ func test_heat_beyond_the_airs_one_holds_only_beside_a_fire_that_lends_it() -> v
 			"Push(3F) held with no fire near").contains("source of")
 
 
-# The map a caller hands in is the one read, never the authored file behind it: a fixture rock made of
-# water offers water, and the fixture's own empty rock does not.
+# The map a caller hands in is the one read, never the authored file behind it: a fixture fire made of
+# water offers water, and the fixture's own fire does not.
 func test_the_map_handed_in_is_the_one_read() -> void:
-	var map := _map()
-	map.grounds[Terrain.Kind.ROCK] = PackedStringArray(["water"])
-	var board := _board({ NEXT_DOOR: Terrain.Kind.ROCK })
+	var board := _board({ NEXT_DOOR: Terrain.Kind.ROCK }, { NEXT_DOOR: [Terrain.TileState.BURNING] })
 	assert_bool(_present(board).has("water")).is_false()
-	assert_bool(_supply(board, null, map).has("water")).override_failure_message(
+	assert_bool(_supply(board, null, _map(["water"])).has("water")).override_failure_message(
 			"available_near read some other map than the one it was handed").is_true()
+
+
+# --- what a tile is made of (#1315) ------------------------------------------------------------
+
+# The column is the TILE's, not its kind's: two rocks side by side offer what each is made of.
+func test_each_tile_offers_its_own_column() -> void:
+	var board := _board({ HERE: Terrain.Kind.ROCK, NEXT_DOOR: Terrain.Kind.ROCK }, {}, {}, null, [],
+			{ NEXT_DOOR: ["dirt"] })
+	var present := _present(board)
+	assert_bool(present.has("dirt")).override_failure_message("the rock made of dirt offered none").is_true()
+	assert_bool(present.has("salt")).override_failure_message("its dirt lent no salt").is_true()
+	assert_bool(_present(_board({ HERE: Terrain.Kind.ROCK })).has("dirt")).override_failure_message(
+			"a rock whose column names nothing offered dirt").is_false()
+
+
+# --- held parts: only an Extract draws them out (#1315) ------------------------------------------
+
+# Loam holds its water: present to an Extract, not to any other verb, at the loam's own amount.
+func test_a_held_part_is_present_to_an_extract_alone() -> void:
+	var board := _board({ HERE: Terrain.Kind.DIRT }, {}, {}, null, [], { HERE: ["loam"] })
+	var presence := CellSubstances.presence_near(HERE, board, null, _catalog(), {}, _map())
+	assert_bool(presence.free.has("loam")).is_true()
+	assert_bool(presence.free.has("ash")).override_failure_message("loam's free part was held").is_true()
+	assert_bool(presence.free.has("water")).override_failure_message("loam's held water was free").is_false()
+	assert_int(presence.held.get("water", 0)).is_equal(CellSubstances.PLENTY)
+	assert_str(_fizzle("Push(W2)", board)).contains("only an Extract")
+	assert_str(_fizzle("Extract(W2)", board)).is_empty()
+	assert_str(_fizzle("Extract(3W2) + Push(3W2)", board)).override_failure_message(
+			"the Extract drew the water out and the Push still could not find it").is_empty()
+
+
+# A substance free anywhere in reach is free: loam beside open water still lends the river's water.
+func test_a_free_source_outranks_a_held_one() -> void:
+	var board := _board({ HERE: Terrain.Kind.DIRT, NEXT_DOOR: Terrain.Kind.WATER }, {}, {}, null, [],
+			{ HERE: ["loam"] })
+	assert_str(_fizzle("Push(W2)", board)).is_empty()
+
+
+# THE MISSING-WIRE CASE: the hold is read off the substance's field, so clearing it frees the water.
+func test_the_hold_is_read_off_the_substance() -> void:
+	var catalog := _catalog()
+	(catalog["loam"] as Substance).extract_only = ""
+	var board := _board({ HERE: Terrain.Kind.DIRT }, {}, {}, null, [], { HERE: ["loam"] })
+	assert_str(_fizzle("Push(W2)", board, null, _map(), catalog)).override_failure_message(
+			"loam holding nothing still kept its water from a Push").is_empty()
+
+
+# The dev tools' readout names what a column holds, through the same walk.
+func test_held_from_names_what_only_an_extract_finds() -> void:
+	var held := CellSubstances.held_from(["loam"] as Array[String], _catalog())
+	assert_array(held).contains_exactly(["water"])
+	assert_bool(CellSubstances.present_from(["loam"] as Array[String], _catalog()).has("water")).is_false()
 
 
 func test_a_gas_on_a_neighbour_is_present() -> void:
@@ -349,13 +426,12 @@ func test_a_jet_needs_real_water_and_cannot_be_made_from_air() -> void:
 	assert_str(_fizzle("Break(A, W) + Push(W2)", bare)).is_empty()
 
 
-# The dev tools' readout of a row (#1532) is the same walk: what a row makes present is exactly what a
-# cast on that ground finds, beside what the air holds.
+# The dev tools' readout of a column (#1532, #1315) is the same walk: what a column makes present is
+# exactly what a cast on that tile finds, beside what the air holds.
 func test_what_a_row_makes_present_is_what_a_cast_finds() -> void:
-	var map := _map()
 	for kind: Terrain.Kind in [Terrain.Kind.GRASS, Terrain.Kind.MUD, Terrain.Kind.DIRT]:
-		var row := map.of_kind(kind)
-		var expected: Array[String] = row.duplicate()
+		var expected: Array[String] = []
+		expected.assign(GROUNDS[kind])
 		expected.append_array(Atmosphere.SUBSTANCES)
 		var from_row := CellSubstances.present_from(expected, _catalog())
 		from_row.sort()

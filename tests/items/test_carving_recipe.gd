@@ -161,12 +161,12 @@ func _fizzle_catalog() -> Dictionary:
 	return catalog
 
 
-func _walk(recipe: String, available: Dictionary[String, int]) -> String:
+func _walk(recipe: String, available: Dictionary[String, int], held: Dictionary[String, int] = {}) -> String:
 	var catalog := _fizzle_catalog()
 	var parsed := CarvingRecipe.parse(recipe, catalog)
 	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
 			% [recipe, parsed.error]).is_empty()
-	return parsed.fizzle_reason(available, catalog)
+	return parsed.fizzle_reason(available, catalog, held)
 
 
 # The ambient air alone, at the air's one of each (#1328).
@@ -223,10 +223,10 @@ func test_a_bind_needs_both_halves() -> void:
 	assert_str(_walk("Break(A, W) + Bind(Q, W)", no_aether)).contains("aether")
 
 
-# Rock Throw: salt is no ambient substance, so it needs dirt's (or stone's) parts beside it.
+# Rock Throw: salt is no ambient substance, so it needs a ground that lends salt (sandstone) beside it.
 func test_a_push_of_salt_works_where_salt_is_present() -> void:
 	assert_str(_walk("Push(E2)", _ambient())).is_not_empty()
-	assert_str(_walk("Push(E2)", _with(_ambient(), ["dirt", "salt", "ash"]))).is_empty()
+	assert_str(_walk("Push(E2)", _with(_ambient(), ["sandstone", "salt"]))).is_empty()
 
 
 # The reason NAMES the first missing substance, by its display name lower-cased.
@@ -304,3 +304,45 @@ func test_nothing_is_consumed_between_steps() -> void:
 	assert_str(_walk("Focus(3W2) + Push(3W2)", three)).is_empty()
 	three["water"] = 2
 	assert_str(_walk("Focus(3W2) + Push(3W2)", three)).contains("source of water")
+
+
+# --- what only an Extract draws out (#1315) ----------------------------------------------------
+#
+# A part a compound HOLDS (Substance.extract_only: loam's water) is handed to the walk apart from the
+# free supply. Only an Extract step may draw on it, and a passing Extract MAKES its argument, so the
+# carving's later verbs find it.
+
+func _held_water() -> Dictionary[String, int]:
+	var held: Dictionary[String, int] = { "water": CellSubstances.PLENTY }
+	return held
+
+
+# THE MISSING-WIRE CASE for Extract's effect: the Push finds the water only because the Extract made it.
+func test_an_extract_draws_a_held_part_out_for_the_next_verb() -> void:
+	assert_str(_walk("Extract(W2) + Push(W2)", _ambient(), _held_water())).is_empty()
+
+
+func test_a_held_part_is_absent_to_every_other_verb() -> void:
+	var reason := _walk("Push(W2)", _ambient(), _held_water())
+	assert_str(reason).contains("only an Extract")
+	assert_str(reason).contains("water")
+	assert_str(_walk("Focus(W2) + Push(W2)", _ambient(), _held_water())).contains("only an Extract")
+
+
+# A held part counts up to the amount the compound holding it is present at.
+func test_a_held_part_is_held_at_its_amount() -> void:
+	var one: Dictionary[String, int] = { "water": CellSubstances.AIR }
+	assert_str(_walk("Extract(W2) + Push(W2)", _ambient(), one)).is_empty()
+	assert_str(_walk("Extract(3W2) + Push(3W2)", _ambient(), one)).contains("source of water")
+
+
+# A free source still serves an Extract, and still serves every other verb: holding is per source.
+func test_a_free_part_serves_an_extract_and_a_push_alike() -> void:
+	var free := _with(_ambient(), ["water"])
+	assert_str(_walk("Extract(W2) + Push(W2)", free)).is_empty()
+	assert_str(_walk("Push(W2)", free, _held_water())).is_empty()
+
+
+# Zap's shape is unchanged: lightning held nowhere is still lightning from nowhere.
+func test_an_extract_of_something_held_nowhere_still_fizzles() -> void:
+	assert_str(_walk("Extract(QF) + Push(QF)", _ambient(), _held_water())).contains("lightning")

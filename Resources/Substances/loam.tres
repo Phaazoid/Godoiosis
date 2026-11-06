@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_subst")
-display_name = "Dirt"
-formula = "E2 + AE"
+display_name = "Loam"
+formula = "QFAE2 + QFA2E + WE2 + AE + W2"
 phase = 1
+extract_only = "water"

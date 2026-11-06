@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://brlh2iihytbei"]
+
+[ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="1_bubc0"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_htng6"]
+[ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="3_8s38j"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="4_24pgl"]
+
+[resource]
+script = ExtResource("4_24pgl")
+recipe = "Extract(3W2) + Push(3W2)"
+popup = "Wellspring!"
+icon = ExtResource("3_8s38j")
+display_name = "Wellspring"
+power = 4
+max_range = 0
+attack_shape = ExtResource("1_bubc0")
+swing = true
+hits_allies = true
+damage_kind = 2
