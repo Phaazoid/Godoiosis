@@ -23,13 +23,15 @@ extends AttackData
 #   fizzles -- CellSubstances.fizzle_reason, asked with the cell the cast is made from.
 
 var _parsed: CarvingRecipe
+var _parsed_against := -1   # the SubstanceCatalog.version _parsed read
 
 
-# The parse, cached until the recipe text changes -- the channel ladder runs inside queue-time
-# gating and the AI's candidate probe, so it must not re-parse per call.
+# The parse, cached until the recipe text or the substance catalog changes (#1622) -- the channel
+# ladder runs inside queue-time gating and the AI's candidate probe, so it must not re-parse per call.
 func parsed() -> CarvingRecipe:
-	if _parsed == null:
+	if _parsed == null or _parsed_against != SubstanceCatalog.version:
 		_parsed = CarvingRecipe.parse(recipe)
+		_parsed_against = SubstanceCatalog.version
 	return _parsed
 
 
