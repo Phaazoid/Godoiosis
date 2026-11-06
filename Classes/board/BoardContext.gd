@@ -109,6 +109,11 @@ func projected_unit_at_cell(cell: Vector2i) -> Unit:
 func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 	return GridUtils.get_terrain_kind_at_cell(grid, cell)
 
+# What this cell's TILE is made of (#1315): substance ids off the tileset's made_of column. A sibling
+# of terrain_kind_at, a method for the same reason; a board with no grid is made of nothing.
+func made_of_at(cell: Vector2i) -> Array[String]:
+	return GridUtils.made_of_at_cell(grid, cell)
+
 # Is this cell a HOLE (#875)? THE spelling of that question -- it lived hand-written as
 # `terrain_kind_at(cell) == Kind.VOID` at three sites in PlanResolver, and all three were wrong the
 # same way: NO GROUND IS A HOLE TOO.

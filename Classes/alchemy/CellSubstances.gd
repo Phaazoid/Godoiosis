@@ -7,9 +7,14 @@ extends Object
 # that can. Every caller asks fizzle_reason with a POSITION -- the menu row, the queue gate, the
 # validator (through the resolve), the resolver, the AI and the Play API -- one predicate, many cells.
 #
-# What each ground, tile state, gas and unit state holds is SubstanceMap's AUTHORED rows (#1532).
-# They feed presence only: Materia's empowerment rules are their own, a declared second reading
-# (dev ruling 2026-10-30), so authoring a source changes what a carving can draw on, not its +1.
+# What each tile holds is its own made_of column (GridUtils.made_of, #1315); what each tile state, gas
+# and unit state holds is SubstanceMap's AUTHORED rows (#1532). They feed presence only: Materia's
+# empowerment rules are their own, a declared second reading (dev ruling 2026-10-30), so authoring a
+# source changes what a carving can draw on, not its +1.
+#
+# FREE OR HELD (#1315): a compound's part named in its `extract_only` is HELD -- present to an Extract
+# alone, which draws it out for the carving's later verbs (CarvingRecipe.fizzle_reason). Loam holds its
+# water. A substance free anywhere in reach is free.
 #
 # Materia's shape: static, the board passed in, read through BoardContext METHODS only (a stub board
 # carries a null grid and a null state store), and its "stand by your source" footprint, Materia.REACH.
@@ -36,23 +41,31 @@ const PLENTY := 1000000   # more than any recipe asks
 static var _parts_memo: Dictionary = {}
 
 
+# What a cast finds, id -> amount: `free` to every verb, `held` to an Extract alone.
+class Presence:
+	var free: Dictionary[String, int] = {}
+	var held: Dictionary[String, int] = {}
+
+
 # The substances present for a cast from `cell`, and how much of each (id -> amount): the ambient
-# baseline at AIR, then everything within Materia.REACH -- the ground, its tile states, any gas, a lit
-# prop, and the states of whoever stands there -- then the caster's own states and the conduits it
-# carries, all at PLENTY, then every compound's parts, recursively, at their compound's amount.
-# Deduped, in that order; a substance found twice keeps the larger amount.
+# baseline at AIR, then everything within Materia.REACH -- each tile's made_of, its tile states, any
+# gas, a lit prop, and the states of whoever stands there -- then the caster's own states and the
+# conduits it carries, all at PLENTY, then every compound's parts, recursively, at their compound's
+# amount: free, or held where the compound holds them. Deduped, in that order; a substance found twice
+# keeps the larger amount.
 #
 # `caster` is counted whatever the scan finds: the body handed in is the one whose conduits count, and
-# a pass hands its copy. `map` is what each thing is made of, the authored one unless a caller (a
-# test's own chemistry, like `catalog`) hands another.
-static func available_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
-		catalog: Dictionary = {}, hypo: Dictionary = {}, map: SubstanceMap = null) -> Dictionary[String, int]:
+# a pass hands its copy. `map` is what each tile state, gas and unit state is made of, the authored one
+# unless a caller (a test's own chemistry, like `catalog`) hands another.
+static func presence_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
+		catalog: Dictionary = {}, hypo: Dictionary = {}, map: SubstanceMap = null) -> Presence:
 	var shared := catalog.is_empty()
 	if shared:
 		catalog = SubstanceCatalog.get_all()
 	if map == null:
 		map = SubstanceMap.authored()
-	var found: Dictionary[String, int] = {}
+	var presence := Presence.new()
+	var found := presence.free
 	for id: String in Atmosphere.SUBSTANCES:
 		_add(found, id, AIR)
 	if board != null:
@@ -66,33 +79,63 @@ static func available_near(cell: Vector2i, board: BoardContext, caster: UnitStat
 			var conduit := item as ConduitData
 			if conduit != null and conduit.substance != null:
 				_add(found, conduit.substance.id(), PLENTY)
-	_lend_parts(found, catalog, shared)
-	return found
+	_lend_parts(presence, catalog, shared)
+	return presence
 
 
-# What these substances make present: each of them, then every part they lend, in available_near's
-# order. The dev tools' readout of a SubstanceMap row, read through the same walk a cast is.
+# What is FREE for a cast from `cell`: presence_near's to-every-verb half.
+static func available_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
+		catalog: Dictionary = {}, hypo: Dictionary = {}, map: SubstanceMap = null) -> Dictionary[String, int]:
+	return presence_near(cell, board, caster, catalog, hypo, map).free
+
+
+# What these substances make present: each of them, then every part they lend free, in
+# available_near's order. The dev tools' readout of a row or a tile, read through the walk a cast is.
 static func present_from(ids: Array[String], catalog: Dictionary = {}) -> Array[String]:
-	var shared := catalog.is_empty()
-	if shared:
-		catalog = SubstanceCatalog.get_all()
-	var found: Dictionary[String, int] = {}
-	for id: String in ids:
-		_add(found, id, PLENTY)
-	_lend_parts(found, catalog, shared)
 	var out: Array[String] = []
-	out.assign(found.keys())
+	out.assign(_presence_from(ids, catalog).free.keys())
 	return out
 
 
-# A compound lends its parts at its own amount; one whose amount rose is walked again.
-static func _lend_parts(found: Dictionary[String, int], catalog: Dictionary, shared: bool) -> void:
+# The parts these substances HOLD and lend nowhere free: what only an Extract finds beside them.
+static func held_from(ids: Array[String], catalog: Dictionary = {}) -> Array[String]:
+	var presence := _presence_from(ids, catalog)
+	var out: Array[String] = []
+	for id: String in presence.held:
+		if not presence.free.has(id):
+			out.append(id)
+	return out
+
+
+static func _presence_from(ids: Array[String], catalog: Dictionary) -> Presence:
+	var shared := catalog.is_empty()
+	if shared:
+		catalog = SubstanceCatalog.get_all()
+	var presence := Presence.new()
+	for id: String in ids:
+		_add(presence.free, id, PLENTY)
+	_lend_parts(presence, catalog, shared)
+	return presence
+
+
+# A compound lends its parts at its own amount, free unless it holds them; one whose amount rose is
+# walked again. A held part's own parts are held too.
+static func _lend_parts(presence: Presence, catalog: Dictionary, shared: bool) -> void:
 	var pending: Array[String] = []
-	pending.assign(found.keys())
+	pending.assign(presence.free.keys())
+	while not pending.is_empty():
+		var id: String = pending.pop_front()
+		var holds := _held_parts_of(id, catalog)
+		for part: String in _parts_of(id, catalog, shared):
+			if holds.has(part):
+				_add(presence.held, part, presence.free[id])
+			elif _add(presence.free, part, presence.free[id]):
+				pending.append(part)
+	pending.assign(presence.held.keys())
 	while not pending.is_empty():
 		var id: String = pending.pop_front()
 		for part: String in _parts_of(id, catalog, shared):
-			if _add(found, part, found[id]):
+			if _add(presence.held, part, presence.held[id]):
 				pending.append(part)
 
 
@@ -106,19 +149,18 @@ static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContex
 	var recipe := carving.parsed()
 	if not recipe.is_legal():
 		return ""
-	return recipe.fizzle_reason(available_near(cell, board, caster, {}, hypo))
+	var presence := presence_near(cell, board, caster, {}, hypo)
+	return recipe.fizzle_reason(presence.free, {}, presence.held)
 
 
 # Everything here is a real source, so all of it is PLENTY.
 static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext, hypo: Dictionary,
 		map: SubstanceMap) -> void:
-	var kind := board.terrain_kind_at(cell)
-	# Water is offered only as OPEN water (BoardContext.is_open_water): ice is a floor, not a well, so
-	# frozen water offers its ice, through the tile state below, and not its water.
-	if kind != Terrain.Kind.WATER:
-		_add_all(found, map.of_kind(kind), PLENTY)
-	if board.is_open_water(cell):
-		_add_all(found, map.of_kind(Terrain.Kind.WATER), PLENTY)
+	# What the tile is made of (#1315). Water is offered only as OPEN water (BoardContext.is_open_water):
+	# ice is a floor, not a well, so frozen water offers its ice, through the tile state below, and not
+	# its water.
+	if board.terrain_kind_at(cell) != Terrain.Kind.WATER or board.is_open_water(cell):
+		_add_all(found, board.made_of_at(cell), PLENTY)
 	for state: Terrain.TileState in board.tile_states_at(cell):
 		_add_all(found, map.of_tile_state(state), PLENTY)
 	for gas: Gas.Kind in Gas.kinds_in(board.gas_at(cell)):
@@ -132,7 +174,7 @@ static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: Boa
 			_add_all(found, map.of_state(state), PLENTY)
 
 
-# The substances a compound is mixed from (`dirt` is `E2 + AE`: salt and ash). A molecule has none,
+# The substances a compound is mixed from (`sandstone` is `salt + silica`). A molecule has none,
 # and a compound whose `lends_its_parts` is off (plant matter, c3potheds@) lends none.
 static func _parts_of(id: String, catalog: Dictionary, shared: bool) -> Array[String]:
 	var none: Array[String] = []
@@ -146,6 +188,15 @@ static func _parts_of(id: String, catalog: Dictionary, shared: bool) -> Array[St
 	if shared:
 		_parts_memo[substance.formula] = ids
 	return ids
+
+
+# The parts a compound holds for an Extract alone (Substance.extract_only).
+static func _held_parts_of(id: String, catalog: Dictionary) -> Array[String]:
+	var substance := catalog.get(id) as Substance
+	if substance == null or substance.extract_only == "":
+		var none: Array[String] = []
+		return none
+	return substance.extract_only_ids()
 
 
 # True when `id` is new or its amount rose.

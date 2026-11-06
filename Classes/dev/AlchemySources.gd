@@ -1,9 +1,10 @@
 extends VBoxContainer
 class_name AlchemySources
 
-# THE ALCHEMY PAGE'S SOURCES TAB (#1532, AlchemyTool hosts it): SubstanceMap's four tables -- what each
-# ground kind, tile state, gas and unit state is MADE of, which is what a carving cast beside one can
-# draw on (CellSubstances).
+# THE ALCHEMY PAGE'S SOURCES TAB (#1532, AlchemyTool hosts it): SubstanceMap's three tables -- what each
+# tile state, gas and unit state is MADE of, which is what a carving cast beside one can draw on
+# (CellSubstances). A GROUND is not here (#1315): what a tile is made of is its own made_of column,
+# edited per tile on the Tiles page (ObjectTool), which borrows this page's parser and readout.
 #
 # IT EDITS THE LIVE MAP, never a copy: for the shipped path that is SubstanceMap.authored(), the one
 # object every reader reads, so a row reaches the next cast with no save. A row is parsed on every
@@ -62,8 +63,8 @@ func _ready() -> void:
 	var note := Label.new()
 	note.text = ("What each thing on the board is MADE of: what a carving cast within %d %s of it can draw "
 		+ "on. A change reaches the next cast. Save writes %s. It never changes what EMPOWERS a carving "
-		+ "(the +1 from water, rock or fire).") % [Materia.REACH, "tile" if Materia.REACH == 1 else "tiles",
-		path.trim_prefix("res://")]
+		+ "(the +1 from water, rock or fire). What a GROUND is made of is per tile: edit it on the Tiles "
+		+ "page.") % [Materia.REACH, "tile" if Materia.REACH == 1 else "tiles", path.trim_prefix("res://")]
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_color_override("font_color", NOTE_COLOR)
 	add_child(note)
@@ -89,8 +90,6 @@ static func groups() -> Array[Dictionary]:
 	var retired: Array = [Terrain.TileState.NONE]
 	retired.append_array(Terrain.RETIRED_STATES)
 	return [
-		{"title": "Grounds", "table": &"grounds", "members": _members(Terrain.Kind.values(),
-			[Terrain.Kind.NONE], func(k: int) -> String: return Terrain.kind_display_name(k as Terrain.Kind))},
 		{"title": "Tile states", "table": &"tile_states", "members": _members(Terrain.TileState.values(),
 			retired, func(k: int) -> String: return Terrain.tile_state_display_name(k as Terrain.TileState))},
 		{"title": "Gases", "table": &"gases", "members": _members(Gas.Kind.values(),
@@ -124,7 +123,8 @@ static func parse_row(text: String, catalog: Dictionary) -> Dictionary:
 	return {"ids": ids, "error": ""}
 
 
-# What a row makes present, as names: the row's own substances, then the parts they lend.
+# What a row makes present, as names: the row's own substances, the parts they lend, and the parts
+# they HOLD for an Extract alone (#1315).
 static func present_names(ids: Array[String]) -> Dictionary:
 	var catalog := SubstanceCatalog.get_all()
 	var own := PackedStringArray()
@@ -134,18 +134,23 @@ static func present_names(ids: Array[String]) -> Dictionary:
 			own.append(_name(id, catalog))
 		else:
 			parts.append(_name(id, catalog))
-	return {"own": own, "parts": parts}
+	var held := PackedStringArray()
+	for id: String in CellSubstances.held_from(ids):
+		held.append(_name(id, catalog))
+	return {"own": own, "parts": parts, "held": held}
 
 
-# The Tiles page's line for a ground, from the same reading as this page's readout.
-static func made_of_line(ids: Array[String]) -> String:
+# A row's readout, this page's and the Tiles page's alike: what a cast beside it finds.
+static func readout_text(ids: Array[String]) -> String:
 	if ids.is_empty():
-		return "Made of: nothing   (edit on Project > Alchemy)"
+		return NOTHING
 	var named := present_names(ids)
-	var line := "Made of: " + " + ".join(named["own"])
+	var text := ", ".join(named["own"])
 	if not (named["parts"] as PackedStringArray).is_empty():
-		line += ", and %s parts %s" % [_its(ids), ", ".join(named["parts"])]
-	return line + "   (edit on Project > Alchemy)"
+		text += "   and %s parts: %s" % [_its(ids), ", ".join(named["parts"])]
+	if not (named["held"] as PackedStringArray).is_empty():
+		text += "   held for an Extract: %s" % ", ".join(named["held"])
+	return text
 
 
 static func _its(ids: Array[String]) -> String:
@@ -245,14 +250,9 @@ func _show_readout(field: LineEdit, ids: Array[String]) -> void:
 		readout.text = NOTHING
 		readout.add_theme_color_override("font_color", EMPTY_COLOR)
 		return
-	var named := present_names(ids)
-	var text := ", ".join(named["own"])
-	if not (named["parts"] as PackedStringArray).is_empty():
-		text += "   and %s parts: %s" % [_its(ids), ", ".join(named["parts"])]
+	var text := readout_text(ids)
 	var row: Dictionary = _fields[field]
-	if row["table"] == &"grounds" and row["key"] == Terrain.Kind.WATER:
-		text += "   (open water only: ice offers %s's row)" % Terrain.tile_state_display_name(Terrain.TileState.FROZEN)
-	elif row["table"] == &"tile_states" and row["key"] == Terrain.TileState.BURNING:
+	if row["table"] == &"tile_states" and row["key"] == Terrain.TileState.BURNING:
 		text += "   (and every lit prop)"
 	readout.text = text
 

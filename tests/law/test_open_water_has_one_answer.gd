@@ -24,6 +24,13 @@ class _WaterBoard extends BoardContext:
 		if cell == OPEN or cell == FROZEN or cell == CHILLED_IN:
 			return Terrain.Kind.WATER
 		return Terrain.Kind.GRASS if cell == DRY else Terrain.Kind.NONE
+	# The fixture's own tiles (#1315): a water tile is made of water, and nothing else here is made of
+	# anything, so CellSubstances' answer is the open-water gate's alone.
+	func made_of_at(cell: Vector2i) -> Array[String]:
+		var out: Array[String] = []
+		if terrain_kind_at(cell) == Terrain.Kind.WATER:
+			out.append("water")
+		return out
 
 
 func _water() -> Substance:
@@ -44,11 +51,8 @@ func test_the_readers_agree_with_is_open_water() -> void:
 	chilled.add_element_state(Elemental.State.CHILLED)
 	var units: Array[Unit] = [walker, chilled]
 	var board := _WaterBoard.new(states, units)
-	# The fixture's own row (#1532): a water ground is made of water, and nothing else here is made of
-	# anything, so the answer is the open-water gate's alone.
 	var water_id := "water"
 	var map := SubstanceMap.new()
-	map.grounds = { Terrain.Kind.WATER: PackedStringArray([water_id]) }
 	var catalog := { water_id: _water() }
 	var no_wet: Dictionary[Vector2i, bool] = {}
 	var laying := AttackData.new()

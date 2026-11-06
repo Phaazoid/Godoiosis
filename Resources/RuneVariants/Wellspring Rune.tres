@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://ubyhjl5m5e55"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_j6q7g"]
+[ext_resource type="Resource" uid="uid://brlh2iihytbei" path="res://Resources/TransmutationData/Wellspring.tres" id="2_0tapu"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_hgolm"]
+
+[resource]
+script = ExtResource("3_hgolm")
+size = 1
+inscriptions = Array[ExtResource("1_j6q7g")]([ExtResource("2_0tapu")])
+temper = 2
+display_name = "Wellspring Rune"
+weight = 1

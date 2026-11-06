@@ -8,6 +8,7 @@ class_name ObjectKnobs
 # visible before you move it:
 #
 #   FIELDS   this tile alone      -> a TileSet custom-data column   -> Save tile fields
+#            (and made_of, #1315: what the tile is made of, on every tile -- see tile_columns)
 #   (fire)   every tile of a KIND -> the ignition .tres             -> Save ground rules
 #   GLOBALS  every board, forever -> the @export declaration        -> Save game-wide defaults
 #
@@ -233,12 +234,21 @@ static func revert_fields(tiles: TileSet, status: Label = null) -> bool:
 		if disk_data == null:
 			continue
 		var live_data: TileData = entry["data"]
-		for field: Dictionary in FIELDS:
-			var layer: String = field["layer"]
+		for layer: String in tile_columns():
 			if tiles.get_custom_data_layer_by_name(layer) < 0 or saved.get_custom_data_layer_by_name(layer) < 0:
 				continue
 			live_data.set_custom_data(layer, disk_data.get_custom_data(layer))
 	return true
+
+
+# Every column the page writes: FIELDS' look rows, and what the tile is made of (#1315), which is
+# chemistry rather than a look and so offered on every tile, flat ground too (ObjectTool).
+static func tile_columns() -> Array[String]:
+	var out: Array[String] = []
+	for field: Dictionary in FIELDS:
+		out.append(field["layer"])
+	out.append(GridUtils.MADE_OF)
+	return out
 
 
 static func _tile_key(entry: Dictionary) -> Vector3i:
