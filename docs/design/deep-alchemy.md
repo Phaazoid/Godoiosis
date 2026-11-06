@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-05. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1623 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05.**
+**Canon checked through #1623 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -1052,11 +1052,22 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Placeholder content:** Wellspring, `Extract(3W2) + Push(3W2)`, a Line 3 water jet on the Wellspring Rune (medium, Water), which nobody carries. Hand it out from the Unit Editor. It works wherever dirt, grass, mud or a river is in reach, and fizzles where nothing but stone is.
 - **Not built:** four new tiles, sand (silica), clay soil (alumina), chalky soil (chalk) and limestone rock, which wait on a look mock (slice 2). Empowerment still follows `Materia`'s three rules (rock empowers Earth); making it follow the column is [#696](https://github.com/Phaazoid/Godoiosis/issues/696)'s door.
 
+**Built 2026-11-05: Quicken and Still, the round clock ([#1311](https://github.com/Phaazoid/Godoiosis/issues/1311)).** Phaazoid@ approved the plan in a Claude session the same day. Every default below is one to change once played.
+- **A mark holds X, not the whole cell.** A carving with `Still(X)` or `Quicken(X)` lays a time mark on every tile it strikes, one per substance its time verbs name. A tile state or gas on that tile is held or quickened when its `SubstanceMap` row makes X present, the parts it lends included. So `Still(F)` holds a fire (flame and heat) and leaves the smoke over it alone. `Pace` is the one answer.
+- **Only the round clock is touched.** A held fire still burns whoever stands in it, and a hit in a pass still changes a held tile: a douse still puts a held fire out. A unit's own state clocks are out of scope.
+- **Held:** the round leaves it as it is. A held fire's clock stops and it spreads nothing. A held gas keeps its level and age, spills nothing, and takes no raise or fresh smoke while it lies there. Arrival is not stopped: fire may catch on a stilled tile and gas may drift in, and from the next round it is held too.
+- **Quickened:** it ticks twice. The round runs a second tick for quickened things only, so inside the circle a fire's front moves two tiles a round and burns down twice as fast, and a tile the first tick lit loses a turn to the second. A quickened gas spills and fades twice.
+- **How long:** `TransmutationData.time_rounds`, default 2, which is the end of the round it is cast in and the next. A new mark on a substance replaces the old one. Where a Still and a Quicken both reach one thing, Still wins.
+- **The forecast is the round.** Both ticks' fire catches are read from one snapshot (`TerrainStateManager.cells_fire_takes_again`), so the gas round, which runs first, forecasts both, and Alt's outline and the round share `GasSpread.next`. A queued Still shows in the outline before it executes. Declared edge: a fuel authored to relight Scorched ground (none is) would relight a burnt-out tile a round later than a literal second tick; the round and the forecast still agree.
+- **Saves** carry each mark with its rounds left. An authored save carries none, as it carries no live clock (#1483).
+- **Placeholder content:** Stillness (`Still(F)`) and Quickening (`Quicken(F)`), each a point aim at range 3 over Wide 3 Deep 2 that deals no damage, on the Stillness Rune and the Quickening Rune (medium, Fire), which nobody carries. Hand them out from the Unit Editor. Heat is in every tile's air, so they work anywhere for a caster with Fire 1.
+- **Not built:** a readout on the board and the tile card, which waits on a look mock.
+
 **Next:**
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
 - **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)) and the smoke carving ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).
 
-**Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's new tiles (#1315 slice 2: its defaults are built, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
+**Still open in Phase 2:** alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's new tiles (#1315 slice 2: its defaults are built, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
 **Still open:**
 
