@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-05. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1623 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05.**
+**Canon checked through #1627 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -1050,13 +1050,24 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Only an Extract draws out a held part.** `Substance.extract_only` names parts of a compound that are present to an Extract step alone (loam holds its water). A passing Extract MAKES what it draws, so later verbs find it: `Extract(W2) + Push(W2)` works beside dirt, while a lone `Push(W2)` fizzles "only an Extract draws out the water here". A part free from any other source stays free. Before this, Extract parsed and did nothing.
 - **Nothing is used up.** Sources stay permanent (`alchemy-kit.md` → *Sources — two kinds*); parching a ground would reverse that, and is the dev's call.
 - **Placeholder content:** Wellspring, `Extract(3W2) + Push(3W2)`, a Line 3 water jet on the Wellspring Rune (medium, Water), which nobody carries. Hand it out from the Unit Editor. It works wherever dirt, grass, mud or a river is in reach, and fizzles where nothing but stone is.
-- **Not built:** four new tiles, sand (silica), clay soil (alumina), chalky soil (chalk) and limestone rock, which wait on a look mock (slice 2). Empowerment still follows `Materia`'s three rules (rock empowers Earth); making it follow the column is [#696](https://github.com/Phaazoid/Godoiosis/issues/696)'s door.
+- **Not built in this slice:** the four new tiles, which came in slice 2 (below). Empowerment still follows `Materia`'s three rules (rock empowers Earth); making it follow the column is [#696](https://github.com/Phaazoid/Godoiosis/issues/696)'s door.
+
+**Built 2026-11-05: four new grounds ([#1315](https://github.com/Phaazoid/Godoiosis/issues/1315), slice 2).** Phaazoid@ approved the look from a mock in the real game and ruled limestone DIRT.
+- **Sand, clay soil, chalky soil and limestone** are a new atlas source on `Resources/TestTiles.tres`: source 2, `Art/Board/Grounds.png`, placeholder pixel art in the Solaria sheet's style.
+  - Each is Kind DIRT, walkable, with move cost 1.
+  - Each is made of one earth: sand `silica`, clay soil `alumina`, chalky soil `chalk`, limestone `limestone`.
+  - They are on the Tile Brush and each has a Tiles page, where one Made of edit changes it.
+- **Limestone is DIRT, not ROCK** (his ruling). It wears earth sides in 3D, and it is not an Earth source for empowerment, which `Materia.sources_at` still answers by kind.
+- **None holds salt or water.** Rock Throw stays greyed beside them, and Wellspring fizzles with only these in reach, as it does on stone.
+- **Nothing reads silica, alumina or chalk yet.** #1621's starter list is what will.
+- **Walkable ground with a kind must name its makeup** (`tests/law/test_substance_map.gd`), so the next new ground cannot ship with every carving silently fizzling on it.
+- **Not built:** the ground reactions (quicklime, brick, gypsum and the rest), which are not ruled.
 
 **Next:**
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
 - **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)) and the smoke carving ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).
 
-**Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's new tiles (#1315 slice 2: its defaults are built, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
+**Still open in Phase 2:** Quicken/Still's round clock (#1311); alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's ground reactions (quicklime, brick, gypsum: not ruled; its defaults and its four new grounds are built, #1315 slices 1 and 2, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
 **Still open:**
 
