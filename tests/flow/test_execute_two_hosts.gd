@@ -702,6 +702,54 @@ func test_a_blast_that_kills_its_own_caster_still_lands_on_the_rest() -> void:
 	_assert_hosts_agree(ran)
 
 
+# ...and a COUNTER's (#1622): a counter blast whose lead victim is its own counter-er, and which kills it.
+# A counter volley is judged once, at its lead, as an attack's is, so the attacker after it still takes
+# its hit, in the queue and in both hosts. Until #1622 every counter member asked its counter-er's
+# liveness again, and the rest of the blast stopped with it.
+func test_a_counter_blast_that_kills_its_own_counterer_still_lands_on_the_attacker() -> void:
+	var hero_cell := Vector2i(3, 2)
+	var foe_cell := Vector2i(3, 3)
+	var path := _author("counter_self_kill", func() -> void:
+		_arm(_spawn(PLAYER, hero_cell), _blow(1))
+		_spawn(PLAYER, Vector2i(0, 0))   # a side that outlives the exchange, so no defeat ends the pass
+		var foe := _spawn(ENEMY, foe_cell)
+		var blast := _blow(40)
+		blast.hits_self = true
+		# Aimed back at the hero, the shape takes the hero's cell and the counter-er's own just south of it:
+		# a placed shape emits its south row first, so the counter-er's own hit leads.
+		P.stamped(blast, 1, [Vector2i(0, 0), Vector2i(0, 1)] as Array[Vector2i])
+		blast.swing = false
+		_arm(foe, blast)
+		foe.set_current_hp(20))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": hero_cell, "at": foe_cell}])
+
+	# The counter-er is freed by now, so it is never read into a typed local: the plan's verdicts name it.
+	var hero: Unit = ran.game[hero_cell]
+	var answer: Array[CounterAttackAction] = (ran.plan as ResolvedPlan).counters
+	assert_int(answer.size()).override_failure_message(
+			"fixture: the counter reached %d victims, not the counter-er and the hero" % answer.size()).is_equal(2)
+	if answer.size() != 2:
+		return
+	assert_object(answer[1].target).override_failure_message("fixture: the counter-er's own hit does not lead") \
+		.is_same(hero)
+	assert_int(answer[0].resolved.lethality).override_failure_message(
+			"fixture: the counter's own hit does not kill its counter-er").is_equal(ResolvedOutcome.Lethality.KILLED)
+	assert_bool(answer[1].resolved.skipped).override_failure_message(
+			"the counter stopped with its counter-er: the rest of the blast never lands").is_false()
+	var promised := answer[1].resolved.target_hp_after
+	assert_int(promised).override_failure_message("fixture: the queue showed the hero taking nothing") \
+		.is_less(hero.get_max_hp())
+	for host: String in ["game", "play"]:
+		var units: Dictionary = ran[host]
+		assert_str(_picture(units, foe_cell)).override_failure_message(
+				"fixture: the counter's own hit did not kill its counter-er in the %s host" % host).is_equal("gone")
+		assert_int((units[hero_cell] as Unit).get_current_hp()).override_failure_message(
+				"the %s host dropped the rest of the counter with its counter-er: the queue said %d" % [host, promised]) \
+			.is_equal(promised)
+	_assert_hosts_agree(ran)
+
+
 # --- WHEN a pass's tiles land (#1498 stage 2) ----------------------------------------------------
 #
 # A volley's tile changes land once its LAST member has played (ruling 3: one blast is one moment), in

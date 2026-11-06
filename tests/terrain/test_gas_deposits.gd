@@ -335,6 +335,48 @@ func test_each_wet_victim_of_one_volley_releases_its_own_steam() -> void:
 	_assert_gas_on(plan, second_cell, release.gases)
 
 
+# ...and a volley that also clears the air clears only the gas that was STANDING (#1622): every victim's
+# steam lands after the volley's air half, the lead's included. Until then the lead's steam went into the
+# channel before its own volley's clear and was swept away, while every later victim's survived. The
+# test's own air reaction lets fire disperse, so one element does both halves; the steam is authored.
+func test_a_volley_that_clears_the_air_keeps_every_victims_steam() -> void:
+	var release := _unit_release()
+	var units := _fire_at(TARGET_CELL, true)
+	var second_cell := TARGET_CELL + Vector2i(0, 1)
+	var second_target: Unit = H.spawn_unit(self, Team.Faction.ENEMY, second_cell, {Stats.Stat.MHP: 50})
+	second_target.add_element_state(Elemental.State.WET)
+	units.append(second_target)
+	var lead := H.stamped_attack(units[0], units[1])
+	var second := H.stamped_attack(units[0], second_target)
+	second.is_secondary_hit = true
+	var volley: Array[AttackAction] = [lead, second]
+	lead.volley = volley
+	second.volley = volley
+	lead.struck_cells = [TARGET_CELL, second_cell] as Array[Vector2i]
+	var board := _OpenBoard.new(units)
+	board.gas = GasField.new()
+	for cell: Vector2i in [TARGET_CELL, second_cell]:
+		board.gas.set_level(cell, Gas.Kind.SMOKE, Gas.Level.THICK)
+	var heat_clears := TerrainReaction.new()
+	heat_clears.incoming_element = Elemental.Element.FIRE
+	heat_clears.in_the_air = true
+	heat_clears.disperses_gas = true
+	var air: Array[TerrainReaction] = [heat_clears]
+	var plan := ResolvedPlan.new()
+	plan.attacks = volley
+	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board, air)
+
+	var landed := board.planned(plan.tiles)
+	for cell: Vector2i in [TARGET_CELL, second_cell]:
+		var packed := landed.gas_at(cell)
+		assert_int(Gas.level_in(packed, Gas.Kind.SMOKE)).override_failure_message(
+				"fixture: the volley's air half never cleared %s" % cell).is_equal(0)
+		for kind: Gas.Kind in Gas.released(release.gases):
+			assert_int(Gas.level_in(packed, kind)).override_failure_message(
+					"the volley's own clear swept away the steam its hit released on %s" % cell) \
+				.is_equal(release.gases[kind])
+
+
 func test_a_unit_reaction_that_releases_gas_says_so_in_its_line() -> void:
 	var reaction := ElementalReaction.new()
 	reaction.incoming_element = Elemental.Element.FIRE

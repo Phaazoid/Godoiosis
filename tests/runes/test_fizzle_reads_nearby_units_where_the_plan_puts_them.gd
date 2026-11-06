@@ -10,6 +10,7 @@
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
+const P := preload("res://tests/support/shape_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
@@ -158,4 +159,42 @@ func test_a_counter_draws_on_a_neighbour_an_earlier_hit_soaked() -> void:
 		var counter: CounterAttackAction = counters[0]
 		assert_bool(counter.resolved.fizzled).is_false()
 		assert_int(counter.resolved.damage).is_greater(0)
+	_break_volleys(plan)
+
+
+# A counter BLAST is judged once, at its lead (#1622), as an attack's volley is: its first hit shoving
+# the Wet neighbour that lends the water out of reach cannot fizzle the rest of the blast. Until then
+# every counter member asked again, so the counter landed on the neighbour and fizzled on the attacker.
+func test_a_counter_blast_that_shoves_its_water_away_still_lands_on_the_rest() -> void:
+	var carving := _tied()
+	carving.knockback = 2
+	# Aimed back at the attacker, the shape takes the attacker's cell and the neighbour's, one row south
+	# of it: a placed shape emits its south row first, so the neighbour's hit leads.
+	P.stamped(carving, 1, [Vector2i(0, 0), Vector2i(-1, 1)] as Array[Vector2i])
+	carving.swing = false
+	var counterer := _alchemist(ENEMY, Vector2i(5, 5), carving)
+	var lender := H.spawn_solo(self, _sm, PLAYER, Vector2i(4, 5), { Stats.Stat.MHP: 60 }, false)
+	lender.add_element_state(Elemental.State.WET)
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(5, 4), { Stats.Stat.MHP: 60 })
+	attacker.squad._queue_action(H.stamped_attack(attacker, counterer))
+	_sm.active_squad = attacker.squad
+	var plan := _sm.resolve_plan(attacker.squad, _board())
+
+	var counters := plan.counters.filter(func(c: CounterAttackAction) -> bool: return c.actor == counterer)
+	assert_int(counters.size()).override_failure_message(
+			"fixture: the counter reached %d victims, not the neighbour and the attacker" % counters.size()).is_equal(2)
+	if counters.size() != 2:
+		_break_volleys(plan)
+		return
+	var first: CounterAttackAction = counters[0]
+	var rest: CounterAttackAction = counters[1]
+	assert_object(first.target).override_failure_message("fixture: the neighbour's hit does not lead").is_same(lender)
+	assert_object(rest.target).is_same(attacker)
+	assert_str(CellSubstances.fizzle_reason(carving, counterer.movement.cell, _board(), counterer.state, plan.hypo)) \
+		.override_failure_message("fixture: the shove left the water in reach, so nothing here could fizzle") \
+		.is_not_empty()
+	assert_bool(first.resolved.fizzled).is_false()
+	assert_bool(rest.resolved.fizzled).override_failure_message(
+			"the counter's own first hit fizzled the rest of its blast").is_false()
+	assert_int(rest.resolved.damage).is_greater(0)
 	_break_volleys(plan)

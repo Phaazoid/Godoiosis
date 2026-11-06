@@ -2,12 +2,15 @@ extends Object
 class_name SubstanceCatalog
 
 # Every substance Deep Alchemy knows (Resources/Substances/), keyed by id = file name. Cached like
-# ReactionCatalog; anything that adds or removes a file at runtime calls refresh().
+# ReactionCatalog; anything that adds, removes or rewrites a file at runtime calls refresh().
 
 const DIR := "res://Resources/Substances/"
 
 static var _cache: Dictionary = {}   # id -> Substance
 static var _scanned := false
+# Moves on every refresh(): what a derivation off the catalog stamps, so it knows when to derive again
+# (TransmutationData.parsed, #1622).
+static var version := 0
 
 
 # A COPY, so a caller adding to it cannot change everyone's.
@@ -37,3 +40,4 @@ static func name_of(id: String) -> String:
 
 static func refresh() -> void:
 	_scanned = false
+	version += 1

@@ -290,6 +290,7 @@ func _update_confirmed(path: String) -> void:
 	if DevWidgets.save_over(current, path, status_label):
 		_dirty = false
 		status_label.text = "Saved %s." % path.get_file()
+		SubstanceCatalog.refresh()   # every carving re-parses against the new formula (#1622)
 		AlchemyTool.redraw_plan(_game)
 	_refresh_list(_loaded_id)
 

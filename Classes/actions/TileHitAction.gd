@@ -39,9 +39,10 @@ static func make(body: UnitState, tile_state: Terrain.TileState, damage: int) ->
 # Idempotent like a wade's soak: a row says what CHANGED, so an already-wet unit grows a row only for
 # the damage. A gas whose state is held only WHILE STANDING in it (smoke, #1335) gives nothing to keep.
 # A row with damage is predicted against `body`, which is advanced past it, so whatever comes next is
-# predicted against the HP this one leaves. Its states are not written: a row says what it adds.
+# predicted against the HP this one leaves. Its states are not written: a row says what it adds, and
+# the next kind is asked with that added (#1622), so two gases giving one state give one row.
 static func gas_hits(body: UnitState, packed: int) -> Array[TileHitAction]:
-	var held := body.element_states
+	var held: Array[Elemental.State] = body.element_states.duplicate()
 	var hits: Array[TileHitAction] = []
 	for kind: Gas.Kind in Gas.kinds_in(packed):
 		var rules := GasRules.for_kind(kind)
@@ -56,6 +57,7 @@ static func gas_hits(body: UnitState, packed: int) -> Array[TileHitAction]:
 			continue
 		var hit := make_gas(body, kind, rules.state if gains else Elemental.State.NONE, damage)
 		hits.append(hit)
+		held.append_array(hit.resolved.states_added)
 		if damage > 0:
 			LethalityRules.land_rung(body, hit.resolved.lethality, damage)
 	return hits

@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-05. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1627 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05.**
+**Canon checked through #1628 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -746,7 +746,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Thin.** Thin steam never soaks and never spreads, so drying stays drying. Medium would let Blow Dry dry an ally and then re-soak them at the end of your own turn.
 - **On the cell the unit was hit on**, before any shove from the same hit. A guard who takes the blow steams on its own cell.
 - **Plants wait for smoke.** A plant fire is mostly smoke; its steam is only the green plant's sap (`green_plant` is `AE + 2FA + W2`, and tall grass, a dry plant, gives smoke alone). So Burning and GrassIgnites keep their ledger line and release both gases in one later diff. *(Done by #1335, which took them off the ledger: below.)*
-- **How:** `ElementalReaction` has TerrainReaction's `gas`/`gas_level` pair *(a `gases` list on all three since #1335)*, and `PlanResolver._release_reaction_gas` puts a fired reaction's gas into the one cell-effect channel every deposit uses. So the board ghosts it before Execute and both executors play it. It is released once per wet victim, where an attack's own gas lands once per volley, and the glossary line says "releases Steam".
+- **How:** `ElementalReaction` has TerrainReaction's `gas`/`gas_level` pair *(a `gases` list on all three since #1335)*, and `PlanResolver._release_reaction_gas` puts a fired reaction's gas into the one cell-effect channel every deposit uses. So the board ghosts it before Execute and both executors play it. It is released once per wet victim, where an attack's own gas lands once per volley, and the glossary line says "releases Steam". *(Since #1622, 2026-11-05, it lands after its volley's air half, so a blast that also disperses gas keeps every victim's steam, the lead's included.)*
 - **The ledger's gas half is checked:** `ReactionLint.unreleased_gases` names any gas an equation makes (in its outputs, not its inputs) that its reaction does not release, and the lint suite reds unless that reaction is on NOT_YET_FOLLOWED.
 - **Not built:**
   - A reaction holds ONE gas, so a burning plant cannot yet release steam and smoke together. Smoke's diff decides the shape. *(Built 2026-10-22, #1335: a list.)*
