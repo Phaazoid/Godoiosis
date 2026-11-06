@@ -36,6 +36,10 @@ var _state_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns_lef
 # of its ground's own. Apart from _state_turns because play runs that one down and an authoring save
 # must keep this one. Only the brush and a load write it; it leaves with its state.
 var _start_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns }
+# The TIME MARKS a Still or Quicken laid (#1311, Pace): which substances the round holds or hurries in a
+# cell, and for how many more rounds. A cell fact apart from its states: a mark outlives the fire it held
+# and waits for whatever arrives. Laid only through apply(), aged only by tick_states().
+var _paces: Dictionary = {}         # Vector2i -> { substance id: Pace.mark }
 
 # Every write to any dictionary above marks here, the grid's and gas's shape (#1182). Only
 # `version` is read today -- the dev header's "(modified)" -- so the cell list goes unconsumed.
@@ -70,6 +74,16 @@ func _live_states_at(cell: Vector2i) -> Array[Terrain.TileState]:
 func _live_has_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 	return _states.has(cell) and _states[cell].has(state)
 
+# A cell's time marks (#1311): substance id -> Pace.mark, empty where none. A copy, sealed like the reads
+# above; its _live twin is PlannedTiles' door.
+func paces_at(cell: Vector2i) -> Dictionary:
+	if _sealed > 0:
+		PlannedTiles.seal_broken()
+	return _live_paces_at(cell)
+
+func _live_paces_at(cell: Vector2i) -> Dictionary:
+	return (_paces[cell] as Dictionary).duplicate() if _paces.has(cell) else {}
+
 # Play back one resolved cell effect (R3). Remove-then-add, mirroring how AttackAction.execute
 # applies unit state deltas. Empties are pruned so an untouched cell never holds a stale entry.
 func apply(effect: ResolvedCellEffect) -> void:
@@ -94,6 +108,15 @@ func apply(effect: ResolvedCellEffect) -> void:
 			var kept := held.has(s) and not effect.states_removed.has(s)
 			var own_life: int = -1 if kept else effect.state_turns.get(s, -1)
 			_start_timer(effect.cell, s, own_life)
+	if grounded and not effect.time_marks.is_empty():
+		_paces[effect.cell] = fold_paces(_live_paces_at(effect.cell), effect)
+
+# The time marks one effect leaves on a cell (#1311), apply()'s rule shared with the planned tiles: its
+# marks laid over the cell's, and none taken where there is no ground, as a state is not.
+static func fold_paces(marks: Dictionary, effect: ResolvedCellEffect, grounded := true) -> Dictionary:
+	if not grounded or effect.time_marks.is_empty():
+		return marks
+	return Pace.laid(marks, effect.time_marks)
 
 # The remove-then-add fold one effect makes to a state list — apply()'s rule, shared so a planned cell
 # (PlannedTiles.land) reads exactly as the applied one will (#419, #1498).
@@ -132,12 +155,20 @@ func prune_groundless() -> bool:
 		effect.cell = cell
 		effect.states_removed.assign(states_at(cell))
 		apply(effect)
-	return not doomed.is_empty()
+	# A time mark goes with its ground too (#1311), on a cell that held nothing else as well.
+	var unmarked := false
+	for cell: Vector2i in _paces.keys():
+		if not has_ground(cell):
+			_paces.erase(cell)
+			dirty.mark(cell)
+			unmarked = true
+	return not doomed.is_empty() or unmarked
 
 func clear() -> void:
 	_states.clear()
 	_state_turns.clear()
 	_start_turns.clear()
+	_paces.clear()
 	dirty.mark_all()
 
 func to_state_dict() -> Dictionary:
@@ -159,11 +190,23 @@ func to_turns_dict() -> Dictionary:
 func to_starts_dict() -> Dictionary:
 	return _start_turns.duplicate(true)
 
-func load_state_dict(data: Dictionary, turns: Dictionary = {}, starts: Dictionary = {}) -> void:
+# The time marks (#1311), the fourth dict: a battle fact like the live clocks, so an authored save drops
+# it (ScenarioManager.capture_scenario) and a mid-battle one puts each mark back with its rounds left.
+func to_paces_dict() -> Dictionary:
+	return _paces.duplicate(true)
+
+func load_state_dict(data: Dictionary, turns: Dictionary = {}, starts: Dictionary = {},
+		paces: Dictionary = {}) -> void:
 	_states.clear()
 	_state_turns.clear()
 	_start_turns.clear()
+	_paces.clear()
 	dirty.mark_all()
+	# A load restores a result, so the marks go straight in (GasField.load_dict's shape).
+	for cell: Vector2i in paces:
+		var marks: Dictionary = paces[cell]
+		if not marks.is_empty():
+			_paces[cell] = marks.duplicate()
 	for cell in data:
 		var states: Array[Terrain.TileState] = []
 		states.assign(data[cell])
@@ -241,16 +284,73 @@ func set_start_turns(cell: Vector2i, state: Terrain.TileState, turns: int) -> bo
 # Called once per ROUND (TurnManager.round_completed -> game._on_round_completed), which is after
 # every faction's end-of-turn burn. That is what keeps Law #2: no spread can land between the
 # queue's forecast of a tile hit and the pass that pays it.
+#
+# THE TIME PAIR (#1311, Pace): a HELD state's clock does not run and its fire spreads nothing; a QUICK one
+# ticks twice, the second tick running only what is quickened. Both ticks' catches are read up front, from
+# one snapshot, which is what lets the gas round (GasSpread.next) forecast both before either lands. The
+# second tick's are cells_fire_takes_again's, the round's only answer to it, so the forecast and the round
+# share it. Last, every mark ages a round.
 func tick_states() -> void:
 	var taken := cells_fire_takes()
+	var again := cells_fire_takes_again(null, taken)
+	_run_clocks(false)
+	for cell in taken:
+		_deposit(cell, Terrain.TileState.BURNING)
+	_run_clocks(true)
+	for cell in again:
+		_deposit(cell, Terrain.TileState.BURNING)
+	_age_paces()
+
+
+# One tick of the clocks: every clock not held, or only the quickened ones on the second tick (#1311).
+# A cell lit by the first tick inside a quickened circle loses a turn to the second.
+func _run_clocks(quick_only: bool) -> void:
 	for cell in _state_turns.keys():
-		dirty.mark(cell)
+		var marks := paces_at(cell)
 		for state in _state_turns[cell].keys():
+			if not _state_turns.has(cell) or not (_state_turns[cell] as Dictionary).has(state):
+				continue
+			var pace := Pace.of_tile_state(marks, state)
+			if pace == Pace.Kind.HELD or (quick_only and pace != Pace.Kind.QUICK):
+				continue
+			dirty.mark(cell)
 			_state_turns[cell][state] -= 1
 			if _state_turns[cell][state] <= 0:
 				_burn_out(cell, state)
-	for cell in taken:
-		_deposit(cell, Terrain.TileState.BURNING)
+
+
+# Every mark a round older (#1311): it covered the tick just run.
+func _age_paces() -> void:
+	for cell: Vector2i in _paces.keys():
+		var older := Pace.aged(_paces[cell])
+		if older.is_empty():
+			_paces.erase(cell)
+		else:
+			_paces[cell] = older
+		dirty.mark(cell)
+
+
+# What the round's SECOND tick lights (#1311): the cells fire takes from each cell the first tick lit
+# whose fire is quickened there, read on the same snapshot as cells_fire_takes. A literal second tick
+# would read after the first, which differs only in the cells the first lit (excluded here, being in
+# `taken`) and the ones it burnt out (burning at the snapshot, so never takeable). A source already
+# burning at the snapshot spread to all it could in the first tick, so its second spread adds nothing.
+# DECLARED EDGE: a fuel whose ignition admits SCORCHED (none does) would relight a burnt-out cell a round
+# later than a literal second tick. The round and the forecast both read this, so they still agree.
+func cells_fire_takes_again(planned: PlannedTiles, taken: Array[Vector2i]) -> Array[Vector2i]:
+	var again: Array[Vector2i] = []
+	for source in taken:
+		if Pace.of_tile_state(_marks_at(source, planned), Terrain.TileState.BURNING) != Pace.Kind.QUICK:
+			continue
+		for cell in GridUtils.cells_within_blended_range(source, 1, _spreads_wide(source)):
+			if not taken.has(cell) and not again.has(cell) and _catches_fire(cell, planned):
+				again.append(cell)
+	return again
+
+
+# A cell's marks as those planned tiles leave them, or the store's (#1311).
+func _marks_at(cell: Vector2i, planned: PlannedTiles) -> Dictionary:
+	return planned.paces_at(cell) if planned != null else paces_at(cell)
 
 
 # Which cells fire takes this round, each burning cell reaching as far as ITS OWN ground throws
@@ -268,9 +368,13 @@ func tick_states() -> void:
 # `planned` reads the cells as those planned tiles leave them (#1430, #1498): Alt's outline asks with the
 # previewed plan's, so a tile a queued hit lights spreads in it and one a queued douse puts out does not.
 # The tick asks with none.
+#
+# A HELD fire spreads nothing (#1311); fire may still catch in a held cell, and is held from then on.
 func cells_fire_takes(planned: PlannedTiles = null) -> Array[Vector2i]:
 	var taken: Array[Vector2i] = []
 	for source in _burning_sources(planned):
+		if Pace.of_tile_state(_marks_at(source, planned), Terrain.TileState.BURNING) == Pace.Kind.HELD:
+			continue
 		for cell in GridUtils.cells_within_blended_range(source, 1, _spreads_wide(source)):
 			if not taken.has(cell) and _catches_fire(cell, planned):
 				taken.append(cell)

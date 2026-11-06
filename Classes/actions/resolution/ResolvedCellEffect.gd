@@ -23,6 +23,9 @@ var gas_cleared := false
 # only where the ground gives that state no clock of its own, and only for a state the cell did not
 # already hold (TerrainStateManager.apply). Empty for every reaction's deposit: those run the ground's.
 var state_turns: Dictionary[Terrain.TileState, int] = {}
+# The time marks a Still or Quicken lays here (#1311): substance id -> Pace.mark(kind, rounds), each
+# replacing the cell's old mark on that substance (Pace.laid). The round reads them, never the pass.
+var time_marks: Dictionary[String, Vector2i] = {}
 
 
 func add_gas(kind: Gas.Kind, levels: int) -> void:

@@ -20,18 +20,44 @@ class_name GasSpread
 # releases -- the same `gases` a hit that lights it releases -- added AFTER spill and fade, so fresh
 # smoke sits thick for a round before it spreads. Asked of the tile states BEFORE their own tick lights
 # anything, which is why both stacks run the gas round first (game._on_round_completed).
+#
+# THE TIME PAIR (#1311, Pace): the round is two steps. The first runs every gas a Still does not hold; a
+# held gas keeps its level and its age, spills nothing, and takes no raise or fresh smoke while it lies
+# there (one that is absent may still drift in). The second, only where something is quickened, runs the
+# quickened gas again from the first's result, with the smoke of the cells fire's second tick lights
+# (TerrainStateManager.cells_fire_takes_again). Both fire lists come off one snapshot, so this forecasts
+# the whole round before the tile tick runs. The tile tick between the two steps changes nothing a step
+# reads (holds_gas sees FROZEN, which has no clock), so running both here is the round.
 
 const SIDES: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]
 
 
 # The field after one round. `cells` is GasField's packed map; it is read, never written.
 static func next(cells: Dictionary[Vector2i, int], board: BoardContext) -> Dictionary[Vector2i, int]:
+	var taken: Array[Vector2i] = []
+	var again: Array[Vector2i] = []
+	if board.terrain_states != null:
+		taken = board.terrain_states.cells_fire_takes(board.tiles)
+		again = board.terrain_states.cells_fire_takes_again(board.tiles, taken)
+	var out := _step(cells, board, taken, false)
+	if again.is_empty() and not _any_quickened(out, board):
+		return out
+	return _step(out, board, again, true)
+
+
+# One step of the round: every gas the step runs spills and fades, then the cells `lit` give off their
+# smoke. `quick_only` is the second step, which runs only what is quickened.
+static func _step(cells: Dictionary[Vector2i, int], board: BoardContext, lit: Array[Vector2i],
+		quick_only: bool) -> Dictionary[Vector2i, int]:
 	var out: Dictionary[Vector2i, int] = {}
 	var raises: Dictionary = {}   # Vector2i -> {Gas.Kind: level}
 	for cell: Vector2i in cells:
 		var packed: int = cells[cell]
 		var kept := packed
+		var marks := board.paces_at(cell)
 		for kind: Gas.Kind in Gas.kinds_in(packed):
+			if not _runs(Pace.of_gas(marks, kind), quick_only):
+				continue
 			var rules := GasRules.for_kind(kind)
 			if rules == null:
 				continue
@@ -53,30 +79,57 @@ static func next(cells: Dictionary[Vector2i, int], board: BoardContext) -> Dicti
 	for cell: Vector2i in raises:
 		var into: Dictionary = raises[cell]
 		var packed: int = out.get(cell, 0)
+		var marks := board.paces_at(cell)
 		for kind: Gas.Kind in into:
 			var level: int = into[kind]
-			if level > Gas.level_in(packed, kind):
+			if level > Gas.level_in(packed, kind) and not _held_here(packed, kind, marks):
 				packed = Gas.with_level(packed, kind, level)
 		if packed != 0:
 			out[cell] = packed
-	_add_ignitions(out, board)
+	_add_ignitions(out, board, lit)
 	return out
+
+
+# Does a step run a gas at this pace: never a held one, and only a quickened one on the second step.
+static func _runs(pace: Pace.Kind, quick_only: bool) -> bool:
+	return pace != Pace.Kind.HELD and (not quick_only or pace == Pace.Kind.QUICK)
+
+
+# A held gas lying here takes nothing more (#1311); one that is absent may arrive.
+static func _held_here(packed: int, kind: Gas.Kind, marks: Dictionary) -> bool:
+	return Gas.level_in(packed, kind) > 0 and Pace.of_gas(marks, kind) == Pace.Kind.HELD
+
+
+# Is any gas in the field quickened where it lies: whether the round needs its second step at all.
+static func _any_quickened(cells: Dictionary[Vector2i, int], board: BoardContext) -> bool:
+	for cell: Vector2i in cells:
+		var marks := board.paces_at(cell)
+		if marks.is_empty():
+			continue
+		for kind: Gas.Kind in Gas.kinds_in(cells[cell]):
+			if Pace.of_gas(marks, kind) == Pace.Kind.QUICK:
+				return true
+	return false
 
 
 # What a spreading fire gives off where it lands, into `out`: GasField.add_level's add-and-cap with a
 # fresh hold, wherever released_onto lays it (a burning TREE spills it to its open sides, #1537).
-# The fire spreads from the tiles as the board's planned tiles leave them (#1430, #1498): the outline's
-# board carries the previewed plan's, so a tile a queued hit lights spreads in it; the round's carries none.
-static func _add_ignitions(out: Dictionary[Vector2i, int], board: BoardContext) -> void:
+# `lit` is the cells the step's fire tick takes, read as the board's planned tiles leave them (#1430,
+# #1498): the outline's board carries the previewed plan's, so a tile a queued hit lights spreads in it;
+# the round's carries none.
+static func _add_ignitions(out: Dictionary[Vector2i, int], board: BoardContext, lit: Array[Vector2i]) -> void:
 	if board.terrain_states == null:
 		return
-	for cell: Vector2i in board.terrain_states.cells_fire_takes(board.tiles):
+	for cell: Vector2i in lit:
 		var fuel := board.terrain_states.fuel_at(cell)
 		if fuel == null:
 			continue
 		for onto in released_onto(cell, board):
 			var packed: int = out.get(onto, 0)
+			var marks := board.paces_at(onto)
 			for kind: Gas.Kind in Gas.released(fuel.gases):
+				if _held_here(packed, kind, marks):
+					continue
 				var level := mini(Gas.level_in(packed, kind) + fuel.gases[kind], Gas.MAX_LEVEL)
 				packed = Gas.with_level(packed, kind, level)
 			if packed != 0:

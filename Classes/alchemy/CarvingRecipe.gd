@@ -11,6 +11,7 @@ class_name CarvingRecipe
 #   delivered -- what the last delivering verb leaves at the target
 #   fizzle    -- the first argument a cast is missing, given what is present (fizzle_reason)
 #   drawn     -- which ambient substances it takes from the air (drawn_from), what Atmosphere scales
+#   paces     -- what its Still and Quicken hold or hurry in the circle (#1311, Pace)
 # Pure on its catalog (id -> Substance), passed in like AlchemyFormula's, so a test can hand it one.
 #
 # An argument may carry an AMOUNT, the equations' coefficient (#1328): `Push(3W2)` is a jet's worth of
@@ -41,6 +42,7 @@ var _demand: Dictionary[Elemental.Element, int] = {}
 var _delivered: Array[String] = []
 var _damage_elements: Array[Elemental.Element] = []
 var _hit_elements: Array[Elemental.Element] = []
+var _paces: Dictionary[String, Pace.Kind] = {}
 
 static var _term := RegEx.create_from_string("^([A-Za-z]+)\\s*\\(([^()]*)\\)$")
 
@@ -164,6 +166,8 @@ func _derive(catalog: Dictionary) -> void:
 				held[element] = held.get(element, 0) + atoms.counts[element]
 		for element: Elemental.Element in held:
 			_demand[element] = maxi(_demand.get(element, 0), held[element])
+		if step.verb == Flourish.Type.STILL or step.verb == Flourish.Type.QUICKEN:
+			_paces[step.args[0]] = Pace.Kind.HELD if step.verb == Flourish.Type.STILL else Pace.Kind.QUICK
 	for i in range(steps.size() - 1, -1, -1):
 		if not steps[i].leaves.is_empty():
 			_delivered = steps[i].leaves.duplicate()
@@ -204,6 +208,12 @@ func damage_elements() -> Array[Elemental.Element]:
 # What a hit carries into the combinatrix: each delivered substance read backwards through SubstanceMap.
 func hit_elements() -> Array[Elemental.Element]:
 	return _hit_elements
+
+
+# What the time pair does to the circle (#1311): each substance a Still or Quicken names, HELD or QUICK.
+# A later verb on the same substance wins, as a later mark on a cell does.
+func paces() -> Dictionary[String, Pace.Kind]:
+	return _paces
 
 
 # Why a cast FIZZLES given how much of each substance is present (CellSubstances.available_near), or

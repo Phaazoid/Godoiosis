@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://cu5kbo77gn5qm"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_qonsh"]
+[ext_resource type="Resource" uid="uid://dvij7ie00jowt" path="res://Resources/TransmutationData/Quickening.tres" id="2_kpvsw"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_hb21b"]
+
+[resource]
+script = ExtResource("3_hb21b")
+size = 1
+inscriptions = Array[ExtResource("1_qonsh")]([ExtResource("2_kpvsw")])
+temper = 1
+display_name = "Quickening Rune"
+weight = 1
