@@ -10,7 +10,8 @@ class_name AirGasTool
 # re-reads each from DISK. Every edit re-resolves the open plan, so the forecast shows the new rule.
 #
 # Not tuned here: a gas's state, while_standing and insulation (what it IS, one read-only line), a
-# paired state's clock (read only when something ADDS the state, #1421), and a gas with no rules file.
+# paired state's clock (read only when something ADDS the state, and nothing does: #1421 lays a cloud),
+# and a gas with no rules file.
 
 const AIR_ID := 100   # the picker's entry for the air, past every Gas.Kind
 const CONFIRM_LIST_MAX := 12   # WeatherTool's

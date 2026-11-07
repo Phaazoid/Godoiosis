@@ -164,6 +164,21 @@ func test_a_break_must_split_and_a_bind_must_make_a_real_molecule() -> void:
 	assert_str(_parse("Bind(F, W)").error).contains("makes nothing real")
 
 
+# A Bind's product may be a molecule written as a `*` composition (#1421): smoke as `A2*AE` is what
+# Bind(A2, AE) makes. The same Bind makes nothing when smoke is a compound, which no formula reaches.
+func test_a_bind_makes_a_composed_molecule_but_never_a_compound() -> void:
+	var catalog := _catalog()
+	catalog["ash"] = _sub("AE")
+	catalog["smoke"] = _sub("A2*AE")
+	var bound := CarvingRecipe.parse("Bind(A2, AE)", catalog)
+	assert_str(bound.error).is_empty()
+	assert_array(bound.delivered()).is_equal(["smoke"])
+	assert_int(bound.demand().get(Elemental.Element.AIR, 0)).is_equal(3)
+	assert_int(bound.demand().get(Elemental.Element.EARTH, 0)).is_equal(1)
+	catalog["smoke"] = _sub("AE + A2")
+	assert_str(CarvingRecipe.parse("Bind(A2, AE)", catalog).error).contains("makes nothing real")
+
+
 # --- the fizzle walk (Deep Alchemy Phase 2: a verb whose argument is not present fizzles) -------
 
 # Every argument the walk below can name, with display names so the reason's wording is the parse's.

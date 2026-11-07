@@ -88,8 +88,9 @@ static func state_display_name(s: State) -> String:
 # How MUCH and how LONG are each paired state's StateRules file (#1534), tuned on the dev tools' Air &
 # gas page; WHICH states pair is the match below. Chilled slows (DEX). Smoked blinds, and a leader who
 # can't see holds its squad closer (#1335): only a LEADER's COH is ever read (Squad.range_of), so on a
-# member it says nothing. Smoked's clock runs only when something ADDS it (a smoke carving, #1421);
-# standing in smoke holds it for exactly as long as the unit stands there, and stores nothing.
+# member it says nothing. Smoked's clock runs only when something ADDS it, and nothing does yet (#1421's
+# carving lays a cloud); standing in smoke holds it for exactly as long as the unit stands there, and
+# stores nothing.
 
 # The pairing registry: one match arm per paired state, each reading its file. Empty result = not a
 # paired state.

@@ -582,9 +582,9 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 ## What is built (CLAUDE-AUTHORED)
 
-> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-05. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
+> **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-07. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1628 (2026-11-05); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05.**
+**Canon checked through #1629 (2026-11-07); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05; #1421 (Smokescreen: a carving lays a smoke cloud, and smoke becomes the molecule `A2*AE`) folded in 2026-11-07.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -603,7 +603,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 - **Melting is heat.** Flame decays to heat (`F`), and the heat melts the ice.
 - **Temperature Shock's +5 is the sudden change in temperature, not chemistry** (Phaazoid@). Its equation is just the frost melting. *(Its meltwater wets the unit since #1423, 2026-10-22, and its heat lands as heat haze since #1427, 2026-10-23. The reaction left the NOT_YET_FOLLOWED ledger then, so this line is the +5's one record.)*
 - **Electrocution's water conducts and is not used up**, so a shock no longer dries a wet unit (2026-10-11, c3potheds@ and Phaazoid@). How a unit dries off is a balance question for later.
-- **Plants store phlogiston as vital air.** Dry fuel doubles its flame, which is why tall grass spreads further; green plants burn off their water as steam. Burning gives off exactly one ash per inert air, which is where smoke's `AE + A2` comes from.
+- **Plants store phlogiston as vital air.** Dry fuel doubles its flame, which is why tall grass spreads further; green plants burn off their water as steam. Burning gives off exactly one ash per inert air, which is where smoke's `AE + A2` comes from. *(Smoke is the molecule `A2*AE` since [#1421](https://github.com/Phaazoid/Godoiosis/issues/1421), 2026-11-07, so a Bind can make it. The atoms are the same.)*
 - **Thunder is lightning in air**, its own natural reaction (`2QF + 2A2 -> 2QA + FA2 + F`, ozone `FA2` as the byproduct), which Electrocute's equation carries.
 - **Materia that is not consumed may gate a stronger or rarer transmutation**: [alchemy-kit.md](alchemy-kit.md) → *Materia*.
 
@@ -620,7 +620,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 | TallGrassIgnites | `F2 + dry_plant -> 2F2 + smoke` |
 | Electrocute | `2QF + 2A2 + W2 -> 2QA + FA2 + F + W2` |
 
-New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dry plant `AE + 2FA`, dirt `E2 + AE` (salt and carbon, mineralogy later), mud `dirt + W2`, silica `QFAE2`, stone `E2 + QFAE2` (a placeholder), nitre `FA2E`, vitriol `FE + W2 + FA` (oil of vitriol), ozone `FA2`. Sulfur gas `FAE` and smoke `AE + A2` are confirmed. *(Mineralogy, #1315, 2026-11-05: dirt is now loam, stone sandstone, and mud `loam + W2`; see its block under the Phase 2 builds.)*
+New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dry plant `AE + 2FA`, dirt `E2 + AE` (salt and carbon, mineralogy later), mud `dirt + W2`, silica `QFAE2`, stone `E2 + QFAE2` (a placeholder), nitre `FA2E`, vitriol `FE + W2 + FA` (oil of vitriol), ozone `FA2`. Sulfur gas `FAE` and smoke `AE + A2` are confirmed *(smoke is the molecule `A2*AE` since #1421, 2026-11-07)*. *(Mineralogy, #1315, 2026-11-05: dirt is now loam, stone sandstone, and mud `loam + W2`; see its block under the Phase 2 builds.)*
 
 **Phase 2: what a carving is.** Settled by Phaazoid@ and c3potheds@ in #claude-sessions, 2026-10-08 to 2026-10-11; built 2026-10-11. It replaces the sigil/flourish anatomy of [transmutation-model-proposal.md](transmutation-model-proposal.md), whose banner says what went.
 
@@ -725,7 +725,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - a unit's states, the caster's own included
   - a carried conduit
 
-  A compound lends its parts at its own amount, so smoke lifts its cell's inert air past the air's one. A player reads it as: no number works anywhere; a number means bring the real thing.
+  A compound lends its parts at its own amount, so a frost cloud (`QW + A2`) lifts its cell's inert air past the air's one. *(Smoke did too, until #1421 made it a molecule, 2026-11-07.)* A player reads it as: no number works anywhere; a number means bring the real thing.
 - **A step makes its products at its own amount**, so nothing multiplies:
   - `Break(A, W) + Push(3W2)` fizzles. The air's one vapor makes one water, so no jet can be made out of air.
   - `Break(3A, 3W) + Push(3W2)` holds only beside a vapor source.
@@ -805,7 +805,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - **The leash is read where the leader stands:** `SquadCohesion.reach_at(leader, center, board)` is COH plus the COH change of every such state the gas at `center` gives (through `BoardContext.gas_at`, which folds deposits as `air_at` does), floored at 0. A leader already HOLDING Smoked is docked once. `SquadCohesion` is the leash's only production reader, so the validator, the group-move solver, #1069's leader-move refusal, the pass-end sweep, `SplitForecast` and the range line all read it. `GroupMoveSolver.stranding` walks from the member's end (path distance is symmetric), so it walks as far as the longest destination leash and judges each destination by its own.
   - **Forecast:** smoke a pass lays under a leader is a cell effect, so `SplitForecast`'s deposit replay names the split on the blow that laid it. Smoke that SPREADS onto a leader at the round tick splits at the next turn start; Alt's outline shows it coming, and since #1430 the member's tether is red (below).
   - **Readout:** the world-space status row shows Smoked while the unit stands in smoke, the tile card's gas row says "Smoked: -2 COH", and the Play API's "leash N" is read at the leader's cell. The 2D panels show HELD states only (declared).
-  - A hit can ADD Smoked like any state (2-turn default clock): the hook for a smoke carving, its own ticket.
+  - A hit can ADD Smoked like any state (2-turn default clock): the hook for a smoke carving, its own ticket. *(#1421, 2026-11-07, chose the cloud instead: its carving lays smoke and adds no Smoked, so the clock is still unread.)*
 - **Every ignition gives off smoke once.** The ignition reactions carry it, so a hit and a spreading fire release the same gases: GrassIgnites and Burning `{smoke: thick, steam: thin}`, TallGrassIgnites `{smoke: thick}`. A plant fire is mostly smoke; thin steam is the green plant's sap and never soaks or spreads.
   - **Spread:** `GasSpread.next` lays each cell `TerrainStateManager.cells_fire_takes()` names its fuel's gases, after spill and fade (with the board's planned tiles since #1430 and #1498, so the outline spreads a fire a queued hit lights). **The round runs gas before tiles** (`game._on_round_completed` and the Play API's twin), so the release lands on the frontier the tile tick then lights, and Alt's outline (`GasField.next_round`) is the round. The dev Step Gas button releases on the frontier too.
   - **Declared:** a TREE tile is not walkable, and gas lies only where a unit could stand (#508 ruling 5), so a burning tree's smoke goes nowhere; a forest fire smokes where it spreads into grass. *(Lifted by #1537, 2026-11-05: the tree's smoke spills onto the ground around it. Below.)*
@@ -1074,9 +1074,19 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Placeholder content:** Stillness (`Still(F)`) and Quickening (`Quicken(F)`), each a point aim at range 3 over Wide 3 Deep 2 that deals no damage, on the Stillness Rune and the Quickening Rune (medium, Fire), which nobody carries. Hand them out from the Unit Editor. Heat is in every tile's air, so they work anywhere for a caster with Fire 1.
 - **The readout** (built 2026-11-06 to a mock Phaazoid@ approved): a marked tile wears a half-size badge in its top-right quarter, the held one or the quickened one (`OverlayManager.TIME_MARK_ICONS`, placeholder art), held winning on a tile with both. It is ghosted while the cast is only queued (`ResolvedPlan.pending_deposits`) and solid once it lands. The tile card adds one Ground line per mark, *"Held (Heat) — Nothing made of it changes at the round's end: … 2 rounds left."*, from the `Glossary` terms Held and Quickened. The Play API prints a mark in the preview's deposits and in the `terrain` view. The AI casts neither verb: nobody it plays carries them (#117).
 
+**Built 2026-11-07: Smokescreen, a carving that lays a smoke cloud ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).** Phaazoid@ has not ruled on #1421; he approved a plan of working defaults in a Claude session the same day. Every default below is one to change once played.
+- **The cloud does the blinding, not the hit** (c3potheds@'s answer, 2026-10-23). The carving's `gases` (#508) lays smoke on every tile it strikes, through `ResolvedPlan.deposit`, and Smoked (#1335) does the rest. A blinding hit would need a new seam: smoke carries no element, so no reaction can key on it.
+- **Smoke is the molecule `A2*AE`**, no longer the compound `AE + A2`. A Bind makes only a molecule (`AlchemyFormula.resolve` skips compounds), so this is the only way `Bind(A2, AE)` makes smoke. The atoms are unchanged, so the plant fires' equations still balance. A molecule lends no parts, so inside a cloud inert air drops back to the air's one, and a `Still(A2)` or `Quicken(A2)` no longer touches smoke. No shipped carving asks for either.
+- **Where ash comes from:** ground made of loam or limestone already lends it free (#1315), so on grass, tall grass and mud the cast works anywhere. On ground with none (sandstone, the bare earths, water) it needs scorched ground or smoke itself in reach: SMOKE's `SubstanceMap` row now names `smoke, ash`, so a cloud can be thickened or widened from inside it. Burning ground offers none: fire on stone has no ash, and a plant fire's ash leaves as its smoke.
+- **The cloud:** medium smoke on a five-tile plus (`Resources/AttackShapes/Plus.tres`), a point aim at range 3. Medium is where Smoked starts, so the cloud blinds for SMOKE's `hold_rounds` (2) and then thins to thin, which blinds nobody. It spills only thin smoke, so it stays the size it was laid. Thick is one dropdown away: it blinds for four rounds and spreads medium smoke every round.
+- **Placeholder content:** Smokescreen (`Bind(A2, AE)`: one verb, demand Air 3 and Earth 1), on the Smokescreen Rune (medium, Air), which nobody carries. It targets both, hits allies (smoke blinds anyone), deals no damage and has no counter of its own; a struck enemy may still counter, as against Gust. Nobody in the cast holds Air 3, so raise one in the Unit Editor to try it.
+- **Nothing new is drawn.** The queued plus ghosts its smoke (`ResolvedPlan.pending_deposits`), the queue row forecasts the split, and the tile card's gas line says Smoked. The ring's readout stays succinct; the rune card's "Leaves Smoke where it hits" line names the cloud.
+- **Smoked's clock still has no Air & gas row:** the carving adds no Smoked, and standing in smoke stores no clock, so nothing reads it.
+- **The AI never casts it** (#117): no victim pays, and a laid cloud is not priced (the ledger's `cell_effects` gap). A follow-up could price it the way #1514 prices a blow.
+
 **Next:**
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
-- **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)) and the smoke carving ([#1421](https://github.com/Phaazoid/Godoiosis/issues/1421)).
+- **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)).
 
 **Still open in Phase 2:** alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's ground reactions (quicklime, brick, gypsum: not ruled; its defaults and its four new grounds are built, #1315 slices 1 and 2, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
