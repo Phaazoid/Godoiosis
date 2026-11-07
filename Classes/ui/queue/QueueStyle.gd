@@ -294,6 +294,13 @@ static var PARCHMENT_INK_SATURATION := 1.5
 # / SHAKE_SWINGS), so the board's refusal and the queue's wobble alike.
 static var REFUSAL_SHAKE_PX := 3.0
 
+# The matchup card's backdrop (#1629), three values it INVENTS, so they are knobs. WASH: how strongly
+# each side wears its faction ink at the outer edge. GLOW: the hit's element glowing between the two.
+# HATCH: the faint diagonal texture. Alphas over the card's stage, in either palette.
+static var MATCHUP_WASH := 0.3
+static var MATCHUP_GLOW := 0.32
+static var MATCHUP_HATCH := 0.045
+
 # --- reads ----------------------------------------------------------------------------------------
 
 # One role's colour in whichever palette the player has picked. DEFAULT returns the authored const --

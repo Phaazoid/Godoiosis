@@ -16,7 +16,7 @@ The long version of every entry in `CLAUDE.md`'s *Architecture map* and *Code la
 | [`presentation.md`](presentation.md) | *Scenes/LookDev/ is load-bearing* · *ArcLightning* · *Gas* · *Weather* · *A unit wears its element state* · *A unit sprite can play frames* |
 | [`dev-tools.md`](dev-tools.md) | *The dev-tools window and its pages* · *The Tiles tab* · *The Game tab* · *The dev/ folder and the content lints* |
 | [`reports.md`](reports.md) | *BugReporter* · *Kind: BUG or FEEDBACK* · *BugReporter.open_card is the one funnel for a card* · *The screenshot comes from the root viewport* · *The dev-tools window is a second file* · *capture_frame() returns null in a headless run* · *Report-flow tests* |
-| [`ui.md`](ui.md) | *ModalLock* · *ModalCard* · *UiLayers* · *The ui/ folder* |
+| [`ui.md`](ui.md) | *ModalLock* · *ModalCard* · *UiLayers* · *The ui/ folder* · *The matchup card* |
 | [`camera.md`](camera.md) | *The camera's vocabulary has one home* · *CameraTrace: what the camera just did* · *ShotDirector: the camera's shots are a priority table* |
 | [`core.md`](core.md) | *Registries* · *The core/ folder: Glossary, Pacing, PlayerSettings, Controls* · *ForeignResource* |
 | [`audio.md`](audio.md) | *AudioDirector* · *MusicDirector* |

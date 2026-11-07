@@ -385,6 +385,7 @@ func _wire_signals() -> void:
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
 	squad_action_queue_control.row_clicked.connect(_on_queue_row_clicked)
+	squad_action_queue_control.ground_grid = grid
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
 	mission_status_panel.drawn_zone_kinds = overlay_manager.drawn_zone_kinds
 	mission_status_panel.zone_row_hovered.connect(hover_presenter.on_objective_row_hover_changed)
@@ -654,7 +655,11 @@ func _on_left_click(cell: Vector2i, shift_held := false) -> void:
 # And a READOUT is a rung too (#1105): at rest, a tile card or the Inspect dock is what is open, so
 # the press closes it and stops. A tile card comes up on every empty-tile click, and dismissing one
 # must never cost the player an order.
+#
+# An open matchup card (#1629) is the first rung, in any state: the press closes it and stops.
 func _on_right_click() -> void:
+	if squad_action_queue_control.close_matchup():
+		return
 	if game_state == _base_state() and (hover_info_panel.is_showing_tile() or unit_info_panel.is_showing()):
 		hover_info_panel.clear()
 		unit_info_panel.clear()

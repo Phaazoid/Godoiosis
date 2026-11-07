@@ -1254,6 +1254,17 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action queue", "label": "Refusal shake size", "static": "REFUSAL_SHAKE_PX",
 		"script": QUEUE_STYLE_SCRIPT, "min": 0.0, "max": 10.0, "step": 1.0,
 		"tip": "How far a red row swings side to side when you press Execute over it, in pixels of the dock. How long it rings and how many times it swings are the tether pluck's own (Squad lines: Shake length, Shake swings), so the two refusals wobble alike. Takes effect on the next refused press."},
+	# The matchup card's backdrop (#1629): three values it invents. An open card repaints under the
+	# slider, so right-click a queued attack before dragging.
+	{"group": "Action queue", "label": "Matchup side wash", "static": "MATCHUP_WASH",
+		"script": QUEUE_STYLE_SCRIPT, "min": 0.0, "max": 0.8, "step": 0.01,
+		"tip": "How strongly each half of the matchup card is washed in its side's colour, green for yours and red for theirs, fading toward the middle. 0 is the plain panel."},
+	{"group": "Action queue", "label": "Matchup element glow", "static": "MATCHUP_GLOW",
+		"script": QUEUE_STYLE_SCRIPT, "min": 0.0, "max": 0.8, "step": 0.01,
+		"tip": "How bright the hit's element glows between the two sides of the matchup card. 0 turns the glow off."},
+	{"group": "Action queue", "label": "Matchup hatch", "static": "MATCHUP_HATCH",
+		"script": QUEUE_STYLE_SCRIPT, "min": 0.0, "max": 0.2, "step": 0.005,
+		"tip": "How visible the fine diagonal lines across the matchup card's backdrop are. 0 leaves the backdrop smooth."},
 
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
@@ -2315,6 +2326,9 @@ static func read_static(name: String) -> Variant:
 		"PARCHMENT_INK_DEPTH": return QueueStyle.PARCHMENT_INK_DEPTH
 		"PARCHMENT_INK_SATURATION": return QueueStyle.PARCHMENT_INK_SATURATION
 		"REFUSAL_SHAKE_PX": return QueueStyle.REFUSAL_SHAKE_PX
+		"MATCHUP_WASH": return QueueStyle.MATCHUP_WASH
+		"MATCHUP_GLOW": return QueueStyle.MATCHUP_GLOW
+		"MATCHUP_HATCH": return QueueStyle.MATCHUP_HATCH
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -3159,6 +3173,18 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"REFUSAL_SHAKE_PX":
 			QueueStyle.REFUSAL_SHAKE_PX = value
+			return
+		"MATCHUP_WASH":
+			QueueStyle.MATCHUP_WASH = value
+			_restyle_action_queue(host)
+			return
+		"MATCHUP_GLOW":
+			QueueStyle.MATCHUP_GLOW = value
+			_restyle_action_queue(host)
+			return
+		"MATCHUP_HATCH":
+			QueueStyle.MATCHUP_HATCH = value
+			_restyle_action_queue(host)
 			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)

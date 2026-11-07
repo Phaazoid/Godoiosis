@@ -23,10 +23,10 @@ class_name ActionQueueRow
 # who is wet.
 
 # The BADGE this row prints for each world consequence, as against the dramatic word PlanResolver
-# hands the board's floating text (reported 2026-09-04: "Into the void!" is 72px, the line's slack is
-# 46, and a chip too wide to wrap pushes the whole dock open). Same split ElementalReaction.short_name
-# already makes for a reaction's word, applied to the other kind of pill -- and the dramatic word is
-# not lost, it is the tooltip.
+# writes, which the matchup card (#1629) has room for (reported 2026-09-04: "Into the void!" is 72px,
+# the line's slack is 46, and a chip too wide to wrap pushes the whole dock open). Same split
+# ElementalReaction.short_name already makes for a reaction's word, applied to the other kind of pill
+# -- and the dramatic word is not lost, it is the tooltip and the card's pill. OutcomeFacts pairs them.
 #
 # THEY ARE CONSTS SO A LAW CAN ENUMERATE THEM: tests/ui/test_queue_badge_widths.gd measures each one
 # against the real dock, so the next word too long for the row fails CI instead of the panel.
@@ -61,6 +61,7 @@ signal cancel_requested(action: BaseAction)
 signal hover_changed(action: BaseAction, hovering: bool)
 signal pressed(row: ActionQueueRow)          # the left press; the panel decides drag or click on release
 signal expand_toggled(row: ActionQueueRow)   # a volley header's readout (#1122)
+signal inspect_requested(row: ActionQueueRow)   # a right-click's release: open the matchup card (#1629)
 
 func setup(action_ref: BaseAction):
 	action = action_ref
@@ -131,99 +132,20 @@ func _paint_rail(outcome: ResolvedOutcome) -> void:
 		return
 	rail.color = QueueStyle.element_ink(outcome.elements[0])
 
-# The consequence chips, IN the line between the target sprite and the readout (dev, 2026-09-03).
-# A STATE the hit applied gets a chip, a fired COMBO gets its BADGE word, and an event popup the
-# resolver already recorded ("Fell 2!", "Drowning!", "Insulated!") gets a neutral one. A SETUP
-# reaction is deliberately silent -- already fully said by the chip it produced, and saying it twice
-# is the noise the split-by-weight ruling exists to prevent (#685).
+# The consequence chips, IN the line between the target sprite and the readout (dev, 2026-09-03):
+# one per OutcomeFacts fact, its BADGE in the chip and its long word on hover. The matchup card draws
+# the same list as pills, so the two cannot disagree about what a hit did.
 #
 # TEXT ONLY, and it is a CHOICE rather than a constraint -- measured, an icon chip still fits the
 # row without clipping. It costs ~19px each, which is what decides whether a second chip WRAPS, and
-# the loudest complaint about this panel was height. `badge_name()` is the other half: the badge word
-# is what fits, and the dramatic one keeps its place in the tooltip and the glossary.
-# Which of the hit's elements set this reaction off -- its ink. A reaction answers to more than its
-# primary (heat dries what fire does), so a heat hit's Quick Dry wears Heat, not Fire.
-static func _setter_of(reaction: ElementalReaction, outcome: ResolvedOutcome) -> Elemental.Element:
-	for e: Elemental.Element in outcome.elements:
-		var one: Array[Elemental.Element] = [e]
-		if reaction.fires_for(one):
-			return e
-	return reaction.incoming_element
-
+# the loudest complaint about this panel was height. The card is where the icons go.
+#
+# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has chips,
+# which is what keeps the cancel X on the right edge of a row that has none. It WRAPS rather than
+# clips, so a crowded hit costs the row a second line instead of losing a word.
 func _build_consequence(outcome: ResolvedOutcome) -> void:
-	for state in outcome.states_added:
-		if state == Elemental.State.NONE:
-			continue
-		var tip: String = UiText.wrap("%s -- %s" % [Elemental.state_display_name(state),
-				Glossary.short(Glossary.term_for_element_state(state))])
-		consequence.add_child(_chip(QueueStyle.state_ink(state),
-				Elemental.state_display_name(state), tip))
-
-	# A fired COMBO gets its badge word. The SETUP half stays silent -- already fully said by the
-	# state chip it just produced, and saying it twice is the noise the split-by-weight ruling exists
-	# to prevent (#685). The guard asks the ACCESSOR whether there is a word, not the raw popup.
-	for reaction: ElementalReaction in outcome.fired_reactions:
-		if not reaction.is_combo() or reaction.badge_name() == "":
-			continue
-		consequence.add_child(_chip(QueueStyle.element_ink(_setter_of(reaction, outcome)),
-				reaction.badge_name(), UiText.wrap(Glossary.reaction_line(reaction))))
-
-	# What the WORLD did, read off the outcome's own recorded FACTS rather than parsed back out of
-	# `popups`. That channel is the BOARD's floating text, where the dramatic word has room and
-	# nothing has to fit -- reading it here printed a string sized for a different surface, and
-	# "Into the void!" is 72px against a 46px slack, which pushed the row, its section and the whole
-	# scroll column clean out of the dock (reported 2026-09-04). The BADGE is this panel's own short
-	# spelling; the dramatic word is the tooltip, which is where the wording is headed anyway.
-	#
-	# Reading facts also deletes the string bookkeeping this loop used to need: nothing has to work
-	# out which popup belonged to which reaction, because the two channels no longer share one list.
-	# A FIZZLE (Deep Alchemy Phase 2): the carving lands nothing, which the row would otherwise say only
-	# by dimming. Its outcome reads no HP, so this badge is the whole readout.
-	if outcome.fizzled:
-		_add_event(BADGE_FIZZLED, PlanResolver.FIZZLED_POPUP)
-	# A WHIFF (#1350): the target is already gone by this swing, so nothing lands -- but the swing still
-	# happens, so the row does not dim, and its Vial and Tank chips below say what it still costs.
-	if outcome.whiffed:
-		_add_event(BADGE_WHIFFED, PlanResolver.WHIFFED_POPUP)
-	if outcome.insulated:
-		_add_event(BADGE_INSULATED, PlanResolver.INSULATED_POPUP)
-	# A fully held shove draws no trail, so this badge is the queue's whole account of it (Law #2).
-	if outcome.knockback_held > 0:
-		_add_event(BADGE_HELD % outcome.knockback_held, PlanResolver.HELD_POPUP % outcome.knockback_held)
-	if outcome.fall_levels > 0:
-		_add_event(BADGE_FELL % outcome.fall_levels, PlanResolver.FELL_POPUP % outcome.fall_levels)
-	if outcome.drown_damage > 0:
-		_add_event(BADGE_DROWNED, PlanResolver.DROWNING_POPUP)
-	if outcome.removed:
-		_add_event(BADGE_VOID, PlanResolver.VOID_POPUP)
-	# The vial BURN (#697). Law #2's plainest case: this cast spends an item out of the caster's
-	# inventory, and a plan that spent one the player never saw spent is the queue lying. Element-
-	# tinted rather than EVENT_TINT because the burn is an elemental fact, and the vial names itself
-	# on hover -- the badge stays one short word for the dock's sake.
-	if outcome.burned_vial != null:
-		var burned := outcome.burned_vial
-		var ink := QueueStyle.element_ink(burned.element) if not burned.is_alkahest \
-				else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
-		consequence.add_child(_chip(ink, BADGE_VIAL, UiText.wrap("Burns %s" % burned.display_name)))
-	# The TANK spend (#97), the vial burn's twin one economy over and there for the same Law #2
-	# reason: this shot is the supercharged one and the next will not be. The resolver threads the
-	# count across the pass, so two shots in one pass cannot both wear this.
-	if outcome.charge_spent:
-		consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), BADGE_TANK,
-			UiText.wrap("Spends a supercharged shot")))
-	# A SPLIT (#367): this blow knocks someone out of a squad, forecast by SplitForecast. Tether
-	# orange because it is about the squad link; the hover names who, and nothing more -- the
-	# wording is the dev's to add.
-	if not outcome.splits.is_empty():
-		var word: String = BADGE_SPLIT if outcome.splits.size() == 1 else BADGE_SPLITS % outcome.splits.size()
-		var names: Array[String] = []
-		for unit in outcome.splits:
-			if is_instance_valid(unit):
-				names.append(unit.get_unit_name())
-		consequence.add_child(_chip(split_ink(), word, UiText.wrap(", ".join(names))))
-	# No visibility toggle: the container holds the line's horizontal EXPAND whether or not it has
-	# chips, which is what keeps the cancel X on the right edge of a row that has none. It WRAPS
-	# rather than clips, so a crowded hit costs the row a second line instead of losing a word.
+	for fact in OutcomeFacts.of(outcome):
+		consequence.add_child(_chip(fact.ink, fact.badge, fact.tip))
 
 # One tinted pill. The tooltip goes on the pill AND its label: a Label defaults to
 # MOUSE_FILTER_IGNORE, so the viewport never picks it and the text is dead however right it is.
@@ -250,10 +172,6 @@ func _chip(tint: Color, text: String, tip: String) -> Control:
 static func split_ink() -> Color:
 	return QueueStyle.adapted_ink(Color(SquadLines2D.TETHER_COLOR, 1.0))
 
-# A world-event pill: this panel's short badge, with the resolver's dramatic word on hover.
-func _add_event(badge: String, spoken: String) -> void:
-	consequence.add_child(_chip(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), badge, UiText.wrap(spoken)))
-
 func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
 	# for the earlier hits this combat. Since #1002 the resolver threads what the rung LEAVES
@@ -275,12 +193,16 @@ func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	readout_card.tooltip_text = tip
 	readout.mouse_filter = Control.MOUSE_FILTER_PASS   # the chips' reason, see _chip
 
-	# Team-color the readout: green when a friendly is losing HP, red for an enemy.
+	_show_readout(side_ink(subject))
+
+
+# A body's side colour: green for the player's side, red for anyone hostile to it. The readout's
+# number and the matchup card's figures both wear it (#1629).
+static func side_ink(unit: Unit) -> Color:
 	var friendly := true
-	if subject != null and is_instance_valid(subject):
-		friendly = not Team.is_enemy(subject.get_faction(), Team.Faction.PLAYER)
-	var role: QueueStyle.Role = QueueStyle.Role.READOUT_ALLY if friendly else QueueStyle.Role.READOUT_ENEMY
-	_show_readout(QueueStyle.ink(role))
+	if unit != null and is_instance_valid(unit):
+		friendly = not Team.is_enemy(unit.get_faction(), Team.Faction.PLAYER)
+	return QueueStyle.ink(QueueStyle.Role.READOUT_ALLY if friendly else QueueStyle.Role.READOUT_ENEMY)
 
 # The damage number's hover text (#424): the delivered kind, then the mitigation and why, then what the
 # board's air added (#1324). A heal or a utility hit has no kind, so it names only the air, which a
@@ -328,13 +250,29 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		pressed.emit(self)
 		accept_event()
+	elif _is_right(event):
+		_take_right(event)
+		accept_event()
 
 # A volley header's readout is its expand toggle (#1122): a click on the row requeues the volley like
-# any other order, so expanding needed a target of its own. STOP keeps this press from the row.
+# any other order, so expanding needed a target of its own. STOP keeps this press from the row, so the
+# readout answers a right-click itself, the same as the row.
 func _on_readout_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		expand_toggled.emit(self)
 		readout_card.accept_event()
+	elif _is_right(event):
+		_take_right(event)
+		readout_card.accept_event()
+
+# A right-click opens the matchup card (#1629) on its RELEASE, the edge the board's cancel acts on in
+# 3D. BOTH edges are taken, so neither reaches the board's cancel or the camera's orbit.
+static func _is_right(event: InputEvent) -> bool:
+	return event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT
+
+func _take_right(event: InputEvent) -> void:
+	if action != null and not (event as InputEventMouseButton).pressed:
+		inspect_requested.emit(self)
 
 # A unit's sheet is 64px holding a ~23x20 character, so fitting the whole CELL into a 32px slot drew
 # everyone at a third of the slot (#1082, the #937 law). The slot is handed the square around the

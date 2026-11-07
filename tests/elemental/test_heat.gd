@@ -218,4 +218,4 @@ func test_a_combo_chip_wears_the_element_that_set_it_off() -> void:
 	r.also_triggered_by.assign([HEAT])
 	var outcome := ResolvedOutcome.new()
 	outcome.elements.assign([HEAT])
-	assert_int(ActionQueueRow._setter_of(r, outcome)).is_equal(HEAT)
+	assert_int(OutcomeFacts.setter_of(r, outcome)).is_equal(HEAT)
