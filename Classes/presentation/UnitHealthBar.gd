@@ -74,7 +74,8 @@ class_name UnitHealthBar
 # ordinary wounded unit, which is the same collision with the numbers further apart -- and the
 # fix is the row saying what the number cannot, in the same icon-then-count shape the hover card
 # already uses. It rides the readout's own visibility for the same structural reason the state icons
-# do; the fact that a unit is down is carried unconditionally by its downed ART, so this
+# do; the fact that a unit is down is carried unconditionally by its downed ART (or by the ice it is
+# frozen in, #1506), so this
 # disambiguates the readout rather than being the only thing that marks the body.
 #
 # A dumb idempotent sink: it is TOLD a style, an HP pair and a prediction, and draws them. It never

@@ -67,6 +67,18 @@ static var chill_breath_alpha := 0.6
 static var chill_breath_x := 0.7          # the anchor, as a share of the ink box across the UNFLIPPED art
 static var chill_breath_y := 0.2          # ...and down from the top of the ink
 
+# A downed body the ice holds (#1506): FrozenInIce's ring of glass crystals and the faint copy of the
+# body drawn over it. Read every frame by FrozenInIce.advance, so no sweep. The face hue is Ice's.
+static var in_ice_grow_time := 0.6        # seconds the crystals take to grow in, and to shrink back out
+static var in_ice_size := 1.0             # the ring's scale; 1 reaches about a third of a cell out
+static var in_ice_face_alpha := 0.16      # a crystal face turned to the camera
+static var in_ice_edge_alpha := 0.95      # ...and its edge, seen side-on
+static var in_ice_edge_sharpness := 1.4   # how quickly a face turns to edge as it turns away
+static var in_ice_edge_color := Color(0.12, 0.28, 0.5)
+static var in_ice_glow := 0.12            # the Ice hue, glowing, so the ring reads on a night board
+static var in_ice_body_alpha := 0.5       # the copy of the body drawn over the ice
+static var in_ice_body_tint := 0.3        # how far that copy leans from white to the Ice hue
+
 
 static func push(material: ShaderMaterial, wet: float, chill: float, icicles: float, clock: float,
 		seed: float) -> void:

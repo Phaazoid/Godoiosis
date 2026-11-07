@@ -69,6 +69,19 @@ Moved verbatim out of [`CLAUDE.md`](../../CLAUDE.md) on 2026-10-20, when that fi
 
 **A decal's texture must be REASSIGNED to change, never `ImageTexture.update()`d** -- the renderer's decal atlas copies it once, on assignment (measured, 4.7.1). Canon: `presentation-effects.md` → *A unit WEARS its element state*.
 
+## A body frozen in the ice
+
+**A downed body the ice holds is drawn frozen INTO it ([#1506](https://github.com/Phaazoid/Godoiosis/issues/1506), 2026-11-07).**
+
+- **The question** is `RulesService.held_by_ice(cell, body, board)`: FROZEN water whose tile is unwalkable, under a body that does not waterwalk, which is `drowns_in` asked of the water under the ice. It borrows `can_traverse`'s Waterwalk clause (`_waterwalks`) rather than restating it. `UnitMirror._sync` asks it once a frame, of downed units only, at the cell the pixels sit over (the wade's cell). It is derived, never stored, so a save restores it for free.
+- **The body:** `UnitSprite3D.set_in_ice` puts "in the ice" ahead of downed in `_state_texture`, the one texture door, so the body stands in its map art. `_sync_status` drives Chilled and icicles to full and Wet to zero on the existing clocks. It also skips `StatusWorld.wear`, because nothing leaves a sealed body.
+- **The ring and the body copy:** `FrozenInIce` (a child of `UnitMirror`, `StatusWorld`'s report-then-advance shape) draws a ring of glass crystals per body. The ring is built once off `UnitMirror.status_seed` by the pure static `FrozenInIce.crystal_ring`, on WORLD at `EFFECT_RENDER_PRIORITY`. It also draws a faint copy of the body: a `Sprite3D` with a ghost's settings, on UNIT at `UNIT_RENDER_PRIORITY`, so it sorts over the ice.
+- **The glass** (`frozen_in_ice.gdshader`) is clear facing the camera and solid at the edges, and writes no depth. **Never give it an opaque hull outline**: the hull's back faces hide the body inside (round 3 of the mock).
+- **Showing and leaving:** the ring hides with the real sprite (the battle zoom, a ghost standing in). It grows in and shrinks away on `StatusLook.in_ice_grow_time`.
+- **Knobs** are `StatusLook.in_ice_*` (group *Frozen in the ice*, Elemental page). They are pushed every frame, so none needs a sweep.
+
+Canon: `presentation-effects.md` → *A body the ice holds is drawn frozen INTO it*.
+
 ## A unit sprite can play frames
 
 **A unit sprite can play FRAMES ([#629](https://github.com/Phaazoid/Godoiosis/issues/629), 2026-08-28) — the project's first frame animation of any kind.** Before it a unit's visual was ONE still `Texture2D` swapped between three authored stills (map/move/downed); there was no `AnimatedSprite2D`/`SpriteFrames`/`AnimationPlayer`/`AnimationTree` anywhere, and three tickets named that gap without owning it (#603, #358, and #414's deferral in shipped code at `AttackAction.gd:89-92`). **A frame is a RECT into one sheet, never a cut-out file** — `Sprite3D` honours an `AtlasTexture` region (only `StandardMaterial3D` quads do not, `BoardOverlays.gd:516`), so a wrong frame is a number to fix rather than a file to re-cut.

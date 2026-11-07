@@ -293,6 +293,51 @@ func test_ice_the_same_pass_refreezes_closes_over_the_sunk_unit() -> void:
 			"the second attack did not freeze the water the fire opened").is_true()
 
 
+# ...and once the pass has PLAYED, the ice holds the body (#1506): a thaw would sink it, which is
+# what the board draws it frozen into the ice for. Read off the board the pass leaves, not the plan.
+func test_the_body_a_refreeze_closes_over_is_held_by_the_ice() -> void:
+	var s := _fire_on_the_ice()
+	var hero: Unit = s.hero
+	var foe: Unit = s.foe
+	var froster := _spawn(PLAYER, Vector2i(4, 1))
+	# The tile alone: a hit on the body under the ice would finish it.
+	_imbue(froster, Elemental.Element.ICE, EquippableData.TargetMode.MAP)
+	game.squad_manager.join_squad(froster, hero.squad)
+	_queue(froster, ICE)
+	assert_object(_sink_of(_plan(hero.squad), foe)).override_failure_message(
+			"fixture: the melt sinks nobody").is_not_null()
+
+	await game.order_executor.execute_orders(hero)
+
+	assert_bool(foe.is_downed()).override_failure_message("fixture: the sunk enemy is not down").is_true()
+	assert_bool(_frozen(ICE)).override_failure_message("fixture: the refreeze never landed").is_true()
+	assert_bool(RulesService.held_by_ice(ICE, foe.state, game._board())).override_failure_message(
+			"the ice that closed over the body does not hold it").is_true()
+
+
+# The ice holds only a body a thaw would sink: a Waterwalker stands on the water frozen or not, and
+# open water holds nobody.
+func test_a_waterwalker_and_open_water_are_not_held_by_the_ice() -> void:
+	_ice(ICE)
+	var walker := _spawn(ENEMY, ICE, {Stats.Stat.MHP: 30})
+	walker.unit_instance.add_job("scout")
+	assert_bool(walker.has_live_ability(Abilities.Id.WATERWALK)).override_failure_message(
+			"fixture: the enemy must walk on water").is_true()
+	walker.take_damage(walker.get_current_hp())
+	assert_bool(walker.is_downed()).override_failure_message("fixture: the walker did not go down").is_true()
+	var plain := _spawn(ENEMY, Vector2i(6, 0))
+	var lake := Vector2i(6, 1)
+	(game.grid as BoardGrid).paint(lake, GRASS_SOURCE, DEEP_WATER)
+	var board: BoardContext = game._board()
+
+	assert_bool(RulesService.held_by_ice(ICE, plain.state, board)).override_failure_message(
+			"fixture: the ice would not hold an ordinary body either").is_true()
+	assert_bool(RulesService.held_by_ice(ICE, walker.state, board)).override_failure_message(
+			"the ice holds a Waterwalker, whom a thaw never sinks").is_false()
+	assert_bool(RulesService.held_by_ice(lake, plain.state, board)).override_failure_message(
+			"open water holds a body as if it were ice").is_false()
+
+
 # A haul's chosen bank is ice a fire in the same plan melts (#1498). The pass judges the haul at the
 # rescue's slot on its own ground, so the order goes red, rather than validating on the live ice and
 # hauling the body onto water at execution.

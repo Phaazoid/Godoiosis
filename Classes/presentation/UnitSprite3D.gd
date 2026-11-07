@@ -90,6 +90,7 @@ var _downed_texture: Texture2D
 var _walk_path: Array[Vector3i] = []
 var _walking := false
 var _downed := false
+var _in_ice := false   # #1506: set_in_ice
 # Which authored still to show, as against `_walking` -- which means "my own tween is running" and
 # is what is_walking() reports. #215's mirror drives the visual from outside without a tween, so one
 # flag cannot answer both.
@@ -232,6 +233,19 @@ func set_downed(down: bool) -> void:
 
 func is_downed() -> bool:
 	return _downed
+
+
+# A downed body the ice holds (#1506) is drawn STANDING, frozen mid-pose inside FrozenInIce's ring.
+# Pushed by UnitMirror, the one asker of RulesService.held_by_ice; only swaps on change.
+func set_in_ice(in_ice: bool) -> void:
+	if in_ice == _in_ice:
+		return
+	_in_ice = in_ice
+	_apply_state_texture()
+
+
+func is_in_ice() -> bool:
+	return _in_ice
 
 
 # Externally driven walking visual (#215's mirror: the 2D game owns the animation,
@@ -441,8 +455,10 @@ static func _ground_point_of(sheet: SpriteFrames) -> Vector2:
 	return Vector2(-1, -1)
 
 
-# Which authored still this unit shows: downed beats walking beats standing.
+# Which authored still this unit shows: in the ice beats downed beats walking beats standing.
 func _state_texture() -> Texture2D:
+	if _in_ice and _map_texture != null:
+		return _map_texture
 	if _downed:
 		# An unauthored downed sprite leaves whatever was showing, which is exactly what set_downed
 		# did before this consolidated it. Faithful rather than improved -- a refactor that quietly
