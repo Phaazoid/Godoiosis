@@ -19,9 +19,10 @@ var entry_type: EntryType
 var label := ""
 var action: BaseAction = null
 var indent_level = 0
-# The plan these rows were built from, HELD and never read (#1359): the panel re-renders from its
-# cached entries without re-resolving, and the plan breaks its volleys when it frees, so a hover's
-# resolve would otherwise split a shown volley's fold. Null on a hand-built entry.
+# The plan these rows were built from (#1359): the panel re-renders from its cached entries without
+# re-resolving, and the plan breaks its volleys when it frees, so a hover's resolve would otherwise
+# split a shown volley's fold. Its one reader is the matchup card (#1629), which renders the plan's
+# tile changes, sinkings and counters. Null on a hand-built entry.
 var plan: ResolvedPlan = null
 
 static func header(text: String) -> ActionQueueDisplayEntry:

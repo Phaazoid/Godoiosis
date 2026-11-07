@@ -24,6 +24,9 @@ class_name SquadActionQueueControl
 # reaches execute_orders, and its refusal branch calls play_refusal: the red rows shake, the list
 # scrolls to the first of them, and a box above the button says why, one line per refused order. The
 # box stays up, re-read on every refresh, until nothing is red; then it waits for the next refusal.
+#
+# A right-click on an attack row opens its MatchupCard (#1629), mounted here as the last child and
+# closed whenever the rows re-render.
 
 @onready var sections_box: VBoxContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll/SectionsBox
 @onready var outer_scroll: ScrollContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll
@@ -65,6 +68,11 @@ var _press_refused := false
 var _refusal_box: PanelContainer
 var _refusal_text: RichTextLabel
 var _shaking: Array[Control] = []   # the row wrappers mid-shake
+
+# The matchup card (#1629), open on one row at a time. `ground_grid` is handed in once by game, for
+# the ground art under a tile word.
+var ground_grid: TileMapLayer
+var _matchup: MatchupCard
 
 
 signal execute_requested
@@ -134,6 +142,11 @@ func restyle() -> void:
 	var was_showing := execute_button.visible
 	_render()
 	execute_button.visible = was_showing
+	if _matchup != null:
+		var lead := _matchup.lead
+		var whole := _matchup.whole_volley
+		close_matchup()
+		open_matchup(lead, whole)
 
 # The hide comes AFTER the emit because the refresh inside execute_orders re-shows the button, and it
 # is what stops a second press mid-pass. A REFUSED press (#1121) leaves the player planning, so the
@@ -145,6 +158,7 @@ func _execute():
 		execute_button.hide()
 
 func show_display_entries(entries: Array[ActionQueueDisplayEntry]):
+	close_matchup()   # the card was read off the plan these entries replace
 	if entries == null:
 		_last_entries = []
 	else:
@@ -411,8 +425,59 @@ func _wire_row(row: ActionQueueRow) -> void:
 	row.hover_changed.connect(func(a, h): row_hover_changed.emit(a, h))
 	row.pressed.connect(_on_row_pressed)
 	row.expand_toggled.connect(_toggle_volley)
+	row.inspect_requested.connect(_on_row_inspected)
+
+# A right-click on a row (#1629): an attack opens its exchange, a volley header the whole volley, a
+# counter the exchange that provokes it. The same row again closes it; any other row swaps it.
+func _on_row_inspected(row: ActionQueueRow) -> void:
+	var lead: AttackAction = null
+	if row.action is CounterAttackAction:
+		lead = (row.action as CounterAttackAction).source_attack
+	elif row.action is AttackAction:
+		lead = row.action as AttackAction
+	if lead == null:
+		return
+	var whole := row.is_volley_header
+	if _matchup != null and _matchup.lead == lead and _matchup.whole_volley == whole:
+		close_matchup()
+		return
+	close_matchup()
+	open_matchup(lead, whole)
+
+func open_matchup(lead: AttackAction, whole_volley: bool) -> void:
+	var at := -1
+	var plan: ResolvedPlan = null
+	for i in _last_entries.size():
+		var entry := _last_entries[i]
+		if entry == null or entry.entry_type != ActionQueueDisplayEntry.EntryType.ACTION:
+			continue
+		if plan == null:
+			plan = entry.plan
+		if entry.action == lead:
+			at = i
+	if plan == null or lead.resolved == null:
+		return
+	var members: Array[AttackAction] = [lead]
+	if whole_volley and at >= 0:
+		members.clear()
+		for action in _collect_volley_group(at):
+			members.append(action as AttackAction)
+	_matchup = MatchupCard.new()
+	_matchup.setup(lead, members, plan, ground_grid, whole_volley)
+	_matchup.close_requested.connect(close_matchup)
+	add_child(_matchup)
+
+# True when a card was open, so a right-click that only closed it does nothing else.
+func close_matchup() -> bool:
+	if _matchup == null:
+		return false
+	if is_instance_valid(_matchup):
+		_matchup.queue_free()
+	_matchup = null
+	return true
 
 func clear():
+	close_matchup()
 	current_squad = null
 	_content_shown = false
 	_apply_visibility()
@@ -424,6 +489,8 @@ func clear():
 # #722's one input, and the gate both halves write through. Deliberately NOT `_render()` -- that
 # rebuilds every section, and a playback edge has not changed a single row.
 func set_hidden_for_playback(hidden: bool) -> void:
+	if hidden:
+		close_matchup()
 	_hidden_for_playback = hidden
 	_apply_visibility()
 
