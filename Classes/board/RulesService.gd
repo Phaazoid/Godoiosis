@@ -80,11 +80,14 @@ static func command_block_reason(unit: Unit, active_faction: Team.Faction) -> St
 static func can_traverse(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
 	if board.is_walkable(cell):
 		return true
-	# Waterwalk (Movement, docs/design/jobs.md "The ability chassis"): ignores water's
-	# impassability for the holder — the same shape as is_walkable's FROZEN bypass, just per-unit
-	# instead of per-cell, which is why it lives here where `unit` is in scope. Reached only when
-	# the cell is ALREADY impassable, so the JobCatalog lookup stays off the hot path for ordinary
-	# ground (it used to be computed for every cell — see docs/performance.md).
+	# Reached only when the cell is ALREADY impassable, so the ability lookup stays off the hot path
+	# for ordinary ground (it used to be computed for every cell — see docs/performance.md).
+	return _waterwalks(cell, body, board)
+
+# Waterwalk (Movement, docs/design/jobs.md "The ability chassis"): ignores water's impassability for
+# the holder — the same shape as is_walkable's FROZEN bypass, just per-unit instead of per-cell.
+# can_traverse's clause, and held_by_ice's (#1506), which asks it of the water under the ice.
+static func _waterwalks(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
 		and body.has_live_ability(Abilities.Id.WATERWALK)
 
@@ -123,6 +126,16 @@ static func drowns_in(cell: Vector2i, body: UnitState, board: BoardContext) -> b
 #                instead, which is the same rule, not an exception to it.
 static func wets_in(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
 	return board.is_open_water(cell) and not body.has_live_ability(Abilities.Id.WATERWALK)
+
+# Is the ice all that holds this body up (#1506)? drowns_in asked of the water UNDER a FROZEN cell:
+# the tile's own walkability (GridUtils.walkable_of, BoardContext.is_walkable's tile half) and
+# can_traverse's Waterwalk clause. A thaw would sink a body here, and a downed one is drawn frozen
+# into the ice. Asks nothing of the lifecycle: the caller does.
+static func held_by_ice(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
+	return board.has_tile_state(cell, Terrain.TileState.FROZEN) \
+		and board.terrain_kind_at(cell) == Terrain.Kind.WATER \
+		and not GridUtils.walkable_of(board.grid.get_cell_tile_data(cell)) \
+		and not _waterwalks(cell, body, board)
 
 # What standing here costs THIS unit at end of turn (#892). Terrain.occupant_damage answers the
 # cell-only form; this is the per-unit layer over it, exactly as can_traverse is over is_walkable --

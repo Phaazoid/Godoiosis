@@ -41,8 +41,12 @@ class_name UnitMirror
 #
 # #322 puts the DOWNED glyph and its rescue clock in that same row. It is deliberately NOT a fourth
 # reason to be up: the fact that a unit is down is already carried unconditionally by its downed
-# ART, so this exists to stop the BAR contradicting it — `1/20` over a body and over a living unit
-# at 1 HP are the same readout for two completely different board states.
+# ART (or, since #1506, by the ice it is frozen in), so this exists to stop the BAR contradicting it
+# — `1/20` over a body and over a living unit at 1 HP are the same readout for two completely
+# different board states.
+#
+# Since #1506 a downed body the ice holds (RulesService.held_by_ice, asked here once a frame) is drawn
+# STANDING inside FrozenInIce's ring of crystals, wearing the chill and none of the wet.
 #
 # It reads the MODEL for that, not the 2D — the departure from OverlayMirror's "the 2D stays the one
 # authority" that #229 already made, and for the same reason: the flat view draws no HP over units
@@ -342,6 +346,8 @@ var _breathing := false
 # What a worn state throws into the world around the unit (#358 slice 2). A child for the debris'
 # reason: it is board-wide, and it is fed from this node's own per-frame pass.
 var _status_world: StatusWorld
+# Every downed body the ice holds (#1506), drawn frozen into it. A child for StatusWorld's reason.
+var _frozen_in_ice: FrozenInIce
 
 
 func _ready() -> void:
@@ -352,6 +358,8 @@ func _ready() -> void:
 	add_child(_debris)
 	_status_world = StatusWorld.new()
 	add_child(_status_world)
+	_frozen_in_ice = FrozenInIce.new()
+	add_child(_frozen_in_ice)
 
 
 func _process(delta: float) -> void:
@@ -474,6 +482,7 @@ func reconcile(delta := 0.0) -> void:
 				_bars.erase(id)
 	_sync_ghost_status()
 	_status_world.advance(delta, _status_clock, heights)
+	_frozen_in_ice.advance(_fade_step(StatusLook.in_ice_grow_time, delta))
 
 
 # --- Element states (#358) ------------------------------------------------------------
@@ -482,8 +491,11 @@ func reconcile(delta := 0.0) -> void:
 # sprite was up would pop to full the moment a ghost stood in for it.
 func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> void:
 	var level: Vector4 = _status.get(id, Vector4.ZERO)
-	var wet := 1.0 if unit.element_states.has(Elemental.State.WET) else 0.0
-	var chill := 1.0 if unit.element_states.has(Elemental.State.CHILLED) else 0.0
+	# A body frozen in the ice (#1506) wears the chill and none of the wet, and throws nothing into the
+	# world: the ice seals it.
+	var in_ice := sprite.is_in_ice()
+	var wet := 1.0 if unit.element_states.has(Elemental.State.WET) and not in_ice else 0.0
+	var chill := 1.0 if unit.element_states.has(Elemental.State.CHILLED) or in_ice else 0.0
 	level.x = move_toward(level.x, wet, _fade_step(StatusLook.status_fade_time, delta))
 	level.y = move_toward(level.y, chill, _fade_step(StatusLook.status_fade_time, delta))
 	level.z = move_toward(level.z, chill, _fade_step(StatusLook.icicle_grow_time, delta))
@@ -500,7 +512,9 @@ func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> vo
 		_status[id] = level
 	# A blizzard fogs every standing unit's breath (#1269); a body on the ground does not breathe it.
 	var breath := 1.0 if _breathing and not unit.is_downed() else 0.0
-	if level != Vector4.ZERO or breath > 0.0:
+	if in_ice:
+		_frozen_in_ice.hold(id, sprite, status_seed(id))
+	elif level != Vector4.ZERO or breath > 0.0:
 		var standing := _standing_sprite(unit, id, sprite)
 		if standing != null:
 			_status_world.wear(id, standing, cell, level, status_seed(id), breath)
@@ -583,6 +597,10 @@ func ghosts() -> Array[UnitSprite3D]:
 
 func status_world() -> StatusWorld:
 	return _status_world
+
+
+func frozen_in_ice() -> FrozenInIce:
+	return _frozen_in_ice
 
 
 # The world half's emitters follow the board like every other effect's (battle3d._cover_effects).
@@ -891,6 +909,9 @@ func _sync(unit: Unit, sprite: UnitSprite3D, delta := 0.0) -> void:
 		sprite.set_downed(downed)
 	if not downed:
 		sprite.set_walking_visual(unit.movement.moving)
+	# The ice closing over a body (#1506): asked of the cell its pixels sit over, as the wade is.
+	sprite.set_in_ice(downed and _frame_board != null
+			and RulesService.held_by_ice(over, unit.state, _frame_board))
 
 	# Hidden ONLY when a planning ghost stands in (#232). Asking visuals.projected rather
 	# than copying $MapSprite.visible: that flag has a second writer, _show_downed_sprite,

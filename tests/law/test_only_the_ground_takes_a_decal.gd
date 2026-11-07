@@ -13,6 +13,8 @@ const PROLOG := "res://Scenarios/missions/Prolog.tres"
 const GROUND := BoardOverlays.GROUND_RENDER_LAYER
 const UNIT := BoardOverlays.UNIT_RENDER_LAYER
 const PROP := BoardOverlays.PROP_RENDER_LAYER
+const H := preload("res://tests/support/squad_fixtures.gd")
+const DEEP_WATER := Vector2i(5, 6)
 
 var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
@@ -83,6 +85,22 @@ func test_nothing_but_the_ground_is_on_the_ground_layer() -> void:
 	await _settle()
 	assert_bool(gas.floor_node().mesh != null and gas.puff_node().multimesh.instance_count > 0) \
 			.override_failure_message("no gas floor or puff was raised, so their layers are never asked").is_true()
+	# A body frozen in the ice (#1506): its ring of crystals and the copy of the body over it.
+	var avoid: Array[Vector2i] = [burning[0]]
+	avoid.append_array(mirror._props.keys())   # the props the walk below counts stay standing
+	var lake := _a_free_cell(avoid)
+	(_game.grid as BoardGrid).paint(lake, 0, DEEP_WATER)
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = lake
+	freeze.states_added.assign([Terrain.TileState.FROZEN])
+	_game.terrain_states.apply(freeze)
+	var frozen: Unit = _game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), lake)
+	assert_object(frozen).override_failure_message("fixture: nobody could be placed on the ice").is_not_null()
+	frozen.take_damage(frozen.get_current_hp())
+	await _settle()
+	units.reconcile(0.1)
+	assert_object(units.frozen_in_ice().ring_for(frozen.get_instance_id())).override_failure_message(
+			"no body was frozen in the ice, so the ring's and the copy's layers are never asked").is_not_null()
 
 	var lips := 0
 	var particles := 0
@@ -129,6 +147,19 @@ func _descendants(root: Node) -> Array[Node]:
 		out.append(child)
 		out.append_array(_descendants(child))
 	return out
+
+
+# A cell of ground nobody stands on, other than `avoid`.
+func _a_free_cell(avoid: Array[Vector2i]) -> Vector2i:
+	var taken: Dictionary[Vector2i, bool] = {}
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null:
+			taken[unit.movement.cell] = true
+	for cell: Vector2i in _game.grid.get_used_cells():
+		if not avoid.has(cell) and not taken.has(cell):
+			return cell
+	return GridUtils.NO_CELL
 
 
 func _an_inland_cell() -> Vector2i:

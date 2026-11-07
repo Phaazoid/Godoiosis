@@ -1229,6 +1229,35 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Chilled around a unit", "label": "Mouth down", "static": "chill_breath_y", "script": STATUS_LOOK_SCRIPT,
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Where the breath comes from, down the art's opaque box: 0 the top of the head, 1 the feet."},
+	# A downed body the ice holds (#1506): FrozenInIce's ring of glass crystals and the faint copy of
+	# the body over it. Read every frame by FrozenInIce.advance, so no arm sweeps. The face colour is
+	# Ice under Element colours.
+	{"group": "Frozen in the ice", "label": "Grow time", "static": "in_ice_grow_time", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Seconds the crystals take to grow up round a body when the ice closes over it, and to sink back when it leaves the ice. 0 is instant."},
+	{"group": "Frozen in the ice", "label": "Size", "static": "in_ice_size", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.3, "max": 2.0, "step": 0.05,
+		"tip": "How big the ring of crystals is. At 1 it reaches about a third of a cell out from the body and stands about as tall as a unit."},
+	{"group": "Frozen in the ice", "label": "Face clarity", "static": "in_ice_face_alpha", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How solid a crystal face is where it looks straight at the camera. Low keeps the body inside readable; the edges are what keep the ice visible."},
+	{"group": "Frozen in the ice", "label": "Edge solidity", "static": "in_ice_edge_alpha", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How solid a crystal is along its edges, where it turns away from the camera. This is what makes the ice read against a white ice floor."},
+	{"group": "Frozen in the ice", "label": "Edge sharpness", "static": "in_ice_edge_sharpness", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.2, "max": 6.0, "step": 0.05,
+		"tip": "How quickly a face turns to edge as it turns away from the camera. Low darkens most of every crystal, high keeps the dark to a thin outline."},
+	{"group": "Frozen in the ice", "label": "Edge colour", "static": "in_ice_edge_color", "script": STATUS_LOOK_SCRIPT,
+		"tip": "The colour a crystal darkens to along its edges, the way the unit art carries a dark outline."},
+	{"group": "Frozen in the ice", "label": "Glow", "static": "in_ice_glow", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much the ice glows in the Ice colour, so it still reads on a night board. Too much reads as magic rather than ice."},
+	{"group": "Frozen in the ice", "label": "Body through the ice", "static": "in_ice_body_alpha", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How solid the copy of the body drawn over the ice is. It is what lets you see who is frozen in; 0 leaves only the body behind the glass."},
+	{"group": "Frozen in the ice", "label": "Body tint", "static": "in_ice_body_tint", "script": STATUS_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far that copy of the body leans from its own colours to the Ice colour."},
 
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
@@ -1855,6 +1884,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Chilled on a unit": "Elemental",
 	"Wet around a unit": "Elemental",
 	"Chilled around a unit": "Elemental",
+	"Frozen in the ice": "Elemental",
 	# The queue.s own invented colour, beside the element chips it has to read against (#685).
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
@@ -2182,6 +2212,15 @@ static func read_static(name: String) -> Variant:
 		"chill_breath_alpha": return StatusLook.chill_breath_alpha
 		"chill_breath_x": return StatusLook.chill_breath_x
 		"chill_breath_y": return StatusLook.chill_breath_y
+		"in_ice_grow_time": return StatusLook.in_ice_grow_time
+		"in_ice_size": return StatusLook.in_ice_size
+		"in_ice_face_alpha": return StatusLook.in_ice_face_alpha
+		"in_ice_edge_alpha": return StatusLook.in_ice_edge_alpha
+		"in_ice_edge_sharpness": return StatusLook.in_ice_edge_sharpness
+		"in_ice_edge_color": return StatusLook.in_ice_edge_color
+		"in_ice_glow": return StatusLook.in_ice_glow
+		"in_ice_body_alpha": return StatusLook.in_ice_body_alpha
+		"in_ice_body_tint": return StatusLook.in_ice_body_tint
 		# ...and the sparks, whose own node holds them (#887 slice 2). A GPU particle's state cannot
 		# be read back, so each of these names the CPU-side value a burst is built from.
 		"sparks": return ShockSparks.sparks
@@ -2738,6 +2777,33 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"chill_breath_y":
 			StatusLook.chill_breath_y = value
+			return
+		"in_ice_grow_time":
+			StatusLook.in_ice_grow_time = value
+			return
+		"in_ice_size":
+			StatusLook.in_ice_size = value
+			return
+		"in_ice_face_alpha":
+			StatusLook.in_ice_face_alpha = value
+			return
+		"in_ice_edge_alpha":
+			StatusLook.in_ice_edge_alpha = value
+			return
+		"in_ice_edge_sharpness":
+			StatusLook.in_ice_edge_sharpness = value
+			return
+		"in_ice_edge_color":
+			StatusLook.in_ice_edge_color = value
+			return
+		"in_ice_glow":
+			StatusLook.in_ice_glow = value
+			return
+		"in_ice_body_alpha":
+			StatusLook.in_ice_body_alpha = value
+			return
+		"in_ice_body_tint":
+			StatusLook.in_ice_body_tint = value
 			return
 		# The sparks. Every arm RE-APPLIES, because the emission buffer `sparks_per_victim` sizes
 		# and the material's own fields are node state rather than values a burst reads as it goes

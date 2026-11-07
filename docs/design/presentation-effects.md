@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** *(It has outgrown the name: the Decisions section below now holds twenty-six built or ruled sections and most of this file, and the idea wall is the four Tiers after it.)* Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond *([#176](https://github.com/Phaazoid/Godoiosis/issues/176) closed 2026-10-08; an idea from the pool is now filed as its own issue when it is taken up, as #551 and #1460 are)*, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites *(nine now, plus a law test)* fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1489 (2026-10-24); #1509 (a drawn weather leaves the look preset alone) folded in 2026-10-27; #894 (the ground ghost over the aim fill) folded in 2026-10-30; #1601 (a cancelled first aim takes its ground ghosts) folded in 2026-11-03; #1315 (meshlib item ids are stable by name) folded in 2026-11-05.**
+**Canon checked through #1489 (2026-10-24); #1509 (a drawn weather leaves the look preset alone) folded in 2026-10-27; #894 (the ground ghost over the aim fill) folded in 2026-10-30; #1601 (a cancelled first aim takes its ground ghosts) folded in 2026-11-03; #1315 (meshlib item ids are stable by name) folded in 2026-11-05; #1506 (a body the ice holds, drawn frozen into it) folded in 2026-11-07.**
 
 ---
 
@@ -1171,6 +1171,36 @@ a step the decal splits onto both tops where a patch would hang as a sheet.
 
 Chilled blocks Wet as a RULE in #1092, so this slice never draws both. Reaction beats (steam,
 shatter, freeze) are their own follow-up, [#1095](https://github.com/Phaazoid/Godoiosis/issues/1095), open.
+
+#### A body the ice holds is drawn frozen INTO it ([#1506](https://github.com/Phaazoid/Godoiosis/issues/1506), BUILT 2026-11-07)
+
+Since #1498 one pass can melt the ice under a unit (it sinks and goes down) and freeze the water
+again over it. The dev picked the look from four rounds of real-UI mocks (round 4, V2): the body
+**standing**, frozen mid-pose, inside a ring of glass crystals, with a faint copy of the body drawn
+over the ice so it reads through.
+
+- **The trigger is DERIVED, never stored**: a DOWNED body on FROZEN water it would drown in were the
+  ice gone (`RulesService.held_by_ice`, asked once a frame by `UnitMirror`). Every such body has the
+  same rules, however it got there: a melt finishes it, and a rescue lifts it where it lies. So a unit
+  cut down while standing on ice over deep water shows frozen in too. Shallow water never sinks
+  anyone and a Waterwalker never goes under, so neither is held. A stored "went under" fact was
+  weighed and not built: a save field and a resolver stamp, read only by the look.
+- **A look only**: no rule reads it.
+- **The body**: `UnitSprite3D.set_in_ice` makes "in the ice" beat downed in the one texture door. It
+  wears the Chilled look at full and none of the Wet, and throws nothing into the world (no drips,
+  mist or breath).
+- **The ring** (`FrozenInIce`, a child of `UnitMirror`, `StatusWorld`'s shape): built once per body
+  off the unit's status seed. Ten six-sided crystals stand round the body with nothing at the middle,
+  and five small ones lean out at the foot. **Glass, not frosted plastic**: a face looking at the
+  camera is clear, an edge is dark and near solid. Round 3's inverted-hull outline was dropped because
+  its back faces hid the body inside. It grows in when the ice closes and shrinks away when the body
+  leaves it.
+- **The body copy** is a plain `Sprite3D` with a ghost's settings (#317). It is drawn after the ice so
+  the body reads through the glass.
+- **Knobs**: `StatusLook.in_ice_*`, group *Frozen in the ice* on the Elemental page. The face colour
+  is Ice under Element colours.
+- **What ice surfaces themselves look like** (the 2D game's 16×16 icon, tiled flat) is
+  [#1630](https://github.com/Phaazoid/Godoiosis/issues/1630).
 
 ### Gas: the volume and the pixel puffs, mixed ([#508](https://github.com/Phaazoid/Godoiosis/issues/508), harness BUILT 2026-10-01, mixes 2026-10-02)
 
