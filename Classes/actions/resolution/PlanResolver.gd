@@ -67,11 +67,21 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 		return
 	_apply_guards(group, plan, hypo)
 	for atk in group:
-		_resolve_one(atk, plan, reactions, hypo, board)
-		if board != null and not atk.is_secondary_hit:
-			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions, hypo):
-				plan.deposit(cell_effect)
+		_resolve_member(atk, plan, reactions, hypo, board, terrain_reactions)
 		settle_landing(atk, plan, hypo, board)   # the volley's tiles, once its last member has resolved
+
+# One member of a volley, an attack's or a counter's: its hit, then the volley's cell effects at its
+# lead, then the gas the hit released. The release goes AFTER the lead's air half (#1622): a dispersal
+# takes the gas STANDING on a struck tile, never what the volley's own hits give off -- the order one
+# cell effect already folds its own clear and its own gas in.
+static func _resolve_member(action: AttackAction, plan: ResolvedPlan, reactions: Array[ElementalReaction],
+		hypo: Dictionary, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	var released := _resolve_one(action, plan, reactions, hypo, board)
+	if board != null and not action.is_secondary_hit:
+		for cell_effect in _resolve_cell_effects(action, board, terrain_reactions, hypo):
+			plan.deposit(cell_effect)
+	for effect in released:
+		plan.deposit(effect)
 
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
 #
@@ -86,13 +96,22 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		if ctr.dropped_by == null:
 			derived.append(ctr)
 	var ordered: Array[CounterAttackAction] = []
+	# A counter volley is judged ONCE, at its lead, as resolve_attack_group judges an attack's (#1569,
+	# #1622): one blast is one moment, so a member's own hit -- the counter-er felled by its own blast,
+	# the neighbour lending its water shoved off -- cannot stop the rest. plan.counters is FLAT, lead
+	# first, and a hand-built member is its own lead.
+	var down := false
+	var fizzled := false
 	for i in derived.size():
 		var ctr := derived[i]
-		if not _counter_actor_live(ctr, hypo):
+		if not ctr.is_secondary_hit:
+			down = not _counter_actor_live(ctr, hypo)
+			fizzled = not down and _fizzles(ctr, board, hypo)
+		if down:
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
 			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
-		elif _fizzles(ctr, board, hypo):
+		elif fizzled:
 			ctr.resolved = _fizzled_outcome()       # its carving has nothing to work with there
 		else:
 			# A counter is an attack with a volley like any other, so it gets the same one-blast-one-
@@ -101,10 +120,7 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 			# the fizzle, as in resolve_attack_group (#1570): a counter that never lands spends no ward.
 			if not ctr.is_secondary_hit:
 				_apply_guards(_volley_of(ctr), plan, hypo)
-			_resolve_one(ctr, plan, reactions, hypo, board)
-			if board != null and not ctr.is_secondary_hit:
-				for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions, hypo):
-					plan.deposit(cell_effect)
+			_resolve_member(ctr, plan, reactions, hypo, board, terrain_reactions)
 		settle_landing(ctr, plan, hypo, board)
 		ordered.append(ctr)
 		if ctr.closes_volley():
@@ -675,14 +691,17 @@ static func _positions_snapshot(board: BoardContext, hypo: Dictionary) -> Dictio
 	return snapshot
 
 
-static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> void:
+# One hit, onto the pass's copy of its target. Hands back the gas the hit releases (_release_reaction_gas)
+# for _resolve_member to deposit, rather than depositing it here, ahead of the volley's air half (#1622).
+static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> Array[ResolvedCellEffect]:
+	var released: Array[ResolvedCellEffect] = []
 	var outcome := ResolvedOutcome.new()
 	var attacker := action.actor
 	var target := action.target
 	if attacker == null or target == null or not is_instance_valid(attacker) or not is_instance_valid(target):
 		outcome.reads_hp = false   # a cell with nobody on it (#47): no HP to show, or the row reads 0->0 (#1568)
 		action.resolved = outcome
-		return
+		return released
 
 	# THE WHIFF (#1350, dev 2026-10-21: "It should whiff and still spend"). An earlier hit this pass
 	# already took the target off the board, so this one lands on nobody -- but it was FIRED, so the
@@ -694,7 +713,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.popups.append(WHIFFED_POPUP)
 		_source_base_damage(action, board, hypo, outcome)
 		action.resolved = outcome
-		return
+		return released
 
 	# Elevation stamp (#258): frozen origin (Law #2, same as fired_attack) against the THREADED
 	# position — a shove earlier in the pass moves the target's level, and the delta must describe
@@ -719,7 +738,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.heal_amount = heal_amount
 		outcome.target_hp_after = body.get_current_hp()
 		action.resolved = outcome
-		return
+		return released
 
 
 	# THE WATCH BREAKS ON CONTACT (#810, dev 2026-09-09). Deliberately BELOW the heal return above:
@@ -769,7 +788,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.fired_reactions.append(reaction)   # whole, art or not (#685)
 	# Asked HERE, before the displacement stage threads a shove into the hypo: the gas rises where the
 	# target was hit, not where the hit throws it.
-	_release_reaction_gas(action, outcome.fired_reactions, target_hypo.position, plan, board)
+	released = _release_reaction_gas(action, outcome.fired_reactions, target_hypo.position, board)
 
 	# remove-wins on conflict -> net-disjoint delta sets
 	var net_added: Array[Elemental.State] = []
@@ -914,25 +933,29 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		target_hypo.position = landing.cell
 
 	action.resolved = outcome
+	return released
 
 # The gas a hit's fired reactions release (#1329): fire drying a wet unit boils its water off as steam,
 # on the cell the target was hit on. Once per VICTIM, secondary hits included, since each victim's
-# water is its own -- where an attack's own gas lands once per volley. Into the one cell-effect channel,
-# so the board ghosts it and both executors play it, and laid where every release lies
-# (GasSpread.released_onto, #1537), so the preview never promises gas the board would not hold (Law #2).
+# water is its own -- where an attack's own gas lands once per volley. Bound for the one cell-effect
+# channel (_resolve_member deposits it, after the volley's air half, #1622), so the board ghosts it and
+# both executors play it, and laid where every release lies (GasSpread.released_onto, #1537), so the
+# preview never promises gas the board would not hold (Law #2).
 static func _release_reaction_gas(action: AttackAction, fired: Array[ElementalReaction], cell: Vector2i,
-		plan: ResolvedPlan, board: BoardContext) -> void:
+		board: BoardContext) -> Array[ResolvedCellEffect]:
+	var released: Array[ResolvedCellEffect] = []
 	if board == null:
-		return
+		return released
 	for onto in GasSpread.released_onto(cell, board):
 		var effect := ResolvedCellEffect.new()
 		effect.cell = onto
 		for reaction in fired:
 			effect.add_gases(reaction.gases)
 		if effect.gas_added.is_empty():
-			return
+			return released
 		effect.cause = action
-		plan.deposit(effect)
+		released.append(effect)
+	return released
 
 # The states a unit would hold once a hit's removes and then its adds have landed: #1092's judge of
 # what an add is blocked by. The landing itself goes through the body's doors (_resolve_one).
