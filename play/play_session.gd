@@ -245,6 +245,16 @@ func gas_at(cell: Vector2i) -> Array[String]:
 		out.append("%s %s" % [Gas.display_name(kind), Gas.Level.keys()[Gas.level_in(packed, kind)].to_lower()])
 	return out
 
+# The time marks on a cell (#1311), one per substance: the tile card's Held and Quickened lines.
+func marks_at(cell: Vector2i) -> Array[String]:
+	var out: Array[String] = []
+	if terrain_states == null:
+		return out
+	var marks := terrain_states.paces_at(cell)
+	for id: String in marks:
+		out.append(_mark_text(Pace.kind_of(marks[id]), id, Pace.rounds_of(marks[id])))
+	return out
+
 # The air at a cell where its gas has moved it off the board's reading (#1324), "elemental aether 20%
 # +2" -- the tile card's Air rows, and what a carving cast from here draws on (BoardContext.air_at).
 func air_at(cell: Vector2i) -> Array[String]:
@@ -1434,10 +1444,17 @@ static func _describe_deposits(plan: ResolvedPlan) -> Array:
 			what = "gas leaves"   # an Air hit clears the cell (#1335), or blows it to a "gas" entry (#1332)
 		elif deposit.has("gas"):
 			what = Gas.display_name(deposit["gas"])
+		elif deposit.has("pace"):
+			what = _mark_text(deposit["pace"], deposit["substance"], deposit["rounds"])
 		else:
 			what = Terrain.tile_state_display_name(deposit["state"])
 		out.append({"cell": deposit["cell"], "what": what})
 	return out
+
+# One time mark (#1311) as the API says it, "held heat, 2 rounds": the preview's and the terrain view's.
+static func _mark_text(kind: Pace.Kind, id: String, rounds: int) -> String:
+	return "%s %s, %d %s" % [Glossary.title(Glossary.term_for_pace(kind)).to_lower(),
+			SubstanceCatalog.name_of(id).to_lower(), rounds, "round" if rounds == 1 else "rounds"]
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved

@@ -47,6 +47,19 @@ static func of(marks: Dictionary, made_of: Array[String]) -> Kind:
 	return Kind.QUICK if quick else Kind.NORMAL
 
 
+# The one pace a cell's badge shows, whatever the marks name: HELD where any mark holds, else QUICK where
+# any hurries, else NORMAL. The same clash rule as of().
+static func strongest(marks: Dictionary) -> Kind:
+	var quick := false
+	for id: String in marks:
+		match kind_of(marks[id]):
+			Kind.HELD:
+				return Kind.HELD
+			Kind.QUICK:
+				quick = true
+	return Kind.QUICK if quick else Kind.NORMAL
+
+
 static func of_tile_state(marks: Dictionary, state: Terrain.TileState) -> Kind:
 	if marks.is_empty():
 		return Kind.NORMAL

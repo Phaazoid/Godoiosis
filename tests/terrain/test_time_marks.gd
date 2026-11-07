@@ -215,6 +215,36 @@ static func _plain(cells: Dictionary[Vector2i, int]) -> Dictionary:
 	return out
 
 
+# --- the readout --------------------------------------------------------------------------------
+
+# The badge of `kind` drawn on `cell` among `sprites` (the overlay's live or plan-time list), or null.
+func _badge_at(sprites: Array[Sprite2D], cell: Vector2i, kind: Pace.Kind) -> Sprite2D:
+	var om: OverlayManager = game.overlay_manager
+	var at := GridUtils.cell_world(om.board_tilemap, cell) + OverlayManager.TIME_MARK_OFFSET
+	for sprite in sprites:
+		if is_instance_valid(sprite) and sprite.texture == OverlayManager.TIME_MARK_ICONS[kind] \
+				and sprite.global_position.is_equal_approx(at):
+			return sprite
+	return null
+
+
+# What the tile card says about `cell`, opened the way a click opens it.
+func _card(cell: Vector2i) -> Array[String]:
+	game.hover_info_panel.show_tile(cell, GridUtils.cell_world(game.grid, cell))
+	await await_idle_frame()
+	var said: Array[String] = game.hover_info_panel.tile_texts()
+	return said
+
+
+# The card's line for a mark of `kind` on substance `id`, or "".
+static func _mark_line(said: Array[String], kind: Pace.Kind, id: String) -> String:
+	var head := "%s (%s)" % [Glossary.title(Glossary.term_for_pace(kind)), SubstanceCatalog.name_of(id)]
+	for line in said:
+		if line.begins_with(head):
+			return line
+	return ""
+
+
 # --- the cases ----------------------------------------------------------------------------------
 
 # A stilled fire neither spreads nor burns down while the mark lasts, then picks up where it stopped.
@@ -356,3 +386,80 @@ func test_a_save_keeps_each_mark_with_its_rounds_left() -> void:
 	await await_idle_frame()
 	assert_dict(game.terrain_states.paces_at(FIRE_CELL)).override_failure_message(
 			"the load lost the mark or its rounds left").is_equal(left)
+
+
+# The board shows a mark: a ghost badge on every cell a queued Still strikes, a solid one once it lands,
+# and none once its rounds are spent.
+func test_the_board_ghosts_a_queued_mark_and_wears_a_landed_one() -> void:
+	var circle: Array[Vector2i] = [Vector2i(-1, 0), Vector2i.ZERO, Vector2i(1, 0)]
+	var carving := _carving("Still(%s)" % _fire_part(), circle)
+	var caster := _caster(Vector2i(2, 1), carving)
+	var om: OverlayManager = game.overlay_manager
+
+	_queue_cast(caster, FIRE_CELL)
+	for offset in circle:
+		var ghost := _badge_at(om.terrain_preview_sprites, FIRE_CELL + offset, Pace.Kind.HELD)
+		assert_object(ghost).override_failure_message(
+				"no ghost badge on %s, which the queued Still strikes" % (FIRE_CELL + offset)).is_not_null()
+		if ghost != null:
+			assert_that(ghost.modulate).is_equal(OverlayManager.TERRAIN_PREVIEW_MODULATE)
+	assert_object(_badge_at(om.terrain_live_sprites, FIRE_CELL, Pace.Kind.HELD)) \
+		.override_failure_message("a queued mark stood on the board before it landed").is_null()
+
+	await game.order_executor.execute_orders(caster.squad.get_leader())
+	await await_idle_frame()
+	for offset in circle:
+		var badge := _badge_at(om.terrain_live_sprites, FIRE_CELL + offset, Pace.Kind.HELD)
+		assert_object(badge).override_failure_message(
+				"no badge on %s once the Still landed" % (FIRE_CELL + offset)).is_not_null()
+		if badge != null:
+			assert_that(badge.modulate).is_equal(Color.WHITE)
+
+	for round_number in range(carving.time_rounds):
+		await _end_round()
+	assert_bool(game.terrain_states.paces_at(FIRE_CELL).is_empty()) \
+		.override_failure_message("fixture: the mark outlived its rounds").is_true()
+	assert_object(_badge_at(om.terrain_live_sprites, FIRE_CELL, Pace.Kind.HELD)) \
+		.override_failure_message("the badge outlived its mark").is_null()
+
+
+# One badge a cell, the hold outranking the hurry as it does in the round; a cell only hurried wears the
+# quickened badge. Drawn by the round's own redraw.
+func test_a_cell_wears_one_badge_and_a_hold_outranks_a_hurry() -> void:
+	_bystander()
+	var both := Vector2i(3, 0)
+	var hurried := Vector2i(5, 0)
+	var quick: Array[Vector2i] = [both, hurried]
+	var held: Array[Vector2i] = [both]
+	_mark(quick, Atmosphere.SUBSTANCES[0], Pace.Kind.QUICK, 3)
+	_mark(held, Atmosphere.SUBSTANCES[1], Pace.Kind.HELD, 3)
+
+	await _end_round()
+	var live: Array[Sprite2D] = game.overlay_manager.terrain_live_sprites
+	assert_object(_badge_at(live, both, Pace.Kind.HELD)).override_failure_message(
+			"a cell both held and hurried does not show the hold").is_not_null()
+	assert_object(_badge_at(live, both, Pace.Kind.QUICK)).override_failure_message(
+			"a cell both held and hurried wears two badges").is_null()
+	assert_object(_badge_at(live, hurried, Pace.Kind.QUICK)).override_failure_message(
+			"a hurried cell wears no badge").is_not_null()
+
+
+# The tile card names each mark: what it does, the substance it names, and the rounds it has left.
+func test_the_tile_card_says_what_a_mark_holds_and_for_how_long() -> void:
+	_bystander()
+	var held_id: String = Atmosphere.SUBSTANCES[0]
+	var quick_id: String = Atmosphere.SUBSTANCES[1]
+	var cells: Array[Vector2i] = [FIRE_CELL]
+	_mark(cells, held_id, Pace.Kind.HELD, 3)
+	_mark(cells, quick_id, Pace.Kind.QUICK, 3)
+	await _end_round()
+
+	var said := await _card(FIRE_CELL)
+	var held_line := _mark_line(said, Pace.Kind.HELD, held_id)
+	assert_str(held_line).override_failure_message("the card names no hold:\n%s" % "\n".join(said)).is_not_empty()
+	assert_str(held_line).contains(Glossary.short(Glossary.term_for_pace(Pace.Kind.HELD))).ends_with("2 rounds left.")
+	assert_str(_mark_line(said, Pace.Kind.QUICK, quick_id)).override_failure_message(
+			"the card names no hurry:\n%s" % "\n".join(said)).ends_with("2 rounds left.")
+
+	await _end_round()
+	assert_str(_mark_line(await _card(FIRE_CELL), Pace.Kind.HELD, held_id)).ends_with("1 round left.")

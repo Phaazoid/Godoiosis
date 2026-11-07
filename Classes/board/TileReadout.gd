@@ -223,6 +223,13 @@ static func ground_lines(game, cell: Vector2i) -> Array[String]:
 		if turns > 0:
 			line += " %d left." % turns
 		lines.append(line)
+	# A time mark (#1311), one line per substance it names.
+	var marks: Dictionary = board.terrain_states.paces_at(cell) if board.terrain_states != null else {}
+	for id: String in marks:
+		var term: Glossary.Term = Glossary.term_for_pace(Pace.kind_of(marks[id]))
+		var rounds: int = Pace.rounds_of(marks[id])
+		lines.append("%s (%s) — %s %d %s left." % [Glossary.title(term), SubstanceCatalog.name_of(id),
+			Glossary.short(term), rounds, "round" if rounds == 1 else "rounds"])
 	var kind: Terrain.Kind = board.terrain_kind_at(cell)
 	if kind == Terrain.Kind.WATER:
 		# One Kind, two tiles (#116) — so the card asks the same question the rules ask: water you
