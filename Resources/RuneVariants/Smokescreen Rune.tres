@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://cio4umf6riwxs"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_pwh6a"]
+[ext_resource type="Resource" uid="uid://u862qx5nwrfb" path="res://Resources/TransmutationData/Smokescreen.tres" id="2_cqcjd"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_10p7u"]
+
+[resource]
+script = ExtResource("3_10p7u")
+size = 1
+inscriptions = Array[ExtResource("1_pwh6a")]([ExtResource("2_cqcjd")])
+temper = 6
+display_name = "Smokescreen Rune"
+weight = 1

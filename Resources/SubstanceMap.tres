@@ -12,7 +12,7 @@ tile_states = Dictionary[int, PackedStringArray]({
 })
 gases = Dictionary[int, PackedStringArray]({
 0: PackedStringArray("steam"),
-1: PackedStringArray("smoke"),
+1: PackedStringArray("smoke", "ash"),
 2: PackedStringArray("chlorine"),
 3: PackedStringArray("frost"),
 4: PackedStringArray("ozone"),

@@ -5,5 +5,5 @@
 [resource]
 script = ExtResource("1_subst")
 display_name = "Smoke"
-formula = "AE + A2"
+formula = "A2*AE"
 phase = 3
