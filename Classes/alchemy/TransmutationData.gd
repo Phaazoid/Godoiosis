@@ -19,6 +19,9 @@ extends AttackData
 		_parsed = null
 @export var popup: String = ""
 @export var icon: Texture2D
+# How many rounds a Still or Quicken in the recipe marks the cells it strikes (#1311): a mark laid this
+# round covers this round's tick and the next ones, this many in all. Read only by a recipe with one.
+@export_range(1, 9) var time_rounds: int = 2
 # materia: casting needs no fuel (ratified 2026-08-29). A verb whose argument is not present
 #   fizzles -- CellSubstances.fizzle_reason, asked with the cell the cast is made from.
 
@@ -33,6 +36,16 @@ func parsed() -> CarvingRecipe:
 		_parsed = CarvingRecipe.parse(recipe)
 		_parsed_against = SubstanceCatalog.version
 	return _parsed
+
+
+# The marks this carving lays on each cell it strikes (#1311): substance -> Pace.mark(kind, time_rounds).
+# Empty for a recipe with no Still or Quicken, which is every carving but the time pair's.
+func time_marks() -> Dictionary[String, Vector2i]:
+	var marks: Dictionary[String, Vector2i] = {}
+	var paces := parsed().paces()
+	for id: String in paces:
+		marks[id] = Pace.mark(paces[id], time_rounds)
+	return marks
 
 
 # Why the recipe cannot be carved, or "" -- the parse's own words.
@@ -261,7 +274,7 @@ func authored_elements() -> Array[Elemental.Element]:
 static func property_sections() -> Array[Dictionary]:
 	var sections := AttackData.property_sections()
 	AttackData.in_section(sections, "Identity", PackedStringArray(["popup", "icon"]))
-	sections.insert(1, {"title": "Recipe", "fields": PackedStringArray(["recipe"])})
+	sections.insert(1, {"title": "Recipe", "fields": PackedStringArray(["recipe", "time_rounds"])})
 	return sections
 
 
@@ -273,5 +286,6 @@ static func property_tips() -> Dictionary:
 		"popup": "Floating text shown over the target when this carving lands. Blank = nothing.",
 		"icon": "The carving's icon in the rune and attack menus.",
 		"recipe": "The carving in codev's notation: verbs with substances as their arguments, joined by +. Break(F, A) + Push(F2) frees fire from the air and pushes the flame. Break and Bind take two arguments; Extract, Infuse, Push, Pull, Spread, Focus, Quicken and Still take one. Each verb costs one slot of rune capacity; the aura the wielder must cover is, per element, the most atoms any one verb works on (its arguments together); what the last verb leaves at the target is what the hit carries and scales off.",
+		"time_rounds": "How many rounds a Still or Quicken in the recipe holds or hurries what it names in the cells this carving strikes. 2 = this round's end and the next. Does nothing for a recipe without either verb.",
 	})
 	return tips

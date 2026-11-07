@@ -61,6 +61,18 @@ func test_every_tile_state_is_bridged() -> void:
 			.is_not_empty()
 
 
+# A time mark the tile card names (#1311). NORMAL is no mark, so it owes the player nothing.
+func test_every_pace_is_bridged() -> void:
+	for value: int in Pace.Kind.values():
+		var kind: Pace.Kind = value
+		if kind == Pace.Kind.NORMAL:
+			continue
+		var term: Glossary.Term = Glossary.term_for_pace(kind)
+		assert_str(Glossary.short(term)) \
+			.override_failure_message("Pace.Kind.%s bridges to an empty glossary entry" % Pace.Kind.keys()[kind]) \
+			.is_not_empty()
+
+
 func test_every_element_state_is_bridged() -> void:
 	for value: int in Elemental.State.values():
 		var state: Elemental.State = value

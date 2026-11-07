@@ -77,3 +77,22 @@ func test_the_terrain_view_lists_gas() -> void:
 	var view: String = BoardView.render_terrain(_sess)
 
 	assert_str(view).contains("%s %s" % [str(cell), Gas.display_name(Gas.Kind.STEAM)])
+
+
+# A time mark (#1311) lists in the terrain view, under the cell it marks, and the overview points there.
+func test_the_terrain_view_lists_a_time_mark_and_the_overview_points_to_it() -> void:
+	var cell := Vector2i(3, 2)
+	var id: String = Atmosphere.SUBSTANCES[0]
+	var mark := ResolvedCellEffect.new()
+	mark.cell = cell
+	mark.time_marks[id] = Pace.mark(Pace.Kind.QUICK, 2)
+	(_board.terrain_states as TerrainStateManager).apply(mark)
+
+	var said: Array[String] = _sess.marks_at(cell)
+	assert_int(said.size()).override_failure_message("the session reads no mark on %s" % cell).is_equal(1)
+	if said.is_empty():
+		return
+	assert_str(said[0]).contains(Glossary.title(Glossary.term_for_pace(Pace.Kind.QUICK)).to_lower()) \
+		.contains(SubstanceCatalog.name_of(id).to_lower())
+	assert_str(BoardView.render_terrain(_sess)).contains("%s %s" % [str(cell), said[0]])
+	assert_str(BoardView.render_overview(_sess)).contains("see `terrain`")

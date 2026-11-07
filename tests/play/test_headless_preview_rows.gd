@@ -181,3 +181,50 @@ func test_the_preview_prints_what_the_pass_leaves_on_the_ground() -> void:
 	assert_bool(found).override_failure_message("the cover is not in the preview's terrain: %s"
 			% str(res.plan.terrain)).is_true()
 	assert_str(BoardView.render_preview(sess)).contains("%s becomes %s" % [str(digger.movement.cell), cover])
+
+
+# A Still's mark (#1311) prints as the board ghosts it: what it holds, and for how many rounds. It names
+# a part of fire that every cell's air holds, so the cast finds it anywhere.
+func test_the_preview_prints_the_time_mark_a_cast_lays() -> void:
+	var id := ""
+	for part in CellSubstances.present_from(SubstanceMap.authored().of_tile_state(Terrain.TileState.BURNING)):
+		if Atmosphere.SUBSTANCES.has(part):
+			id = part
+	assert_str(id).override_failure_message("precondition: fire is made of nothing every cell's air holds") \
+		.is_not_empty()
+	var b := _board("TimeMarkPreviewRoot")
+	var caster: Unit = BoardBuilder.spawn(b, _data("Caster", PLAYER), Vector2i(1, 1))
+	var carving := TransmutationData.new()
+	carving.display_name = "Hold"
+	carving.recipe = "Still(%s)" % id
+	carving.deals_no_damage = true
+	carving.damage_kind = AttackData.Kind.NONE
+	carving.hits_allies = true
+	carving.can_counter = false
+	carving.targets = EquippableData.TargetMode.BOTH
+	var here: Array[Vector2i] = [Vector2i.ZERO]
+	P.stamped(carving, 3, here)
+	var aura := carving.demand().duplicate()
+	var affinity: Array[Elemental.Element] = []
+	for element: Elemental.Element in aura:
+		affinity.append(element)
+	caster.unit_instance.aura = aura
+	caster.unit_instance.affinity = affinity
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	rune.inscriptions.assign([carving])
+	assert_bool(caster.add_item(rune)).override_failure_message("fixture: the rune did not fit").is_true()
+	var sess = PlaySession.new(b)
+	var aim := Vector2i(3, 1)
+	var queued: Dictionary = sess.queue_attack(sess.handle_for(caster), aim, "Hold")
+	assert_bool(queued.ok).override_failure_message("the session refused the cast: %s" % str(queued)).is_true()
+
+	var res: Dictionary = sess.preview()
+	var said := ""
+	for deposit: Dictionary in res.plan.terrain:
+		if deposit.cell == aim:
+			said = deposit.what
+	assert_str(said).override_failure_message("the mark is not in the preview's terrain: %s" % str(res.plan.terrain)) \
+		.contains(Glossary.title(Glossary.term_for_pace(Pace.Kind.HELD)).to_lower()) \
+		.contains(SubstanceCatalog.name_of(id).to_lower()) \
+		.contains("%d rounds" % carving.time_rounds)

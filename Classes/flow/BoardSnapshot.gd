@@ -22,13 +22,13 @@ class_name BoardSnapshot
 # writes it. A new store needs nothing for that unless play writes it, when it joins PLAY_WRITTEN.
 
 # The fields PLAY writes (#1507): a pass's landings and the round tick move tile states, their clocks
-# and authored starts, and gas, and nothing else on the board. Each is keyed by cell, which is what
-# lets an edit be told apart from play cell by cell.
+# and authored starts, their time marks (#1311), and gas, and nothing else on the board. Each is keyed by
+# cell, which is what lets an edit be told apart from play cell by cell.
 const PLAY_WRITTEN: Array[StringName] = [&"terrain_states", &"terrain_state_turns",
-		&"terrain_state_starts", &"gas"]
-# The three of them that are tile states, which Clear Tile States wipes whole.
+		&"terrain_state_starts", &"terrain_paces", &"gas"]
+# The four of them the tile-state store holds, which Clear Tile States wipes whole.
 const TILE_STATE_FIELDS: Array[StringName] = [&"terrain_states", &"terrain_state_turns",
-		&"terrain_state_starts"]
+		&"terrain_state_starts", &"terrain_paces"]
 
 var tile_data: PackedByteArray       # BoardGrid.tile_map_data -- the whole layer as bytes
 var terrain_states: Dictionary = {}  # TerrainStateManager.to_state_dict()
@@ -39,6 +39,8 @@ var terrain_state_turns: Dictionary = {}  # TerrainStateManager.to_turns_dict()
 # The AUTHORED starts (#1484): what an author chose a clock to begin at. Content, unlike the live
 # clocks above, so an authoring save keeps this and drops those (#1483).
 var terrain_state_starts: Dictionary = {}  # TerrainStateManager.to_starts_dict()
+# The time marks (#1311): a battle fact, like the live clocks.
+var terrain_paces: Dictionary = {}  # TerrainStateManager.to_paces_dict()
 var corner_heights: Dictionary = {}  # BoardHeights.to_corner_dict()
 var gas: Dictionary = {}             # GasField.to_dict() (#508)
 var zones: Dictionary = {}           # ZoneManager.to_dict()
@@ -57,6 +59,7 @@ func equals(other: BoardSnapshot) -> bool:
 		and terrain_states == other.terrain_states \
 		and terrain_state_turns == other.terrain_state_turns \
 		and terrain_state_starts == other.terrain_state_starts \
+		and terrain_paces == other.terrain_paces \
 		and corner_heights == other.corner_heights \
 		and gas == other.gas \
 		and zones == other.zones
@@ -189,6 +192,7 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 	snapshot.terrain_states = scenario.terrain_states
 	snapshot.terrain_state_turns = scenario.terrain_state_turns
 	snapshot.terrain_state_starts = scenario.terrain_state_starts
+	snapshot.terrain_paces = scenario.terrain_paces
 	snapshot.corner_heights = scenario.corner_heights
 	snapshot.gas = scenario.gas
 	snapshot.zones = scenario.zones
@@ -201,7 +205,7 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 func restore_into(grid: BoardGrid, states: TerrainStateManager, heights: BoardHeights, gas_store: GasField,
 		zone_store: ZoneManager) -> void:
 	grid.restore(tile_data)
-	states.load_state_dict(terrain_states, terrain_state_turns, terrain_state_starts)
+	states.load_state_dict(terrain_states, terrain_state_turns, terrain_state_starts, terrain_paces)
 	heights.load_corner_dict(corner_heights)
 	gas_store.load_dict(gas)
 	zone_store.load_dict(zones)
@@ -212,6 +216,7 @@ func write_into(scenario: ScenarioData) -> void:
 	scenario.terrain_states = terrain_states
 	scenario.terrain_state_turns = terrain_state_turns
 	scenario.terrain_state_starts = terrain_state_starts
+	scenario.terrain_paces = terrain_paces
 	scenario.corner_heights = corner_heights
 	scenario.gas = gas
 	scenario.zones = zones

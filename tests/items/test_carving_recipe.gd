@@ -118,6 +118,21 @@ func test_a_verb_that_leaves_nothing_at_the_target_is_read_past() -> void:
 	assert_array(_parse("Pull(A2)").delivered()).is_empty()
 
 
+# The time pair (#1311): each substance a Still or Quicken names, and which; no other verb lays a pace.
+func test_still_and_quicken_name_what_they_hold_and_hurry() -> void:
+	var paces := _parse("Push(F2) + Still(W2) + Quicken(F)").paces()
+	assert_int(paces.size()).is_equal(2)
+	assert_int(paces.get("water", -1)).is_equal(Pace.Kind.HELD)
+	assert_int(paces.get("atom_fire", -1)).is_equal(Pace.Kind.QUICK)
+	assert_bool(_parse("Break(F, A) + Push(F2)").paces().is_empty()).is_true()
+
+
+# A later verb on the same substance wins, as a later mark on a cell does.
+func test_the_last_time_verb_on_a_substance_wins() -> void:
+	assert_int(_parse("Still(A2) + Quicken(A2)").paces().get("inert_air", -1)).is_equal(Pace.Kind.QUICK)
+	assert_int(_parse("Quicken(A2) + Still(A2)").paces().get("inert_air", -1)).is_equal(Pace.Kind.HELD)
+
+
 func test_opposites_combine_rather_than_refuse() -> void:
 	assert_str(_parse("Push(A2) + Pull(A2)").error).is_empty()
 	assert_str(_parse("Spread(W2) + Focus(W2)").error).is_empty()

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://dgl6xafpkxbn2"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_127k7"]
+[ext_resource type="Resource" uid="uid://bymill4q4uhl1" path="res://Resources/TransmutationData/Stillness.tres" id="2_g8ksd"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_ntjfq"]
+
+[resource]
+script = ExtResource("3_ntjfq")
+size = 1
+inscriptions = Array[ExtResource("1_127k7")]([ExtResource("2_g8ksd")])
+temper = 1
+display_name = "Stillness Rune"
+weight = 1

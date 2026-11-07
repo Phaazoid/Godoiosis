@@ -96,7 +96,7 @@ static func axes() -> Array[Dictionary]:
 	return [
 		ring_verbs(), action_types(), gear_verbs(), hud_doors(), board_keys(),
 		outcome_fields(), plan_lists(),
-		tile_states(), gases(), weathers(), winds(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
+		tile_states(), paces(), gases(), weathers(), winds(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
 		ground_kinds(), element_states(), turn_starts(), board_stores(),
 	]
 
@@ -409,6 +409,22 @@ static func tile_states() -> Dictionary:
 			S.COVER: {"play": covered(VIEW, "TileState.COVER"), "ai": harmless("its DEF is in the outcomes the score reads")},
 			S.SCORCHED: {"play": covered(VIEW, "TileState.SCORCHED"), "ai": harmless("spent fuel: nothing left to burn")},
 		},
+	}
+
+
+# The time marks a Still or Quicken lays on a cell (#1311). NORMAL is no mark.
+static func paces() -> Dictionary:
+	var members: Array = []
+	for kind: int in Pace.Kind.values():
+		if kind != Pace.Kind.NORMAL:
+			members.append(kind)
+	return {
+		"name": "time marks (Pace.Kind)",
+		"members": members,
+		"label": _enum_label(Pace.Kind.keys()),
+		"play_all": covered(SESSION, "Pace.kind_of"),   # marks_at and the preview's deposits
+		"ai_all": gap("#117", "a mark reaches the AI only through the gas forecast it changes: no score term prices holding or hurrying a fire, so it never casts Still or Quicken (nobody it plays carries them)"),
+		"rows": {},
 	}
 
 

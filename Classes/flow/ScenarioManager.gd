@@ -264,6 +264,7 @@ func capture_board() -> BoardSnapshot:
 	snapshot.terrain_states = game.terrain_states.to_state_dict()
 	snapshot.terrain_state_turns = game.terrain_states.to_turns_dict()
 	snapshot.terrain_state_starts = game.terrain_states.to_starts_dict()
+	snapshot.terrain_paces = game.terrain_states.to_paces_dict()   # #1311
 	snapshot.corner_heights = game.board_heights.to_corner_dict()
 	snapshot.gas = game.gas_field.to_dict()
 	snapshot.zones = game.zone_manager.to_dict()
@@ -302,6 +303,7 @@ func capture_scenario(scenario_name: String, authored := false, board: BoardSnap
 	# the authoring undo and every full capture put the clocks back exactly as they were.
 	if authored:
 		scenario.terrain_state_turns = {}
+		scenario.terrain_paces = {}   # #1311: a Still's mark is the same kind of battle fact
 	# #1599: whose turn it is is battle state too, so an authored save writes the turn the board was
 	# loaded with, and a full capture the live one.
 	scenario.active_faction = current_opening_faction if authored else turn_manager.active_faction()

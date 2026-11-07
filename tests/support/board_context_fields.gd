@@ -10,6 +10,7 @@ const SEALED := {
 	"terrain_states": {
 		"states_at": [Vector2i.ZERO],
 		"has_state": [Vector2i.ZERO, Terrain.TileState.FROZEN],
+		"paces_at": [Vector2i.ZERO],
 	},
 	"gas": {
 		"packed_at": [Vector2i.ZERO],

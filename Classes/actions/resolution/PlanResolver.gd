@@ -1662,7 +1662,9 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var leaves_gas := fired != null and not Gas.released(fired.gases).is_empty()
 	# ...and its TILE EFFECT (#894), on tiles of its own (AttackAction.effect_cells), whatever Targets says.
 	var lays := fired != null and fired.tile_effect_state() != Terrain.TileState.NONE
-	if elements.is_empty() and not leaves_gas and not lays:
+	# ...and its TIME MARKS (#1311): a Still or Quicken marks every tile it struck, whatever Targets says.
+	var marks := _time_marks_of(fired)
+	if elements.is_empty() and not leaves_gas and not lays and marks.is_empty():
 		return effects
 	# What each struck tile's dispersal carries off, by where it lands (#1332). Every tile is read
 	# before anything moves, and landed only after the loop, so a cloud across a struck line shifts
@@ -1716,6 +1718,8 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 				effect = null
 		if laid.has(cell):
 			effect = _lay_tile_effect(cell, fired, board, effect)
+		if not marks.is_empty() and struck.has(cell):
+			effect = _mark_time(cell, marks, effect)
 		if effect != null:
 			effect.cause = action
 			effects.append(effect)
@@ -1786,6 +1790,24 @@ static func _lay_tile_effect(cell: Vector2i, attack: AttackData, board: BoardCon
 	if not effect.states_added.has(state):
 		effect.states_added.append(state)
 	effect.state_turns[state] = attack.tile_effect_turns
+	return effect
+
+# The marks a Still or Quicken lays (#1311): a carving's, none for anything else.
+static func _time_marks_of(attack: AttackData) -> Dictionary[String, Vector2i]:
+	var carving := attack as TransmutationData
+	if carving == null:
+		var none: Dictionary[String, Vector2i] = {}
+		return none
+	return carving.time_marks()
+
+# The time marks on one struck tile (#1311), folded into `effect` (created if there was none). The store
+# keeps them only where there is ground, as it keeps a state (TerrainStateManager.apply).
+static func _mark_time(cell: Vector2i, marks: Dictionary[String, Vector2i],
+		effect: ResolvedCellEffect) -> ResolvedCellEffect:
+	if effect == null:
+		effect = ResolvedCellEffect.new()
+		effect.cell = cell
+	effect.time_marks.merge(marks, true)
 	return effect
 
 # The cells a shock's CURRENT ran through (#1335): both ends of every link the volley stamped

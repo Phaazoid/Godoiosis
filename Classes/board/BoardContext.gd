@@ -179,6 +179,13 @@ func has_tile_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 		return tiles.has_state(cell, state)
 	return terrain_states.has_state(cell, state)
 
+# The time marks on this cell (#1311): substance id -> Pace.mark, planned first as tile states are. What
+# the gas round asks of each cell it moves (GasSpread.next, through Pace.of_gas).
+func paces_at(cell: Vector2i) -> Dictionary:
+	if terrain_states == null:
+		return {}
+	return tiles.paces_at(cell) if tiles != null else terrain_states.paces_at(cell)
+
 # The air at this cell (#1324): the board's reading moved by the gas lying here (GasRules.air_of), the
 # one answer to "what is the air HERE". `atmosphere` stays the whole board's, for the readouts that
 # speak for the board. Planned tiles count the way they do for tile states; the game's boards carry

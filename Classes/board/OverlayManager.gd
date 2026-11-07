@@ -50,6 +50,13 @@ const TERRAIN_STATE_ICONS: Dictionary = {
 }
 # A cell whose gas the pass disperses (#1335). PLACEHOLDER: the Air element's icon, the element doing it.
 const GAS_CLEARED_ICON: Texture2D = preload("res://Art/Icons/ElementIcons/Air.png")
+# A cell's time-mark badge (#1311), half a cell, in its top-right quarter so the state icon stays
+# readable. PLACEHOLDER art: the move and no-move icons, halved.
+const TIME_MARK_ICONS: Dictionary[Pace.Kind, Texture2D] = {
+	Pace.Kind.HELD: preload("res://Art/Icons/TerrainIcons/Held.png"),
+	Pace.Kind.QUICK: preload("res://Art/Icons/TerrainIcons/Quickened.png"),
+}
+const TIME_MARK_OFFSET := Vector2(4, -4)
 
 const TERRAIN_Z_INDEX := 1                                # above the board, below unit sprites — tweak by eye
 const TERRAIN_PREVIEW_MODULATE := Color(1, 1, 1, 0.5)     # ghost the pending-ignite marker (Part B)
@@ -1538,7 +1545,8 @@ func clear_hover_ghosts() -> void:
 # show_knockback_preview's shape) so each deposit draws its OWN icon — was BURNING-only until
 # Burrow (#84) made a second previewable state real. Ephemeral: redrawn on plan change.
 # A {"cell", "gas": Gas.Kind} entry is a gas the pass leaves (#508), drawn with the kind's own puff;
-# a {"cell", "clears_gas"} entry is a cell an Air hit disperses (#1335).
+# a {"cell", "clears_gas"} entry is a cell an Air hit disperses (#1335). The {"cell", "pace", ...}
+# entries of a time verb (#1311) draw one badge per cell, as the live board does.
 #
 # The ghost draws OVER the aim fill (#894): an open aim ghosts what it would leave, and a fire laid where
 # it hits lands on the very tiles the fill covers. So it takes the hover layer's z, and wins the tie by
@@ -1549,7 +1557,14 @@ func show_terrain_preview(deposits: Array) -> void:
 	var ghost_z := TERRAIN_Z_INDEX
 	if hover_overlay is CanvasItem:
 		ghost_z = (hover_overlay as CanvasItem).z_index
+	var marks := {}
 	for deposit in deposits:
+		if deposit.has("pace"):
+			var at: Vector2i = deposit["cell"]
+			var here: Dictionary = marks.get(at, {})
+			here[deposit["substance"]] = Pace.mark(deposit["pace"], deposit["rounds"])
+			marks[at] = here
+			continue
 		var icon: Texture2D = null
 		if deposit.has("clears_gas"):
 			icon = GAS_CLEARED_ICON
@@ -1569,6 +1584,22 @@ func show_terrain_preview(deposits: Array) -> void:
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE
 		icon_overlay.add_child(sprite)
 		terrain_preview_sprites.append(sprite)
+	for cell: Vector2i in marks:
+		var badge := _time_mark_badge(cell, Pace.strongest(marks[cell]), ghost_z)
+		if badge != null:
+			badge.modulate = TERRAIN_PREVIEW_MODULATE
+			terrain_preview_sprites.append(badge)
+
+# One cell's time-mark badge (#1311), or null for NORMAL (nothing to show).
+func _time_mark_badge(cell: Vector2i, kind: Pace.Kind, z: int) -> Sprite2D:
+	if not TIME_MARK_ICONS.has(kind):
+		return null
+	var sprite := Sprite2D.new()
+	sprite.texture = TIME_MARK_ICONS[kind]
+	sprite.global_position = GridUtils.cell_world(board_tilemap, cell) + TIME_MARK_OFFSET
+	sprite.z_index = z
+	icon_overlay.add_child(sprite)
+	return sprite
 
 func clear_terrain_preview() -> void:
 	for sprite in terrain_preview_sprites:
@@ -2155,6 +2186,12 @@ func redraw_terrain_live(states: TerrainStateManager) -> void:
 			sprite.z_index = TERRAIN_Z_INDEX
 			icon_overlay.add_child(sprite)
 			terrain_live_sprites.append(sprite)
+	# The time marks (#1311), after the states so a badge draws over its cell's icon.
+	var paces := states.to_paces_dict()
+	for cell: Vector2i in paces:
+		var badge := _time_mark_badge(cell, Pace.strongest(paces[cell]), TERRAIN_Z_INDEX)
+		if badge != null:
+			terrain_live_sprites.append(badge)
 
 func _clear_terrain_live() -> void:
 	for sprite in terrain_live_sprites:

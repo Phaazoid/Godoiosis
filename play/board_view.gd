@@ -28,7 +28,7 @@ static func render_overview(session) -> String:
 	lines.append(_grid_block(session, bounds, _overview_overlay(session)))
 	lines.append(_ground_legend(session, bounds))
 	if _has_relief(session, bounds):
-		lines.append("Heights and gas: see `terrain`")
+		lines.append("Heights, gas and time marks: see `terrain`")
 	lines.append("")
 	lines.append(_legend(session))
 	var pre_mission := _pre_mission_block(session)
@@ -159,7 +159,7 @@ static func _attack_line(unit: Unit, attack: AttackData, prefix: String, board: 
 # The ground's shape (#46), which the 3-char overview has no room for: each cell's height in the
 # rules' half-level units (Terrain.UNITS_PER_LEVEL to a level), then n/e/s/w for the side a ramp
 # rises toward or * for a corner form, blank for a hole or off the map. Then any gas lying on a cell,
-# and the air there where the gas moved it.
+# and the air there where the gas moved it, then any time mark (#1311).
 static func render_terrain(session) -> String:
 	var bounds := _content_bounds(session)
 	var lines: Array[String] = ["Terrain: height in half-levels (%d to a level); n/e/s/w = the side a ramp rises to, * = a corner slope"
@@ -192,6 +192,18 @@ static func render_terrain(session) -> String:
 	lines.append("Gas: none" if gas.is_empty() else "Gas:")
 	for line in gas:
 		lines.append("  " + line)
+	# Time marks (#1311), only where a Still or Quicken has laid one.
+	var marked: Array[String] = []
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			var marks: Array[String] = session.marks_at(Vector2i(x, y))
+			if not marks.is_empty():
+				marked.append("%s %s" % [str(Vector2i(x, y)), "; ".join(marks)])
+	if not marked.is_empty():
+		lines.append("")
+		lines.append("Time marks:")
+		for line in marked:
+			lines.append("  " + line)
 	return "\n".join(lines)
 
 # The enemy ranges view (#46): the game's V key as text. Its two glyphs are its own, unused by the
@@ -365,9 +377,11 @@ static func _ground_legend(session, bounds: Rect2i) -> String:
 			parts.append("%s %s" % ["' '" if GROUND[key][0] == " " else GROUND[key][0], word])
 	return "Ground: " + "  ".join(parts)
 
-# Does the board have anything only the `terrain` view shows: a raised or sloped cell, or gas?
+# Does the board have anything only the `terrain` view shows: a raised or sloped cell, gas or a time mark?
 static func _has_relief(session, bounds: Rect2i) -> bool:
 	if session.gas_field != null and not session.gas_field.is_empty():
+		return true
+	if session.terrain_states != null and not session.terrain_states.to_paces_dict().is_empty():
 		return true
 	for y in range(bounds.position.y, bounds.end.y):
 		for x in range(bounds.position.x, bounds.end.x):

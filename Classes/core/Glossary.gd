@@ -40,7 +40,7 @@ enum Term {
 	# at all, then how hard you hit with one (#930 put both on screen for the first time).
 	ELEMENTS, AFFINITY, AURA, WET, CHILLED, SMOKED, REACTIONS, ATMOSPHERE,
 	# Terrain
-	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER,
+	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER, HELD, QUICKENED,
 	# Lifecycle
 	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
 	# Missions (one per player-facing ZoneManager.Kind, #1105, then the VIP the pre-mission screen
@@ -119,6 +119,11 @@ static func term_for_tile_state(state: Terrain.TileState) -> Term:
 	# silent wrong word. Terrain.RETIRED_STATES are the ones it skips, and they never reach a
 	# reader -- TerrainStateManager.load_state_dict drops them at the door.
 	return MAP[state]
+
+# Pace.Kind.NORMAL has no row (nothing to say), and test_glossary_coverage skips exactly it.
+static func term_for_pace(kind: Pace.Kind) -> Term:
+	const MAP: Dictionary[Pace.Kind, Term] = {Pace.Kind.HELD: Term.HELD, Pace.Kind.QUICK: Term.QUICKENED}
+	return MAP[kind]
 
 # ZoneManager.AUTHORING_KINDS have no row, and test_glossary_coverage skips exactly those.
 static func term_for_zone_kind(kind: ZoneManager.Kind) -> Term:
@@ -623,6 +628,20 @@ static func _build_entries() -> Dictionary:
 		"long": "Entrenchment, dug by a burrowing weapon. Whoever stands here gains +%d DEF. It "
 			% Terrain.COVER_DEF
 			+ "never expires, but a destructive hit removes it."}
+	# A time mark (#1311). The tile card prefixes the substance it names, which is what "it" means here.
+	e[Term.HELD] = {"category": Category.TERRAIN, "title": "Held",
+		"short": "Nothing made of it changes at the round's end: a fire here neither spreads nor burns down.",
+		"long": "A Still carving holds what it names on the tiles it strikes, for a few rounds. Anything "
+			+ "there made of that substance stays as it is at the round's end: a fire's countdown stops "
+			+ "and it spreads nothing, and a gas keeps its strength and spills nothing. A held fire still "
+			+ "burns whoever stands in it, and a hit can still change the tile. Whatever arrives later is "
+			+ "held too, from the next round."}
+	e[Term.QUICKENED] = {"category": Category.TERRAIN, "title": "Quickened",
+		"short": "Anything made of it runs twice at the round's end: a fire here spreads twice and burns down twice as fast.",
+		"long": "A Quicken carving hurries what it names on the tiles it strikes, for a few rounds. The "
+			+ "round runs anything there made of that substance twice: a fire spreads two tiles and burns "
+			+ "down twice as fast, and a gas spills and fades twice. Where a Still and a Quicken reach "
+			+ "the same thing, the Still wins."}
 
 	# Lifecycle.
 	e[Term.DOWNED] = {"category": Category.LIFECYCLE, "title": "Downed",

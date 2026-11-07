@@ -325,9 +325,11 @@ func attack_playback() -> Array[AttackAction]:
 
 # What this pass leaves on the ground, one entry per cell AND state ({"cell", "state"}) or cell AND
 # gas kind ({"cell", "gas"}), so two attacks igniting one cell count once while a cell gaining two
-# states counts twice; and one {"cell", "clears_gas"} per cell an Air hit disperses (#1335). The board
-# ghosts exactly this (game._preview_plan_effects) and the Play API's preview prints it (#46): one
-# answer to what the plan deposits.
+# states counts twice; and one {"cell", "clears_gas"} per cell an Air hit disperses (#1335); and one
+# {"cell", "pace", "substance", "rounds"} per cell AND substance a time verb marks (#1311), the last
+# mark on a substance winning as it does on landing (Pace.laid). The board ghosts exactly this
+# (game._preview_plan_effects) and the Play API's preview prints it (#46): one answer to what the plan
+# deposits.
 func pending_deposits() -> Array[Dictionary]:
 	var deposits: Array[Dictionary] = []
 	var seen := {}
@@ -349,6 +351,15 @@ func pending_deposits() -> Array[Dictionary]:
 				continue
 			seen[gas_key] = true
 			deposits.append({"cell": effect.cell, "gas": kind})
+	var marks := {}
+	for effect in cell_effects:
+		if not effect.time_marks.is_empty():
+			marks[effect.cell] = Pace.laid(marks.get(effect.cell, {}), effect.time_marks)
+	for cell: Vector2i in marks:
+		for id: String in marks[cell]:
+			var marked: Vector2i = marks[cell][id]
+			deposits.append({"cell": cell, "pace": Pace.kind_of(marked), "substance": id,
+					"rounds": Pace.rounds_of(marked)})
 	return deposits
 
 # The threaded hypothetical the pass resolved through (Unit -> PlanResolver._Hypo), kept on the

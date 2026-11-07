@@ -5,7 +5,8 @@ class_name PlannedTiles
 # the body half on ResolvedPlan.hypo, and the same model. A cell is copied from the live stores the
 # first time a landing touches it, and every later landing folds into the copy; a cell nothing has
 # touched is not here, and reads as the stores do. One absolute record per cell -- what a pass can
-# change today, its tile states and its gas -- so a read is one lookup, never a fold over deposits.
+# change today, its tile states, its gas and its time marks (#1311) -- so a read is one lookup, never a
+# fold over deposits.
 #
 # land() is the one write door, and it uses the stores' own folds and ground rule
 # (TerrainStateManager.fold, GasField.fold), so a planned cell and the landed one cannot disagree. It
@@ -21,6 +22,7 @@ class_name PlannedTiles
 class Cell:
 	var states: Array[Terrain.TileState] = []
 	var gas := 0
+	var paces := {}   # the time marks a Still or Quicken lays (#1311): substance id -> Pace.mark
 
 var _terrain: TerrainStateManager
 var _gas: GasField
@@ -70,9 +72,12 @@ func land(effect: ResolvedCellEffect) -> void:
 			record.states = _terrain._live_states_at(cell)
 		if _gas != null:
 			record.gas = _gas._live_packed_at(cell)
+		if _terrain != null:
+			record.paces = _terrain._live_paces_at(cell)
 		_cells[cell] = record
 	if _terrain != null:
 		record.states = TerrainStateManager.fold(record.states, effect, _terrain.has_ground(cell))
+		record.paces = TerrainStateManager.fold_paces(record.paces, effect, _terrain.has_ground(cell))
 	if _gas != null:
 		record.gas = GasField.fold(record.gas, effect, _gas.has_ground(cell))
 
@@ -96,6 +101,14 @@ func has_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 	return _terrain != null and _terrain._live_has_state(cell, state)
 
 
+# The cell's time marks (#1311), planned first: a queued Still holds what Alt's outline forecasts.
+func paces_at(cell: Vector2i) -> Dictionary:
+	var record: Cell = _cells.get(cell)
+	if record != null:
+		return record.paces.duplicate()
+	return _terrain._live_paces_at(cell) if _terrain != null else {}
+
+
 func gas_at(cell: Vector2i) -> int:
 	var record: Cell = _cells.get(cell)
 	if record != null:
@@ -116,6 +129,7 @@ func copy() -> PlannedTiles:
 		var record := Cell.new()
 		record.states = _cells[cell].states.duplicate()
 		record.gas = _cells[cell].gas
+		record.paces = _cells[cell].paces.duplicate()
 		twin._cells[cell] = record
 	return twin
 
