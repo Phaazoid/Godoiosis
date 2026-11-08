@@ -511,6 +511,7 @@ const STAGING_DUST_SCRIPT := "res://Classes/presentation/StagingDust.gd"
 const ARC_LIGHTNING_SCRIPT := "res://Classes/presentation/ArcLightning.gd"
 const SHOCK_SPARKS_SCRIPT := "res://Classes/presentation/ShockSparks.gd"
 const STATUS_LOOK_SCRIPT := "res://Classes/presentation/StatusLook.gd"
+const VEIN_LOOK_SCRIPT := "res://Classes/presentation/VeinLook.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	# --- Player settings the dev authors the DEFAULT for (#394) ---
@@ -1259,6 +1260,50 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How far that copy of the body leans from its own colours to the Ice colour."},
 
+	# --- MATERIA VEINS (#696) ------------------------------------------------------------------
+	#
+	# The crystals VeinMirror grows along a vein and the stain under it. Read by the mirror's poll every
+	# frame, so no arm sweeps. The colours are the veins' OWN, deliberately apart from Element colours
+	# (VeinLook's header says why); tune them as a set, so a glance at a vein says its element.
+	{"group": "Veins: colours", "label": "Fire", "static": "vein_fire_color", "script": VEIN_LOOK_SCRIPT,
+		"tip": "A fire vein's crystals and the stain under them. Red, and the loudest of the set."},
+	{"group": "Veins: colours", "label": "Water", "static": "vein_water_color", "script": VEIN_LOOK_SCRIPT,
+		"tip": "A water vein's glassy columns and their stain. Blue; tune it against Aether and Air."},
+	{"group": "Veins: colours", "label": "Earth", "static": "vein_earth_color", "script": VEIN_LOOK_SCRIPT,
+		"tip": "An earth vein's cubes and their stain. Brown-orange, almost rust, so it reads apart from dirt."},
+	{"group": "Veins: colours", "label": "Air", "static": "vein_air_color", "script": VEIN_LOOK_SCRIPT,
+		"tip": "An air vein's needles and their stain. White to silver; on a pale board it leans on the needles' shape."},
+	{"group": "Veins: colours", "label": "Aether", "static": "vein_aether_color", "script": VEIN_LOOK_SCRIPT,
+		"tip": "An aether vein's floating gems and their stain. Purple, kept apart from Water's blue."},
+	{"group": "Veins: colours", "label": "Lightning", "static": "vein_lightning_color", "script": VEIN_LOOK_SCRIPT,
+		"tip": "A lightning vein's diamonds and their stain. Yellow, the yellow diamond's colour."},
+	{"group": "Veins: colours", "label": "Alkahest stain", "static": "vein_alkahest_stain", "script": VEIN_LOOK_SCRIPT,
+		"tip": "The stain under an alkahest vein. Its crystals wear each element's own colour, so only the stain needs one."},
+	{"group": "Veins: crystals", "label": "Size", "static": "vein_size", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.2, "max": 3.0, "step": 0.05,
+		"tip": "How big every vein crystal is. Big enough to read from the far camera, small enough to keep a unit's tile readable."},
+	{"group": "Veins: crystals", "label": "Crystals per tile", "static": "vein_density", "script": VEIN_LOOK_SCRIPT,
+		"min": 1.0, "max": 30.0, "step": 1.0,
+		"tip": "The most crystals one vein tile grows. They string along the vein toward its neighbours, so a long vein reads as one line."},
+	{"group": "Veins: crystals", "label": "Clear middle", "static": "vein_clear", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.0, "max": 0.45, "step": 0.01,
+		"tip": "The radius at each tile's middle kept free of crystals, in tiles, so a unit standing there is not buried in them."},
+	{"group": "Veins: crystals", "label": "Glow", "static": "vein_glow", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How strongly the crystals glow in their colour. More reads on a night board; too much reads as a light source."},
+	{"group": "Veins: the stain", "label": "Strength", "static": "vein_stain", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How dark the ground under a vein is at its heart. 0 turns the stain off."},
+	{"group": "Veins: the stain", "label": "Reach", "static": "vein_stain_reach", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.02, "max": 0.6, "step": 0.01,
+		"tip": "How far the stain bleeds past a vein's edge, in tiles, and so how soft its rim is."},
+	{"group": "Veins: the stain", "label": "Darkening", "static": "vein_stain_dark", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far the stain's colour is darkened from the vein's, so it reads as soaked ground rather than paint."},
+	{"group": "Veins: the stain", "label": "Slope fade", "static": "vein_stain_slope", "script": VEIN_LOOK_SCRIPT,
+		"min": 0.0, "max": 0.95, "step": 0.01,
+		"tip": "How steep ground must be before the stain fades from it. Low keeps it on ramps; 0 also smears it down cliff sides."},
+
 	# --- THE ACTION QUEUE.S OWN COLOURS (#685 round 4) -----------------------------------------
 	#
 	# Not an element: what the WORLD did to a unit. Its own group because the element rows above are about
@@ -1896,6 +1941,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Wet around a unit": "Elemental",
 	"Chilled around a unit": "Elemental",
 	"Frozen in the ice": "Elemental",
+	# A materia vein (#696), beside the other things an element looks like on the board.
+	"Veins: colours": "Elemental",
+	"Veins: crystals": "Elemental",
+	"Veins: the stain": "Elemental",
 	# The queue.s own invented colour, beside the element chips it has to read against (#685).
 	"Action queue": "Elemental",
 	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
@@ -2232,6 +2281,22 @@ static func read_static(name: String) -> Variant:
 		"in_ice_glow": return StatusLook.in_ice_glow
 		"in_ice_body_alpha": return StatusLook.in_ice_body_alpha
 		"in_ice_body_tint": return StatusLook.in_ice_body_tint
+		# A materia vein (#696). Read every frame by VeinMirror's poll, so no arm sweeps.
+		"vein_fire_color": return VeinLook.vein_fire_color
+		"vein_water_color": return VeinLook.vein_water_color
+		"vein_earth_color": return VeinLook.vein_earth_color
+		"vein_air_color": return VeinLook.vein_air_color
+		"vein_aether_color": return VeinLook.vein_aether_color
+		"vein_lightning_color": return VeinLook.vein_lightning_color
+		"vein_alkahest_stain": return VeinLook.vein_alkahest_stain
+		"vein_size": return VeinLook.vein_size
+		"vein_density": return VeinLook.vein_density
+		"vein_clear": return VeinLook.vein_clear
+		"vein_glow": return VeinLook.vein_glow
+		"vein_stain": return VeinLook.vein_stain
+		"vein_stain_reach": return VeinLook.vein_stain_reach
+		"vein_stain_dark": return VeinLook.vein_stain_dark
+		"vein_stain_slope": return VeinLook.vein_stain_slope
 		# ...and the sparks, whose own node holds them (#887 slice 2). A GPU particle's state cannot
 		# be read back, so each of these names the CPU-side value a burst is built from.
 		"sparks": return ShockSparks.sparks
@@ -2818,6 +2883,52 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"in_ice_body_tint":
 			StatusLook.in_ice_body_tint = value
+			return
+		# A materia vein (#696): VeinMirror's poll compares VeinLook.key() every frame and rebuilds.
+		"vein_fire_color":
+			VeinLook.vein_fire_color = value
+			return
+		"vein_water_color":
+			VeinLook.vein_water_color = value
+			return
+		"vein_earth_color":
+			VeinLook.vein_earth_color = value
+			return
+		"vein_air_color":
+			VeinLook.vein_air_color = value
+			return
+		"vein_aether_color":
+			VeinLook.vein_aether_color = value
+			return
+		"vein_lightning_color":
+			VeinLook.vein_lightning_color = value
+			return
+		"vein_alkahest_stain":
+			VeinLook.vein_alkahest_stain = value
+			return
+		"vein_size":
+			VeinLook.vein_size = value
+			return
+		"vein_density":
+			VeinLook.vein_density = int(value)
+			return
+		"vein_clear":
+			VeinLook.vein_clear = value
+			return
+		"vein_glow":
+			VeinLook.vein_glow = value
+			return
+		"vein_stain":
+			VeinLook.vein_stain = value
+			return
+		"vein_stain_reach":
+			VeinLook.vein_stain_reach = value
+			return
+		"vein_stain_dark":
+			VeinLook.vein_stain_dark = value
+			return
+		"vein_stain_slope":
+			VeinLook.vein_stain_slope = value
 			return
 		# The sparks. Every arm RE-APPLIES, because the emission buffer `sparks_per_victim` sizes
 		# and the material's own fields are node state rather than values a burst reads as it goes

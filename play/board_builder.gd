@@ -89,6 +89,9 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	# by the tile states' own rule.
 	var gas_field := GasField.new()
 	gas_field.ground_source = terrain_states.ground_source
+	# The materia veins (#696), the twin of game.vein_field: a store the third load path drops is #103's shape.
+	var vein_field := VeinField.new()
+	vein_field.ground_source = terrain_states.ground_source
 
 	# The Dictionary this returns, made BEFORE the lambda below so the lambda can read what apply_scenario
 	# files into it later: the scenario, and the weather standing over it (#1260, a store since #1509).
@@ -106,6 +109,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		# AI's stakes read it off this board.
 		var context := BoardContext.new(grid, units, squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 				board.get("mission"))
+		context.veins = vein_field
 		context.weather = weather_of(board)
 		context.atmosphere = atmosphere_of(board)
 		return context
@@ -122,6 +126,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"terrain_states": terrain_states,
 		"board_heights": board_heights,
 		"gas_field": gas_field,
+		"vein_field": vein_field,
 	})
 	return board
 
@@ -200,7 +205,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	# The board through the game's own door (#1365): BoardSnapshot.from_scenario, with its pre-#427
 	# guard, and the one store list ScenarioManager.restore_board writes through. It was a hand copy.
 	BoardSnapshot.from_scenario(scenario).restore_into(board.grid, board.terrain_states, board.board_heights,
-			board.gas_field, board.zone_manager)
+			board.gas_field, board.vein_field, board.zone_manager)
 
 	var spawned: Array[Unit] = []
 	var unit_of_entry := {}            # ScenarioUnitEntry -> the Unit it spawned, ScenarioManager's map

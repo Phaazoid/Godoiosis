@@ -19,13 +19,19 @@ extends Object
 # cells_within_manhattan_range includes the origin, so 1 is exactly on-or-adjacent.
 const REACH := 1   # playtest-tunable
 
-# What THIS cell offers, ignoring reach -- the terrain fact. Veins (#696) extend HERE, and the
-# empowerment overlay (#699) draws it. A carried vial (#697) is NOT positional and never enters:
-# it unions in at the call site, beside whatever this returns.
+# What every sigil element is: what alkahest empowers, the vial's (VialData.granted_elements) and the
+# vein's (Vein.empowers) one answer. A fresh array, since SIGIL_ELEMENTS is a read-only const a caller
+# could not union into.
+static func alkahest() -> Array[Elemental.Element]:
+	return Elemental.SIGIL_ELEMENTS.duplicate()
+
+# What THIS cell offers, ignoring reach -- the terrain and its authored vein (#696). The empowerment
+# overlay (#699) draws it. A carried vial (#697) is NOT positional and never enters: it unions in at the
+# call site, beside whatever this returns.
 #
-# Air and Aether are deliberately absent (dev, 2026-09-05). Air's "what counts as high ground" is
-# parked as its own question; Aether waits on authored life-dense content, because a living TREE
-# is not a source -- the ambient half of that ruling is in alchemy-kit.md's source table.
+# No TERRAIN offers Air or Aether (dev, 2026-09-05). Air's "what counts as high ground" is parked as its
+# own question; Aether waits on authored content, because a living TREE is not a source. A vein is that
+# authored content: an air or aether vein is the one place either comes from.
 static func sources_at(cell: Vector2i, board: BoardContext) -> Array[Elemental.Element]:
 	var found: Array[Elemental.Element] = []
 	if board == null:
@@ -42,11 +48,15 @@ static func sources_at(cell: Vector2i, board: BoardContext) -> Array[Elemental.E
 	# consulted -- a tree becomes one the moment it catches, through the state it gains.
 	if Terrain.is_burning(board.tile_states_at(cell)) or board.prop_lit_at(cell):
 		found.append(Elemental.Element.FIRE)
+	# A VEIN (#696): its own element, every sigil element for alkahest, nothing for lightning.
+	for element: Elemental.Element in Vein.empowers(board.vein_at(cell)):
+		if not found.has(element):
+			found.append(element)
 	return found
 
 # Every element a caster standing on `cell` may draw on: the union of sources within REACH.
 # Deduped, because empowerment is BINARY and never stacks -- a vein beside a river is still just
-# "empowered in water: yes" (and will be, once #696 puts veins in sources_at).
+# "empowered in water: yes".
 static func empowered_at(cell: Vector2i, board: BoardContext) -> Array[Elemental.Element]:
 	var found: Array[Elemental.Element] = []
 	if board == null:

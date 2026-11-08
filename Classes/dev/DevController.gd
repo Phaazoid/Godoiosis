@@ -735,6 +735,8 @@ func _paint() -> void:
 			_paint_corner(_mouse_vertex())
 		TileBrushTool.PaintMode.GAS:
 			_paint_gas(_mouse_cell())
+		TileBrushTool.PaintMode.VEIN:
+			_paint_vein(_mouse_cell())
 
 func _erase() -> void:
 	match game.dev_overlay.tile_brush.paint_mode:
@@ -748,6 +750,8 @@ func _erase() -> void:
 			_erase_corner(_mouse_vertex())
 		TileBrushTool.PaintMode.GAS:
 			_erase_gas(_mouse_cell())
+		TileBrushTool.PaintMode.VEIN:
+			_erase_vein(_mouse_cell())
 
 # One click writes the tile AND where it sits (#340): the ground first, then the height, because
 # height goes with the ground (#245/#260) and a store write ahead of the tile would be writing under
@@ -888,8 +892,8 @@ func clear_start_turns(cell: Vector2i, state: Terrain.TileState) -> void:
 	_end_stroke()
 
 # Everything that sits ON a cell goes with its ground, at both sites ground can leave: tile states
-# (#245), elevation (#260) and gas (#508). One sweep, so a further store is a line here rather than
-# one more thing each site has to remember. The state redraw is not optional (without it the store is
+# (#245), elevation (#260), gas (#508) and veins (#696). One sweep, so a further store is a line here
+# rather than one more thing each site has to remember. The state redraw is not optional (without it the store is
 # right and the icon stays on screen); the height readout's refresh no-ops while it is hidden.
 func _prune_groundless_stores() -> void:
 	if game.terrain_states.prune_groundless():
@@ -898,6 +902,7 @@ func _prune_groundless_stores() -> void:
 	if game.board_heights.prune_groundless(has_ground):
 		_refresh_height_readout()
 	game.gas_field.prune_groundless(has_ground)
+	game.vein_field.prune_groundless(has_ground)
 
 # Gas painting (#508). ABSOLUTE like the corner tool: every cell a drag crosses goes to the picked
 # level of the picked gas, so a stroke repaints idempotently. The store refuses a groundless cell
@@ -910,6 +915,16 @@ func _paint_gas(cell: Vector2i) -> void:
 func _erase_gas(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	game.gas_field.set_level(cell, brush.selected_gas_kind(), Gas.Level.NONE)
+
+# Vein painting (#696): every cell a drag crosses takes the picked kind, overwriting what ran there.
+# The store refuses a groundless cell and marks nothing when the value is unchanged.
+func _paint_vein(cell: Vector2i) -> void:
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	game.vein_field.set_kind(cell, brush.selected_vein_kind())
+
+# Right-drag takes the vein away, whatever its kind: a cell holds one.
+func _erase_vein(cell: Vector2i) -> void:
+	game.vein_field.set_kind(cell, Vein.Kind.NONE)
 
 # The brush's Step Gas: exactly the round's gas step (GasField.tick), bracketed as one undo step.
 func step_gas() -> void:

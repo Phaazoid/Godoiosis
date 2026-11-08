@@ -439,3 +439,48 @@ func test_what_a_row_makes_present_is_what_a_cast_finds() -> void:
 		found.assign(_supply(_board({ HERE: kind })).keys())
 		found.sort()
 		assert_array(found).override_failure_message("%s's row" % Terrain.Kind.keys()[kind]).is_equal(from_row)
+
+
+# --- materia veins (#696) --------------------------------------------------------------------
+
+# What a vein holds is its SubstanceMap row, the fixture's own here: the tile states' and gases' shape.
+func _vein_map() -> SubstanceMap:
+	var map := _map()
+	map.veins = {
+		Vein.Kind.FIRE: PackedStringArray(["flame"]),
+		Vein.Kind.LIGHTNING: PackedStringArray(["lightning"]),
+		Vein.Kind.ALKAHEST: PackedStringArray(),
+	}
+	return map
+
+
+func _vein_board(cell: Vector2i, kind: Vein.Kind) -> _SubstanceBoard:
+	var board := _board({})
+	board.veins = VeinField.new()
+	board.veins.set_kind(cell, kind)
+	return board
+
+
+func test_a_vein_beside_the_caster_makes_its_row_present_in_plenty() -> void:
+	var supply := _supply(_vein_board(NEXT_DOOR, Vein.Kind.LIGHTNING), null, _vein_map())
+	assert_int(supply.get("lightning", 0)).is_equal(CellSubstances.PLENTY)
+	assert_bool(_supply(_board({}), null, _vein_map()).has("lightning")).override_failure_message(
+			"fixture: lightning must not be present on a bare board").is_false()
+
+
+# Reach is Materia's, as for every source.
+func test_a_vein_two_away_is_not_present() -> void:
+	assert_bool(_supply(_vein_board(TWO_AWAY, Vein.Kind.LIGHTNING), null, _vein_map()).has("lightning")).is_false()
+
+
+# A vein whose row is empty (alkahest, the prima materia) makes nothing present, though it empowers.
+func test_a_vein_with_an_empty_row_adds_nothing() -> void:
+	var bare := _supply(_board({}), null, _vein_map())
+	var veined := _supply(_vein_board(NEXT_DOOR, Vein.Kind.ALKAHEST), null, _vein_map())
+	assert_array(veined.keys()).contains_exactly_in_any_order(bare.keys())
+
+
+# The fizzle follows: a cast that needs flame fizzles on a bare board and holds beside a fire vein.
+func test_a_vein_answers_a_fizzle() -> void:
+	assert_str(_fizzle("Focus(F2) + Push(F2)", _board({}), null, _vein_map())).is_not_empty()
+	assert_str(_fizzle("Focus(F2) + Push(F2)", _vein_board(NEXT_DOOR, Vein.Kind.FIRE), null, _vein_map())).is_empty()

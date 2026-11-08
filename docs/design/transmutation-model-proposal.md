@@ -8,7 +8,7 @@
 >
 > **Wording note (immersion):** in-game language stays inside the fantasy — *channeling, transmutation, carving, marks* — never "chemistry," even though the designers know exactly what it is.
 >
-> **Canon checked through #1347 (2026-10-21); #1530 (aura demand as depth) folded in 2026-10-30.**
+> **Canon checked through #1347 (2026-10-21); #1530 (aura demand as depth) folded in 2026-10-30; #696 (veins built) folded in 2026-11-07.**
 >
 > **SUPERSEDED as a MECHANISM by Deep Alchemy Phase 2 (2026-10-11).** A carving is now a recipe of verbs with substances as their arguments (`Break(F, A) + Push(F2)`). Canon: [deep-alchemy.md](deep-alchemy.md) → *What is built*. Phase 2 replaced:
 > - **the anatomy**: weighted sigils + shaping flourishes are gone; `TransmutationData.recipe` replaces both;
@@ -185,7 +185,7 @@ Teachable in one line of flavor: *"the mercurial marks change what it is; the ge
 
 ## Far future — pinned, not designed
 
-- **Mid-battle re-flourishing.** Materia is ambient on the battlefield — and, since the 2026-08-29 pass, at authored **veins** too (ruled, not built: [#696](https://github.com/Phaazoid/Godoiosis/issues/696); grill resolution 6 below; ticket [#513](https://github.com/Phaazoid/Godoiosis/issues/513)); redrawing a flourish mid-fight is a latent alchemist verb. Must eat a main action minimum. The target fantasy: *erasing a flourish in a way that weakens the unit as a final gambit — trading power for the one utility that opens a previously impossible path to victory.* Pinned 2026-07-03.
+- **Mid-battle re-flourishing.** Materia is ambient on the battlefield — and, since the 2026-08-29 pass, at authored **veins** too (ruled, and built 2026-11-07: [#696](https://github.com/Phaazoid/Godoiosis/issues/696); grill resolution 6 below; ticket [#513](https://github.com/Phaazoid/Godoiosis/issues/513)); redrawing a flourish mid-fight is a latent alchemist verb. Must eat a main action minimum. The target fantasy: *erasing a flourish in a way that weakens the unit as a final gambit — trading power for the one utility that opens a previously impossible path to victory.* Pinned 2026-07-03.
 - **Mounts & taming (the Bond).** Alchemist mounts = beasts lulled and bonded via transmutation; mechanist mirror = engineered vehicles (planetary metals + materia fuel) — *built vs befriended*, asymmetry preserved. Doctrine (pinned 2026-07-03):
   - **A Bond is a Sympathy made permanent** — the pure-Aether ladder (×2 Conduction, ×3 Sympathy) fixed by Coagula. Recipe shape: **2 Aether + 1 species-element sigil + Stillness×2** (3 sigils → 5 slots; Aether primary = the bond, species sigil = the key cut for that beast, twin Stillness = outlives the battle). Permanent bond = `UnitInstance`-side state (the persistence seam), hence deliberately the most expensive recipe class in the game. Lands at **tier 3**: a deep-Aether demand (aether-2 minimum under the 2026-08-10 wildcard model — at aether-1 the recipe's total deficit is 2, one aether + the species sigil, and no pool covers two; at aether-2 the wildcard carries the species sigil), L-rune slots, plus—
   - **Taming is a reaction, not a new system:** Bond × [required beast state] → TAMED. The bond only takes on a *prepared* beast (fire-drake must be Quenched, storm-roc GROUNDED, cave-bull MESMERIZED — the lull; that bench state's job). Deterministic capture, no roll (Law #1); the preparation *is* the combinatrix — taming becomes a multi-beat combo assembled in the field.

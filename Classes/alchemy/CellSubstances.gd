@@ -7,10 +7,10 @@ extends Object
 # that can. Every caller asks fizzle_reason with a POSITION -- the menu row, the queue gate, the
 # validator (through the resolve), the resolver, the AI and the Play API -- one predicate, many cells.
 #
-# What each tile holds is its own made_of column (GridUtils.made_of, #1315); what each tile state, gas
-# and unit state holds is SubstanceMap's AUTHORED rows (#1532). They feed presence only: Materia's
-# empowerment rules are their own, a declared second reading (dev ruling 2026-10-30), so authoring a
-# source changes what a carving can draw on, not its +1.
+# What each tile holds is its own made_of column (GridUtils.made_of, #1315); what each tile state, gas,
+# unit state and materia vein (#696) holds is SubstanceMap's AUTHORED rows (#1532). They feed presence
+# only: Materia's empowerment rules are their own (a vein's is Vein.empowers), a declared second
+# reading (dev ruling 2026-10-30), so authoring a source changes what a carving can draw on, not its +1.
 #
 # FREE OR HELD (#1315): a compound's part named in its `extract_only` is HELD -- present to an Extract
 # alone, which draws it out for the carving's later verbs (CarvingRecipe.fizzle_reason). Loam holds its
@@ -31,8 +31,8 @@ extends Object
 # authors. A thin reading lowers damage and never makes a substance absent (#1324).
 #
 # HOW MUCH is present (#1328): the air supplies ONE of what it holds, whatever its reading, and every
-# real source -- a ground, a tile state, a gas, a lit prop, a unit's states, a conduit -- supplies any
-# amount a recipe writes. So a number on a recipe means a real source in reach.
+# real source -- a ground, a tile state, a gas, a vein, a lit prop, a unit's states, a conduit --
+# supplies any amount a recipe writes. So a number on a recipe means a real source in reach.
 const AIR := 1
 const PLENTY := 1000000   # more than any recipe asks
 
@@ -49,14 +49,14 @@ class Presence:
 
 # The substances present for a cast from `cell`, and how much of each (id -> amount): the ambient
 # baseline at AIR, then everything within Materia.REACH -- each tile's made_of, its tile states, any
-# gas, a lit prop, and the states of whoever stands there -- then the caster's own states and the
-# conduits it carries, all at PLENTY, then every compound's parts, recursively, at their compound's
+# gas, its vein, a lit prop, and the states of whoever stands there -- then the caster's own states and
+# the conduits it carries, all at PLENTY, then every compound's parts, recursively, at their compound's
 # amount: free, or held where the compound holds them. Deduped, in that order; a substance found twice
 # keeps the larger amount.
 #
 # `caster` is counted whatever the scan finds: the body handed in is the one whose conduits count, and
-# a pass hands its copy. `map` is what each tile state, gas and unit state is made of, the authored one
-# unless a caller (a test's own chemistry, like `catalog`) hands another.
+# a pass hands its copy. `map` is what each tile state, gas, unit state and vein is made of, the authored
+# one unless a caller (a test's own chemistry, like `catalog`) hands another.
 static func presence_near(cell: Vector2i, board: BoardContext, caster: UnitState = null,
 		catalog: Dictionary = {}, hypo: Dictionary = {}, map: SubstanceMap = null) -> Presence:
 	var shared := catalog.is_empty()
@@ -165,6 +165,7 @@ static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: Boa
 		_add_all(found, map.of_tile_state(state), PLENTY)
 	for gas: Gas.Kind in Gas.kinds_in(board.gas_at(cell)):
 		_add_all(found, map.of_gas(gas), PLENTY)
+	_add_all(found, map.of_vein(board.vein_at(cell)), PLENTY)   # a materia vein (#696)
 	# A lit prop is a fire, made of what a burning tile is.
 	if board.prop_lit_at(cell):
 		_add_all(found, map.of_tile_state(Terrain.TileState.BURNING), PLENTY)

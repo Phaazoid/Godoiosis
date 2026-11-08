@@ -14,6 +14,9 @@ var zones: ZoneManager
 var heights: BoardHeights
 # The gas over the board (#508). Null on a board with no gas, which reads as no gas anywhere.
 var gas: GasField
+# The materia veins (#696). Set after construction by the builders that have them (game, the Play API),
+# as the weather is, so every other builder reads no veins; planned and with_units carry it.
+var veins: VeinField
 # The weather over the board (#1260). Set after construction by the builders that have one (game,
 # the Play API), so every other builder -- the test fixtures above all -- reads CLEAR.
 var weather: Weather.Kind = Weather.Kind.CLEAR
@@ -214,6 +217,7 @@ func planned(planned_tiles: PlannedTiles) -> BoardContext:
 	var none: Array[Unit] = []
 	var board := BoardContext.new(grid, none, squad_manager, terrain_states, zones, heights, gas, mission)
 	board.units = units.duplicate()
+	board.veins = veins
 	board.weather = weather
 	board.atmosphere = atmosphere
 	board.tiles = planned_tiles
@@ -223,10 +227,17 @@ func planned(planned_tiles: PlannedTiles) -> BoardContext:
 # is what BoardLint asks the spawn rule against (#1432).
 func with_units(unit_list: Array[Unit]) -> BoardContext:
 	var board := BoardContext.new(grid, unit_list, squad_manager, terrain_states, zones, heights, gas, mission)
+	board.veins = veins
 	board.weather = weather
 	board.atmosphere = atmosphere
 	board.tiles = tiles
 	return board
+
+# The materia vein through this cell (#696): NONE on a board with no vein store.
+func vein_at(cell: Vector2i) -> Vein.Kind:
+	if veins == null:
+		return Vein.Kind.NONE
+	return veins.kind_at(cell)
 
 # Is the prop standing on this cell ALIGHT (#272's prop_lit column)? Sibling of terrain_kind_at,
 # and null-safe on the GRID as well as the tile, because a stub board carries no TileMapLayer.
