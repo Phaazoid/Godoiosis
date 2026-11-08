@@ -86,7 +86,7 @@ func _flammable(grid: TileMapLayer, cell: Vector2i, igniters: Array) -> bool:
 	var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
 	var none: Array[Terrain.TileState] = []
 	for r: TerrainReaction in igniters:
-		if r.applies_to_tile(kind, none):
+		if r.applies_to_tile(kind, none, GridUtils.made_of_at_cell(grid, cell)):
 			return true
 	return false
 

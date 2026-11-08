@@ -264,5 +264,5 @@ static func ground_lines(game, cell: Vector2i) -> Array[String]:
 			% [elevation, elevation + climb])
 	elif elevation != 0:
 		lines.append("Height %d — reached only by a ramp that climbs to it." % elevation)
-	lines.append_array(Glossary.terrain_reactions_for(kind, held))
+	lines.append_array(Glossary.terrain_reactions_for(kind, held, board.made_of_at(cell)))
 	return lines

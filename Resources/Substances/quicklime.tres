@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://dn7j6l6xxbtbh"]
+
+[ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_8o007"]
+
+[resource]
+script = ExtResource("1_8o007")
+display_name = "Quicklime"
+formula = "WE2 + F2"
+phase = 1
+extract_only = "flame"

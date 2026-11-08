@@ -1827,6 +1827,7 @@ static func _current_cells(action: AttackAction) -> Array[Vector2i]:
 static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
 	var held := board.tile_states_at(cell)
+	var made_of := board.made_of_at(cell)
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
 	var fired := false
@@ -1835,7 +1836,7 @@ static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.El
 			continue
 		# The kind/state gate is the reaction's own predicate — shared with the tile hover card's
 		# interaction list (#135), so the card can never promise a deposit this filter refuses.
-		if not reaction.applies_to_tile(kind, held):
+		if not reaction.applies_to_tile(kind, held, made_of):
 			continue
 		_fire_into(effect, reaction)
 		fired = true
@@ -1848,9 +1849,10 @@ static func _resolve_air_at(cell: Vector2i, elements: Array[Elemental.Element], 
 		terrain_reactions: Array[TerrainReaction], effect: ResolvedCellEffect, gas_here: int) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
 	var held := board.tile_states_at(cell)
+	var made_of := board.made_of_at(cell)
 	for reaction in terrain_reactions:
 		if not reaction.in_the_air or not reaction.fires_for(elements) \
-				or not reaction.applies_to_tile(kind, held):
+				or not reaction.applies_to_tile(kind, held, made_of):
 			continue
 		if reaction.disperses_gas and gas_here == 0:
 			continue
@@ -1860,11 +1862,15 @@ static func _resolve_air_at(cell: Vector2i, elements: Array[Elemental.Element], 
 		_fire_into(effect, reaction)
 	return effect
 
-# What one fired terrain reaction leaves in a cell's effect, ground or air.
+# What one fired terrain reaction leaves in a cell's effect, ground or air. An added state's authored
+# turns are its own life (#1635), the longer winning (ElementalReaction's rule); a fuel ground's clock
+# still outranks it at apply (TerrainStateManager._start_timer).
 static func _fire_into(effect: ResolvedCellEffect, reaction: TerrainReaction) -> void:
 	for s in reaction.add_tile_states:
 		if not effect.states_added.has(s):
 			effect.states_added.append(s)
+		if reaction.add_state_turns.has(s) and reaction.add_state_turns[s] > effect.state_turns.get(s, -1):
+			effect.state_turns[s] = reaction.add_state_turns[s]
 	for s in reaction.remove_tile_states:
 		if not effect.states_removed.has(s):
 			effect.states_removed.append(s)

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://bdf33124ostqh"]
+
+[ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_h8mur"]
+
+[resource]
+script = ExtResource("1_h8mur")
+display_name = "Slaked Lime"
+formula = "WE2 + W2"
+phase = 1

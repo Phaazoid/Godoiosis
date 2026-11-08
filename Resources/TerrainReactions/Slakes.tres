@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://k14tj6ugt8h1"]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_2gil0"]
+
+[resource]
+script = ExtResource("1_2gil0")
+incoming_element = 2
+required_tile_state = 6
+remove_tile_states = Array[int]([6])
+gases = Dictionary[int, int]({
+0: 3
+})
+equation = "quicklime + 2W2 -> slaked_lime + 2FW"
+popup = "Slakes!"

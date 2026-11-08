@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-07. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1629 (2026-11-07); #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05; #1421 (Smokescreen: a carving lays a smoke cloud, and smoke becomes the molecule `A2*AE`) folded in 2026-11-07.**
+**Canon checked through #1635 (2026-11-07); #1635 slice 1 (quicklime, brick and thunderstone: ground reactions gated on what a tile is made of) folded in 2026-11-07; #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05; #1421 (Smokescreen: a carving lays a smoke cloud, and smoke becomes the molecule `A2*AE`) folded in 2026-11-07.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -1059,9 +1059,9 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - They are on the Tile Brush and each has a Tiles page, where one Made of edit changes it.
 - **Limestone is DIRT, not ROCK** (his ruling). It wears earth sides in 3D, and it is not an Earth source for empowerment, which `Materia.sources_at` still answers by kind.
 - **None holds salt or water.** Rock Throw stays greyed beside them, and Wellspring fizzles with only these in reach, as it does on stone.
-- **Nothing reads silica, alumina or chalk yet.** #1621's starter list is what will.
+- **Nothing reads silica, alumina or chalk yet.** #1621's starter list is what will. *(Since #1635, a shock fuses sand and a fire bakes clay soil, below.)*
 - **Walkable ground with a kind must name its makeup** (`tests/law/test_substance_map.gd`), so the next new ground cannot ship with every carving silently fizzling on it.
-- **Not built:** the ground reactions (quicklime, brick, gypsum and the rest), which are not ruled.
+- **Not built:** the ground reactions (quicklime, brick, gypsum and the rest), which are not ruled. *(Quicklime, brick and thunderstone are built as working defaults, #1635 slice 1, below; gypsum and ore roasting are its slice 2.)*
 
 **Built 2026-11-05: Quicken and Still, the round clock ([#1311](https://github.com/Phaazoid/Godoiosis/issues/1311)).** Phaazoid@ approved the plan in a Claude session the same day. Every default below is one to change once played.
 - **A mark holds X, not the whole cell.** A carving with `Still(X)` or `Quicken(X)` lays a time mark on every tile it strikes, one per substance its time verbs name. A tile state or gas on that tile is held or quickened when its `SubstanceMap` row makes X present, the parts it lends included. So `Still(F)` holds a fire (flame and heat) and leaves the smoke over it alone. `Pace` is the one answer.
@@ -1084,11 +1084,30 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **Smoked's clock still has no Air & gas row:** the carving adds no Smoked, and standing in smoke stores no clock, so nothing reads it.
 - **The AI never casts it** (#117): no victim pays, and a laid cloud is not priced (the ledger's `cell_effects` gap). A follow-up could price it the way #1514 prices a blow.
 
+**Built 2026-11-07: quicklime, brick and thunderstone, the first ground reactions ([#1635](https://github.com/Phaazoid/Godoiosis/issues/1635), slice 1).** Phaazoid@ approved the plan of working defaults and the look, from a mock in the real game, in a Claude session the same day. Every default below is one to change once played. Gypsum and ore roasting are slice 2.
+- **The gate is what the tile is MADE of:** `TerrainReaction.required_made_of`, one substance the tile's own `made_of` column must name. All four earths are DIRT, so `required_kind` cannot tell them apart. A part another substance lends does not count, so loam's alumina is not clay. It joins the one predicate, `applies_to_tile(kind, held, made_of)`, so the tile card and the resolver still read one rule. The glossary page words it "Fire on Limestone".
+- **What a reaction leaves is a tile state on the same ground**, never a new ground: a pass cannot write the grid. Three new `Terrain.TileState` members, appended: QUICKLIME, BRICK, THUNDERSTONE. Each has a `SubstanceMap` row naming its substance.
+- **Calcines:** a fire hit on limestone sets Quicklime and releases thin smoke. `F2 + limestone + A2 -> quicklime + smoke`: limestone's fixed air leaves as the smoke, and the fire stays bound in the lime.
+- **Slakes:** a water hit on Quicklime clears it and releases thick steam, which soaks and scalds whoever stands in it at the end of their turn. This is "stores fire". `quicklime + 2W2 -> slaked_lime + 2FW`. The tile is plain limestone again afterwards, so it can calcine again.
+- **Bakes:** a fire hit on clay soil sets Brick. `F2 + alumina -> brick`. Brick is a molecule, `QFA2E*F2`, so it lends nothing and its fire is bound for good.
+- **Fuses:** a shock hit on sand sets Thunderstone. `QF + silica -> thunderstone`.
+- **Held, not free.** Quicklime (`WE2 + F2`) holds its flame and thunderstone (`QFAE2 + QF`) its lightning, as loam holds its water: only an Extract draws on them. So `Extract(2QF) + Push(2QF)` casts beside thunderstone with no lightning carried, and a lone `Push(2QF)` there fizzles.
+- **How long:** all permanent. Quicklime lasts until slaked. A ground reaction's `add_state_turns` is now the added state's own life (`PlanResolver._fire_into`), so a duration is one row on the Reactions tab. A fuel ground's clock still outranks it, so no shipped reaction changes.
+- **The look:** three flat placeholder icons, drawn and ghosted the way Scorched is (`OverlayManager.TERRAIN_STATE_ICONS`). Each has a glossary entry the tile card shows, and the card lists the reaction a ground can take. The Play API draws them as `%`, `=` and `*`.
+- **Declared limits:**
+  - Chalky soil does not calcine. Chalk is the lime with no fixed air left to drive off.
+  - Only a fire HIT calcines or bakes. A standing fire beside the tile does not, and neither does Heat.
+  - Rain does not slake.
+  - A unit-only shock (Zap Cannon) fuses nothing.
+  - Thunderstone gives no Shock empowerment: `Materia` stays its own reading.
+  - A state laid on a ground leaves the ground's own makeup present too.
+  - The AI does not seek any of this out (#117).
+
 **Next:**
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
 - **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)).
 
-**Still open in Phase 2:** alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's ground reactions (quicklime, brick, gypsum: not ruled; its defaults and its four new grounds are built, #1315 slices 1 and 2, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
+**Still open in Phase 2:** alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's ground reactions (gypsum and ore roasting, #1635 slice 2; quicklime, brick and thunderstone are built as working defaults, #1635 slice 1, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
 **Still open:**
 

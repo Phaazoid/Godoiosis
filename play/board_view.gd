@@ -13,6 +13,7 @@ const PlaySession := preload("res://play/play_session.gd")   # for STASH, the na
 const GROUND := {
 	"burning": ["^", "burning"], "frozen": ["_", "frozen"], "scorched": [";", "scorched"],
 	"cover": ["n", "cover (dug in)"],
+	"quicklime": ["%", "quicklime"], "brick": ["=", "brick"], "thunderstone": ["*", "thunderstone"],
 	"grass": [".", "grass"], "tall_grass": [",", "tall grass"], "dirt": [":", "dirt"],
 	"none": ["'", "plain ground"], "mud": ["~", "mud"], "shallow": ["w", "shallow water"],
 	"deep": ["W", "deep water"], "rock": ["#", "rock"], "tree": ["T", "tree"], "wall": ["#", "impassable"],
@@ -354,6 +355,12 @@ static func _ground_key(session, cell: Vector2i) -> String:
 		return "scorched"
 	if states.has(Terrain.TileState.COVER):
 		return "cover"
+	if states.has(Terrain.TileState.QUICKLIME):
+		return "quicklime"
+	if states.has(Terrain.TileState.BRICK):
+		return "brick"
+	if states.has(Terrain.TileState.THUNDERSTONE):
+		return "thunderstone"
 	var t: Dictionary = session.terrain_at(cell)
 	# THE TABLE WINS, and it is consulted BEFORE walkability (#875): both kinds of nothing are
 	# unwalkable, and the `#` fallback used to swallow them, drawing a chasm as masonry.

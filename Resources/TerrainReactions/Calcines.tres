@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://bgi320af7icby"]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_l4jbj"]
+
+[resource]
+script = ExtResource("1_l4jbj")
+incoming_element = 1
+required_made_of = "limestone"
+forbidden_tile_state = 6
+add_tile_states = Array[int]([6])
+gases = Dictionary[int, int]({
+1: 1
+})
+equation = "F2 + limestone + A2 -> quicklime + smoke"
+popup = "Calcines!"
