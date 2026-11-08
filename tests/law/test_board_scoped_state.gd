@@ -73,6 +73,7 @@ const PROCESS_SCOPED := [
 	"_icons_by_kind",                             # GasPuffArt (#508): each kind's preview ghost, keyed by Gas.Kind
 	"_icon",                                      # WeatherArt (#1260): the placeholder soak icon, built once
 	"_fog_noise",                                 # WeatherArt (#1285): the fog's seamless noise tile, built once
+	"_ragged",                                    # VeinMirror (#696): the stain edge's two fixed-seed noises, built once
 	"_caps_by_frame",                             # SnowCapArt (#1269): each prop art's snow cap, keyed by sheet and frame
 	"_badges",                                    # StrikeMarks2D (#1247): baked badge art, keyed by (icon, colour)
 	"_kind_colors",                               # BoardOverlays (#1374): a zone kind's colour, the Game tab's layer rows
