@@ -46,6 +46,10 @@ const TERRAIN_STATE_ICONS: Dictionary = {
 	# SCORCHED is FLAT art on purpose (#890) -- it is not in OverlayMirror.STANDING_STATES, so the
 	# diorama mirrors this icon onto the cell for free, the way FROZEN's frost does. Placeholder.
 	Terrain.TileState.SCORCHED: preload("res://Art/Icons/TerrainIcons/Scorched.png"),
+	# The ground reactions' states (#1635), flat like SCORCHED. Placeholder art.
+	Terrain.TileState.QUICKLIME: preload("res://Art/Icons/TerrainIcons/Quicklime.png"),
+	Terrain.TileState.BRICK: preload("res://Art/Icons/TerrainIcons/Brick.png"),
+	Terrain.TileState.THUNDERSTONE: preload("res://Art/Icons/TerrainIcons/Thunderstone.png"),
 	# No BLAZE row since #890 retired it: permanence moved to the ground, so there is only one fire.
 }
 # A cell whose gas the pass disperses (#1335). PLACEHOLDER: the Air element's icon, the element doing it.

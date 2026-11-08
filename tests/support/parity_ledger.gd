@@ -408,6 +408,10 @@ static func tile_states() -> Dictionary:
 			S.FROZEN: {"play": covered(VIEW, "TileState.FROZEN"), "ai": harmless("ice is ground: movement reads it through can_traverse")},
 			S.COVER: {"play": covered(VIEW, "TileState.COVER"), "ai": harmless("its DEF is in the outcomes the score reads")},
 			S.SCORCHED: {"play": covered(VIEW, "TileState.SCORCHED"), "ai": harmless("spent fuel: nothing left to burn")},
+			# #1635: the AI does not seek these out (#117); a slaked burst's steam is a gas row's hazard.
+			S.QUICKLIME: {"play": covered(VIEW, "TileState.QUICKLIME"), "ai": harmless("standing on it costs nothing; its slaking steam is GasRules' hazard")},
+			S.BRICK: {"play": covered(VIEW, "TileState.BRICK"), "ai": harmless("baked ground: nothing happens to whoever stands on it")},
+			S.THUNDERSTONE: {"play": covered(VIEW, "TileState.THUNDERSTONE"), "ai": harmless("fused ground: it only feeds a carving's Extract")},
 		},
 	}
 

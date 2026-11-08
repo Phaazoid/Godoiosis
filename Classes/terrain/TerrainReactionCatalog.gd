@@ -39,10 +39,11 @@ static func refresh() -> void:
 # questions, not two answers to one: this is the second, and the resolver's own filter is the first.
 static func fuel_for_kind(kind: Terrain.Kind, reactions: Array[TerrainReaction]) -> TerrainReaction:
 	var none: Array[Terrain.TileState] = []
+	var any_ground: Array[String] = []   # fuel is a KIND's: a reaction gated on a tile's makeup is never fuel
 	for reaction in reactions:
 		if reaction.incoming_element == Elemental.Element.FIRE \
 				and reaction.add_tile_states.has(Terrain.TileState.BURNING) \
-				and reaction.applies_to_tile(kind, none):
+				and reaction.applies_to_tile(kind, none, any_ground):
 			return reaction
 	return null
 

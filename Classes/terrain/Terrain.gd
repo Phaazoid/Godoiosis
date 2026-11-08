@@ -37,11 +37,14 @@ enum TileState {
 			 # (APPEND-ONLY, and a hole is worse than a tombstone) -- deleting 4 would make any
 			 # stray one in an old saved board read as whatever lands here next. RETIRED_STATES
 			 # below is what keeps it out of the authoring surfaces.
-	SCORCHED # #890: ground whose fuel is spent. Permanent (no authored clock), harmless to stand
+	SCORCHED, # #890: ground whose fuel is spent. Permanent (no authored clock), harmless to stand
 			 # on, and NOT FUEL -- the ignition reactions forbid it, so fire can never re-cross
 			 # ground it has already taken. That is what makes a spreading fire a FRONT that
 			 # settles rather than a field that oscillates for ever, and it is why the burnt lane
 			 # behind the fire is the safe one.
+	QUICKLIME,    # #1635: limestone a fire hit calcined. Holds its flame; water slakes it into steam.
+	BRICK,        # #1635: clay soil a fire hit baked. Permanent.
+	THUNDERSTONE  # #1635: sand a shock hit fused. Holds its lightning for an Extract. Permanent.
 }
 
 # States no authoring surface may offer and no rule may act on -- the tombstones above. A retired

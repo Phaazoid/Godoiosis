@@ -108,6 +108,19 @@ func test_inputs_that_leave_out_the_incoming_element_degrade() -> void:
 	assert_str(found[0]["text"]).contains("flame")
 
 
+# #1635: a reaction gated on what its tile is MADE of must name that substance among its inputs.
+func test_inputs_that_leave_out_what_the_tile_is_made_of_degrade() -> void:
+	var r := TerrainReaction.new()
+	r.incoming_element = Elemental.Element.FIRE
+	r.required_made_of = "water"
+	r.equation = "F2 + F2 -> 2F2"
+	var found := ReactionLint.check(r, _catalog(), _map())
+	assert_array(_severities(found)).is_equal([ReactionLint.Severity.DEGRADES])
+	assert_str(found[0]["text"]).contains("water")
+	r.equation = "F2 + W2 -> 2FW"
+	assert_array(ReactionLint.check(r, _catalog(), _map())).is_empty()
+
+
 func test_outputs_that_leave_out_the_released_gas_degrade() -> void:
 	var r := TerrainReaction.new()
 	r.incoming_element = Elemental.Element.FIRE

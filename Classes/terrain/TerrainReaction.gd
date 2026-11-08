@@ -17,6 +17,11 @@ class_name TerrainReaction
 @export var incoming_element: Elemental.Element = Elemental.Element.NONE
 @export var also_triggered_by: Array[Elemental.Element] = []
 @export var required_kind: Terrain.Kind = Terrain.Kind.NONE
+
+# A substance the tile must be MADE of (#1635): one its own made_of column names (#1315), so two
+# grounds of one kind can react apart. A part another substance lends does not count. Empty = any.
+@export var required_made_of: String = ""
+
 @export var required_tile_state: Terrain.TileState = Terrain.TileState.NONE
 
 # A state that REFUSES this reaction (#890) -- required_tile_state's negative, and NONE means
@@ -77,8 +82,10 @@ func fires_for(elements: Array[Elemental.Element]) -> bool:
 
 # The tile gate as ONE predicate (#135 round 2): the resolver's deposit filter and the hover
 # card's "what can touch this tile" list read the same clauses, so they can never drift.
-func applies_to_tile(kind: Terrain.Kind, held_states: Array[Terrain.TileState]) -> bool:
+func applies_to_tile(kind: Terrain.Kind, held_states: Array[Terrain.TileState], made_of: Array[String]) -> bool:
 	if required_kind != Terrain.Kind.NONE and required_kind != kind:
+		return false
+	if required_made_of != "" and not made_of.has(required_made_of):
 		return false
 	if not admits(held_states):
 		return false
@@ -97,7 +104,7 @@ func admits(held_states: Array[Terrain.TileState]) -> bool:
 # The dev tools' form (Project > Alchemy > Reactions), ElementalReaction.property_sections' twin.
 static func property_sections() -> Array[Dictionary]:
 	return [
-		{"title": "When it fires", "fields": PackedStringArray(["incoming_element", "also_triggered_by", "required_kind", "required_tile_state", "forbidden_tile_state", "in_the_air"])},
+		{"title": "When it fires", "fields": PackedStringArray(["incoming_element", "also_triggered_by", "required_kind", "required_made_of", "required_tile_state", "forbidden_tile_state", "in_the_air"])},
 		{"title": "What it does", "fields": PackedStringArray(["add_tile_states", "remove_tile_states", "add_state_turns", "spread_and_a_half", "disperses_gas"])},
 		{"title": "What it releases", "fields": PackedStringArray(["gases"])},
 		{"title": "Chemistry", "fields": PackedStringArray(["equation"])},
@@ -111,6 +118,7 @@ static func property_tips() -> Dictionary:
 		"incoming_element": "The element a hit must carry to set this off. Ignition (fuel) reads this one alone, so heat lights nothing.",
 		"also_triggered_by": "Other elements that set it off too, e.g. Heat melts and boils what fire does. It still fires at most once per hit.",
 		"required_kind": "The ground it needs. None = any ground.",
+		"required_made_of": "A substance the tile must be MADE of: one its own Made of column names (the Tiles page), e.g. limestone. Empty = any ground. A part another substance lends does not count, so loam's alumina is not clay.",
 		"required_tile_state": "A state the tile must already hold. None = none needed: the setup half.",
 		"forbidden_tile_state": "A state that REFUSES it. The ignitions name Scorched, so spent ground cannot catch again.",
 		"in_the_air": "It happens in the AIR over the cell, so it answers every cell a hit passes over, whatever the attack's Targets says. Gas dispersing on an Air hit is one.",

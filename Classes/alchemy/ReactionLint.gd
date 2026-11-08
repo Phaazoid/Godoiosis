@@ -101,6 +101,7 @@ static func _expected_inputs(reaction: Resource, map: SubstanceMap, grounds: Dic
 		_expect(out, _one(SubstanceMap.of_element(r.incoming_element)), "the incoming %s" % Elemental.display_name(r.incoming_element))
 		if r.required_kind != Terrain.Kind.NONE:   # NONE is any ground, so nothing to name
 			_expect(out, _ground(r.required_kind, grounds), "the %s ground" % Terrain.Kind.keys()[r.required_kind].capitalize())
+		_expect(out, _one(r.required_made_of), "the %s it must be made of" % r.required_made_of)   # #1635
 		_expect(out, map.of_tile_state(r.required_tile_state), "the required %s" % Terrain.TileState.keys()[r.required_tile_state].capitalize())
 	return out
 

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://co7tvj1ldhffb"]
+
+[ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_yctyv"]
+
+[resource]
+script = ExtResource("1_yctyv")
+display_name = "Brick"
+formula = "QFA2E*F2"
+phase = 1

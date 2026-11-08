@@ -238,7 +238,7 @@ func test_melting_ice_releases_the_melts_own_gas_on_the_thawed_tile() -> void:
 
 func test_a_reaction_that_only_releases_gas_still_names_itself_on_the_tile_card() -> void:
 	# Glossary.terrain_reactions_for skips a reaction with nothing to say; releasing gas is something.
-	var lines := Glossary.terrain_reactions_for(Terrain.Kind.WATER, [] as Array[Terrain.TileState])
+	var lines := Glossary.terrain_reactions_for(Terrain.Kind.WATER, [] as Array[Terrain.TileState], [] as Array[String])
 	var named := false
 	for line in lines:
 		if line.contains(Gas.display_name(STEAM)):

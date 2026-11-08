@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://fspobypvtndu"]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_tfigl"]
+
+[resource]
+script = ExtResource("1_tfigl")
+incoming_element = 1
+required_made_of = "alumina"
+forbidden_tile_state = 7
+add_tile_states = Array[int]([7])
+equation = "F2 + alumina -> brick"
+popup = "Bakes!"

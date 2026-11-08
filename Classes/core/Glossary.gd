@@ -40,7 +40,8 @@ enum Term {
 	# at all, then how hard you hit with one (#930 put both on screen for the first time).
 	ELEMENTS, AFFINITY, AURA, WET, CHILLED, SMOKED, REACTIONS, ATMOSPHERE,
 	# Terrain
-	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER, HELD, QUICKENED,
+	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER, QUICKLIME, BRICK,
+	THUNDERSTONE, HELD, QUICKENED,
 	# Lifecycle
 	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
 	# Missions (one per player-facing ZoneManager.Kind, #1105, then the VIP the pre-mission screen
@@ -113,6 +114,8 @@ static func term_for_tile_state(state: Terrain.TileState) -> Term:
 	const MAP: Dictionary[Terrain.TileState, Term] = {
 		Terrain.TileState.BURNING: Term.BURNING, Terrain.TileState.SCORCHED: Term.SCORCHED,
 		Terrain.TileState.FROZEN: Term.FROZEN, Terrain.TileState.COVER: Term.COVER,
+		Terrain.TileState.QUICKLIME: Term.QUICKLIME, Terrain.TileState.BRICK: Term.BRICK,
+		Terrain.TileState.THUNDERSTONE: Term.THUNDERSTONE,
 	}
 	# Deliberately a bare lookup and not a get() with a fallback: test_glossary_coverage walks
 	# every live TileState through here, so a member with no row is a red suite rather than a
@@ -186,6 +189,8 @@ static func _terrain_reaction_line(r: TerrainReaction) -> String:
 		trigger += " in the air"   # over any tile, whatever the attack targets (#1335)
 	if r.required_kind != Terrain.Kind.NONE:
 		trigger += " on %s" % Terrain.kind_display_name(r.required_kind)
+	if r.required_made_of != "":
+		trigger += " on %s" % SubstanceCatalog.name_of(r.required_made_of)   # #1635
 	if r.required_tile_state != Terrain.TileState.NONE:
 		trigger += " on a %s tile" % Terrain.tile_state_display_name(r.required_tile_state)
 	return _assemble_line(trigger, _terrain_effects(r), r.popup)
@@ -212,12 +217,13 @@ static func _releases(gases: Dictionary[Gas.Kind, Gas.Level]) -> String:
 # kind/state gate is TerrainReaction.applies_to_tile, the same predicate the resolver's deposit
 # filter runs, so the card can never list a reaction the resolver would refuse. Arrow form for
 # the card's narrow column; the glossary page keeps the full sentences.
-static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.TileState]) -> Array[String]:
+static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.TileState],
+		made_of: Array[String]) -> Array[String]:
 	var lines: Array[String] = []
 	for reaction in TerrainReactionCatalog.get_all():
 		if reaction.in_the_air:
 			continue   # true over every tile, so not this tile's to list (#1335); the Reactions page has it
-		if not reaction.applies_to_tile(kind, states):
+		if not reaction.applies_to_tile(kind, states, made_of):
 			continue
 		var effects := _terrain_effects(reaction)
 		if effects.is_empty():
@@ -628,6 +634,22 @@ static func _build_entries() -> Dictionary:
 		"long": "Entrenchment, dug by a burrowing weapon. Whoever stands here gains +%d DEF. It "
 			% Terrain.COVER_DEF
 			+ "never expires, but a destructive hit removes it."}
+	# The ground reactions' states (#1635). Each names what the ground BECAME; the reaction lines on the
+	# card say which hit does what.
+	e[Term.QUICKLIME] = {"category": Category.TERRAIN, "title": "Quicklime",
+		"short": "Burnt lime that holds the fire that made it. Water sets it loose as scalding steam.",
+		"long": "Limestone a fire has burnt. The fire that burnt it stays bound in the lime, and water "
+			+ "sets it loose: a splash of water on quicklime slakes it in a burst of scalding steam, and "
+			+ "the stone is plain limestone again. A carving that extracts fire can draw on it too."}
+	e[Term.BRICK] = {"category": Category.TERRAIN, "title": "Brick",
+		"short": "Clay soil baked hard by fire. It stays brick.",
+		"long": "Clay soil a fire has baked. The fire is bound into the brick for good, so nothing "
+			+ "sets it free, and brick never goes back to clay."}
+	e[Term.THUNDERSTONE] = {"category": Category.TERRAIN, "title": "Thunderstone",
+		"short": "Sand fused to glass by lightning, still holding the strike. A carving that extracts lightning draws it out.",
+		"long": "Sand that lightning has struck and fused into glass. The strike stays in the stone, "
+			+ "and a carving that extracts lightning can draw on it when cast beside it, with no "
+			+ "lightning of its own to carry."}
 	# A time mark (#1311). The tile card prefixes the substance it names, which is what "it" means here.
 	e[Term.HELD] = {"category": Category.TERRAIN, "title": "Held",
 		"short": "Nothing made of it changes at the round's end: a fire here neither spreads nor burns down.",

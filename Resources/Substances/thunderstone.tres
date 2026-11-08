@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://de577wwhgekca"]
+
+[ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_84j3w"]
+
+[resource]
+script = ExtResource("1_84j3w")
+display_name = "Thunderstone"
+formula = "QFAE2 + QF"
+phase = 1
+extract_only = "lightning"
