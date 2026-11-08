@@ -32,6 +32,8 @@ class_name ScenarioData
 # Vector2i -> int, every gas kind's amount packed four bits a kind (#508, GasField / Gas). SPARSE: a
 # cell absent holds no gas, so a board without any saves as {}.
 @export var gas: Dictionary = {}
+# Vector2i -> int, the materia vein through each cell (#696, VeinField / Vein.Kind). SPARSE, as gas is.
+@export var veins: Dictionary = {}
 
 # DEPRECATED (#427), and NEVER read as data: a board saved before corner heights carries these and no
 # `corner_heights`. Godot ignores properties a resource no longer declares, so without them such a

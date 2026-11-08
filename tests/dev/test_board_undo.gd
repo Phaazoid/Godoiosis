@@ -482,3 +482,62 @@ func test_step_gas_spreads_as_a_round_would_and_undoes_as_one_step() -> void:
 	_dc.undo_board()
 	assert_bool(field.to_dict() == before).override_failure_message(
 			"undo did not put the gas back as it was before the step").is_true()
+
+
+# ---- the vein brush (#696) ----
+
+func _vein_mode(kind: Vein.Kind) -> void:
+	_brush._set_paint_mode(TileBrushTool.PaintMode.VEIN)
+	_brush._vein_kind = kind
+
+
+func test_a_vein_stroke_paints_the_picked_kind_and_undoes_as_one_step() -> void:
+	var cells: Array[Vector2i] = [Vector2i(1, 5), Vector2i(2, 5), Vector2i(3, 5)]
+	_paint_stroke(cells)   # the ground the vein needs
+	_vein_mode(Vein.Kind.AETHER)
+	_paint_stroke(cells)
+	for cell in cells:
+		assert_int(game.vein_field.kind_at(cell)).is_equal(Vein.Kind.AETHER)
+
+	_dc.undo_board()
+
+	for cell in cells:
+		assert_int(game.vein_field.kind_at(cell)).override_failure_message(
+				"the vein survived the undo -- the snapshot is missing VeinField").is_equal(Vein.Kind.NONE)
+		assert_bool(_has_ground(cell)).override_failure_message(
+				"undo took back the GROUND stroke: the vein stroke recorded no step of its own, so "
+				+ "BoardSnapshot.equals cannot see veins").is_true()
+
+	_dc.redo_board()
+	assert_int(game.vein_field.kind_at(cells[1])).is_equal(Vein.Kind.AETHER)
+
+
+func test_right_drag_takes_the_vein_away() -> void:
+	var cell := Vector2i(4, 6)
+	_paint_stroke([cell] as Array[Vector2i])
+	_vein_mode(Vein.Kind.LIGHTNING)
+	_paint_stroke([cell] as Array[Vector2i])
+	_erase_stroke([cell] as Array[Vector2i])
+	assert_bool(game.vein_field.is_empty()).is_true()
+
+
+func test_a_vein_is_refused_on_a_cell_with_no_ground() -> void:
+	_vein_mode(Vein.Kind.FIRE)
+	_paint_stroke([Vector2i(9, 9)] as Array[Vector2i])
+	assert_bool(game.vein_field.is_empty()).is_true()
+
+
+func test_erasing_the_ground_takes_its_vein_and_undo_brings_both_back() -> void:
+	var cell := Vector2i(5, 7)
+	_paint_stroke([cell] as Array[Vector2i])
+	_vein_mode(Vein.Kind.ALKAHEST)
+	_paint_stroke([cell] as Array[Vector2i])
+	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+
+	_erase_stroke([cell] as Array[Vector2i])
+	assert_int(game.vein_field.kind_at(cell)).override_failure_message(
+			"a vein outlived its ground").is_equal(Vein.Kind.NONE)
+
+	_dc.undo_board()
+	assert_bool(_has_ground(cell)).is_true()
+	assert_int(game.vein_field.kind_at(cell)).is_equal(Vein.Kind.ALKAHEST)

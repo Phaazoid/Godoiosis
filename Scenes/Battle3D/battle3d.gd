@@ -126,6 +126,7 @@ var _crawl_pushed := -2.0
 var _staging_dust: StagingDust = null
 var _arc: ArcLightning = null
 var _gas: GasMirror = null
+var _veins: VeinMirror = null
 var _weather: WeatherMirror = null
 var _wind: WindMirror = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
@@ -228,6 +229,14 @@ func _ready() -> void:
 	_gas.board_source = func() -> BoardContext: return game.next_round_board()   # the plan's deposits folded (#1430)
 	_gas.wind_source = wind_source
 	add_child(_gas)
+	# The materia veins (#696): crystals along each vein and the stain under it. Resident like the gas.
+	_veins = VeinMirror.new()
+	_veins.name = "VeinMirror"
+	_veins.field = game.vein_field
+	_veins.heights = game.board_heights
+	_veins.grid = game.grid
+	_veins.stands_down = func() -> bool: return view == View.FLAT_2D
+	add_child(_veins)
 	# The board's weather (#1260), drawn off the RULE store so it cannot look like one weather and
 	# soak like another. Resident like the gas; the cull sweep and the white-out reach it below.
 	_weather = WeatherMirror.new()

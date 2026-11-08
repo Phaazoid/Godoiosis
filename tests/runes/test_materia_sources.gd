@@ -114,3 +114,57 @@ func test_different_elements_in_reach_both_empower() -> void:
 	var empowered := Materia.empowered_at(HERE, board)
 	assert_bool(empowered.has(WATER)).is_true()
 	assert_bool(empowered.has(EARTH)).is_true()
+
+# --- materia veins (#696) ------------------------------------------------------------------
+
+# A vein rides the board's vein store, not its kind: the stub's grass under every cell is offered
+# nothing, so whatever a case reads came from the vein.
+func _vein_board(veins: Dictionary) -> _MateriaBoard:
+	var board := _board({ HERE: Terrain.Kind.GRASS, NEXT_DOOR: Terrain.Kind.GRASS, TWO_AWAY: Terrain.Kind.GRASS })
+	board.veins = VeinField.new()
+	for cell: Vector2i in veins:
+		board.veins.set_kind(cell, veins[cell])
+	return board
+
+func test_a_tagged_vein_empowers_its_own_element() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.FIRE })
+	assert_array(Materia.sources_at(NEXT_DOOR, board)).is_equal([FIRE])
+	assert_array(Materia.empowered_at(HERE, board)).is_equal([FIRE])
+
+# The same reach as any source: on it or beside it, never two away.
+func test_a_vein_two_cells_away_does_not_empower() -> void:
+	var board := _vein_board({ TWO_AWAY: Vein.Kind.FIRE })
+	assert_array(Materia.empowered_at(HERE, board)).is_empty()
+
+# Air and aether have no terrain source (test_no_terrain_kind_offers_air_or_aether); a vein is
+# the authored content they waited on.
+func test_air_and_aether_veins_are_their_sources() -> void:
+	var board := _vein_board({ HERE: Vein.Kind.AIR, NEXT_DOOR: Vein.Kind.AETHER })
+	var empowered := Materia.empowered_at(HERE, board)
+	assert_bool(empowered.has(Elemental.Element.AIR)).is_true()
+	assert_bool(empowered.has(Elemental.Element.AETHER)).is_true()
+
+# Alkahest is universal: the alkahest vial's own answer, asked rather than restated.
+func test_an_alkahest_vein_empowers_every_sigil_element() -> void:
+	var board := _vein_board({ HERE: Vein.Kind.ALKAHEST })
+	var empowered := Materia.empowered_at(HERE, board)
+	assert_array(empowered).contains_exactly_in_any_order(Elemental.SIGIL_ELEMENTS)
+	var vial := VialData.new()
+	vial.is_alkahest = true
+	assert_array(empowered).contains_exactly_in_any_order(vial.granted_elements())
+
+# A lightning vein makes lightning PRESENT (its SubstanceMap row) and empowers nothing (#1312's ruling).
+func test_a_lightning_vein_empowers_nothing() -> void:
+	var board := _vein_board({ HERE: Vein.Kind.LIGHTNING })
+	assert_array(Materia.empowered_at(HERE, board)).is_empty()
+
+# A vein beside a matching river still empowers once: binary, as any two sources of one element.
+func test_a_vein_beside_its_terrain_source_does_not_stack() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.WATER })
+	board.kinds[HERE] = Terrain.Kind.WATER
+	assert_array(Materia.empowered_at(HERE, board)).is_equal([WATER])
+
+# A board built without a vein store (every fixture but game's and the Play API's) reads no veins.
+func test_a_board_without_a_vein_store_reads_none() -> void:
+	var board := _board({ HERE: Terrain.Kind.GRASS })
+	assert_int(board.vein_at(HERE)).is_equal(Vein.Kind.NONE)

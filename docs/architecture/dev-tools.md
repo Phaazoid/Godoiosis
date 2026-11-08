@@ -70,7 +70,7 @@ Dev tools: `Classes/dev/DevOverlay.gd` (+ per-tool scripts in `Classes/dev/`) â€
 
 **The Grounds group is gone ([#1315](https://github.com/Phaazoid/Godoiosis/issues/1315), 2026-11-05)**, with the `SubstanceMap.grounds` table it edited: a ground's makeup is its tile's own column, edited on the Tiles page, and the tab carries one note line saying so. Until then the Tiles page showed the ground's row read-only (the dev's ruling at the #1532 plan, so each row had one editor); there is still one editor per fact, now the Tiles page. Open water only (ice offers Frozen's row) went with it: it is `CellSubstances._add_cell`'s rule for a water tile's column.
 
-**A vein gets no row.** A vein is per tile or per cell ([#696](https://github.com/Phaazoid/Godoiosis/issues/696)); it adds to these game-wide rows inside `CellSubstances._add_cell`, authored wherever #696 puts it.
+**A vein has a row too** ([#696](https://github.com/Phaazoid/Godoiosis/issues/696), 2026-11-07): the **Veins** table, what each KIND of vein holds, read inside `CellSubstances._add_cell` beside the others. Which cells carry a vein is board content, painted with the Tile Brush's Veins mode (`VeinField`), never a row.
 
 ### Substances and Reactions
 

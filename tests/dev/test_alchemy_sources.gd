@@ -124,6 +124,9 @@ func test_every_member_of_every_table_has_a_row() -> void:
 	for state: int in Elemental.State.values():
 		if state != Elemental.State.NONE:
 			expected.append([&"unit_states", state])
+	for kind: int in Vein.Kind.values():
+		if kind != Vein.Kind.NONE:
+			expected.append([&"veins", kind])
 	for row: Array in expected:
 		assert_object(_field(_tool, row[0], row[1])).override_failure_message(
 			"no row for %s %d" % row).is_not_null()

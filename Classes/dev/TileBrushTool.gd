@@ -22,13 +22,13 @@ class_name TileBrushTool
 # it drags the POINT four cells share to the level picker's height, welding them, where the cell
 # brush paints one whole tile and can still author a deliberate cliff between neighbours.
 
-const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Corners", "Gas"]   # index == PaintMode value
+const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Corners", "Gas", "Veins"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var selected_source := 0
 var game   # injected by DevOverlay.init
-enum PaintMode { TERRAIN, ZONE, STATE, CORNER, GAS }
+enum PaintMode { TERRAIN, ZONE, STATE, CORNER, GAS, VEIN }
 var paint_mode := PaintMode.TERRAIN
 const NEW_ZONE_LABEL := "(new zone)"
 var _zone_name := ""
@@ -66,6 +66,10 @@ var _gas_row: HBoxContainer
 var _gas_level_row: HBoxContainer
 var _step_gas_button: Button
 var _clear_gas_button: Button
+# VEIN mode (#696): which vein the next stroke lays. A cell holds one, so a stroke overwrites and a
+# right-drag takes away whatever runs there.
+var _vein_kind := Vein.Kind.FIRE
+var _vein_row: HBoxContainer
 
 # The terrain brush's elevation half (#260, merged in by #340): the height the next click places at,
 # which way that cell rises, and — since #427 slice 2 — how far.
@@ -450,6 +454,13 @@ func _build_extra_controls() -> void:
 	_clear_gas_button.pressed.connect(_on_clear_gas_pressed)
 	add_child(_clear_gas_button)
 
+	# Part 4c: vein painting (#696). Options scan Vein.Kind past NONE, so a new kind shows up here.
+	var vein_labels: Array = []
+	for kind: int in range(1, Vein.Kind.size()):
+		vein_labels.append(Vein.display_name(kind as Vein.Kind))
+	_vein_row = DevWidgets.add_option(self, "Vein", vein_labels, vein_labels[0],
+		func(label: String): _vein_kind = (vein_labels.find(label) + 1) as Vein.Kind)
+
 	# Part 5: the elevation brush (#260). Hand-built rather than DevWidgets.add_spinbox/add_option
 	# for the reason the zone rows are: the wheel writes the level back INTO the SpinBox, and
 	# add_option builds a one-shot list (the #179 trap).
@@ -725,6 +736,9 @@ func selected_gas_kind() -> Gas.Kind:
 func selected_gas_level() -> Gas.Level:
 	return _gas_level
 
+func selected_vein_kind() -> Vein.Kind:
+	return _vein_kind
+
 func selected_tile_state() -> Terrain.TileState:
 	return _tile_state
 
@@ -779,6 +793,7 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_gas_level_row.visible = mode == PaintMode.GAS
 	_step_gas_button.visible = mode == PaintMode.GAS
 	_clear_gas_button.visible = mode == PaintMode.GAS
+	_vein_row.visible = mode == PaintMode.VEIN
 	# Level and rise ride the TERRAIN brush rather than a mode of their own (#340): a tile is painted
 	# AT a height, so asking how high is part of asking which tile, not a separate question.
 	#

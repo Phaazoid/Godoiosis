@@ -149,6 +149,7 @@ var scenario_director: ScenarioDirector   # fires authored DialogBeats (#182)
 var terrain_states: TerrainStateManager
 var board_heights: BoardHeights   # per-cell elevation + ramps (#257); RefCounted, so not a child
 var gas_field: GasField   # the atmosphere: how much of each gas every cell holds (#508); RefCounted
+var vein_field: VeinField   # the materia veins (#696); RefCounted
 var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; deleted when art lands
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
@@ -256,6 +257,8 @@ func _build_collaborators() -> void:
 	board_heights = BoardHeights.new()   # no add_child: RefCounted, and it needs nothing from the tree
 	gas_field = GasField.new()   # the same: a RefCounted store, built beside its structural twin
 	gas_field.ground_source = terrain_states.ground_source   # gas needs ground, by the tile states' own rule
+	vein_field = VeinField.new()   # a vein needs ground too, by the same rule
+	vein_field.ground_source = terrain_states.ground_source
 
 	if DevTools.enabled():
 		height_debug_overlay = HeightDebugOverlay.new()
@@ -2514,6 +2517,7 @@ func _board() -> BoardContext:
 			mission_controller.mission if mission_controller != null else null)
 	board.weather = scenario_manager.current_weather   # #1260
 	board.atmosphere = scenario_manager.air_reading()   # #1324: the authored air, moved by the weather
+	board.veins = vein_field   # #696
 	return board
 
 # The plan being previewed (#313), for every readout of what the queue will do: the health bars' ghosts

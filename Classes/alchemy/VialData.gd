@@ -43,10 +43,7 @@ static func property_tips() -> Dictionary:
 # other -- which is exactly what Materia.gd's header reserved this spot for.
 func granted_elements() -> Array[Elemental.Element]:
 	if is_alkahest:
-		# duplicate(): SIGIL_ELEMENTS is a const Array and therefore READ-ONLY, and that flag
-		# travels with assignment -- handing the const out directly would hand out a list the
-		# caller cannot union into.
-		return Elemental.SIGIL_ELEMENTS.duplicate()
+		return Materia.alkahest()   # the alkahest vein's answer too (#696)
 	var only: Array[Elemental.Element] = []
 	if element != Elemental.Element.NONE:
 		only.append(element)

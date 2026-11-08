@@ -1,9 +1,9 @@
 extends VBoxContainer
 class_name AlchemySources
 
-# THE ALCHEMY PAGE'S SOURCES TAB (#1532, AlchemyTool hosts it): SubstanceMap's three tables -- what each
-# tile state, gas and unit state is MADE of, which is what a carving cast beside one can draw on
-# (CellSubstances). A GROUND is not here (#1315): what a tile is made of is its own made_of column,
+# THE ALCHEMY PAGE'S SOURCES TAB (#1532, AlchemyTool hosts it): SubstanceMap's four tables -- what each
+# tile state, gas, unit state and kind of materia vein (#696) is MADE of, which is what a carving cast
+# beside one can draw on (CellSubstances). A GROUND is not here (#1315): what a tile is made of is its own made_of column,
 # edited per tile on the Tiles page (ObjectTool), which borrows this page's parser and readout.
 #
 # IT EDITS THE LIVE MAP, never a copy: for the shipped path that is SubstanceMap.authored(), the one
@@ -16,7 +16,7 @@ class_name AlchemySources
 # and drops the enemy-range cache, as every page that moves what an enemy reaches does (#1360).
 #
 # The rows feed PRESENCE only (dev ruling 2026-10-30): Materia's +1 is a declared second reading. A vein
-# (#696) is per tile or per cell, so it gets no row here.
+# is painted per cell (VeinField), but what each KIND holds is a row here, as a tile state's is.
 
 const NOTE_COLOR := Color(0.62, 0.82, 1.0, 1)   # WeightsTool's note blue
 const BAD_COLOR := Color(1.0, 0.45, 0.4, 1)
@@ -96,6 +96,8 @@ static func groups() -> Array[Dictionary]:
 			[], func(k: int) -> String: return Gas.display_name(k as Gas.Kind))},
 		{"title": "Unit states", "table": &"unit_states", "members": _members(Elemental.State.values(),
 			[Elemental.State.NONE], func(k: int) -> String: return Elemental.state_display_name(k as Elemental.State))},
+		{"title": "Veins", "table": &"veins", "members": _members(Vein.Kind.values(),
+			[Vein.Kind.NONE], func(k: int) -> String: return Vein.display_name(k as Vein.Kind))},
 	]
 
 

@@ -1,9 +1,9 @@
 # Every thing the game names says what it is made of (SubstanceMap, Deep Alchemy phase 1).
 #
-# The element vocabulary (ELEMENTS) is code; the tile states, gases and unit states are AUTHORED rows in
-# Resources/SubstanceMap.tres (#1532), and a ground's makeup is its tile's made_of column (#1315). A new
-# Element, State, TileState or gas Kind reds here until it gets a row. A row or tile may be EMPTY (a hole
-# holds nothing), but every id it names must be a real substance file. Vials carry their own field, so
+# The element vocabulary (ELEMENTS) is code; the tile states, gases, unit states and veins (#696) are
+# AUTHORED rows in Resources/SubstanceMap.tres (#1532), and a ground's makeup is its tile's made_of column
+# (#1315). A new Element, State, TileState, gas Kind or Vein.Kind reds here until it gets a row. A row or
+# tile may be EMPTY (a hole holds nothing), but every id it names must be a real substance file. Vials carry their own field, so
 # they are held here too, with the vials that have no substance yet declared.
 extends GdUnitTestSuite
 
@@ -131,6 +131,12 @@ func test_every_extract_only_part_is_a_substance() -> void:
 func test_every_gas_says_what_it_is() -> void:
 	# The gas looks hang on this answer (#508): a gas with no substance has no chemistry to draw.
 	assert_array(_check_rows(SubstanceMap.authored().gases, Gas.Kind.values(), Gas.Kind.keys(), "Gas")).is_empty()
+
+
+# An empty vein row is legal: alkahest and aether hold no formula yet, as their vials say below.
+func test_every_vein_says_what_it_is() -> void:
+	var members := _members_except(Vein.Kind.values(), [Vein.Kind.NONE])
+	assert_array(_check_rows(SubstanceMap.authored().veins, members, Vein.Kind.keys(), "Vein")).is_empty()
 
 
 func test_every_vial_names_its_substance_or_says_why_not() -> void:
