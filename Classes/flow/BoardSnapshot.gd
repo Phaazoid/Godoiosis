@@ -43,6 +43,7 @@ var terrain_state_starts: Dictionary = {}  # TerrainStateManager.to_starts_dict(
 var terrain_paces: Dictionary = {}  # TerrainStateManager.to_paces_dict()
 var corner_heights: Dictionary = {}  # BoardHeights.to_corner_dict()
 var gas: Dictionary = {}             # GasField.to_dict() (#508)
+var veins: Dictionary = {}           # VeinField.to_dict() (#696)
 var zones: Dictionary = {}           # ZoneManager.to_dict()
 
 
@@ -62,6 +63,7 @@ func equals(other: BoardSnapshot) -> bool:
 		and terrain_paces == other.terrain_paces \
 		and corner_heights == other.corner_heights \
 		and gas == other.gas \
+		and veins == other.veins \
 		and zones == other.zones
 
 
@@ -195,6 +197,7 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 	snapshot.terrain_paces = scenario.terrain_paces
 	snapshot.corner_heights = scenario.corner_heights
 	snapshot.gas = scenario.gas
+	snapshot.veins = scenario.veins
 	snapshot.zones = scenario.zones
 	return snapshot
 
@@ -203,11 +206,12 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 # (#1365). ScenarioManager.restore_board adds its overlay redraws on top; the headless BoardBuilder has
 # none to add, and used to hand-copy this list -- the second copy a new store would be missed by.
 func restore_into(grid: BoardGrid, states: TerrainStateManager, heights: BoardHeights, gas_store: GasField,
-		zone_store: ZoneManager) -> void:
+		vein_store: VeinField, zone_store: ZoneManager) -> void:
 	grid.restore(tile_data)
 	states.load_state_dict(terrain_states, terrain_state_turns, terrain_state_starts, terrain_paces)
 	heights.load_corner_dict(corner_heights)
 	gas_store.load_dict(gas)
+	vein_store.load_dict(veins)
 	zone_store.load_dict(zones)
 
 
@@ -219,4 +223,5 @@ func write_into(scenario: ScenarioData) -> void:
 	scenario.terrain_paces = terrain_paces
 	scenario.corner_heights = corner_heights
 	scenario.gas = gas
+	scenario.veins = veins
 	scenario.zones = zones

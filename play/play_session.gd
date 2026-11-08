@@ -18,6 +18,7 @@ var overlay_manager: OverlayManager
 var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
 var board_heights: BoardHeights           # twin of game.board_heights (#257); null board reads flat
 var gas_field: GasField                   # twin of game.gas_field (#508); null on a board built without one
+var vein_field: VeinField                 # twin of game.vein_field (#696); null on a board built without one
 var scenario_data: ScenarioData          # authored scenario metadata (#612); null on fresh new boards
 var reserve_root: Node2D                  # where a drawn roster waits off the board (#46); null on a board built without one
 var zone_manager: ZoneManager             # the zones the deployment cells are read from (#46)
@@ -55,6 +56,7 @@ func _init(board: Dictionary) -> void:
 	terrain_states = board.get("terrain_states")
 	board_heights = board.get("board_heights")
 	gas_field = board.get("gas_field")
+	vein_field = board.get("vein_field")
 	scenario_data = board.get("scenario")
 	reserve_root = board.get("reserve_root")
 	zone_manager = board.get("zone_manager")
@@ -169,6 +171,7 @@ func reserve_units() -> Array[Unit]:
 func _board() -> BoardContext:
 	var board := BoardContext.new(grid, live_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission)
+	board.veins = vein_field   # #696
 	board.weather = _weather()
 	board.atmosphere = BoardBuilder.atmosphere_of(_built)   # #1324: the air as played, the builder's one composition
 	return board

@@ -423,3 +423,33 @@ func test_a_round_writes_only_the_fields_play_is_declared_to_write() -> void:
 	for field in changed:
 		assert_bool(BoardSnapshot.PLAY_WRITTEN.has(field)).override_failure_message(
 				"a round wrote '%s', which BoardSnapshot.PLAY_WRITTEN does not declare" % field).is_true()
+
+
+# ---- materia veins (#696) ----
+
+func _paint_vein(kind: Vein.Kind, cell: Vector2i) -> void:
+	_brush._set_paint_mode(TileBrushTool.PaintMode.VEIN)
+	_brush._vein_kind = kind
+	_stroke(MOUSE_BUTTON_LEFT, [cell] as Array[Vector2i])
+
+
+# Play writes no vein, so a played board saves its veins as painted, through the header's own capture.
+func test_a_painted_vein_saves_as_painted_through_play() -> void:
+	_paint_vein(Vein.Kind.AETHER, FIRE)
+	assert_int(game.vein_field.kind_at(FIRE)).override_failure_message(
+			"precondition: the brush painted no vein, so nothing below proves anything").is_equal(Vein.Kind.AETHER)
+	_round()
+	assert_dict(_saved().veins).is_equal({FIRE: Vein.Kind.AETHER})
+
+
+# A save and a load in memory (capture_scenario -> apply_scenario) carry the veins back onto a board
+# that lost them.
+func test_a_save_and_load_carries_the_veins() -> void:
+	_paint_vein(Vein.Kind.LIGHTNING, FIRE)
+	var scenario: ScenarioData = game.scenario_manager.capture_scenario("veined", false)
+	game.vein_field.clear()
+
+	game.scenario_manager.apply_scenario(scenario)
+
+	assert_int(game.vein_field.kind_at(FIRE)).override_failure_message(
+			"the load dropped the vein the save captured").is_equal(Vein.Kind.LIGHTNING)

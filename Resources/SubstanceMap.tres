@@ -25,3 +25,12 @@ unit_states = Dictionary[int, PackedStringArray]({
 2: PackedStringArray("ice"),
 3: PackedStringArray("smoke")
 })
+veins = Dictionary[int, PackedStringArray]({
+1: PackedStringArray("sulfur"),
+2: PackedStringArray("mercury"),
+3: PackedStringArray("salt"),
+4: PackedStringArray("nitre"),
+5: PackedStringArray(),
+6: PackedStringArray(),
+7: PackedStringArray("lightning")
+})

@@ -85,9 +85,25 @@ func test_nothing_but_the_ground_is_on_the_ground_layer() -> void:
 	await _settle()
 	assert_bool(gas.floor_node().mesh != null and gas.puff_node().multimesh.instance_count > 0) \
 			.override_failure_message("no gas floor or puff was raised, so their layers are never asked").is_true()
+	# The materia veins' crystals (#696): one vein of each habit, so every habit's mesh is on the board to be
+	# asked (alkahest only mixes these, by a draw the cell seeds). Their stain is a Decal of its own, ground-only.
+	var veins := _scene.get_node("VeinMirror") as VeinMirror
+	var off_limits: Array[Vector2i] = [burning[0]]
+	off_limits.append_array(mirror._props.keys())
+	for habit: Vein.Kind in VeinMirror.HABITS:
+		var vein_cell := _a_free_cell(off_limits)
+		off_limits.append(vein_cell)
+		_game.vein_field.set_kind(vein_cell, habit)
+	await _settle()
+	for habit: Vein.Kind in VeinMirror.HABITS:
+		assert_int(veins.crystal_count(habit)).override_failure_message(
+				"no %s crystal grew, so its layer is never asked" % Vein.display_name(habit)).is_greater(0)
+	assert_int(veins.stain_node().cull_mask).override_failure_message(
+			"the veins' stain paints more than the ground").is_equal(GROUND)
 	# A body frozen in the ice (#1506): its ring of crystals and the copy of the body over it.
 	var avoid: Array[Vector2i] = [burning[0]]
 	avoid.append_array(mirror._props.keys())   # the props the walk below counts stay standing
+	avoid.append_array(_game.vein_field.cells())
 	var lake := _a_free_cell(avoid)
 	(_game.grid as BoardGrid).paint(lake, 0, DEEP_WATER)
 	var freeze := ResolvedCellEffect.new()

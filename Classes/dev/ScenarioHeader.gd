@@ -46,6 +46,7 @@ const SAVED_AS_AUTHORED := "Saved as authored. Play had changed the tile states 
 # deliberately signal-free; gated on the window being visible.
 var _seen_terrain_version := -1
 var _seen_gas_version := -1   # the gas store's counter, the same poll (#508)
+var _seen_vein_version := -1   # the vein store's, the same poll (#696)
 var _seen_heights_version := -1   # corner heights (#1182)
 var _seen_states_version := -1    # tile states (#1182)
 var _seen_play_version := -1      # what play changed (#1182)
@@ -108,6 +109,7 @@ func is_modified() -> bool:
 		return false
 	return _marked or game.grid.dirty.version != _seen_terrain_version \
 		or game.gas_field.dirty.version != _seen_gas_version \
+		or game.vein_field.dirty.version != _seen_vein_version \
 		or game.board_heights.dirty.version != _seen_heights_version \
 		or game.terrain_states.dirty.version != _seen_states_version \
 		or scenario_manager.play_version != _seen_play_version
@@ -119,6 +121,7 @@ func _stamp_clean() -> void:
 	if game != null:
 		_seen_terrain_version = game.grid.dirty.version
 		_seen_gas_version = game.gas_field.dirty.version
+		_seen_vein_version = game.vein_field.dirty.version
 		_seen_heights_version = game.board_heights.dirty.version
 		_seen_states_version = game.terrain_states.dirty.version
 	if scenario_manager != null:

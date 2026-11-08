@@ -7,9 +7,10 @@ class_name SubstanceMap
 #   ELEMENTS, CARRIED_AS_TOO   code. What a hit of each element IS, read backwards to say what a
 #                              carving hits as. The element vocabulary, not a source.
 #   tile_states, gases,        AUTHORED (#1532), in Resources/SubstanceMap.tres. What each tile state,
-#   unit_states                gas and unit state holds: what a carving beside it can draw on
-#                              (CellSubstances). A row may name several substances (Burning is flame
-#                              and heat, #1535); an empty row holds nothing (an entrenchment).
+#   unit_states, veins         gas, unit state and materia vein (#696) holds: what a carving beside it
+#                              can draw on (CellSubstances). A row may name several substances
+#                              (Burning is flame and heat, #1535); an empty row holds nothing (an
+#                              entrenchment, an alkahest vein).
 #
 # A GROUND has no row here (#1315): what a tile is made of is authored WITH ITS ART, the tileset's
 # made_of column (GridUtils.made_of), so a new-looking ground needs no new Terrain.Kind. A vial is
@@ -40,6 +41,7 @@ const CARRIED_AS_TOO: Dictionary[String, Elemental.Element] = {
 @export var tile_states: Dictionary[Terrain.TileState, PackedStringArray] = {}
 @export var gases: Dictionary[Gas.Kind, PackedStringArray] = {}
 @export var unit_states: Dictionary[Elemental.State, PackedStringArray] = {}
+@export var veins: Dictionary[Vein.Kind, PackedStringArray] = {}
 
 # The authored map, held so a reader per cell pays no path lookup. The dev tools edit and save this
 # same object (DevWidgets.save_over writes through to the owner of the path), so a live edit reaches
@@ -70,6 +72,10 @@ func of_gas(kind: Gas.Kind) -> Array[String]:
 
 func of_state(state: Elemental.State) -> Array[String]:
 	return _ids(unit_states.get(state, PackedStringArray()))
+
+
+func of_vein(kind: Vein.Kind) -> Array[String]:
+	return _ids(veins.get(kind, PackedStringArray()))
 
 
 static func of_element(element: Elemental.Element) -> String:

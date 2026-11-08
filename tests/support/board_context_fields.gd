@@ -23,6 +23,7 @@ const UNSEALED := {
 	"grid": "the ground's kind; a pass changes none, and every write announces itself (BoardGrid, test_board_writes_announce)",
 	"heights": "the ground's shape; a pass changes none, and every write announces itself",
 	"zones": "painted mission zones; a pass changes none",
+	"veins": "authored materia veins (#696); a pass changes none",
 	"units": "bodies, sealed on the body side (Unit.state, Unit.open_seal)",
 	"squad_manager": "the queue and its projection; bodies through it are sealed on the body side",
 	"weather": "a value the builder hands the board for its length; a pass changes none",

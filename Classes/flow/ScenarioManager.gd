@@ -267,6 +267,7 @@ func capture_board() -> BoardSnapshot:
 	snapshot.terrain_paces = game.terrain_states.to_paces_dict()   # #1311
 	snapshot.corner_heights = game.board_heights.to_corner_dict()
 	snapshot.gas = game.gas_field.to_dict()
+	snapshot.veins = game.vein_field.to_dict()
 	snapshot.zones = game.zone_manager.to_dict()
 	return snapshot
 
@@ -280,7 +281,7 @@ func capture_board() -> BoardSnapshot:
 func restore_board(snapshot: BoardSnapshot) -> void:
 	# The store list both loaders share (#1365); the redraws are this host's own.
 	snapshot.restore_into(grid as BoardGrid, game.terrain_states, game.board_heights, game.gas_field,
-			game.zone_manager)
+			game.vein_field, game.zone_manager)
 	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
 	overlay_manager.redraw_terrain_live(game.terrain_states)
 	overlay_manager.redraw_zones(game.zone_manager, game.mission_controller.hidden_zone_names())
@@ -633,6 +634,7 @@ func clear_board():
 	game.board_heights.clear()   # so is elevation (#257) -- a sandbox spawn starts flat, not on the
 								 # last mission's cliff. apply_scenario refills it straight after.
 	game.gas_field.clear()   # and gas (#508) -- the atmosphere is board content like the rest
+	game.vein_field.clear()   # and the veins (#696)
 	if game.dev_overlay != null:
 		game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()
