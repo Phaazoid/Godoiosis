@@ -17,7 +17,8 @@ var gas_added: Dictionary[Gas.Kind, int] = {}
 # GasField.fold takes it in that order for apply and the planned tiles alike, so the forecast and both
 # executors agree.
 # A hit that shoves BLOWS the gas instead (#1332): the same clear here, plus the same levels in the
-# gas_added of the effect on the tile it lands on, so a push needs no field of its own.
+# gas_added of the effect on the tile it lands on, so a push needs no field of its own. Blown past the
+# board's edge it lands nowhere (#1638), so it reads as a dispersal.
 var gas_cleared := false
 # A life the deposit brings for a state it adds (#894: an attack's laid tile effect), in rounds. Runs
 # only where the ground gives that state no clock of its own, and only for a state the cell did not
