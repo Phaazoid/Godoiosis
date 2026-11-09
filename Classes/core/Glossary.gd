@@ -41,7 +41,7 @@ enum Term {
 	ELEMENTS, AFFINITY, AURA, WET, CHILLED, SMOKED, REACTIONS, ATMOSPHERE,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER, QUICKLIME, BRICK,
-	THUNDERSTONE, HELD, QUICKENED,
+	THUNDERSTONE, GYPSUM, QUICKSILVER, HELD, QUICKENED,
 	# Lifecycle
 	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
 	# Missions (one per player-facing ZoneManager.Kind, #1105, then the VIP the pre-mission screen
@@ -115,7 +115,8 @@ static func term_for_tile_state(state: Terrain.TileState) -> Term:
 		Terrain.TileState.BURNING: Term.BURNING, Terrain.TileState.SCORCHED: Term.SCORCHED,
 		Terrain.TileState.FROZEN: Term.FROZEN, Terrain.TileState.COVER: Term.COVER,
 		Terrain.TileState.QUICKLIME: Term.QUICKLIME, Terrain.TileState.BRICK: Term.BRICK,
-		Terrain.TileState.THUNDERSTONE: Term.THUNDERSTONE,
+		Terrain.TileState.THUNDERSTONE: Term.THUNDERSTONE, Terrain.TileState.GYPSUM: Term.GYPSUM,
+		Terrain.TileState.QUICKSILVER: Term.QUICKSILVER,
 	}
 	# Deliberately a bare lookup and not a get() with a fallback: test_glossary_coverage walks
 	# every live TileState through here, so a member with no row is a red suite rather than a
@@ -650,6 +651,16 @@ static func _build_entries() -> Dictionary:
 		"long": "Sand that lightning has struck and fused into glass. The strike stays in the stone, "
 			+ "and a carving that extracts lightning can draw on it when cast beside it, with no "
 			+ "lightning of its own to carry."}
+	e[Term.GYPSUM] = {"category": Category.TERRAIN, "title": "Gypsum",
+		"short": "Lime that vitriol has eaten into soft white stone. It stays gypsum.",
+		"long": "Chalky soil or limestone a vitriol hit has corroded. The vitriol is bound into the "
+			+ "stone for good, so nothing sets it free, and gypsum never goes back to lime. On "
+			+ "limestone the hit fizzes, giving off a thin smoke."}
+	e[Term.QUICKSILVER] = {"category": Category.TERRAIN, "title": "Quicksilver",
+		"short": "Cinnabar roasted by fire, its quicksilver pooled in the ground. A carving that needs quicksilver draws on it.",
+		"long": "Cinnabar a fire has roasted. The fire burns the sulfur out of the ore as a thin "
+			+ "smoke and leaves its quicksilver lying in the ground, and a carving that needs "
+			+ "quicksilver can draw on it when cast beside it, with none of its own to carry."}
 	# A time mark (#1311). The tile card prefixes the substance it names, which is what "it" means here.
 	e[Term.HELD] = {"category": Category.TERRAIN, "title": "Held",
 		"short": "Nothing made of it changes at the round's end: a fire here neither spreads nor burns down.",

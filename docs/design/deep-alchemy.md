@@ -584,7 +584,7 @@ Equivalent exchange conserves atoms, not power; the exploit surface is loops and
 
 > **Provenance:** written by Claude (Opus 5.5) on 2026-10-07, updated 2026-11-07. It records what the code holds today and proposes nothing. Everything above the first horizontal rule is still c3potheds@'s.
 
-**Canon checked through #1638 (2026-11-08); #1536 (Disperse's equation, `A2 -> A2`, with its carry and edge ideas split to #1637 and #1638) folded in 2026-11-08; #1635 slice 1 (quicklime, brick and thunderstone: ground reactions gated on what a tile is made of) folded in 2026-11-07; #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05; #1421 (Smokescreen: a carving lays a smoke cloud, and smoke becomes the molecule `A2*AE`) folded in 2026-11-07; #696 (materia veins) folded in 2026-11-07; #695 slice 1 (empowered forms) folded in 2026-11-08.**
+**Canon checked through #1638 (2026-11-08); #1536 (Disperse's equation, `A2 -> A2`, with its carry and edge ideas split to #1637 and #1638) folded in 2026-11-08; #1635 slice 2 (gypsum and ore roasting: the Spray strikes tiles, vitriol corrodes lime, fire roasts a cinnabar ground) folded in 2026-11-08; #1635 slice 1 (quicklime, brick and thunderstone: ground reactions gated on what a tile is made of) folded in 2026-11-07; #1534 (the air's Normal and step move to `AtmosphereRules`, tuned on the Air & gas page) folded in 2026-11-05; #1622 (reaction steam lands after its volley's air half) folded in 2026-11-05; #1315 slice 2 (four new grounds) folded in 2026-11-05; #1311 (Quicken and Still) folded in 2026-11-05; #1421 (Smokescreen: a carving lays a smoke cloud, and smoke becomes the molecule `A2*AE`) folded in 2026-11-07; #696 (materia veins) folded in 2026-11-07; #695 slice 1 (empowered forms) folded in 2026-11-08.**
 
 **Phase 1: formulas and a lint.** Agreed in #iosis-talk on 2026-10-06, filled in 2026-10-11. Nothing in play reads any of it. *(Since Phase 2, 2026-10-11, carvings read the substances, `AlchemyFormula` and `SubstanceMap` in play; the equations and `ReactionLint` still are not read.)*
 
@@ -1061,9 +1061,9 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - They are on the Tile Brush and each has a Tiles page, where one Made of edit changes it.
 - **Limestone is DIRT, not ROCK** (his ruling). It wears earth sides in 3D, and it is not an Earth source for empowerment, which `Materia.sources_at` still answers by kind.
 - **None holds salt or water.** Rock Throw stays greyed beside them, and Wellspring fizzles with only these in reach, as it does on stone.
-- **Nothing reads silica, alumina or chalk yet.** #1621's starter list is what will. *(Since #1635, a shock fuses sand and a fire bakes clay soil, below.)*
+- **Nothing reads silica, alumina or chalk yet.** #1621's starter list is what will. *(Since #1635, a shock fuses sand, a fire bakes clay soil and vitriol corrodes chalky soil, below.)*
 - **Walkable ground with a kind must name its makeup** (`tests/law/test_substance_map.gd`), so the next new ground cannot ship with every carving silently fizzling on it.
-- **Not built:** the ground reactions (quicklime, brick, gypsum and the rest), which are not ruled. *(Quicklime, brick and thunderstone are built as working defaults, #1635 slice 1, below; gypsum and ore roasting are its slice 2.)*
+- **Not built:** the ground reactions (quicklime, brick, gypsum and the rest), which are not ruled. *(All five are built as working defaults, #1635, below: quicklime, brick and thunderstone in slice 1, gypsum and ore roasting in slice 2.)*
 
 **Built 2026-11-05: Quicken and Still, the round clock ([#1311](https://github.com/Phaazoid/Godoiosis/issues/1311)).** Phaazoid@ approved the plan in a Claude session the same day. Every default below is one to change once played.
 - **A mark holds X, not the whole cell.** A carving with `Still(X)` or `Quicken(X)` lays a time mark on every tile it strikes, one per substance its time verbs name. A tile state or gas on that tile is held or quickened when its `SubstanceMap` row makes X present, the parts it lends included. So `Still(F)` holds a fire (flame and heat) and leaves the smoke over it alone. `Pace` is the one answer.
@@ -1094,7 +1094,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **The look:** low crystals strung toward same-kind neighbours, each element in its own habit and colour, alkahest mixing all five, the middle of each tile kept clear for a unit; a soft stain under the vein on the ground alone. Every value is a Game-tab row (the **Veins** groups on the Elemental page).
 - **Not built:** a drill that opens or buries a vein, a tile-card line (#699/#1319's readability pass), hidden veins and Vein-sense (the hidden-information grill), and any authored board that holds one: no committed mission paints a vein yet.
 
-**Built 2026-11-07: quicklime, brick and thunderstone, the first ground reactions ([#1635](https://github.com/Phaazoid/Godoiosis/issues/1635), slice 1).** Phaazoid@ approved the plan of working defaults and the look, from a mock in the real game, in a Claude session the same day. Every default below is one to change once played. Gypsum and ore roasting are slice 2.
+**Built 2026-11-07: quicklime, brick and thunderstone, the first ground reactions ([#1635](https://github.com/Phaazoid/Godoiosis/issues/1635), slice 1).** Phaazoid@ approved the plan of working defaults and the look, from a mock in the real game, in a Claude session the same day. Every default below is one to change once played. Gypsum and ore roasting are slice 2, below.
 - **The gate is what the tile is MADE of:** `TerrainReaction.required_made_of`, one substance the tile's own `made_of` column must name. All four earths are DIRT, so `required_kind` cannot tell them apart. A part another substance lends does not count, so loam's alumina is not clay. It joins the one predicate, `applies_to_tile(kind, held, made_of)`, so the tile card and the resolver still read one rule. The glossary page words it "Fire on Limestone".
 - **What a reaction leaves is a tile state on the same ground**, never a new ground: a pass cannot write the grid. Three new `Terrain.TileState` members, appended: QUICKLIME, BRICK, THUNDERSTONE. Each has a `SubstanceMap` row naming its substance.
 - **Calcines:** a fire hit on limestone sets Quicklime and releases thin smoke. `F2 + limestone + A2 -> quicklime + smoke`: limestone's fixed air leaves as the smoke, and the fire stays bound in the lime.
@@ -1113,6 +1113,22 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
   - A state laid on a ground leaves the ground's own makeup present too.
   - The AI does not seek any of this out (#117).
 
+**Built 2026-11-08: gypsum and ore roasting ([#1635](https://github.com/Phaazoid/Godoiosis/issues/1635), slice 2).** Both had waited on a missing piece: nothing delivered vitriol to the ground, and no ground was an ore. Phaazoid@ approved one default for each, the plan and the look, from a mock in the real game, in a Claude session the same day, and renamed "Effervesces" to "Fizzes" as too unknown a word. Every default below is one to change once played.
+- **Vitriol reaches the ground through the Chemical Spitter's Spray**, which now strikes tiles as well as units (`targets` BOTH on the Spray and the Pressurised Spray). A Corrosion hit already IS vitriol (`SubstanceMap.ELEMENTS`); the Spray never touched the ground. So a Spray at bare ground is now a legal order, and a Spray at a body corrodes the ground under it too. The AI never aims one at bare ground, which scores nothing (`AITactics._map_pays`).
+- **Cinnabar is a fifth ground** on the ground sheet: DIRT, made of `cinnabar` (`QE*WE*WE*FE`, a molecule, so it lends nothing). It is on the Tile Brush and has a Tiles page, like the four before it.
+- **Corrodes:** a Corrosion hit on chalky soil sets Gypsum. `chalk + vitriol -> gypsum`.
+- **Fizzes:** a Corrosion hit on limestone sets Gypsum and releases thin smoke. `limestone + vitriol + A2 -> gypsum + smoke`: limestone's fixed air leaves as the smoke, as it does when it calcines.
+- **Roasts:** a fire hit on cinnabar sets Quicksilver and releases thin smoke. `F2 + cinnabar + FA -> 2F2 + quicksilver + AE`: the burning of sulfur (`F2 + FE + FA -> 2F2 + AE`) with the ore in sulfur's place. Its ash is why it smokes; `ReactionLint` reads ash as smoke.
+- **Gypsum** (`WE2*FE*W2*FA`) and **quicksilver** (`QE*WE*WE`, a liquid; the quicksilver of the list above, not mercury) are molecules too. Gypsum keeps its vitriol for good. Quicksilver is FREE, not held: a Quicksilver tile makes it present to any carving cast beside it, though nothing shipped asks for it yet.
+- **How long:** both permanent. Each reaction forbids its own state, so a second hit does nothing.
+- **The look:** a crimson-veined cinnabar ground, and two flat placeholder icons drawn and ghosted the way Scorched is. Each state has a glossary entry, the card lists the reaction a ground can take, and the Play API draws them as `|` and `$`.
+- **Declared limits:**
+  - The roast's freed flame is not lit: the tile does not catch.
+  - Quicklime does not take vitriol, and gypsum does not calcine.
+  - Cinnabar is the only ore.
+  - A state laid on a ground leaves the ground's own makeup present too, so roasted cinnabar is still cinnabar.
+  - The AI does not seek any of this out (#117).
+
 **Built 2026-11-08: empowered forms, slice 1 ([#695](https://github.com/Phaazoid/Godoiosis/issues/695)).** Phaazoid@ ruled the shape and R1 to R7 in a Claude session the same day, and the picks are recorded on #695. Canon for what empowerment buys is [alchemy-kit.md](alchemy-kit.md) → *Empowerment*.
 - **A DELTA held inside the carving's own file:** `TransmutationData.empowered`, an `EmpoweredForm` sub-resource. It may set a name and popup, a shape (and Swing), a power and shove bonus, a tile effect and gases. The recipe, range, cost, demand and fizzle stay the base's: it is the same carving, fired differently. `empowered_carving()` builds the derived carving once (`form_of` points back) and drops it when either half emits `changed`.
 - **It fires where the caster is empowered in EVERY element its `requires` checklist names** (R1, changed by the dev from the proposal). Empty means the elements the hit delivers, the set the +1 reads. A carving empowered in only some of them fires its base at plain power, with no +1.
@@ -1129,7 +1145,7 @@ New substances: ice `QW`, frost cloud `QW + A2`, green plant `AE + 2FA + W2`, dr
 - **A ninth gas kind** needs the renderer's cells texture to pack kinds wider than a byte: all eight are spent since #1427.
 - **Thunder's clap** ([#1270](https://github.com/Phaazoid/Godoiosis/issues/1270)).
 
-**Still open in Phase 2:** alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's ground reactions (gypsum and ore roasting, #1635 slice 2; quicklime, brick and thunderstone are built as working defaults, #1635 slice 1, above). Ichor, light and shadow, and whether gas spread conserves matter stay open below.
+**Still open in Phase 2:** alkahest's guard (#1314, closed 2026-10-12: c3potheds@ answered that alkahest is the prima materia, not `QFAWE`, so it has no formula and no Bind can make it; an alkahest aura point stays a channeling wildcard); mineralogy's ground reactions, all five built as working defaults (#1635, above) and open only to tuning once played. Ichor, light and shadow, and whether gas spread conserves matter stay open below.
 
 **Still open:**
 

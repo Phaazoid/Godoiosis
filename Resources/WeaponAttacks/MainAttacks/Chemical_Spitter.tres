@@ -19,6 +19,7 @@ max_range = 0
 attack_shape = ExtResource("1_y1dfg")
 swing = true
 hits_allies = true
+targets = 2
 vertical_rule = 1
 pierces_guard = true
 damage_kind = 6

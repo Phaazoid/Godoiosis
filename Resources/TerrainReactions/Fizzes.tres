@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://dqf466m16f4x5"]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_krkrm"]
+
+[resource]
+script = ExtResource("1_krkrm")
+incoming_element = 8
+required_made_of = "limestone"
+forbidden_tile_state = 9
+add_tile_states = Array[int]([9])
+gases = Dictionary[int, int]({
+1: 1
+})
+equation = "limestone + vitriol + A2 -> gypsum + smoke"
+popup = "Fizzes!"

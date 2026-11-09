@@ -1,12 +1,13 @@
 # #1635's GROUND REACTIONS: a hit that changes one ground and not another of the same kind. Fire calcines
 # limestone to quicklime and water slakes it into steam; fire bakes clay soil to brick; a shock fuses sand
-# to thunderstone, whose lightning a carving's Extract can draw. The gate is what the tile is MADE of
-# (TerrainReaction.required_made_of), read off the tile's own made_of column.
+# to thunderstone, whose lightning a carving's Extract can draw; vitriol corrodes chalky soil and limestone
+# to gypsum; fire roasts cinnabar, leaving its quicksilver in the ground. The gate is what the tile is MADE
+# of (TerrainReaction.required_made_of), read off the tile's own made_of column.
 #
 # Every cast goes through the player's own doors (select, aim, click, execute), and the queued plan is
 # read BEFORE it plays, so each case also holds Law #2. No authored value is pinned: each reaction is
 # loaded by its file and every expectation is read off its own fields, the reacting ground is whichever
-# tile the TileSet says is made of that substance, and each carving is built here.
+# tile the TileSet says is made of that substance, and each carving and weapon is built here.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -23,6 +24,7 @@ const TARGET := Vector2i(4, 3)         # three tiles from the caster
 const AWAY := Vector2i(1, 6)           # three tiles from the caster and from the source
 const RANGE := 3
 const LIFE := 2                        # the own-life case's turns, this suite's number
+const QUICKSILVER := "quicksilver"     # what roasting frees: the issue's own subject, not a tuning value
 
 var _main: Node
 var game: Node2D
@@ -106,6 +108,14 @@ func _end_round() -> void:
 
 # A placed single-cell carving at RANGE that strikes the map, deals no damage and carries `element`.
 func _carving(recipe: String, element: Elemental.Element) -> TransmutationData:
+	var carving := _carving_of(recipe)
+	assert_array(carving.get_elements()).override_failure_message(
+			"fixture: '%s' does not carry %s" % [recipe, Elemental.display_name(element)]).contains([element])
+	return carving
+
+
+# The same carving, asked for no element: what it delivers may carry none.
+func _carving_of(recipe: String) -> TransmutationData:
 	var carving := TransmutationData.new()
 	carving.display_name = "Test cast"
 	carving.recipe = recipe
@@ -116,9 +126,37 @@ func _carving(recipe: String, element: Elemental.Element) -> TransmutationData:
 	carving.targets = EquippableData.TargetMode.BOTH
 	P.point(carving, RANGE)
 	assert_str(carving.recipe_error()).override_failure_message("fixture: '%s' does not parse" % recipe).is_empty()
-	assert_array(carving.get_elements()).override_failure_message(
-			"fixture: '%s' does not carry %s" % [recipe, Elemental.display_name(element)]).contains([element])
 	return carving
+
+
+# A caster whose one carving pushes the substance `reaction`'s hit IS, carried in a conduit (#1312),
+# which no cast uses up.
+func _conduit_caster(reaction: TerrainReaction) -> Unit:
+	var id := SubstanceMap.of_element(reaction.incoming_element)
+	var caster := _caster(CASTER_CELL, _carving("Push(%s)" % id, reaction.incoming_element))
+	var conduit := ConduitData.new()
+	conduit.display_name = "Test conduit"
+	conduit.substance = SubstanceCatalog.by_id(id)
+	assert_object(conduit.substance).override_failure_message("precondition: no substance '%s'" % id).is_not_null()
+	assert_bool(caster.add_item(conduit)).override_failure_message("fixture: the conduit did not fit").is_true()
+	return caster
+
+
+# A spitter-family weapon whose main is a point attack at RANGE carrying `element` to units AND tiles,
+# the Targets the Chemical Spitter's Spray is authored with.
+func _spitter(element: Elemental.Element) -> WeaponInstance:
+	var spray := WeaponAttackData.new()
+	spray.display_name = "Test spray"
+	spray.elemental_damage_type = element
+	spray.targets = EquippableData.TargetMode.BOTH
+	P.point(spray, RANGE)
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHEMICAL_SPITTER
+	template.main_attack = spray
+	var weapon := WeaponInstance.make(template)
+	assert_bool(weapon is ChemicalSpitterWeaponInstance).override_failure_message(
+			"fixture: the spitter family no longer makes a ChemicalSpitterWeaponInstance").is_true()
+	return weapon
 
 
 # A caster at `cell` whose one carving is `carving`, with the aura it demands.
@@ -264,6 +302,68 @@ func test_thunderstone_lends_its_lightning_to_an_extract_alone() -> void:
 			"the game queued a Push on thunderstone's held lightning").is_false()
 
 
+func test_vitriol_on_chalky_soil_corrodes_it_once() -> void:
+	var corrodes := _reaction("Corrodes")
+	_paint_made_of(TARGET, corrodes.required_made_of)
+	var caster := _conduit_caster(corrodes)
+	await _cast_and_check(caster, TARGET, corrodes)
+
+	await _end_round()
+	assert_bool(_queue_cast(caster, TARGET)).override_failure_message("the second cast was refused").is_true()
+	var plan: ResolvedPlan = game.previewed_plan()
+	for deposit: Dictionary in plan.pending_deposits():
+		assert_bool(deposit.get("cell") == TARGET and deposit.has("state")).override_failure_message(
+				"vitriol on gypsum deposited %s again" % Terrain.TileState.keys()[deposit.get("state", 0)]).is_false()
+
+
+func test_vitriol_on_limestone_fizzes_to_gypsum_and_smoke() -> void:
+	var fizzes := _reaction("Fizzes")
+	_paint_made_of(TARGET, fizzes.required_made_of)
+	await _cast_and_check(_conduit_caster(fizzes), TARGET, fizzes)
+
+
+func test_fire_on_cinnabar_roasts_it_to_quicksilver_and_smoke() -> void:
+	var roasts := _reaction("Roasts")
+	_paint_made_of(TARGET, roasts.required_made_of)
+	_lay(SOURCE_CELL, Terrain.TileState.BURNING)
+	var caster := _caster(CASTER_CELL, _carving("Push(F2)", roasts.incoming_element))
+	await _cast_and_check(caster, TARGET, roasts)
+
+
+# Roasting leaves the ore's quicksilver IN the ground: a carving that pushes it is refused beside plain
+# cinnabar (an ore lends nothing until it is roasted) and queues beside a roasted tile, with none carried.
+func test_a_roasted_tile_lends_its_quicksilver_to_a_carving() -> void:
+	var roasts := _reaction("Roasts")
+	_paint_made_of(SOURCE_CELL, roasts.required_made_of)
+	var carving := _carving_of("Push(%s)" % QUICKSILVER)
+	var caster := _caster(CASTER_CELL, carving)
+	assert_str(CellSubstances.fizzle_reason(carving, CASTER_CELL, game._board(), caster.state)).override_failure_message(
+			"precondition: %s is present beside plain %s; the fixture has another source" % [
+			QUICKSILVER, roasts.required_made_of]).is_not_empty()
+	assert_bool(_queue_cast(caster, TARGET)).override_failure_message(
+			"the game queued a %s cast beside plain %s" % [QUICKSILVER, roasts.required_made_of]).is_false()
+	game.exit_current_mode()
+
+	_lay(SOURCE_CELL, roasts.add_tile_states[0])
+	assert_str(CellSubstances.fizzle_reason(carving, CASTER_CELL, game._board(), caster.state)).override_failure_message(
+			"a roasted tile beside the caster lent it no %s" % QUICKSILVER).is_empty()
+	assert_bool(_queue_cast(caster, TARGET)).override_failure_message(
+			"the game refused a %s cast beside a roasted tile" % QUICKSILVER).is_true()
+
+
+# THE PLAYER'S ROUTE: vitriol reaches the ground through the Chemical Spitter's Spray, which strikes tiles
+# as well as units. Fired at a body standing on chalky soil, it corrodes the ground under the body: a
+# Spray that struck units alone would hit the body and leave the soil as it was.
+func test_a_spitters_spray_corrodes_the_ground_under_its_target() -> void:
+	var corrodes := _reaction("Corrodes")
+	_paint_made_of(TARGET, corrodes.required_made_of)
+	var foe: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.ENEMY), TARGET)
+	assert_object(foe).override_failure_message("fixture: no foe would spawn at %s" % TARGET).is_not_null()
+	var shooter := _spawn(CASTER_CELL)
+	shooter.equipped_weapon = _spitter(corrodes.incoming_element)
+	await _cast_and_check(shooter, TARGET, corrodes)
+
+
 # The gate reads the tile's OWN column: a ground that merely lends the substance (loam lends alumina) is
 # not made of it.
 func test_the_made_of_gate_reads_the_tiles_own_column() -> void:
@@ -280,21 +380,32 @@ func test_the_made_of_gate_reads_the_tiles_own_column() -> void:
 			"an empty gate stopped meaning any ground").is_true()
 
 
-# The tile card lists a made-of reaction on its own ground and nowhere else: TileReadout hands the
-# cell's makeup to the same predicate the resolver runs.
+# The tile card lists each made-of reaction on its own ground and nowhere else: TileReadout hands the
+# cell's makeup to the same predicate the resolver runs. Every such reaction in the catalog is asked.
 func test_the_tile_card_lists_a_made_of_reaction_on_its_ground_only() -> void:
-	var calcines := _reaction("Calcines")
-	_paint_made_of(TARGET, calcines.required_made_of)
-	var word := "sets %s" % Terrain.tile_state_display_name(calcines.add_tile_states[0])
-	assert_bool(_card_says(TARGET, word)).override_failure_message(
-			"the card on %s does not say '%s'" % [calcines.required_made_of, word]).is_true()
-	assert_bool(_card_says(AWAY, word)).override_failure_message(
-			"the card on the stone floor says '%s'" % word).is_false()
+	var asked := 0
+	for reaction: TerrainReaction in TerrainReactionCatalog.get_all():
+		if reaction.required_made_of == "" or reaction.in_the_air or reaction.add_tile_states.is_empty() \
+				or reaction.required_tile_state != Terrain.TileState.NONE:
+			continue
+		asked += 1
+		_paint_made_of(TARGET, reaction.required_made_of)
+		var words: Array[String] = [
+			Elemental.trigger_names(reaction.incoming_element, reaction.also_triggered_by),
+			"sets %s" % Terrain.tile_state_display_name(reaction.add_tile_states[0]),
+		]
+		assert_bool(_card_says(TARGET, words)).override_failure_message(
+				"the card on %s does not say %s" % [reaction.required_made_of, words]).is_true()
+		assert_bool(_card_says(AWAY, words)).override_failure_message(
+				"the card on the stone floor says %s" % [words]).is_false()
+	assert_int(asked).override_failure_message(
+			"precondition: no reaction in the catalog is gated on what a tile is made of").is_greater(0)
 
 
-func _card_says(cell: Vector2i, text: String) -> bool:
+# True when one of the card's ground lines says every one of `words`.
+func _card_says(cell: Vector2i, words: Array[String]) -> bool:
 	for line: String in TileReadout.ground_lines(game, cell):
-		if line.contains(text):
+		if words.all(func(word: String) -> bool: return line.contains(word)):
 			return true
 	return false
 
