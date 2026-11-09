@@ -638,7 +638,8 @@ static func render_legal_targets(session, handle: String, attack_name := "") -> 
 		return "> ERROR: " + str(res.error)
 	var verb := "watch spots for" if res.get("watch", false) else "targets"
 	if res.aims.is_empty():
-		return "%s %s with %s from (%d,%d): none" % [verb, res.unit, res.attack, res.from.x, res.from.y]
+		return "%s %s with %s from (%d,%d): none" % [verb, res.unit, res.attack, res.from.x, res.from.y] \
+				+ _render_sources(res.get("sources", {}))
 	var lines: Array[String] = ["%s %s with %s from (%d,%d): %d aims" % [verb, res.unit, res.attack, res.from.x, res.from.y, res.aims.size()]]
 	# A directional attack's aim is its FACING: every cell of one facing fires the same stamp, so the
 	# facing prints once, at its first cell, with a count of the cells that aim the same way.
@@ -670,7 +671,26 @@ static func render_legal_targets(session, handle: String, attack_name := "") -> 
 		if more[key] > 0:
 			line += "  (+%d more cells aim this way)" % more[key]
 		lines.append(line)
-	return "\n".join(lines)
+	return "\n".join(lines) + _render_sources(res.get("sources", {}))
+
+
+# The aim's materia sources (#699), the cells the game outlines while this attack is aimed: one line,
+# each source cell with the elements it offers, or nothing when there are none.
+static func _render_sources(sources: Dictionary) -> String:
+	if sources.is_empty():
+		return ""
+	var cells: Array[Vector2i] = []
+	cells.assign(sources.keys())
+	cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y < b.y if a.y != b.y else a.x < b.x
+	)
+	var parts: Array[String] = []
+	for c: Vector2i in cells:
+		var names: Array[String] = []
+		for e: Elemental.Element in sources[c]:
+			names.append(Elemental.display_name(e))
+		parts.append("(%d,%d) %s" % [c.x, c.y, "+".join(names)])
+	return "\n  materia sources within a walk: " + ", ".join(parts)
 
 
 # The turn's own state, on EVERY frame including the failures -- a refusal is exactly when the

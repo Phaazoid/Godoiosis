@@ -43,6 +43,7 @@ enum Layer {
 	PAYLOAD,
 	TETHER_GLOW,
 	QUEUED_FOOTPRINT, QUEUED_STRIKES, QUEUED_STRIKES_FOCUS, QUEUED_BADGES,
+	SOURCE_EDGE,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -209,6 +210,13 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# bead's width and its >1.2 bloom this would be a glowing rope around forty cells.
 	Layer.ENEMY_FOCUS_EDGE: {"color": Color(1, 1, 1, 0.85), "sort": 13, "lift_sort": 5,
 		"beam": "outline", "kind": Kind.LINE},
+	# ...and the stroke round the aimed carving's materia SOURCES (#699), the focus edge's shape: it lies on
+	# the ground above every fill, and can cross any of them. No integer under the effect ceiling is free,
+	# so it SHARES the focus edge's render sort, as the tethers share theirs -- a line writes no depth --
+	# and lies on its own plane (5.5) so the two strokes never sit coplanar. Each element's stroke carries
+	# its own tint (ElementPalette), so the layer colour is WHITE.
+	Layer.SOURCE_EDGE: {"color": Color.WHITE, "sort": 13, "lift_sort": 5.5,
+		"beam": "source", "kind": Kind.LINE},
 	# WHO CAN REACH THE CELL YOU ARE HOVERING (#1069) -- one mark per enemy whose field covers your
 	# candidate destination, running enemy -> that cell, drawn ONLY while you are choosing a move.
 	#
@@ -457,6 +465,9 @@ var geometry_version := 0
 # stroke around forty cells reads as a rope of light laid over the terrain.
 @export var outline_width := 0.03: set = _set_outline_width
 @export var outline_intensity := 1.0: set = _set_outline_intensity
+# The source outline's own width (#699): it names ground to stand by rather than whose field you point
+# at, and at the focus edge's 0.03 the mock could not be seen. It shares the focus edge's glow.
+@export var source_line_width := 0.1: set = _set_source_line_width
 # ...and the reach mark's own set (#1042, renamed with the channel at #1069), which is neither:
 # wider than a stroke, dimmer than a laser, and the only beam in the game that MOVES.
 @export var mark_width := 0.055: set = _set_mark_width
@@ -630,6 +641,11 @@ func _set_outline_width(value: float) -> void:
 
 func _set_outline_intensity(value: float) -> void:
 	outline_intensity = value
+	_apply_beam_params()
+
+
+func _set_source_line_width(value: float) -> void:
+	source_line_width = value
 	_apply_beam_params()
 
 
@@ -1257,6 +1273,9 @@ func _style_beam(material: ShaderMaterial, spec: Dictionary = {}) -> void:
 	match spec.get("beam", "") as String:
 		"outline":
 			width = outline_width
+			intensity = outline_intensity
+		"source":
+			width = source_line_width
 			intensity = outline_intensity
 		"mark", "strike":
 			width = mark_width

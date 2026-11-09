@@ -25,9 +25,9 @@ const REACH := 1   # playtest-tunable
 static func alkahest() -> Array[Elemental.Element]:
 	return Elemental.SIGIL_ELEMENTS.duplicate()
 
-# What THIS cell offers, ignoring reach -- the terrain and its authored vein (#696). The empowerment
-# overlay (#699) draws it. A carried vial (#697) is NOT positional and never enters: it unions in at the
-# call site, beside whatever this returns.
+# What THIS cell offers, ignoring reach -- the terrain and its authored vein (#696). The aim's source
+# outline (#699) draws it, through sources_near. A carried vial (#697) is NOT positional and never
+# enters: it unions in at the call site, beside whatever this returns.
 #
 # No TERRAIN offers Air or Aether (dev, 2026-09-05). Air's "what counts as high ground" is parked as its
 # own question; Aether waits on authored content, because a living TREE is not a source. A vein is that
@@ -112,3 +112,39 @@ static func empowered_at(cell: Vector2i, board: BoardContext) -> Array[Elemental
 			if not found.has(element):
 				found.append(element)
 	return found
+
+# The sources a caster could draw `elements` from by standing on any of `cells` (#699): each source
+# cell within REACH of one of them -> the asked elements it offers, in `elements`' order. empowered_at
+# turned around, so a marked source is exactly one that would empower a stand in `cells`. A source
+# need not be standable itself: a river is drawn on from its bank.
+static func sources_near(cells: Array[Vector2i], elements: Array[Elemental.Element],
+		board: BoardContext) -> Dictionary[Vector2i, Array]:
+	var found: Dictionary[Vector2i, Array] = {}
+	if board == null or elements.is_empty():
+		return found
+	var seen: Dictionary[Vector2i, bool] = {}
+	for cell: Vector2i in cells:
+		for near: Vector2i in GridUtils.cells_within_manhattan_range(cell, REACH):
+			if seen.has(near):
+				continue
+			seen[near] = true
+			var offered := sources_at(near, board)
+			var here: Array[Elemental.Element] = []
+			for element: Elemental.Element in elements:
+				if offered.has(element):
+					here.append(element)
+			if not here.is_empty():
+				found[near] = here
+	return found
+
+# What the aim's source outline marks (#699): sources_near over every cell a unit could stand on this
+# turn -- `move_range` (RulesService.compute_move_range's answer, the set Move offers) plus `here`, where
+# it stands now, which that answer omits. The game's aim and the Play API both ask this one, so the
+# outline and the API agree on which stands count.
+static func sources_within_walk(here: Vector2i, move_range: Dictionary,
+		elements: Array[Elemental.Element], board: BoardContext) -> Dictionary[Vector2i, Array]:
+	var stands: Array[Vector2i] = [here]
+	for cell: Vector2i in move_range.get("reachable", {}):
+		if cell != here:
+			stands.append(cell)
+	return sources_near(stands, elements, board)

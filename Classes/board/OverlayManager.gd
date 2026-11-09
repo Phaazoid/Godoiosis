@@ -414,6 +414,13 @@ var payload_overlay: TileMapLayer = null   # the aim's PAYLOAD tiles, inset (#10
 # on reach_line_version's shape, because OverlayMirror polls rather than listening.
 var focus_outline: Array[PackedVector3Array] = []
 var focus_outline_version := 0
+# The aimed carving's materia SOURCES (#699): a stroke round each element's group of source cells, one
+# {"element": Elemental.Element, "cells": Array[Vector2i], "segments": Array[PackedVector3Array]} per
+# element, the segments in trace space.
+# SourceEdges2D draws it flat, OverlayMirror lifts it; the version is the mirror's change signal.
+var source_edges: Array[Dictionary] = []
+var source_edges_version := 0
+var _source_edges_2d: SourceEdges2D
 # A SQUAD's lines (#1070): the stroke round its cohesion range, and a tether from each member to its
 # leader -- see SquadLines2D. Data the way the reach lines are: SquadLines2D draws it flat,
 # OverlayMirror lifts it, and the version is the mirror's change signal (#308). The tether CHORDS are
@@ -615,6 +622,13 @@ func _ready() -> void:
 	_squad_lines_2d.name = "SquadLines2D"
 	_squad_lines_2d.z_index = TERRAIN_Z_INDEX
 	add_child(_squad_lines_2d)
+	# The aimed carving's sources (#699) are drawn OVER the aim's red reach, so the flat stroke takes the
+	# aim layers' z (AimFlash2D's way), later in tree order; 3D sets it on the floor above every fill.
+	_source_edges_2d = SourceEdges2D.new()
+	_source_edges_2d.name = "SourceEdges2D"
+	if hover_overlay is CanvasItem:
+		_source_edges_2d.z_index = (hover_overlay as CanvasItem).z_index
+	add_child(_source_edges_2d)
 	# Queued attacks (#1247): the marks in the same band as the other board lines, and their footprints
 	# under the range fills -- a plain FILL sheet, THREAT's borrow, placed beneath it in tree order the
 	# way its 3D sort sits beneath it.
@@ -949,6 +963,62 @@ func restyle_focus_outline() -> void:
 		return
 	focus_outline_version += 1   # geometry unchanged; the mirror re-pushes for the new colour
 	_threat_lines_2d.queue_redraw()
+
+
+# The aimed carving's materia sources (#699): `sources` is Materia.sources_within_walk's answer, a source
+# cell -> the asked elements it offers. One stroke per ELEMENT round its cells, so a vein is one box and
+# the river beside a bank one long one. A cell offering two of them (an alkahest vein) is drawn once, in
+# the first by AuraRing.WHEEL's order: two strokes on one edge would sit on one plane.
+func show_source_edges(sources: Dictionary[Vector2i, Array], board: BoardContext) -> void:
+	var by_element: Dictionary = {}
+	for cell: Vector2i in sources:
+		var element: Elemental.Element = _first_on_the_wheel(sources[cell])
+		if not by_element.has(element):
+			var cells: Array[Vector2i] = []
+			by_element[element] = cells
+		(by_element[element] as Array[Vector2i]).append(cell)
+	var order: Array = by_element.keys()
+	order.sort_custom(func(a: Elemental.Element, b: Elemental.Element) -> bool:
+		return _wheel_rank(a) < _wheel_rank(b))
+	var groups: Array[Dictionary] = []
+	for element: Elemental.Element in order:
+		groups.append({"element": element, "cells": by_element[element],
+				"segments": outline_segments(by_element[element], board)})
+	source_edges = groups
+	source_edges_version += 1
+	if _source_edges_2d != null:
+		_source_edges_2d.groups = groups
+		_source_edges_2d.queue_redraw()
+
+
+func clear_source_edges() -> void:
+	if source_edges.is_empty():
+		return
+	var none: Dictionary[Vector2i, Array] = {}
+	show_source_edges(none, null)
+
+
+# A colour or width knob moved: geometry unchanged, both views redraw a standing outline.
+func restyle_source_edges() -> void:
+	if source_edges.is_empty():
+		return
+	source_edges_version += 1
+	if _source_edges_2d != null:
+		_source_edges_2d.queue_redraw()
+
+
+# An element off the wheel (none is offered today: every source is a sigil element) ranks after it.
+static func _wheel_rank(element: Elemental.Element) -> int:
+	var at := AuraRing.WHEEL.find(element)
+	return at if at >= 0 else AuraRing.WHEEL.size() + int(element)
+
+
+static func _first_on_the_wheel(offered: Array) -> Elemental.Element:
+	var best: Elemental.Element = offered[0]
+	for element: Elemental.Element in offered:
+		if _wheel_rank(element) < _wheel_rank(best):
+			best = element
+	return best
 
 
 static func _corner_height(cell: Vector2i, offset: Vector2i, board: BoardContext) -> float:
@@ -2172,6 +2242,8 @@ func clear_selection_overlays():
 	invalidmove_overlay.clear()
 	# The squad's lines are selection markup like the fills they replaced (#1070).
 	clear_squad_lines()
+	# ...and the aimed carving's source outline (#699) goes with the reach it is drawn over.
+	clear_source_edges()
 	# The player's reach goes with the move layer it belongs to (#1066) -- they are two halves of
 	# one answer about one unit, and a red halo outliving its blue names nobody. The THREAT layer
 	# is deliberately NOT here: an enemy field is up because of a key or a pin, not a selection.
