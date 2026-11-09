@@ -17,9 +17,7 @@
 # on the body must be applied.
 extends GdUnitTestSuite
 
-const PENDING := {
-	"res://Resources/TerrainReactions/Disperse.tres": "dispersing and blowing (#1332) both move gas without changing it, so its equation is bookkeeping: c3potheds's to write (#1335)",
-}
+const PENDING := {}
 
 const NOT_YET_FOLLOWED := {
 	"res://Resources/Reactions/shock_wet_electrocute.tres": "the thunder (#1270) is not made; its ozone and its heat are the struck cell's Ozone reaction (#1335, #1427)",
