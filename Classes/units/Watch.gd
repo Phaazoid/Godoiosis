@@ -29,7 +29,12 @@ var path_lengths: Array[int] = []
 # Where the shot lays its tile effect (#894), frozen with the footprint. Read only for an attack that
 # lays on a shape of its own (AttackData.lays_effect_apart); any other lays where the shot strikes.
 var effect_cells: Array[Vector2i] = []
-var attack: AttackData = null        # what fires; stamped at declare, never re-picked
+var attack: AttackData = null        # what was declared; stamped at declare, never re-picked
+# A carving's empowered form is chosen when the watch ARMS (#695 R6) and kept, whatever the ground does
+# after. The watch holds the BASE (attack), since that is what its rune carries and armed_for asks,
+# and these two say the shot fires the form (fires()) and whether that leaned on the vial (R4).
+var empowered := false
+var leans_on_vial := false
 var spent := false                   # absorbed its one trigger
 # Broken by a blow (#810, dev 2026-09-09): the watcher was hit, so the watch is off. A SECOND fact
 # beside `spent`, not a reuse of it -- "you took your shot" and "it was shot off you" are different
@@ -50,7 +55,7 @@ static var _next_sequence := 1
 # Its position in the pass's list is its order, so it needs no sequence of its own.
 static func make(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = [],
-		effect: Array[Vector2i] = []) -> Watch:
+		effect: Array[Vector2i] = [], formed := false, vial := false) -> Watch:
 	var w := Watch.new()
 	w.watcher = watching_unit
 	w.anchor_cell = origin
@@ -59,6 +64,8 @@ static func make(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 	w.path_lengths = lengths.duplicate()
 	w.effect_cells = effect.duplicate()
 	w.attack = fired_attack
+	w.empowered = formed
+	w.leans_on_vial = vial
 	return w
 
 
@@ -67,8 +74,8 @@ static func make(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 # is still the newer one.
 static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 		watched_cells: Array[Vector2i], fired_attack: AttackData, lengths: Array[int] = [],
-		effect: Array[Vector2i] = [], stamp := 0) -> Watch:
-	var w := make(watching_unit, origin, aim, watched_cells, fired_attack, lengths, effect)
+		effect: Array[Vector2i] = [], stamp := 0, formed := false, vial := false) -> Watch:
+	var w := make(watching_unit, origin, aim, watched_cells, fired_attack, lengths, effect, formed, vial)
 	if stamp > 0:
 		w.sequence = stamp
 		_next_sequence = maxi(_next_sequence, stamp + 1)
@@ -81,11 +88,21 @@ static func arm(watching_unit: Unit, origin: Vector2i, aim: Vector2i,
 # The resolver's working copy for one pass. The pass marks copies spent as they fire; the live
 # watch is spent by EXECUTION, once, off the outcome that used it (GuardWard's rule).
 func copy() -> Watch:
-	var w := make(watcher, anchor_cell, aim_cell, footprint, attack, path_lengths, effect_cells)
+	var w := make(watcher, anchor_cell, aim_cell, footprint, attack, path_lengths, effect_cells,
+			empowered, leans_on_vial)
 	w.spent = spent
 	w.cancelled = cancelled
 	w.sequence = sequence
 	return w
+
+
+# What the shot fires: the declared attack, or its empowered form when the watch armed empowered.
+func fires() -> AttackData:
+	if empowered and attack is TransmutationData:
+		var form := (attack as TransmutationData).empowered_carving()
+		if form != null:
+			return form
+	return attack
 
 
 # The watches standing on a board, oldest arm first: the order a resolve searches them in, which is

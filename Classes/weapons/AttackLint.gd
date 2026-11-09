@@ -43,8 +43,44 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	_check_blend_totals(attack, found)
 	_check_kind_is_authored(attack, found)
 	_check_empowered_form_is_flat(attack, found)
+	_check_carving_form(attack, found)
 	_check_effect_looks_match(attack, found)
 	return found
+
+
+# A carving's empowered form (#695). All DEGRADES: the base fires correctly either way, the form just
+# does not do what its file says, and a BLOCKS would refuse the one panel that can repair it. Its own
+# geometry is the checks above asked of the derived carving, re-filed, and only when it draws a shape.
+static func _check_carving_form(attack: AttackData, found: Array[Dictionary]) -> void:
+	var carving := attack as TransmutationData
+	if carving == null or carving.empowered == null:
+		return
+	var form := carving.empowered
+	var name := attack.display_name if attack.display_name != "" else "This carving"
+	if not form.changes_anything():
+		_add(found, Severity.DEGRADES,
+			"%s's empowered form changes nothing, so where it is empowered it fires as itself, less the +1." % name)
+	if form.swing and form.attack_shape == null:
+		_add(found, Severity.DEGRADES,
+			"%s's empowered form turns Swing on with no shape of its own, and Swing is only read with one." % name)
+	var uses := carving.distinct_elements()
+	for element: Elemental.Element in form.requires:
+		if not uses.has(element):
+			_add(found, Severity.DEGRADES, "%s's empowered form requires %s, which its recipe never uses." % [
+				name, Elemental.display_name(element)])
+	if carving.form_requires().is_empty():
+		_add(found, Severity.DEGRADES,
+			"%s's empowered form can never fire: the hit delivers no element, so tick what it requires." % name)
+	if form.attack_shape == null:
+		return
+	var own: Array[Dictionary] = []
+	var derived := carving.empowered_carving()
+	_check_reaches_anything(derived, own)
+	_check_affects_anything(derived, own)
+	_check_paths_are_sound(derived, own)
+	_check_swing_spares_its_wielder(derived, own)
+	for row in own:
+		_add(found, Severity.DEGRADES, "Empowered form: %s" % row.text)
 
 
 # A look slot that has come loose from the attack wearing it (#900) -- two faults, both silent.

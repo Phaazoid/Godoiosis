@@ -110,6 +110,10 @@ class_name ScenarioUnitEntry
 @export var watch_attack_index := -1
 @export var watch_spent := false
 @export var watch_cancelled := false   # #810: broken by a blow -- a third ending beside spent
+# The form it armed with (#695): Watch.empowered and Watch.leans_on_vial saved. False in every save
+# before it, which is right: no carving had a form.
+@export var watch_empowered := false
+@export var watch_leans_on_vial := false
 # Arm order (#1565): this watch's RANK among the board's watches, 1 = oldest. A board-wide fact, so
 # ScenarioManager writes it once every entry exists, on a FULL capture only; 0 = not saved (guard_sequence's).
 @export var watch_sequence := 0
@@ -232,6 +236,8 @@ func capture_unit_state(unit: Unit) -> void:
 	watch_attack_index = -1
 	watch_spent = false
 	watch_cancelled = false
+	watch_empowered = false
+	watch_leans_on_vial = false
 	if unit.watch != null and unit.watch.is_intact():
 		watch_attack_index = unit.overwatch_attacks().find(unit.watch.attack)
 		if watch_attack_index >= 0:
@@ -242,6 +248,8 @@ func capture_unit_state(unit: Unit) -> void:
 			watch_effect_cells = unit.watch.effect_cells.duplicate()
 			watch_spent = unit.watch.spent
 			watch_cancelled = unit.watch.cancelled
+			watch_empowered = unit.watch.empowered
+			watch_leans_on_vial = unit.watch.leans_on_vial
 
 # Write the snapshot back onto a freshly spawned unit. Runs AFTER initialize() (which
 # rebuilds stats/limbs/aura and refills HP), deliberately overriding that reset.
@@ -336,7 +344,8 @@ func apply_unit_state(unit: Unit) -> void:
 		if watch_attack_index >= 0 and watch_attack_index < watchable.size():
 			unit.arm_watch(watch_anchor, watch_aim, watch_cells.duplicate(),
 					watchable[watch_attack_index], watch_spent, watch_cancelled,
-					watch_path_lengths.duplicate(), watch_effect_cells.duplicate(), watch_sequence)
+					watch_path_lengths.duplicate(), watch_effect_cells.duplicate(), watch_sequence,
+					watch_empowered, watch_leans_on_vial)
 
 	if current_hp >= 0:
 		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a

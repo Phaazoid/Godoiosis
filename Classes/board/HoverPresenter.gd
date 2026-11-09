@@ -343,24 +343,29 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 		var board: BoardContext = game._board()
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # aiming: the live pick IS the question (#102)
+		# ...and what it FIRES from here (#695): a formed carving's empowered form where the caster stands,
+		# on the ground the queued prefix leaves (candidate_board) -- the chooser the pass asks at this
+		# aim's slot. Every question below reads the shape, so each one asks it of this.
+		var ground: BoardContext = game.squad_manager.candidate_board(attacker.squad)
+		var firing := Materia.fires(aiming, attacker.state, origin, ground)
 		# The sight line (#258): for a RANGED point aim at any cell in horizontal reach, show the
 		# trace -- valid or blocked, the player sees the line the gate judged. Melee draws none
 		# (visually obvious anytime -- dev); a directional aim has no single line.
-		if Reach.draws_sight_trace(aiming) \
-				and Reach.get_attack_cells_from(origin, cell, aiming).has(cell):
-			game.overlay_manager.show_sight_trace(Reach.sight_trace(aiming, origin, cell, board))
+		if Reach.draws_sight_trace(firing) \
+				and Reach.get_attack_cells_from(origin, cell, firing).has(cell):
+			game.overlay_manager.show_sight_trace(Reach.sight_trace(firing, origin, cell, board))
 			trace_shown = true
 		# Directional: a facing whose spread the terrain leaves standing (#756 -- it was any non-zero
 		# facing before truncation). Point: the hovered cell itself must be in range AND within
 		# vertical tolerance (#258). One predicate, the same one the click commits through.
-		var aimable := Reach.can_aim_at(origin, cell, aiming, board)
+		var aimable := Reach.can_aim_at(origin, cell, firing, board)
 		if aimable and game.aim_intent == game.AimIntent.WATCH:
 			# A WATCH shows what the order it queues will arm (#1355): the resolver's footprint rule asked
 			# of a probe, as the Play API asks it, so the hover and the queued ghost are one answer. The
 			# whole surfaced lane -- a body in it does not cut a watch, and a current adds none -- flashing
 			# in the order its shot walks. Nobody pulses: the ghost names no victim either.
 			var probe := OverwatchAction.new()
-			probe.init(attacker, cell, aiming)
+			probe.init(attacker, cell, firing)
 			var paths := probe.watched_paths_from(origin, board)
 			preview_cells = Conduction._tiles_of(paths)
 			travel = Conduction._path_steps(paths)
@@ -372,9 +377,8 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# runs through is the queued prefix's (candidate_board, #1498 stage 3b), the ground the gate
 			# judges this click on, so ice an earlier order makes stops it here too.
 			# Held, because who it catches asks attack_hits_allies -- a fact about the firing weapon's mods.
-			var ground: BoardContext = game.squad_manager.candidate_board(attacker.squad)
 			var reach: Conduction.Sweep = attacker.with_weapon_in_hand(source,
-				func() -> Conduction.Sweep: return Conduction.sweep(attacker, origin, cell, aiming, ground))
+				func() -> Conduction.Sweep: return Conduction.sweep(attacker, origin, cell, firing, ground))
 			preview_cells = reach.cells
 			# Every footprint flashes in the order the attack travels (#1057 part 2), whatever it
 			# targets -- the tiles say HOW it lands, the victims' own pulse says WHO.
@@ -387,7 +391,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# aim moves on -- and what it DROPS (#1058 D2b), off the same resolve.
 			var candidate := AttackAction.declare(attacker, origin, cell)
 			forecast = game.squad_manager.preview_aim(attacker.squad, candidate, board, source)
-			if aiming != null and aiming.payload != null:
+			if firing != null and firing.payload != null:
 				var rows := SquadManager.payloads_in(forecast, candidate)
 				travel = travel.duplicate(true)
 				_add_payloads(rows, preview_cells, travel, insets, victims)

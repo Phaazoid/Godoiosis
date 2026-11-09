@@ -54,6 +54,52 @@ static func sources_at(cell: Vector2i, board: BoardContext) -> Array[Elemental.E
 			found.append(element)
 	return found
 
+# WHICH ATTACK A CAST FIRES from `cell` (#695): a formed carving's empowered form when the caster is
+# empowered in every element the form requires, else the attack itself. The ONE chooser: the pass asks
+# it at the caster's cell at its slot, on the ground the pass has left, and every judge before the click
+# (hover, click, gates, Play API, AI, ThreatField) asks it on the candidate board, so the preview and
+# what fires are one answer (Law #2).
+#
+# THE GROUND IS ASKED FIRST; the caster's vial only where the ground falls short, and `leans_on_vial`
+# says the vial made the difference -- the one case it burns (R4, PlanResolver._source_base_damage).
+class FormChoice:
+	var attack: AttackData = null
+	var leans_on_vial := false
+
+
+static func form_choice(attack: AttackData, body: UnitState, cell: Vector2i, board: BoardContext) -> FormChoice:
+	var choice := FormChoice.new()
+	choice.attack = attack
+	var carving := attack as TransmutationData
+	if carving == null or carving.empowered_carving() == null:
+		return choice
+	var ground := empowered_at(cell, board)
+	if carving.form_fires(ground):
+		choice.attack = carving.empowered_carving()
+		return choice
+	var charge: Array[Elemental.Element] = []
+	if body != null:
+		charge = body.attunement_elements()
+	if charge.is_empty():
+		return choice
+	for element: Elemental.Element in charge:
+		if not ground.has(element):
+			ground.append(element)
+	if carving.form_fires(ground):
+		choice.attack = carving.empowered_carving()
+		choice.leans_on_vial = true
+	return choice
+
+
+# The attack alone, for a judge that has no vial to spend. Returns early for anything without a form,
+# so asking it of every aim costs nothing.
+static func fires(attack: AttackData, body: UnitState, cell: Vector2i, board: BoardContext) -> AttackData:
+	var carving := attack as TransmutationData
+	if carving == null or carving.empowered == null:
+		return attack
+	return form_choice(attack, body, cell, board).attack
+
+
 # Every element a caster standing on `cell` may draw on: the union of sources within REACH.
 # Deduped, because empowerment is BINARY and never stacks -- a vein beside a river is still just
 # "empowered in water: yes".

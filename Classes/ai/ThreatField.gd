@@ -262,12 +262,14 @@ static func _reach_by_attack(unit: Unit, board: BoardContext, origins: Array[Vec
 			# of what it could aim.
 			if _fizzles(unit, attack, origin, board, fizzled, bodies):
 				continue
-			var out: Dictionary = by_attack.get_or_add(attack, {})
-			var known := memo.at(attack, origin)
-			for cell in Reach.get_all_attack_cells_from(origin, attack):
+			# Keyed by what fires from this origin (#695), the candidate builder's own chooser.
+			var firing := Materia.fires(attack, PlanResolver.state_of(unit, bodies), origin, board)
+			var out: Dictionary = by_attack.get_or_add(firing, {})
+			var known := memo.at(firing, origin)
+			for cell in Reach.get_all_attack_cells_from(origin, firing):
 				if out.has(cell):
 					continue
-				if not Reach.is_directional_attack(attack) and not memo.aim_ok(known, attack, origin, cell, board):
+				if not Reach.is_directional_attack(firing) and not memo.aim_ok(known, firing, origin, cell, board):
 					continue
 				out[cell] = true
 	_add_counter_reach(unit, board, origins, by_attack, memo, fizzled, bodies)
@@ -303,15 +305,16 @@ static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[V
 	if not unit.attack_source_can_counter():
 		return
 	var counter := unit.get_counter_attack()
-	var out: Dictionary = by_attack.get_or_add(counter, {})
 	for origin in origins:
 		if _fizzles(unit, counter, origin, board, fizzled, bodies):
 			continue   # a counter that would fizzle there lands nothing (PlanResolver.resolve_counters)
-		var known := memo.at(counter, origin)
-		for cell in Reach.get_all_attack_cells_from(origin, counter):
+		var firing := Materia.fires(counter, PlanResolver.state_of(unit, bodies), origin, board)
+		var out: Dictionary = by_attack.get_or_add(firing, {})
+		var known := memo.at(firing, origin)
+		for cell in Reach.get_all_attack_cells_from(origin, firing):
 			if out.has(cell):
 				continue
-			if not Reach.is_directional_attack(counter) and not memo.aim_ok(known, counter, origin, cell, board):
+			if not Reach.is_directional_attack(firing) and not memo.aim_ok(known, firing, origin, cell, board):
 				continue
 			out[cell] = true
 
@@ -330,10 +333,11 @@ static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vec
 	if not AIArchetype.main_action_priority(_archetype_of(unit.squad)).has(BaseAction.ActionType.OVERWATCH):
 		return
 	for attack in AITactics.watch_attacks_for(unit):
-		var out: Dictionary = by_attack.get_or_add(attack, {})
 		for origin in origins:
 			if CellSubstances.fizzle_reason(attack, origin, board, unit.state) != "":
 				continue   # AITactics._try_overwatch arms no watch that would fizzle there
+			# Keyed by the form it would arm (#695), so the splash below dilates by that form's shape.
+			var out: Dictionary = by_attack.get_or_add(Materia.fires(attack, unit.state, origin, board), {})
 			var lanes := AITactics.watch_lanes(unit, origin, attack, board)
 			for dir in lanes:
 				for cell: Vector2i in lanes[dir]:

@@ -593,7 +593,10 @@ func _candidate_watch_declarable(squad: Squad, action: BaseAction, ground: Board
 		return true
 	var one: Array[BaseAction] = [action]
 	var origin := Unit.projected_cell(action.actor, _hypothetical_actions(squad, one), true, true)
-	if Reach.can_aim_at(origin, watch.target_cell, watch.fired_attack, ground):
+	# Judged in the form it would arm there (#695): the gate reads the footprint, and a form may
+	# change the shape.
+	var arming := Materia.fires(watch.fired_attack, action.actor.state, origin, ground)
+	if Reach.can_aim_at(origin, watch.target_cell, arming, ground):
 		return true
 	watch.add_validation_error("Can't aim a watch there")
 	return false
@@ -798,7 +801,10 @@ func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext, 
 	# counter from a reach attack's range and then swing a range-1 main (#102). The board carries
 	# the elevations: a target above this unit's up_tolerance draws no counter (#258's counter
 	# denial). Required, may be null = flat -- an optional would silently read flat forever.
-	return Reach.can_hit_cell_from(counter_cell, aimed_from, counter_attack, board)
+	# ...in the FORM it fires from that cell (#695 R7): a directional reach is the footprint, and a
+	# form may change the shape.
+	return Reach.can_hit_cell_from(counter_cell, aimed_from,
+			Materia.fires(counter_attack, body, counter_cell, board), board)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext,
 		hypo: Dictionary) -> Unit:
@@ -1130,9 +1136,17 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 				watch_order.resolved_path_lengths = []
 				watch_order.resolved_effect = []
 				watch_order.resolved_fizzles = false
+				watch_order.resolved_empowered = false
+				watch_order.resolved_leans_on_vial = false
 				continue
 			var watch_origin := PlanResolver.projected_position(watch_order.actor, hypo)
-			var watched := watch_order.watched_paths_from(watch_origin, board)
+			# Its empowered form is chosen HERE, where it arms (#695 R6), and kept by the watch.
+			var watch_choice := Materia.form_choice(watch_order.fired_attack,
+					PlanResolver.state_of(watch_order.actor, hypo), watch_origin, board)
+			var watch_fires := watch_choice.attack
+			watch_order.resolved_empowered = watch_fires != watch_order.fired_attack
+			watch_order.resolved_leans_on_vial = watch_choice.leans_on_vial
+			var watched := OverwatchAction.watched_paths(watch_fires, watch_origin, watch_order.target_cell, board)
 			watch_order.resolved_anchor = watch_origin
 			# Its material, asked as PlanResolver._fizzles asks an aim's: the pass's copy, on the ground
 			# the orders ahead of this slot have left (#1498 stage 3b).
@@ -1140,11 +1154,13 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 					board, PlanResolver.state_of(watch_order.actor, hypo), hypo) != ""
 			watch_order.resolved_footprint = AttackShape.joined_cells(watched)
 			watch_order.resolved_path_lengths = AttackShape.joined_lengths(watched)
-			watch_order.resolved_effect = watch_order.effect_cells_from(watch_origin, board)
+			watch_order.resolved_effect = OverwatchAction.effect_cells(watch_fires, watch_origin,
+					watch_order.target_cell, board)
 			if not watch_order.resolved_footprint.is_empty():
 				var armed := Watch.make(watch_order.actor, watch_origin, watch_order.target_cell,
 						watch_order.resolved_footprint, watch_order.fired_attack,
-						watch_order.resolved_path_lengths, watch_order.resolved_effect)
+						watch_order.resolved_path_lengths, watch_order.resolved_effect,
+						watch_order.resolved_empowered, watch_order.resolved_leans_on_vial)
 				plan.watches.append(armed)
 				watch_orders[armed] = watch_order
 				armed_this_pass.append(armed)
@@ -1153,10 +1169,16 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			continue
 		var aim := action as AttackAction
 		var origin := PlanResolver.projected_position(aim.actor, hypo)
+		# WHICH FORM FIRES (#695): a formed carving's empowered form where the caster stands at THIS
+		# slot, on the ground the orders ahead have left -- so a re-planned walk or an earlier shove that
+		# moves them off the source fires the base, and the queue says so. The stored aim keeps its
+		# declared carving; the volley it expands into carries what fires.
+		var choice := Materia.form_choice(aim.fired_attack, PlanResolver.state_of(aim.actor, hypo), origin, board)
+		var firing := choice.attack
 		# The current travels once the blast lands, judged against THIS pass's own wetness (E4): a
 		# target an earlier order in the same plan soaked conducts for this one, which is the whole
 		# of the water-then-shock combo previewing correctly.
-		var reach := Conduction.sweep(aim.actor, origin, aim.target_cell, aim.fired_attack, board, hypo)
+		var reach := Conduction.sweep(aim.actor, origin, aim.target_cell, firing, board, hypo)
 		var affected := reach.cells
 		var victims := reach.victims
 		var group: Array[AttackAction] = []
@@ -1165,7 +1187,7 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			# (target stays null = no unit hit). It plays out and is where terrain effects will
 			# land (#50). Units are a CONSEQUENCE of the aimed cells, not the gate.
 			var cell_attack := AttackAction.create(aim.actor, origin, null, aim.target_cell)
-			cell_attack.fired_attack = aim.fired_attack
+			cell_attack.fired_attack = firing
 			cell_attack.footprint = affected
 			# ...and the current (#887). The victimless branch needs it MOST: the water is conducting
 			# whether or not anybody is standing in it, so this is the one attack whose whole arc
@@ -1173,7 +1195,7 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			cell_attack.arc_links = reach.links
 			group.append(cell_attack)
 		else:
-			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack, affected, reach.links)
+			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, firing, affected, reach.links)
 
 		# Back-link every derived action to the order that produced it -- read by the whiff clause
 		# and the queue row's tint -- and stamp what the sweep said about its tiles and hits: where
@@ -1182,6 +1204,7 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 		AttackAction.stamp_sweep(group, reach)
 		for atk in group:
 			atk.source_aim = aim
+			atk.leans_on_vial = choice.leans_on_vial
 		plan.attacks.append_array(group)
 
 		# Resolve THIS aim, then publish its shoves as projected positions — so the board preview and
@@ -1224,7 +1247,10 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 		var c_aim_cell := PlanResolver.projected_position(aim.target, hypo)
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
 		# create_counter_volley stamps below (#102).
-		var c_attack := PlanResolver.state_of(aim.actor, hypo).counter_attack(aim.actor.active_attack)
+		var c_body := PlanResolver.state_of(aim.actor, hypo)
+		# ...in the form the reactor's own cell gives it (#695 R7).
+		var c_choice := Materia.form_choice(c_body.counter_attack(aim.actor.active_attack), c_body, c_origin, board)
+		var c_attack := c_choice.attack
 		# A counter is an attack like any other, so a shock counter arcs (E7 -- counters are in the
 		# chain). Its current reads the hypo the attacks have already resolved into.
 		var c_reach := Conduction.sweep(aim.actor, c_origin, c_aim_cell, c_attack, board, hypo)
@@ -1232,6 +1258,8 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 		var c_victims := c_reach.victims
 		var c_volley := CounterAttackAction.create_counter_volley(aim.actor, c_attack, c_origin, c_victims, aim.source_attack, c_affected, c_reach.links)
 		AttackAction.stamp_sweep(c_volley, c_reach)
+		for counter in c_volley:
+			counter.leans_on_vial = c_choice.leans_on_vial
 		plan.counters.append_array(c_volley)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)

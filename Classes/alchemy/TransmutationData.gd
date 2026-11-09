@@ -11,6 +11,8 @@ extends AttackData
 #   delivered -- what the last delivering verb leaves at the target: the hit's element, and the
 #                elements its damage scales off (once each)
 # Shape, range, shove, power and states stay AUTHORED on AttackData; verbs never move geometry.
+# Where its caster is empowered it may fire an authored EMPOWERED FORM instead (#695, EmpoweredForm):
+# a delta laid over this carving, chosen in the pass by Materia.form_choice.
 # NOT equippable itself -- it lives in a RuneData's `inscriptions`.
 
 @export var recipe: String = "":
@@ -25,8 +27,66 @@ extends AttackData
 # materia: casting needs no fuel (ratified 2026-08-29). A verb whose argument is not present
 #   fizzles -- CellSubstances.fizzle_reason, asked with the cell the cast is made from.
 
+# What this carving becomes where its caster is empowered (#695): a delta laid over it, held inside
+# this file. Null = no form, and the +1 fallback (base_damage) applies instead.
+@export var empowered: EmpoweredForm = null:
+	set(value):
+		if empowered != null and empowered.changed.is_connected(_drop_form):
+			empowered.changed.disconnect(_drop_form)
+		empowered = value
+		_form = null
+
+# Set on a DERIVED form only: the carving it was laid over. A form never forms again.
+var form_of: TransmutationData = null
+
 var _parsed: CarvingRecipe
 var _parsed_against := -1   # the SubstanceCatalog.version _parsed read
+var _form: TransmutationData = null
+
+
+# The derived carving this one fires where its caster is empowered, or null with no form (#695).
+# ONE object per carving until an edit (an AI key compares instance ids): built on first ask and
+# dropped when this carving or its delta emits `changed`, which every dev-tools writer does.
+func empowered_carving() -> TransmutationData:
+	if empowered == null:
+		return null
+	if _form == null:
+		_form = duplicate() as TransmutationData   # shallow: shapes, looks and payload stay shared
+		_form.empowered = null
+		_form.form_of = self
+		empowered.lay_over(_form)
+		if not changed.is_connected(_drop_form):
+			changed.connect(_drop_form)
+		if not empowered.changed.is_connected(_drop_form):
+			empowered.changed.connect(_drop_form)
+	return _form
+
+
+func _drop_form() -> void:
+	_form = null
+
+
+# The elements a caster must ALL be empowered in for the form to fire (#695 R1): the delta's own
+# checklist, or, left empty, what the hit delivers -- the set base_damage's +1 reads.
+func form_requires() -> Array[Elemental.Element]:
+	if empowered != null and not empowered.requires.is_empty():
+		return empowered.requires
+	return damage_elements()
+
+
+# Does the form fire for a caster empowered in `empowered_in`? Never without a form, and never for a
+# carving that requires nothing (one delivering nothing with an empty checklist): binary, as canon
+# says empowerment is. Materia.form_choice is the one caller that composes the ground and the vial.
+func form_fires(empowered_in: Array[Elemental.Element]) -> bool:
+	if empowered == null:
+		return false
+	var needed := form_requires()
+	if needed.is_empty():
+		return false
+	for element: Elemental.Element in needed:
+		if not empowered_in.has(element):
+			return false
+	return true
 
 
 # The parse, cached until the recipe text or the substance catalog changes (#1622) -- the channel
@@ -87,7 +147,7 @@ func damage_elements() -> Array[Elemental.Element]:
 # A utility carving (#126) skips the scaling entirely: aura still GATES channeling, it just
 # never adds damage to a damageless effect.
 #
-# `empowered` (#694) is the elements the caster may draw materia from where they stand — PASSED,
+# `empowered_in` (#694) is the elements the caster may draw materia from where they stand — PASSED,
 # never looked up, because a carving has no board and must not grow one (Law #4). It is +1
 # EFFECTIVE aura in each delivered element it matches, the same once-each the wielder's aura gets.
 #
@@ -98,13 +158,17 @@ func damage_elements() -> Array[Elemental.Element]:
 #
 # `air` is the board's atmosphere bonus (#1324, Atmosphere.bonus_of), passed for empowered's reason.
 # It is added after the damageless guard, so a utility carving stays at 0, and floored there.
-func base_damage(wielder: UnitState, empowered: Array[Elemental.Element] = [], air := 0) -> int:
+#
+# A FORM REPLACES THE +1 (#695 R2): a carving with an empowered form, and the form itself, take none,
+# however partly the caster is empowered. Only a formless carving reads `empowered_in`.
+func base_damage(wielder: UnitState, empowered_in: Array[Elemental.Element] = [], air := 0) -> int:
 	if deals_no_damage:
 		return 0
+	var takes_the_plus_one := empowered == null and form_of == null
 	var scaling := 0
 	for e: Elemental.Element in damage_elements():
 		scaling += wielder.get_element_aura(e)
-		if empowered.has(e):
+		if takes_the_plus_one and empowered_in.has(e):
 			scaling += 1
 	return maxi(0, power + scaling + air)
 
@@ -275,7 +339,16 @@ static func property_sections() -> Array[Dictionary]:
 	var sections := AttackData.property_sections()
 	AttackData.in_section(sections, "Identity", PackedStringArray(["popup", "icon"]))
 	sections.insert(1, {"title": "Recipe", "fields": PackedStringArray(["recipe", "time_rounds"])})
+	sections.append({"title": "Empowered form", "fields": PackedStringArray(["empowered"])})
 	return sections
+
+
+# The empowered form's row waits for its own section (#695 slice 2), so it is hidden rather than drawn
+# by the generic resource swapper meanwhile.
+func hidden_fields() -> PackedStringArray:
+	var hidden := super()
+	hidden.append("empowered")
+	return hidden
 
 
 # The carving's own rows (#473). The recipe gets a bespoke row with live readouts in the Attack
@@ -287,5 +360,6 @@ static func property_tips() -> Dictionary:
 		"icon": "The carving's icon in the rune and attack menus.",
 		"recipe": "The carving in codev's notation: verbs with substances as their arguments, joined by +. Break(F, A) + Push(F2) frees fire from the air and pushes the flame. Break and Bind take two arguments; Extract, Infuse, Push, Pull, Spread, Focus, Quicken and Still take one. Each verb costs one slot of rune capacity; the aura the wielder must cover is, per element, the most atoms any one verb works on (its arguments together); what the last verb leaves at the target is what the hit carries and scales off.",
 		"time_rounds": "How many rounds a Still or Quicken in the recipe holds or hurries what it names in the cells this carving strikes. 2 = this round's end and the next. Does nothing for a recipe without either verb.",
+		"empowered": "What this carving becomes where its caster is empowered in every element the form requires: a change laid over the carving (name, shape, power, shove, tile effect, gas), never a second carving. Empty = no form; the carving gets +1 per empowered element instead.",
 	})
 	return tips

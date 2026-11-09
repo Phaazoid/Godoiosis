@@ -44,6 +44,10 @@ var resolved_effect: Array[Vector2i] = []
 # Whether its carving fizzles from that anchor, on the ground the pass has at its slot (#1498 stage 3b):
 # a stored watch is judged where it arms, as a stored aim is where it lands. Written beside the anchor.
 var resolved_fizzles := false
+# Whether it arms its carving's EMPOWERED FORM (#695 R6), chosen at that anchor on that ground, and
+# whether the choice leaned on the vial (R4). Written beside the anchor; execute() arms both.
+var resolved_empowered := false
+var resolved_leans_on_vial := false
 
 
 func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
@@ -70,9 +74,13 @@ func init(watching_unit: Unit, aim_cell: Vector2i, attack: AttackData) -> void:
 # Play API prints, never reaches past the board's edge or into a hole. Paths and footprint are one
 # store (AttackShape.joined_cells / joined_lengths), so the paths are trimmed here and a path left
 # empty is dropped; the other branch is trimmed by get_affected_cells_from itself.
-func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
-	if fired_attack != null and fired_attack.is_single_target_swing():
-		var walked := Reach.get_paths_from(origin, target_cell, fired_attack, board)
+#
+# STATIC, taking the attack (#695): a stored order keeps its declared carving, but the pass arms the
+# EMPOWERED FORM it chose at the slot (Materia.form_choice), so the resolver hands that in. The instance
+# door below is this rule asked of the order's own stamp, which a probe sets to the attack it means.
+static func watched_paths(attack: AttackData, origin: Vector2i, aim_cell: Vector2i, board: BoardContext) -> Array[Array]:
+	if attack != null and attack.is_single_target_swing():
+		var walked := Reach.get_paths_from(origin, aim_cell, attack, board)
 		if board == null:
 			return walked
 		var kept: Array[Array] = []
@@ -84,24 +92,33 @@ func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
 				kept.append(surfaced)
 		return kept
 	var one: Array[Array] = []
-	var cells := Reach.get_affected_cells_from(origin, target_cell, fired_attack, board)
+	var cells := Reach.get_affected_cells_from(origin, aim_cell, attack, board)
 	if not cells.is_empty():
 		one.append(cells)
 	return one
 
 
+func watched_paths_from(origin: Vector2i, board: BoardContext) -> Array[Array]:
+	return watched_paths(fired_attack, origin, target_cell, board)
+
+
 # Where the watch's tile effect lands from `origin` (#894): the effect shape set down as an aim's is.
-# Empty for an attack laying where it strikes, which only the shot's own walk can answer.
-func effect_cells_from(origin: Vector2i, board: BoardContext) -> Array[Vector2i]:
-	if fired_attack == null or not fired_attack.lays_effect_apart():
+# Empty for an attack laying where it strikes, which only the shot's own walk can answer. Static for
+# watched_paths' reason.
+static func effect_cells(attack: AttackData, origin: Vector2i, aim_cell: Vector2i, board: BoardContext) -> Array[Vector2i]:
+	if attack == null or not attack.lays_effect_apart():
 		return []
-	return Reach.get_effect_cells_from(origin, target_cell, fired_attack, board)
+	return Reach.get_effect_cells_from(origin, aim_cell, attack, board)
+
+
+func effect_cells_from(origin: Vector2i, board: BoardContext) -> Array[Vector2i]:
+	return effect_cells(fired_attack, origin, target_cell, board)
 
 
 func execute() -> void:
 	begin_execution()
 	actor.arm_watch(resolved_anchor, target_cell, resolved_footprint, fired_attack, resolved_spent,
-			false, resolved_path_lengths, resolved_effect)
+			false, resolved_path_lengths, resolved_effect, 0, resolved_empowered, resolved_leans_on_vial)
 	finish_execution()
 
 

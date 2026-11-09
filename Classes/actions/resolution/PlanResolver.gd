@@ -531,28 +531,32 @@ static func _break_watch_on(target: Unit, plan: ResolvedPlan, outcome: ResolvedO
 # The sweep works on copies, so the armed watch is left alone -- re-arming it over the current would
 # let the arc grow the watched cells with every trigger. Its tile effect lands where the watch froze it
 # (#894), never re-placed, since the sweep walks paths and an effect shape is not one.
+#
+# It fires the form the watch chose when it ARMED (#695 R6, Watch.fires), whatever the ground is now.
 static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
 	var paths := watch.paths()
-	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, watch.attack, Conduction._tiles_of(paths))
-	var reach := Conduction.sweep_paths(watch.watcher, watch.attack, paths, board, hypo,
+	var firing := watch.fires()
+	var arrival := Reach.travel_facings(watch.anchor_cell, watch.aim_cell, firing, Conduction._tiles_of(paths))
+	var reach := Conduction.sweep_paths(watch.watcher, firing, paths, board, hypo,
 			PlanResolver.unit_threaded_at.bind(board, hypo), arrival)
-	if watch.attack.lays_effect_apart():
+	if firing.lays_effect_apart():
 		reach.effect = watch.effect_cells.duplicate()
 	var group: Array[AttackAction] = []
 	if reach.victims.is_empty():
 		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
 		# reachable through a chain that shoved the crosser out before this watch fired.
 		var cell_shot := AttackAction.create(watch.watcher, watch.anchor_cell, null, watch.aim_cell)
-		cell_shot.fired_attack = watch.attack
+		cell_shot.fired_attack = firing
 		cell_shot.footprint = reach.cells
 		cell_shot.arc_links = reach.links
 		group.append(cell_shot)
 	else:
-		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, reach.victims, watch.attack, reach.cells, reach.links)
+		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, reach.victims, firing, reach.cells, reach.links)
 	AttackAction.stamp_sweep(group, reach)
 	for shot in group:
 		shot.is_watch_shot = true
 		shot.triggered_by = entrant
+		shot.leans_on_vial = watch.leans_on_vial
 	return group
 
 
@@ -1090,6 +1094,13 @@ static func _source_base_damage(action: AttackAction, board: BoardContext = null
 		var air := Atmosphere.bonus_of(air_steps)
 		if outcome != null and not carving.deals_no_damage:
 			outcome.air_steps = air_steps
+		# A FORMED carving (#695): the form was chosen where the volley was built, and it replaces the
+		# +1, so base_damage reads no empowerment here. The vial burns iff the choice leaned on it (R4),
+		# stamped at that choice -- this step never re-decides which form fires. No payload burns one.
+		if carving.empowered != null or carving.form_of != null:
+			if outcome != null and action.leans_on_vial and action.dropped_by == null:
+				outcome.burned_vial = body.attunement
+			return carving.base_damage(body, terrain, air)
 		var charge := body.attunement_elements()
 		# A PAYLOAD burns no vial (#1058): it was never fired, so it spends nothing. Terrain still
 		# empowers it, being where the thrower stands rather than something they would spend.
