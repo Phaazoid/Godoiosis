@@ -294,3 +294,10 @@ func test_a_stash_rune_says_what_its_carving_becomes() -> void:
 	var row := _row_for(_screen(), rune)
 	assert_object(row).override_failure_message("the stash drew no row for the rune").is_not_null()
 	_assert_says(row.tooltip_text, says, "a rune in the stash never says what its carving becomes")
+	# What it needs beyond the air is the carving's own fact too, and the formula is the rune card's
+	# alone (#1319 D1): the hover says what the carving does, never its recipe.
+	var needs := CellSubstances.needs_text(carving)
+	assert_str(needs).override_failure_message("fixture: the carving has no needs line").is_not_empty()
+	_assert_says(row.tooltip_text, needs, "a rune in the stash never says what its carving needs")
+	assert_str(row.tooltip_text).override_failure_message(
+		"the hover printed the carving's formula").not_contains(carving.recipe)

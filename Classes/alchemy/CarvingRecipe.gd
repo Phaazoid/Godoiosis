@@ -10,6 +10,7 @@ class_name CarvingRecipe
 #   demand    -- depth: per element, the most atoms any ONE verb works on (what the alchemist's aura must reach)
 #   delivered -- what the last delivering verb leaves at the target
 #   fizzle    -- the first argument a cast is missing, given what is present (fizzle_reason)
+#   needs     -- every argument it is missing, in words (needs_text): the same walk, run past each gap
 #   drawn     -- which ambient substances it takes from the air (drawn_from), what Atmosphere scales
 #   paces     -- what its Still and Quicken hold or hurry in the circle (#1311, Pace)
 # Pure on its catalog (id -> Substance), passed in like AlchemyFormula's, so a test can hand it one.
@@ -228,6 +229,47 @@ func paces() -> Dictionary[String, Pace.Kind]:
 # beside loam, whose water a plain `Push(W2)` cannot reach.
 func fizzle_reason(available: Dictionary[String, int], catalog: Dictionary = {},
 		held: Dictionary[String, int] = {}) -> String:
+	var missing := _shortfalls(available, held, true)
+	if missing.is_empty():
+		return ""
+	var first: Shortfall = missing[0]
+	if first.held_here:
+		return "Fizzles: only an Extract draws out the %s here" % _named(first.id, catalog)
+	return "Fizzles: needs %s %s" % [_need_phrase(first, catalog), Materia.reach_text()]
+
+
+# EVERY substance the recipe is missing given what is present, in words: "Works anywhere", or "Needs
+# water and a source of fire within 1 tile". fizzle_reason's walk run on past each shortfall, which is
+# treated as met so a later step that uses it is not blamed for it too. Asked of the AIR alone
+# (CellSubstances.needs_text), it is what a carving needs wherever it is cast: a boardless readout's line.
+func needs_text(available: Dictionary[String, int], catalog: Dictionary = {},
+		held: Dictionary[String, int] = {}) -> String:
+	var missing := _shortfalls(available, held, false)
+	if missing.is_empty():
+		return "Works anywhere"
+	var phrases: Array[String] = []
+	for need: Shortfall in missing:
+		phrases.append(_need_phrase(need, catalog))
+	var listed := phrases[-1]
+	if phrases.size() > 1:
+		listed = "%s and %s" % [", ".join(phrases.slice(0, -1)), phrases[-1]]
+	return "Needs %s %s" % [listed, Materia.reach_text()]
+
+
+# One missing argument: the substance, the most any step asked of it, and whether a compound in reach
+# HOLDS enough of it, so only an Extract could draw it out.
+class Shortfall:
+	var id := ""
+	var amount := 1
+	var held_here := false
+
+
+# THE walk (fizzle_reason, needs_text). `first_only` stops at the first shortfall, the only one a fizzle
+# names; otherwise each is met at its step's amount and the walk goes on. A substance short twice keeps
+# one entry, at the larger amount.
+func _shortfalls(available: Dictionary[String, int], held: Dictionary[String, int],
+		first_only: bool) -> Array[Shortfall]:
+	var missing: Array[Shortfall] = []
 	var have: Dictionary[String, int] = {}
 	have.assign(available)
 	for step: Step in steps:
@@ -235,15 +277,31 @@ func fizzle_reason(available: Dictionary[String, int], catalog: Dictionary = {},
 			var supply: int = have.get(id, 0)
 			if step.verb == Flourish.Type.EXTRACT:
 				supply = maxi(supply, held.get(id, 0))
-			if supply < step.amount:
-				if held.get(id, 0) >= step.amount:
-					return "Fizzles: only an Extract draws out the %s here" % _named(id, catalog)
-				if step.amount > 1:
-					return "Fizzles: needs a source of %s nearby" % _named(id, catalog)
-				return "Fizzles: needs %s nearby" % _named(id, catalog)
+			if supply >= step.amount:
+				continue
+			var need: Shortfall = null
+			for seen: Shortfall in missing:
+				if seen.id == id:
+					need = seen
+			if need == null:
+				need = Shortfall.new()
+				need.id = id
+				missing.append(need)
+			need.amount = maxi(need.amount, step.amount)
+			need.held_here = held.get(id, 0) >= need.amount
+			if first_only:
+				return missing
+			have[id] = step.amount
 		for id: String in step.makes:
 			have[id] = maxi(have.get(id, 0), step.amount)
-	return ""
+	return missing
+
+
+# "a source of water" for an amount the air cannot supply, else "water" (#1328: the reason names the fix).
+static func _need_phrase(need: Shortfall, catalog: Dictionary) -> String:
+	if need.amount > 1:
+		return "a source of %s" % _named(need.id, catalog)
+	return _named(need.id, catalog)
 
 
 # Which of `ambient` the recipe takes from the AIR, once each: an ambient need a step names more times

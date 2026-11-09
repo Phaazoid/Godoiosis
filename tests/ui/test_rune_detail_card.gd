@@ -335,14 +335,63 @@ func test_a_carving_the_carrier_cannot_channel_says_the_ladders_own_words() -> v
 	assert_str(_list_tooltips(card)).contains("Water")
 
 
-# Surplus aura is real damage and the card says how much -- the number the halo beside it is drawn
-# for. Fire 3 against a recipe asking Fire 1 (and delivering it) is two spare points, counted once.
-func test_a_channelable_carving_names_the_damage_its_spare_aura_buys() -> void:
+# The pool is real damage and the card says how much (#1319 D7): the carrier's whole Fire, counted
+# once, which is what base_damage adds over the carving's power.
+func test_a_channelable_carving_names_the_damage_its_aura_adds() -> void:
 	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
-	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+	var alch := _alchemist({FIRE: 3})
+	var card := await _open(_rune(carvings), alch)
+	var adds := carvings[0].base_damage(alch.state) - carvings[0].power
 
 	assert_str(card._aura.text).contains("Channels on")
-	assert_str(card._aura.text).contains("adds 2 damage")
+	assert_str(card._aura.text).contains("Your Fire 3 adds %d damage" % adds)
+
+
+# --- #1319: the effect first, what it needs, and the recipe last ------------------------------------
+
+# The readout leads with what the carving DOES, never its formula, and says what it needs beyond the
+# air -- the boardless readout, which wraps rather than clipping now that it carries three lines.
+func test_the_readout_leads_with_the_effect_and_says_what_it_needs() -> void:
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
+	var alch := _alchemist({FIRE: 3})
+	var card := await _open(_rune(carvings), alch)
+
+	assert_str(card._damage.text).is_equal(carvings[0].boardless_text(alch.state))
+	assert_str(card._damage.text.get_slice("\n", 0)).is_equal(carvings[0].effect_text(alch.state))
+	assert_str(card._damage.text).contains(CellSubstances.needs_text(carvings[0]))
+	assert_str(card._damage.text).not_contains(carvings[0].recipe)
+	assert_bool(card._damage.clip_text).override_failure_message(
+		"the readout clips its own lines").is_false()
+
+
+# The recipe is the card's last line, dim, with its element letters in their own colours (dev: "whenever
+# we present EAFWQ, I think we should color code the letters").
+func test_the_recipe_line_colours_its_element_letters() -> void:
+	var carvings: Array[TransmutationData] = [_circle("Break(F, A) + Push(F2)", "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+
+	assert_bool(card._recipe.visible).is_true()
+	assert_str(card._recipe.get_parsed_text()).is_equal("Recipe: Break(F, A) + Push(F2)")
+	var fire := ElementPalette.color_for_element(FIRE).to_html(false)
+	var air := ElementPalette.color_for_element(AIR).to_html(false)
+	assert_str(card._recipe.text).contains("[color=#%s]F[/color]" % fire)
+	assert_str(card._recipe.text).contains("[color=#%s]A[/color]" % air)
+	# A verb's name is no formula, so none of its letters are coloured.
+	assert_str(card._recipe.text).contains("Break(")
+
+
+# "Cost" is rune capacity alone (#1319 D6): the legend says what the marks ask of the aura instead.
+func test_the_legend_says_asked_for_not_paid_for() -> void:
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+	var words: Array[String] = []
+	for node: Node in _walk(card):
+		var label := node as Label
+		if label != null:
+			words.append(label.text)
+
+	assert_array(words).contains(["asked for, not held", "what it asks"])
+	assert_array(words).not_contains(["asked for, unpaid", "the cost"])
 
 
 # --- the two states with nobody in the middle -------------------------------------------------------
@@ -361,7 +410,9 @@ func test_a_rune_nobody_holds_shows_the_demand_and_gives_no_verdict() -> void:
 	assert_object(card._ring.portrait).override_failure_message(
 		"an empty centre was asked for -- demand only, nothing paid").is_null()
 	assert_bool(card._aura.visible).is_false()
-	assert_str(card._damage.text).is_empty()
+	# No number for nobody: what it needs is the carving's own fact, so that line stays (#1319).
+	assert_str(card._damage.text).is_equal(carvings[0].boardless_text(null))
+	assert_str(card._damage.text).not_contains("Damage")
 	assert_str(card._headline.text).contains("in the stash")
 
 
@@ -380,18 +431,22 @@ func test_a_rune_nobody_holds_still_names_what_its_carving_becomes() -> void:
 	var carvings: Array[TransmutationData] = [carving]
 	var card := await _open(_rune(carvings), null)
 
-	assert_str(card._damage.text).is_equal(carving.form_text(null))
+	assert_str(card._damage.text).contains(carving.form_text(null))
 	assert_str(card._damage.text).contains("becomes Blaze")
 	assert_bool(card._damage.visible).is_true()
 
 
+# Effect, then what it needs, then what it becomes (#1319): the form is the readout's last line.
 func test_a_held_rune_names_its_form_under_its_damage() -> void:
 	var carving := _formed("Ember", "Blaze")
 	var carvings: Array[TransmutationData] = [carving]
 	var wielder := _alchemist({FIRE: 3})
 	var card := await _open(_rune(carvings), wielder)
 
-	assert_str(card._damage.text.get_slice("\n", 1)).is_equal(carving.form_text(wielder.state))
+	var lines := card._damage.text.split("\n")
+	assert_int(lines.size()).is_equal(3)
+	assert_str(lines[1]).is_equal(CellSubstances.needs_text(carving))
+	assert_str(lines[2]).is_equal(carving.form_text(wielder.state))
 
 
 # A blank rune OPENS rather than being a card with nothing on it: what it has room for, and that its

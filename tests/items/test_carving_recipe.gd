@@ -267,6 +267,57 @@ func test_the_reason_names_the_missing_substance() -> void:
 	assert_str(_walk("Extract(QF) + Push(QF)", _ambient())).contains("lightning")
 
 
+# The reach is said in tiles, the one spelling Materia owns (#1319), never "nearby".
+func test_a_fizzle_says_how_near_in_tiles() -> void:
+	var reason := _walk("Focus(W2) + Push(W2)", _ambient())
+	assert_str(reason).contains(Materia.reach_text())
+	assert_str(reason).not_contains("nearby")
+	assert_str(_walk("Push(3A2)", _ambient())).contains(Materia.reach_text())
+
+
+# --- the needs line (#1319) -------------------------------------------------------------------
+
+func _needs(recipe: String, available: Dictionary[String, int]) -> String:
+	var catalog := _fizzle_catalog()
+	var parsed := CarvingRecipe.parse(recipe, catalog)
+	assert_str(parsed.error).override_failure_message("fixture recipe '%s' does not parse: %s"
+			% [recipe, parsed.error]).is_empty()
+	return parsed.needs_text(available, catalog)
+
+
+func test_a_carving_the_air_feeds_works_anywhere() -> void:
+	assert_str(_needs("Bind(F, F) + Push(F2)", _ambient())).is_equal("Works anywhere")
+	assert_str(_needs("Break(A, W) + Push(W2)", _ambient())).is_equal("Works anywhere")
+
+
+func test_the_needs_line_names_what_is_missing_and_how_near() -> void:
+	assert_str(_needs("Focus(W2) + Push(W2)", _ambient())).is_equal("Needs water %s" % Materia.reach_text())
+	assert_str(_needs("Push(3A2)", _ambient())).is_equal(
+			"Needs a source of inert air %s" % Materia.reach_text())
+
+
+# Where a fizzle names the FIRST gap, the needs line names them all: the walk goes on past each.
+func test_the_needs_line_names_every_gap_the_fizzle_names_the_first() -> void:
+	var recipe := "Focus(W2) + Push(E2)"
+	assert_str(_needs(recipe, _ambient())).is_equal("Needs water and salt %s" % Materia.reach_text())
+	assert_str(_walk(recipe, _ambient())).contains("water")
+	assert_str(_walk(recipe, _ambient())).not_contains("salt")
+
+
+# A substance short at two steps is named once, at the larger amount: the second step is not blamed
+# for the first's gap, and a jet's worth is what it needs.
+func test_a_substance_short_twice_is_named_once_at_the_larger_amount() -> void:
+	assert_str(_needs("Focus(W2) + Push(3W2)", _ambient())).is_equal(
+			"Needs a source of water %s" % Materia.reach_text())
+
+
+func test_only_a_legal_carving_has_a_needs_line() -> void:
+	assert_str(CellSubstances.needs_text(AttackData.new())).is_empty()
+	var broken := TransmutationData.new()
+	broken.recipe = "Shove(F)"
+	assert_str(CellSubstances.needs_text(broken)).is_empty()
+
+
 # --- amounts (#1328) -------------------------------------------------------------------------
 
 # The amount is the equations' coefficient in front of the argument; no number is one.

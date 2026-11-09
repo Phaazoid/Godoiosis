@@ -153,6 +153,20 @@ static func fizzle_reason(attack: AttackData, cell: Vector2i, board: BoardContex
 	return recipe.fizzle_reason(presence.free, {}, presence.held)
 
 
+# What `attack` needs beyond the AIR, wherever it is cast ("Works anywhere", "Needs a source of
+# lightning within 1 tile"), or "" for anything but a legal carving. No board, no caster: the carving's
+# own fact, what a boardless readout (the gear hover, the rune card) can say. The fizzle's walk, run on.
+static func needs_text(attack: AttackData) -> String:
+	var carving := attack as TransmutationData
+	if carving == null:
+		return ""
+	var recipe := carving.parsed()
+	if not recipe.is_legal():
+		return ""
+	var presence := presence_near(Vector2i.ZERO, null)
+	return recipe.needs_text(presence.free, {}, presence.held)
+
+
 # Everything here is a real source, so all of it is PLENTY.
 static func _add_cell(found: Dictionary[String, int], cell: Vector2i, board: BoardContext, hypo: Dictionary,
 		map: SubstanceMap) -> void:

@@ -251,16 +251,24 @@ func aura_text(wielder: UnitState, temper: Elemental.Element) -> String:
 	var refusal := channel_block_reason(wielder, temper)
 	if refusal != "":
 		return refusal
-	# SURPLUS IS WHAT DAMAGE READS: aura past the recipe's demand in each element the hit scales off,
-	# once each -- base_damage's own count. Spare aura in an element it only spends is not damage.
-	var spare := 0
+	# THE WHOLE POOL IS WHAT DAMAGE READS (#1319 D7): the wielder's aura in each element the hit scales
+	# off, once each -- base_damage's own count. Aura in an element it only spends is not damage.
+	var pools: Array[String] = []
+	var scaling := 0
 	for e: Elemental.Element in damage_elements():
-		spare += maxi(0, wielder.get_element_aura(e) - demand_of(e))
-	# A utility carving suppresses scaling outright, so its surplus buys nothing and claiming a number
+		var depth := wielder.get_element_aura(e)
+		if depth > 0:
+			pools.append("%s %d" % [Elemental.display_name(e), depth])
+			scaling += depth
+	# A utility carving suppresses scaling outright, so its aura buys nothing and claiming a number
 	# here would promise damage the resolver never adds (deals_no_damage, #126).
-	if spare == 0 or deals_no_damage:
-		return "Channels on %s" % demand_text()
-	return "Channels on %s, and the aura past it adds %d damage" % [demand_text(), spare]
+	if scaling == 0 or deals_no_damage:
+		return "Channels on %s." % demand_text()
+	var named := pools[-1]
+	if pools.size() > 1:
+		named = "%s and %s" % [", ".join(pools.slice(0, -1)), pools[-1]]
+	return "Channels on %s. Your %s add%s %d damage." % [demand_text(), named,
+			"s" if pools.size() == 1 else "", scaling]
 
 
 # HOW COMFORTABLY this channels, which is the THIRD answer the ladder already computes and throws
@@ -310,15 +318,35 @@ func effect_text(wielder: UnitState) -> String:
 
 # What this carving DOES for this wielder, for the menu's hover readout (#166) — the carving's
 # answer to the role ArmorData.mechanical_text plays for a worn piece. Itemized per wielder because
-# both numbers depend on them: damage scales off their aura, wildcards off their gaps.
+# both numbers depend on them: damage scales off their aura, wildcards off their gaps. The EFFECT leads
+# and the recipe is not here (#1319 D1): the formula is the rune card's own `Recipe:` line.
 func mechanical_text(wielder: UnitState, _temper: Elemental.Element) -> String:
-	var parts: Array[String] = [recipe, effect_text(wielder)]
+	var text := _summary_text(wielder)
+	var form_line := form_text(wielder)
+	return text if form_line == "" else "%s\n%s" % [text, form_line]
+
+# The first line: the effect, then the wildcards it leans on.
+func _summary_text(wielder: UnitState) -> String:
+	var parts: Array[String] = [effect_text(wielder)]
 	var deficit := total_deficit(wielder)
 	if deficit > 0:
 		parts.append("Wildcards %d" % deficit)
-	var text := "  ·  ".join(parts)
+	return "  ·  ".join(parts)
+
+# The readout where there is NO BOARD (#1319): the gear hover and the rune card. mechanical_text's
+# lines with what the carving needs beyond the air between them (CellSubstances.needs_text), since no
+# cell is there to fizzle it. With nobody holding it, the needs line and the form's, unnumbered.
+func boardless_text(wielder: UnitState) -> String:
+	var lines: Array[String] = []
+	if wielder != null:
+		lines.append(_summary_text(wielder))
+	var needs := CellSubstances.needs_text(self)
+	if needs != "":
+		lines.append(needs)
 	var form_line := form_text(wielder)
-	return text if form_line == "" else "%s\n%s" % [text, form_line]
+	if form_line != "":
+		lines.append(form_line)
+	return "\n".join(lines)
 
 # What this carving becomes where its caster is empowered (#695), as one line for every readout that
 # names it: "Beside a source of Fire: becomes Fireburst (Damage 8)". "" with no form, or with one that

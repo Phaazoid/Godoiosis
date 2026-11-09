@@ -7,7 +7,7 @@ extends Object
 # poorest on the screen where a stranger picks it up.
 #
 # Order: the name, the kind's MECHANICAL lines, then authored flavour last. The mechanical half is
-# never authored here: ArmorData.mechanical_text, RuneData.attack_detail, VialData.mechanical_text,
+# never authored here: ArmorData.mechanical_text, TransmutationData.boardless_text, VialData.mechanical_text,
 # WeaponModData.effect_text and WeaponInstance.status_text own those words, so a number that moves
 # re-words every tooltip with no edit at this layer. `description` stays flavour, and stays the
 # dev's to write.
@@ -77,16 +77,13 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 			lines.append(t.display_name)
 			# What it asks for is the recipe's, whoever carries it (#962).
 			lines.append("Asks %s" % t.demand_text())
-			# Both of these scale off the wielder's aura, so with nobody to ask, the carving is
-			# named and left at that -- save its form (#695), which is the carving's own, minus its number.
-			if unit == null:
-				var form_line := t.form_text(null)
-				if form_line != "":
-					lines.append(form_line)
-				continue
-			var detail: String = rune.attack_detail(unit.state, t)
+			# The boardless readout (#1319): what it does, what it needs beyond the air, its form. With
+			# nobody to ask, the numbers drop out and the carving's own facts stay.
+			var detail := t.boardless_text(UnitState.of(unit))
 			if detail != "":
 				lines.append(detail)
+			if unit == null:
+				continue
 			var reason: String = rune.attack_block_reason(unit.state, t)
 			if reason != "":
 				lines.append(reason)

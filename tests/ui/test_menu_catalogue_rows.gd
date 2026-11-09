@@ -192,6 +192,28 @@ func test_every_greyed_row_says_what_it_needs() -> void:
 	assert_str(_tooltip(inferno)).contains("2")
 
 
+# The readout draws a greyed row's REASON in the refusal red (#1319), so the row has to say where in
+# its tooltip the reason starts -- at the reason's own first line, and on no row that can be picked.
+func test_a_greyed_row_marks_where_its_reason_starts() -> void:
+	var alch := _alchemist_with_a_partial_rune()
+
+	await _enter_attack_ring(alch)
+	var rows := _open_rows()
+
+	var inferno := _row_named(rows, "Inferno")
+	assert_bool(inferno.has("refused_from")).override_failure_message(
+		"a greyed row does not say which of its lines are the reason").is_true()
+	var lines := _tooltip(inferno).split("\n")
+	var inferno_carving: TransmutationData = (alch.get_equipped_weapon() as RuneData).inscriptions[2]
+	var reason: String = game.main_action_menu._use_reason(alch, inferno_carving)
+	assert_str(reason).override_failure_message("fixture: Inferno is greyed for no reason").is_not_empty()
+	var from := int(inferno["refused_from"])
+	assert_int(from).is_less(lines.size())
+	assert_str("\n".join(lines.slice(from))).is_equal(UiText.wrap(reason))
+	assert_bool(_row_named(rows, "Ember").has("refused_from")).override_failure_message(
+		"a pickable row claims a refusal").is_false()
+
+
 # The descriptions half of #166: a row you CAN pick still says what it does. Blocked by the old
 # controller, which attached a tooltip only when a row was disabled.
 func test_an_enabled_row_still_carries_its_readout() -> void:

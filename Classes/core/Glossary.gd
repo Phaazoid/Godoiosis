@@ -426,8 +426,8 @@ static func _build_entries() -> Dictionary:
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
 			+ "aura. A carving the wielder cannot pay for is listed greyed, with the reason. "
-			+ ("A carving also needs what it works on within %d tile%s of the caster, or it fizzles "
-				% [Materia.REACH, "" if Materia.REACH == 1 else "s"])
+			+ ("A carving also needs what it works on %s of the caster, or it fizzles "
+				% Materia.reach_text())
 			+ "and does nothing. The air is everywhere, so carvings that work on the air never "
 			+ "fizzle, but it holds only a little of anything: a carving that needs more than that "
 			+ "needs a real source within reach, such as open water, a fire or the ground. One that "
