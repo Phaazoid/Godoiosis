@@ -97,7 +97,11 @@ static func render_focus(session, handle: String) -> String:
 		overlay[cell] = "-"
 	var refused := "- strands a squadmate" if unit.is_leader() and unit.has_squad() else "- breaks leader range"
 	if unit.has_equipped_weapon():
-		for cell in Reach.get_all_attack_cells_from(unit.get_projected_destination(), unit.get_fired_attack()):
+		# The game's reach layer: the form the cast would fire from there (#695, game.enter_attack_mode).
+		var origin := unit.get_projected_destination()
+		var firing := Materia.fires(unit.get_fired_attack(), unit.state, origin,
+				session.squad_manager.candidate_board(unit.squad))
+		for cell in Reach.get_all_attack_cells_from(origin, firing):
 			overlay[cell] = "*" if overlay.has(cell) else "x"
 	for other in session.live_units():
 		if other.is_downed() and not overlay.has(other.movement.cell):

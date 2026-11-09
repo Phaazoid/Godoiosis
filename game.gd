@@ -976,7 +976,10 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 		# the attack's vertical tolerance (#258) -- the board carries the elevations. One predicate
 		# since #756, because a directional aim is no longer unconditional: a facing whose spread
 		# the terrain truncates to nothing is a dud order, and the hover draws the same answer.
-		if Reach.can_aim_at(origin, cell, aiming, _board()):
+		# Judged in the form it would FIRE from here (#695), the hover's own question.
+		var firing: AttackData = Materia.fires(aiming, attacker.state, origin,
+				squad_manager.candidate_board(attacker.squad))
+		if Reach.can_aim_at(origin, cell, firing, _board()):
 			_commit_aim(attacker, origin, cell)
 	exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 
@@ -1323,9 +1326,12 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE, source: E
 	# firing stop looking identical -- which is the intent's first reader before the click.
 	overlay_manager.set_aim_colors(aiming, intent == AimIntent.WATCH)
 	var reach_origin := unit.get_projected_destination()
+	# A directional reach is its spread, so it is drawn for the form the cast would FIRE here (#695),
+	# the hover's own chooser on the hover's own ground.
+	var firing: AttackData = Materia.fires(aiming, unit.state, reach_origin, squad_manager.candidate_board(unit.squad))
 	overlay_manager.show_attack_reach(
-		Reach.get_all_attack_cells_from(reach_origin, aiming),
-		Reach.blocked_cells_from(reach_origin, aiming, _board()))
+		Reach.get_all_attack_cells_from(reach_origin, firing),
+		Reach.blocked_cells_from(reach_origin, firing, _board()))
 
 # Generic "pick one highlighted unit" mode (rescue, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays

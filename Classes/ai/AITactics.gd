@@ -421,22 +421,28 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 		# player's row is greyed. The same CellSubstances.fizzle_reason, asked from the same cell.
 		if CellSubstances.fizzle_reason(attack, origin, board, unit.state) != "":
 			continue
+		# What fires from this origin (#695): the order stays the base, the geometry is the form's.
+		var firing := Materia.fires(attack, unit.state, origin, board)
 		var marks: Dictionary = patients if attack.heals else hostiles
 		# A blow is aimed at a cloud, wherever it lies (#1514), only by a band that values splits.
 		var blows := not attack.heals and board.gas != null and not board.gas.is_empty() \
-				and AIProfiles.of(unit).values_splits and _blows_gas(unit, attack)
+				and AIProfiles.of(unit).values_splits and _blows_gas(unit, firing)
 		if blows:
 			marks = marks.duplicate()
 			for cell in board.gas.cells():
 				marks[cell] = true
-		if marks.is_empty() and not _may_pay_unmarked(unit, attack):
+		if marks.is_empty() and not _may_pay_unmarked(unit, firing):
 			continue
-		for aim in _aim_cells(unit, origin, attack, board, marks):
-			var sweep := Conduction.sweep(unit, origin, aim, attack, board)
-			var paying := _paying_victims(unit, attack, sweep, base_hypo, stakes, stabilise)
+		for aim in _aim_cells(unit, origin, firing, board, marks):
+			var sweep := Conduction.sweep(unit, origin, aim, firing, board)
+			var paying := _paying_victims(unit, firing, sweep, base_hypo, stakes, stabilise)
 			unit.active_attack = attack   # declare()'s stamp only (#102)
 			var action := AttackAction.declare(unit, origin, aim)
-			if paying.is_empty() and not _map_pays(unit, attack, sweep, board, base_hypo, action, blows):
+			var shot := action
+			if firing != attack:
+				shot = AttackAction.create(unit, origin, null, aim)
+				shot.fired_attack = firing
+			if paying.is_empty() and not _map_pays(unit, firing, sweep, board, base_hypo, shot, blows):
 				continue
 			var key := _aim_key(attack, sweep)
 			if seen.has(key):
@@ -1084,14 +1090,13 @@ static func watch_attacks_for(unit: Unit) -> Array[AttackData]:
 
 # The cells each facing's watch would cover from `origin` (dir -> cells), truncation included
 # (#756). A facing that covers nothing is absent. _watch_aim ranks these; ThreatField unions them.
-# Asked of a probe of the order itself (#1355), so a lane is the resolver's footprint rule
-# (OverwatchAction.watched_paths_from), each cell once.
+# Asked of the resolver's own footprint rule (OverwatchAction.watched_paths, #1355), each cell once,
+# for the form the watch would arm from `origin` (#695).
 static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board: BoardContext) -> Dictionary:
 	var lanes := {}
+	var arming := Materia.fires(attack, unit.state, origin, board)
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		var probe := OverwatchAction.new()
-		probe.init(unit, origin + dir, attack)
-		var cells := Conduction._tiles_of(probe.watched_paths_from(origin, board))
+		var cells := Conduction._tiles_of(OverwatchAction.watched_paths(arming, origin, origin + dir, board))
 		if not cells.is_empty():
 			lanes[dir] = cells
 	return lanes
@@ -1154,6 +1159,7 @@ static func watch_lanes(unit: Unit, origin: Vector2i, attack: AttackData, board:
 # ally-hitting watch shoots its own squad, and that is the attack behaving as authored.
 static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: Unit, board: BoardContext) -> Vector2i:
 	var footprints := watch_lanes(unit, origin, attack, board)
+	var arming := Materia.fires(attack, unit.state, origin, board)
 	var wanted := {}       # their union, and the hop field's `until`
 	for dir in footprints:
 		for cell: Vector2i in footprints[dir]:
@@ -1166,7 +1172,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 	var best_hops := -1
 	var best_covered := 0
 	for dir in GridUtils.CARDINAL_DIRECTIONS:
-		if not footprints.has(dir) or not Reach.can_aim_at(origin, origin + dir, attack, board):
+		if not footprints.has(dir) or not Reach.can_aim_at(origin, origin + dir, arming, board):
 			continue
 		var lane: Array[Vector2i] = footprints[dir]
 		var hops := -1
@@ -1188,7 +1194,7 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 		return best
 	var facing := GridUtils.cardinal_direction_i_between(origin, enemy.movement.cell)
 	if facing != Vector2i.ZERO and footprints.has(facing) \
-			and Reach.can_aim_at(origin, origin + facing, attack, board):
+			and Reach.can_aim_at(origin, origin + facing, arming, board):
 		var toward: Array[Vector2i] = footprints[facing]
 		if _lane_can_be_entered(toward, enemy, board):
 			return origin + facing

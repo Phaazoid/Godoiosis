@@ -638,13 +638,15 @@ func lapse_guard() -> void:
 # `path_lengths` splits the cells into the paths the shot walks (#1057). Empty is ONE path, which is
 # the persisted meaning too, so a caller with a single line need not spell it. `effect_cells` is where
 # its tile effect lands (#894, Watch.effect_cells). `stamp` is an arm order a save restored (#1565);
-# 0 stamps a fresh one.
+# 0 stamps a fresh one. `formed` and `vial` are the empowered-form choice made at arm (#695 R6,
+# Watch.empowered / leans_on_vial).
 func arm_watch(origin: Vector2i, aim_cell: Vector2i, watched_cells: Array[Vector2i],
 		attack: AttackData, spent := false, cancelled := false, path_lengths: Array[int] = [],
-		effect_cells: Array[Vector2i] = [], stamp := 0) -> void:
+		effect_cells: Array[Vector2i] = [], stamp := 0, formed := false, vial := false) -> void:
 	if attack == null or watched_cells.is_empty():
 		return
-	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack, path_lengths, effect_cells, stamp)
+	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack, path_lengths, effect_cells, stamp,
+			formed, vial)
 	watch.spent = spent
 	watch.cancelled = cancelled   # #810: a save taken after a blow broke the watch restores it broken
 
