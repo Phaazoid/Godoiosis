@@ -78,8 +78,11 @@ static func _mechanical_lines(item: Item, unit: Unit) -> Array[String]:
 			# What it asks for is the recipe's, whoever carries it (#962).
 			lines.append("Asks %s" % t.demand_text())
 			# Both of these scale off the wielder's aura, so with nobody to ask, the carving is
-			# named and left at that.
+			# named and left at that -- save its form (#695), which is the carving's own, minus its number.
 			if unit == null:
+				var form_line := t.form_text(null)
+				if form_line != "":
+					lines.append(form_line)
 				continue
 			var detail: String = rune.attack_detail(unit.state, t)
 			if detail != "":

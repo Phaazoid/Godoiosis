@@ -365,6 +365,35 @@ func test_a_rune_nobody_holds_shows_the_demand_and_gives_no_verdict() -> void:
 	assert_str(card._headline.text).contains("in the stash")
 
 
+# A formed carving (#695): what it becomes is the carving's own fact, so the stash still says it,
+# without the number, which is a wielder's.
+func _formed(name: String, form_name: String) -> TransmutationData:
+	var carving := _circle("Push(F2)", name)
+	carving.empowered = EmpoweredForm.new()
+	carving.empowered.display_name = form_name
+	carving.empowered.requires.assign([FIRE])
+	return carving
+
+
+func test_a_rune_nobody_holds_still_names_what_its_carving_becomes() -> void:
+	var carving := _formed("Ember", "Blaze")
+	var carvings: Array[TransmutationData] = [carving]
+	var card := await _open(_rune(carvings), null)
+
+	assert_str(card._damage.text).is_equal(carving.form_text(null))
+	assert_str(card._damage.text).contains("becomes Blaze")
+	assert_bool(card._damage.visible).is_true()
+
+
+func test_a_held_rune_names_its_form_under_its_damage() -> void:
+	var carving := _formed("Ember", "Blaze")
+	var carvings: Array[TransmutationData] = [carving]
+	var wielder := _alchemist({FIRE: 3})
+	var card := await _open(_rune(carvings), wielder)
+
+	assert_str(card._damage.text.get_slice("\n", 1)).is_equal(carving.form_text(wielder.state))
+
+
 # A blank rune OPENS rather than being a card with nothing on it: what it has room for, and that its
 # temper is still unspent, are the two facts a player opens it to learn.
 func test_a_blank_rune_opens_and_says_it_is_blank() -> void:

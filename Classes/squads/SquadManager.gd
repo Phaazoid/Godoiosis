@@ -961,6 +961,18 @@ static func payloads_in(plan: ResolvedPlan, candidate: AttackAction) -> Array[At
 	return rows
 
 
+# The vial `candidate` burns in `plan`, or null (#695 R4): the resolver's stamp, read off the one row
+# AttackAction.execute spends it from -- never the rule re-asked. What the aim strip names on a hover.
+static func vial_burned_by(plan: ResolvedPlan, candidate: AttackAction) -> VialData:
+	if plan == null:
+		return null
+	for row in plan.attacks:
+		if row.source_aim == candidate and row.dropped_by == null and not row.is_secondary_hit \
+				and row.resolved != null and row.resolved.burned_vial != null:
+			return row.resolved.burned_vial
+	return null
+
+
 # One pass over ONE action list. Split out of resolve_plan so a hypothetical queue can be resolved
 # by the same code rather than a second copy of it; `actions` is what every queue walk below reads.
 #

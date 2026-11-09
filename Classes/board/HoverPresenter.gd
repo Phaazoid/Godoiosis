@@ -105,6 +105,7 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 		# cell that was clicked, not the one under the pointer (#1105). An aim's forecast is about the
 		# cell under the pointer, so it does go (#929), and its ground ghosts with it (#894).
 		game.aim_forecast = null
+		game.aim_strip.show_burn("")
 		if game.game_state == game.GameState.ATTACK_TARGETING:
 			game.preview_ground()
 		return
@@ -339,6 +340,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	var victims: Array[Unit] = []
 	var trace_shown := false
 	var forecast: ResolvedPlan = null
+	var burns: VialData = null
 	if attacker != null:
 		var board: BoardContext = game._board()
 		var origin := attacker.get_projected_destination()
@@ -391,12 +393,15 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 			# aim moves on -- and what it DROPS (#1058 D2b), off the same resolve.
 			var candidate := AttackAction.declare(attacker, origin, cell)
 			forecast = game.squad_manager.preview_aim(attacker.squad, candidate, board, source)
+			burns = SquadManager.vial_burned_by(forecast, candidate)
 			if firing != null and firing.payload != null:
 				var rows := SquadManager.payloads_in(forecast, candidate)
 				travel = travel.duplicate(true)
 				_add_payloads(rows, preview_cells, travel, insets, victims)
 
 	game.aim_forecast = forecast
+	# The vial this aim would spend (#695), named on the strip off the same forecast the bars read.
+	game.aim_strip.show_burn(burns.shown_name() if burns != null else "")
 	game.preview_ground()   # what it would leave on the ground, or the queued plan's when it forecasts nothing
 	if not trace_shown:
 		game.overlay_manager.clear_sight_trace()

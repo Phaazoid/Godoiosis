@@ -16,6 +16,9 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
+const P := preload("res://tests/support/shape_fixtures.gd")
+const FIRE := Elemental.Element.FIRE
+const AIR := Elemental.Element.AIR
 
 var _main: Node
 var game: Node2D
@@ -318,3 +321,87 @@ func test_a_carried_weapons_ally_splash_is_what_the_hover_pulses() -> void:
 	pulsing = game.overlay_manager._pulsing_units
 	assert_array(pulsing).override_failure_message(
 			"the hover asked who the aim catches with the wrong weapon in hand").contains([ally])
+
+
+# ------------------------------------------------------------------------------
+#  The strip names what a carving fires as, and the vial it would burn (#695 slice 2)
+# ------------------------------------------------------------------------------
+
+
+# Built, never drawn from shipped content: test_empowered_forms' Fireball, its form a Plus named Burst.
+func _formed_carving() -> TransmutationData:
+	var carving := TransmutationData.new()
+	carving.display_name = "Fireball"
+	carving.power = 4
+	carving.recipe = "Break(F, A) + Push(F2)"
+	carving.targets = EquippableData.TargetMode.UNIT
+	P.point(carving, 2, 2)
+	carving.empowered = EmpoweredForm.new()
+	carving.empowered.display_name = "Burst"
+	carving.empowered.power_bonus = -1
+	return carving
+
+
+func _alchemist(cell: Vector2i, carving: TransmutationData) -> Unit:
+	var unit := _spawn(cell)
+	unit.unit_instance.aura = {FIRE: 4, AIR: 4}
+	var affinity: Array[Elemental.Element] = [FIRE, AIR]
+	unit.unit_instance.affinity = affinity
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(carving)).override_failure_message("fixture: the carving did not inscribe").is_true()
+	var carried: Array[EquippableData] = [rune]
+	_arm(unit, carried)
+	return unit
+
+
+func test_beside_a_source_the_strip_names_the_form_the_carving_fires() -> void:
+	game.vein_field.set_kind(Vector2i(1, 1), Vein.Kind.FIRE)
+	var carving := _formed_carving()
+	var caster := _alchemist(Vector2i(2, 1), carving)
+	_aim(caster, carving)
+
+	var firing: AttackData = Materia.fires(carving, caster.state, caster.get_projected_destination(),
+			game.squad_manager.candidate_board(caster.squad))
+	assert_object(firing).override_failure_message("fixture: the vein empowered no form").is_not_same(carving)
+	assert_str(_strip_text()).contains("%s → %s" % [carving.display_name, firing.display_name])
+
+
+func test_away_from_a_source_the_strip_names_the_carving_alone() -> void:
+	var carving := _formed_carving()
+	var caster := _alchemist(Vector2i(2, 1), carving)
+	_aim(caster, carving)
+
+	assert_str(_strip_text()).contains(carving.display_name)
+	assert_str(_strip_text()).not_contains("→")
+
+
+# The vial is named off the HOVERED aim's forecast, the plan the health bars read: on a cell the aim
+# would hit, the vial its form leans on; on a cell it cannot aim at, nothing.
+func test_the_strip_names_the_vial_the_hovered_aim_would_burn() -> void:
+	var carving := _formed_carving()
+	var caster := _alchemist(Vector2i(2, 1), carving)
+	var vial := VialData.new()
+	vial.element = FIRE
+	vial.display_name = "Test Vial"
+	assert_bool(caster.add_item(vial)).override_failure_message("fixture: the vial did not fit").is_true()
+	assert_str(caster.use_vial(caster.inventory.find(vial))).is_equal("")
+	var foe_cell := Vector2i(4, 1)
+	_spawn(foe_cell, Team.Faction.ENEMY)
+	_aim(caster, carving)
+
+	game.hover_presenter.update_hover_visuals(foe_cell)
+	assert_str(_strip_text()).override_failure_message(
+		"hovering a foe the vial-borne form would hit, the strip never said the vial burns: %s" % _strip_text()
+	).contains("burns %s" % vial.shown_name())
+
+	await await_idle_frame()
+	var named_at: Vector2 = game.aim_strip._attack.get_global_rect().position
+
+	game.hover_presenter.update_hover_visuals(Vector2i(9, 3))
+	assert_str(_strip_text()).override_failure_message(
+		"on a cell the aim cannot reach, the strip still names a vial: %s" % _strip_text()).not_contains("burns")
+	# The centred strip keeps the note's width once shown, so the name does not slide cell to cell.
+	await await_idle_frame()
+	assert_vector(game.aim_strip._attack.get_global_rect().position).override_failure_message(
+		"the attack's name moved when the vial note went: the strip resized under the cursor").is_equal(named_at)

@@ -268,3 +268,29 @@ func test_a_conduit_hovers_what_it_holds() -> void:
 		"the fixture's conduit describes itself as nothing, so this case cannot fail").is_not_empty()
 	assert_str(says).contains(held.display_name)
 	_assert_says(ItemText.hover(conduit), says, "a conduit hovers as its name alone")
+
+
+# A rune in the stash still names what a formed carving BECOMES (#695), with no number: there is nobody
+# to read one off. The new half of ItemText's stash branch; a carried rune reads it through attack_detail.
+func test_a_stash_rune_says_what_its_carving_becomes() -> void:
+	if not await _enter_phase():
+		return
+	var carving := TransmutationData.new()
+	carving.display_name = "Test Ember"
+	carving.power = 4
+	carving.recipe = "Push(F2)"
+	carving.empowered = EmpoweredForm.new()
+	carving.empowered.display_name = "Test Blaze"
+	carving.empowered.requires.assign([Elemental.Element.FIRE])
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(carving)).override_failure_message("fixture: the carving did not inscribe").is_true()
+	mc.loadout().stash.append(rune)
+	await _redraw()
+
+	var says := carving.form_text(null)
+	assert_str(says).override_failure_message(
+		"the fixture's form describes itself as nothing, so this case cannot fail").is_not_empty()
+	var row := _row_for(_screen(), rune)
+	assert_object(row).override_failure_message("the stash drew no row for the rune").is_not_null()
+	_assert_says(row.tooltip_text, says, "a rune in the stash never says what its carving becomes")

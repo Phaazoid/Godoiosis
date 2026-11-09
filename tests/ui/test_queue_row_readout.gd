@@ -955,3 +955,86 @@ func _assert_fills_slot(slot: TextureRect, sheet: Texture2D, which: String) -> v
 	assert_float(region.end.y) \
 		.override_failure_message("the %s window %s does not stand the feet (row %d) on its floor" % [which, region, ink.end.y]) \
 		.is_equal(ink.end.y)
+
+
+# --- an empowered form and the vial it leans on (#695 slice 2) ---
+#
+# Built, never authored content: a formed carving whose form is reached only through the attacker's
+# fire vial, so the one queued aim both fires the form and burns the vial. Every expected word is the
+# fixture's own or OutcomeFacts' answer, so a rewording moves nothing here.
+
+func _queue_vial_formed() -> ActionQueueRow:
+	var carving := TransmutationData.new()
+	carving.display_name = "Form Test"
+	carving.power = 4
+	carving.targets = EquippableData.TargetMode.UNIT
+	carving.recipe = "Break(F, A) + Push(F2)"
+	carving.empowered = EmpoweredForm.new()
+	carving.empowered.display_name = "Form Test Burst"
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var aura: Dictionary[Elemental.Element, int] = {Elemental.Element.FIRE: 6, Elemental.Element.AIR: 6}
+	attacker.unit_instance.aura = aura
+	var affinity: Array[Elemental.Element] = [Elemental.Element.FIRE, Elemental.Element.AIR]
+	attacker.unit_instance.affinity = affinity
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(carving)).override_failure_message("fixture carving failed to inscribe").is_true()
+	attacker.equipped_weapon = rune
+	var vial := VialData.new()
+	vial.element = Elemental.Element.FIRE
+	vial.display_name = "Test Vial"
+	assert_bool(attacker.add_item(vial)).override_failure_message("fixture: the vial did not fit").is_true()
+	assert_str(attacker.use_vial(attacker.inventory.find(vial))).is_equal("")
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
+	var row := _attack_row()
+	assert_object(row).override_failure_message("the carving was not queued").is_not_null()
+	var fired := (row.action as AttackAction).fired_attack as TransmutationData
+	assert_bool(fired != null and fired.form_of == carving).override_failure_message(
+		"fixture: the vial did not make the form fire, so this case proves nothing").is_true()
+	return row
+
+
+func test_a_hit_that_fired_a_form_wears_the_forms_name() -> void:
+	var row := await _queue_vial_formed()
+	var fired := (row.action as AttackAction).fired_attack as TransmutationData
+	var entries := _consequence_entries(row)
+
+	assert_array(_texts(entries)).override_failure_message(
+		"the row never says the hit fired the empowered form: %s" % [_texts(entries)]).contains([fired.display_name])
+	var tip := String(_entry(row, fired.display_name)["tip"])
+	assert_str(tip).contains("Empowered by %s" % fired.form_of.form_requires_text())
+	assert_str(tip).contains("fires as %s" % fired.display_name)
+
+
+# A collapsed volley says what the AIM did, off its lead: the form and the vial, which every member
+# wears and which used to hide behind the fold.
+func test_a_volley_header_says_the_form_and_the_vial_its_aim_spent() -> void:
+	var row := await _queue_vial_formed()
+	var lead := row.action as AttackAction
+	assert_object(lead.resolved.burned_vial).override_failure_message(
+		"fixture: the vial-borne form burned no vial").is_not_null()
+	var header: ActionQueueRow = (load("res://Scenes/ActionQueueRow.tscn") as PackedScene).instantiate()
+	_main.add_child(header)   # freed with _main in after_test
+	header.setup_volley_summary(lead, 2, false)
+
+	var expected: Array[String] = []
+	for fact in OutcomeFacts.of_aim(lead.resolved, lead.fired_attack):
+		expected.append(fact.badge)
+	assert_array(expected).contains([lead.fired_attack.display_name, ActionQueueRow.BADGE_VIAL])
+	assert_array(_texts(_consequence_entries(header))).override_failure_message(
+		"the folded header hides what its aim fired as or spent").is_equal(expected)
+
+
+func test_a_formless_volley_header_draws_no_chips() -> void:
+	await _queue_elemental_attack(Elemental.Element.WATER, [])
+	var lead := _attack_row().action as AttackAction
+	var header: ActionQueueRow = (load("res://Scenes/ActionQueueRow.tscn") as PackedScene).instantiate()
+	_main.add_child(header)
+	header.setup_volley_summary(lead, 2, false)
+
+	assert_int(header.consequence.get_child_count()).override_failure_message(
+		"a header whose aim fired no form and spent no vial drew a chip").is_equal(0)

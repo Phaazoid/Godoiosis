@@ -546,3 +546,187 @@ func test_a_hit_and_an_effect_naming_one_library_shape_edit_one_copy() -> void:
 	again.item_selected.emit(_item_index(again, name))
 	assert_object(_editor._effect_shape.staged).override_failure_message(
 		"picked to name the hit's shape, the form holds two copies of it").is_same(_editor._shape.staged)
+
+
+# --- a carving's Empowered form section (#695 slice 2) ----------------------------------------
+#
+# The form repeats some of the carving's own row labels (Element, Swing, Lands on), so every lookup
+# below is scoped to the form's own block, found by the section that holds `requires`.
+
+func _formless_carving() -> TransmutationData:
+	var carving := TransmutationData.new()
+	carving.display_name = "Editor Test"
+	carving.power = 4
+	carving.recipe = "Break(F, A) + Push(F2)"
+	return carving
+
+
+func _formed_carving() -> TransmutationData:
+	var carving := _formless_carving()
+	carving.empowered = EmpoweredForm.new()
+	return carving
+
+
+func _open_carving(carving: TransmutationData) -> void:
+	_editor._mode = AttackEditorTool.Mode.TRANSMUTATION
+	_editor.current = carving
+	_editor._loaded_name = ""
+	_editor._stage_fields()
+	_editor.populate()
+
+
+func _form_section_title(field: String) -> String:
+	for section: Dictionary in EmpoweredForm.property_sections():
+		if (section["fields"] as PackedStringArray).has(field):
+			return section["title"]
+	return ""
+
+
+# The form's indented block: the container its section titles are drawn into.
+func _form_root() -> Control:
+	var title := _form_section_title("requires")
+	for node in _all_of(_editor.editor_container, "Label", []):
+		if (node as Label).text == title:
+			return node.get_parent() as Control
+	return null
+
+
+# A ROW, never a section heading of the same name ("Shape" is both): a row's label sits in an HBox.
+func _form_row(label_text: String) -> Control:
+	var root := _form_root()
+	if root == null:
+		return null
+	for node in _all_of(root, "Label", []):
+		if (node as Label).text == label_text and node.get_parent() is HBoxContainer:
+			return node.get_parent() as Control
+	for node in _all_of(root, "CheckBox", []):
+		if (node as CheckBox).text == label_text:
+			return node as Control
+	return null
+
+
+func _tick_texts(row: Control) -> Array[String]:
+	var texts: Array[String] = []
+	for node in _all_of(row, "CheckBox", []):
+		texts.append((node as CheckBox).text)
+	return texts
+
+
+# What the checklist should offer: the recipe's elements and anything held, named as the ticks name them.
+func _expected_ticks(carving: TransmutationData) -> Array[String]:
+	var hint: String = DevWidgets.exported_property(carving.empowered, "requires").hint_string
+	var names: Array[String] = []
+	for member: Dictionary in DevWidgets._typed_enum_members(hint):
+		var value: int = member["value"]
+		if carving.distinct_elements().has(value) or carving.empowered.requires.has(value):
+			names.append(member["name"])
+	return names
+
+
+func test_ticking_a_form_gives_the_carving_one_and_unticking_clears_it() -> void:
+	var carving := _formless_carving()
+	_open_carving(carving)
+	assert_object(_form_root()).override_failure_message("a formless carving drew the form's fields").is_null()
+
+	_checkbox("Has an empowered form").button_pressed = true
+	assert_object(carving.empowered).override_failure_message("the tick wrote no form").is_not_null()
+	assert_object(_form_root()).override_failure_message("a new form drew none of its fields").is_not_null()
+
+	_checkbox("Has an empowered form").button_pressed = false
+	assert_object(carving.empowered).override_failure_message("unticking left the form in place").is_null()
+	assert_object(_form_root()).is_null()
+
+
+func test_the_form_draws_its_own_sections_in_the_order_it_declares() -> void:
+	_open_carving(_formed_carving())
+	var root := _form_root()
+	assert_object(root).is_not_null()
+	var texts: Array[String] = []
+	for node in _all_of(root, "Label", []):
+		texts.append((node as Label).text)
+	var previous := -1
+	for section: Dictionary in EmpoweredForm.property_sections():
+		var at := texts.find(section["title"])
+		assert_int(at).override_failure_message(
+			"the form drew no heading for '%s' in order" % section["title"]).is_greater(previous)
+		previous = at
+
+
+# A form can only require what the carving could be empowered in, so the checklist offers the recipe's
+# elements -- and a held one besides, so a stale tick can be cleared. The recipe is typed live with no
+# rebuild, so the ticks follow it in place.
+func test_the_checklist_offers_the_recipes_elements_and_follows_the_recipe() -> void:
+	var carving := _formed_carving()
+	carving.empowered.requires.assign([Elemental.Element.WATER])
+	_open_carving(carving)
+	var row := _form_row("Needs")
+	assert_object(row).override_failure_message("no checklist in the form").is_not_null()
+	assert_array(_tick_texts(row)).contains_exactly_in_any_order(_expected_ticks(carving))
+
+	var before := _expected_ticks(carving)
+	DevWidgets.write(carving, "recipe", "Bind(Q, Q)")
+	assert_array(_expected_ticks(carving)).override_failure_message(
+		"fixture: the new recipe asks the same elements, so this proves nothing").is_not_equal(before)
+	assert_array(_tick_texts(_form_row("Needs"))).override_failure_message(
+		"the checklist kept offering the old recipe's elements").contains_exactly_in_any_order(_expected_ticks(carving))
+
+
+# A row the delta would not read hides (EmpoweredForm.hidden_fields), and returns by reflow on the
+# FORM's own `changed`.
+func test_the_forms_swing_and_effect_rows_hide_until_the_form_reads_them() -> void:
+	var carving := _formed_carving()
+	var form := carving.empowered
+	_open_carving(carving)
+	var swing := _form_row("Swing")
+	var life := _form_row("Lasts (rounds)")
+	assert_object(swing).override_failure_message("no Swing row in the form").is_not_null()
+	assert_object(life).override_failure_message("no life row in the form").is_not_null()
+	assert_bool(swing.visible or life.visible).override_failure_message(
+		"a form with no shape and no effect offers rows nothing reads").is_false()
+
+	DevWidgets.write(form, "tile_effect", AttackData.TILE_EFFECTS.keys()[0])
+	assert_bool(is_instance_valid(life) and life.visible).override_failure_message(
+		"picking the form an effect left its life hidden").is_true()
+
+	# A Swing ticked with no shape is what AttackLint reports; the row stays to clear it.
+	DevWidgets.write(form, "swing", true)
+	assert_bool(swing.visible).override_failure_message(
+		"a stray Swing tick hid, so the editor cannot clear what the lint reports").is_true()
+
+
+# The form's shapes join the carving's: any two fields naming ONE library file edit one copy, and an
+# Update writes that file once. _staged_attack hands the lint the form's staged shape, never the file.
+func test_the_forms_shape_naming_the_carvings_library_shape_edits_one_copy() -> void:
+	var library := AttackShapeCatalog.get_library()
+	assert_bool(library.is_empty()).override_failure_message(
+		"fixture: the shape library is empty, so there is nothing to share").is_false()
+	var name: String = library.keys()[0]
+	var shared: AttackShape = library[name]
+	var carving := _formed_carving()
+	carving.attack_shape = shared
+	carving.empowered.attack_shape = shared
+	_open_carving(carving)
+
+	assert_object(_editor._form_shape.staged).override_failure_message(
+		"loaded naming one shape twice, the form holds two copies of it").is_same(_editor._shape.staged)
+	assert_array(_editor._distinct_shape_fields()).not_contains([_editor._form_shape])
+	var file := shared.resource_path.get_file()
+	assert_int(_editor._shared_victims().count(file)).override_failure_message(
+		"the overwrite confirm names the shared shape more than once").is_equal(1)
+	var probe := _editor._staged_attack() as TransmutationData
+	assert_object(probe.empowered.attack_shape).is_same(_editor._form_shape.staged)
+	assert_object(carving.empowered.attack_shape).override_failure_message(
+		"judging the staged attack wrote the copy onto the live form").is_same(shared)
+
+	# ...and picked that way through the form's own picker, against the carving's tile-effect shape too.
+	carving.attack_shape = null
+	carving.tile_effect = AttackData.TILE_EFFECTS.keys()[0]
+	carving.tile_effect_shape = shared
+	_open_carving(carving)
+	var pick := _form_row("Shape").get_child(1) as OptionButton
+	pick.item_selected.emit(_item_index(pick, AttackEditorTool.NO_FORM_SHAPE_KEY))
+	assert_object(carving.empowered.attack_shape).is_null()
+	pick = _form_row("Shape").get_child(1) as OptionButton
+	pick.item_selected.emit(_item_index(pick, name))
+	assert_object(_editor._form_shape.staged).override_failure_message(
+		"picked to name the effect's shape, the form holds a second copy of it").is_same(_editor._effect_shape.staged)

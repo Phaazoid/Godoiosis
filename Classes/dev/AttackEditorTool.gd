@@ -64,6 +64,11 @@ const NO_SHAPE_KEY := "(none - the aimed cell alone)"
 const NEW_SHAPE_KEY := "(new shape)"
 const UNNAMED_SHAPE_KEY := "(unnamed - Save as... to name it)"
 const NO_EFFECT_SHAPE_KEY := "(none - where the attack hits)"
+# A carving's empowered form (#695): its blanks keep the carving's own, so its (none) rows say so.
+const NO_FORM_SHAPE_KEY := "(none - the carving's own shape)"
+const NO_FORM_EFFECT_KEY := "(none - the carving's own)"
+const FORM_INDENT := 16
+const FORM_NOTE_COLOR := Color(0.7, 0.7, 0.7)   # the checklist's rule note, quieter than a row
 const NO_EMPOWERED_KEY := "(none — fires the same however full the tank is)"
 const NO_PAYLOAD_KEY := "(none - drops nothing)"
 # The worst case a payload chain may fan out to before the readout warns (#1058, ruling 41: a warning,
@@ -86,6 +91,10 @@ var current_template: WeaponData = null   # FAMILY only: which family "current" 
 # take_over_path moving the object every other attack is still holding.
 var _shape: LibraryField = null
 var _effect_shape: LibraryField = null   # where its tile effect lands (#894), from the same library
+# ...and a carving's empowered form's own two (#695), on `current.empowered`. All four shape fields keep
+# ONE staged copy per library file between them (_share_one_shape_copy).
+var _form_shape: LibraryField = null
+var _form_effect_shape: LibraryField = null
 var _looks: Dictionary[Elemental.Element, LibraryField] = {}
 var _items := {}
 # Which dropdown entry "current" was loaded from ("" = a New attack). Pool modes load a COPY with
@@ -124,6 +133,8 @@ func _ready():
 			current.tile_effect_shape = picked as AttackShape
 	_effect_shape.make = func() -> Resource: return AttackShape.new()
 	_effect_shape.refresh = _restage_shared_shape
+	_form_shape = _form_shape_field(NO_FORM_SHAPE_KEY, "attack_shape")
+	_form_effect_shape = _form_shape_field(NO_EFFECT_SHAPE_KEY, "tile_effect_shape")
 	_refresh_list()
 	_on_new_pressed()
 
@@ -464,6 +475,9 @@ func _draw_field(field: String, rows: Dictionary) -> PackedStringArray:
 		"recipe":
 			_populate_recipe(current as TransmutationData)
 			return PackedStringArray(["recipe"])
+		"empowered":
+			_populate_carving_form()
+			return PackedStringArray(["empowered"])
 	var added := DevWidgets.add_property_row(editor_container, current, field, populate)
 	if not added.is_empty():
 		rows[field] = added
@@ -723,14 +737,227 @@ func _populate_tile_effect(rows: Dictionary) -> PackedStringArray:
 	return PackedStringArray(["tile_effect", "tile_effect_turns", "tile_effect_shape"])
 
 
-# The hit and its tile effect may name ONE library shape, and then they edit one copy: two copies would
-# have Update write the file twice, the second, unedited one undoing the first.
+# A carving's EMPOWERED FORM (#695 slice 2): one tick to give it a form, one sentence saying what the
+# form does and when, then the form's own fields under the form's own sections, indented. Bespoke for
+# #97's picker's reasons -- the reflective swapper can only .new() an embedded resource and would draw
+# its fields unsectioned -- and one more: the form's two shapes are LIBRARY fields, staged beside the
+# carving's own and written once at Update.
+#
+# A row the delta would not read is HIDDEN, never inert (EmpoweredForm.hidden_fields, bound to the
+# FORM's `changed`, which the carving's own binder never hears).
+func _populate_carving_form() -> void:
+	var carving := current as TransmutationData
+	if carving == null:
+		return
+	var tick := _check("Has an empowered form", carving.empowered != null,
+		DevWidgets.property_tip(carving, "empowered"))
+	tick.toggled.connect(func(on: bool) -> void:
+		DevWidgets.write(carving, "empowered", EmpoweredForm.new() if on else null)
+		_form_shape.stage()
+		_form_effect_shape.stage()
+		_share_one_shape_copy()
+		populate())
+	var lead := Label.new()
+	lead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	editor_container.add_child(lead)
+	var say := func() -> void: lead.text = _form_lead(carving)
+	_follow(carving, lead, say)
+	var form := carving.empowered
+	if form == null:
+		return
+	_follow(form, lead, say)
+
+	var indent := MarginContainer.new()
+	indent.add_theme_constant_override("margin_left", FORM_INDENT)
+	editor_container.add_child(indent)
+	var inner := VBoxContainer.new()
+	indent.add_child(inner)
+	var rows := {}
+	for section: Dictionary in EmpoweredForm.property_sections():
+		var heading := Label.new()
+		heading.text = section["title"]
+		heading.add_theme_color_override("font_color", DevWidgets.HEADING_COLOR.darkened(0.15))
+		inner.add_child(heading)
+		for field: String in section["fields"]:
+			var first := inner.get_child_count()
+			_draw_form_field(inner, carving, form, field)
+			rows[field] = DevWidgets._added_since(inner, first)
+	DevWidgets.bind_hidden_fields(form, rows)
+
+
+# One of the form's fields into `inner`. The bespoke ones are the checklist, the two library shapes
+# and the effect's element pick; the rest are DevWidgets' reflective rows, the carving's own drawer.
+func _draw_form_field(inner: VBoxContainer, carving: TransmutationData, form: EmpoweredForm, field: String) -> void:
+	var tip := DevWidgets.property_tip(form, field)
+	var first := inner.get_child_count()
+	match field:
+		"requires":
+			_populate_form_requires(inner, carving, form)
+		"attack_shape":
+			_populate_form_shape(inner, carving, _form_shape, "Shape", tip,
+				"No shape: the form keeps the carving's own, and its swing.")
+		"tile_effect_shape":
+			_populate_form_shape(inner, carving, _form_effect_shape, "Lands on", tip,
+				"No shape: the effect lands on every tile the form hits.")
+		"tile_effect":
+			# A held element the table lays nothing for keeps a row, as on the carving's own pick.
+			var by_name := {NO_FORM_EFFECT_KEY: Elemental.Element.NONE}
+			for element: Elemental.Element in AttackData.TILE_EFFECTS:
+				by_name[Elemental.display_name(element)] = element
+			var held := NO_FORM_EFFECT_KEY
+			if form.tile_effect != Elemental.Element.NONE:
+				held = Elemental.display_name(form.tile_effect)
+				by_name[held] = form.tile_effect
+			DevWidgets.add_option(inner, "Element", by_name.keys(), held, func(picked: String) -> void:
+				DevWidgets.write(form, "tile_effect", by_name[picked]))
+		"tile_effect_turns":
+			var life := DevWidgets.add_spinbox(inner, "Lasts (rounds)", form.tile_effect_turns,
+				func(v: float) -> void: DevWidgets.write(form, "tile_effect_turns", int(v)))
+			DevWidgets.apply_range_hint(life, form, "tile_effect_turns")
+		_:
+			DevWidgets.add_property_row(inner, form, field, populate)
+			return   # the reflective row tips itself
+	DevWidgets._tip_rows_from(inner, first, tip)
+
+
+# The checklist (#695 R1), offering only the elements the RECIPE asks for -- a form can only require
+# what the carving could be empowered in -- plus any held one, so a stale tick can be cleared. The
+# recipe is typed live without a rebuild, so the ticks redraw in place when its element set moves.
+func _populate_form_requires(inner: VBoxContainer, carving: TransmutationData, form: EmpoweredForm) -> void:
+	var holder := VBoxContainer.new()
+	inner.add_child(holder)
+	var note := Label.new()
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_color_override("font_color", FORM_NOTE_COLOR)
+	inner.add_child(note)
+	var drawn: Array = []
+	var redraw := func() -> void:
+		var offered := carving.distinct_elements()
+		if drawn == Array(offered) and holder.get_child_count() > 0:
+			return
+		drawn.assign(offered)
+		for child in holder.get_children():
+			holder.remove_child(child)
+			child.queue_free()
+		var skip: Array = []
+		for value: int in Elemental.Element.values():
+			if not offered.has(value):
+				skip.append(value)
+		DevWidgets.add_enum_ticks(holder, "Needs", DevWidgets.exported_property(form, "requires").hint_string,
+			func() -> Variant: return form.requires,
+			func(now: Variant) -> void: DevWidgets.write(form, "requires", now), skip)
+	var say := func() -> void:
+		var delivered: Array[String] = []
+		for e: Elemental.Element in carving.damage_elements():
+			delivered.append(Elemental.display_name(e))
+		note.text = "None ticked: needs %s, what its hit delivers." % " and ".join(delivered) \
+			if not delivered.is_empty() else "None ticked: its hit delivers no element, so tick what the form needs."
+	_follow(carving, holder, redraw)
+	_follow(carving, note, say)
+
+
+# One of the form's two library shapes: the picker, then (with one picked) who else uses it, its stamp
+# and the save row -- _populate_shape's flow, handed the form's field. The grid's caption is the
+# CARVING's, whose range the form keeps.
+func _populate_form_shape(inner: VBoxContainer, carving: TransmutationData, field: LibraryField, label: String,
+		tip: String, none_text: String) -> void:
+	field.draw_picker(inner, label, tip)
+	if field.staged == null:
+		DevWidgets.add_label(inner, none_text)
+		return
+	field.draw_users(inner, "Unnamed shape -- this form alone. Save it to share it.")
+	DevWidgets.add_cell_grid(inner, "Stamp", field.staged, "stamp", carving, "path_cells", "path_lengths")
+	field.draw_save_row(inner)
+
+
+# What the form does, in one sentence, or what a formless carving gets instead. The numbers are read
+# off the rule (form_requires, Materia.REACH), never typed.
+static func _form_lead(carving: TransmutationData) -> String:
+	if carving.empowered == null:
+		if carving.deals_no_damage:
+			return "No form: empowerment does nothing for it, since it deals no damage for the +1 to add to."
+		return "No form: where its caster is empowered, it gets +1 power per empowered element its hit delivers."
+	var form_name := carving.empowered_carving().display_name
+	if carving.form_requires().is_empty():
+		return "Never fires as %s yet: its hit delivers no element, so tick what the form needs." % form_name
+	return "Fires as %s where its caster is empowered in %s: a source within %d tile%s, or their vial. Replaces the +1." \
+		% [form_name, carving.form_requires_text(), Materia.REACH, "" if Materia.REACH == 1 else "s"]
+
+
+# `sync` now and on every `changed` of `resource`, until `owner` leaves the tree -- the connection a
+# lambda cannot auto-drop, dropped with the row it draws (add_cell_grid's caption idiom).
+static func _follow(resource: Resource, owner: Node, sync: Callable) -> void:
+	resource.changed.connect(sync)
+	owner.tree_exiting.connect(func() -> void:
+		if resource.changed.is_connected(sync):
+			resource.changed.disconnect(sync))
+	sync.call()
+
+
+# One of the empowered form's two shape fields (#695), off the same library as the carving's own. The
+# write goes through DevWidgets.write so the FORM emits `changed` and the carving drops the derived form
+# it cached; a bare set would leave the editor reading the old shape.
+func _form_shape_field(none_key: String, prop: String) -> LibraryField:
+	var field := LibraryField.new(self, status_label)
+	field.noun = "shape"
+	field.library_dir = AttackShapeCatalog.LIBRARY_DIR
+	field.none_key = none_key
+	field.new_key = NEW_SHAPE_KEY
+	field.unnamed_key = UNNAMED_SHAPE_KEY
+	field.list = func() -> Dictionary: return AttackShapeCatalog.get_library()
+	field.held = func() -> Resource:
+		var form := _form()
+		return null if form == null else form.get(prop) as Resource
+	field.assign = func(picked: Resource) -> void:
+		var form := _form()
+		if form != null:
+			DevWidgets.write(form, prop, picked as AttackShape)
+	field.make = func() -> Resource: return AttackShape.new()
+	field.refresh = _restage_shared_shape
+	return field
+
+
+func _form() -> EmpoweredForm:
+	var carving := current as TransmutationData
+	return null if carving == null else carving.empowered
+
+
+# Every shape field this panel edits, the carving's own two first: the order _share_one_shape_copy
+# resolves a shared file in.
+func _shape_fields() -> Array[LibraryField]:
+	return [_shape, _effect_shape, _form_shape, _form_effect_shape]
+
+
+# The shape fields with a staged copy no EARLIER field already holds: one per file Update writes.
+func _distinct_shape_fields() -> Array[LibraryField]:
+	var out: Array[LibraryField] = []
+	var seen: Array[Resource] = []
+	for field in _shape_fields():
+		if field.staged != null and seen.has(field.staged):
+			continue
+		if field.staged != null:
+			seen.append(field.staged)
+		out.append(field)
+	return out
+
+
+# Any two shape fields may name ONE library shape -- the hit and its tile effect, or the carving and
+# its form -- and then they edit one copy: two copies would have Update write the file twice, the
+# second, unedited one undoing the first. A later field adopts the earliest holder's copy.
 func _share_one_shape_copy() -> void:
-	if current != null and current.tile_effect_shape != null and current.tile_effect_shape == current.attack_shape:
-		_effect_shape.staged = _shape.staged
+	var fields := _shape_fields()
+	for i in fields.size():
+		var held: Resource = fields[i].held.call() if fields[i].held.is_valid() else null
+		if held == null:
+			continue
+		for j in i:
+			var earlier: Resource = fields[j].held.call() if fields[j].held.is_valid() else null
+			if earlier == held:
+				fields[i].staged = fields[j].staged
+				break
 
 
-# Either shape field's refresh: a pick has just re-staged that one field.
+# Every shape field's refresh: a pick has just re-staged that one field.
 func _restage_shared_shape() -> void:
 	_share_one_shape_copy()
 	populate()
@@ -837,8 +1064,8 @@ func _shown(value: Variant) -> String:
 # staged look per element this attack can author for. Rebuilt whenever the loaded attack changes,
 # because which look slots exist is the attack's own answer and it moves when its element does.
 func _stage_fields() -> void:
-	_shape.stage()
-	_effect_shape.stage()
+	for field in _shape_fields():
+		field.stage()
 	_share_one_shape_copy()
 	_looks.clear()
 	if current == null:
@@ -884,12 +1111,24 @@ func _assign_look(element: Elemental.Element, picked: EffectLook) -> void:
 # The attack as it would be SAVED -- the editor's own values plus the staged stamp. The lint has to
 # judge this rather than `current`, whose shape is still the library object the grid is not editing.
 # The looks need no substitution: a staged look is reached through the same dictionary either way.
+# A carving's form gets its own staged shapes on a copy of the delta, never on the delta itself.
 func _staged_attack() -> AttackData:
-	if current == null or (_shape.staged == null and _effect_shape.staged == null):
+	if current == null:
+		return current
+	var staged_any := false
+	for field in _shape_fields():
+		staged_any = staged_any or field.staged != null
+	if not staged_any:
 		return current
 	var probe := current.duplicate() as AttackData   # shallow: only the shape references differ
 	probe.attack_shape = _shape.staged as AttackShape
 	probe.tile_effect_shape = _effect_shape.staged as AttackShape
+	var carving := probe as TransmutationData
+	if carving != null and carving.empowered != null:
+		var form := carving.empowered.duplicate() as EmpoweredForm
+		form.attack_shape = _form_shape.staged as AttackShape
+		form.tile_effect_shape = _form_effect_shape.staged as AttackShape
+		carving.empowered = form
 	return probe
 
 
@@ -897,9 +1136,9 @@ func _staged_attack() -> AttackData:
 # stamp and each named look. Each one is a real second file, and a confirm that named only the
 # attack would understate what an Update reaches.
 func _shared_victims() -> String:
-	var clause := _shape.victim_clause()
-	if _effect_shape.staged != _shape.staged:
-		clause += _effect_shape.victim_clause()
+	var clause := ""
+	for field in _distinct_shape_fields():
+		clause += field.victim_clause()
 	for element in _looks:
 		var field: LibraryField = _looks[element]
 		clause += field.victim_clause()
@@ -909,10 +1148,9 @@ func _shared_victims() -> String:
 # Write every shared file the form has staged, at the COMMIT point. False only on a real write
 # failure, which save_over has already reported.
 func _save_shared_files() -> bool:
-	if not _shape.save_named():
-		return false
-	if _effect_shape.staged != _shape.staged and not _effect_shape.save_named():
-		return false
+	for field in _distinct_shape_fields():
+		if not field.save_named():
+			return false
 	for element in _looks:
 		var field: LibraryField = _looks[element]
 		if not field.save_named():
