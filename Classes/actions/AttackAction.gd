@@ -45,6 +45,10 @@ var volley: Array[AttackAction] = []
 # The attack chosen to fire — a carving or a WeaponAttackData. Null means NO attack (bare fists),
 # not the weapon's main: since #102 that fallback is gone (#30, #72).
 var fired_attack: AttackData = null
+# The empowered form this hit fires was reached only through the caster's vial (#695 R4), stamped
+# where the form was chosen (Materia.form_choice), so the damage step burns the vial without
+# re-deciding which form fires.
+var leans_on_vial := false
 # Who this hit was AIMED at, when a Guard substituted its victim (#414). Null on every ordinary hit.
 # `target` is always the unit that actually takes the payload — the resolver rewrote it — so this is
 # an annotation for the readouts and the block lunge, never a second answer to "who is hit".

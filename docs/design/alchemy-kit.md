@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #1347 (2026-10-21); #1333's two Fireball forms folded in 2026-10-23; #1480 (the equip gate's home is `UnitState.equip`) folded in 2026-10-25; #1530 (aura demand as depth) folded in 2026-10-30; #1532 slice 1 (what a thing is made of is authored, and feeds presence, never empowerment) the same day; #1315 (a ground's makeup is its tile's own column) folded in 2026-11-05; #696 (materia veins, built) folded in 2026-11-07.**
+**Canon checked through #1347 (2026-10-21); #1333's two Fireball forms folded in 2026-10-23; #1480 (the equip gate's home is `UnitState.equip`) folded in 2026-10-25; #1530 (aura demand as depth) folded in 2026-10-30; #1532 slice 1 (what a thing is made of is authored, and feeds presence, never empowerment) the same day; #1315 (a ground's makeup is its tile's own column) folded in 2026-11-05; #696 (materia veins, built) folded in 2026-11-07; #695 slice 1 (empowered forms, built) folded in 2026-11-08.**
 
 **Deep Alchemy Phase 2 re-cut the rune model to VERBS (2026-10-11).** A carving is now a recipe of verbs with substances as their arguments (`Break(F, A) + Push(F2)`); cost is its verb count, aura demand is, per element, the most atoms any one verb works on (depth since #1530, 2026-10-30; the atoms across every argument until then; an argument's amount excluded, #1328), and a hit carries and scales off what its last delivering verb leaves at the target. Sigils and flourishes are gone. Canon: [deep-alchemy.md](deep-alchemy.md) → *What is built*. Passages below that predate it carry a dated note.
 
@@ -111,8 +111,8 @@ Note what the law does *not* repeal. Transmutations already needed no fuel to fi
 
 A cast is **empowered** in element *E* when the caster is **on or adjacent to** (Manhattan 1) a source of *E*, **or** is **attuned** to a matching (or alkahest) vial they have used. What that buys:
 
-- **Normally, an authored empowered form** — each carving answers, in its own terms, what it becomes at a source (a fireball that becomes a wall, a gust that becomes a gale). This is the norm, not a premium tier ([#695](https://github.com/Phaazoid/Godoiosis/issues/695)).
-- **Otherwise the fallback: +1 effective aura in that element, scaling only** — used when nothing special suits the carving, or when raw power simply *is* the fitting answer. It is the limb tax's mirror twin: aura already moves by ±1, the wound takes a point and the river lends one.
+- **Normally, an authored empowered form** — each carving answers, in its own terms, what it becomes at a source (a fireball that becomes a wall, a gust that becomes a gale). This is the norm, not a premium tier ([#695](https://github.com/Phaazoid/Godoiosis/issues/695)). **Built 2026-11-08 (slice 1; Phaazoid@'s rulings on #695 the same day):** a DELTA laid over the carving (`TransmutationData.empowered`, an `EmpoweredForm`), which may change the name, popup, shape, power, shove, tile effect and gases, and never the recipe, range, cost, demand or fizzle. It fires where the caster is empowered in **every** element its `requires` checklist names; left empty, that is the elements the hit delivers, the set the +1 reads. It **replaces** the +1, and a carving empowered in only some of those elements fires its base at plain power, with no +1. It is chosen at the caster's cell at its slot in the pass, so a walk or shove off the source fires the base; a watch chooses when it arms and keeps it, a counter at the reactor's cell, and a payload fires its base. Mechanics: [deep-alchemy.md](deep-alchemy.md) → *What is built*.
+- **Otherwise the fallback: +1 effective aura in that element, scaling only** — used when nothing special suits the carving, or when raw power simply *is* the fitting answer. *(Since #695: on a carving with no form only.)* It is the limb tax's mirror twin: aura already moves by ±1, the wound takes a point and the river lends one.
 - **Three invariants, each load-bearing.** Empowerment **never** feeds the **anchor** (a carving you cannot channel stays unchannelable), **never** feeds **wildcards** (the deficit budget does not move with position), and **never** feeds the **equip gate** — otherwise walking away from a river would force-unequip a rune mid-battle (`EquippableData.can_equip`, [#157](https://github.com/Phaazoid/Godoiosis/issues/157)). Empowerment is power, never permission.
 - **Binary, never stacked.** A vein beside a river is still just *empowered in water: yes*.
 - Keyed on the caster's **projected cell at resolve time**, so the queue previews it exactly (Law #2). Reach is **playtest-tunable** — `Materia.REACH`, a bare `const` beside the rule that reads it, the `OVERKILL_CEILING`/`DOWN_WILL_COST` idiom (`DOWN_WILL_COST` went with Will, #1174). *(Not a `GameKnobs` row: that table is presentation only — board markup, camera, fire visuals, HUD colours — and structurally addresses node/class properties reachable from the Battle3D host. #694's own issue body said otherwise and was wrong.)* *(Since #1174 the table also holds gameplay statics, the limb-loss thresholds on `LethalityRules`; `Materia.REACH` is still a `const` outside it.)*
@@ -152,7 +152,7 @@ Element-tagged vials, plus rare **alkahest-pure** that matches anything. **Burne
 
 - **`Use` is an inspect-panel verb**, sitting where `Equip` sits for a weapon. It spends the item on the spot and leaves the unit **attuned**. *"No separate action"* therefore means **no queued action** — popping a vial costs no order and no turn; the item itself is the whole cost.
 - **The charge waits.** One at a time; a second `Use` replaces the first and the button names what it overwrites, so the trade is readable *before* the item is gone. It survives across turns until a cast draws on it, and it **rides a mid-battle save** — a charge that evaporated on load would eat a scarce item silently.
-- **The burn is DIFFERENTIAL: the charge is spent iff the outcome without it would differ.** One rule covers every case — the terrain already granting that element (stand by the river and the vial stays in your bag), no delivered element matching, a `deals_no_damage` carving whose base is 0 either way, and a carving delivering several elements where only one needed the help. *(Worded per sigil until Phase 2, 2026-10-11; empowerment now matches the elements a carving delivers.)* It stays the right question once #695 makes empowerment an authored *form* rather than a +1.
+- **The burn is DIFFERENTIAL: the charge is spent iff the outcome without it would differ.** One rule covers every case — the terrain already granting that element (stand by the river and the vial stays in your bag), no delivered element matching, a `deals_no_damage` carving whose base is 0 either way, and a carving delivering several elements where only one needed the help. *(Worded per sigil until Phase 2, 2026-10-11; empowerment now matches the elements a carving delivers.)* It stays the right question once #695 makes empowerment an authored *form* rather than a +1. *(Built 2026-11-08: for a formed carving the vial burns iff it changes WHICH form fires, so a natural source of the element is used first and the vial stays in the bag.)*
 - **Spent at execution, never at plan time**, on the readiness precedent's exact terms. That is the whole of why re-aiming, undoing, reordering or cancelling a plan costs nothing: the plan never held the charge, so there is no reservation to release. The queue shows the burn as a chip before Execute (Law #2).
 - **Deferred, and filed rather than parked:** choosing *per cast* which cast spends the vial. Today the charge is consumed by whichever cast first benefits, which the player does not pick — [#789](https://github.com/Phaazoid/Godoiosis/issues/789).
 - **It gates nothing.** The one refusal in the system is `VialData.use_block_reason`, and it refuses only a burn that would buy the holder something they already have (and, since #97, using a vial whose element is spitter fuel rather than a sigil element, such as Vitriol). Nothing about a vial can refuse a *cast*.
@@ -195,7 +195,8 @@ TransmutationData (the carving)
   can_counter / hits_allies
   base_damage(wielder, empowered, air) = max(0, power + Σ (aura[e] + 1 if empowered in e)
                                  #   over DELIVERED elements, once each, + air)   # aura-scaled;
-                                 #   air = the board's atmosphere bonus (#1324)
+                                 #   air = the board's atmosphere bonus (#1324); the +1 only on
+                                 #   a carving with no empowered form (#695)
   can_channel(wielder, temper)   # anchor + wildcards (2026-08-10): aura in one of the carving's
                                   #   elements, deficit <= max(1, spare temper aura); derived
                                   #   from channel_block_reason, the reason-first ladder (#166)
@@ -210,9 +211,11 @@ TransmutationData (the carving)
                                   #   UTILITY carving. base_damage() returns 0 and the Σ aura term
                                   #   is skipped entirely. Mutually exclusive with `heals`.
 
-  — empowered_form               # NOT YET BUILT for carvings (#695; the weapon half's is, #97) —
-                                  #   what this carving becomes at a source;
-                                  #   absent = the +1 aura fallback. Casting itself needs no fuel.
+  empowered: EmpoweredForm        # BUILT 2026-11-08 (#695, slice 1; the weapon half's is #97) --
+                                  #   a DELTA: what this carving becomes at a source, firing where
+                                  #   the caster is empowered in every element of `requires`
+                                  #   (empty = what the hit delivers). Null = the +1 aura fallback.
+                                  #   Casting itself needs no fuel.
                                   #   A reagent-gated exotic is the ONE exception, and is #698's.
   — effect / timing / damage-type # status | terrain-mod | instant vs EoT — still PROPOSED; built
                                   #   slices: heals / deals_no_damage, damage_kind (#424), payload

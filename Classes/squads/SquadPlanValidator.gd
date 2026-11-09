@@ -298,9 +298,13 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], plan: Resolve
 # The board it DOES take is the footprint's (#756): a spread the terrain truncates covers fewer
 # cells, so a candidate whose only victim stands past a ledge must whiff at the queue gate exactly
 # as it will whiff at the resolve. The eligibility question above still asks no board.
+#
+# Asked of the FORM the cast would fire there (#695, Materia.fires): a form may change the shape, so an
+# aim only the form reaches is not a whiff.
 static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], units: Array[Unit], board: BoardContext) -> bool:
 	var origin := Unit.projected_cell(aim.actor, actions, true, true)
-	var footprint := Reach.get_affected_cells_from(origin, aim.target_cell, aim.fired_attack, board)
+	var firing := Materia.fires(aim.fired_attack, aim.actor.state, origin, board)
+	var footprint := Reach.get_affected_cells_from(origin, aim.target_cell, firing, board)
 	# The current is reach, so an aim whose only casualties arrive by the arc is not a whiff. Asked
 	# with this function's own projection rather than through Conduction.sweep, which reads the
 	# occupancy seam a RESOLVED plan uses -- the two falses above are load-bearing here (#126).
@@ -314,7 +318,7 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 	# path is only ever cut AT a valid victim, so if any path has one this already answers true, and
 	# if none does nothing was cut -- the footprint here and the struck tiles the sweep floods from
 	# are then the same cells. Whether anybody is found cannot differ; only who, which is the resolve's.
-	var arc := Conduction.arc_cells(aim.actor, aim.fired_attack, footprint, board)
+	var arc := Conduction.arc_cells(aim.actor, firing, footprint, board)
 	for unit in units:
 		if not is_instance_valid(unit):
 			continue
@@ -323,7 +327,7 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 			return true     # the current does not check tags -- anybody in it is a casualty
 		if not footprint.has(cell):
 			continue
-		if RulesService.is_attack_victim(aim.actor.state, unit, aim.fired_attack):
+		if RulesService.is_attack_victim(aim.actor.state, unit, firing):
 			return true
 	return false
 

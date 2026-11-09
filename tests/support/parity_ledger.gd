@@ -97,7 +97,7 @@ static func axes() -> Array[Dictionary]:
 		ring_verbs(), action_types(), gear_verbs(), hud_doors(), board_keys(),
 		outcome_fields(), plan_lists(),
 		tile_states(), paces(), gases(), weathers(), winds(), zone_kinds(), objectives(), lose_conditions(), lethality_rungs(),
-		ground_kinds(), element_states(), turn_starts(), board_stores(),
+		ground_kinds(), element_states(), turn_starts(), board_stores(), empowered_form_fields(),
 	]
 
 static func _enum_label(keys: Array) -> Callable:
@@ -648,6 +648,19 @@ static func board_stores() -> Dictionary:
 		"label": _string_label(),
 		"play_all": covered(BUILDER, "BoardSnapshot.from_scenario(scenario).restore_into"),
 		"ai_all": never("the AI reads the board the host restored, never a store of its own"),
+		"rows": {},
+	}
+
+
+# A carving's empowered form (#695): every field reaches both columns through the one chooser, which
+# answers the derived carving the delta lays over the base.
+static func empowered_form_fields() -> Dictionary:
+	return {
+		"name": "empowered form fields (EmpoweredForm)",
+		"members": script_vars(EmpoweredForm.new()),
+		"label": _string_label(),
+		"play_all": covered(SESSION, "Materia.fires"),
+		"ai_all": covered(TACTICS, "Materia.fires"),
 		"rows": {},
 	}
 

@@ -361,17 +361,19 @@ func _list_aims(unit: Unit, handle: String, aiming: AttackData, plan: ResolvedPl
 	var fizzle := CellSubstances.fizzle_reason(aiming, origin, board, PlanResolver.state_of(unit, bodies), bodies)
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't fire %s from %s: %s" % [handle, _attack_label(aiming), str(origin), fizzle]}
+	# What it FIRES from here (#695): the game's own chooser, on the gate's ground and bodies.
+	var firing := Materia.fires(aiming, PlanResolver.state_of(unit, bodies), origin, board)
 	var out: Array[Dictionary] = []
 	# The candidate set is the union over four facings -- what the red overlay draws -- and
 	# can_aim_at, the click's own gate (#1365), is what narrows it to the aim actually available. Both
 	# of queue_attack's gates are applied here in its own order, so a cell offered can never be refused.
-	for aim: Vector2i in Reach.get_all_attack_cells_from(origin, aiming):
-		if not Reach.can_aim_at(origin, aim, aiming, board):
+	for aim: Vector2i in Reach.get_all_attack_cells_from(origin, firing):
+		if not Reach.can_aim_at(origin, aim, firing, board):
 			continue
 		# Through Conduction, so a shock aim whose casualties arrive by the arc is OFFERED here and
 		# ACCEPTED by queue_attack below -- the two gates are the same gate, stated twice. Whether
 		# hitting nobody is a whiff is the game's own policy (aim_whiffs): a map-hitting aim never is.
-		var victims := Conduction.sweep(unit, origin, aim, aiming, board).victims
+		var victims := Conduction.sweep(unit, origin, aim, firing, board).victims
 		if SquadPlanValidator.aim_whiffs(AttackAction.declare(unit, origin, aim), not victims.is_empty()):
 			continue
 		var names: Array[String] = []
@@ -379,8 +381,16 @@ func _list_aims(unit: Unit, handle: String, aiming: AttackData, plan: ResolvedPl
 			names.append(handle_for(v))
 		# No victims and not a whiff is an aim that lands on the ground alone, and says so (#46).
 		out.append(_with_facing({"cell": aim, "victims": names, "ground_only": names.is_empty()},
-				aiming, origin))
-	return {"ok": true, "unit": handle, "attack": _attack_label(aiming), "from": origin, "aims": out}
+				firing, origin))
+	return {"ok": true, "unit": handle, "attack": _fires_label(aiming, firing), "from": origin, "aims": out}
+
+
+# An attack's name, and the empowered form it fires instead when one does (#695): "Fireball (fires
+# Fireburst)".
+static func _fires_label(aiming: AttackData, firing: AttackData) -> String:
+	if firing == aiming:
+		return _attack_label(aiming)
+	return "%s (fires %s)" % [_attack_label(aiming), _attack_label(firing)]
 
 
 # Where a watch may be set (#46), by overwatch's own click gate, each with the cells it would watch
@@ -406,12 +416,14 @@ func _list_watch_aims(unit: Unit, handle: String, watch: AttackData, plan: Resol
 	var fizzle := CellSubstances.fizzle_reason(watch, origin, board, PlanResolver.state_of(unit, bodies), bodies)
 	if fizzle != "":
 		return {"ok": false, "error": "%s can't watch with %s from %s: %s" % [handle, _attack_label(watch), str(origin), fizzle]}
+	# The form it would ARM here (#695 R6), so each footprint is the one the watch would hold.
+	var arming := Materia.fires(watch, PlanResolver.state_of(unit, bodies), origin, board)
 	var out: Array[Dictionary] = []
-	for aim: Vector2i in Reach.get_all_attack_cells_from(origin, watch):
-		if not Reach.can_aim_at(origin, aim, watch, board):
+	for aim: Vector2i in Reach.get_all_attack_cells_from(origin, arming):
+		if not Reach.can_aim_at(origin, aim, arming, board):
 			continue
 		var probe := OverwatchAction.new()
-		probe.init(unit, aim, watch)
+		probe.init(unit, aim, arming)
 		var footprint: Array[Vector2i] = []
 		for path: Array in probe.watched_paths_from(origin, board):
 			for cell: Vector2i in path:
@@ -422,8 +434,8 @@ func _list_watch_aims(unit: Unit, handle: String, watch: AttackData, plan: Resol
 			var occupant := board.projected_unit_at_cell(cell)
 			if occupant != null and Team.is_enemy(unit.get_faction(), occupant.get_faction()):
 				standing.append(handle_for(occupant))
-		out.append(_with_facing({"cell": aim, "footprint": footprint, "standing": standing}, watch, origin))
-	return {"ok": true, "unit": handle, "attack": _attack_label(watch), "from": origin, "aims": out, "watch": true}
+		out.append(_with_facing({"cell": aim, "footprint": footprint, "standing": standing}, arming, origin))
+	return {"ok": true, "unit": handle, "attack": _fires_label(watch, arming), "from": origin, "aims": out, "watch": true}
 
 
 # A directional aim is a FACING, whichever of its cells is named (#46): labelled N/E/S/W by
@@ -984,12 +996,17 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	# the queue this aim joins (judge_candidate, #1529). declare() stamps fired_attack (#78) -- Play aims
 	# fire what the unit would (rune carvings included), same as the player's click and the AI.
 	var order := AttackAction.declare(unit, origin, aim)
+	# Judged in the form it FIRES from here (#695), the click's own question; named in the summary.
+	var fired: Array[AttackData] = [aiming]
 	var reached: Variant = squad_manager.judge_candidate(unit.squad, order, func(plan: ResolvedPlan) -> Variant:
 		var board := squad_manager.candidate_board(unit.squad, plan)
-		if not Reach.can_aim_at(origin, aim, aiming, board):
+		var firing := Materia.fires(aiming, PlanResolver.state_of(unit, squad_manager.candidate_bodies(unit.squad, plan)),
+				origin, board)
+		fired[0] = firing
+		if not Reach.can_aim_at(origin, aim, firing, board):
 			return null
 		# The current is reach here too, matching legal_targets and the game's own queue gate.
-		return Conduction.sweep(unit, origin, aim, aiming, board).victims)
+		return Conduction.sweep(unit, origin, aim, firing, board).victims)
 	if reached == null:
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
 	var victims: Array[Unit] = reached
@@ -1006,7 +1023,7 @@ func _queue_armed_attack(unit: Unit, handle: String, aim: Vector2i) -> Dictionar
 	for v in victims:
 		names.append(handle_for(v))
 	var hits: String = ", ".join(names) if not names.is_empty() else "nobody"
-	return {"ok": true, "summary": "%s -> attack %s with %s (hits %s)" % [handle, str(aim), _attack_label(aiming), hits]}
+	return {"ok": true, "summary": "%s -> attack %s with %s (hits %s)" % [handle, str(aim), _fires_label(aiming, fired[0]), hits]}
 
 func cancel(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -1146,7 +1163,9 @@ func overwatch(handle: String, aim: Vector2i, attack_name := "") -> Dictionary:
 	# The player's click gate, which is now one predicate rather than this pair (#756): a directional
 	# aim needs a facing whose spread survives the terrain, a point aim needs the cell itself. The
 	# dud-aim refusal that stood below is inside it -- a facing watching no cells is not aimable.
-	if not Reach.can_aim_at(origin, aim, aiming, squad_manager.candidate_board(unit.squad)):
+	# In the form it would arm there (#695), the candidate watch gate's own question.
+	var ground := squad_manager.candidate_board(unit.squad)
+	if not Reach.can_aim_at(origin, aim, Materia.fires(aiming, unit.state, origin, ground), ground):
 		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
 	var action := OverwatchAction.new()
 	action.init(unit, aim, aiming)

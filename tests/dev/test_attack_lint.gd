@@ -366,3 +366,93 @@ func test_a_matching_look_on_an_attack_that_carries_it_is_clean() -> void:
 
 	assert_array(AttackLint.check(attack)).override_failure_message(
 		"a correctly attached look was reported as a fault").is_empty()
+
+
+# ==============================================================================
+#  A carving's empowered form (#695): every finding DEGRADES
+# ==============================================================================
+
+func _formed(recipe := "Break(F, A) + Push(F2)") -> TransmutationData:
+	var t := TransmutationData.new()
+	t.display_name = "Probe"
+	t.recipe = recipe
+	P.point(t, 2, 2)
+	t.empowered = EmpoweredForm.new()
+	t.empowered.power_bonus = -1
+	return t
+
+
+# Only the form's rows: a bare fixture carving may draw unrelated findings of its own.
+func _form_rows(attack: TransmutationData) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for row in AttackLint.check(attack):
+		if String(row["text"]).contains("mpowered form"):
+			out.append(row)
+	return out
+
+
+func _all_degrade(rows: Array[Dictionary]) -> void:
+	for row in rows:
+		assert_int(row["severity"]).override_failure_message(
+			"a form finding must never block the panel that repairs it: %s" % row["text"]) \
+			.is_equal(AttackLint.Severity.DEGRADES)
+
+
+func test_a_sound_carving_form_is_clean() -> void:
+	var carving := _formed()
+	carving.empowered.attack_shape = P.shape([Vector2i.ZERO, Vector2i.UP, Vector2i.DOWN] as Array[Vector2i])
+	assert_array(_form_rows(carving)).is_empty()
+
+
+func test_a_form_that_changes_nothing_degrades() -> void:
+	var carving := _formed()
+	carving.empowered.power_bonus = 0
+	var rows := _form_rows(carving)
+	assert_int(rows.size()).is_equal(1)
+	assert_str(rows[0]["text"]).contains("changes nothing")
+	_all_degrade(rows)
+
+
+func test_a_form_requiring_an_element_the_recipe_never_uses_degrades() -> void:
+	var carving := _formed()
+	carving.empowered.requires.assign([Elemental.Element.FIRE, Elemental.Element.WATER])
+	var rows := _form_rows(carving)
+	assert_int(rows.size()).is_equal(1)
+	assert_str(rows[0]["text"]).contains("Water")
+	_all_degrade(rows)
+
+
+func test_a_form_on_a_carving_that_delivers_nothing_degrades_until_ticked() -> void:
+	var carving := _formed("Quicken(F)")
+	assert_array(carving.damage_elements()).override_failure_message(
+		"fixture: this recipe must deliver nothing").is_empty()
+	var rows := _form_rows(carving)
+	assert_int(rows.size()).is_equal(1)
+	assert_str(rows[0]["text"]).contains("never fire")
+	_all_degrade(rows)
+
+	carving.empowered.requires.assign([Elemental.Element.FIRE])
+	assert_array(_form_rows(carving)).override_failure_message(
+		"a ticked checklist still read as a form that never fires").is_empty()
+
+
+func test_a_form_with_swing_and_no_shape_degrades() -> void:
+	var carving := _formed()
+	carving.empowered.swing = true
+	var rows := _form_rows(carving)
+	assert_int(rows.size()).is_equal(1)
+	assert_str(rows[0]["text"]).contains("Swing")
+	_all_degrade(rows)
+
+
+# The form's own geometry is the base's checks asked of the derived carving, re-filed as DEGRADES.
+func test_a_forms_empty_stamp_degrades_rather_than_blocks() -> void:
+	var carving := _formed()
+	carving.empowered.attack_shape = P.shape([] as Array[Vector2i])
+	var rows: Array[Dictionary] = []
+	for row in AttackLint.check(carving):
+		if String(row["text"]).begins_with("Empowered form:"):
+			rows.append(row)
+	assert_int(rows.size()).is_equal(1)
+	assert_str(rows[0]["text"]).contains("lands on no cells")
+	_all_degrade(rows)
