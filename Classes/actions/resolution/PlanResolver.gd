@@ -1768,18 +1768,22 @@ static func _arrival(to: Vector2i, action: AttackAction, at: Dictionary[Vector2i
 # Where the gas a hit clears from `cell` comes to rest (#1332): as far as the hit SHOVES, along the
 # shove's own direction, so a body and the gas it stands in fly together. Gas weighs nothing, so no
 # weight band holds it. It walks tile by tile through GasSpread.can_cross -- the round's spread rule,
-# so a wall, a tree, a sheer ledge, a hole or the board's edge stops it -- and rests on the last tile it
-# reached. `cell` itself when it cannot move at all: a hit that shoves nobody, the origin's own tile,
-# or gas pinned against a wall. That gas disperses.
+# so a wall, a tree, a sheer ledge or a hole stops it -- and rests on the last tile it reached. Past the
+# board's edge is open sky (#1638): a step off the board carries it away. `cell` itself when it comes to
+# rest nowhere: a hit that shoves nobody, the origin's own tile, gas pinned against a wall, or gas
+# blown off the board. That gas disperses.
 static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Vector2i:
 	var dir := _shove_direction(action, cell)
 	if dir == Vector2i.ZERO:
 		return cell
 	var pos := cell
 	for _i in range(_source_knockback(action, hypo)):
-		if not GasSpread.can_cross(pos, pos + dir, board):
+		var next := pos + dir
+		if not board.has_ground(next) and not board.is_void_at(next):
+			return cell   # no tile and not a hole: past the edge (is_void_at's rect)
+		if not GasSpread.can_cross(pos, next, board):
 			break
-		pos += dir
+		pos = next
 	return pos
 
 # An attack's TILE EFFECT on one of its effect tiles (#894), folded into `effect` (created if there was

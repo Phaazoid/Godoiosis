@@ -13,6 +13,8 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const PLAYER := Team.Faction.PLAYER
 const TARGET_CELL := Vector2i(1, 0)
 const STEAM := Gas.Kind.STEAM
+const GRASS_SOURCE := 0
+const GRASS_ATLAS := Vector2i(5, 0)
 
 class _KindBoard extends BoardContext:
 	var kinds: Dictionary
@@ -562,6 +564,81 @@ func test_blown_gas_stops_on_the_last_tile_it_can_cross() -> void:
 	assert_int(board.gas.level_at(TARGET_CELL + away, Gas.Kind.SMOKE)).override_failure_message(
 			"the gas did not come to rest against the wall").is_equal(Gas.Level.MEDIUM)
 	assert_int(board.gas.packed_at(walls[0])).is_equal(0)
+
+
+# A REAL board (#1638): one row of open grass along the shove, from the caster's cell out to the rim,
+# `rim_steps` tiles past the target, with `holes` erased inside it. GridUtils then says where the edge
+# is and what is a hole, as it does in play; _room's stub board has neither.
+func _field(attacker: Unit, rim_steps: int, holes: Array[Vector2i] = []) -> BoardContext:
+	var grid: TileMapLayer = auto_free(TileMapLayer.new())
+	grid.tile_set = load("res://Resources/TestTiles.tres")
+	add_child(grid)
+	var away := _away(attacker, TARGET_CELL)
+	for i in range(-1, rim_steps + 1):
+		grid.set_cell(TARGET_CELL + away * i, GRASS_SOURCE, GRASS_ATLAS)
+	for hole in holes:
+		grid.erase_cell(hole)
+	var no_units: Array[Unit] = []
+	var board := BoardContext.new(grid, no_units, null)
+	board.gas = GasField.new()
+	assert_bool(GasSpread.holds_gas(TARGET_CELL, board)).override_failure_message(
+			"fixture: this grass holds no gas -- point _field at a tile that does").is_true()
+	return board
+
+
+# The board's edge is open sky (#1638): gas a shove would carry past it leaves the board, spelled as a
+# dispersal -- cleared where it was struck and landed nowhere -- so every reader of the clear reads it.
+func test_gas_blown_past_the_boards_edge_leaves_the_board() -> void:
+	var attacker := _blower(3)
+	var away := _away(attacker, TARGET_CELL)
+	var rim := TARGET_CELL + away
+	var board := _field(attacker, 1)
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.MEDIUM)
+	assert_bool(GasSpread.can_cross(TARGET_CELL, rim, board)).override_failure_message(
+			"fixture: the gas has no room to move at all, so it disperses whatever the edge does").is_true()
+	assert_bool(board.grid.get_used_rect().has_point(rim + away)).override_failure_message(
+			"fixture: the tile past the rim is on the board").is_false()
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	var plan := _resolve(_one(_aim(attacker, struck)), board)
+	assert_int(plan.cell_effects.size()).override_failure_message(
+			"gas blown off the board was laid somewhere").is_equal(1)
+	assert_bool(plan.cell_effects[0].gas_cleared).is_true()
+	assert_dict(plan.cell_effects[0].gas_added).is_empty()
+	assert_bool(plan.pending_deposits().has({"cell": TARGET_CELL, "clears_gas": true})).override_failure_message(
+			"the board would not show the gas leaving before Execute").is_true()
+	assert_int(board.planned(plan.tiles).gas_at(rim)).override_failure_message(
+			"the forecast parks the gas on the last row").is_equal(0)
+	_play(plan, board)
+	assert_bool(board.gas.is_empty()).override_failure_message("gas blown past the edge stayed on the board").is_true()
+
+
+# Only a step PAST the edge leaves: a shove that runs out on the last row rests there.
+func test_blown_gas_that_ends_on_the_edge_tile_stays_there() -> void:
+	var attacker := _blower(1)
+	var rim := TARGET_CELL + _away(attacker, TARGET_CELL)
+	var board := _field(attacker, 1)
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.MEDIUM)
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	_play(_resolve(_one(_aim(attacker, struck)), board), board)
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+	assert_int(board.gas.level_at(rim, Gas.Kind.SMOKE)).override_failure_message(
+			"gas that only reached the last row left the board").is_equal(Gas.Level.MEDIUM)
+
+
+# A hole still stops it: a tile erased INSIDE the board is a hole, not the edge, so the gas rests on the
+# tile before it -- the wall case above with a hole for the wall.
+func test_blown_gas_still_stops_at_a_hole() -> void:
+	var attacker := _blower(3)
+	var away := _away(attacker, TARGET_CELL)
+	var holes: Array[Vector2i] = [TARGET_CELL + away * 2]
+	var board := _field(attacker, 3, holes)
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.MEDIUM)
+	assert_bool(board.is_void_at(holes[0])).override_failure_message("fixture: the erased tile is not a hole").is_true()
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	_play(_resolve(_one(_aim(attacker, struck)), board), board)
+	assert_int(board.gas.packed_at(TARGET_CELL)).is_equal(0)
+	assert_int(board.gas.level_at(TARGET_CELL + away, Gas.Kind.SMOKE)).override_failure_message(
+			"the gas did not come to rest at the hole's edge").is_equal(Gas.Level.MEDIUM)
 
 
 # With no room to move at all it disperses, as gas a hit that shoves nobody strikes does: pinned against
