@@ -336,6 +336,11 @@ static func _add_carrier(rows: Array[Dictionary], carrier: String, kind: Carrier
 		rows.append(row)
 
 
+# The tier as a word, for a panel row: WeaponTemplateLint's and WeaponInstanceLint's twin.
+static func severity_word(finding: Dictionary) -> String:
+	return "BLOCKS" if finding["severity"] == Severity.BLOCKS else "DEGRADES"
+
+
 # One row as a panel prints it: "Super Scope (mod: grants it)". Here for severity_word's reason -- a
 # projection of this file's own enum, which a second speller would let drift.
 static func carrier_text(row: Dictionary) -> String:
