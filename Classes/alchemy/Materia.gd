@@ -19,6 +19,10 @@ extends Object
 # cells_within_manhattan_range includes the origin, so 1 is exactly on-or-adjacent.
 const REACH := 1   # playtest-tunable
 
+# REACH in words, "within 1 tile": the one spelling a fizzle, a carving's needs line and the Glossary share.
+static func reach_text() -> String:
+	return "within %d tile%s" % [REACH, "" if REACH == 1 else "s"]
+
 # What every sigil element is: what alkahest empowers, the vial's (VialData.granted_elements) and the
 # vein's (Vein.empowers) one answer. A fresh array, since SIGIL_ELEMENTS is a read-only const a caller
 # could not union into.

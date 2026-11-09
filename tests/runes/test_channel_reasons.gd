@@ -251,47 +251,59 @@ func test_no_refusal_is_ever_dressed_up_as_a_positive_sentence() -> void:
 			"a refused carving read as channelable").not_contains("Channels on")
 
 
-# SURPLUS IS ONCE PER DELIVERED ELEMENT (Phase 2, replacing the old per-sigil weighting), because
-# base_damage adds the wielder's pool once for each element the hit carries: an alchemist on Fire 5
-# firing a Fire 2 recipe has three points past what it asks, and they are worth three, not six. A
-# deeper recipe therefore leaves LESS surplus, never more -- and that number is the whole reason the
-# ring draws a halo at all.
-func test_the_surplus_is_counted_once_per_delivered_element() -> void:
+# THE WHOLE POOL IS THE NUMBER (#1319 D7): base_damage adds the wielder's aura once for each element
+# the hit carries, all of it, so the sentence names that pool and what it adds. Measured against
+# base_damage rather than retyped: the sentence's number IS what firing it adds over the carving's power.
+func _added(carving: TransmutationData, alch: Unit) -> int:
+	return carving.base_damage(alch.state) - carving.power
+
+
+func test_the_verdict_names_the_whole_pool_the_hit_scales_off() -> void:
 	var alch: Unit = _alchemist({ FIRE: 5 })
 	var flame: TransmutationData = _carving("Push(F2)")
 	var spark: TransmutationData = _carving("Push(F)", "Spark")
 
-	# Measured against base_damage rather than retyped: the sentence's number IS what firing it pays.
-	var spare_on_flame := flame.base_damage(alch.state) - (flame.power + flame.demand_of(FIRE))
-	assert_int(spare_on_flame).is_equal(3)
-	assert_str(flame.aura_text(alch.state, FIRE)).contains("3")
-	assert_str(flame.aura_text(alch.state, FIRE)).not_contains("6")
-	# ...and the same pool through a one-atom recipe is worth four.
-	var spare_on_spark := spark.base_damage(alch.state) - (spark.power + spark.demand_of(FIRE))
-	assert_int(spare_on_spark).is_equal(4)
-	assert_str(spark.aura_text(alch.state, FIRE)).contains("4")
+	assert_int(_added(flame, alch)).is_equal(5)
+	assert_str(flame.aura_text(alch.state, FIRE)).is_equal(
+		"Channels on Fire 2. Your Fire 5 adds %d damage." % _added(flame, alch))
+	# The recipe's depth changes what it asks, never what the pool adds.
+	assert_int(_added(spark, alch)).is_equal(_added(flame, alch))
+	assert_str(spark.aura_text(alch.state, FIRE)).contains("adds %d damage" % _added(spark, alch))
 
 
-# Aura past what the recipe asks, in an element it only SPENDS, buys no damage: Break(F, A) frees the
-# fire and the flame is all it delivers, so the spare Air is not surplus however deep it runs.
-func test_spare_aura_in_an_element_the_recipe_only_spends_is_not_surplus() -> void:
+# Aura in an element the recipe only SPENDS buys no damage: Break(F, A) frees the fire and the flame is
+# all it delivers, so the Air is not in the sentence however deep it runs.
+func test_aura_in_an_element_the_recipe_only_spends_is_not_named() -> void:
 	var alch: Unit = _alchemist({ FIRE: 7, Elemental.Element.AIR: 4 })
 	var carving: TransmutationData = _carving("Break(F, A) + Push(F2)")
 
-	assert_int(carving.base_damage(alch.state) - (carving.power + carving.demand_of(FIRE))).is_equal(5)
-	assert_str(carving.aura_text(alch.state, FIRE)).contains("5")
-	# Counting the spare Air too would make it eight.
-	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("8")
+	assert_int(_added(carving, alch)).is_equal(7)
+	assert_str(carving.aura_text(alch.state, FIRE)).contains("Your Fire 7 adds 7 damage")
+	# Counting the Air too would make it eleven.
+	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("Air 4")
 
 
-# A carving whose recipe the carrier covers exactly has no surplus to describe, so the sentence stops
-# rather than reporting a zero -- the ring beside it draws no halo either, and the two cannot disagree.
-func test_an_exactly_covered_circle_claims_no_spare_damage() -> void:
+# A hit that scales off two elements names both pools and their sum.
+func test_two_pools_are_named_together() -> void:
+	var alch: Unit = _alchemist({ FIRE: 3, Elemental.Element.AETHER: 2 })
+	var zap: TransmutationData = _carving("Bind(Q, F) + Push(QF)")
+
+	assert_int(zap.damage_elements().size()).override_failure_message(
+		"fixture: the hit must scale off two elements").is_equal(2)
+	var says := zap.aura_text(alch.state, FIRE)
+	assert_str(says).contains("add %d damage" % _added(zap, alch))
+	assert_str(says).contains("Fire 3")
+	assert_str(says).contains("Aether 2")
+
+
+# Covering the recipe exactly still names the pool: the old surplus sentence stopped here, but the
+# damage reads the pool, not what is left past the recipe.
+func test_an_exactly_covered_circle_still_names_its_pool() -> void:
 	var alch: Unit = _alchemist({ FIRE: 2 })
 	var carving: TransmutationData = _carving("Push(F2)")
 
-	assert_str(carving.aura_text(alch.state, FIRE)).contains("Channels on")
-	assert_str(carving.aura_text(alch.state, FIRE)).not_contains("damage")
+	assert_str(carving.aura_text(alch.state, FIRE)).is_equal(
+		"Channels on Fire 2. Your Fire 2 adds %d damage." % _added(carving, alch))
 
 
 # A utility carving suppresses scaling outright (#126), so its spare aura buys nothing. Saying

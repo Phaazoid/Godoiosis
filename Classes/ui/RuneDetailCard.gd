@@ -45,6 +45,8 @@ const COST_BAR := Vector2(4, 12)
 # only these two have no tick equivalent to borrow, the hollow tick being an outline rather than a fill.
 const HOLLOW_SWATCH_FILL := 0.14
 const SPARE_ALPHA := 0.45
+# The recipe line's words sit back behind the readout above it; its element letters keep full ink.
+const RECIPE_ALPHA := 0.75
 
 var _rune: RuneData
 # Null for a rune nobody is holding -- one sitting in the stash. The ring then draws demand alone and
@@ -62,6 +64,9 @@ var _range: Label
 # A VBox rather than a fixed set of Labels because the count is the carving's business, not the card's.
 var _channels: VBoxContainer
 var _aura: Label
+# The recipe, last and dim, its element letters in their own colours (#1319 D1): the one surface that
+# prints the formula, so it reads as the carving's ingredients rather than as what the carving does.
+var _recipe: RichTextLabel
 var _list: VBoxContainer
 var _hint: Label
 
@@ -148,7 +153,10 @@ func _build_readout(parent: Container) -> void:
 	_picker.item_selected.connect(_on_carving_picked)
 	column.add_child(_picker)
 
+	# Wraps rather than clipping: it carries the effect, the needs line and the form line (#1319).
 	_damage = _readout_label(column)
+	_damage.clip_text = false
+	_damage.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_range = _readout_label(column)
 	_channels = VBoxContainer.new()
 	_channels.add_theme_constant_override("separation", 3)
@@ -159,6 +167,19 @@ func _build_readout(parent: Container) -> void:
 	_aura = _readout_label(column)
 	_aura.clip_text = false
 	_aura.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_recipe = RichTextLabel.new()
+	_recipe.bbcode_enabled = true
+	_recipe.fit_content = true
+	_recipe.scroll_active = false
+	_recipe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_recipe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_recipe.add_theme_font_size_override("normal_font_size", 11)
+	_recipe.add_theme_font_size_override("bold_font_size", 11)
+	var dim := QueueStyle.ink(QueueStyle.Role.FRAME_TEXT)
+	dim.a = RECIPE_ALPHA
+	_recipe.add_theme_color_override("default_color", dim)
+	column.add_child(_recipe)
 
 
 # WHAT THE RING'S MARKS MEAN, spelled out (dev, 2026-09-18: *"add the legend row that you included
@@ -180,12 +201,13 @@ func _build_legend(parent: Container) -> void:
 	var air := ElementPalette.color_for_element(Elemental.Element.AIR)
 	var aether := ElementPalette.color_for_element(Elemental.Element.AETHER)
 	_legend_entry(row, _swatch_bar(fire, 1.0, false), "aura you hold")
-	_legend_entry(row, _swatch_bar(air, HOLLOW_SWATCH_FILL, true), "asked for, unpaid")
+	_legend_entry(row, _swatch_bar(air, HOLLOW_SWATCH_FILL, true), "asked for, not held")
 	_legend_entry(row, _swatch_bar(fire, SPARE_ALPHA, false), "spare, powering it")
 	_legend_entry(row, _swatch_bar(aether, AuraRing.DIM_ALPHA, false), "affinity, not grown")
 	_legend_entry(row, _swatch_bar(ElementPalette.NEUTRAL, AuraRing.FAINT_ALPHA, false),
 		"can never grow")
-	_legend_entry(row, ArcSwatch.new(fire), "the cost")
+	# "Cost" is rune capacity alone (#1319 D6); what a carving asks of the aura is a depth, never spent.
+	_legend_entry(row, ArcSwatch.new(fire), "what it asks")
 
 
 func _legend_entry(parent: Container, swatch: Control, text: String) -> void:
@@ -326,15 +348,13 @@ func _refresh_readout() -> void:
 
 	_plate.show_attack(_carving)
 	_ring.set_carving(_carving)
-	# attack_detail scales off the WIELDER's aura, so a rune nobody holds shows no number rather than
-	# a number computed against nobody -- only what its carving becomes, which is nobody's (#695).
-	if _carving == null:
-		_damage.text = ""
-	elif _wielder != null:
-		_damage.text = _rune.attack_detail(_wielder.state, _carving)
-	else:
-		_damage.text = _carving.form_text(null)
+	# The boardless readout (#1319): the numbers scale off the WIELDER's aura, so a rune nobody holds
+	# shows none rather than a number computed against nobody -- only the carving's own facts, what it
+	# needs and what it becomes (#695).
+	_damage.text = "" if _carving == null else _carving.boardless_text(UnitState.of(_wielder))
 	_damage.visible = _damage.text != ""
+	_recipe.text = "" if _carving == null else "Recipe: %s" % ElementPalette.formula_bbcode(_carving.recipe)
+	_recipe.visible = _recipe.text != ""
 	_range.text = AttackChannelText.range_text(_carving)
 	_range.visible = _range.text != ""
 	_refresh_channels()

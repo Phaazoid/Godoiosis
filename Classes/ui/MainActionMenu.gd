@@ -375,6 +375,10 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 		lines.append(detail)
 	if blocked_reason != "":
 		entry["disabled"] = true
+		# Which of the tooltip's lines are the REASON (#1319): the readout draws them in the refusal
+		# red behind a caution mark. UiText.wrap wraps line by line, so the detail's own wrapped
+		# count is where the reason starts in the joined text.
+		entry["refused_from"] = UiText.wrap(detail).split("\n").size() if detail != "" else 0
 		lines.append(blocked_reason)
 	if not lines.is_empty():
 		# Wrapped HERE, not at draw time: the stored string is what the player reads, so wrapping

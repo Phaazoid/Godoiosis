@@ -46,6 +46,8 @@ const CENTRE_SPRITE_SEAT := 0.7
 const ARC_SAMPLES_PER_SLICE := 12
 const MIN_LABEL_FONT_SIZE := 8   # a shrunk label stops here; below it the name is not a readout
 const READOUT_PADDING := 8.0     # breathing room between the readout's text and its panel edge
+const CAUTION_SIZE := 0.95       # the caution mark's height, in font sizes
+const CAUTION_ADVANCE := 1.25    # the room the mark and its gap take before the reason, in font sizes
 const CENTRE_NAME_MARGIN := 4.0  # air the centre name keeps between itself and the disc's rim
 
 # Look values, tuned live through GameKnobs.CLASS_KNOBS. Statics rather than exports because the
@@ -583,6 +585,9 @@ func _draw_readout() -> void:
 	var title := String(node.get("name", ""))
 	if title != "":
 		lines.append(title)
+	# A greyed row's REASON (#1319, dev: "Caution symbol, whole thing in red"): MainActionMenu._entry
+	# marks where in the tooltip it starts, and every line from there is drawn in the refusal red.
+	var refused_at := lines.size() + int(node["refused_from"]) if node.has("refused_from") else -1
 	var detail := String(node.get("tooltip", ""))
 	if detail != "":
 		for line in detail.split("\n"):
@@ -591,9 +596,11 @@ func _draw_readout() -> void:
 		return
 
 	var line_height := float(font_size) * 1.35
+	var mark_room := float(font_size) * CAUTION_ADVANCE
 	var widest := 0.0
-	for line: String in lines:
-		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x)
+	for i in range(lines.size()):
+		var width := font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
+		widest = maxf(widest, width + (mark_room if i == refused_at else 0.0))
 
 	var top: float = _centre.y + _ring_radii(_levels.size() - 1).y + float(font_size)
 	var box := Rect2(
@@ -609,10 +616,34 @@ func _draw_readout() -> void:
 	# The hierarchy between the name and its explanation is BRIGHTNESS, never alpha -- alpha is what
 	# made this hard to read in the first place.
 	var y := top + float(font_size)
+	var refused_ink := QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT)
 	for i in range(lines.size()):
-		_draw_centred_line(font, font_size, lines[i], y,
-			READOUT_TITLE_COLOR if i == 0 else READOUT_DETAIL_COLOR)
+		if refused_at >= 0 and i >= refused_at:
+			if i == refused_at:
+				var width := font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
+				var left := _centre.x - (width + mark_room) * 0.5
+				draw_caution(_root, Vector2(left, y + 1.0), float(font_size) * CAUTION_SIZE, refused_ink,
+					READOUT_BACKGROUND)
+				_root.draw_string(font, Vector2(left + mark_room, y), lines[i],
+					HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, refused_ink)
+			else:
+				_draw_centred_line(font, font_size, lines[i], y, refused_ink)
+		else:
+			_draw_centred_line(font, font_size, lines[i], y,
+				READOUT_TITLE_COLOR if i == 0 else READOUT_DETAIL_COLOR)
 		y += line_height
+
+
+# The caution mark a refusal leads with (#1319): a filled triangle `size` tall standing on `base_left`,
+# its "!" cut out in `cut`. Drawn, not a glyph, so it needs no font to carry one.
+static func draw_caution(canvas: CanvasItem, base_left: Vector2, size: float, ink: Color, cut: Color) -> void:
+	var x := base_left.x
+	var base := base_left.y
+	canvas.draw_colored_polygon(PackedVector2Array([
+		Vector2(x + size * 0.5, base - size), Vector2(x + size, base), Vector2(x, base)]), ink)
+	var stroke := maxf(1.0, size * 0.12)
+	canvas.draw_rect(Rect2(x + (size - stroke) * 0.5, base - size * 0.66, stroke, size * 0.34), cut)
+	canvas.draw_rect(Rect2(x + (size - stroke) * 0.5, base - size * 0.22, stroke, stroke), cut)
 
 
 # The readout waits out a hover, so sweeping the ring does not strobe a panel under it. The delay

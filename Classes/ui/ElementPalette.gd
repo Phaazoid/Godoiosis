@@ -40,6 +40,36 @@ static func color_for_element(element: Elemental.Element) -> Color:
 	return NEUTRAL
 
 
+# A recipe or formula as BBCode with each element LETTER in its element's colour (#1319 D1, dev: "whenever
+# we present EAFWQ, I think we should color code the letters"). Only a formula token is coloured
+# (AlchemyFormula.is_formula_token, its count stripped), so a verb's name and a substance id stay plain.
+static func formula_bbcode(text: String) -> String:
+	var out := ""
+	var token := ""
+	for ch in text + " ":
+		if ch in " ,()+":
+			out += _token_bbcode(token) + ch
+			token = ""
+		else:
+			token += ch
+	return out.substr(0, out.length() - 1)
+
+
+static func _token_bbcode(token: String) -> String:
+	var count := token.length() - token.lstrip("0123456789").length()
+	var formula := token.substr(count)
+	if formula == "" or not AlchemyFormula.is_formula_token(formula):
+		return token.replace("[", "[lb]")
+	var out := token.substr(0, count)
+	for ch in formula:
+		if AlchemyFormula.LETTERS.has(ch):
+			var ink := color_for_element(AlchemyFormula.LETTERS[ch]).to_html(false)
+			out += "[b][color=#%s]%s[/color][/b]" % [ink, ch]
+		else:
+			out += ch
+	return out
+
+
 # A STATE borrows the colour of the element that deposits it rather than owning a second set: the
 # player learns one vocabulary, and a chill chip cannot drift from the ice that caused it. Second
 # projection of one store, not a second store (Law #4).
