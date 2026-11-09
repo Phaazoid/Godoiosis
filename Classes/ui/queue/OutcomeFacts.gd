@@ -4,7 +4,8 @@ class_name OutcomeFacts
 # What a hit did to the body it landed on, as a list of FACTS, each drawn its own way by each surface
 # that shows it: the queue row prints a fact's BADGE in a chip with its WORD on hover, the matchup
 # card (#1629) prints its ICON and full WORD in a pill. One list, so the two can never disagree about
-# what a hit did (Law #4). Every fact is read off the outcome's own stamps (Law #2).
+# what a hit did (Law #4). Every fact is read off the outcome's own stamps, or the attack its row
+# fired, which the resolver stamped too (Law #2).
 #
 # A SETUP reaction is deliberately absent: the state chip it produced already says it (#685). Only a
 # fired COMBO gets a fact of its own.
@@ -24,10 +25,15 @@ class Fact:
 		icon = icon_
 
 
-static func of(outcome: ResolvedOutcome) -> Array[Fact]:
+# `fired` is the attack the row fired (AttackAction.fired_attack, stamped at resolve), which is where
+# an empowered form shows: the outcome records what a hit did, never which form did it.
+static func of(outcome: ResolvedOutcome, fired: AttackData = null) -> Array[Fact]:
 	var facts: Array[Fact] = []
 	if outcome == null:
 		return facts
+	var form := _form_fact(fired)
+	if form != null:
+		facts.append(form)
 	for state in outcome.states_added:
 		if state == Elemental.State.NONE:
 			continue
@@ -66,14 +72,9 @@ static func of(outcome: ResolvedOutcome) -> Array[Fact]:
 		facts.append(_event(ActionQueueRow.BADGE_DROWNED, PlanResolver.DROWNING_POPUP))
 	if outcome.removed:
 		facts.append(_event(ActionQueueRow.BADGE_VOID, PlanResolver.VOID_POPUP))
-	# The vial BURN (#697): this cast spends an item, and a plan that spent one unseen is the queue
-	# lying. Element-tinted, because the burn is an elemental fact.
-	if outcome.burned_vial != null:
-		var burned := outcome.burned_vial
-		var ink := QueueStyle.element_ink(burned.element) if not burned.is_alkahest \
-				else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
-		var spent := "Burns %s" % burned.display_name
-		facts.append(Fact.new(ink, ActionQueueRow.BADGE_VIAL, spent, UiText.wrap(spent)))
+	var vial := _vial_fact(outcome)
+	if vial != null:
+		facts.append(vial)
 	# The TANK spend (#97): this shot is the supercharged one and the next will not be.
 	if outcome.charge_spent:
 		var spent := "Spends a supercharged shot"
@@ -90,6 +91,47 @@ static func of(outcome: ResolvedOutcome) -> Array[Fact]:
 				names.append(unit.get_unit_name())
 		facts.append(Fact.new(ActionQueueRow.split_ink(), word, word, UiText.wrap(", ".join(names))))
 	return facts
+
+
+# The facts that belong to the AIM rather than to one body it hit (#695): what the carving fired as,
+# and the vial it burned. Every member wears them; a collapsed volley's header draws these alone, off
+# its lead, so neither hides behind the fold.
+static func of_aim(outcome: ResolvedOutcome, fired: AttackData = null) -> Array[Fact]:
+	var facts: Array[Fact] = []
+	var form := _form_fact(fired)
+	if form != null:
+		facts.append(form)
+	var vial := _vial_fact(outcome)
+	if vial != null:
+		facts.append(vial)
+	return facts
+
+
+# The EMPOWERED FORM (#695): the row fired its carving's form. The badge is the form's own name, or
+# BADGE_EMPOWERED for a form that kept its carving's; the ink is the first element it asked for.
+static func _form_fact(fired: AttackData) -> Fact:
+	var form := fired as TransmutationData
+	if form == null or form.form_of == null:
+		return null
+	var carving := form.form_of
+	var needed := carving.form_requires()
+	var word := "Empowered by %s" % carving.form_requires_text()
+	var badge := form.display_name if form.display_name != carving.display_name else ActionQueueRow.BADGE_EMPOWERED
+	var ink := QueueStyle.element_ink(needed[0]) if not needed.is_empty() \
+			else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
+	return Fact.new(ink, badge, word, UiText.wrap("%s: fires as %s" % [word, form.display_name]))
+
+
+# The vial BURN (#697): this cast spends an item, and a plan that spent one unseen is the queue
+# lying. Element-tinted, because the burn is an elemental fact.
+static func _vial_fact(outcome: ResolvedOutcome) -> Fact:
+	if outcome == null or outcome.burned_vial == null:
+		return null
+	var burned := outcome.burned_vial
+	var ink := QueueStyle.element_ink(burned.element) if not burned.is_alkahest \
+			else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
+	var spent := "Burns %s" % burned.display_name
+	return Fact.new(ink, ActionQueueRow.BADGE_VIAL, spent, UiText.wrap(spent))
 
 
 # Which of the hit's elements set this reaction off -- its ink. A reaction answers to more than its

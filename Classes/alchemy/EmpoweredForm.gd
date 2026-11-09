@@ -64,6 +64,18 @@ func changes_anything() -> bool:
 		or knockback_bonus != 0 or tile_effect != Elemental.Element.NONE or not gases.is_empty()
 
 
+# The rows the Attack Editor hides because lay_over would not read them (#695 slice 2), AttackData's
+# hidden_fields one level down: Swing rides a shape, the effect's life and landing ride an element. A
+# Swing ticked with no shape stays shown, so the editor can clear what AttackLint reports.
+func hidden_fields() -> PackedStringArray:
+	var hidden: PackedStringArray = []
+	if attack_shape == null and not swing:
+		hidden.append("swing")
+	if tile_effect == Elemental.Element.NONE:
+		hidden.append_array(["tile_effect_turns", "tile_effect_shape"])
+	return hidden
+
+
 # Where its fields sit in the Attack Editor's nested form (#825's law: every export has one home).
 static func property_sections() -> Array[Dictionary]:
 	return [

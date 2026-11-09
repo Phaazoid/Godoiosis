@@ -327,9 +327,13 @@ func _refresh_readout() -> void:
 	_plate.show_attack(_carving)
 	_ring.set_carving(_carving)
 	# attack_detail scales off the WIELDER's aura, so a rune nobody holds shows no number rather than
-	# a number computed against nobody.
-	_damage.text = _rune.attack_detail(_wielder.state, _carving) \
-		if _wielder != null and _carving != null else ""
+	# a number computed against nobody -- only what its carving becomes, which is nobody's (#695).
+	if _carving == null:
+		_damage.text = ""
+	elif _wielder != null:
+		_damage.text = _rune.attack_detail(_wielder.state, _carving)
+	else:
+		_damage.text = _carving.form_text(null)
 	_damage.visible = _damage.text != ""
 	_range.text = AttackChannelText.range_text(_carving)
 	_range.visible = _range.text != ""

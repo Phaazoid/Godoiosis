@@ -7,7 +7,8 @@ class_name AimStrip
 # neither says WHICH one is up, and that is this strip's one job.
 #
 # A DUMB VIEW: game.gd tells it what to say at the aim's two doors (enter_attack_mode, which the cycle
-# re-enters, and exit_current_mode) and it asks nothing of the board. The cycle keys come through
+# re-enters, and exit_current_mode), and the hover tells it the one per-cell fact, the vial the aim
+# would burn (#695, show_burn); it asks nothing of the board. The cycle keys come through
 # Controls.key_for_action, never spelled, so it cannot advertise a binding the Input Map has not got
 # (#1051's rule) -- and they show only when there is something to cycle to. They are BUTTONS as well,
 # onto the keys' own door: cycle_requested, which game wires to cycle_aimed_attack.
@@ -40,6 +41,7 @@ var _back: Button
 var _attack: Label
 var _source: Label
 var _swap: Label
+var _burn: Label
 var _count: Label
 var _next: Button
 
@@ -75,6 +77,8 @@ func _build() -> void:
 	_source = _label(row, SOURCE_FONT_SIZE)
 	_swap = _label(row, HINT_FONT_SIZE)
 	_swap.text = SWAP_TEXT
+	_burn = _label(row, HINT_FONT_SIZE)
+	_burn.visible = false
 	_count = _label(row, HINT_FONT_SIZE)
 	_next = _arrow(row, 1)
 	visible = false
@@ -115,10 +119,12 @@ func _ink_arrow(button: Button) -> void:
 
 # Say what is being aimed. `at` is the aim's place in the cycle, 0-based, or -1 when it is not
 # in it; `count` is how many attacks the cycle holds. `swaps` is whether the click would equip
-# `source_name` -- an attack from a carried weapon rather than the one in hand.
-func show_aim(attack_name: String, source_name: String, swaps: bool, at: int, count: int) -> void:
+# `source_name` -- an attack from a carried weapon rather than the one in hand. `form_name` is what
+# the aimed carving fires as from here (#695), "" when it fires as itself.
+func show_aim(attack_name: String, source_name: String, swaps: bool, at: int, count: int,
+		form_name := "") -> void:
 	_box.add_theme_stylebox_override("panel", QueueStyle.panel_box())
-	_attack.text = attack_name
+	_attack.text = attack_name if form_name == "" else "%s → %s" % [attack_name, form_name]
 	_attack.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.TITLE_TEXT))
 	_source.text = source_name
 	_source.visible = source_name != ""
@@ -128,6 +134,8 @@ func show_aim(attack_name: String, source_name: String, swaps: bool, at: int, co
 	_source.add_theme_color_override("font_color", QueueStyle.ink(source_role))
 	_swap.visible = swaps
 	_swap.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT))
+	_burn.text = ""   # a fresh aim has no hovered cell yet; the hover names the vial once it has one
+	_burn.visible = false
 	var cycles := count > 1
 	_back.visible = cycles
 	_next.visible = cycles
@@ -146,13 +154,25 @@ func hide_aim() -> void:
 	visible = false
 
 
+# The vial the hovered aim would burn (#695 R4), "" for none. The swap's warm ink, for the swap's
+# reason: an item the click spends is a consequence it carries, not a caption. Once shown, the note
+# keeps its width for the rest of the aim and only fades, so the centred strip does not slide under
+# the cursor from cell to cell; show_aim clears it.
+func show_burn(vial_name: String) -> void:
+	if vial_name != "":
+		_burn.text = "burns %s" % vial_name
+		_burn.visible = true
+	_burn.modulate.a = 1.0 if vial_name != "" else 0.0
+	_burn.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_REFUSED_TEXT))
+
+
 # What the strip says, joined -- for a test to read without walking the row.
 func shown_text() -> String:
 	var parts: Array[String] = []
 	if _back.visible:
 		parts.append(_back.text)
-	for label: Label in [_attack, _source, _swap, _count]:
-		if label.visible and label.text != "":
+	for label: Label in [_attack, _source, _swap, _burn, _count]:
+		if label.visible and label.text != "" and label.modulate.a > 0.0:
 			parts.append(label.text)
 	if _next.visible:
 		parts.append(_next.text)

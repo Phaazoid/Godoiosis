@@ -41,6 +41,7 @@ const BADGE_SPLIT := "Split"        # the dev's word (#367); one unit leaves its
 const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
 const BADGE_FIZZLED := "Fizzle"     # a carving with nothing to work with
 const BADGE_WHIFFED := "Whiff"      # a swing at a target this pass already killed (#1350)
+const BADGE_EMPOWERED := "Empowered"   # a form that keeps its carving's name (#695); a named one wears its name
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
@@ -144,7 +145,8 @@ func _paint_rail(outcome: ResolvedOutcome) -> void:
 # which is what keeps the cancel X on the right edge of a row that has none. It WRAPS rather than
 # clips, so a crowded hit costs the row a second line instead of losing a word.
 func _build_consequence(outcome: ResolvedOutcome) -> void:
-	for fact in OutcomeFacts.of(outcome):
+	var fired: AttackData = (action as AttackAction).fired_attack if action is AttackAction else null
+	for fact in OutcomeFacts.of(outcome, fired):
 		consequence.add_child(_chip(fact.ink, fact.badge, fact.tip))
 
 # One tinted pill. The tooltip goes on the pill AND its label: a Label defaults to
@@ -292,6 +294,10 @@ func setup_volley_summary(lead: AttackAction, count: int, expanded: bool) -> voi
 	action_icon.modulate = lead.get_ui_modulate()
 	target_texture.texture = null
 	_paint_rail(null)   # the group's hits may carry different elements; the folder's rows say which
+	# ...but what the AIM did is one answer for every hit (#695): the form it fired as and the vial it
+	# burned, off the lead, so a folded volley still says both.
+	for fact in OutcomeFacts.of_aim(lead.resolved, lead.fired_attack):
+		consequence.add_child(_chip(fact.ink, fact.badge, fact.tip))
 
 	# The READOUT slot becomes the hit-count + expand affordance -- the group has no single hp->hp,
 	# and this is the slot that is free rather than one to draw over (#685).

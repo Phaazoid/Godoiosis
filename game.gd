@@ -907,14 +907,16 @@ func _aim_index(unit: Unit, options: Array[Unit.AimOption]) -> int:
 	return -1
 
 
-func _show_aim_strip(unit: Unit) -> void:
+# `firing` is what the aimed attack fires as from the aim's origin (#695), chosen once by the caller.
+func _show_aim_strip(unit: Unit, firing: AttackData) -> void:
 	var options := unit.aim_options(aim_intent == AimIntent.WATCH, squad_manager.candidate_board(unit.squad),
 			squad_manager.candidate_bodies(unit.squad))
 	var attack := unit.get_fired_attack()
 	var source: EquippableData = aim_source if aim_source != null else unit.get_equipped_weapon()
+	var form_name := firing.display_name if firing != null and firing != attack else ""
 	aim_strip.show_aim(attack.display_name if attack != null else "",
 			source.shown_name() if source != null else "", aim_source != null,
-			_aim_index(unit, options), options.size())
+			_aim_index(unit, options), options.size(), form_name)
 
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
@@ -1315,7 +1317,6 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE, source: E
 	aim_intent = intent
 	aim_source = source
 	var aiming := unit.get_fired_attack()
-	_show_aim_strip(unit)
 	# The reach layer is the whole range and NEVER changes. What an aim will actually affect is
 	# pulsed by HoverPresenter instead -- one tile per cell means any marker drawn here erases the
 	# range underneath it, which is exactly what wiped whole ForwardWide lanes. Its COLOR does
@@ -1329,6 +1330,7 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE, source: E
 	# A directional reach is its spread, so it is drawn for the form the cast would FIRE here (#695),
 	# the hover's own chooser on the hover's own ground.
 	var firing: AttackData = Materia.fires(aiming, unit.state, reach_origin, squad_manager.candidate_board(unit.squad))
+	_show_aim_strip(unit, firing)   # and the strip names that form, off the same choice
 	overlay_manager.show_attack_reach(
 		Reach.get_all_attack_cells_from(reach_origin, firing),
 		Reach.blocked_cells_from(reach_origin, firing, _board()))

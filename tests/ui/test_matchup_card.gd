@@ -301,3 +301,46 @@ func test_a_right_click_on_the_card_closes_it_without_popping_an_order() -> void
 	assert_object(_card()).override_failure_message("a right-click on the card left it open").is_null()
 	assert_array(attacker.squad.action_queue).override_failure_message(
 			"the card's right-click fell through and popped an order").is_equal(orders)
+
+
+# #695: a hit that fired its carving's empowered form says so on the card as a pill, the row chip's long
+# word. Built, never authored: the form is reached only through the attacker's fire vial.
+func test_a_hit_that_fired_a_form_says_so_on_the_card() -> void:
+	var carving := TransmutationData.new()
+	carving.display_name = "Form Test"
+	carving.power = 4
+	carving.targets = EquippableData.TargetMode.UNIT
+	carving.recipe = "Break(F, A) + Push(F2)"
+	carving.empowered = EmpoweredForm.new()
+	carving.empowered.display_name = "Form Test Burst"
+	var attacker := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var aura: Dictionary[Elemental.Element, int] = {Elemental.Element.FIRE: 6, Elemental.Element.AIR: 6}
+	attacker.unit_instance.aura = aura
+	var affinity: Array[Elemental.Element] = [Elemental.Element.FIRE, Elemental.Element.AIR]
+	attacker.unit_instance.affinity = affinity
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(carving)).override_failure_message("fixture carving failed to inscribe").is_true()
+	attacker.equipped_weapon = rune
+	var vial := VialData.new()
+	vial.element = Elemental.Element.FIRE
+	vial.display_name = "Test Vial"
+	assert_bool(attacker.add_item(vial)).override_failure_message("fixture: the vial did not fit").is_true()
+	assert_str(attacker.use_vial(attacker.inventory.find(vial))).is_equal("")
+	await _queue(attacker, H.stamped_attack(attacker, victim))
+	var row := _attack_row(attacker)
+	assert_object(row).override_failure_message("fixture: the aim drew no attack row").is_not_null()
+	var fired := (row.action as AttackAction).fired_attack as TransmutationData
+	assert_bool(fired != null and fired.form_of == carving).override_failure_message(
+		"fixture: the vial did not make the form fire, so this case proves nothing").is_true()
+
+	await _right_click(row.actor_texture)
+
+	var card := _card()
+	assert_object(card).override_failure_message("the right-click opened no card").is_not_null()
+	var shown: Array[String] = []
+	for pill in _named(card, "FactPill"):
+		shown.append((pill.find_child("Word", true, false) as Label).text)
+	assert_array(shown).override_failure_message("the card never says the form fired: %s" % [shown]) \
+		.contains(["Empowered by %s" % carving.form_requires_text()])
