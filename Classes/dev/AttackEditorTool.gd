@@ -68,7 +68,7 @@ const NO_EFFECT_SHAPE_KEY := "(none - where the attack hits)"
 const NO_FORM_SHAPE_KEY := "(none - the carving's own shape)"
 const NO_FORM_EFFECT_KEY := "(none - the carving's own)"
 const FORM_INDENT := 16
-const FORM_NOTE_COLOR := Color(0.7, 0.7, 0.7)   # the checklist's rule note, quieter than a row
+const NOTE_COLOR := Color(0.7, 0.7, 0.7)   # a note under a row, quieter than it: the checklist's rule, an extra's findings
 const NO_EMPOWERED_KEY := "(none — fires the same however full the tank is)"
 const NO_PAYLOAD_KEY := "(none - drops nothing)"
 # The worst case a payload chain may fan out to before the readout warns (#1058, ruling 41: a warning,
@@ -291,25 +291,28 @@ func _on_update_pressed():
 
 
 func _update_confirmed(path: String) -> void:
+	var warning := _save_warning()
 	if not _save_shared_files():
 		return
 	if DevWidgets.save_over(current, path, status_label):
 		_loaded_name = current.display_name   # a rename moves the loaded identity with it
 		_refresh_list(current.display_name)
+		_say_saved(_loaded_name, warning)
 
 
 # The main first, then the family. A partial write is possible and is REPORTED rather than rolled
 # back -- save_over already puts its own failure in the status label, and the half that landed is
 # on disk either way.
 func _update_family_confirmed(family_path: String, main_path: String) -> void:
+	var warning := _save_warning()
 	if not _save_shared_files():
 		return
 	if main_path != "" and not DevWidgets.save_over(current, main_path, status_label):
 		return
 	if not DevWidgets.save_over(current_template, family_path, status_label):
 		return
-	status_label.text = "Saved %s" % _loaded_name
-	populate()   # the extras list re-reads its carriers and lint marks off what is now on disk
+	_say_saved(_loaded_name, warning)
+	populate()   # the extras list re-reads its carriers and lint findings off what is now on disk
 
 
 # Refuse to WRITE an attack nothing can aim (#473). At the SAVE rather than as a live row in the
@@ -321,6 +324,10 @@ func _update_family_confirmed(family_path: String, main_path: String) -> void:
 # a file that already exists on disk in that state, so refusing would leave the only tool that can
 # repair it unable to write. BoardLint's two tiers, honoured at the consumer rather than only at
 # the rule (the "justify it at every surface" law).
+#
+# The DEGRADES line is said TWICE: here, so it shows while an Update's confirm is open, and again by
+# _say_saved once the write lands, because save_over clears the line on success (#168) and this panel
+# draws no lint row anywhere else.
 func _refuse_unfireable(attack: AttackData) -> bool:
 	var findings := AttackLint.check(attack)
 	if findings.is_empty():
@@ -331,12 +338,27 @@ func _refuse_unfireable(attack: AttackData) -> bool:
 			push_warning(msg)
 			status_label.text = msg
 			return true
-	status_label.text = findings[0]["text"]
+	status_label.text = _first_warning(findings)
 	return false
 
-# The one-line form of a finding, for a list row that has no space for the full sentence.
-func _mark_for(finding: Dictionary) -> String:
-	return "reaches no cells" if finding["severity"] == AttackLint.Severity.BLOCKS else "blend does not total %d%%" % Stats.BLEND_TOTAL
+
+# The first DEGRADES finding's sentence, "" when there is none.
+static func _first_warning(findings: Array[Dictionary]) -> String:
+	for finding in findings:
+		if finding["severity"] == AttackLint.Severity.DEGRADES:
+			return finding["text"]
+	return ""
+
+
+# The warning a save is about to land with, judged on the attack AS IT WILL BE WRITTEN: taken before
+# the write, and after a Save As has renamed it, so the sentence names the file being saved.
+func _save_warning() -> String:
+	return _first_warning(AttackLint.check(_staged_attack()))
+
+
+# The line a landed save leaves: the save, and the warning it landed with.
+func _say_saved(saved_name: String, warning: String) -> void:
+	status_label.text = "Saved %s" % saved_name if warning == "" else "Saved %s -- %s" % [saved_name, warning]
 
 func _on_delete_pressed():
 	if _mode == Mode.FAMILY:
@@ -377,10 +399,12 @@ func _on_save_as_pressed():
 	if not _save_shared_files():
 		return
 	current.display_name = chosen_name
+	var warning := _save_warning()
 	if DevWidgets.save_over(current, path, status_label):
 		_loaded_name = chosen_name   # save_over take_over_path'd it: the editor now holds this file
 		name_input.text = ""
 		_refresh_list(chosen_name)
+		_say_saved(chosen_name, warning)
 
 func populate():
 	for child in editor_container.get_children():
@@ -828,7 +852,7 @@ func _populate_form_requires(inner: VBoxContainer, carving: TransmutationData, f
 	inner.add_child(holder)
 	var note := Label.new()
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.add_theme_color_override("font_color", FORM_NOTE_COLOR)
+	note.add_theme_color_override("font_color", NOTE_COLOR)
 	inner.add_child(note)
 	var drawn: Array = []
 	var redraw := func() -> void:
@@ -1317,9 +1341,9 @@ func _populate_blend(rows: Dictionary) -> void:
 # never copies: Springspear.tres and Kinetic_Mace.tres already store theirs as ext_resource, so a
 # duplicate here would fork the file the Weapon Attack mode edits.
 #
-# The lint mark beside an entry is safe to draw where a mark on the main's own fields would not be
-# (see _refuse_unfireable): an extra is a library file this form does not edit, so nothing on this
-# panel can make the mark stale.
+# The lint findings under an entry are safe to draw where a row for the main's own fields would not
+# be (see _refuse_unfireable): an extra is a library file this form does not edit, so nothing on this
+# panel can make them stale.
 func _populate_extras(family_label: String) -> void:
 	var extras := current_template.extra_attacks
 	DevWidgets.add_heading(editor_container, "Extra attacks")
@@ -1332,12 +1356,6 @@ func _populate_extras(family_label: String) -> void:
 		var label_text := "(missing file)"
 		if extra != null:
 			label_text = extra.display_name if extra.display_name != "" else "(unnamed)"
-			# The mark names the FINDING, not a fixed phrase: since #485 the lint answers two
-			# different faults, and "reaches no cells" beside a blend that does not total 100
-			# would be a label describing the wrong problem.
-			var findings := AttackLint.check(extra)
-			if not findings.is_empty():
-				label_text += "  — %s" % _mark_for(findings[0])
 		label.text = label_text
 		label.custom_minimum_size = Vector2(220, 0)
 		row.add_child(label)
@@ -1349,6 +1367,14 @@ func _populate_extras(family_label: String) -> void:
 		)
 		row.add_child(remove)
 		editor_container.add_child(row)
+		# Every finding in the lint's own sentence, the Item Editor's idiom for its two lints: a fixed
+		# short phrase per tier named the wrong fault for most of the rows the lint has grown.
+		for finding in AttackLint.check(extra):
+			var line := Label.new()
+			line.text = "%s: %s" % [AttackLint.severity_word(finding), finding["text"]]
+			line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			line.add_theme_color_override("font_color", NOTE_COLOR)
+			editor_container.add_child(line)
 
 	var library := WeaponAttackCatalog.get_library()
 	if library.is_empty():
