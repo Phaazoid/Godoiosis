@@ -7,5 +7,6 @@ script = ExtResource("1_sqi3k")
 incoming_element = 6
 in_the_air = true
 disperses_gas = true
+equation = "A2 -> A2"
 popup = "Disperses!"
 metadata/_custom_type_script = "uid://dxskrhe0srgid"
