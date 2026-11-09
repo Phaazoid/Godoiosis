@@ -2086,6 +2086,46 @@ func test_the_focus_outline_reaches_the_diorama_lying_on_the_ground() -> void:
 			"the stroke outlived the pointer in the diorama").is_equal(0)
 
 
+# The aim's source outline (#699) reaches the diorama on the focus stroke's lift, ONE layer carrying every
+# element at once: each edge wears its own element's colour, so a fire vein's box and a river's differ.
+# The store is written directly here because it is this wire's input; tests/runes/test_source_edges.gd
+# drives the aim that writes it.
+func test_the_source_outline_reaches_the_diorama_in_each_elements_colour() -> void:
+	var fire: Array[Elemental.Element] = [Elemental.Element.FIRE]
+	var water: Array[Elemental.Element] = [Elemental.Element.WATER]
+	var sources: Dictionary[Vector2i, Array] = {Vector2i(1, 1): fire, Vector2i(4, 2): water}
+	_om().show_source_edges(sources, game._board())
+	await _settle()
+
+	var groups: Array[Dictionary] = _om().source_edges
+	assert_int(groups.size()).override_failure_message("fixture: the store holds no two groups").is_equal(2)
+	var lifted := _overlays.lines_of(BoardOverlays.Layer.SOURCE_EDGE)
+	assert_int(lifted.size()).is_equal(8)   # four edges round each of the two cells
+	var lift: float = _overlays.marker_lift(BoardOverlays.Layer.SOURCE_EDGE)
+	var first: Vector3 = (groups[0]["segments"] as Array)[0][0]
+	assert_that(lifted[0][0]).override_failure_message(
+			"the stroke did not arrive at trace_point plus its own layer lift").is_equal(
+			BoardSpace.trace_point(first) + Vector3.UP * lift)
+
+	var marker := (_overlays._markers[BoardOverlays.Layer.SOURCE_EDGE] as Array)[0] as MeshInstance3D
+	var mark := 0
+	for group: Dictionary in groups:
+		var want := ElementPalette.color_for_element(group["element"]).srgb_to_linear()   # linearized, as beam_color is
+		for _segment in group["segments"]:
+			var colors: PackedColorArray = (marker.mesh as ImmediateMesh).surface_get_arrays(mark)[Mesh.ARRAY_COLOR]
+			assert_int(colors.size()).override_failure_message("edge %d drew no vertices" % mark).is_greater(0)
+			for c: Color in colors:
+				assert_bool(absf(c.r - want.r) <= 1.5 / 255.0 and absf(c.g - want.g) <= 1.5 / 255.0
+						and absf(c.b - want.b) <= 1.5 / 255.0).override_failure_message(
+						"edge %d wore %s, not its element's %s" % [mark, c, want]).is_true()
+			mark += 1
+
+	_om().clear_source_edges()
+	await _settle()
+	assert_int(_overlays.lines_of(BoardOverlays.Layer.SOURCE_EDGE).size()).override_failure_message(
+			"the stroke outlived its aim in the diorama").is_equal(0)
+
+
 # The REACH lines (#1069, slice 1's channel re-pointed) reach the diorama -- lifted through the
 # same trace_point the focus stroke above is, and taken down with the gesture that drew them.
 func test_reach_lines_reach_the_diorama_and_leave_with_the_gesture() -> void:

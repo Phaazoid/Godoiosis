@@ -62,6 +62,7 @@ var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the stor
 var _last_reach_line_version := -1   # ...and the reach lines, #710 slice 1 by way of #1069
 var _last_strike_version := -1   # ...and the queued attacks' marks (#1247)
 var _last_outline_version := -1  # ...and the focus stroke's (slice 4)
+var _last_source_edges_version := -1   # ...and the aimed carving's source outline (#699)
 var _last_squad_lines_version := -1   # ...and the squad's range and tethers (#1070)
 var _shake_pushed := 0.0   # the last pluck pushed, so a still tether costs no per-frame write
 var _moments_drawn := false   # whether the moment layers hold anything, so an idle board costs nothing (#367)
@@ -139,6 +140,7 @@ func _process(_delta: float) -> void:
 	_reach_lines(om)
 	_queued_strikes(om)
 	_focus_outline(om)
+	_source_edges(om)
 	_squad_lines(om)
 	_tether_moments(om)
 	_arrows(om)
@@ -205,6 +207,7 @@ func _poll_geometry() -> void:
 	_last_reach_line_version = -1
 	_last_strike_version = -1
 	_last_outline_version = -1
+	_last_source_edges_version = -1
 	_last_squad_lines_version = -1
 
 
@@ -962,6 +965,27 @@ func _focus_outline(om: OverlayManager) -> void:
 			points.append(BoardSpace.trace_point(p) + lift)
 		segments.append(points)
 	overlays.set_lines(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, segments, OverlayManager.FOCUS_OUTLINE_COLOR)
+
+
+# The aimed carving's source outline (#699): _focus_outline's lift, one mark per segment, each tinted in
+# its element's ElementPalette colour -- the colour SourceEdges2D draws it in. The vertex colour reaches
+# the beam shader raw while a source_color uniform is linearized, so the tint is linearized here to match.
+func _source_edges(om: OverlayManager) -> void:
+	if om.source_edges_version == _last_source_edges_version:
+		return
+	_last_source_edges_version = om.source_edges_version
+	var lift := Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.SOURCE_EDGE)
+	var marks: Array[Array] = []
+	var tints: Array[Color] = []
+	for group: Dictionary in om.source_edges:
+		var tint := ElementPalette.color_for_element(group["element"]).srgb_to_linear()
+		for segment: PackedVector3Array in group["segments"]:
+			var points := PackedVector3Array()
+			for p: Vector3 in segment:
+				points.append(BoardSpace.trace_point(p) + lift)
+			marks.append([points])
+			tints.append(tint)
+	overlays.set_marks(BoardOverlays.Layer.SOURCE_EDGE, marks, Color.WHITE, [], [], tints)
 
 
 # The squad's lines (#1070): the range's stroke lies on the ground as the focus edge does, and each

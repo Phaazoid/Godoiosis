@@ -348,6 +348,22 @@ func legal_targets(handle: String, attack_name := "") -> Dictionary:
 			AttackAction.declare(unit, unit.movement.cell, unit.movement.cell),
 			func(plan: ResolvedPlan) -> Dictionary: return _list_aims(unit, handle, aiming, plan))
 	unit.active_attack = standing
+	return _with_sources(listed, unit, aiming)
+
+
+# The materia sources the aimed attack would draw on from a stand this turn (#699): the game's source
+# outline, asked its way (Materia.sources_within_walk on the live board), so the two agree. A source cell
+# -> the elements it offers; empty for a weapon attack or a damageless carving.
+func _with_sources(listed: Dictionary, unit: Unit, attack: AttackData) -> Dictionary:
+	if not listed.get("ok", false):
+		return listed
+	var sources: Dictionary[Vector2i, Array] = {}
+	var carving := attack as TransmutationData
+	if carving != null and not carving.empowering_elements().is_empty():
+		var board := _board()
+		sources = Materia.sources_within_walk(unit.movement.cell, RulesService.compute_move_range(unit, board),
+				carving.empowering_elements(), board)
+	listed["sources"] = sources
 	return listed
 
 
@@ -403,8 +419,8 @@ func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Diction
 		return {"ok": false, "error": "%s can't watch with %s: %s" % [handle, _attack_label(watch), reason]}
 	var probe := OverwatchAction.new()
 	probe.init(unit, unit.movement.cell, watch)
-	return squad_manager.judge_candidate(unit.squad, probe,
-			func(plan: ResolvedPlan) -> Dictionary: return _list_watch_aims(unit, handle, watch, plan))
+	return _with_sources(squad_manager.judge_candidate(unit.squad, probe,
+			func(plan: ResolvedPlan) -> Dictionary: return _list_watch_aims(unit, handle, watch, plan)), unit, watch)
 
 
 func _list_watch_aims(unit: Unit, handle: String, watch: AttackData, plan: ResolvedPlan) -> Dictionary:

@@ -168,3 +168,73 @@ func test_a_vein_beside_its_terrain_source_does_not_stack() -> void:
 func test_a_board_without_a_vein_store_reads_none() -> void:
 	var board := _board({ HERE: Terrain.Kind.GRASS })
 	assert_int(board.vein_at(HERE)).is_equal(Vein.Kind.NONE)
+
+# --- the aim's source outline (#699): which sources a stand this turn could draw on ---------------
+
+const FAR := Vector2i(8, 4)
+
+func _stands(cells: Array) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	out.assign(cells)
+	return out
+
+func _asked(elements: Array) -> Array[Elemental.Element]:
+	var out: Array[Elemental.Element] = []
+	out.assign(elements)
+	return out
+
+# A river is drawn on from its bank: the source need not be a cell anyone stands on.
+func test_a_source_beside_a_stand_is_marked_though_nobody_stands_on_it() -> void:
+	var board := _board({ NEXT_DOOR: Terrain.Kind.WATER })
+	var found := Materia.sources_near(_stands([HERE]), _asked([WATER]), board)
+	assert_array(found.keys()).is_equal([NEXT_DOOR])
+	assert_array(found[NEXT_DOOR]).is_equal([WATER])
+
+# Exactly the reach that empowers: two cells beyond every stand is no source of this aim.
+func test_a_source_two_cells_beyond_every_stand_is_not_marked() -> void:
+	var board := _board({ TWO_AWAY: Terrain.Kind.WATER })
+	assert_dict(Materia.sources_near(_stands([HERE]), _asked([WATER]), board)).is_empty()
+
+# The outline is sources_near read backwards from empowered_at, so for every stand the two must agree:
+# a stand is empowered in an element exactly when a marked source of it lies within REACH.
+func test_a_marked_source_is_exactly_one_that_would_empower_a_stand() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.FIRE, FAR: Vein.Kind.FIRE })
+	var found := Materia.sources_near(_stands([HERE]), _asked([FIRE]), board)
+	assert_bool(Materia.empowered_at(HERE, board).has(FIRE)).is_true()
+	assert_array(found.keys()).is_equal([NEXT_DOOR])
+
+# Only what the aim asks for: a fire vein beside a river marks the vein for fire alone.
+func test_only_the_asked_elements_are_marked() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.FIRE })
+	board.kinds[HERE] = Terrain.Kind.WATER
+	var found := Materia.sources_near(_stands([HERE]), _asked([FIRE]), board)
+	assert_array(found.keys()).is_equal([NEXT_DOOR])
+	assert_dict(Materia.sources_near(_stands([HERE]), _asked([EARTH]), board)).is_empty()
+
+# Ice is a floor, not a well: a frozen river beside the bank marks nothing.
+func test_a_frozen_river_is_not_marked() -> void:
+	var board := _board({ NEXT_DOOR: Terrain.Kind.WATER }, { NEXT_DOOR: [Terrain.TileState.FROZEN] })
+	assert_dict(Materia.sources_near(_stands([HERE]), _asked([WATER]), board)).is_empty()
+
+# An alkahest vein offers every asked element, in the order they were asked.
+func test_an_alkahest_vein_offers_each_asked_element_in_the_asked_order() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.ALKAHEST })
+	var found := Materia.sources_near(_stands([HERE]), _asked([Elemental.Element.AETHER, WATER]), board)
+	assert_array(found[NEXT_DOOR]).is_equal([Elemental.Element.AETHER, WATER])
+
+# The walk is Move's own answer plus the cell the unit already stands on, which compute_move_range omits.
+func test_the_walk_counts_where_the_unit_already_stands() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.FIRE })
+	var no_moves := {"reachable": {}}
+	var found := Materia.sources_within_walk(HERE, no_moves, _asked([FIRE]), board)
+	assert_array(found.keys()).is_equal([NEXT_DOOR])
+
+func test_the_walk_reaches_a_source_by_a_cell_move_offers() -> void:
+	var board := _vein_board({ FAR: Vein.Kind.FIRE })
+	var move_range := {"reachable": {Vector2i(7, 4): 3}}
+	assert_array(Materia.sources_within_walk(HERE, move_range, _asked([FIRE]), board).keys()).is_equal([FAR])
+	assert_dict(Materia.sources_within_walk(HERE, {"reachable": {}}, _asked([FIRE]), board)).is_empty()
+
+func test_nothing_asked_marks_nothing() -> void:
+	var board := _vein_board({ NEXT_DOOR: Vein.Kind.ALKAHEST })
+	assert_dict(Materia.sources_near(_stands([HERE]), _asked([]), board)).is_empty()

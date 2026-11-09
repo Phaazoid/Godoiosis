@@ -142,6 +142,19 @@ func cost() -> int:
 func damage_elements() -> Array[Elemental.Element]:
 	return parsed().damage_elements()
 
+# The elements a materia source must offer to empower this carving, what the aim's source outline (#699)
+# marks: a formed carving's form_requires (form_fires' checklist), a formless one's delivered elements
+# (what base_damage's +1 reads), none for a damageless formless carving. A derived form asks its base.
+func empowering_elements() -> Array[Elemental.Element]:
+	if form_of != null:
+		return form_of.empowering_elements()
+	if empowered != null:
+		return form_requires()
+	var none: Array[Elemental.Element] = []
+	if deals_no_damage:
+		return none
+	return damage_elements()
+
 # Aura scaling: power + the wielder's aura in each element of what this carving delivers, once each
 # (Fireball's flame scales off fire once). A wildcard-covered (0-aura) element adds nothing.
 # A utility carving (#126) skips the scaling entirely: aura still GATES channeling, it just
@@ -168,8 +181,10 @@ func base_damage(wielder: UnitState, empowered_in: Array[Elemental.Element] = []
 	var scaling := 0
 	for e: Elemental.Element in damage_elements():
 		scaling += wielder.get_element_aura(e)
-		if takes_the_plus_one and empowered_in.has(e):
-			scaling += 1
+	if takes_the_plus_one:
+		for e: Elemental.Element in empowering_elements():
+			if empowered_in.has(e):
+				scaling += 1
 	return maxi(0, power + scaling + air)
 
 # --- Channeling: anchor + wildcards (dev, 2026-08-10 — REPLACES the 2026-07-04 temper/leeway
