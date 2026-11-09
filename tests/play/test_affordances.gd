@@ -114,6 +114,46 @@ func test_a_named_victim_is_the_unit_actually_standing_there() -> void:
 		"the enemy's own cell was not among the offered aims").is_true()
 
 
+# The aim's materia sources (#699) ride legal_targets: the cells the game outlines while that carving is
+# aimed, asked through the same Materia door. A source on a walk is named; one past every stand is not;
+# a weapon attack names none.
+func test_legal_targets_names_the_sources_a_carving_would_draw_on() -> void:
+	var unit: Unit = _session.unit_by_handle("A")
+	var fireball := TransmutationData.new()
+	fireball.display_name = "Fireball"
+	fireball.power = 3
+	fireball.recipe = "Break(F, A) + Push(F2)"   # makes its own fire, so it never fizzles on grass
+	fireball.targets = EquippableData.TargetMode.UNIT
+	var elements: Array[Elemental.Element] = [Elemental.Element.FIRE, Elemental.Element.AIR]
+	unit.unit_instance.aura = {Elemental.Element.FIRE: 4, Elemental.Element.AIR: 4}
+	unit.unit_instance.affinity = elements
+	var rune := RuneData.new()
+	rune.size = RuneData.Size.LARGE
+	assert_bool(rune.inscribe(fireball)).override_failure_message("fixture: the carving did not inscribe").is_true()
+	assert_bool(unit.add_item(rune)).override_failure_message("fixture: the rune did not fit").is_true()
+	var weapon_only: Dictionary = _session.legal_targets("A")
+	assert_dict(weapon_only.get("sources", {})).override_failure_message(
+			"a weapon attack named materia sources").is_empty()
+	assert_bool(unit.set_equipped_weapon(rune)).override_failure_message("fixture: could not equip").is_true()
+
+	var beside := Vector2i(0, 1)
+	var far := Vector2i(9, 9)
+	var moves: Dictionary = _session.legal_moves("A")
+	var stands: Array = [moves.from]
+	stands.append_array(moves.cells)
+	for stand: Vector2i in stands:
+		assert_bool(absi(stand.x - far.x) + absi(stand.y - far.y) > Materia.REACH).override_failure_message(
+				"fixture: %s is within a walk, so the far case proves nothing" % far).is_true()
+	(_board.vein_field as VeinField).set_kind(beside, Vein.Kind.FIRE)
+	(_board.vein_field as VeinField).set_kind(far, Vein.Kind.FIRE)
+
+	var offered: Dictionary = _session.legal_targets("A", "Fireball")
+	assert_bool(offered.ok).override_failure_message("fixture: %s" % str(offered.get("error", ""))).is_true()
+	assert_dict(offered.sources).is_equal({beside: [Elemental.Element.FIRE]})
+	assert_str(BoardView.render_legal_targets(_session, "A", "Fireball")).contains(
+			"materia sources within a walk: (0,1) Fire")
+
+
 # ==============================================================================
 #  Status -- the turn state the rendered board never carried
 # ==============================================================================

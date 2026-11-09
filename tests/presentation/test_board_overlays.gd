@@ -1229,6 +1229,43 @@ func test_the_range_outline_and_the_tethers_each_take_their_own_width() -> void:
 		.override_failure_message("the tethers moved off their own width").is_equal_approx(0.03, 0.0001)
 
 
+# --- The aim's source outline (#699) --------------------------------------------------------------
+
+# It lies on the ground like the focus edge, so it must clear every fill it can cross -- the aim's red
+# reach above all -- and sit on a plane of its own: two floor strokes on one plane would z-fight.
+func test_the_source_outline_lies_above_every_fill_on_a_plane_of_its_own() -> void:
+	var overlays := _overlays()
+	var lift: float = overlays.marker_lift(BoardOverlays.Layer.SOURCE_EDGE)
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		if BoardOverlays.LAYERS[layer]["kind"] != BoardOverlays.Kind.FILL:
+			continue
+		assert_float(lift).override_failure_message(
+				"the source outline sits under a fill it crosses (%s)" % BoardOverlays.Layer.keys()[layer]
+				).is_greater(overlays.marker_lift(layer))
+	for floor_line: BoardOverlays.Layer in [BoardOverlays.Layer.ENEMY_FOCUS_EDGE, BoardOverlays.Layer.COHESION_EDGE]:
+		assert_bool(absf(lift - overlays.marker_lift(floor_line)) > 0.0001).override_failure_message(
+				"the source outline shares %s's plane" % BoardOverlays.Layer.keys()[floor_line]).is_true()
+
+
+# Its width is its own (the mock's focus-edge width could not be seen), and a moved knob reaches a stroke
+# that is already standing.
+func test_the_source_outline_takes_its_own_width_and_a_moved_knob_reaches_it() -> void:
+	var overlays := _bare_overlays()
+	overlays.outline_width = 0.03
+	overlays.source_line_width = 0.12
+	var segments: Array[PackedVector3Array] = [PackedVector3Array([Vector3(0, 1, 0), Vector3(1, 1, 0)])]
+	overlays.set_lines(BoardOverlays.Layer.SOURCE_EDGE, segments, Color.WHITE)
+	overlays.set_lines(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, segments, Color.WHITE)
+
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.SOURCE_EDGE, &"beam_width")) \
+		.override_failure_message("the source outline is not on its own width").is_equal_approx(0.12, 0.0001)
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.ENEMY_FOCUS_EDGE, &"beam_width")) \
+		.override_failure_message("the focus edge moved off its own width").is_equal_approx(0.03, 0.0001)
+	overlays.source_line_width = 0.07
+	assert_float(overlays.beam_parameter(BoardOverlays.Layer.SOURCE_EDGE, &"beam_width")) \
+		.override_failure_message("the width knob never reached the standing stroke").is_equal_approx(0.07, 0.0001)
+
+
 # --- The CASING (#1109 round 2) -------------------------------------------------------------------
 
 # Every LINE layer, drawn once with a cone, so each has its ribbon material and (where it draws one) its

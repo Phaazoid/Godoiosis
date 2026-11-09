@@ -1332,6 +1332,23 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE, source: E
 	overlay_manager.show_attack_reach(
 		Reach.get_all_attack_cells_from(reach_origin, firing),
 		Reach.blocked_cells_from(reach_origin, firing, _board()))
+	_show_source_edges(unit, aiming)
+
+# The aimed carving's materia sources (#699; dev, 2026-11-08: only while choosing an attack that needs
+# them, and never outside where the unit can walk). A weapon attack or a damageless formless carving
+# draws none, and the F cycle repaints through enter_attack_mode. Cleared with the reach
+# (clear_selection_overlays).
+func _show_source_edges(unit: Unit, aiming: AttackData) -> void:
+	var carving := aiming as TransmutationData
+	var elements: Array[Elemental.Element] = []
+	if carving != null:
+		elements = carving.empowering_elements()
+	if elements.is_empty():
+		overlay_manager.clear_source_edges()
+		return
+	var board := _board()
+	overlay_manager.show_source_edges(
+			Materia.sources_within_walk(unit.movement.cell, move_mode_range_for(unit), elements, board), board)
 
 # Generic "pick one highlighted unit" mode (rescue, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
@@ -2601,8 +2618,8 @@ func unit_at_pointer(cell: Vector2i) -> Unit:
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
 
-# compute_move_range's answer while CHOOSING_MOVE, off move_mode_range unless the unit or its leash centre
-# changed. Nothing else the search reads moves while the mode is up (docs/performance.md, Invariants).
+# compute_move_range's answer while CHOOSING_MOVE (and while aiming, for the source outline, #699), off
+# move_mode_range unless the unit or its leash centre changed. Nothing else the search reads moves while the mode is up (docs/performance.md, Invariants).
 # Keyed by instance id, so it never serves one unit's range to another and holds no freed reference.
 func move_mode_range_for(unit: Unit) -> Dictionary:
 	var key := [unit.get_instance_id(), RulesService.leash_centre(unit)]

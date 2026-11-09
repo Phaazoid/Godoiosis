@@ -78,7 +78,10 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Enemy focus", "node": "BoardOverlays", "prop": "outline_width", "label": "Enemy focus outline width", "min": 0.005, "max": 0.2, "step": 0.005,
 		"tip": "How thick the stroke round the hovered enemy's whole field is, in cells. It says WHOSE field you are looking at while the rest of the crowd is dimmed, so it wants to be legible and quiet rather than bright."},
 	{"group": "Enemy focus", "node": "BoardOverlays", "prop": "outline_intensity", "label": "Enemy focus outline glow", "min": 0.2, "max": 4.0, "step": 0.05,
-		"tip": "Brightness multiplier on that stroke. 1.0 draws it flat, which is what board markup wants; above about 1.2 it blooms and starts reading as an effect rather than as a boundary."},
+		"tip": "Brightness multiplier on that stroke. 1.0 draws it flat, which is what board markup wants; above about 1.2 it blooms and starts reading as an effect rather than as a boundary. The aim's source outline shares it."},
+	# The aim's source outline (#699): its own width, the focus edge's glow.
+	{"group": "Aiming", "node": "BoardOverlays", "prop": "source_line_width", "label": "Source outline width (3D)", "min": 0.005, "max": 0.3, "step": 0.005,
+		"tip": "How thick the stroke round a materia source is while you aim a carving that source would empower, in cells. It is drawn in the element's own colour (Element colours) and lies on the ground over the red reach, so it has to read against both. Its glow is the enemy focus outline's."},
 	{"group": "Sight beam", "node": "BoardOverlays", "prop": "beam_softness", "label": "Sight beam edge", "min": 0.25, "max": 6.0, "step": 0.05,
 		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
 	{"group": "Sight beam", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
@@ -498,6 +501,7 @@ const QUEUE_STYLE_SCRIPT := "res://Classes/ui/queue/QueueStyle.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 const THREAT_LINES_SCRIPT := "res://Classes/board/ThreatLines2D.gd"
+const SOURCE_EDGES_SCRIPT := "res://Classes/board/SourceEdges2D.gd"
 const STRIKE_MARKS_SCRIPT := "res://Classes/board/StrikeMarks2D.gd"
 const AIM_FLASH_SCRIPT := "res://Classes/board/AimFlash2D.gd"
 const MOVE_GRID_SCRIPT := "res://Classes/board/MoveGrid.gd"
@@ -599,6 +603,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Aiming", "label": "Payload inset (2D+3D)", "static": "PAYLOAD_INSET", "script": INSET_SQUARE_SCRIPT,
 		"min": 0.0, "max": 0.45, "step": 0.01,
 		"tip": "How far in from each edge a payload's tile is drawn, as a share of the tile -- the tiles an attack reaches only through what it DROPS. 0 is a full tile, which reads exactly like the aim's own footprint; larger leaves a smaller square with more ground showing round it."},
+	{"group": "Aiming", "label": "Source outline width (2D)", "static": "SOURCE_LINE_WIDTH", "script": SOURCE_EDGES_SCRIPT,
+		"min": 0.5, "max": 6.0, "step": 0.25,
+		"tip": "The flat view's stroke round a materia source while you aim a carving it would empower, in pixels of a 16-pixel tile. The 3D width is its own row above."},
 
 	# The three tones of the range readout (#1066): your blue above (Move fill), your red, and the
 	# enemy's one field under both. Tune them as a STACK, never one at a time -- what the player
@@ -2098,6 +2105,7 @@ static func read_static(name: String) -> Variant:
 		"STRIKE_POINTER_LENGTH": return StrikeMarks2D.STRIKE_POINTER_LENGTH
 		"STRIKE_BADGE_GROUND": return StrikeMarks2D.STRIKE_BADGE_GROUND
 		"PAYLOAD_INSET": return InsetSquare.PAYLOAD_INSET
+		"SOURCE_LINE_WIDTH": return SourceEdges2D.SOURCE_LINE_WIDTH
 		"GRID_LINE_INSET": return MoveGrid.GRID_LINE_INSET
 		"GRID_LINE_WIDTH": return MoveGrid.GRID_LINE_WIDTH
 		"GRID_FILL_GAP": return MoveGrid.GRID_FILL_GAP
@@ -2516,6 +2524,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PAYLOAD_INSET":
 			InsetSquare.PAYLOAD_INSET = value
 			_restyle_payload_inset(host)
+			return
+		# The source outline (#699) is drawn on a redraw, so a standing one is redrawn.
+		"SOURCE_LINE_WIDTH":
+			SourceEdges2D.SOURCE_LINE_WIDTH = value
+			_restyle_source_edges(host)
 			return
 		# The movement grid (#1074). All four regenerate the one texture each view already holds.
 		"GRID_LINE_INSET":
@@ -3297,44 +3310,44 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"CARD_SLIDE_SECONDS":
 			PreMissionScreen.CARD_SLIDE_SECONDS = value
 			return
-		# The queue's rows read the palette when they are BUILT, so a dragged colour needs them
-		# rebuilt -- and through the panel's own UI-only re-render, never game.refresh_action_queue,
-		# which re-resolves the whole plan and would do so once per slider tick.
+		# An element colour is drawn by the queue's rows, read when they are BUILT, and by the aim's source
+		# outline (#699): both are redrawn, the rows through the panel's own UI-only re-render, never
+		# game.refresh_action_queue, which re-resolves the whole plan and would do so once per slider tick.
 		"ELEMENT_FIRE":
 			ElementPalette.ELEMENT_FIRE = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_WATER":
 			ElementPalette.ELEMENT_WATER = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_SHOCK":
 			ElementPalette.ELEMENT_SHOCK = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_ICE":
 			ElementPalette.ELEMENT_ICE = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_EARTH":
 			ElementPalette.ELEMENT_EARTH = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_AIR":
 			ElementPalette.ELEMENT_AIR = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_AETHER":
 			ElementPalette.ELEMENT_AETHER = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_CORROSION":
 			ElementPalette.ELEMENT_CORROSION = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"ELEMENT_HEAT":
 			ElementPalette.ELEMENT_HEAT = value
-			_restyle_action_queue(host)
+			_restyle_element_colours(host)
 			return
 		"EVENT_TINT":
 			QueueStyle.EVENT_TINT = value
@@ -3551,6 +3564,17 @@ static func _restyle_action_queue(host: Node3D) -> void:
 	var panel: SquadActionQueueControl = game_2d.squad_action_queue_control
 	if panel != null:
 		panel.restyle()
+
+
+static func _restyle_element_colours(host: Node3D) -> void:
+	_restyle_action_queue(host)
+	_restyle_source_edges(host)
+
+
+static func _restyle_source_edges(host: Node3D) -> void:
+	var manager := overlay_manager_of(host)
+	if manager != null:
+		manager.restyle_source_edges()
 
 
 static func _refresh_guard_markers(host: Node3D) -> void:
