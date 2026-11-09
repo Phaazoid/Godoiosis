@@ -181,7 +181,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | *(any unit)* | Wind Blast | **shove the unit back** — repositioning (Axiom 4). *("Wind" survives here as an attack name — the sanctioned use.)* *(The shove shipped as the **Gust** carving, `Push(A2)`, knockback 2, damageless — an authored shove on the attack, not a reaction.)* |
 | AIRBORNE | Gale | launch further / fling into a hazard 🔗 |
 | BURNING | Backdraft | spread BURNING to adjacent, +dmg 🔗 |
-| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(BUILT [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), 2026-10-22: an AIR hit removes every gas on the cells it strikes, previewed (`Disperse.tres`, the first reaction in the air). Since [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332), 2026-10-22, an AIR hit that SHOVES blows the gas as far as it shoves instead, away from the caster, and disperses only gas with no room to move.)* |
+| SMOKED/STEAM/vapor | Disperse | clear the atmosphere. *(BUILT [#1335](https://github.com/Phaazoid/Godoiosis/issues/1335), 2026-10-22: an AIR hit removes every gas on the cells it strikes, previewed (`Disperse.tres`, the first reaction in the air). Since [#1332](https://github.com/Phaazoid/Godoiosis/issues/1332), 2026-10-22, an AIR hit that SHOVES blows the gas as far as it shoves instead, away from the caster, and disperses only gas with no room to move. Since [#1638](https://github.com/Phaazoid/Godoiosis/issues/1638), 2026-11-08, gas it carries past the board's edge leaves the board.)* |
 | SUBLIMED | Scatter | ++dmg (tear the vapor apart) |
 
 ### EARTH
