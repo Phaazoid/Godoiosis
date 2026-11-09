@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Substance" format=3 uid="uid://dpdcymwsn6p7e"]
+
+[ext_resource type="Script" uid="uid://dp41r1ki80u1f" path="res://Classes/alchemy/Substance.gd" id="1_p2cub"]
+
+[resource]
+script = ExtResource("1_p2cub")
+display_name = "Gypsum"
+formula = "WE2*FE*W2*FA"
+phase = 1

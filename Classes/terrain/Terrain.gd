@@ -44,7 +44,9 @@ enum TileState {
 			 # behind the fire is the safe one.
 	QUICKLIME,    # #1635: limestone a fire hit calcined. Holds its flame; water slakes it into steam.
 	BRICK,        # #1635: clay soil a fire hit baked. Permanent.
-	THUNDERSTONE  # #1635: sand a shock hit fused. Holds its lightning for an Extract. Permanent.
+	THUNDERSTONE, # #1635: sand a shock hit fused. Holds its lightning for an Extract. Permanent.
+	GYPSUM,       # #1635: chalky soil or limestone a vitriol hit corroded. Permanent.
+	QUICKSILVER   # #1635: cinnabar a fire hit roasted. Its quicksilver lies in the ground. Permanent.
 }
 
 # States no authoring surface may offer and no rule may act on -- the tombstones above. A retired

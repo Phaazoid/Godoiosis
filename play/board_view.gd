@@ -14,6 +14,7 @@ const GROUND := {
 	"burning": ["^", "burning"], "frozen": ["_", "frozen"], "scorched": [";", "scorched"],
 	"cover": ["n", "cover (dug in)"],
 	"quicklime": ["%", "quicklime"], "brick": ["=", "brick"], "thunderstone": ["*", "thunderstone"],
+	"gypsum": ["|", "gypsum"], "quicksilver": ["$", "quicksilver"],
 	"grass": [".", "grass"], "tall_grass": [",", "tall grass"], "dirt": [":", "dirt"],
 	"none": ["'", "plain ground"], "mud": ["~", "mud"], "shallow": ["w", "shallow water"],
 	"deep": ["W", "deep water"], "rock": ["#", "rock"], "tree": ["T", "tree"], "wall": ["#", "impassable"],
@@ -361,6 +362,10 @@ static func _ground_key(session, cell: Vector2i) -> String:
 		return "brick"
 	if states.has(Terrain.TileState.THUNDERSTONE):
 		return "thunderstone"
+	if states.has(Terrain.TileState.GYPSUM):
+		return "gypsum"
+	if states.has(Terrain.TileState.QUICKSILVER):
+		return "quicksilver"
 	var t: Dictionary = session.terrain_at(cell)
 	# THE TABLE WINS, and it is consulted BEFORE walkability (#875): both kinds of nothing are
 	# unwalkable, and the `#` fallback used to swallow them, drawing a chasm as masonry.
