@@ -44,8 +44,38 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	_check_kind_is_authored(attack, found)
 	_check_empowered_form_is_flat(attack, found)
 	_check_carving_form(attack, found)
+	_check_carving_shoves_with_air(attack, found)
 	_check_effect_looks_match(attack, found)
 	return found
+
+
+# A carving carries a body only by pushing the air (#1637, codev's Push(A2) carry). The shove stays
+# authored, since verbs never move geometry (Phase 2), so this is a check and not the rule: a carving,
+# or failing that its empowered form, that shoves while its LAST Push moves no air (Atmosphere.AIR).
+# DEGRADES: it fires as authored. A weapon's shove has no recipe to answer to.
+static func _check_carving_shoves_with_air(attack: AttackData, found: Array[Dictionary]) -> void:
+	var carving := attack as TransmutationData
+	if carving == null or not carving.parsed().is_legal():
+		return
+	var name := attack.display_name if attack.display_name != "" else "This carving"
+	var who := name
+	var tiles := carving.knockback
+	if tiles <= 0 and carving.empowered != null:
+		tiles = carving.empowered_carving().knockback
+		who = "%s's empowered form" % name
+	if tiles <= 0:
+		return
+	var pushed := ""
+	var steps := carving.parsed().steps
+	for i in range(steps.size() - 1, -1, -1):
+		if steps[i].verb == Flourish.Type.PUSH:
+			pushed = steps[i].args[0]
+			break
+	if Atmosphere.AIR.has(pushed):
+		return
+	var why := "its recipe has no Push to carry anyone" if pushed == "" \
+		else "its last Push carries %s, not air" % SubstanceCatalog.name_of(pushed).to_lower()
+	_add(found, Severity.DEGRADES, "%s shoves %d tile%s, but %s." % [who, tiles, "" if tiles == 1 else "s", why])
 
 
 # A carving's empowered form (#695). All DEGRADES: the base fires correctly either way, the form just
