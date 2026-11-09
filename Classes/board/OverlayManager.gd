@@ -50,6 +50,8 @@ const TERRAIN_STATE_ICONS: Dictionary = {
 	Terrain.TileState.QUICKLIME: preload("res://Art/Icons/TerrainIcons/Quicklime.png"),
 	Terrain.TileState.BRICK: preload("res://Art/Icons/TerrainIcons/Brick.png"),
 	Terrain.TileState.THUNDERSTONE: preload("res://Art/Icons/TerrainIcons/Thunderstone.png"),
+	Terrain.TileState.GYPSUM: preload("res://Art/Icons/TerrainIcons/Gypsum.png"),
+	Terrain.TileState.QUICKSILVER: preload("res://Art/Icons/TerrainIcons/Quicksilver.png"),
 	# No BLAZE row since #890 retired it: permanence moved to the ground, so there is only one fire.
 }
 # A cell whose gas the pass disperses (#1335). PLACEHOLDER: the Air element's icon, the element doing it.

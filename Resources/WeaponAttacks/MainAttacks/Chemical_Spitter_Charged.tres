@@ -9,6 +9,7 @@ elemental_damage_type = 8
 display_name = "Pressurised Spray"
 power = 7
 max_range = 3
+targets = 2
 vertical_rule = 1
 damage_kind = 6
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

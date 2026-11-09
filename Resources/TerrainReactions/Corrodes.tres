@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3 uid="uid://vuo5jlk80jxt"]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_8q0mk"]
+
+[resource]
+script = ExtResource("1_8q0mk")
+incoming_element = 8
+required_made_of = "chalk"
+forbidden_tile_state = 9
+add_tile_states = Array[int]([9])
+equation = "chalk + vitriol -> gypsum"
+popup = "Corrodes!"
