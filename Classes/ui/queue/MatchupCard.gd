@@ -156,7 +156,7 @@ func _build() -> void:
 	if not (whole_volley and _members.size() > 1):
 		var own := _sinks_of(_members[0], sinks)
 		var seen := {}
-		var facts: Array[OutcomeFacts.Fact] = OutcomeFacts.of(_members[0].resolved)
+		var facts: Array[OutcomeFacts.Fact] = OutcomeFacts.of(_members[0].resolved, _members[0].fired_attack)
 		for sink in own:
 			facts.append_array(OutcomeFacts.of(sink.resolved))
 		for fact in facts:

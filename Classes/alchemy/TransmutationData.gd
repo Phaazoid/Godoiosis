@@ -316,7 +316,31 @@ func mechanical_text(wielder: UnitState, _temper: Elemental.Element) -> String:
 	var deficit := total_deficit(wielder)
 	if deficit > 0:
 		parts.append("Wildcards %d" % deficit)
-	return "  ·  ".join(parts)
+	var text := "  ·  ".join(parts)
+	var form_line := form_text(wielder)
+	return text if form_line == "" else "%s\n%s" % [text, form_line]
+
+# What this carving becomes where its caster is empowered (#695), as one line for every readout that
+# names it: "Beside a source of Fire: becomes Fireburst (Damage 8)". "" with no form, or with one that
+# can never fire. The number is the form's own (it takes no +1), so it needs a wielder; the kind is
+# left off because a form cannot change it.
+func form_text(wielder: UnitState) -> String:
+	var form := empowered_carving()
+	var needed := form_requires()
+	if form == null or needed.is_empty():
+		return ""
+	var line := "Beside a source%s of %s: becomes %s" % [
+			"s" if needed.size() > 1 else "", form_requires_text(), form.display_name]
+	if wielder != null and not form.deals_no_damage:
+		line += " (%s)" % form.hit_text(form.base_damage(wielder), form.delivered_kind()).get_slice(",", 0)
+	return line
+
+# form_requires in words, "Fire and Air": the one spelling the readout line and the queue's chip share.
+func form_requires_text() -> String:
+	var names: Array[String] = []
+	for e in form_requires():
+		names.append(Elemental.display_name(e))
+	return " and ".join(names)
 
 # Load-time guard: the recipe parses, and is small enough to ever fit on a rune (the largest
 # circle cap, L, is the global ceiling -- RuneData owns the per-size knobs).
@@ -356,14 +380,6 @@ static func property_sections() -> Array[Dictionary]:
 	sections.insert(1, {"title": "Recipe", "fields": PackedStringArray(["recipe", "time_rounds"])})
 	sections.append({"title": "Empowered form", "fields": PackedStringArray(["empowered"])})
 	return sections
-
-
-# The empowered form's row waits for its own section (#695 slice 2), so it is hidden rather than drawn
-# by the generic resource swapper meanwhile.
-func hidden_fields() -> PackedStringArray:
-	var hidden := super()
-	hidden.append("empowered")
-	return hidden
 
 
 # The carving's own rows (#473). The recipe gets a bespoke row with live readouts in the Attack

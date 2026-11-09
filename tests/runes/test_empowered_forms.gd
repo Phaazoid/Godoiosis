@@ -516,3 +516,59 @@ func test_the_play_api_names_the_form() -> void:
 	assert_bool(listed.ok).override_failure_message("fixture: %s" % listed.get("error", "")).is_true()
 	assert_str(String(listed.get("attack", ""))).override_failure_message(
 			"the aims listing does not say the form fires").contains("fires Burst")
+
+
+# ==============================================================================
+#  The words (slice 2): one line, TransmutationData.form_text, on every readout
+# ==============================================================================
+
+func test_the_form_line_names_what_it_becomes() -> void:
+	var carving := _carving()
+	var caster := _alchemist(PLAYER, AWAY, carving)
+	var line := carving.form_text(caster.state)
+
+	assert_str(line).contains("becomes %s" % carving.empowered_carving().display_name)
+	for element in carving.form_requires():
+		assert_str(line).contains(Elemental.display_name(element))
+	assert_str(line).override_failure_message("the form's own number, which takes no +1, is missing: %s" % line) \
+			.contains("(Damage %d)" % carving.empowered_carving().base_damage(caster.state))
+
+
+func test_two_required_elements_are_two_sources() -> void:
+	var carving := _carving()
+	carving.empowered.requires.assign([FIRE, AIR])
+	assert_str(carving.form_text(null)).contains("sources of Fire and Air")
+
+
+func test_a_formless_carving_says_nothing_of_a_form() -> void:
+	var carving := _carving(false)
+	var caster := _alchemist(PLAYER, AWAY, carving)
+	assert_str(carving.form_text(caster.state)).is_empty()
+	assert_str((caster.equipped_weapon as RuneData).attack_detail(caster.state, carving)).not_contains("\n")
+
+
+# Nobody to read an aura off: the form is still named, its number is not.
+func test_with_no_wielder_the_form_line_has_no_number() -> void:
+	var line := _carving().form_text(null)
+	assert_str(line).contains("becomes Burst")
+	assert_str(line).not_contains("Damage")
+
+
+func test_a_damageless_form_has_no_number() -> void:
+	var carving := _carving()
+	carving.deals_no_damage = true
+	var caster := _alchemist(PLAYER, AWAY, carving)
+	var line := carving.form_text(caster.state)
+	assert_str(line).contains("becomes Burst")
+	assert_str(line).not_contains("(")
+
+
+# The ring readout, the rune card and the carried hover text all read attack_detail; the form rides it
+# as the second line, so the first stays what it was.
+func test_the_readout_carries_the_form_as_its_second_line() -> void:
+	var carving := _carving()
+	var caster := _alchemist(PLAYER, AWAY, carving)
+	var detail := (caster.equipped_weapon as RuneData).attack_detail(caster.state, carving)
+	assert_int(detail.get_slice_count("\n")).is_equal(2)
+	assert_str(detail.get_slice("\n", 1)).is_equal(carving.form_text(caster.state))
+	assert_str(detail.get_slice("\n", 0)).contains(carving.effect_text(caster.state))
