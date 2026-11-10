@@ -37,7 +37,7 @@ board with a fixed cast and no roster since the tutorial.
 
 | # | Name | Size | Win | Lose | Sky and air | Cast | Alchemy spine | Hard shapes | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | The Lime Kiln | small | Rout | none | clear, Normal | Basics, cap 4 | limestone calcined to quicklime, slaked into scalding steam; steam soaks, so a shock chains | hazard squad (latent), strong solo | planned |
+| 1 | The Lime Kiln | small | Rout | none | clear, Normal | Warband, cap 4 | quicklime slaked into steam that soaks from a distance; a drain carries the shock | hazard squad (latent), strong solo, filler | **done** |
 | 2 | Chaff | medium | Extract | round limit | Dust (a look), vapor 0% | roster plus a guest with Smokescreen | smoke shortens the leash and splits a squad; tall grass makes the smoke | strong squad, filler pack | planned |
 | 3 | Meltwater | medium | Capture | none | Light Snow (heat down a step) | Basics | a frozen lake over deep water; fire melts it under whoever stands there, and the enemy does it first | hazard squad (present), strong solo on water | planned |
 | 4 | The Salt Stair | medium, tall | Rout | none | clear | Company | ledges and holes with Gust; Rock Throw only beside sandstone | strong solo too heavy to shove, strong squad on a ledge | planned |
@@ -52,4 +52,8 @@ board with a fixed cast and no roster since the tutorial.
 
 ## Built so far
 
-Nothing yet. Each finished map gets a row here with its real numbers, taken from the saved file.
+Each finished map gets a row here with its real numbers.
+
+| # | Board | Cells | Enemies | Won by me in | Blunt baseline | Note |
+|---|---|---|---|---|---|---|
+| 1 | `TheLimeKiln.tres` | 14 x 12 | 6 in 3 groups | 7 rounds, no deaths | AI-driven default four: defeat | [TheLimeKiln.md](TheLimeKiln.md) |

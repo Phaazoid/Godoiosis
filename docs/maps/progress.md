@@ -28,9 +28,29 @@
 |---|---|
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
-| Draft PR | not opened yet |
-| Map in hand | 1, The Lime Kiln: designing |
+| Draft PR | opened after map 1 (see the log) |
+| Map in hand | 2, Chaff: first draft built, not yet played |
+
+## What the first map taught (read before designing the next)
+
+- **Damage runs high.** A 20 HP unit dies to two or three hits. STR 7 melee hits for 10, and a hit of
+  10 takes a limb. "Easy filler" at STR 3 still hits for 6.
+- **A Sentry never leaves its zone and never retaliates past it,** so anything that reaches it from
+  two tiles outside the zone is free. Give a Sentry squad armour against the free poke, or put the
+  zone's edge where the safe tile is.
+- **The current only moves between touching conductors** (open water or a Wet body, three hops).
+- **Splash reaches two rows, the same as Zap and Fireball.**
+- **Fire on grass is a wildfire and a steam bath.** Use stone, sand or separated fuel unless the
+  wildfire is the point.
+- **A lone unit's ranged counter is only silenced by a kill in the same pass** or by an attacker
+  inside its minimum range.
+- **The AI can play the player's side:** build a scratch copy with `ai_factions` holding both
+  factions and `offers_pre_mission` false, load it, and one `endturn` plays the whole mission. That
+  is the cheap blunt baseline. Delete the scratch copy afterwards.
+- **Restart the bridge after rebuilding a board** (send `quit`, start it again). Never kill Godot by
+  process name: the dev's own editor is the same executable.
 
 ## Log
 
 - 2026-11-09: scaffolding, builder proven on a throwaway board (not committed).
+- 2026-11-10: map 1, The Lime Kiln, done after five layouts. Committed.
