@@ -44,11 +44,11 @@ board with a fixed cast and no roster since the tutorial.
 | 5 | Stormglass | medium | Rout | defended point | Thunderstorm (everyone ends Wet, vapor up three) | Warband, cap 5 | rain soaks every body each turn, so every shock chains through friend and foe alike (thunderstone moved to The Glass Walk) | strong squad the rain links together, waves | planned |
 | 6 | The Glass Walk (was The Cellar) | tiny | Rout | round limit (10) | none; Night | fixed cast of three, no roster | a lightning vein, and sand fused to thunderstone as stepping stones for a Zap with no diamond; a pool that conducts | hazard squad that wades into its hazard, strong solo, filler | **done** |
 | 6b | The Cellar | tiny | Rout | round limit | none indoors; aether-rich air | fixed cast | essence and frost move a Heal; kill order | strong solo with a healer | planned, lower priority: I could not find an alchemy hook strong enough |
-| 7 | Cinder Row | long and narrow | Extract | protected unit | Ashfall, heat 40% | fixed cast plus an escort | Fire Wall, Stillness and Quickening on a street of fences | hazard squad (brought by the enemy), filler | planned |
+| 7 | Cinder Row | long and narrow | Extract | protected unit and a round limit (14) | Ashfall, heat 30% | fixed cast of five, one of them the escort | Stillness holds a fire, Quickening hurries one: three burning yards as fuses onto a three-wide street | hazard squad on a timer, strong solo in the last fire, filler | **done** |
 | 8 | Quicksilver Flats | large | Capture three | none | Aurora (aether up two) | Warband, cap 7 | veins: who stands on one hits harder, so the fight is over footing | strong squad on a vein, strong solo | planned |
 | 9 | The Drowned Orchard | medium | Rout | none | drawn: Clear, Fog or Rain | Basics, cap 5 | mud and loam feed water carvings; wet then ice; water-walkers | strong solo that ignores terrain (Overwatch key), hazard squad | planned |
 | 10 | Earthworks | medium | Rout | defended point | clear | Company | **unbuilt:** raised earth walls. Playable today with cover and choke points; the note marks where a wall would go | strong squad to be cut in two | planned |
-| 11 | Three Banners | small | Rout | none | clear | fixed cast | a third faction hostile to both; turn their fire and gas on each other | two rival squads, one solo | planned |
+| 11 | Three Banners | small | Rout | none | clear | fixed cast | a third faction hostile to both; turn their fire and gas on each other | two rival squads, one solo | **shelved:** the hostility table has no third side (wish list). An AI-run ALLY squad is possible and may replace it |
 | 12 | The Long Dark | huge | Capture and Rout | round limit | Night, drawn weather | Warband, cap 9 | everything above, as an exam | all three | planned |
 
 ## Built so far
@@ -61,3 +61,4 @@ Each finished map gets a row here with its real numbers.
 | 2 | `Chaff.tres` | 22 x 13 | 8 in 4 groups | round 11 of 11 (clock since raised to 12), all five out, three on 1 or 2 HP | AI-driven default four plus the guest: defeat by round 5 | [Chaff.md](Chaff.md) |
 | 3 | `Meltwater.tres` | 22 x 16 | 8 in 5 groups | 9 rounds, no deaths (an earlier draft: 13 rounds, one death) | AI-driven default five: defeat | [Meltwater.md](Meltwater.md) |
 | 4 | `TheGlassWalk.tres` | 13 x 7 | 5 in 4 groups | 8 rounds of 10, no deaths, first layout | AI-driven fixed cast: defeat | [TheGlassWalk.md](TheGlassWalk.md) |
+| 5 | `CinderRow.tres` | 24 x 16 (street 22 x 3) | 6 in 3 groups | round 13 of 14, all five out (a 12-round draft was lost by one round) | AI-driven fixed cast: defeat | [CinderRow.md](CinderRow.md) |

@@ -1,0 +1,624 @@
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://csm117uo3qpfk"]
+
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_sitaj"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_wgx02"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_j210w"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_lluig"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_1u07t"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="6_mc3q0"]
+[ext_resource type="Resource" uid="uid://bymill4q4uhl1" path="res://Resources/TransmutationData/Stillness.tres" id="7_jhbij"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="8_pltog"]
+[ext_resource type="Resource" uid="uid://dvij7ie00jowt" path="res://Resources/TransmutationData/Quickening.tres" id="9_30rak"]
+[ext_resource type="Resource" uid="uid://bmpv62rqepwaq" path="res://Resources/TransmutationData/Freeze.tres" id="10_g2i3b"]
+[ext_resource type="Resource" uid="uid://di65u0h4kh6q0" path="res://Resources/TransmutationData/Splash.tres" id="11_lcnj3"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="12_uu5tv"]
+[ext_resource type="Texture2D" uid="uid://c3hqfuhr1eyhm" path="res://Art/Units/MapSprites/Wizard_Downed.png" id="13_1qsun"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="14_765hq"]
+[ext_resource type="Texture2D" uid="uid://dh7relsdlsex2" path="res://Art/Units/MapSprites/Wizard.png" id="15_to5nm"]
+[ext_resource type="Texture2D" uid="uid://b33dttfj4adfl" path="res://Art/Units/MapSprites/Wizard_Moving.png" id="16_bolm6"]
+[ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="17_typbu"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="18_h16qi"]
+[ext_resource type="Resource" uid="uid://dk136huv8a4cx" path="res://Resources/RuneVariants/FreezeRune.tres" id="19_do15u"]
+[ext_resource type="Resource" uid="uid://dxa7oypoypadt" path="res://Resources/RuneVariants/Air Rune.tres" id="20_mkwwx"]
+[ext_resource type="Resource" uid="uid://cvvsnph8bcjc8" path="res://Resources/Units/Torv.tres" id="21_7npl5"]
+[ext_resource type="Resource" uid="uid://cuns07k40xaxv" path="res://Resources/Units/Sara.tres" id="22_25k8o"]
+[ext_resource type="Resource" uid="uid://dmbjfwxb8u62b" path="res://Resources/Units/Bram.tres" id="23_ir443"]
+[ext_resource type="Texture2D" uid="uid://jatc26kj1u3" path="res://Art/Units/MapSprites/Priest_Downed.png" id="24_fxa7e"]
+[ext_resource type="Texture2D" uid="uid://utcba4ppc03" path="res://Art/Units/MapSprites/Priest.png" id="25_2un2i"]
+[ext_resource type="Texture2D" uid="uid://bpv34jqdf236f" path="res://Art/Units/MapSprites/Priest_Moving.png" id="26_4se17"]
+[ext_resource type="Texture2D" uid="uid://dkb5xbjjl4q5v" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="27_dqiia"]
+[ext_resource type="Resource" uid="uid://dq8xjurnrp551" path="res://Resources/RuneVariants/Heal2.tres" id="28_mtx3w"]
+[ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="29_qj430"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="30_jaroh"]
+[ext_resource type="Texture2D" uid="uid://lwdxls0bwe07" path="res://Art/Units/MapSprites/Orc_Downed.png" id="31_i8cfg"]
+[ext_resource type="Texture2D" uid="uid://djn7qkinjsvvk" path="res://Art/Units/MapSprites/Orc.png" id="32_n44eb"]
+[ext_resource type="Texture2D" uid="uid://cuw76kdqfrbjw" path="res://Art/Units/MapSprites/Orc_Moving.png" id="33_hv66b"]
+[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="34_8st4d"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="35_pd61x"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="36_hvmbe"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="37_76su0"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="38_r2qpd"]
+[ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="39_rvsmx"]
+[ext_resource type="Resource" uid="uid://df4pvueay4oiy" path="res://Resources/TransmutationData/Fireball.tres" id="40_gr5gs"]
+[ext_resource type="Resource" uid="uid://behtn3o6jviqf" path="res://Resources/Abilities/FireInsulation.tres" id="41_vd52o"]
+[ext_resource type="Resource" uid="uid://cmgupqw3gkgbv" path="res://Resources/Abilities/HeatInsulation.tres" id="42_dsq5u"]
+
+[sub_resource type="Resource" id="Resource_iswlo"]
+script = ExtResource("8_pltog")
+size = 1
+inscriptions = Array[ExtResource("6_mc3q0")]([ExtResource("7_jhbij")])
+temper = 1
+display_name = "Stillness Rune"
+weight = 1
+
+[sub_resource type="Resource" id="Resource_biy4s"]
+script = ExtResource("8_pltog")
+size = 1
+inscriptions = Array[ExtResource("6_mc3q0")]([ExtResource("9_30rak")])
+temper = 1
+display_name = "Quickening Rune"
+weight = 1
+
+[sub_resource type="Resource" id="Resource_m3uso"]
+script = ExtResource("8_pltog")
+size = 1
+inscriptions = Array[ExtResource("6_mc3q0")]([ExtResource("10_g2i3b"), ExtResource("11_lcnj3")])
+temper = 2
+display_name = "FreezeRune"
+weight = 1
+
+[sub_resource type="Resource" id="Resource_g0kxu"]
+script = ExtResource("18_h16qi")
+display_name = "Isaac"
+portrait = ExtResource("17_typbu")
+base_stats = Dictionary[int, int]({
+8: 9
+})
+map_sprite = ExtResource("15_to5nm")
+move_sprite = ExtResource("16_bolm6")
+downed_sprite = ExtResource("13_1qsun")
+base_aura = Dictionary[int, int]({
+1: 1,
+2: 1,
+5: 1,
+6: 1,
+7: 1
+})
+base_affinity = Array[int]([7, 6, 5, 2, 1])
+base_is_alkahest_affine = true
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("19_do15u"), ExtResource("20_mkwwx")])
+starting_equipped_index = 0
+
+[sub_resource type="Resource" id="Resource_2782o"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_g0kxu")
+cell = Vector2i(2, 12)
+squad_id = 0
+is_leader = true
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 9
+})
+current_hp = 20
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_iswlo"), SubResource("Resource_biy4s"), SubResource("Resource_m3uso")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+1: 1,
+2: 1,
+5: 1,
+6: 1,
+7: 1
+})
+affinity = Array[int]([7, 6, 5, 2, 1])
+is_alkahest_affine = true
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_4jtqq"]
+script = ExtResource("4_lluig")
+unit_data = ExtResource("21_7npl5")
+state_saved = false
+cell = Vector2i(2, 13)
+squad_id = 1
+is_leader = true
+
+[sub_resource type="Resource" id="Resource_5o4os"]
+script = ExtResource("4_lluig")
+unit_data = ExtResource("22_25k8o")
+state_saved = false
+cell = Vector2i(2, 14)
+squad_id = 2
+is_leader = true
+
+[sub_resource type="Resource" id="Resource_tv61k"]
+script = ExtResource("4_lluig")
+unit_data = ExtResource("23_ir443")
+state_saved = false
+cell = Vector2i(1, 14)
+squad_id = 3
+is_leader = true
+
+[sub_resource type="Resource" id="Resource_8fisu"]
+script = ExtResource("18_h16qi")
+display_name = "The Chandler"
+portrait = ExtResource("27_dqiia")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 3,
+2: 3,
+4: 3,
+5: 7,
+6: 4,
+7: 2,
+8: 7
+})
+map_sprite = ExtResource("25_2un2i")
+move_sprite = ExtResource("26_4se17")
+downed_sprite = ExtResource("24_fxa7e")
+base_aura = Dictionary[int, int]({
+7: 1
+})
+base_affinity = Array[int]([7])
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("28_mtx3w")])
+
+[sub_resource type="Resource" id="Resource_esvlv"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_8fisu")
+cell = Vector2i(1, 13)
+squad_id = 4
+is_leader = true
+must_survive = true
+stats = Dictionary[int, int]({
+0: 12,
+1: 2,
+2: 3,
+4: 3,
+5: 7,
+6: 4,
+7: 2,
+8: 7
+})
+current_hp = 12
+aura = Dictionary[int, int]({
+7: 1
+})
+affinity = Array[int]([7])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_mdavh"]
+script = ExtResource("29_qj430")
+template = ExtResource("30_jaroh")
+
+[sub_resource type="Resource" id="Resource_21o6c"]
+script = ExtResource("18_h16qi")
+display_name = "Looter"
+portrait = ExtResource("34_8st4d")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("32_n44eb")
+move_sprite = ExtResource("33_hv66b")
+downed_sprite = ExtResource("31_i8cfg")
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("30_jaroh")])
+
+[sub_resource type="Resource" id="Resource_rxu2f"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_21o6c")
+cell = Vector2i(10, 12)
+squad_id = 5
+is_leader = true
+squad_archetype = 1
+ai_profile = "Easy"
+stats = Dictionary[int, int]({
+0: 14,
+1: 3,
+2: 2,
+4: 5,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 14
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_mdavh")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_0ydho"]
+script = ExtResource("35_pd61x")
+template = ExtResource("36_hvmbe")
+
+[sub_resource type="Resource" id="Resource_o7k5l"]
+script = ExtResource("18_h16qi")
+display_name = "Looter"
+portrait = ExtResource("34_8st4d")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("32_n44eb")
+move_sprite = ExtResource("33_hv66b")
+downed_sprite = ExtResource("31_i8cfg")
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("30_jaroh")])
+
+[sub_resource type="Resource" id="Resource_53fic"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_o7k5l")
+cell = Vector2i(10, 14)
+squad_id = 6
+is_leader = true
+squad_archetype = 1
+ai_profile = "Easy"
+stats = Dictionary[int, int]({
+0: 14,
+1: 3,
+2: 2,
+4: 5,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 14
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_0ydho")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_7m3e7"]
+script = ExtResource("37_76su0")
+template = ExtResource("38_r2qpd")
+
+[sub_resource type="Resource" id="Resource_f236s"]
+script = ExtResource("39_rvsmx")
+def_power = 4
+covered_kinds = Array[int]([0, 1, 2])
+stat_modifiers = Dictionary[int, int]({
+4: -1
+})
+display_name = "Riveted Mail"
+weight = 5
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_67j8f"]
+script = ExtResource("18_h16qi")
+display_name = "Wrecker Boss"
+portrait = ExtResource("34_8st4d")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("32_n44eb")
+move_sprite = ExtResource("33_hv66b")
+downed_sprite = ExtResource("31_i8cfg")
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("30_jaroh")])
+
+[sub_resource type="Resource" id="Resource_sle58"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_67j8f")
+cell = Vector2i(13, 13)
+squad_id = 7
+is_leader = true
+squad_name = "The Wreckers"
+squad_archetype = 3
+squad_zone = "The Second Yard"
+ai_profile = "Medium"
+stats = Dictionary[int, int]({
+0: 24,
+1: 7,
+2: 6,
+4: 3,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 24
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_7m3e7"), SubResource("Resource_f236s")])
+equipped_index = 0
+worn_armor_index = 1
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_445cf"]
+script = ExtResource("35_pd61x")
+template = ExtResource("36_hvmbe")
+
+[sub_resource type="Resource" id="Resource_u3ryn"]
+script = ExtResource("39_rvsmx")
+def_power = 4
+covered_kinds = Array[int]([0, 1, 2])
+stat_modifiers = Dictionary[int, int]({
+4: -1
+})
+display_name = "Riveted Mail"
+weight = 5
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_7562g"]
+script = ExtResource("18_h16qi")
+display_name = "Wrecker"
+portrait = ExtResource("34_8st4d")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("32_n44eb")
+move_sprite = ExtResource("33_hv66b")
+downed_sprite = ExtResource("31_i8cfg")
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("30_jaroh")])
+
+[sub_resource type="Resource" id="Resource_6oh4i"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_7562g")
+cell = Vector2i(12, 12)
+squad_id = 7
+ai_profile = "Medium"
+stats = Dictionary[int, int]({
+0: 22,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 22
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_445cf"), SubResource("Resource_u3ryn")])
+equipped_index = 0
+worn_armor_index = 1
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_0ufoa"]
+script = ExtResource("35_pd61x")
+template = ExtResource("36_hvmbe")
+
+[sub_resource type="Resource" id="Resource_d27jb"]
+script = ExtResource("39_rvsmx")
+def_power = 4
+covered_kinds = Array[int]([0, 1, 2])
+stat_modifiers = Dictionary[int, int]({
+4: -1
+})
+display_name = "Riveted Mail"
+weight = 5
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_g5ieb"]
+script = ExtResource("18_h16qi")
+display_name = "Wrecker"
+portrait = ExtResource("34_8st4d")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("32_n44eb")
+move_sprite = ExtResource("33_hv66b")
+downed_sprite = ExtResource("31_i8cfg")
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("30_jaroh")])
+
+[sub_resource type="Resource" id="Resource_ulqpb"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_g5ieb")
+cell = Vector2i(12, 14)
+squad_id = 7
+ai_profile = "Medium"
+stats = Dictionary[int, int]({
+0: 22,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 22
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_0ufoa"), SubResource("Resource_d27jb")])
+equipped_index = 0
+worn_armor_index = 1
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_y1l2p"]
+script = ExtResource("8_pltog")
+size = 1
+inscriptions = Array[ExtResource("6_mc3q0")]([ExtResource("40_gr5gs")])
+temper = 1
+display_name = "Fire Rune"
+weight = 1
+metadata/_custom_type_script = "uid://ckrp1phgirys0"
+
+[sub_resource type="Resource" id="Resource_nwt4v"]
+script = ExtResource("39_rvsmx")
+flat_def = 2
+covered_kinds = Array[int]([3])
+granted_abilities = Array[ExtResource("14_765hq")]([ExtResource("41_vd52o"), ExtResource("42_dsq5u")])
+display_name = "Asbestos Shroud"
+weight = 2
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_ihbkb"]
+script = ExtResource("18_h16qi")
+display_name = "The Firestarter"
+portrait = ExtResource("34_8st4d")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("32_n44eb")
+move_sprite = ExtResource("33_hv66b")
+downed_sprite = ExtResource("31_i8cfg")
+starting_inventory = Array[ExtResource("5_1u07t")]([ExtResource("30_jaroh")])
+
+[sub_resource type="Resource" id="Resource_eo4nk"]
+script = ExtResource("4_lluig")
+unit_data = SubResource("Resource_ihbkb")
+cell = Vector2i(19, 13)
+squad_id = 8
+is_leader = true
+squad_archetype = 2
+ai_profile = "Hard"
+stats = Dictionary[int, int]({
+0: 26,
+1: 7,
+2: 2,
+4: 5,
+5: 8,
+6: 6,
+7: 3,
+8: 10
+})
+current_hp = 26
+inventory = Array[ExtResource("5_1u07t")]([SubResource("Resource_y1l2p"), SubResource("Resource_nwt4v")])
+equipped_index = 0
+worn_armor_index = 1
+aura = Dictionary[int, int]({
+1: 3
+})
+affinity = Array[int]([1])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[resource]
+script = ExtResource("2_wgx02")
+scenario_name = "missions/CinderRow"
+unit_entries = Array[ExtResource("4_lluig")]([SubResource("Resource_2782o"), SubResource("Resource_4jtqq"), SubResource("Resource_5o4os"), SubResource("Resource_tv61k"), SubResource("Resource_esvlv"), SubResource("Resource_rxu2f"), SubResource("Resource_53fic"), SubResource("Resource_sle58"), SubResource("Resource_6oh4i"), SubResource("Resource_ulqpb"), SubResource("Resource_eo4nk")])
+tile_data = PackedByteArray("AAAAAAAAAAASAAoAAAABAAAAAAASAAoAAAACAAAAAAASAAoAAAADAAAAAAASAAoAAAAEAAAAAAASAAoAAAAFAAAAAAASAAoAAAAGAAAAAAASAAoAAAAHAAAAAAASAAoAAAAIAAAAAAASAAoAAAAJAAAAAAASAAoAAAAKAAAAAAASAAoAAAALAAAAAAASAAoAAAAMAAAAAAASAAoAAAANAAAAAAASAAoAAAAOAAAAAAASAAoAAAAPAAAAAAASAAoAAAAQAAAAAAASAAoAAAARAAAAAAASAAoAAAASAAAAAAASAAoAAAATAAAAAAASAAoAAAAUAAAAAAASAAoAAAAVAAAAAAASAAoAAAAWAAAAAAASAAoAAAAXAAAAAAASAAoAAAAAAAEAAAASAAoAAAABAAEAAAASAAoAAAACAAEAAAASAAoAAAADAAEAAAASAAoAAAAEAAEAAAASAAoAAAAFAAEAAAASAAoAAAAGAAEAAAASAAoAAAAHAAEAAAASAAoAAAAIAAEAAAASAAoAAAAJAAEAAAASAAoAAAAKAAEAAAASAAoAAAALAAEAAAASAAoAAAAMAAEAAAASAAoAAAANAAEAAAASAAoAAAAOAAEAAAASAAoAAAAPAAEAAAASAAoAAAAQAAEAAAASAAoAAAARAAEAAAASAAoAAAASAAEAAQAAAAAAAAATAAEAAQAAAAAAAAAUAAEAAQAAAAAAAAAVAAEAAAASAAoAAAAWAAEAAAASAAoAAAAXAAEAAAASAAoAAAAAAAIAAAASAAoAAAABAAIAAAASAAoAAAACAAIAAAASAAoAAAADAAIAAAASAAoAAAAEAAIAAAASAAoAAAAFAAIAAAASAAoAAAAGAAIAAAASAAoAAAAHAAIAAAASAAoAAAAIAAIAAAASAAoAAAAJAAIAAAASAAoAAAAKAAIAAAASAAoAAAALAAIAAAASAAoAAAAMAAIAAAASAAoAAAANAAIAAAASAAoAAAAOAAIAAAASAAoAAAAPAAIAAAASAAoAAAAQAAIAAAASAAoAAAARAAIAAAASAAoAAAASAAIAAQAAAAAAAAATAAIAAQAAAAAAAAAUAAIAAQAAAAAAAAAVAAIAAAASAAoAAAAWAAIAAAASAAoAAAAXAAIAAAASAAoAAAAAAAMAAAASAAoAAAABAAMAAAASAAoAAAACAAMAAAASAAoAAAADAAMAAAASAAoAAAAEAAMAAAASAAoAAAAFAAMAAAASAAoAAAAGAAMAAAASAAoAAAAHAAMAAAASAAoAAAAIAAMAAAASAAoAAAAJAAMAAAASAAoAAAAKAAMAAAASAAoAAAALAAMAAAASAAoAAAAMAAMAAAASAAoAAAANAAMAAAASAAoAAAAOAAMAAAASAAoAAAAPAAMAAAASAAoAAAAQAAMAAAASAAoAAAARAAMAAAASAAoAAAASAAMAAQAAAAAAAAATAAMAAQAAAAAAAAAUAAMAAQAAAAAAAAAVAAMAAAASAAoAAAAWAAMAAAASAAoAAAAXAAMAAAASAAoAAAAAAAQAAAASAAoAAAABAAQAAAASAAoAAAACAAQAAAASAAoAAAADAAQAAAASAAoAAAAEAAQAAAASAAoAAAAFAAQAAAASAAoAAAAGAAQAAAASAAoAAAAHAAQAAAASAAoAAAAIAAQAAAASAAoAAAAJAAQAAAASAAoAAAAKAAQAAAASAAoAAAALAAQAAAASAAoAAAAMAAQAAAASAAoAAAANAAQAAAASAAoAAAAOAAQAAAASAAoAAAAPAAQAAAASAAoAAAAQAAQAAAASAAoAAAARAAQAAAASAAoAAAASAAQAAQAAAAAAAAATAAQAAQAAAAAAAAAUAAQAAQAAAAAAAAAVAAQAAAASAAoAAAAWAAQAAAASAAoAAAAXAAQAAAASAAoAAAAAAAUAAAASAAoAAAABAAUAAAASAAoAAAACAAUAAAASAAoAAAADAAUAAAASAAoAAAAEAAUAAAASAAoAAAAFAAUAAAASAAoAAAAGAAUAAAASAAoAAAAHAAUAAAASAAoAAAAIAAUAAAASAAoAAAAJAAUAAAASAAoAAAAKAAUAAAASAAoAAAALAAUAAAASAAoAAAAMAAUAAAASAAoAAAANAAUAAAASAAoAAAAOAAUAAAASAAoAAAAPAAUAAAASAAoAAAAQAAUAAAASAAoAAAARAAUAAAASAAoAAAASAAUAAQAAAAAAAAATAAUAAQAAAAAAAAAUAAUAAQAAAAAAAAAVAAUAAAASAAoAAAAWAAUAAAASAAoAAAAXAAUAAAASAAoAAAAAAAYAAAASAAoAAAABAAYAAAASAAoAAAACAAYAAAASAAoAAAADAAYAAAASAAoAAAAEAAYAAAASAAoAAAAFAAYAAAASAAoAAAAGAAYAAAASAAoAAAAHAAYAAAASAAoAAAAIAAYAAAASAAoAAAAJAAYAAAASAAoAAAAKAAYAAAASAAoAAAALAAYAAAASAAoAAAAMAAYAAQAAAAAAAAANAAYAAQAAAAAAAAAOAAYAAQAAAAAAAAAPAAYAAAASAAoAAAAQAAYAAAASAAoAAAARAAYAAAASAAoAAAASAAYAAQAAAAAAAAATAAYAAQAAAAAAAAAUAAYAAQAAAAAAAAAVAAYAAAASAAoAAAAWAAYAAAASAAoAAAAXAAYAAAASAAoAAAAAAAcAAAASAAoAAAABAAcAAAASAAoAAAACAAcAAAASAAoAAAADAAcAAAASAAoAAAAEAAcAAAASAAoAAAAFAAcAAAASAAoAAAAGAAcAAAASAAoAAAAHAAcAAAASAAoAAAAIAAcAAAASAAoAAAAJAAcAAAASAAoAAAAKAAcAAAASAAoAAAALAAcAAAASAAoAAAAMAAcAAQAAAAAAAAANAAcAAQAAAAAAAAAOAAcAAQAAAAAAAAAPAAcAAAASAAoAAAAQAAcAAAASAAoAAAARAAcAAAASAAoAAAASAAcAAQAAAAAAAAATAAcAAQAAAAAAAAAUAAcAAQAAAAAAAAAVAAcAAAASAAoAAAAWAAcAAAASAAoAAAAXAAcAAAASAAoAAAAAAAgAAAASAAoAAAABAAgAAAASAAoAAAACAAgAAAASAAoAAAADAAgAAAASAAoAAAAEAAgAAAASAAoAAAAFAAgAAAASAAoAAAAGAAgAAAASAAoAAAAHAAgAAAASAAoAAAAIAAgAAAASAAoAAAAJAAgAAAASAAoAAAAKAAgAAAASAAoAAAALAAgAAAASAAoAAAAMAAgAAQAAAAAAAAANAAgAAQAAAAAAAAAOAAgAAQAAAAAAAAAPAAgAAAASAAoAAAAQAAgAAAASAAoAAAARAAgAAAASAAoAAAASAAgAAQAAAAAAAAATAAgAAQAAAAAAAAAUAAgAAQAAAAAAAAAVAAgAAAASAAoAAAAWAAgAAAASAAoAAAAXAAgAAAASAAoAAAAAAAkAAAASAAoAAAABAAkAAAASAAoAAAACAAkAAAASAAoAAAADAAkAAAASAAoAAAAEAAkAAAASAAoAAAAFAAkAAAASAAoAAAAGAAkAAAASAAoAAAAHAAkAAAASAAoAAAAIAAkAAAASAAoAAAAJAAkAAAASAAoAAAAKAAkAAAASAAoAAAALAAkAAAASAAoAAAAMAAkAAQAAAAAAAAANAAkAAQAAAAAAAAAOAAkAAQAAAAAAAAAPAAkAAAASAAoAAAAQAAkAAAASAAoAAAARAAkAAAASAAoAAAASAAkAAQAAAAAAAAATAAkAAQAAAAAAAAAUAAkAAQAAAAAAAAAVAAkAAAASAAoAAAAWAAkAAAASAAoAAAAXAAkAAAASAAoAAAAAAAoAAAASAAoAAAABAAoAAAASAAoAAAACAAoAAAASAAoAAAADAAoAAAASAAoAAAAEAAoAAAASAAoAAAAFAAoAAAASAAoAAAAGAAoAAQAAAAAAAAAHAAoAAQAAAAAAAAAIAAoAAQAAAAAAAAAJAAoAAAASAAoAAAAKAAoAAAASAAoAAAALAAoAAAASAAoAAAAMAAoAAQAAAAAAAAANAAoAAQAAAAAAAAAOAAoAAQAAAAAAAAAPAAoAAAASAAoAAAAQAAoAAAASAAoAAAARAAoAAAASAAoAAAASAAoAAQAAAAAAAAATAAoAAQAAAAAAAAAUAAoAAQAAAAAAAAAVAAoAAAASAAoAAAAWAAoAAAASAAoAAAAXAAoAAAASAAoAAAAAAAsAAAASAAoAAAABAAsAAAASAAoAAAACAAsAAAASAAoAAAADAAsAAAASAAoAAAAEAAsAAAASAAoAAAAFAAsAAAASAAoAAAAGAAsAAQAAAAAAAAAHAAsAAQAAAAAAAAAIAAsAAQAAAAAAAAAJAAsAAAASAAoAAAAKAAsAAAASAAoAAAALAAsAAAASAAoAAAAMAAsAAQAAAAAAAAANAAsAAQAAAAAAAAAOAAsAAQAAAAAAAAAPAAsAAAASAAoAAAAQAAsAAAASAAoAAAARAAsAAAASAAoAAAASAAsAAQAAAAAAAAATAAsAAQAAAAAAAAAUAAsAAQAAAAAAAAAVAAsAAAASAAoAAAAWAAsAAAASAAoAAAAXAAsAAAASAAoAAAAAAAwAAAASAAoAAAABAAwAAAAKAAYAAAACAAwAAAAKAAYAAAADAAwAAAAKAAYAAAAEAAwAAAAKAAYAAAAFAAwAAAAKAAYAAAAGAAwAAQAAAAAAAAAHAAwAAQAAAAAAAAAIAAwAAQAAAAAAAAAJAAwAAAAKAAYAAAAKAAwAAAAKAAYAAAALAAwAAAAKAAYAAAAMAAwAAQAAAAAAAAANAAwAAQAAAAAAAAAOAAwAAQAAAAAAAAAPAAwAAAAKAAYAAAAQAAwAAAAKAAYAAAARAAwAAAAKAAYAAAASAAwAAQAAAAAAAAATAAwAAQAAAAAAAAAUAAwAAQAAAAAAAAAVAAwAAAAKAAYAAAAWAAwAAAAKAAYAAAAXAAwAAAASAAoAAAAAAA0AAAASAAoAAAABAA0AAAAKAAYAAAACAA0AAAAKAAYAAAADAA0AAAAKAAYAAAAEAA0AAAAKAAYAAAAFAA0AAAAKAAYAAAAGAA0AAQAAAAAAAAAHAA0AAQAAAAAAAAAIAA0AAQAAAAAAAAAJAA0AAAAKAAYAAAAKAA0AAAAKAAYAAAALAA0AAAAKAAYAAAAMAA0AAQAAAAAAAAANAA0AAQAAAAAAAAAOAA0AAQAAAAAAAAAPAA0AAAAKAAYAAAAQAA0AAAAKAAYAAAARAA0AAAAKAAYAAAASAA0AAQAAAAAAAAATAA0AAQAAAAAAAAAUAA0AAQAAAAAAAAAVAA0AAAAKAAYAAAAWAA0AAAAKAAYAAAAXAA0AAAASAAoAAAAAAA4AAAASAAoAAAABAA4AAAAKAAYAAAACAA4AAAAKAAYAAAADAA4AAAAKAAYAAAAEAA4AAAAKAAYAAAAFAA4AAAAKAAYAAAAGAA4AAQAAAAAAAAAHAA4AAQAAAAAAAAAIAA4AAQAAAAAAAAAJAA4AAAAKAAYAAAAKAA4AAAAKAAYAAAALAA4AAAAKAAYAAAAMAA4AAQAAAAAAAAANAA4AAQAAAAAAAAAOAA4AAQAAAAAAAAAPAA4AAAAKAAYAAAAQAA4AAAAKAAYAAAARAA4AAAAKAAYAAAASAA4AAQAAAAAAAAATAA4AAQAAAAAAAAAUAA4AAQAAAAAAAAAVAA4AAAAKAAYAAAAWAA4AAAAKAAYAAAAXAA4AAAASAAoAAAAAAA8AAAASAAoAAAABAA8AAAASAAoAAAACAA8AAAASAAoAAAADAA8AAAASAAoAAAAEAA8AAAASAAoAAAAFAA8AAAASAAoAAAAGAA8AAAASAAoAAAAHAA8AAAASAAoAAAAIAA8AAAASAAoAAAAJAA8AAAASAAoAAAAKAA8AAAASAAoAAAALAA8AAAASAAoAAAAMAA8AAAASAAoAAAANAA8AAAASAAoAAAAOAA8AAAASAAoAAAAPAA8AAAASAAoAAAAQAA8AAAASAAoAAAARAA8AAAASAAoAAAASAA8AAAASAAoAAAATAA8AAAASAAoAAAAUAA8AAAASAAoAAAAVAA8AAAASAAoAAAAWAA8AAAASAAoAAAAXAA8AAAASAAoAAAA=")
+terrain_states = {
+Vector2i(6, 10): Array[int]([1]),
+Vector2i(7, 10): Array[int]([1]),
+Vector2i(8, 10): Array[int]([1]),
+Vector2i(12, 6): Array[int]([1]),
+Vector2i(13, 6): Array[int]([1]),
+Vector2i(14, 6): Array[int]([1]),
+Vector2i(18, 1): Array[int]([1]),
+Vector2i(19, 1): Array[int]([1]),
+Vector2i(20, 1): Array[int]([1])
+}
+zones = {
+"The Far Gate": {
+"cells": Array[Vector2i]([Vector2i(21, 12), Vector2i(22, 12), Vector2i(21, 13), Vector2i(22, 13), Vector2i(21, 14), Vector2i(22, 14)]),
+"kind": 2
+},
+"The Second Yard": {
+"cells": Array[Vector2i]([Vector2i(12, 12), Vector2i(13, 12), Vector2i(14, 12), Vector2i(12, 13), Vector2i(13, 13), Vector2i(14, 13), Vector2i(12, 14), Vector2i(13, 14), Vector2i(14, 14)]),
+"kind": 0
+}
+}
+objectives = Array[int]([2])
+lose_conditions = Array[int]([2, 4])
+round_limit = 14
+look_preset = "Forest Fire"
+weather = 18
+atmosphere = Dictionary[String, int]({
+"atom_fire": 30
+})
+ai_factions = Array[int]([1])

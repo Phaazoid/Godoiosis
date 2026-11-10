@@ -51,6 +51,16 @@ Each entry says which map wanted it, what it would have done there, and what the
   costs a turn a stone. A carving that drew from one thunderstone and struck from the next would
   make a field of stones a network instead of a path.
 
+- **A time mark whose shape can be turned** (Cinder Row). Stillness and Quickening cover the two
+  rows north of the aimed tile, three wide, whichever way the caster faces. Every yard on Cinder Row
+  is north of the street for that reason. A circle around the aimed tile, or a shape that turns
+  with the cast, would let a fire be held from any side.
+- **Stillness that lasts as long as the caster stands there** (Cinder Row). Two rounds, then recast.
+  A held fire that stays held while Isaac spends his action on it each turn is the same cost and a
+  clearer picture: he is the one holding it.
+- **Time marks on something other than heat** (Cinder Row). `Still(X)` parses for any substance and
+  only the heat ones ship. Smoke, steam, a soaked or chilled body, a downed unit's clock.
+
 ## Terrain and tiles
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds
@@ -90,6 +100,14 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **A clock the player can buy time on** (Chaff). The round limit is a flat number. A limit that
   slipped by a round for each enemy leader killed, or stopped while a zone was held, would let a
   map reward the fight it stages instead of only taxing it.
+
+- **A third side that fights both** (the planned Three Banners). `Team.is_enemy` makes PLAYER and
+  ALLY hostile to ENEMY and nothing else; NEUTRAL and OTHER fight nobody. A three-way battle where
+  the player turns two enemy groups' fire and gas on each other cannot be built. The turn cycle
+  already supports the extra faction; only the hostility table is missing.
+- **An objective for the escort to do something at the end** (Cinder Row). The Chandler walks to a
+  zone. A unit that must reach a tile and spend an action there (light a beacon, open a gate) would
+  give the last round a beat.
 
 ## AI
 

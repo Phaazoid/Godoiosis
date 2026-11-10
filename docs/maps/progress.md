@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 5: testing the time carvings (Stillness, Quickening) in a sandbox before designing Cinder Row |
+| Map in hand | 6, a vertical board: testing shoves, ledges and holes in a sandbox first |
 
 ## What the first map taught (read before designing the next)
 
@@ -77,3 +77,7 @@
 - 2026-11-10: map 4, The Glass Walk, done on its first layout. Committed.
 - Factions: `Team.is_enemy` makes PLAYER and ALLY hostile to ENEMY only. NEUTRAL and OTHER fight
   nobody, so a three-way battle cannot be built today. An AI-run ALLY squad can.
+- 2026-11-10: map 5, Cinder Row, done after two layouts and two runs. Committed.
+- Time marks cover the two rows NORTH of the aimed tile, three wide, never turned. Fire moves one
+  row a round; a held fire spreads nothing; a quickened one moves two rows and burns out in half
+  the time. A unit burns only if it ENDS its turn on a burning tile.
