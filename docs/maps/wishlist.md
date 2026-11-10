@@ -33,6 +33,18 @@ Each entry says which map wanted it, what it would have done there, and what the
   A carving or hazard that actually cuts a marching squad in two would be the tool the encounter
   notes describe: a raised wall across the middle of the formation is the obvious one.
 
+- **A fire carving with more than two tiles of reach** (Meltwater). Every fire in the game reaches
+  two tiles (two and a half on the diagonal). So "the enemy melts the ice under you" only works
+  when he stands almost on top of the ice, and the player can only melt what is two tiles from
+  shore. A lobbed fire at range 3 or 4, for one side or both, would let a lake be wider than a
+  moat. The map keeps everything within two tiles of a bank.
+- **Ice that weakens before it breaks** (Meltwater). Fire on ice is all or nothing: one hit, open
+  water, a drowned unit. A cracked state (one more hit breaks it, or it breaks at the round's end)
+  would give the victim a turn to move and the preview something to warn about.
+- **Heat that melts ice at a distance** (Meltwater). A burning tile or a heat haze beside ice does
+  nothing to it. If standing heat thawed adjacent ice at the round tick, a fire on the bank would
+  be a slow fuse, and Stillness and Quickening would have a second use.
+
 ## Terrain and tiles
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds
@@ -49,6 +61,10 @@ Each entry says which map wanted it, what it would have done there, and what the
   or brush wall that becomes walkable scorched ground would let fire cut a route as well as close
   one. The first sketch of Chaff had fenced fields the player burned through; the shipped board has
   open floor.
+
+- **Ice that shows what is under it** (Meltwater). Ice over a ford and ice over a lake are the same
+  to the Play API's board and, as far as I can tell without having looked, to the tile's art. A
+  map about which ice is safe needs the player to be able to see the difference.
 
 ## Units, gear and enemies
 

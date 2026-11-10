@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 3, Meltwater: spec drafted, not yet built |
+| Map in hand | 4, The Glass Walk: spec drafted, not yet built |
 
 ## What the first map taught (read before designing the next)
 
@@ -70,3 +70,4 @@
 - 2026-11-09: scaffolding, builder proven on a throwaway board (not committed).
 - 2026-11-10: map 1, The Lime Kiln, done after five layouts. Committed.
 - 2026-11-10: map 2, Chaff, done after four layouts and five runs. Committed.
+- 2026-11-10: map 3, Meltwater, done after two layouts and three runs. Committed.

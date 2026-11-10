@@ -99,6 +99,38 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Where:** Chaff. Wren swapped rune for Carbine, fired, and swapped back, all in one turn, every
   turn. If that is intended it makes every unit with two tools a unit with both at once.
 
+### S9. A downed unit lying on ice dies when the tile is melted, and nothing warns of it
+
+- **Where:** Meltwater, run 1. Isaac was downed on a frozen tile. The Kindler's next Fireball
+  melted it. The log read "d hits E for 8 (DIES)".
+- **Why it is here:** it follows from the rules (a downed body holds 1 HP, and the water takes
+  what is left), and it is the cruellest thing the board does. The player's own bridge is where
+  their wounded end up lying.
+
+### S10. A unit that cannot be spawned on a tile can still be saved standing on it
+
+- **Where:** building Meltwater. `game.spawn_unit` refused Pike on deep water, because he is a
+  plain body until his Water Walker job is applied. Spawning with `terrain_later` and then giving
+  him the job works, Check board is clean, and the saved board loads with him on the water.
+- **Why it is here:** the dev tools' own spawn would refuse the same placement, so a water-walker
+  cannot be authored onto water by hand without first placing him ashore, giving him the job and
+  then moving him. I did not try the Unit Editor's own route.
+
+### S11. Sentries leave their zone to rescue, and one joined another squad doing it
+
+- **Where:** Meltwater. The Kindler is a Sentry whose zone is the island. He walked onto the ice
+  twice to haul sunk Fishers out, and after the first rescue his line read as a member of the
+  Sergeant's squad.
+- **Why it is here:** it made the fight better. It also means "a Sentry never leaves its zone" is
+  not quite true, and a designer relying on it for safety will be surprised.
+
+### S12. A Springspear cannot Stab until it is loaded
+
+- **Where:** Meltwater and The Lime Kiln. After a Spring, the plain Stab is refused too ("Spent —
+  needs Spring Load"). The unit has no attack at all until it spends a turn reloading.
+- **Why it is here:** the weapon's card says so, but the ring greys both rows at the moment the
+  player most expects the basic attack to still be there.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the
