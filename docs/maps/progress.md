@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 8, Stormgate (a defended gate in a thunderstorm, AI-run ALLY militia): spec drafted as `Stormgate.json` in the scratch folder, not built |
+| Map in hand | 9, not started. Next from the ledger: The Drowned Orchard (drawn weather) or Earthworks (unbuilt raised earth) |
 
 ## What the first map taught (read before designing the next)
 
@@ -99,3 +99,13 @@
 - A vein is a source for whoever stands on or beside it. A caster shoved two tiles off it fizzles.
 - A Guard takes a line or area hit meant for its ward; Zap pierces it. A Fireburst reaches three tiles.
 - Under an Aurora a Freeze drew two extra from the air.
+- 2026-11-10: map 8, Stormgate, done after two layouts and four runs (three lost). Committed.
+- Under a Thunderstorm every unit is Wet from round 1, so every shock chains through touching
+  bodies of either side. The enemy's Zap Cannon (15 at five tiles) hits its own squad. Freeze on a
+  Wet body does 14 and leaves it Chilled, which is not Wet and does not conduct.
+- A defended point is lost the moment an enemy ends a move on it, and a downed body does NOT block
+  the tile behind it: units walk through. Keep a unit ON every defended tile.
+- An AI-run ALLY squad works through `ai_factions`. It fights well and its own area attacks hit
+  player units in the line.
+- The Play API's rescue is `{"cmd":"rescue","args":{"unit":"D","target":"H"}}`; load takes
+  `{"path":"res://Scenarios/missions/X.tres"}`.

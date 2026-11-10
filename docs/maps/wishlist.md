@@ -76,7 +76,17 @@ Each entry says which map wanted it, what it would have done there, and what the
   one cast and then sat behind the lines. A vein that slowly charged a tile, or that a unit could
   tap for a vial's worth once, would be worth holding.
 
+- **A carving that dries a body** (Stormgate). In a storm everyone is a conductor. Chilled takes
+  Wet off as a side effect of a 14-point hit. A cast that dries three of your own units would be
+  the direct answer to the weather, and the reason to bring a fire or air caster to a rain map.
+- **A Zap the caster can shape** (Stormgate). Dorian never cast: every target had an ally in the
+  chain. A Zap that stops at the first body, or one that skips bodies the caster names, would let
+  the board's own carrier do something in the map built around it.
+
 ## Terrain and tiles
+
+- **A tile that breaks a chain** (Stormgate). Duckboards, a rubber mat, a roof: one tile where a
+  Wet body does not conduct. It would give "where do I stand" an answer other than "alone".
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds
   are grass, tall grass and trees, which burn, and mud, which costs 2 to cross. There is no
@@ -137,6 +147,13 @@ Each entry says which map wanted it, what it would have done there, and what the
   again.
 - **A downed unit that does not hold a capture tile** (The Lodes). A keeper's body blocks his tile
   for three rounds after he falls. Twice the mission waited on a bleed-out.
+
+- **A defended point that is lost at the end of a round, not on the step** (Stormgate). An enemy
+  that ends one move on the gate ends the mission, even with every other enemy down. "Lost if an
+  enemy holds it at the round's end" would give the player one turn to throw him off it.
+- **Allies the player can speak to** (Stormgate). The militia are AI-run and cannot be told to
+  step out of a line or out of a puddle. One order a turn to an allied squad (hold, fall back,
+  spread out) would make them part of the plan instead of part of the board.
 
 ## AI
 

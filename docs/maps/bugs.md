@@ -174,6 +174,43 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Why it is here:** it is the rule and it previews correctly. It also means an area or line
   attack cannot be used to reach past a Guard, which I had assumed it could.
 
+### S18. A counter with Zap Cannon chains through everyone touching the attacker
+
+- **Where:** Stormgate, run 1. Isaac cast Freeze beside a Storm Caller, in the rain, with two
+  allies next to him. The Caller's answer was a Zap Cannon: 15 to Isaac and 15 to each of the two.
+- **Why it is here:** the preview shows it under REACTION and I had not looked. A reaction that
+  does 45 damage to three units is the largest single event I saw in eight maps, and it is an
+  answer, not an order.
+
+### S19. A downed body does not block the tile it lies on from being walked through
+
+- **Where:** Stormgate, run 3. A downed Bulwark lay on the only tile in front of a gate tile. A
+  Cutter walked through it onto the gate and the mission was lost.
+- **Why it is here:** a downed body does block a *capture* (The Lodes) and does block a unit from
+  *stopping* there, so I had assumed it blocked the way. It does not. Nothing on the body says so.
+
+### S20. An enemy caster's shock hits its own squad, and can end on the caster
+
+- **Where:** Stormgate. On round 3 of run 4 a Storm Caller's Zap Cannon hit its target, its own
+  Captain for 15 and its own Bulwark for 10. In the AI-driven baseline the last Storm Caller's
+  cast chained back to himself for 15 and downed him, which ended the mission as a victory.
+- **Why it is here:** the rules are doing what they say. But a Hard-band caster that removes a
+  third of its own squad's health in one cast is not weighing its own side, and one that downs
+  itself is a strange way to lose. The score "never fells its own side" (the AI note says so);
+  it seems not to count the caster.
+
+### S21. An allied AI unit's line attack goes through the player's units
+
+- **Where:** Stormgate. A militia Springspear aimed at a Bulwark took 10 off Isaac, who stood in
+  the line. The same rule as S20, from the other side.
+
+### S22. The same plan, replayed, met a different wave
+
+- **Where:** Stormgate, runs 3 and 4. The same first two rounds, with the units ending on slightly
+  different tiles, and the Drowned Company reached the militia on round 3 instead of round 4.
+- **Why it is here:** nothing is random, so this is the AI reading the board. It does mean a
+  player cannot learn "they arrive on round 4" from one attempt.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the
