@@ -9,7 +9,6 @@ is false on every board). The boards are playable through Mission Select in a de
 | File | What it is |
 |---|---|
 | [`START-HERE.md`](START-HERE.md) | One page: the twelve boards, what to play first, the likely bugs, the recurring wishes. |
-|---|---|
 | [`ledger.md`](ledger.md) | The variety ledger: every map planned and built, and the axes each one covers, so no two repeat. |
 | [`progress.md`](progress.md) | Where the run stands. A resumed session reads this first. |
 | [`wishlist.md`](wishlist.md) | Content and rules a map wanted that do not exist. Ideas for future work, not requests. |
