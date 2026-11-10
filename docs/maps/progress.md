@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 10, not started. Next from the ledger: Earthworks (unbuilt raised earth) or The Long Dark (huge) |
+| Map in hand | 11, not started. Ideas: The Long Dark (huge, the exam), a map on the air itself (essence, frost, heat haze moving Heal and Freeze), a Chemical Spitter and gypsum map |
 
 ## What the first map taught (read before designing the next)
 
@@ -121,3 +121,15 @@
 - Fire melts ice under a unit (it drowns, and a second hit kills). A Sentry squad comes out through
   its own fire to attack a unit that walks into reach. Steam downs a rescued unit again.
 - Trees block a carbine's line.
+- 2026-11-10: map 10, The Saps, done on its first layout in one run. Committed.
+- Corridors work. A Rushdown squad of five came down ONE column of a two-wide trench, so a pocket at
+  the trench mouth meets them one at a time. A Spring or a Freeze up the file hits two or three.
+- Company: Aldin, Aster, Bram, Celest (Rock Throw: any rock or cut-stone tile is a source), Dorian,
+  Isaac, Noemie, Rebecca, Ross. Stash: Bulwark Plate, Riveted Mail, Ballast Harness, Fire and
+  Electric runes, a diamond, "woosh" (Gust), the Gun (equip it: Super Gun, 13 at 1 to 10 tiles,
+  needs a clear line), seven vials, Asbestos Shroud. `wear` puts armour on; `reload` loads a spear.
+- Extract waits for the downed too: they must be rescued and walked out. A unit with a leg off
+  moves two tiles a round.
+- A scratch notes file now holds a rules crib from a research probe (gases, tile states, air,
+  vials, the Spitter). The short version: only steam and smoke do anything to a unit; the other
+  gases only move the air; quicksilver, gypsum and brick have no effect of their own.
