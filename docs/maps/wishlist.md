@@ -45,6 +45,12 @@ Each entry says which map wanted it, what it would have done there, and what the
   nothing to it. If standing heat thawed adjacent ice at the round tick, a fire on the bank would
   be a slow fuse, and Stillness and Quickening would have a second use.
 
+- **Thunderstone that carries a current** (The Glass Walk). Fused sand is a source for an Extract
+  and nothing more. As a conductor, a line of it would be a fuse the player lays across a floor.
+- **A Zap that can be aimed at a stone to jump from it** (The Glass Walk). The stepping-stone walk
+  costs a turn a stone. A carving that drew from one thunderstone and struck from the next would
+  make a field of stones a network instead of a path.
+
 ## Terrain and tiles
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds

@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 4, The Glass Walk: spec drafted, not yet built |
+| Map in hand | 5: testing the time carvings (Stillness, Quickening) in a sandbox before designing Cinder Row |
 
 ## What the first map taught (read before designing the next)
 
@@ -74,3 +74,6 @@
 - 2026-11-10: Meltwater fixed after its first commit failed `test_every_mission_can_be_won_on_foot`
   (an enemy on open water nobody can walk up to). **Read the suite output before committing; do not
   chain the commit after the check.** Every enemy must start beside a tile a unit can walk to.
+- 2026-11-10: map 4, The Glass Walk, done on its first layout. Committed.
+- Factions: `Team.is_enemy` makes PLAYER and ALLY hostile to ENEMY only. NEUTRAL and OTHER fight
+  nobody, so a three-way battle cannot be built today. An AI-run ALLY squad can.
