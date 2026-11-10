@@ -71,3 +71,6 @@
 - 2026-11-10: map 1, The Lime Kiln, done after five layouts. Committed.
 - 2026-11-10: map 2, Chaff, done after four layouts and five runs. Committed.
 - 2026-11-10: map 3, Meltwater, done after two layouts and three runs. Committed.
+- 2026-11-10: Meltwater fixed after its first commit failed `test_every_mission_can_be_won_on_foot`
+  (an enemy on open water nobody can walk up to). **Read the suite output before committing; do not
+  chain the commit after the check.** Every enemy must start beside a tile a unit can walk to.

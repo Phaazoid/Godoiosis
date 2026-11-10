@@ -399,7 +399,7 @@ starting_inventory = Array[ExtResource("5_tk78s")]([ExtResource("16_tr0x4")])
 [sub_resource type="Resource" id="Resource_xmvfq"]
 script = ExtResource("4_saa8b")
 unit_data = SubResource("Resource_ni8ot")
-cell = Vector2i(6, 9)
+cell = Vector2i(7, 10)
 squad_id = 2
 is_leader = true
 squad_archetype = 3

@@ -25,8 +25,8 @@ walks on water patrols the lake.
  6   a W W W W W W W a L K a a a W W W W a a a a     K  Shrine Kindler
  7   a W W W W W W W W W m _ W W W W W W a a a a     S  Ice Sergeant   F  Ice Fisher
  8   a W W W W W W W W F _ S _ W W W W W a a a a     m  Ice Fisher with a Carbine
- 9   a W W W W W P W W _ _ _ F W W W W W a a a a     P  Pike (walks on water)
-10   a W W W W W W W W W _ _ W W W W W W a a a a     h  Shore Hand
+ 9   a W W W W W W W W _ _ _ F W W W W W a a a a     P  Pike (walks on water)
+10   a W W W W W W P W W _ _ W W W W W W a a a a     h  Shore Hand
 11   a a s s s s s s L s s s s s s s s s s s a a
 12   a a s h s s s s s s s s s s s s s h s s a a
 13   a a a a a a a a D D D D D D a a a a a a a a     D  deployment (South Shore)
@@ -89,6 +89,11 @@ Two Easy thugs, 14 HP, who arrive at the deployment on round 2.
 - Check board: no BLOCKS and no DEGRADES.
 - The twelve suite files that read every mission were run one file at a time with this board on
   disk, and all pass (114 cases).
+- **A correction.** The first commit of this board failed one of those suites and I committed it
+  anyway by mistake: `law/test_every_mission_can_be_won_on_foot` requires every enemy to be
+  reachable on foot, and Pike began on open water with no shore beside him. He now begins at
+  (7,10), one tile off the south shore. That suite, the board lint suite, the load-integrity suite
+  and the tile round-trip suite were rerun on the fixed board and pass.
 - **Not checked:** the board has never been opened in the windowed game. Whether ice over deep
   water and plain ice can be told apart by eye, and whether Light Snow reads, are unknown.
 
@@ -99,7 +104,8 @@ Two Easy thugs, 14 HP, who arrive at the deployment on round 2.
 | 1 | first draft: three Fishers bunched on the platform, Pike far west, a six-tile ford | one Fireburst from the shore lantern sank two Fishers on round 1; sank the Sergeant and the Kindler in turn; froze a bridge | **Victory, round 13,** Isaac dead (see the Kindler's card). Every enemy was at 1 HP by round 3: too easy up front, and eight turns of walking the ford at the end |
 | 2 | **this board:** four Fishers spread out, one with a Carbine; Pike nearer; a four-tile ford | sank Fishers one at a time and stood at the causeway's foot | abandoned on round 3: the Sergeant came ashore, Celest walked into the Overwatch lane and went down, Isaac died |
 | 3 | this board | melted the causeway's shore end on round 1; killed Pike through the water on round 2; walked round; took the Kindler at the ford | **Victory, round 9,** no deaths |
-| blunt | this board, player side on the AI (Torv, Marco, Sara, Bram, Isaac) | | **Defeat.** Pike downed three of them. It killed Pike, both Shore Hands and one Fisher |
+| fix | this board, Pike moved from (6,9) to (7,10) | one enemy turn only | Pike now opens by setting an Overwatch down the shore at column 7 instead of crossing to shoot. **The full runs above were played with him at (6,9).** I did not replay them |
+| blunt | this board with Pike at (6,9), player side on the AI (Torv, Marco, Sara, Bram, Isaac) | | **Defeat.** Pike downed three of them. It killed Pike, both Shore Hands and one Fisher |
 
 ## What I am unsure of
 
