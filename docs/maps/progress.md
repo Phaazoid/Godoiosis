@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 7, a large board on materia veins: sandbox first |
+| Map in hand | 7, The Lodes (large, veins, Aurora, Capture three sites): built and three rounds played, NOT finished, NOT committed. Its spec is `Lodes.json` in the scratch folder; rebuild it from there |
 
 ## What the first map taught (read before designing the next)
 
@@ -88,3 +88,8 @@
 - The Company roster's "Gun" has range 10 and beats any board of posted enemies. Prefer Warband or
   Basics, or give posted enemies a reason not to stand in the open.
 - A fall does only 2 a level. A unit on a ramp may have no line to a target a level above the ramp's top.
+- 2026-11-10: the run stopped here on the usage limit, six maps committed. The Lodes was mid-playtest:
+  veins work as sources (a caster beside one needs no rock or diamond), a caster shoved off his vein
+  fizzles and does nothing, and the alkahest vein gave Fireburst. Three rounds in, the centre site was
+  nearly taken with no losses and the Rushdown squad was one turn from contact. Nothing about its
+  difficulty is known yet. Its board file was deleted from the worktree so no half-tested board is on disk.
