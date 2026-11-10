@@ -12,8 +12,9 @@ unarmoured, and he walks straight at the enemy from round 1. Between him and the
 meadow of tall grass, and behind the line is a fire caster.
 
 The board has no clock because he is the clock. Left alone he fights both Outriders, reaches the
-pikes on round 4, and is burned and stabbed to death on round 5. Helped past the Outriders he gets there a round sooner. The player has four turns to make that not
-happen, and cannot make it not happen by telling him to stop.
+pikes on round 4, and is burned and stabbed to death on round 5. Helped past the Outriders he gets
+there a round sooner. The player has four turns to make that not happen, and cannot make it not
+happen by telling him to stop.
 
 ## The map
 
