@@ -161,3 +161,9 @@
 - Enemy jobs work from the builder: `"jobs":["scout"]` (Iron Will: no hit over 6), `["berserker"]`
   (Crisis: stands back up on 5 HP, +5 STR/DEX/PER for 3 turns; it fired when he drowned),
   `["tank"]` (Brace: about 3 more off weapon hits). The Play API's unit line does not show them.
+- 2026-11-10: Stormgate with one Storm Caller was tested against the baseline and rejected (the AI
+  wins it on round 7). The committed board is unchanged and its note has the row.
+- **Where the run stands:** thirteen boards committed and pushed on `content/night-maps`, draft PR
+  1651. I stopped adding boards here on purpose: every Deep Alchemy rule that changes a fight is on
+  at least one board, and a fourteenth would repeat a spine. What is left to try needs something
+  built first (see `START-HERE.md`, the wish-list themes). Nothing is half-built on disk.

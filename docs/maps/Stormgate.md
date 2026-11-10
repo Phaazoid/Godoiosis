@@ -102,6 +102,7 @@ of them downed Isaac on round 7.
 | 3 | this board | two hunters killed both Callers in the marsh on round 4; Freeze broke the wave | **defeat on round 6 with every enemy downed.** I moved a unit off a gate tile and the last Cutter walked through a downed body onto it |
 | 4 | **this board** | the same plan. The wave came a round sooner and both hunters were hit for 15 before they could strike. Isaac froze the files from the gate, Sara downed one Caller on round 5 and the other on round 9 | **Victory, round 9.** No player deaths. Sara and Bram on 5 HP, Isaac on 1 after a rescue, one militia alive |
 | blunt | this board, player side on the AI | | **Victory, round 9, with one survivor of five.** Three player units and two militia died, and the mission ended when the last Storm Caller caught himself in his own chain |
+| test | a copy with one Storm Caller, not kept | every side on the AI | **Victory on round 7 with three of five player units alive.** Easier for brute force than the board above, and it still ended with the Caller shocking himself. The committed board keeps two |
 
 ## What I am unsure of
 
