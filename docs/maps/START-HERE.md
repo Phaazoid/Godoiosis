@@ -1,9 +1,9 @@
 # Start here
 
-**CLAUDE-AUTHORED, unreviewed.** A one-page way into this folder, written after the twelfth board.
+**CLAUDE-AUTHORED, unreviewed.** A one-page way into this folder, written after the twelfth board and updated for the thirteenth.
 Everything below is my read of my own work; none of it has been seen in the windowed game.
 
-## The twelve boards
+## The thirteen boards
 
 | Board | Size | Win | In one line | How sure I am |
 |---|---|---|---|---|
@@ -19,6 +19,7 @@ Everything below is my read of my own work; none of it has been seen in the wind
 | [The Saps](TheSaps.md) | 14 x 14 | Capture then Extract, 14 rounds | trenches decide how many can reach you | good, on one run |
 | [The Long Dark](TheLongDark.md) | 38 x 24 | Extract, 26 rounds | two roads, two set pieces on each | fair; long walks |
 | [The Marshal's Charge](TheMarshalsCharge.md) | 18 x 12 | Rout, an allied VIP must live | an escort you cannot steer | fair, on one run |
+| [The Champions' Yard](TheChampionsYard.md) | 13 x 9 | Rout, 12 rounds | three solos built on enemy jobs: Iron Will, Crisis, Brace | fair, on one run; three duels more than one map |
 
 **If you play three,** play The Saps (shortest way to see what corridors do), Meltwater (the ice
 does everything the note says) and The Marshal's Charge (five rounds, and you will know at once

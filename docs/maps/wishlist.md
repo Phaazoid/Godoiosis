@@ -123,6 +123,12 @@ Each entry says which map wanted it, what it would have done there, and what the
   A catalogue of enemy archetypes (bulwark, marksman, kindler, mender) would keep them consistent
   across boards.
 
+- **A way to see an enemy's job before the first blow** (The Champions' Yard). Iron Will, Crisis
+  and Brace each changed a fight completely and none of them is on the line the Play API prints
+  for a unit. If the info card shows them, good; if not, each is an ambush.
+- **A carving that sets a body alight** (The Champions' Yard). Iron Will caps a hit at 6; a burn
+  that ticks is the answer that is not a hit. Today only a tile burns, and only fuel tiles.
+
 ## Objectives and mission rules
 
 - **Extract that lets a wounded unit be left for a cost** (Chaff). Every living unit must be in the

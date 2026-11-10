@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 13, not started. Twelve boards are committed |
+| Map in hand | 14, not started. Thirteen boards are committed |
 
 ## What the first map taught (read before designing the next)
 
@@ -155,3 +155,9 @@
   one already down.
 - The AI walks through fire to attack. A Fire Wall rune (line of 3 burning tiles, 2 turns) does not
   stop a squad.
+- 2026-11-10: a redesign of The Drowned Orchard (Pressmen at the ford) was tested and rejected; the
+  committed board is unchanged and its note has the row.
+- 2026-11-10: map 13, The Champions' Yard, done on its first layout in one run. Committed.
+- Enemy jobs work from the builder: `"jobs":["scout"]` (Iron Will: no hit over 6), `["berserker"]`
+  (Crisis: stands back up on 5 HP, +5 STR/DEX/PER for 3 turns; it fired when he drowned),
+  `["tank"]` (Brace: about 3 more off weapon hits). The Play API's unit line does not show them.

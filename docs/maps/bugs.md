@@ -310,6 +310,14 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Why it is here:** it is what "built from Torv" means, and it cost a draft to notice. The
   builder's stat overrides do not touch limbs.
 
+### S34. Crisis fired on a drowning, and left a non-swimmer standing in deep water
+
+- **Where:** The Champions' Yard. A Fireball melted the ice under a berserker. The preview read
+  "goes under at (10, 4): 14 dmg (14 -> 5) CRISIS [+Wet, drowns]". He was then on the board at
+  5 HP, surged, on a deep-water tile, and could be stabbed from the next tile.
+- **Not checked:** what he would have done on his own turn, or whether he would have gone under
+  again at the end of it. I killed him first.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the
