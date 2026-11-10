@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 6, a vertical board: testing shoves, ledges and holes in a sandbox first |
+| Map in hand | 7, a large board on materia veins: sandbox first |
 
 ## What the first map taught (read before designing the next)
 
@@ -81,3 +81,10 @@
 - Time marks cover the two rows NORTH of the aimed tile, three wide, never turned. Fire moves one
   row a round; a held fire spreads nothing; a quickened one moves two rows and burns out in half
   the time. A unit burns only if it ENDS its turn on a burning tile.
+- 2026-11-10: map 6, The Salt Stair, done after two layouts. Committed.
+- A shove ending on a hole KILLS (no downed state); into deep water it downs. A Hard unit with Gust
+  looks for both. A counter-shove can kill the attacker. A unit with a blocker behind it on the
+  shove's line does not move. A unit in a Ballast Harness (weight band 2) does not move either.
+- The Company roster's "Gun" has range 10 and beats any board of posted enemies. Prefer Warband or
+  Basics, or give posted enemies a reason not to stand in the open.
+- A fall does only 2 a level. A unit on a ramp may have no line to a target a level above the ramp's top.

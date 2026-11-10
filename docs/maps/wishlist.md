@@ -61,6 +61,15 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **Time marks on something other than heat** (Cinder Row). `Still(X)` parses for any substance and
   only the heat ones ship. Smoke, steam, a soaked or chilled body, a downed unit's clock.
 
+- **Raised earth: a wall for a round or two** (The Salt Stair, and the dev's own example). Behind
+  your own unit it is a backstop against a shove. Across a squad it cuts the cohesion path. Under a
+  ledge it is a step. The Salt Stair has two fixed rocks doing the first job; the note says where
+  the carving would replace them.
+- **A pull** (The Salt Stair). Push and Pull are both verbs, and only Push ships (Gust). A carving
+  that drags a unit two tiles toward the caster would let the player haul a Warden off his ledge
+  from the side, and would give the enemy a way to drag a unit onto the spine.
+- **Wind as a rule** (The Salt Stair, Chaff). A tile added to shoves and gas going downwind.
+
 ## Terrain and tiles
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds
@@ -81,6 +90,12 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **Ice that shows what is under it** (Meltwater). Ice over a ford and ice over a lake are the same
   to the Play API's board and, as far as I can tell without having looked, to the tile's art. A
   map about which ice is safe needs the player to be able to see the difference.
+
+- **A ledge a unit can be shoved off and survive** (The Salt Stair). A fall does 2 a level and a
+  hole kills. There is nothing between: a drop into a pit the unit must climb out of, or a ledge
+  with a long fall that downs. The board had to choose between a tickle and a death.
+- **A rail or parapet tile** (The Salt Stair). Something that stops a shove and can be walked past
+  on the other axis, so a safe tile is a place on a path and not a dead end beside a rock.
 
 ## Units, gear and enemies
 

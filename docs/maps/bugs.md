@@ -131,6 +131,34 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Why it is here:** the weapon's card says so, but the ring greys both rows at the moment the
   player most expects the basic attack to still be there.
 
+### S13. The scoped Gun out-ranges every Sentry and Hold unit in the game
+
+- **Where:** the first draft of The Salt Stair, Company roster. The stash's "Gun" (a Carbine with
+  the Super Scope) fires Super Gun: power 9, range 1 to 10. Aster did 13 a shot with it.
+- **What happened:** from the deployment zone she could already target both Galewrights. Two shots
+  each killed them. From the upper spine four shots killed the Captain. None of them moved, because
+  a Hold unit never moves and a Sentry never leaves its zone, and none could answer at that range.
+- **Why it is here:** it is one item in one roster, and it turns any board built on posted enemies
+  into a shooting gallery. A Sentry that takes a hit from outside its reach might reasonably step
+  out of the line of fire, or the weapon might be rarer than "in the stash".
+
+### S14. A shove into a hole is a kill, not a down, and the enemy AI goes looking for it
+
+- **Where:** a sandbox, then The Salt Stair. A Hard-band unit with Gust and a player unit two
+  tiles from a hole in line: it cast on its first turn. "A falls into the void", "DIES".
+- **Why it is here:** deep water downs and can be rescued from; a hole removes the unit. The same
+  cast into deep water did 20 and left the victim downed. The difference between the two is the
+  difference between a setback and losing a character, and the only place it is stated is the
+  queue row's own words.
+
+### S15. A counter-shove can kill the attacker
+
+- **Where:** The Salt Stair. A unit that attacks a Galewright is answered with Gust, and if the
+  attacker has void behind it on that line, the answer kills it. The preview shows it under
+  REACTION before the order is confirmed.
+- **Why it is here:** it is correct and it is previewed, and it is still the first time in these
+  runs that a *reaction* was lethal at full health.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the
