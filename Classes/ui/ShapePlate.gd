@@ -37,17 +37,22 @@ extends VBoxContainer
 
 # The plate is a FIXED box and the cell size is what gives, so a long-ranged attack cannot widen the
 # card. MAX span falls out of the two: the largest odd span whose cells still clear MIN_CELL_PX.
+#
+# A HOST MAY DRAW IT BIGGER (box_px; the rune card's fills the room its ring had, #1319), and only the
+# cells grow: the span cap stays BOX_PX's, so one attack reads the same reach on every plate.
 const BOX_PX := 116
 const MIN_CELL_PX := 6
 const MIN_SPAN := 3
 const SEP := 2
 
+var box_px := BOX_PX
 var _grid: GridContainer
 var _lines: PathLines
 var _caption: Label
 
 
-func _init() -> void:
+func _init(box := BOX_PX) -> void:
+	box_px = box
 	add_theme_constant_override("separation", 3)
 	# The grid and the path lines share one rect: a MarginContainer lays every child over the same area.
 	var frame := MarginContainer.new()
@@ -151,7 +156,7 @@ func _paint(attack: AttackData, ring: Array[Vector2i], hits: Array[Vector2i], pa
 	drawn.append_array(hits)
 	var span := _span_for(drawn)
 	var half := (span - 1) / 2
-	var cell := int((BOX_PX - (span - 1) * SEP) / float(span))
+	var cell := int((box_px - (span - 1) * SEP) / float(span))
 	_grid.columns = span
 	for y in range(-half, half + 1):
 		for x in range(-half, half + 1):

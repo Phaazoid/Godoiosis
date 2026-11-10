@@ -1,8 +1,8 @@
 # The rune detail card (#1019), on the real screen it opens from.
 #
 # WHAT A HEADLESS SUITE CANNOT SEE, said out loud: nothing here proves a hollow tick reads as an
-# outline at 116px, that a halo is visible beside its neighbours, or that the cost bars echo the ring's
-# own marks. Those are the dev's to play, and AuraRing's own suite says the same thing about the
+# outline on the aura line, that a halo is visible beside its neighbours, or that the cost bars echo the
+# line's own marks. Those are the dev's to play, and AuraLine's own suite says the same thing about the
 # marks themselves.
 #
 # WHAT IS PINNED IS THE WIRE -- that picking another carving moves what is DRAWN. That is precisely
@@ -212,7 +212,7 @@ static func _rows_of(card: RuneDetailCard) -> Array[Control]:
 
 
 static func _wanted(card: RuneDetailCard, element: Elemental.Element) -> int:
-	for row: AuraRing.Row in AuraRing.rows(card._ring.unit, card._ring.carving):
+	for row: AuraRing.Row in AuraRing.rows(card._line.unit, card._line.carving):
 		if row.element == element:
 			return row.wanted
 	return -1
@@ -301,21 +301,48 @@ func test_a_carvings_payload_chain_reaches_the_readout() -> void:
 		"the chain's second level never reached the card:\n%s" % text).contains("Blast drops Spring where it hits")
 
 
-# The ring is the element half of that same wire. Asserted through rows() rather than through pixels,
-# which is AuraRing's own division: rows() is the model and _draw only renders it.
-func test_the_ring_follows_the_picked_carving() -> void:
+# The aura line is the element half of that same wire. Asserted through rows() rather than through
+# pixels, which is the model's own division: AuraRing.rows() is the model and AuraLine only draws it.
+func test_the_aura_line_follows_the_picked_carving() -> void:
 	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Tap"), _circle("Break(F, E)", "Split")]
 	var rune := _rune(carvings)
 	var card := await _open(rune, _alchemist({FIRE: 3}))
 
 	card._on_carving_picked(1)
-	assert_object(card._ring.carving).is_same(rune.inscriptions[1])
+	assert_object(card._line.carving).is_same(rune.inscriptions[1])
 	assert_int(_wanted(card, EARTH)).is_equal(1)
 
 	card._on_carving_picked(0)
-	assert_object(card._ring.carving).is_same(rune.inscriptions[0])
+	assert_object(card._line.carving).is_same(rune.inscriptions[0])
 	assert_int(_wanted(card, EARTH)).override_failure_message(
-		"the ring kept the previous carving's demand").is_equal(0)
+		"the line kept the previous carving's demand").is_equal(0)
+
+
+# THE LINE ABOVE, THE PLATE IN THE RING'S ROOM (#1319; dev, 2026-11-09: "change that to a line, perhaps
+# above it, let that whole space be filled out by the range display"). The card wears no ring at all,
+# and the plate's cells are read off what it actually laid out rather than off the constant.
+func test_the_line_sits_above_a_plate_that_fills_the_rings_room() -> void:
+	var carvings: Array[TransmutationData] = [_circle("Push(F)", "Ember")]
+	var card := await _open(_rune(carvings), _alchemist({FIRE: 3}))
+	await await_idle_frame()
+
+	for node: Node in _walk(card):
+		assert_bool(node is AuraRing).override_failure_message(
+			"the card still wears an aura ring beside the plate").is_false()
+
+	assert_float(card._line.get_global_rect().end.y).override_failure_message(
+		"the aura line is not above the plate").is_less_equal(card._plate.get_global_rect().position.y)
+
+	var grid := card._plate.grid()
+	var span := grid.columns
+	var cell := (grid.get_child(0) as Control).size.x
+	assert_float(cell).override_failure_message("the plate's cells were never laid out").is_greater(0.0)
+	var room := float(int((RuneDetailCard.PLATE_PX - (span - 1) * ShapePlate.SEP) / float(span)))
+	var beside := float(int((ShapePlate.BOX_PX - (span - 1) * ShapePlate.SEP) / float(span)))
+	assert_float(cell).override_failure_message(
+		"a %d-span plate drew %.0fpx cells; the ring's room gives %.0f" % [span, cell, room]).is_equal(room)
+	assert_float(cell).override_failure_message(
+		"the plate drew no bigger than it did beside the ring").is_greater(beside)
 
 
 # --- the verdict ------------------------------------------------------------------------------------
@@ -396,19 +423,17 @@ func test_the_legend_says_asked_for_not_paid_for() -> void:
 
 # --- the two states with nobody in the middle -------------------------------------------------------
 
-# A rune in the stash is held by NOBODY, so the ring shows demand with nothing paid and the card gives
+# A rune in the stash is held by NOBODY, so the line shows demand with nothing paid and the card gives
 # no verdict at all: channeling is a property of the pairing, not of either half.
 func test_a_rune_nobody_holds_shows_the_demand_and_gives_no_verdict() -> void:
 	var carvings: Array[TransmutationData] = [_circle("Push(F2)", "Ember")]
 	var card := await _open(_rune(carvings), null)
 
 	assert_int(_wanted(card, FIRE)).is_equal(2)
-	for row: AuraRing.Row in AuraRing.rows(card._ring.unit, card._ring.carving):
+	for row: AuraRing.Row in AuraRing.rows(card._line.unit, card._line.carving):
 		assert_int(row.depth).override_failure_message(
 			"a rune nobody holds reported aura for somebody").is_equal(0)
 
-	assert_object(card._ring.portrait).override_failure_message(
-		"an empty centre was asked for -- demand only, nothing paid").is_null()
 	assert_bool(card._aura.visible).is_false()
 	# No number for nobody: what it needs is the carving's own fact, so that line stays (#1319).
 	assert_str(card._damage.text).is_equal(carvings[0].boardless_text(null))
@@ -458,7 +483,7 @@ func test_a_blank_rune_opens_and_says_it_is_blank() -> void:
 	assert_str(card._hint.text).contains("0 of 6")
 	assert_str(card._hint.text).contains("not tempered")
 	assert_str(_list_text(card)).contains("Nothing is carved")
-	assert_bool(card._ring.visible).is_true()
+	assert_bool(card._line.visible).is_true()
 
 
 # --- the list ---------------------------------------------------------------------------------------
@@ -498,7 +523,7 @@ func test_a_cost_bar_says_whether_that_atom_is_paid() -> void:
 		"the unpaid atom drew the same bar as the paid one").is_equal(1)
 
 
-# The SPARE, past a `+` -- the halo's own number said again in the list, so the ring and the row
+# The SPARE, past a `+` -- the halo's own number said again in the list, so the line and the row
 # cannot disagree about how much aura is going spare.
 func test_spare_aura_gets_its_own_marks_after_the_recipe() -> void:
 	# Fire 3 against a Fire 1 recipe: one paid, two spare.

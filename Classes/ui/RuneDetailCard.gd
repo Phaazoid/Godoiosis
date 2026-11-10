@@ -10,14 +10,15 @@ extends ModalCard
 # the card it mirrors fits and pulls freely, previews before committing, and lives in a phase with no
 # workshop in it. The parity stops at display, and that is a boundary rather than a missing slice.
 #
-# THE ELEMENT DEMAND IS THE AURA RING (dev, on the mockups: "I think we can do a little better with
-# showing what elements a thing needs, visually. Something like the circle around the units"), so
-# there is no second widget: AuraRing grew `wanted` plus two tick states and this card hands it the
-# picked carving. What the ring is NOT is a verdict -- it explains its own marks and judges nothing,
-# so whether a carving actually channels is printed here, off the carving's own ladder.
+# THE ELEMENT DEMAND IS AN AURA LINE ABOVE THE PLATE (#1319), drawn off the aura ring's own model. It
+# was the ring itself beside the plate from #1019 (dev: "Something like the circle around the units")
+# until the dev moved it (2026-11-09: "change that to a line, perhaps above it, let that whole space be
+# filled out by the range display"), so the plate now fills the ring's room. What the line is NOT is a
+# verdict -- it explains its own marks and judges nothing, so whether a carving actually channels is
+# printed here, off the carving's own ladder.
 #
 # IT HAS BOTH OF QueueStyle'S GROUNDS, exactly as ModFittingCard does and for the same reason (#814):
-# ModalCard's frame is panel_box(), dark under either palette, so the ring takes AUTHORED ink and the
+# ModalCard's frame is panel_box(), dark under either palette, so the line takes AUTHORED ink and the
 # readout labels take the FRAME roles -- while the carvings list is a section box, i.e. paper under
 # parchment, so its rows take NAME_TEXT and its cost bars take SKINNED. Ask which ground a mark is on.
 #
@@ -31,32 +32,31 @@ const CARD_W := 600
 # taste: the bars are guaranteed the other half whatever the dev writes into a display_name, and
 # CARD_W is a MINIMUM on the card's content, so an unbounded name would widen the whole modal.
 const NAME_MAX_W := CARD_W / 2.0
-# The ring stands beside the plate at the PLATE's own height, which is why this is not a number of
-# this file's own: two squares of one size read as a pair, and a hollow tick needs the radius to come
-# out as an outline rather than as a smudge.
-const RING_PX := ShapePlate.BOX_PX
+# The plate fills the room the ring beside it had (#1319): two plates' width and the gap between them.
+const STRIP_SEP := 12
+const PLATE_PX := ShapePlate.BOX_PX * 2 + STRIP_SEP
 const LIST_H := 168
 # One cost mark per sigil. RECTANGLES, matching the ring's own bars (dev: "it should be the same
 # rectangle shape as the ring for consistency instead of circles") -- one motif, twice on one card.
 const COST_BAR := Vector2(4, 12)
-# ...and carrying the ring's own THREE STATES (#1022). A bar is solid where the carrier's aura pays
+# ...and carrying the aura ticks' own THREE STATES (#1022). A bar is solid where the carrier's aura pays
 # that sigil, hollow where it is asked for and unpaid, and lighter for a spare point past the recipe.
-# The two numbers are the RING's, read off AuraRing where they exist, so the two motifs cannot drift;
-# only these two have no tick equivalent to borrow, the hollow tick being an outline rather than a fill.
+# The ticks' alphas are read off AuraRing where they exist, so the two motifs cannot drift; only
+# these two have no tick equivalent to borrow, the hollow tick being an outline rather than a fill.
 const HOLLOW_SWATCH_FILL := 0.14
 const SPARE_ALPHA := 0.45
 # The recipe line's words sit back behind the readout above it; its element letters keep full ink.
 const RECIPE_ALPHA := 0.75
 
 var _rune: RuneData
-# Null for a rune nobody is holding -- one sitting in the stash. The ring then draws demand alone and
+# Null for a rune nobody is holding -- one sitting in the stash. The line then draws demand alone and
 # every wielder-dependent readout drops out, rather than being computed against nobody.
 var _wielder: Unit
 var _carving: TransmutationData
 
 var _picker: OptionButton
 var _plate: ShapePlate
-var _ring: AuraRing
+var _line: AuraLine
 var _headline: Label
 var _damage: Label
 var _range: Label
@@ -118,25 +118,24 @@ func _build_head(parent: Container) -> void:
 	row.add_child(close)
 
 
-# The plate, the ring and the numbers, side by side: all three answer for the SAME picked carving, and
-# picking another moves all three, so they have to be read together to be read at all.
+# The aura line, then the plate and the numbers side by side: all three answer for the SAME picked
+# carving, and picking another moves all three, so they have to be read together to be read at all.
 #
 # A LEGEND ROW SITS UNDER IT since #1022, reversing #1019's call that the ring's tooltip was enough
 # (dev: *"it will be useful for the player, too"*). The earlier ruling was not wrong about the
 # tooltip -- it is right there and it does word every mark -- it was wrong about who finds one.
 func _build_readout(parent: Container) -> void:
+	_line = AuraLine.for_carrier(_wielder)
+	parent.add_child(_line)
+
 	var strip := HBoxContainer.new()
-	strip.add_theme_constant_override("separation", 12)
+	strip.add_theme_constant_override("separation", STRIP_SEP)
 	parent.add_child(strip)
 
-	# AT FULL SIZE, deliberately: cropping the plate to buy the column some width was proposed and
-	# turned down (dev: "Keeping the full size helps give a sense of scale").
-	_plate = ShapePlate.new()
+	# NEVER CROPPED: cropping the plate to buy the column some width was proposed and turned down (dev:
+	# "Keeping the full size helps give a sense of scale"), and since #1319 it takes the ring's room too.
+	_plate = ShapePlate.new(PLATE_PX)
 	strip.add_child(_plate)
-
-	_ring = AuraRing.for_demand(_wielder, _sprite_of(_wielder), RING_PX)
-	_ring.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	strip.add_child(_ring)
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 3)
@@ -182,15 +181,15 @@ func _build_readout(parent: Container) -> void:
 	column.add_child(_recipe)
 
 
-# WHAT THE RING'S MARKS MEAN, spelled out (dev, 2026-09-18: *"add the legend row that you included
+# WHAT THE LINE'S MARKS MEAN, spelled out (dev, 2026-09-18: *"add the legend row that you included
 # there, because it will be useful for the player, too"*). That REVERSES #1019's own call -- no legend,
 # the ring's tooltip explains itself -- and it is recorded rather than flipped quietly, because the
 # earlier ruling was a real one: a tooltip is found only by a player who already suspects there is
 # something to find.
 #
-# THE RING'S OWN AUTHORED INKS AND ITS OWN ALPHAS, read off AuraRing rather than retyped, so a swatch
-# and the mark it names cannot come out two different colours the day either is tuned. It sits on the
-# card's FRAME, so the words take FRAME_TEXT while the swatches take the element wheel.
+# THE MARKS' OWN AUTHORED INKS AND ALPHAS, read off AuraRing and AuraLine rather than retyped, so a
+# swatch and the mark it names cannot come out two different colours the day either is tuned. It sits
+# on the card's FRAME, so the words take FRAME_TEXT while the swatches take the element wheel.
 func _build_legend(parent: Container) -> void:
 	var row := HFlowContainer.new()
 	row.add_theme_constant_override("h_separation", 11)
@@ -207,7 +206,7 @@ func _build_legend(parent: Container) -> void:
 	_legend_entry(row, _swatch_bar(ElementPalette.NEUTRAL, AuraRing.FAINT_ALPHA, false),
 		"can never grow")
 	# "Cost" is rune capacity alone (#1319 D6); what a carving asks of the aura is a depth, never spent.
-	_legend_entry(row, ArcSwatch.new(fire), "what it asks")
+	_legend_entry(row, _underline_swatch(fire), "what it asks")
 
 
 func _legend_entry(parent: Container, swatch: Control, text: String) -> void:
@@ -222,7 +221,7 @@ func _legend_entry(parent: Container, swatch: Control, text: String) -> void:
 	parent.add_child(pair)
 
 
-# One legend swatch, drawn as the ring's own rectangle so the key and the mark share a shape.
+# One legend swatch, drawn as a tick's own rectangle so the key and the mark share a shape.
 func _swatch_bar(tint: Color, alpha: float, outlined: bool) -> Control:
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(tint, alpha)
@@ -236,30 +235,15 @@ func _swatch_bar(tint: Color, alpha: float, outlined: bool) -> Control:
 	return bar
 
 
-# The cost's glyph, and the one legend mark that is not a rectangle -- because the cost is not one.
-# A swatch that lied about its own shape would teach the wrong thing about the ring beside it.
-class ArcSwatch extends Control:
-	var tint := Color.WHITE
-
-	func _init(colour: Color) -> void:
-		tint = colour
-		custom_minimum_size = Vector2(16, 12)
-		size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _draw() -> void:
-		draw_arc(Vector2(size.x * 0.5, size.y - 1.0), size.x * 0.42, PI, TAU, 14, tint, 2.2, true)
-
-
-# The carrier's map sprite, or nothing at all. A rune in the stash gets an EMPTY centre rather than a
-# placeholder (dev's fork: demand only, nothing paid), and wherever there IS a carrier the character
-# stays in the middle -- dev, on a mockup that moved a verdict in there: "if this is extending the
-# Aura Ring, I think we need to keep it more consistent, and keep the character sprite in the center.
-# Otherwise, it might be confusing what we're showing."
-static func _sprite_of(unit: Unit) -> Texture2D:
-	if unit == null or unit.unit_data == null:
-		return null
-	return unit.unit_data.map_sprite
+# What it asks, and the one legend mark that is not a rectangle -- because the demand is not one: it is
+# the line's underline (#1319), which replaced the ring's arc (#1022), at the underline's own weight.
+static func _underline_swatch(tint: Color) -> Control:
+	var dash := ColorRect.new()
+	dash.color = tint
+	dash.custom_minimum_size = Vector2(14, AuraLine.UNDERLINE_W)
+	dash.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return dash
 
 
 func _readout_label(parent: Container) -> Label:
@@ -347,7 +331,7 @@ func _refresh_readout() -> void:
 	_headline.text = "%s  ·  %s rune  ·  %s" % [_rune.shown_name(), size_word, carrier]
 
 	_plate.show_attack(_carving)
-	_ring.set_carving(_carving)
+	_line.set_carving(_carving)
 	# The boardless readout (#1319): the numbers scale off the WIELDER's aura, so a rune nobody holds
 	# shows none rather than a number computed against nobody -- only the carving's own facts, what it
 	# needs and what it becomes (#695).
@@ -384,7 +368,7 @@ func _channel_lines() -> Array[String]:
 
 
 # The channelling verdict, refusal or not -- ONE call, because aura_text asks the ladder first and
-# builds its positive half only when that comes back empty. The ring beside it says the same thing in
+# builds its positive half only when that comes back empty. The line above says the same thing in
 # marks and structurally cannot disagree, both being read off the same two numbers.
 #
 # A RUNE NOBODY HOLDS HAS NO VERDICT: channeling is a property of the PAIRING, not of either half
@@ -485,15 +469,15 @@ static func _box_state(state: TransmutationData.Channel) -> QueueStyle.Channel:
 	return QueueStyle.Channel.CLEAR
 
 
-# The recipe as MARKS, one bar per sigil, carrying the RING'S OWN THREE STATES (#1022): solid where
+# The recipe as MARKS, one bar per sigil, carrying the TICKS' OWN THREE STATES (#1022): solid where
 # this carrier's aura pays that sigil, hollow where it is asked for and unpaid, and a lighter bar past
 # a `+` for each spare point. Shipped flat at #1019, which is why they said so little -- the shape was
 # right and the vocabulary was missing.
 #
 # THE POOL IS WALKED DOWN A COPY, sigil by sigil, so a 2-Fire recipe against Fire 1 draws one paid bar
-# and one hollow rather than two of either -- the ring's own per-tick rule, one surface along.
+# and one hollow rather than two of either -- the aura line's own per-tick rule, one surface along.
 #
-# SKINNED, because these sit on the list's paper, where the ring above takes AUTHORED off the card's
+# SKINNED, because these sit on the list's paper, where the line above takes AUTHORED off the card's
 # own dark frame. Two grounds on one card is #814's rule, not an inconsistency.
 #
 # STATIC, because the loadout's stash row draws the same recipe for nobody (#962), and IGNORE, because
@@ -515,7 +499,7 @@ static func cost_bars(carving: TransmutationData, wielder: Unit) -> Control:
 			bars.add_child(_cost_bar(element, 1.0 if paid else HOLLOW_SWATCH_FILL, not paid))
 
 	# What is LEFT after paying is the spare -- the halo's own number, said again in the list so the
-	# ring and the row cannot disagree about how much is going spare.
+	# line and the row cannot disagree about how much is going spare.
 	var spare: Array[Elemental.Element] = []
 	for element: Elemental.Element in carving.damage_elements():
 		for _i in range(maxi(0, left.get(element, 0))):
