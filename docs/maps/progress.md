@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 7, The Lodes (large, veins, Aurora, Capture three sites): built and three rounds played, NOT finished, NOT committed. Its spec is `Lodes.json` in the scratch folder; rebuild it from there |
+| Map in hand | 8, Stormgate (a defended gate in a thunderstorm, AI-run ALLY militia): spec drafted as `Stormgate.json` in the scratch folder, not built |
 
 ## What the first map taught (read before designing the next)
 
@@ -93,3 +93,9 @@
   fizzles and does nothing, and the alkahest vein gave Fireburst. Three rounds in, the centre site was
   nearly taken with no losses and the Rushdown squad was one turn from contact. Nothing about its
   difficulty is known yet. Its board file was deleted from the worktree so no half-tested board is on disk.
+- 2026-11-10: the run resumed (the dev said there was budget). Map 7, The Lodes, done after two layouts. Committed.
+- Capture is one action from any free zone tile and is never contested: make a guarded zone the one
+  tile its keeper stands on. A downed body holds its tile for three rounds unless struck again.
+- A vein is a source for whoever stands on or beside it. A caster shoved two tiles off it fizzles.
+- A Guard takes a line or area hit meant for its ward; Zap pierces it. A Fireburst reaches three tiles.
+- Under an Aurora a Freeze drew two extra from the air.

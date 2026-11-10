@@ -159,6 +159,21 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Why it is here:** it is correct and it is previewed, and it is still the first time in these
   runs that a *reaction* was lethal at full health.
 
+### S16. A Fireburst reaches three tiles, and so reaches a unit standing beside its caster
+
+- **Where:** The Lodes. The Kindler's Fireball has range 2 and cannot target an adjacent tile. His
+  Fireburst is a plus placed on the aimed tile, so aimed two tiles out it catches a unit three
+  tiles away, and aimed at the empty tile behind an adjacent attacker it catches the attacker.
+- **Why it is here:** "a unit beside him is safe" is true of the Fireball and false of the form.
+  The card says the form is a plus; it does not say what that does to the minimum range.
+
+### S17. A Guard absorbs a blow aimed down a line, and the preview is the only place that says so
+
+- **Where:** The Lodes. A Freeze cast down a line at the Stonecaller previewed as "Lode Guard,
+  guarding Stonecaller: 5". The guard was not in the line. Zap, which pierces Guard, went through.
+- **Why it is here:** it is the rule and it previews correctly. It also means an area or line
+  attack cannot be used to reach past a Guard, which I had assumed it could.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the

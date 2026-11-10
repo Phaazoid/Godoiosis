@@ -70,6 +70,12 @@ Each entry says which map wanted it, what it would have done there, and what the
   from the side, and would give the enemy a way to drag a unit onto the spine.
 - **Wind as a rule** (The Salt Stair, Chaff). A tile added to shoves and gas going downwind.
 
+- **A carving that moves or buries a vein** (The Lodes). Every answer to a vein-bound caster today
+  is "move the caster". Moving the vein is the other half.
+- **A vein that does something when nobody stands on it** (The Lodes). The alkahest vein was worth
+  one cast and then sat behind the lines. A vein that slowly charged a tile, or that a unit could
+  tap for a vial's worth once, would be worth holding.
+
 ## Terrain and tiles
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds
@@ -123,6 +129,14 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **An objective for the escort to do something at the end** (Cinder Row). The Chandler walks to a
   zone. A unit that must reach a tile and spend an action there (light a beacon, open a gate) would
   give the last round a beat.
+
+- **Capture that has to be held, or that a living defender blocks** (The Lodes). Capture is one
+  action from any free tile of the zone, and nobody takes it back. A fast unit can claim a guarded
+  site without fighting. The Lodes works round it by making each zone the one tile its keeper
+  stands on. A zone that cannot be claimed while a hostile stands in it would let zones be shapes
+  again.
+- **A downed unit that does not hold a capture tile** (The Lodes). A keeper's body blocks his tile
+  for three rounds after he falls. Twice the mission waited on a bleed-out.
 
 ## AI
 
