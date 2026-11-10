@@ -113,6 +113,7 @@ the shock key beside it.
 | 3 | Rain | third draft | lanes on the wrong rows; a Zap at the ford did 33; Isaac's own counter-Zap then downed him | stopped on round 8 with the west bank won and four of five units on 8 HP or less. Not played out |
 | 4 | Snow | third draft, 20-round clock | west bank cleared on round 6 with nobody lost. Froze a bridge and lit the orchard from it on round 9; the Press Master melted the bridge and Isaac died | **Defeat on the clock,** one Press Hand alive on about 7 HP. The clock went to 24 |
 | 5 | Snow | **this board** | the same six rounds. Lit the bank from the ford on round 9 and followed the fire north too closely. The Pressmen came out through their own fire on round 13 | **Victory, round 16. Three of five dead** (Sara, Isaac, Ross). Noemie's last round downed the last Press Hand |
+| 6 | Snow | a redesign, not kept: the Pressmen moved to the ford's east bank, clock 18 | lit the bank from the ford on round 9. All four came to the water's edge at once, hit Isaac for 12, then went back to their post when nobody was in reach. The Fireball that boiled the ford left steam that downed Isaac twice more after rescues | stopped on round 12. No better than the board above and worse to play. The committed board is run 5's |
 | blunt | Clear (drawn) | this board, player side on the AI | | **Defeat on round 8** |
 
 ## What I am unsure of
