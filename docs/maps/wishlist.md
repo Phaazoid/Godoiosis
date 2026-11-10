@@ -155,7 +155,18 @@ Each entry says which map wanted it, what it would have done there, and what the
   step out of a line or out of a puddle. One order a turn to an allied squad (hold, fall back,
   spread out) would make them part of the plan instead of part of the board.
 
+- **Weather that changes the ground** (The Drowned Orchard). Rain that damps or stops a grass
+  fire. Snow that freezes shallows after a few rounds. A drawn weather would then decide which key
+  exists on a board, not only which one hits hardest.
+- **A hazard that hurries its victims** (The Drowned Orchard). The safe answer to a posted squad on
+  fuel is to light it and end the turn a dozen times. Fire that spread two tiles a round in dry
+  air, or a posted squad that broke and ran for water when its post caught, would turn the wait
+  into a chase.
+
 ## AI
+
+- **A posted squad that leaves a burning post** (The Drowned Orchard, The Lime Kiln). Not to
+  attack: to live. Today it either stands in the fire or charges through it.
 
 - **A Sentry that steps out of scalding steam** (The Lime Kiln). The guards stood in thick steam
   for two rounds at their post. That is what makes the map work, and it is also not what a guard
@@ -163,6 +174,10 @@ Each entry says which map wanted it, what it would have done there, and what the
   post, or a zone that is all cloud).
 
 ## Authoring tools
+
+- **A way to pick the weather when testing a drawing board.** I built three scratch copies of The
+  Drowned Orchard with one weather locked in each. A `weather` argument on the Play API's `load`,
+  and a dropdown beside Restart in the game, would do the same without a second file.
 
 - **A way to build a board from a script.** These maps came from a scratch script that reads a
   small text spec (rows of ground glyphs, a height grid, lists of states, zones and units) and

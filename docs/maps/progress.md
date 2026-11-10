@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 9, not started. Next from the ledger: The Drowned Orchard (drawn weather) or Earthworks (unbuilt raised earth) |
+| Map in hand | 10, not started. Next from the ledger: Earthworks (unbuilt raised earth) or The Long Dark (huge) |
 
 ## What the first map taught (read before designing the next)
 
@@ -109,3 +109,15 @@
   player units in the line.
 - The Play API's rescue is `{"cmd":"rescue","args":{"unit":"D","target":"H"}}`; load takes
   `{"path":"res://Scenarios/missions/X.tres"}`.
+- 2026-11-10: map 9, The Drowned Orchard, done after three layouts and five runs. Committed.
+- A drawn-weather board is tested on scratch copies with one weather locked (`"weather":"RAIN"`, no
+  `weather_odds`). Rain does NOT stop a grass fire. Snow weakens fire carvings. Freeze does 6 to a
+  dry body and 11 to 13 to a Wet one.
+- Basics' stash holds Fire, Electric (with a diamond), Freeze, Wind, Water, Heal and Earth runes, and
+  Isaac can carry and cast the first three. Losing an arm took his Fire Rune away.
+- A Spring goes through two units in a line. Overwatch fires only down the row or column it faces:
+  put the lane on the row the enemy is standing on.
+- A dry caster beside open water is not in the chain. A Wet one is, and so is his counter.
+- Fire melts ice under a unit (it drowns, and a second hit kills). A Sentry squad comes out through
+  its own fire to attack a unit that walks into reach. Steam downs a rescued unit again.
+- Trees block a carbine's line.

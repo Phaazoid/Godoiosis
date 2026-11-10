@@ -211,6 +211,44 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Why it is here:** nothing is random, so this is the AI reading the board. It does mean a
   player cannot learn "they arrive on round 4" from one attempt.
 
+### S23. Rain does not damp a grass fire
+
+- **Where:** The Drowned Orchard, Rain. A Fireball on grass with every unit Wet and the rain
+  falling: the plus of five tiles lit, and the fire spread a tile a round, as in the Clear.
+- **Why it is here:** I expected rain to slow or stop it and built a three-weather board on that.
+  Rain halves fire against a Wet body and does nothing to the ground.
+
+### S24. A rescued unit standing in steam is downed again at the end of the turn
+
+- **Where:** The Drowned Orchard. Sara was rescued on scorched ground with steam on it. The scald
+  took her last point at the turn's end, and the next hit killed her. Isaac, downed in a shallow
+  beside the fire, died to the steam with nobody touching him.
+- **Why it is here:** the rescue's preview shows the rescue. It does not show that the tile will
+  undo it.
+
+### S25. A Sentry squad walks out through its own fire to attack
+
+- **Where:** The Drowned Orchard. Four Pressmen stood in a burning orchard for a round, then all
+  four moved onto burning tiles to reach my units, taking the fire and the steam to do it.
+  Earlier, with nobody in reach, the same squad stood still and burned to death (S2).
+- **Why it is here:** the two behaviours together read as "they will die where they stand unless
+  you come close, and then they will die on top of you".
+
+### S26. A tree beside the line stops a carbine at two tiles
+
+- **Where:** The Drowned Orchard. From (14,9) at a target on (14,7) with a tree on (14,8): refused,
+  as expected. From (15,8) at (14,7), a diagonal with trees on two of the corners: `legal_targets`
+  offered nothing at all.
+- **Not checked:** whether the second case was the trees or the gas on those tiles.
+
+### S27. The Ferrymen stop in the shallows on round 1 and charge six tiles on round 2
+
+- **Where:** The Drowned Orchard, all five runs. Three Rushdown Water Walkers moved four tiles on
+  round 1, ending in a column in the far shallows, then six on round 2.
+- **Why it is here:** it makes them readable (the row each stands on is the row it charges down),
+  and I do not know what rule produces it. They may be stopping one tile outside the player's
+  reach.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the
