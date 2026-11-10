@@ -45,7 +45,7 @@ The full list, with how to see each again, is in [bugs.md](bugs.md). The ones I 
 
 [wishlist.md](wishlist.md) has about fifty entries. Five ideas account for most of them:
 
-- **A wall.** Raised earth, in eight of the twelve notes. Each of those names the tiles. The Fire Wall
+- **A wall.** Raised earth, in 9 of the thirteen notes. Each of those names the tiles. The Fire Wall
   rune is not a substitute: the AI walks through fire (bugs.md, S32).
 - **Something that dries or douses.** Rain, shallows and steam make everyone a conductor and
   nothing undoes it.
