@@ -1,0 +1,531 @@
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://cqsip5xhqk0qj"]
+
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_wkmas"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_r8jre"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_dha0s"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_g6051"]
+[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/items/Item.gd" id="5_gjk1v"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="6_2v4uv"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="7_m48bl"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="8_0qrh5"]
+[ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="9_r8mhw"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="10_ujmar"]
+[ext_resource type="Texture2D" uid="uid://lwdxls0bwe07" path="res://Art/Units/MapSprites/Orc_Downed.png" id="11_mix50"]
+[ext_resource type="Texture2D" uid="uid://djn7qkinjsvvk" path="res://Art/Units/MapSprites/Orc.png" id="12_pe0tb"]
+[ext_resource type="Texture2D" uid="uid://cuw76kdqfrbjw" path="res://Art/Units/MapSprites/Orc_Moving.png" id="13_rss0m"]
+[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="14_h16os"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="15_ify0q"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="16_t3n6j"]
+[ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="17_mygus"]
+[ext_resource type="Resource" uid="uid://fx3dcqyslgbe" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="18_sqwk4"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="19_fay24"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="20_wotaq"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="21_v0cfu"]
+[ext_resource type="Resource" uid="uid://cxhr4ihodwbgm" path="res://Resources/TransmutationData/Gust.tres" id="22_x8m1j"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="23_0lmrh"]
+[ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="24_23od6"]
+
+[sub_resource type="Resource" id="Resource_s6cvt"]
+script = ExtResource("6_2v4uv")
+template = ExtResource("7_m48bl")
+
+[sub_resource type="Resource" id="Resource_sw2v3"]
+script = ExtResource("9_r8mhw")
+def_power = 4
+covered_kinds = Array[int]([0, 1, 2])
+stat_modifiers = Dictionary[int, int]({
+4: -1
+})
+display_name = "Riveted Mail"
+weight = 5
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_qlwxe"]
+script = ExtResource("15_ify0q")
+display_name = "Stair Warden"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_2cho6"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_qlwxe")
+cell = Vector2i(6, 2)
+squad_id = 0
+ai_profile = "Medium"
+stats = Dictionary[int, int]({
+0: 22,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 22
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_s6cvt"), SubResource("Resource_sw2v3")])
+equipped_index = 0
+worn_armor_index = 1
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_xccwe"]
+script = ExtResource("17_mygus")
+template = ExtResource("18_sqwk4")
+
+[sub_resource type="Resource" id="Resource_brie5"]
+script = ExtResource("9_r8mhw")
+def_power = 4
+covered_kinds = Array[int]([0, 1, 2])
+stat_modifiers = Dictionary[int, int]({
+4: -1
+})
+display_name = "Riveted Mail"
+weight = 5
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_jqbkt"]
+script = ExtResource("15_ify0q")
+display_name = "Stair Warden"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_7fgc2"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_jqbkt")
+cell = Vector2i(7, 2)
+squad_id = 0
+ai_profile = "Medium"
+stats = Dictionary[int, int]({
+0: 22,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 22
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_xccwe"), SubResource("Resource_brie5")])
+equipped_index = 0
+worn_armor_index = 1
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
+})
+
+[sub_resource type="Resource" id="Resource_bbm3k"]
+script = ExtResource("19_fay24")
+template = ExtResource("20_wotaq")
+
+[sub_resource type="Resource" id="Resource_8kg3f"]
+script = ExtResource("9_r8mhw")
+def_power = 2
+covered_kinds = Array[int]([0, 1, 2])
+stat_maximums = Dictionary[int, int]({
+4: 4
+})
+display_name = "Ballast Harness"
+weight = 10
+metadata/_custom_type_script = "uid://dj0617uewvdny"
+
+[sub_resource type="Resource" id="Resource_ggsat"]
+script = ExtResource("15_ify0q")
+display_name = "Warden Captain"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_dv47a"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_ggsat")
+cell = Vector2i(6, 1)
+squad_id = 0
+is_leader = true
+squad_name = "The Wardens"
+squad_archetype = 3
+squad_zone = "The Summit"
+ai_profile = "Hard"
+stats = Dictionary[int, int]({
+0: 30,
+1: 8,
+2: 6,
+4: 4,
+5: 3,
+6: 8,
+7: 3,
+8: 14
+})
+current_hp = 32
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_bbm3k"), SubResource("Resource_8kg3f")])
+equipped_index = 0
+worn_armor_index = 1
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_nnhs7"]
+script = ExtResource("23_0lmrh")
+size = 1
+inscriptions = Array[ExtResource("21_v0cfu")]([ExtResource("22_x8m1j")])
+temper = 6
+display_name = "Air Rune"
+weight = 1
+
+[sub_resource type="Resource" id="Resource_3mrnv"]
+script = ExtResource("15_ify0q")
+display_name = "Galewright"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_mmhm2"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_3mrnv")
+cell = Vector2i(4, 6)
+squad_id = 1
+is_leader = true
+squad_archetype = 2
+ai_profile = "Hard"
+stats = Dictionary[int, int]({
+0: 16,
+1: 7,
+2: 2,
+4: 5,
+5: 7,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 16
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_nnhs7")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+6: 2
+})
+affinity = Array[int]([6])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_whgfe"]
+script = ExtResource("23_0lmrh")
+size = 1
+inscriptions = Array[ExtResource("21_v0cfu")]([ExtResource("22_x8m1j")])
+temper = 6
+display_name = "Air Rune"
+weight = 1
+
+[sub_resource type="Resource" id="Resource_07wcu"]
+script = ExtResource("15_ify0q")
+display_name = "Galewright"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_fext7"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_07wcu")
+cell = Vector2i(9, 8)
+squad_id = 2
+is_leader = true
+squad_archetype = 2
+ai_profile = "Hard"
+stats = Dictionary[int, int]({
+0: 16,
+1: 7,
+2: 2,
+4: 5,
+5: 7,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 16
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_whgfe")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+6: 2
+})
+affinity = Array[int]([6])
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_2p4dp"]
+script = ExtResource("24_23od6")
+template = ExtResource("16_t3n6j")
+
+[sub_resource type="Resource" id="Resource_3ulx8"]
+script = ExtResource("15_ify0q")
+display_name = "Stair Hand"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_b33kw"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_3ulx8")
+cell = Vector2i(4, 13)
+squad_id = 3
+is_leader = true
+squad_archetype = 1
+ai_profile = "Easy"
+stats = Dictionary[int, int]({
+0: 14,
+1: 3,
+2: 2,
+4: 5,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 14
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_2p4dp")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[sub_resource type="Resource" id="Resource_t2fuu"]
+script = ExtResource("6_2v4uv")
+template = ExtResource("7_m48bl")
+
+[sub_resource type="Resource" id="Resource_pco1k"]
+script = ExtResource("15_ify0q")
+display_name = "Stair Hand"
+portrait = ExtResource("14_h16os")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("12_pe0tb")
+move_sprite = ExtResource("13_rss0m")
+downed_sprite = ExtResource("11_mix50")
+starting_inventory = Array[ExtResource("5_gjk1v")]([ExtResource("16_t3n6j")])
+
+[sub_resource type="Resource" id="Resource_grxqa"]
+script = ExtResource("4_g6051")
+unit_data = SubResource("Resource_pco1k")
+cell = Vector2i(9, 13)
+squad_id = 4
+is_leader = true
+squad_archetype = 1
+ai_profile = "Easy"
+stats = Dictionary[int, int]({
+0: 14,
+1: 3,
+2: 2,
+4: 5,
+5: 3,
+6: 7,
+7: 3,
+8: 10
+})
+current_hp = 14
+inventory = Array[ExtResource("5_gjk1v")]([SubResource("Resource_t2fuu")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[resource]
+script = ExtResource("2_r8jre")
+scenario_name = "missions/TheSaltStair"
+unit_entries = Array[ExtResource("4_g6051")]([SubResource("Resource_2cho6"), SubResource("Resource_7fgc2"), SubResource("Resource_dv47a"), SubResource("Resource_mmhm2"), SubResource("Resource_fext7"), SubResource("Resource_b33kw"), SubResource("Resource_grxqa")])
+tile_data = PackedByteArray("AAAAAAAAAAASAAIAAQABAAAAAAASAAIAAQACAAAAAAASAAIAAQADAAAAAAASAAIAAQAEAAAAAAASAAIAAQAFAAAAAAASAAIAAQAGAAAAAAASAAIAAQAHAAAAAAASAAIAAQAIAAAAAAASAAIAAQAJAAAAAAASAAIAAQAKAAAAAAASAAIAAQALAAAAAAASAAIAAQAMAAAAAAASAAIAAQANAAAAAAASAAIAAQAAAAEAAAASAAIAAQABAAEAAAASAAIAAQACAAEAAAASAAIAAQADAAEAAAASAAIAAQAEAAEAAAASAAIAAQAFAAEAAAAKAAYAAAAGAAEAAAAKAAYAAAAHAAEAAAAKAAYAAAAIAAEAAAAKAAYAAAAJAAEAAAASAAIAAQAKAAEAAAASAAIAAQALAAEAAAASAAIAAQAMAAEAAAASAAIAAQANAAEAAAASAAIAAQAAAAIAAAASAAIAAQABAAIAAAASAAIAAQACAAIAAAASAAIAAQADAAIAAAASAAIAAQAEAAIAAAASAAIAAQAFAAIAAAAKAAYAAAAGAAIAAAAKAAYAAAAHAAIAAAAKAAYAAAAIAAIAAAAKAAYAAAAJAAIAAAASAAIAAQAKAAIAAAASAAIAAQALAAIAAAASAAIAAQAMAAIAAAASAAIAAQANAAIAAAASAAIAAQAAAAMAAAASAAIAAQABAAMAAAASAAIAAQACAAMAAAASAAIAAQADAAMAAAASAAIAAQAEAAMAAAASAAIAAQAFAAMAAAASAAIAAQAGAAMAAAAKAAYAAAAHAAMAAAAKAAYAAAAIAAMAAAASAAIAAQAJAAMAAAASAAIAAQAKAAMAAAASAAIAAQALAAMAAAASAAIAAQAMAAMAAAASAAIAAQANAAMAAAASAAIAAQAAAAQAAAASAAIAAQABAAQAAAASAAIAAQACAAQAAAASAAIAAQADAAQAAAASAAIAAQAEAAQAAAASAAIAAQAFAAQAAAASAAIAAQAGAAQAAAAKAAYAAAAHAAQAAAAKAAYAAAAIAAQAAAASAAIAAQAJAAQAAAASAAIAAQAKAAQAAAASAAIAAQALAAQAAAASAAIAAQAMAAQAAAASAAIAAQANAAQAAAASAAIAAQAAAAUAAAASAAIAAQABAAUAAAASAAIAAQACAAUAAAASAAIAAQADAAUAAAAKAAYAAAAEAAUAAAAKAAYAAAAFAAUAAAASAAIAAQAGAAUAAAAKAAYAAAAHAAUAAAAKAAYAAAAIAAUAAAASAAIAAQAJAAUAAAASAAIAAQAKAAUAAAASAAIAAQALAAUAAAASAAIAAQAMAAUAAAASAAIAAQANAAUAAAASAAIAAQAAAAYAAAASAAIAAQABAAYAAAASAAIAAQACAAYAAAASAAoAAAADAAYAAAAKAAYAAAAEAAYAAAAKAAYAAAAFAAYAAAASAAIAAQAGAAYAAAAKAAYAAAAHAAYAAAAKAAYAAAAIAAYAAAASAAIAAQAJAAYAAAASAAIAAQAKAAYAAAASAAIAAQALAAYAAAASAAIAAQAMAAYAAAASAAIAAQANAAYAAAASAAIAAQAAAAcAAAASAAIAAQABAAcAAAASAAIAAQACAAcAAAASAAIAAQADAAcAAAAKAAYAAAAEAAcAAAASAAIAAQAFAAcAAAASAAIAAQAGAAcAAAAKAAYAAAAHAAcAAAAKAAYAAAAIAAcAAAASAAIAAQAJAAcAAAASAAIAAQAKAAcAAAASAAIAAQALAAcAAAASAAIAAQAMAAcAAAASAAIAAQANAAcAAAASAAIAAQAAAAgAAAASAAIAAQABAAgAAAASAAIAAQACAAgAAAASAAIAAQADAAgAAAAKAAYAAAAEAAgAAAASAAIAAQAFAAgAAAASAAIAAQAGAAgAAAAKAAYAAAAHAAgAAAAKAAYAAAAIAAgAAAASAAIAAQAJAAgAAAAKAAYAAAAKAAgAAAAKAAYAAAALAAgAAAASAAoAAAAMAAgAAAASAAIAAQANAAgAAAASAAIAAQAAAAkAAAASAAIAAQABAAkAAAASAAIAAQACAAkAAAASAAIAAQADAAkAAAAKAAYAAAAEAAkAAAASAAIAAQAFAAkAAAASAAIAAQAGAAkAAAAKAAYAAAAHAAkAAAAKAAYAAAAIAAkAAAASAAIAAQAJAAkAAAAKAAYAAAAKAAkAAAAKAAYAAAALAAkAAAASAAIAAQAMAAkAAAASAAIAAQANAAkAAAASAAIAAQAAAAoAAAASAAIAAQABAAoAAAASAAIAAQACAAoAAAASAAIAAQADAAoAAAAKAAYAAAAEAAoAAAASAAIAAQAFAAoAAAASAAIAAQAGAAoAAAAKAAYAAAAHAAoAAAAKAAYAAAAIAAoAAAASAAIAAQAJAAoAAAASAAIAAQAKAAoAAAAKAAYAAAALAAoAAAASAAIAAQAMAAoAAAASAAIAAQANAAoAAAASAAIAAQAAAAsAAAASAAIAAQABAAsAAAASAAIAAQACAAsAAAASAAIAAQADAAsAAAAKAAYAAAAEAAsAAAASAAIAAQAFAAsAAAASAAIAAQAGAAsAAAAKAAYAAAAHAAsAAAAKAAYAAAAIAAsAAAASAAIAAQAJAAsAAAASAAIAAQAKAAsAAAAKAAYAAAALAAsAAAASAAIAAQAMAAsAAAASAAIAAQANAAsAAAASAAIAAQAAAAwAAAASAAIAAQABAAwAAAASAAIAAQACAAwAAAAKAAYAAAADAAwAAAAKAAYAAAAEAAwAAAAKAAYAAAAFAAwAAAAKAAYAAAAGAAwAAAAKAAYAAAAHAAwAAAAKAAYAAAAIAAwAAAAKAAYAAAAJAAwAAAAKAAYAAAAKAAwAAAAKAAYAAAALAAwAAAAKAAYAAAAMAAwAAAASAAIAAQANAAwAAAASAAIAAQAAAA0AAAASAAIAAQABAA0AAAASAAIAAQACAA0AAAAKAAYAAAADAA0AAAAKAAYAAAAEAA0AAAAKAAYAAAAFAA0AAAAKAAYAAAAGAA0AAAAKAAYAAAAHAA0AAAAKAAYAAAAIAA0AAAAKAAYAAAAJAA0AAAAKAAYAAAAKAA0AAAAKAAYAAAALAA0AAAAKAAYAAAAMAA0AAAASAAIAAQANAA0AAAASAAIAAQAAAA4AAAASAAIAAQABAA4AAAASAAIAAQACAA4AAgAAAAAAAAADAA4AAgAAAAAAAAAEAA4AAgAAAAAAAAAFAA4AAgAAAAAAAAAGAA4AAgAAAAAAAAAHAA4AAgAAAAAAAAAIAA4AAgAAAAAAAAAJAA4AAgAAAAAAAAAKAA4AAgAAAAAAAAALAA4AAgAAAAAAAAAMAA4AAAASAAIAAQANAA4AAAASAAIAAQAAAA8AAAASAAIAAQABAA8AAAASAAIAAQACAA8AAgAAAAAAAAADAA8AAgAAAAAAAAAEAA8AAgAAAAAAAAAFAA8AAgAAAAAAAAAGAA8AAgAAAAAAAAAHAA8AAgAAAAAAAAAIAA8AAgAAAAAAAAAJAA8AAgAAAAAAAAAKAA8AAgAAAAAAAAALAA8AAgAAAAAAAAAMAA8AAAASAAIAAQANAA8AAAASAAIAAQAAABAAAAASAAIAAQABABAAAAASAAIAAQACABAAAgAAAAAAAAADABAAAgAAAAAAAAAEABAAAgAAAAAAAAAFABAAAgAAAAAAAAAGABAAAgAAAAAAAAAHABAAAgAAAAAAAAAIABAAAgAAAAAAAAAJABAAAgAAAAAAAAAKABAAAgAAAAAAAAALABAAAgAAAAAAAAAMABAAAAASAAIAAQANABAAAAASAAIAAQA=")
+corner_heights = Dictionary[Vector2i, Vector4i]({
+Vector2i(2, 6): Vector4i(4, 4, 4, 4),
+Vector2i(3, 5): Vector4i(4, 4, 4, 4),
+Vector2i(3, 6): Vector4i(4, 4, 4, 4),
+Vector2i(3, 7): Vector4i(4, 4, 4, 4),
+Vector2i(3, 8): Vector4i(4, 4, 2, 2),
+Vector2i(3, 9): Vector4i(2, 2, 2, 2),
+Vector2i(3, 10): Vector4i(2, 2, 2, 2),
+Vector2i(3, 11): Vector4i(2, 2, 0, 0),
+Vector2i(4, 5): Vector4i(4, 4, 4, 4),
+Vector2i(4, 6): Vector4i(4, 4, 4, 4),
+Vector2i(5, 1): Vector4i(6, 6, 6, 6),
+Vector2i(5, 2): Vector4i(6, 6, 6, 6),
+Vector2i(6, 1): Vector4i(6, 6, 6, 6),
+Vector2i(6, 2): Vector4i(6, 6, 6, 6),
+Vector2i(6, 3): Vector4i(6, 6, 4, 4),
+Vector2i(6, 4): Vector4i(4, 4, 4, 4),
+Vector2i(6, 5): Vector4i(4, 4, 4, 4),
+Vector2i(6, 6): Vector4i(4, 4, 4, 4),
+Vector2i(6, 7): Vector4i(4, 4, 2, 2),
+Vector2i(6, 8): Vector4i(2, 2, 2, 2),
+Vector2i(6, 9): Vector4i(2, 2, 2, 2),
+Vector2i(6, 10): Vector4i(2, 2, 2, 2),
+Vector2i(6, 11): Vector4i(2, 2, 0, 0),
+Vector2i(7, 1): Vector4i(6, 6, 6, 6),
+Vector2i(7, 2): Vector4i(6, 6, 6, 6),
+Vector2i(7, 3): Vector4i(6, 6, 4, 4),
+Vector2i(7, 4): Vector4i(4, 4, 4, 4),
+Vector2i(7, 5): Vector4i(4, 4, 4, 4),
+Vector2i(7, 6): Vector4i(4, 4, 4, 4),
+Vector2i(7, 7): Vector4i(4, 4, 2, 2),
+Vector2i(7, 8): Vector4i(2, 2, 2, 2),
+Vector2i(7, 9): Vector4i(2, 2, 2, 2),
+Vector2i(7, 10): Vector4i(2, 2, 2, 2),
+Vector2i(7, 11): Vector4i(2, 2, 0, 0),
+Vector2i(8, 1): Vector4i(6, 6, 6, 6),
+Vector2i(8, 2): Vector4i(6, 6, 6, 6),
+Vector2i(9, 8): Vector4i(2, 2, 2, 2),
+Vector2i(9, 9): Vector4i(2, 2, 2, 2),
+Vector2i(10, 8): Vector4i(2, 2, 2, 2),
+Vector2i(10, 9): Vector4i(2, 2, 2, 2),
+Vector2i(10, 10): Vector4i(2, 2, 2, 2),
+Vector2i(10, 11): Vector4i(2, 2, 0, 0),
+Vector2i(11, 8): Vector4i(2, 2, 2, 2)
+})
+zones = {
+"The Cairn": {
+"cells": Array[Vector2i]([Vector2i(5, 1), Vector2i(6, 1), Vector2i(7, 1), Vector2i(8, 1)]),
+"kind": 1
+},
+"The Foot": {
+"cells": Array[Vector2i]([Vector2i(4, 15), Vector2i(5, 15), Vector2i(6, 15), Vector2i(7, 15), Vector2i(8, 15), Vector2i(9, 15), Vector2i(4, 16), Vector2i(5, 16), Vector2i(6, 16), Vector2i(7, 16), Vector2i(8, 16), Vector2i(9, 16)]),
+"kind": 3
+},
+"The Summit": {
+"cells": Array[Vector2i]([Vector2i(5, 1), Vector2i(6, 1), Vector2i(7, 1), Vector2i(8, 1), Vector2i(5, 2), Vector2i(6, 2), Vector2i(7, 2), Vector2i(8, 2), Vector2i(6, 3), Vector2i(7, 3)]),
+"kind": 0
+}
+}
+objectives = Array[int]([1])
+look_preset = "Dawn"
+wind = 3
+roster = "Warband"
+deployment_cap = 4
+ai_factions = Array[int]([1])
