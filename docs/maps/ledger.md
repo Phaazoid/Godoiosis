@@ -38,7 +38,7 @@ board with a fixed cast and no roster since the tutorial.
 | # | Name | Size | Win | Lose | Sky and air | Cast | Alchemy spine | Hard shapes | Status |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | The Lime Kiln | small | Rout | none | clear, Normal | Warband, cap 4 | quicklime slaked into steam that soaks from a distance; a drain carries the shock | hazard squad (latent), strong solo, filler | **done** |
-| 2 | Chaff | medium | Extract | round limit | Dust (a look), vapor 0% | roster plus a guest with Smokescreen | smoke shortens the leash and splits a squad; tall grass makes the smoke | strong squad, filler pack | planned |
+| 2 | Chaff | medium | Extract | round limit (12) | Dust (a look), vapor 0% | Basics, cap 4, plus a guest with Smokescreen | burning chaff heaps make smoke that shortens a hunting squad's leash; Freeze slows the giant | strong squad, strong solo (slow), filler | **done** |
 | 3 | Meltwater | medium | Capture | none | Light Snow (heat down a step) | Basics | a frozen lake over deep water; fire melts it under whoever stands there, and the enemy does it first | hazard squad (present), strong solo on water | planned |
 | 4 | The Salt Stair | medium, tall | Rout | none | clear | Company | ledges and holes with Gust; Rock Throw only beside sandstone | strong solo too heavy to shove, strong squad on a ledge | planned |
 | 5 | Stormglass | medium | Rout | defended point | Thunderstorm (everyone ends Wet, vapor up three) | Warband, cap 5 | sand fused to thunderstone is a Zap source; every body conducts | strong squad (the rain is the separator's opposite: it links them), waves | planned |
@@ -57,3 +57,4 @@ Each finished map gets a row here with its real numbers.
 | # | Board | Cells | Enemies | Won by me in | Blunt baseline | Note |
 |---|---|---|---|---|---|---|
 | 1 | `TheLimeKiln.tres` | 14 x 12 | 6 in 3 groups | 7 rounds, no deaths | AI-driven default four: defeat | [TheLimeKiln.md](TheLimeKiln.md) |
+| 2 | `Chaff.tres` | 22 x 13 | 8 in 4 groups | round 11 of 11 (clock since raised to 12), all five out, three on 1 or 2 HP | AI-driven default four plus the guest: defeat by round 5 | [Chaff.md](Chaff.md) |

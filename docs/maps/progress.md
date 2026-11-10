@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 2, Chaff: first draft built, not yet played |
+| Map in hand | 3, Meltwater: spec drafted, not yet built |
 
 ## What the first map taught (read before designing the next)
 
@@ -50,7 +50,23 @@
 - **Restart the bridge after rebuilding a board** (send `quit`, start it again). Never kill Godot by
   process name: the dev's own editor is the same executable.
 
+## What the second map taught
+
+- **A Rushdown squad of five crosses eight tiles and attacks on its second turn.** Standing to
+  receive it loses two units. Staying one tile outside its reach for that turn hands you the first
+  strike.
+- **Smoke in a squad's path packs it** (the AI fits the formation into the short leash). It splits
+  only a squad that is already spread when the smoke lands.
+- **A squad at full leash stretch around a one-tile gap can freeze for good** (bug log, B2). Start
+  squads compact and keep them off one-wide gaps.
+- **A Sentry squad on open ground is bypassed.** Sentries suit posts with one way past.
+- **Chilled takes one off DEX,** which can drop a heavy unit's MOV a whole band.
+- **A placed PLAYER unit works beside a roster** and counts for Extract.
+- **Equipping is free:** a unit can swap tools and act every turn.
+- **Run the suites only when no other board is half-built on disk:** they read the whole folder.
+
 ## Log
 
 - 2026-11-09: scaffolding, builder proven on a throwaway board (not committed).
 - 2026-11-10: map 1, The Lime Kiln, done after five layouts. Committed.
+- 2026-11-10: map 2, Chaff, done after four layouts and five runs. Committed.

@@ -21,6 +21,18 @@ Each entry says which map wanted it, what it would have done there, and what the
   water flask (point aim, range 3, one tile) would open those layouts. The map uses a drain to
   carry the current.
 
+- **Wind that moves gas** (Chaff). The board authors a strong east wind and it only draws. Gas that
+  drifted a tile a round downwind would make "which side of the heap do I light" a real choice and
+  would let a map put its smoke where the author wants it without placing a caster. The map relies
+  on the squad walking into smoke that stays put.
+- **A Smokescreen that needs no ash, or a carried pouch of it** (Chaff). On stone, sand or water the
+  carving fizzles unless a heap, scorched ground or smoke is within a tile of the caster. On Chaff
+  that meant the guest who carries it never cast it: wherever she could cast from, the fire had
+  already made the smoke. A vial that counts as a source is on the Deep Alchemy list as unbuilt.
+- **Something that splits a moving squad** (Chaff). Smoke in a squad's path packs it (bug log, S5).
+  A carving or hazard that actually cuts a marching squad in two would be the tool the encounter
+  notes describe: a raised wall across the middle of the formation is the obvious one.
+
 ## Terrain and tiles
 
 - **A bare loam ground: plain dirt** (The Lime Kiln, and every map after it). The only loam grounds
@@ -32,6 +44,11 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **A low wall that blocks a swing but not a lob** (The Lime Kiln). Rock blocks everything. A
   parapet that stopped Splash and let Zap or a thrown flask over would let a designer separate the
   two reaches.
+
+- **A barricade that fire opens** (Chaff). Fences burn, but a burnt fence is still a wall. A fence
+  or brush wall that becomes walkable scorched ground would let fire cut a route as well as close
+  one. The first sketch of Chaff had fenced fields the player burned through; the shipped board has
+  open floor.
 
 ## Units, gear and enemies
 
@@ -45,7 +62,12 @@ Each entry says which map wanted it, what it would have done there, and what the
 
 ## Objectives and mission rules
 
-*(none yet)*
+- **Extract that lets a wounded unit be left for a cost** (Chaff). Every living unit must be in the
+  zone, so one slow straggler decides the mission. That is the design, and it made a good ending,
+  but a board cannot say "four of five is a win, five of five is the good ending".
+- **A clock the player can buy time on** (Chaff). The round limit is a flat number. A limit that
+  slipped by a round for each enemy leader killed, or stopped while a zone was held, would let a
+  map reward the fight it stages instead of only taxing it.
 
 ## AI
 

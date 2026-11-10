@@ -19,6 +19,27 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Not checked:** whether it is the placement (a unit that spawned in water) or the standing still
   (a unit that walked in soaks on the walk, and nothing soaks one that stays).
 
+### B2. A Rushdown squad stretched to its leash either side of a one-tile gap never advances
+
+- **Where:** a draft of Chaff. Stone floor, open in every direction. Two rock blocks at (11,5)-(12,5)
+  and (11,7)-(12,7) leave a one-tile gap between them on row 6.
+- **The squad:** a leader at (11,6), in the gap, COH 3, capacity 5, Hard band. Members at (10,5),
+  (10,7), (13,5) and (13,7), Medium band, MOV 4 all round. The two eastern members are exactly
+  three tiles of path from the leader, through the gap. Rushdown. The nearest player unit is eight
+  tiles west.
+- **Expected:** the squad walks west, a shorter step if the full one does not fit.
+- **What happened:** for three turns the squad's only actions were two members revving. Nobody
+  moved. A lone Rushdown unit beside them walked west normally each turn.
+- **What I checked:** the same five units with the same stats and bands, placed in the same shape
+  around the same rock blocks on a bare test board with the player to the south-west, advance
+  normally. So do the same five on open floor, an all-Hard copy, and a three-strong copy. On the
+  failing board, `focus` on the leader shows a move range of about twenty tiles and marks most of
+  an eastern member's range as breaking leader range. My guess is that every destination the
+  leader wants strands the two members who must file through the gap, and the advance is given up
+  whole instead of shortened. I did not read the AI code.
+- **Why it matters:** it is the stuck-squad class #1514 fixed for smoke, reached with no smoke at
+  all, and it turns a hunting squad into scenery. Moving the squad off the gap fixed the board.
+
 ## Surprises
 
 ### S1. One Fireball on a grass board is a wildfire, and the wildfire is also a steam bath
@@ -48,6 +69,35 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Where:** the Play API bridge, same process, same path, file rewritten on disk in between.
 - **What happened:** the old board loaded, and the saved loadout was replayed onto it. Expected
   from the resource cache; it cost a confused quarter of an hour. Restarting the bridge fixes it.
+
+### S5. Smoke where a leader stops packs the squad; it does not split it
+
+- **Where:** Chaff. A burning heap had put medium smoke in the lane the Reapers walked into.
+- **What happened:** the captain stopped in the smoke and all four members ended adjacent to him,
+  inside the one-tile leash. No split. The squad lost two tiles of reach that turn instead.
+- **Why it is here:** the encounter notes (#1649) list smoke as a separator. Against a squad that
+  is *moving into* smoke it is a compressor: the AI fits the formation to the short leash. It only
+  splits a squad that is already spread when the smoke lands on its leader (I saw that happen with
+  Smokescreen on a standing squad: two members cut loose in the same pass).
+
+### S6. A Medium-band Reaper ended its move on a burning tile
+
+- **Where:** Chaff, round 2. The Reaper took 5 at the end of that turn and died on the tile two
+  rounds later, downed and still burning.
+- **Not checked:** whether any non-burning tile inside the one-tile leash was free. If none was,
+  this is the hazard rule working as written.
+
+### S7. Losing an arm quietly takes a rune out of the hand, and may take the aura with it
+
+- **Where:** Chaff. Isaac lost his right arm to a 10-point hit. His line then read "(unarmed)".
+  Re-equipping the Fire Rune was refused: "Needs aura in Fire". The Freeze rune equipped.
+- **Why it is here:** nothing in the hit's result line said the rune had dropped or that an aura
+  had gone. I found out on the next turn when the order was refused.
+
+### S8. Equipping is free and unlimited within a turn
+
+- **Where:** Chaff. Wren swapped rune for Carbine, fired, and swapped back, all in one turn, every
+  turn. If that is intended it makes every unit with two tools a unit with both at once.
 
 ## Known already (seen again, not new)
 
