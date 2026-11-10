@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 11, not started. Ideas: The Long Dark (huge, the exam), a map on the air itself (essence, frost, heat haze moving Heal and Freeze), a Chemical Spitter and gypsum map |
+| Map in hand | 12, not started. Eleven boards are committed. Ideas left: a tiny indoor board on the air itself (essence, frost and heat haze moving Heal and Freeze), a Chemical Spitter and gypsum board, a board with an escort and a drawn weather |
 
 ## What the first map taught (read before designing the next)
 
@@ -133,3 +133,15 @@
 - A scratch notes file now holds a rules crib from a research probe (gases, tile states, air,
   vials, the Spitter). The short version: only steam and smoke do anything to a unit; the other
   gases only move the air; quicksilver, gypsum and brick have no effect of their own.
+- 2026-11-10: map 11, The Long Dark, done after four layouts of one site and five runs. Committed.
+- A Hold squad never moves: it can be hit from one tile outside its reach (Freeze reaches 3, Spring 2,
+  a carbine exactly 2, a mace 1). A Sentry squad walks toward any player unit standing in its zone.
+- An attack beside three enemies draws three reactions. PREVIEW BEFORE EVERY EXECUTE: three units
+  were lost in this run to batches that executed an attack without my reading its preview.
+- A Mender's Heal on a downed ally leaves a body that never bleeds out (bug log B3).
+- Shallow water cannot be melted: it is the safe tile beside an ice causeway. A unit that walks
+  through shallows is Wet; one that starts a mission standing in them is not (B1).
+- Splash wets its targets at once and slakes quicklime under them; a Zap after it did 15 through mail.
+- Freeze leaves frost and frost weakens the next Freeze cast through it.
+- A big board is mostly walking: budget a round per three tiles for the slowest unit, two tiles if
+  it is wounded.

@@ -49,7 +49,7 @@ board with a fixed cast and no roster since the tutorial.
 | 9 | The Drowned Orchard | medium | Rout | round limit (24) | drawn: Clear, Rain or Snow | Basics, cap 5, the whole stash open | read the sky, then pack: fire on a grass bank behind a channel, a Zap through a ford, Freeze as a bridge the enemy can melt | three strong solos who ignore terrain (Overwatch key), strong squad wading its hazard, hazard squad in an orchard | **done** |
 | 10 | The Saps (was Earthworks) | small, all corridors | Capture then Extract | round limit (14) | clear | Company, cap 4 | **unbuilt:** raised earth walls. Today the rock is the wall: trenches one and two tiles wide, a bay as a pocket, a nine-tile lane for the scoped Gun | strong squad cut down by a trench mouth, strong solo at the end of a lane, filler | **done** |
 | 11 | Three Banners | small | Rout | none | clear | fixed cast | a third faction hostile to both; turn their fire and gas on each other | two rival squads, one solo | **shelved:** the hostility table has no third side (wish list). An AI-run ALLY squad is possible and may replace it |
-| 12 | The Long Dark | huge | Capture and Rout | round limit | Night, drawn weather | Warband, cap 9 | everything above, as an exam | all three | planned |
+| 12 | The Long Dark | huge | Extract | round limit (26) | Night, aether-rich air | Warband, cap 6 | the exam: two roads, each with two set pieces from the earlier boards (quicklime and a drain, an ice causeway under a fire caster; a vein in a pool, a trench held from its far end), and a hunting squad on whichever road you take | all three, twice | **done** |
 
 ## Built so far
 
@@ -67,3 +67,4 @@ Each finished map gets a row here with its real numbers.
 | 8 | `Stormgate.tres` | 20 x 16 | 9 in 4 groups, plus 3 allied | round 9, no player deaths, three of five on 5 HP or less (three earlier runs lost) | AI-driven default five: victory with one survivor, ended by a Storm Caller shocking himself | [Stormgate.md](Stormgate.md) |
 | 9 | `TheDrownedOrchard.tres` | 20 x 13 | 10 in 3 groups | round 16 of 24 in Snow with three of five dead; round 23 with no deaths on an earlier build in Clear | AI-driven default five: defeat on round 8 | [TheDrownedOrchard.md](TheDrownedOrchard.md) |
 | 10 | `TheSaps.tres` | 14 x 14 | 8 in 3 groups | round 13 of 14, all four out, three of them on 1 or 2 HP. First layout, one run | AI-driven default four: defeat on round 9, all dead | [TheSaps.md](TheSaps.md) |
+| 11 | `TheLongDark.tres` | 38 x 24 | 16 in 7 groups | south road: round 24 of 26, all six out (three earlier attempts abandoned at the Cut). North road: round 22, all six out, first attempt | AI-driven default six: defeat on round 14 | [TheLongDark.md](TheLongDark.md) |

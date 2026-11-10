@@ -249,6 +249,42 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
   and I do not know what rule produces it. They may be stopping one tile outside the player's
   reach.
 
+### B3. A Heal on a downed unit raises its HP, stops its bleed-out, and leaves it lying there
+
+- **Where:** The Long Dark, twice. A Warden Mender healed a downed Warden: its line read
+  "hp11/18 ... [DOWNED, no right arm]" with no "dies in" count. Three rounds later it was still
+  down, still at 11 HP, and still blocking its tile. A downed Captain healed the same way took a
+  second killing blow to remove.
+- **Expected:** either the heal stands the unit up, or a downed unit cannot be healed, or the
+  clock keeps running.
+- **Why it matters:** a body that never bleeds out is a permanent block on its tile. In a
+  two-wide trench it closed a firing lane until I spent two attacks on it.
+
+### S28. An attack on one member of a holding squad draws every member's answer
+
+- **Where:** The Long Dark, the Cut. Torv struck the Captain from the tile beside him. The preview
+  listed three reactions: the Captain's Smash, the Bulwark's Smash and the Marksman's Shot, 27
+  damage in all, and he was killed outright the next round.
+- **Why it is here:** each reaction is legal and each was in the preview, which I did not read.
+  Stacked, they make "walk up and hit it" lethal against any squad of three standing together,
+  and nothing on the board says how many answers an attack will draw until the order is aimed.
+
+### S29. A Sentry squad whose zone holds a player unit walks toward it even when it cannot attack
+
+- **Where:** The Long Dark, a draft. With the Cut Guard's zone widened to cover the tiles where
+  I was fighting the Wardens, the Guard left its post on round 6 and arrived two rounds later.
+  With the zone two tiles narrower it never moved at all.
+- **Why it is here:** "a Sentry attacks what it can reach" is how I had been reading them. The
+  zone is also a tripwire.
+
+### S30. My own frost weakened my next Freeze
+
+- **Where:** The Long Dark, the Cut. Three Freezes down the same file in three rounds did 8, 8
+  and 6. The queue row showed why: "air: vapor -1, air: elemental aether +1" against "+2" before.
+  Freeze leaves thin frost, and frost takes vapor and aether out of the air it is cast through.
+- **Why it is here:** it is a rule working exactly as written, and the first time in eleven
+  boards that a gas other than steam or smoke changed a number I cared about.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the

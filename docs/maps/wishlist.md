@@ -163,6 +163,20 @@ Each entry says which map wanted it, what it would have done there, and what the
   air, or a posted squad that broke and ran for water when its post caught, would turn the wait
   into a chase.
 
+- **A count of the answers before the order is aimed** (The Long Dark). An attack on one of three
+  units standing together drew three reactions. The ranges view shows who can strike a tile next
+  turn; it does not show who will answer a blow struck from it now.
+- **A body that cannot be healed while it is down, or that stands when it is** (The Long Dark; bug
+  log B3). A healed, downed, clockless body is a wall nobody chose to build.
+
+- **A wounded unit that can be carried** (The Long Dark, The Saps). Extract waits for the slowest
+  unit, and a unit with a leg off moves two tiles a round. Nine rounds of one mission were that
+  walk. A sound unit carrying a wounded one at its own pace, at the cost of its action, would
+  make the last stretch a decision instead of a wait.
+- **A road choice the player is shown** (The Long Dark). The board has two roads and nothing on
+  the pre-mission screen says so. A line on the mission card, or a look at the whole board before
+  deploying, is what would make it a choice.
+
 ## AI
 
 - **A posted squad that leaves a burning post** (The Drowned Orchard, The Lime Kiln). Not to
