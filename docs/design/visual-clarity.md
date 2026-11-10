@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1171 (2026-09-29); #1498 (the split forecast's ground is the planned tiles; the arc's canon sweep) folded in 2026-10-29; #1428 (the bar runs on to the END OF TURN) folded in 2026-10-23; #1377 (the danger field stops clipping a Sentry's reach to its zone) folded in 2026-10-21; #1247 (queued attacks wear the queue's icon on the board) folded in 2026-10-07; #1251 (the hovered unit's own marks on top, and the hover flash) folded in 2026-10-07; #1253 (a queued attack's pointer rides its badge, and the hover flash rests at normal) folded in 2026-10-07; #1132 (the battle zoom sees past what stands in the way, then the approach and arrival, then the held angle and the settle, then readouts and bystanders) folded in 2026-10-07; #705 (the dev pause and key poses, then the Camera page) folded in 2026-10-08; #1207 (the field covers a placed blast's splash) folded in 2026-10-05; #1174 (Will retired, the limb icons) folded in 2026-10-01; #1197 (the danger field draws the watch shot and the current) folded in 2026-10-03; #508's soak rename folded in 2026-10-04; #46's shared execute steps folded in 2026-10-04. #545 (fast-forward, skip and the playback speed) folded in 2026-10-07; #1256 (an enemy squad's lines while aiming at it, and lime) folded in 2026-10-07; #661 (a board swap ends the pass in flight) folded in 2026-10-08; #1001 (threat lines are dumb reach lines, closed not-planned) folded in 2026-10-09; the #929 follow-up (a HUD surface catches its own clicks) folded in 2026-10-09; #1374 (a zone colour knob recolours every surface wearing it) folded in 2026-10-21; #1430 (the round's smoke split turns a tether red) folded in 2026-10-23; #1456 (a VIP wears one mark, in one gold) folded in 2026-10-24; #1480 stage 5 (a socket the plan takes away is outlined) folded in 2026-10-25; #1499 (the split forecast judges the plan's bodies) folded in 2026-10-25; #695 slice 2 (a collapsed volley's header draws its aim-level facts) folded in 2026-11-08.**
+**Canon checked through #1649 (2026-11-09).**
 
 ## Principles
 
@@ -69,13 +69,17 @@ plus the running order of the queue-UX checklist. Update it as items land.
    **Overwatch** (who watches it: side, unit, attack), **Zones** (each drawn zone and what its kind
    asks, including *how* to take a capture point) and **Ground** (states with live clocks, rules,
    which elements can touch it) — for a clicked empty tile, or beside the dock for the tile an
-   inspected unit stands on, following that unit as it walks. **A tile is never read inside the
+   inspected unit stands on, following that unit as it walks. *(Since
+   [#1324](https://github.com/Phaazoid/Godoiosis/issues/1324) there is a fourth layer, **Air**, and
+   the card shows ONE section at a time, under a tab row with a key to turn the page, because the card
+   cannot scroll: `TileInfoSections`.)* **A tile is never read inside the
    dock** (*"much better than including the new info in the unit overlay"*). Two earlier shapes were
    built and thrown out, and why is worth keeping: a click opening the tile in the full-height dock
    (*"far too much"*, and it stood beside the hover card for the same tile), then the Z key growing
    the hover card in place (*"the Z button just isn't doing it for me"* — it all has to be reachable
    by mouse). Right-click closes a card before it undoes an order, since a card now comes up on every
-   empty-tile click. `TileReadout` (`Classes/board/`) is the ONE builder and `TileInfoSections` the
+   empty-tile click. *(Since [#1629](https://github.com/Phaazoid/Godoiosis/issues/1629) an open
+   matchup card is the first rung, closed before anything else.)* `TileReadout` (`Classes/board/`) is the ONE builder and `TileInfoSections` the
    one renderer and the one redraw diff — whose old `""` sentinel, doubling as an empty readout's
    signature, is what showed a rock the grass tile's fire (dev report, 2026-09-26). The hover setting
    slice 2 was to add (Verbose / Minimal / Off) was dropped when #1105 closed (dev, 2026-09-27): with
@@ -115,17 +119,21 @@ directly against `Classes/ui/queue/SquadActionQueueControl.gd` / `ActionQueueRow
 
 1. **More info per row — damage + target HP before -> after.** — **DONE.**
    `AttackAction.get_outcome_summary()` renders `-N (before->after)`, with a dedicated honest form
-   for CRISIS rows (extended alongside #57).
+   for CRISIS rows (extended alongside #57). *(No live surface calls it now: the row's before→after
+   is `ActionQueueRow._show_hp_delta`.)*
 2. **Counters render after all attacks.** — **DONE** — `ActionQueueDisplayEntry.build_for`
-   builds COUNTER as its own section, last, with skipped counters hidden.
+   builds COUNTER as its own section, last, with skipped counters hidden. *(The section is headed
+   REACTION now, and END OF TURN follows it, last.)*
 3. **Group a volley into one expandable row.** — **DONE** —
    `SquadActionQueueControl._collect_volley_group` / `_add_volley_group`, per-actor expand/collapse
    state (`_expanded_actors`), `ActionQueueRow.setup_volley_summary`. Since #1122 the toggle is the
    header's `[+] xN` readout (`ActionQueueRow.expand_toggled`); a click on the header row requeues.
 4. **Outer scrollbox for the whole queue.** — **DONE** — `_section_scrolls: Array[ScrollContainer]`,
-   one per section plus the outer list.
+   one per section plus the outer list. *(One `OuterScroll` since
+   [#685](https://github.com/Phaazoid/Godoiosis/issues/685), which deleted `_section_scrolls`.)*
 5. **Click-drag to reorder attacks.** — **DONE** — full drag machinery (`_drag_row` / `_drag_section`,
-   `reorder_attacks_requested` signal) in `SquadActionQueueControl`.
+   `reorder_attacks_requested` signal) in `SquadActionQueueControl`. *(The signal is
+   `reorder_requested(action_type, ordered_actors)` now.)*
 
 **A click on a row REQUEUES its order ([#1122](https://github.com/Phaazoid/Godoiosis/issues/1122),
 2026-09-28).** Dev: *"jump to that unit in game, with the action menu brought up, to requeue that
@@ -148,17 +156,20 @@ player is told any of this is [#1085](https://github.com/Phaazoid/Godoiosis/issu
 
 ## Tooltip / popup legibility — open items (added 2026-07-29)
 
+*(All three items below shipped; nothing here is open. The heading keeps its words for the links
+that name it.)*
+
 Collected at @Phaazoid's direction while building [#90](https://github.com/Phaazoid/Godoiosis/issues/90) and [#88](https://github.com/Phaazoid/Godoiosis/issues/88). All three are "the text is there but the player can't use it" problems, which is this umbrella's remit.
 
 1. **Popup line width — DONE 2026-07-29.** Long tooltips ran off the right edge of the screen and became unreadable (found by feel-test on a new ability description). Godot's built-in tooltip is a `Label` with autowrap **off**, and autowrap is a property rather than a theme item, so there is no global switch — every tooltip in `Classes/ui/` now routes through `UiText.wrap()` (`TOOLTIP_WIDTH`, playtest-tunable). Pinned at **runtime** by `tests/ui/test_tooltip_rendering.gd`, which populates the real inspect panel with a unit dressed in the authored content that caused the regression, walks the live `Control` tree, and asserts every rendered tooltip is already in wrapped form (`wrap(t) == t`, valid because `wrap` is idempotent). Known trade-off: a single word longer than the width overflows its line rather than breaking mid-word — `wrap` leaves it alone, so it does not read as a violation.
 
   > **Corrected 2026-08-01 (suite audit).** This was originally pinned by a **source-level** law at `tests/law/test_tooltip_wrapping.gd` that grepped each `Classes/ui/` function for the token `UiText`, justified by "this layer has zero runtime coverage (#114)". That premise was **false** — [#114](https://github.com/Phaazoid/Godoiosis/issues/114) measured the game scene instantiating cleanly under the runner, and `tests/ui/test_game_scene_smoke.gd` had said so since 2026-07-29. The runtime replacement is strictly stronger: falsified against a site that wrapped at the **wrong width**, which the source scan could not see because `UiText` still appeared in the function.
-2. **A rune has no meaningful inventory tooltip — DONE 2026-08-10 ([#167](https://github.com/Phaazoid/Godoiosis/issues/167), filed during #166 playtest, a #44 sub-issue).** `inventory_panel._tooltip_for` had a `WeaponInstance` branch and an `ArmorData` branch; a `RuneData` fell through to the generic case and showed only its name plus flavour text. The new branch is a readout, not new machinery: a temper/size/used-capacity headline, then one line per inscribed carving built from the exact `attack_detail`/`attack_block_reason` pair #166 built for the Transmutation submenu's rows (same detail-then-reason order, so the two surfaces read consistently) — a carried-but-unequipped rune, or one force-stripped by a maim, now explains itself the same way an equipped one's submenu does. Read against the panel's own unit (the tooltip's wielder), since the numbers are per-wielder. Pinned by `tests/ui/test_rune_inventory_tooltip.gd`, sibling fixture to #166's `tests/ui/test_menu_catalogue_rows.gd`, asserting on the rendered slot tooltip rather than the builder function in isolation. **That whole composition moved to `ItemText.hover` at [#137](https://github.com/Phaazoid/Godoiosis/issues/137)** — the rule is unchanged and so is this readout; what changed is that the pre-mission surfaces now say the same words, where both had answered with the item's name alone.
+2. **A rune has no meaningful inventory tooltip — DONE 2026-08-10 ([#167](https://github.com/Phaazoid/Godoiosis/issues/167), filed during #166 playtest, a #44 sub-issue).** `inventory_panel._tooltip_for` had a `WeaponInstance` branch and an `ArmorData` branch; a `RuneData` fell through to the generic case and showed only its name plus flavour text. The new branch is a readout, not new machinery: a temper/size/used-capacity headline, then one line per inscribed carving built from the exact `attack_detail`/`attack_block_reason` pair #166 built for the Transmutation submenu's rows (same detail-then-reason order, so the two surfaces read consistently) — a carried-but-unequipped rune, or one force-stripped by a maim, now explains itself the same way an equipped one's submenu does. Read against the panel's own unit (the tooltip's wielder), since the numbers are per-wielder. Pinned by `tests/ui/test_rune_inventory_tooltip.gd`, sibling fixture to #166's `tests/ui/test_menu_catalogue_rows.gd`, asserting on the rendered slot tooltip rather than the builder function in isolation. **That whole composition moved to `ItemText.hover` at [#137](https://github.com/Phaazoid/Godoiosis/issues/137)** — the rule is unchanged and so is this readout; what changed is that the pre-mission surfaces now say the same words, where both had answered with the item's name alone. *(Since [#962](https://github.com/Phaazoid/Godoiosis/issues/962) each carving's line leads with its recipe, "Asks …", whoever carries it.)*
 3. **The Transmutation submenu reads as a catalogue, not just a picker — BUILT 2026-08-10 ([#166](https://github.com/Phaazoid/Godoiosis/issues/166); the item was #88's, filed as a ticket out of [#157](https://github.com/Phaazoid/Godoiosis/issues/157)'s plan and a #44 sub-issue).** #157's equip gate killed the fully-dead-rune case but is "at least one channelable carving", so a partial rune's dead entries permanently owe the player a reason — the gate made this readout more necessary, not less. Both dev-requested parts shipped, and the mechanism under them is deliberately general:
-   - **Un-channelable carvings are LISTED and greyed with a reason.** `RuneData.choice_attacks` is now the catalogue (every inscription), matching `WeaponInstance.secondary_attacks`, which always returned all extras and let the row disable them; whether a given carving can be paid for is asked per entry.
+   - **Un-channelable carvings are LISTED and greyed with a reason.** `RuneData.choice_attacks` is now the catalogue (every inscription), matching `WeaponInstance.secondary_attacks`, which always returned all extras and let the row disable them; whether a given carving can be paid for is asked per entry. *(Every carving but the watch-only ones: it is `fireable_only(repertoire)` now.)*
    - **Every row carries a hover readout** — recipe · hit · strain (the middle term was "payload" until #1058 gave the word to the attack a hit drops), derived per wielder (`TransmutationData.mechanical_text`, the carving's answer to the role `ArmorData.mechanical_text` plays for a worn piece). Deliberately derived rather than authored: an `AttackData.description` for prose can be appended as one more line whenever it is wanted, at the same cost. **Since [#1083](https://github.com/Phaazoid/Godoiosis/issues/1083) every attack row, weapon or carving, fire or watch, also says whether it hits allies** — one line, the only one of the cards' channel list the ring carries, by ruling (the rest is the item card's, [#1152](https://github.com/Phaazoid/Godoiosis/issues/1152)). The rule is in `weapons.md` → *The ally line*.
    - **The generalization, which is the reusable part: a menu can only grey what it can explain.** The reason a row is dead belongs to the data layer, not the menu — `EquippableData.attack_block_reason(wielder, attack)`, answered per kind (a weapon reports readiness in its family's own `status_text()` words, a rune reports aura), with `Unit.is_attack_fireable` **derived** from it so the refusal and its explanation can never drift (Law #4). The menu side is one row builder, `MainActionMenu._entry(name, blocked_reason, detail)`, which any other menu can adopt without new machinery. The one hardcoded reason string that used to live in the menu is gone.
-   - **Which options get listed-and-greyed is still per-menu policy, and only this one changed.** The Weapon Action *self-verbs* (Reload/Rev/Burrow) stay hidden when unavailable, because `can_reload()` conflates "this family cannot reload at all" with "the magazine is already full" — they need that distinction before they could honestly say why. `populate()`'s top-level rows likewise stay omit-when-unavailable; a permanently full main menu is a UX change, not a readout fix.
+   - **Which options get listed-and-greyed is still per-menu policy, and only this one changed.** The Weapon Action *self-verbs* (Reload/Rev/Burrow) stay hidden when unavailable, because `can_reload()` conflates "this family cannot reload at all" with "the magazine is already full" — they need that distinction before they could honestly say why. `populate()`'s top-level rows likewise stay omit-when-unavailable; a permanently full main menu is a UX change, not a readout fix. *(Reload lists and greys with its reason since [#97](https://github.com/Phaazoid/Godoiosis/issues/97) (`has_reload_verb` / `reload_block_reason`), so only Rev and Burrow still hide. And since [#1409](https://github.com/Phaazoid/Godoiosis/issues/1409) the ATTACK row opens on the kit having a main at all, greyed when it cannot fire.)*
    - This is also **why the category opens for a single carving** rather than requiring two: with descriptions and greyed entries it is informative even when it offers no alternative choice. Note the category's *row* still gates on something ACTIONABLE (`Unit.has_transmutations`, the same loop `has_weapon_actions` uses) — the catalogue is what's inside it, not what opens it.
 
 ## Reading a turn: pacing and history (added 2026-07-29)
@@ -195,6 +206,7 @@ you read it *afterwards*. Both are #44 children.
     `is_ai_faction` call its invalid-plan concede already makes (#103), so a hotseat faction with AI
     off is a *human* and paces like one. `PLAYER_ACTION` is **0.0** by dev call (2026-08-10): an AI
     plan is being read for the first time, a player's was authored by the person watching it.
+    *(0.3 since [#519](https://github.com/Phaazoid/Godoiosis/issues/519), which reversed that call.)*
   - **`AI_PLAN_READ` is skipped when the squad only holds position.** Queueing repaints the queue
     panel, arrows, ghosts and target markers synchronously, so the pause buys a real readout — but a
     squad with nothing to do would just add dead air per squad, which is the complaint being fixed.
@@ -293,6 +305,8 @@ Law #2 says the queue never lies and Law #1 says there is no randomness, so a qu
 *forecast* a unit's HP — it *is* what that HP will be. This draws it: while a plan is queued, every
 unit it changes wears a readout with a **notch** at the predicted HP and the span between there and
 now filled in. **Presentation only.** It computes no damage; if it ever needs to, that is the bug.
+*(An open aim feeds it too since [#929](https://github.com/Phaazoid/Godoiosis/issues/929): the
+hovered aim's whole plan, `game.aim_forecast`, stands in for the queued one.)*
 
 *(The NOTCH was deleted by #314 below. Everything else in this section — who wears one, what the
 alarm means, the hypo-not-`target_hp_after` rule — is unchanged; with one cube per point of HP,
@@ -342,7 +356,7 @@ puts a doomed bar over the player unit it is about to hit. Whether that is a lea
 lands during `Pacing.AI_PLAN_READ`, the beat that exists so a drawn AI plan can be read) was filed
 as [#362](https://github.com/Phaazoid/Godoiosis/issues/362) and **RULED A FEATURE on 2026-09-16**:
 the dev wants *more* enemy intent shown *earlier*, which is [#710](https://github.com/Phaazoid/Godoiosis/issues/710)
-(see *The enemy's reach, before you commit* below).
+(see *What the enemy COULD do* below).
 
 Successor filed the same day and **BUILT 2026-08-19**: [#350](https://github.com/Phaazoid/Godoiosis/issues/350)
 — a player toggle pinning **every** bar on, which was one more disjunct in this same visibility
@@ -599,7 +613,8 @@ solid objects should — the coplanar-quad ladder they used to need is gone. Wha
 one's cubes; the cubes themselves cannot. (Round 4 deleted the backing quad, which was the last
 thing on that ladder besides the text.) The width figure above is also
 superseded — the grid is 41 texels ÷ 32 px-per-cell = 1.28 cells at 20 max HP, and it scales with the
-unit's max HP rather than being fixed.** Deliberately not built: that ticket was the toggle, and
+unit's max HP rather than being fixed.** *(4-texel cubes shipped the same day (`38dde3c2`), so a row
+is 31 texels, about 0.97 cells.)* Deliberately not built: that ticket was the toggle, and
 whether the crowding actually reads
 badly is a question only play answers.
 
@@ -648,7 +663,8 @@ had. What landed:
 - **A row's KIND is derived from the table, not stated in a second field** — a row with `options` is
   a choice. `is_choice` asks that question and there is nothing to keep in step.
 - **A generic core with typed façades**: `value_of` / `set_value` / `default_value` are what a
-  caller walking `DEFS` uses (`board_fingerprint` is the one such caller), and `is_on`/`set_on` plus
+  caller walking `DEFS` uses (`board_fingerprint` is the one such caller; *the Game tab's setting
+  rows now read and write through them too, `GameKnobs.read_class` / `write_class` and `GameTool`*), and `is_on`/`set_on` plus
   `choice_of`/`set_choice` sit over them for callers that know their row's kind. `default_of` folded
   into `default_value`. The five production `is_on` readers are untouched.
 - **The projection property survives**, which is the whole reason (a) was chosen over two bools: the
@@ -739,7 +755,8 @@ It is the readout the ruleset actually earns.
 
 The rulings, all dev calls, all made in a grill session before building:
 
-- **A cube is 5 texels INCLUDING a 1-texel black cage, ten to a row.** Ten is what makes it a glance
+- **A cube is 5 texels INCLUDING a 1-texel black cage, ten to a row.** *(Shipped at 4, the cage
+  still 1, since `38dde3c2` (2026-08-22); both are Game-tab rows.)* Ten is what makes it a glance
   rather than a count — one full row plus four reads as 14 without counting. Rows grow upward, the
   BOTTOM row fills first, so losses show along the top where a cube has clearance to leave.
 - **The cage is where the 3D read comes from, not lighting.** Dev's words: *"each edge of the cube
@@ -846,7 +863,9 @@ The six feel calls, each a dev ruling:
 - **The grid is HELD IN PLACE by default** — *"The health bars are 3D, they should not billboard
   towards the camera."* It sits on the board's own axes like the voxel props; a knob restores facing.
   The cost is declared rather than fixed: orbit past one and it goes edge-on to a line, which is what
-  keeping it in place *means*.
+  keeping it in place *means*. *(The shipped default FACES the camera: the 2026-08-27 `tuning`
+  commit (`ef3ef1e1`) flipped `hp_grid_faces_camera` from false to true. Held in place, the grid
+  squares to the level's own viewing angle since [#562](https://github.com/Phaazoid/Godoiosis/issues/562).)*
 - **The recess needed a second pass, and the reason generalises.** *"The recessed red doesn't
   actually look too great, it looks somewhat different than the image you built for me."* He was
   right and the diagram was the thing at fault: it drew a socket with a dark inner rim, which the
@@ -1037,7 +1056,8 @@ specified to ride exactly that gate. Riding it is a choice about defaults, not a
 the one answer to what a marker type LOOKS like (applied once at `setup`, so `_style_icon` only ever
 decides tint and z — it used to assign textures too, a second place a marker's art came from), and
 `OverlayMirror._icons` routes by TYPE rather than by mode (CROWN to the head channel, everything
-else to the ground). The per-type y-stagger went with the squares: CROWN is the head channel's only
+else to the ground; *since [#414](https://github.com/Phaazoid/Godoiosis/issues/414) `GUARD_WARD`
+rides its own `GUARD_ICONS` layer*). The per-type y-stagger went with the squares: CROWN is the head channel's only
 tenant, so there is nothing left to stagger against.
 
 **The premise this ticket was filed on was wrong, and the correction generalises.** #325's body
@@ -1067,7 +1087,8 @@ an interaction-scoped marker cannot carry an event that happens when no interact
 right the marker looks the rest of the time. Fifth instance of
 [#228](https://github.com/Phaazoid/Godoiosis/issues/228)'s law.
 
-So the animation waits, and what shipped first is the lifecycle it needs:
+So the animation waits *(#423 closed 2026-09-27: the shatter became the tether's break, which
+Membership MOMENTS at the end of this file covers)*, and what shipped first is the lifecycle it needs:
 `PlayerSettings.ALWAYS_SHOW_SQUAD_RINGS`, **off by default**, which keeps every multi-member squad's
 rings up instead of only the squad being looked at. It is a toggle rather than a switchover on
 purpose — the same play-both-then-decide shape #325 itself used, and the loser gets deleted.
@@ -1097,7 +1118,8 @@ that channel that has to survive somebody *else's* redraw, and `HoverPresenter` 
 hover-move preview: so hovering one squad stripped every other squad's rings, which is the state the
 board would have sat in for most of a feel-test. `standing_squads_source` (a Callable injected by
 game, the `SquadManager.board_source` idiom) is what lets the redraw put the standing set back
-without `OverlayManager` learning what a player setting is. The general form: **adding a persistent
+without `OverlayManager` learning what a player setting is. *(Now `OverlayManager.standing_rings_drawer`,
+which draws the standing set rather than returning its squads.)* The general form: **adding a persistent
 tenant to a channel means auditing every writer that clears the channel, not just the ones that
 draw the new thing.**
 
@@ -1152,7 +1174,8 @@ the squad's own ring already says what the pick marker repeats. The other three 
 marker and are untouched — rescue and intimidate target a unit with no ring to collide with, and
 Squad Up's candidates are solo units who by definition have none. Squad Up had already been through
 this reduction: `draw_create_squad`'s comment records #346 deleting its TARGET icon as *"two markings
-of one fact"*, and join-squad was the half left behind.
+of one fact"*, and join-squad was the half left behind. *(The function and its comment are gone
+since; see the retirement list above.)*
 
 **Three things the build settled, each worth keeping.** The **hue is never the undealt sentinel
 here** — `can_join_squad` ends in `squad.leader.has_squad()`, so a joinable squad always has
@@ -1285,7 +1308,10 @@ complaints were separable and only one of them was a widget problem: the look, a
 `ACTION_DATA` declares nineteen verbs and a leader with a rune on a capture point beside a downed
 ally is offered fifteen at once. **A ring does not fix that by being a ring.** It fixes it by
 nesting, which is arithmetic: at the same arc length per slice, a ring at twice the radius holds
-twice the slices, so no single ring has to hold nineteen.
+twice the slices, so no single ring has to hold nineteen. *(`ACTION_DATA` holds 16 rows now, three
+of them category headers: verbs left in round 2 and with Will
+([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)), and Reposition and Undeploy joined
+([#772](https://github.com/Phaazoid/Godoiosis/issues/772)).)*
 
 Five rulings, all the dev's, none of them re-derivable from the code:
 
@@ -1346,7 +1372,8 @@ with what commits. Safe by construction, since the menu is modal.
 
 **The portability is a seam, not a side effect.** `(level, index)` is the one authority and the
 mouse is one adapter feeding it — `aim_at` / `commit` / `back` is the whole vocabulary. This ticket
-ships no gamepad bindings (there are none in `project.godot` at all); what it ships is the shape
+ships no gamepad bindings (there are none in `project.godot` at all; *one now, Dialogic's own
+`dialogic_default_action`, and still none on a game action*); what it ships is the shape
 that keeps them from being a rewrite.
 
 **The look is knobs, not guesses** (#253's rule): centre gap, ring thickness, gap, dead zone, wedge
@@ -1474,7 +1501,8 @@ preview with no chrome at all: a lit deployment zone and two keys nobody had bee
 corner is the right home for the replacement rather than a free one, because `MissionStatusPanel`
 reserves that slot whether or not anything is in it -- so `PreMissionBar` reflows nothing, and takes
 its height FROM the reservation (`BUTTON_CLEARANCE - CORNER_MARGIN`) rather than measuring the slot a
-third time. The general rule the pair of tickets makes: **a surface that stands down owes the frame
+third time. *(It caps at `HEIGHT_CEILING`, which is `BUTTON_CLEARANCE` itself; the minus form is
+`PlaybackHint`'s, from [#545](https://github.com/Phaazoid/Godoiosis/issues/545).)* The general rule the pair of tickets makes: **a surface that stands down owes the frame
 whatever the player still needs from that corner.**
 
 What its old visibility rule became is the FLASH, and the
@@ -1488,7 +1516,7 @@ together again, for a reason that is not layout; the measured gap is still what 
 What #541 leaves up is declared: behind a menu or a finished mission (the press refuses there), and
 ending a turn with a half-built queue now means executing or cancelling it first —
 [#1086](https://github.com/Phaazoid/Godoiosis/issues/1086)'s cancel-the-whole-queue is what makes that
-cheap.
+cheap. *(#1086 is still open: today a queue empties one row at a time, by its X or by right-click.)*
 
 **A wedge is capped at how much it PAINTS** (`MAX_WEDGE_DEGREES`) — *"the massive balloon arcs just
 don't look great."* A compacting ring produces rings of one and two constantly, and without a cap
@@ -1580,7 +1608,8 @@ would leave a short hop standing under its own ghost while a long one finished.
 `_execute_action_phase_parallel` already polled `execution_complete` every frame; it now visits every
 action instead of breaking on the first unfinished one, and fires an optional per-action hook. The
 phase runner still does not know what a move is — the hook is generic and the executor supplies the
-meaning.
+meaning. *(Now `OrderExecutor._execute_move_phase`, which retires each move through the move-specific
+`_retire_move_markup`.)*
 
 **The test lesson, which generalizes past this ticket.** The first version of the walking-arrow case
 waited for the other unit to arrive, and PASSED against the mutant that restores the first-step
@@ -1636,6 +1665,11 @@ rung art every other row uses. **Overwatch's architecture, generalized** (dev's 
 starting point): a standing board condition whose consequences the resolver derives per pass into
 its own `ResolvedPlan` list, which the panel draws as rows that ask the action about themselves.
 [terrain.md](terrain.md) → *Hazardous tiles and pathing* owns the mechanism and the two open halves.
+*(Both are DECIDED since 2026-10-05,
+[#920](https://github.com/Phaazoid/Godoiosis/issues/920) and [#1220](https://github.com/Phaazoid/Godoiosis/issues/1220):
+crossing became a route preference in `RulesService.route_to`, and not ending on a hazard is the AI's
+alone. [#509](https://github.com/Phaazoid/Godoiosis/issues/509), terrain that hurts to cross, is what
+stays open.)*
 
 Two findings the build produced, both about the ask rather than the code. **The "crosses" half had
 nothing to report**: crossing fire costs nothing today, so a path-crossing warning would have
@@ -1688,12 +1722,14 @@ tile, and asserts on the queue.
 press — it re-opens its planning, exactly as if you had hit Move again — so the button now walks
 `move queued → planning → nothing`. The third rung is free: planning already spent the order on
 entry, so leaving the mode is the outright cancel. Scoped to a **lone** move, so a formation still
-pops whole (see [squad-system.md](squad-system.md) → *Right-click is a LIFO undo*).
+pops whole (see [squad-system.md](squad-system.md) → *Action queue rules*, its "Right-click is a LIFO
+undo" rule).
 
 Two seams carry it, and both exist to avoid a second answer. `game.begin_move_planning` is the Move
 *gesture* — cancel the queued order, then enter the mode — called by the menu row and by the
 right-click branch alike; `game.enter_move_mode` stays the bare mode entry, because thirteen
 presentation call sites use it purely to paint the overlay and would start deleting orders otherwise.
+*(Its one production caller is `begin_move_planning` itself; the rest are test setups.)*
 `game.select_unit` is the extracted select write point (#107), since re-entry has to select before
 `_click_choosing_move` can read anything. Pinned in `tests/ui/test_right_click_cancel.gd` — where
 **two existing cases had to be rewritten**: both ended on an order count of zero, which stays true
@@ -2027,7 +2063,9 @@ places rather than everywhere makes them have more effect."*
   So `HOLD_REV` and `LINGER_REV` are **player-only knobs** from here on, and their Game-tab tips say so.
 - **THE SKIP IS AT CONSTRUCTION, and that is what makes it reach the tear-out.** `BeatSheet.read`
   simply does not append the coda — the same move it already makes for a hold-position filler,
-  *"the honest reading of a phase in which the board does not change."* Because `_gather_cells`
+  *"the honest reading of a phase in which the board does not change."* *(Since
+  [#1454](https://github.com/Phaazoid/Godoiosis/issues/1454) it also skips a side-channel order whose
+  actor the pass felled, asking `is_inert()`.)* Because `_gather_cells`
   walks the beats, dropping one takes its actor's cell off the **stage** as well: with the battle
   zoom at its shipped `ALWAYS`, every beat is CINEMATIC, so that one cell was the difference between
   a silent pass and the full diorama — brace, flight, settle, and the same again going home. The
@@ -2246,7 +2284,9 @@ settle and it lands on the combat side, because the act break where the defendin
 is punctuation *inside* a fight — dropping to plain for it cuts the exchange in half between an attack
 and its counter. `CELL_EFFECTS` is the edge that could have gone the other way (a unit standing in
 fire *is* taking damage) and stays plain rather than reversing a standing call: the environment pass
-forks on neither profile nor faction, because the board acts there.
+forks on neither profile nor faction, because the board acts there. *(`CELL_EFFECTS` was retired by
+[#1498](https://github.com/Phaazoid/Godoiosis/issues/1498) stage 2: a volley's tile changes land with
+it (`ResolvedPlan.play_landing`), so there is no environment beat any more.)*
 
 **`Pacing.active_profile()` is DELETED, and that is the load-bearing half.** It answered for a whole
 pass, and once `COMBAT_ONLY` exists there is no such answer — a move and the volley after it run
@@ -2865,7 +2905,8 @@ Discrete doors still `note_event` themselves, and that is what NAMES a cause: th
 one distance door — `widen_to_fit`, `frame`, `pose`, `restore_view` and the wheel all arrive
 there; *R writes the home distance directly, since #1280 `_reseat_pivot` relabels it past this door, and #705's `return_to_snapshot` cuts every channel directly — the heartbeat catches all three*), the lift cut, a landed shake, the borrow/restore/drop trio, and `battle3d`'s own edges —
 the lock, the stage, the follow change, and **the round-8 deferral**, which needed its own rising
-edge because `_trained_seen_id` deliberately does not advance while the show holds. A note that
+edge because `_trained_seen_id` deliberately does not advance while the show holds *(gone since
+[#672](https://github.com/Phaazoid/Godoiosis/issues/672); the deferral is a `ShotDirector` row)*. A note that
 fires on a no-op is guarded at each door for one reason: a row reading `11.0 -> 11.0` stands where
 a cause should be, and enough of them evict the causes.
 
@@ -2993,7 +3034,8 @@ ruled change is its own commit, moving two readings and nothing else.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
-landed as #229 above; the PANEL half is still open, and Will is moot since #1174 retired it --
+landed as #229 above; the PANEL half is still open *(no issue tracks it: it survives as one line
+in #44's list comment)*, and Will is moot since #1174 retired it --
 #965 now asks for Wounded on the board instead); squad-target
 cursor color-coding; simultaneous-movement legibility (needs design first — the umbrella's core
 problem).
@@ -3025,7 +3067,10 @@ avoid that, or when it can't, selectively make things invisible."* Nothing in th
 asked what stands between the lens and its subject, and the beat's yaw was solved ONCE -- the
 shorter of `side_on_yaw`'s two answers -- and never re-asked while the subject moved. That second
 half is [#972](https://github.com/Phaazoid/Godoiosis/issues/972) exactly: a tumble bending 90
-degrees, held side-on to the BLOW, on a cliff face for the whole death show. *(#972 is still open on the tracker; whether round 3's hide closes it is not recorded.)*
+degrees, held side-on to the BLOW, on a cliff face for the whole death show. *(#972 closed on 2026-11-04, by a closing keyword in
+[#1607](https://github.com/Phaazoid/Godoiosis/pull/1607)'s merge, though #1607's own text says it does
+not fix the bent tumble's angle. That PR fixed
+[#1594](https://github.com/Phaazoid/Godoiosis/issues/1594): the death show keeps what the close-up hid.)*
 
 **His four rulings (2026-10-07, on the issue):** both halves, angle first then hide; units, props
 and terrain may all be hidden; hide OUTRIGHT, no fade; the battle zoom only.
@@ -3504,7 +3549,7 @@ total rather than incidental: *"every Control — menus, cards, the queue panel,
 `execute_orders` restores the prior value rather than releasing — so it means *the whole enemy turn,
 gaps and walk-only passes included*, which is [#541](https://github.com/Phaazoid/Godoiosis/issues/541)'s
 question rather than this one. The right predicate already existed and had two consumers:
-**`CameraController.playback_cinematic`**, published once per pass at `OrderExecutor.gd:118` as
+**`CameraController.playback_cinematic`**, published once per pass in `OrderExecutor.execute_orders` as
 `_shows_a_fight(sheet)` (*any beat cinematic* **and** the sheet stages cells) and cleared on both lock
 edges. Reading it makes the `BATTLE_ZOOM_MODE` fork evaporate rather than need answering — **OFF** never
 hides, **COMBAT_ONLY** is true for the whole pass if any volley is in it so no per-beat flicker is
@@ -3529,7 +3574,8 @@ player's own Execute never leaves `game_state` at IDLE, so a one-shot write at t
 `UnitInfoPanelControl.is_showing()`/`is_showing_unit()` therefore read the CONTENT half — a panel hidden
 for a cinematic has not let go of its unit, and game asks those two where to park the card.
 `#541` closed into this, and was REOPENED on 2026-09-27 for the wider rule its closing comment named:
-End Turn now also stands down for the whole AI turn and while a squad's plan is open. It is still ONE
+End Turn now also stands down for the whole AI turn and while a squad's plan is open *(and closed
+again the same day, with that rule built)*. It is still ONE
 `visible` — the cinematic is the button's hide term and #541 its content term, the shape the other
 three surfaces already had (see *So the End Turn button stopped waiting* above).
 
@@ -3663,7 +3709,8 @@ Nothing in the project answered *what colour is Fire* — the board's own forks 
 #422's `AIM_PALETTES`) are keyed on heals-vs-damage and watch-vs-attack, never on
 `Elemental.Element`. `Classes/ui/ElementPalette.gd` is `StateIcons`' shape for colour instead of
 art: seven `static var`s plus two projections (`color_for_element`, `color_for_state` — a state
-borrows the colour of the element that deposits it rather than owning a second set). Seven
+borrows the colour of the element that deposits it rather than owning a second set). *(Nine today:
+Aether, Corrosion and Heat joined. "Seven" below is the count at build.)* Seven
 `GameKnobs.CLASS_KNOBS` rows on the **Elemental** tab, since a set of seven that must read against
 one another and against a slate ground is exactly what the tuning rule exists for. Deliberately
 **not** part of #422's aim palette: widening that vocabulary is
@@ -3722,7 +3769,7 @@ own height was always the first one.**
 **A STATUS BELONGS UNDER THE UNIT RECEIVING IT.** The consequence line started at the row's left
 edge, i.e. under the ATTACKER, which he read immediately as *"confusing and unintuitive... that needs
 to be below the image of the unit who is getting the status."* It is not a layout preference — a
-chip under the attacker is a **lie about who is wet**. `ConsequenceRow` is indented to start under
+chip under the attacker is a **lie about who is wet**. `Consequence` is indented to start under
 `TargetTexture`.
 
 The other two were straightforward: the `hp→hp` digits get the same tinted card the chips wear
@@ -3902,7 +3949,9 @@ about "one big one fits."**
 had been split from its dramatic word (`short_name` / `popup`); the world-event pills never were, and
 rendered `popups` verbatim — a channel built for the **board's floating text**, where there is room
 and nothing has to fit. So the row now builds those chips from the outcome's **recorded facts**
-(`insulated`, `fall_levels`, `drown_damage`, `removed`) rather than parsing them back out of strings,
+(`insulated`, `fall_levels`, `drown_damage`, `removed`) rather than parsing them back out of strings
+*(since [#1629](https://github.com/Phaazoid/Godoiosis/issues/1629) through `OutcomeFacts.of`, which
+the right-click `MatchupCard` shares)*,
 prints its own short badge, and puts the dramatic word on hover — which is where the dev is taking
 this anyway: *"I will probably slowly replace all of these with icons only... and we can move text
 into hover menus when that time comes."*
@@ -4035,7 +4084,7 @@ The problem and the rulings are `missions.md`'s; this is how it draws. **`ZoneMa
 
 A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks`, `_restyle_move_grid`'s shape): the diorama re-reads `ZoneMarks` every frame, and the flat sprites are rebuilt.
 
-**A kind's COLOUR has one live store since [#1374](https://github.com/Phaazoid/Godoiosis/issues/1374) (2026-10-21).** Dragging *Capture zone* used to recolour the diorama alone: the 3D read the layer's runtime colour, while `ZoneMarks.colour_of` (the flat marks, the tile card's emblem, the objectives panel's) read the authored `LAYERS` entry. The four kind layers' runtime colour is now CLASS-level on `BoardOverlays` (`kind_color`), because those three readers have no BoardOverlays node to ask (a headless Play board has none at all); `set_layer_modulate` and `layer_modulate` still write and read it, so the store per layer stays one. A colour row also rebuilds the flat sprites and the objectives panel through their existing doors (`_restyle_zone_marks`, `_refresh_mission_status`); the tile card re-reads its sections every frame already, so `TileReadout.signature` carries a section's marking colour for its diff to see the change. Pinned by `test_zone_looks`. Still open on the issue: the 2D move and out-of-range tints restate `LAYERS` with literals that differ from it (the out-of-range grid is grey flat and navy in the diorama), which no unification can fix without changing a colour he sees.
+**A kind's COLOUR has one live store since [#1374](https://github.com/Phaazoid/Godoiosis/issues/1374) (2026-10-21).** Dragging *Capture zone* used to recolour the diorama alone: the 3D read the layer's runtime colour, while `ZoneMarks.colour_of` (the flat marks, the tile card's emblem, the objectives panel's) read the authored `LAYERS` entry. The four kind layers' runtime colour is now CLASS-level on `BoardOverlays` (`kind_color`), because those three readers have no BoardOverlays node to ask (a headless Play board has none at all); `set_layer_modulate` and `layer_modulate` still write and read it, so the store per layer stays one. A colour row also rebuilds the flat sprites and the objectives panel through their existing doors (`_restyle_zone_marks`, `_refresh_mission_status`); the tile card re-reads its sections every frame already, so `TileReadout.signature` carries a section's marking colour for its diff to see the change. Pinned by `test_zone_looks`. Still open on the issue: the 2D move and out-of-range tints restate `LAYERS` with literals that differ from it (the out-of-range grid is grey flat and navy in the diorama), which no unification can fix without changing a colour he sees. *(#1374 closed 2026-10-24: the dev's 2026-10-23 ruling put the F4 flat view out of scope, and [#1492](https://github.com/Phaazoid/Godoiosis/pull/1492) fixed the `INVALID_MOVE` comment.)*
 
 **LIT, from the objectives panel ([#955](https://github.com/Phaazoid/Godoiosis/issues/955) part 3, 2026-09-27).** Hovering a zone row in the objectives panel lights every drawn zone of its kind: a fuller wash in both views (`ZoneMarks.texture(mask, lit)`, the same rim over `ZONE_LIT_FILL_ALPHA`) and, in the diorama, a taller and stronger wall. Each wall strip now carries its own height, and its strength rides the vertex alpha, so the wall is still one mesh and one draw. `OverlayManager.lit_zone_kind` is the one store; `set_lit_zone_kind` bumps `drawn_zones_version`, so both views rebuild on the hover's edge and never per frame. Three knobs sit beside the rest (*Lit fill*, *Lit wall height*, *Lit wall strength*). The dev picked this from a drawn mockup over two alternatives: the pale wash a sentry's patrol area gets, and fading every other zone. The fade had a hole, since a board with one kind of zone has nothing else to fade. What the row itself does is `missions.md`'s.
 
@@ -4051,7 +4100,7 @@ A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks
 
 **Two tiers, because the two questions cost different things.** *Who CAN reach this cell* is a reach field, cheap enough to keep live; *who WILL attack whom* is a real AI turn per engaged squad, and is debounced. They ended up on separate keys for a better reason than cost, though: they answer different questions, and the dev found in play that showing both as beams was *"a bit too much"*.
 
-**The field is `Classes/ai/ThreatField.gd`, and it is the ARCHETYPE'S OWN ENVELOPE rather than a generic danger zone:** Hold fires from where it stands, a Sentry fires only from its zone + post and only INTO its zone, Rushdown walks its whole move range; each origin is dilated by every fireable attack under the same vertical gate `AITactics._attack_candidates` applies, so the field and the AI's own builder cannot disagree about geometry. `game.threat_field()` builds it once and drops it whenever the plan or the board moves, or a unit goes down, dies or is revived: the unit's own `went_downed`, `game._on_unit_died`, and the dev Revive button (`revive()` announces only its downed clock since [#1009](https://github.com/Phaazoid/Godoiosis/issues/1009), a panel signal the field does not hear; its one other caller, a rescue, lands mid-pass, and the pass end drops the field).
+**The field is `Classes/ai/ThreatField.gd`, and it is the ARCHETYPE'S OWN ENVELOPE rather than a generic danger zone:** Hold fires from where it stands, a Sentry fires only from its zone + post and only INTO its zone, Rushdown walks its whole move range; each origin is dilated by every fireable attack under the same vertical gate `AITactics._attack_candidates` applies, so the field and the AI's own builder cannot disagree about geometry. `game.threat_field()` builds it once and drops it whenever the plan or the board moves, or a unit goes down, dies or is revived *(since [#1360](https://github.com/Phaazoid/Godoiosis/issues/1360) the field stamps the store versions it was built on, so terrain needs no drop, while a door that moves, adds, removes or re-arms a unit still drops it; since [#1344](https://github.com/Phaazoid/Godoiosis/issues/1344) a build shares trace verdicts within itself only, `TraceMemo`)*: the unit's own `went_downed`, `game._on_unit_died`, and the dev Revive button (`revive()` announces only its downed clock since [#1009](https://github.com/Phaazoid/Godoiosis/issues/1009), a panel signal the field does not hear; its one other caller, a rescue, lands mid-pass, and the pass end drops the field).
 
 **IT IS BUILT ON THE PROJECTED BOARD, the same positional snapshot the plan tier plans against (slice 4).** Slice 1 read the LIVE board, which was the only board there was until slice 2 built the snapshot -- a premise that expired without anybody noticing. The cost was a duplicate seam the dev then caught in play: the intent LINES described the board after his pending plan and these tones described the board as it stands, so a line could name a victim the tones said was out of reach, with the line telling the truth. `AIController.stand_on_projected`/`restore_cells` are the one door both tiers open.
 
@@ -4163,11 +4212,11 @@ The red grows modestly everywhere.
 
 **THE ORDER IS THE DESIGN, and it is the reverse of slice 3's.** Yours sorts ABOVE theirs, so a cell both fields cover composites as blue TINTED purple rather than as purple — which is what says *both* with no third colour authored anywhere. That composite is what the dev judged: four purples were drawn, each in three places (alone, over your blue, beside your red), and he picked **C, "barely purple"**, with *"could perhaps be a little darker"*. A sort IS a plane (`_lift_of`), so this is a real depth relationship and not pool-allocation luck; `test_your_own_two_tones_draw_over_the_enemys_field` pins it, and a sibling law refuses the four deleted layer names outright.
 
-**Sorts −3 and −4 fell vacant with the dim pair and are LEFT vacant.** Compacting them would move the whole negative stack, and what a shift threatens is the FLOOR — `_lift_of` is `fill_lift + sort * lift_step`, and the zone band at −7 sits at 0.012 with `fill_lift` 0.04.
+**Sorts −3 and −4 fell vacant with the dim pair and are LEFT vacant.** Compacting them would move the whole negative stack, and what a shift threatens is the FLOOR — `_lift_of` is `fill_lift + sort * lift_step`, and the zone band at −7 sits at 0.012 with `fill_lift` 0.04. *(No longer vacant: [#955](https://github.com/Phaazoid/Godoiosis/issues/955)'s `ZONE_EMBLEMS` took −3 and [#1247](https://github.com/Phaazoid/Godoiosis/issues/1247)'s `QUEUED_FOOTPRINT` took −4. Nothing was compacted, so the floor reasoning stands.)*
 
-**The one thing here that is not a colour: the player's reach may not ride `ThreatField`'s own origins.** `_origins_of` unions `reachable` with `squad_unreachable` on purpose (see *COHESION IS IGNORED* above), which is right for a **prediction** about an enemy and wrong for a **permission** about your own unit — your blue is where you may actually be ordered, so your red must grow from those cells and no others. So the walk is exposed rather than reused whole: **`ThreatField.reach_from(unit, board, origins)`**, a thin public static over the private `_reach_of` the enemy path already calls, with the origins passed IN (Law #4's *pass it in, don't rebuild it locally*). The enemy path is untouched and the counter rim and archetype rules come along for free. **The rule at every caller is that the red grows from exactly the cells drawn BLUE plus the one the body is standing on** — `get_move_range` drops that cell because there is nothing to say about walking where you already are, and everything to say about shooting from there — which is also what makes group-move mode correct for free: its blue is only the FOLLOWABLE subset, and the red narrows with it.
+**The one thing here that is not a colour: the player's reach may not ride `ThreatField`'s own origins.** `_origins_of` unions `reachable` with `squad_unreachable` on purpose (see *COHESION IS IGNORED* above), which is right for a **prediction** about an enemy and wrong for a **permission** about your own unit — your blue is where you may actually be ordered, so your red must grow from those cells and no others. So the walk is exposed rather than reused whole: **`ThreatField.reach_from(unit, board, origins)`** *(and an optional `bodies` since [#1529](https://github.com/Phaazoid/Godoiosis/issues/1529))*, a thin public static over the private `_reach_of` the enemy path already calls, with the origins passed IN (Law #4's *pass it in, don't rebuild it locally*). The enemy path is untouched and the counter rim and archetype rules come along for free. **The rule at every caller is that the red grows from exactly the cells drawn BLUE plus the one the body is standing on** — `get_move_range` drops that cell because there is nothing to say about walking where you already are, and everything to say about shooting from there — which is also what makes group-move mode correct for free: its blue is only the FOLLOWABLE subset, and the red narrows with it.
 
-**Cost, reasoned rather than profiled:** one reach walk per hover change over ~40 origins, against `docs/performance.md`'s measured 1.5 ms for `ThreatField.build` over *every enemy on Castle Assault*, cached until the board moves. If hovering ever feels sticky, re-measure before believing this.
+**Cost, reasoned rather than profiled:** one reach walk per hover change over ~40 origins, against `docs/performance.md`'s measured 1.5 ms for `ThreatField.build` over *every enemy on Castle Assault*, cached until the board moves. If hovering ever feels sticky, re-measure before believing this. *(3.6 ms once [#1197](https://github.com/Phaazoid/Godoiosis/issues/1197)'s watch and current joined it: `performance.md`'s later table.)*
 
 **A PINNED ENEMY FLASHES** (dev: *"units that are toggled need to be indicated in some way. I think they should flash, too."*), and the surface is his ruling too — the unit SPRITE, not a marker, which gets the diorama for free through `UnitMirror`'s per-frame `modulate` copy. It is a THIRD tenant on that channel beside the aim pulse and the hover highlight, so the precedence is stated in code rather than discovered: **the aim pulse outranks it**, because *this unit is about to be hit* is news where *you pinned it* is a bookmark you set yourself. `UnitVisuals.pinned` is a flag rather than a reading of the tween precisely because the pin OUTLIVES its own pulse and has to come back when the aim moves on — the half a plain precedence misses, and its own case. `game._sync_pin_flashes` sweeps every unit on each redraw rather than diffing: `set_pinned` is idempotent, and a pin ends three ways (shift+click, the key's OFF, the body dying), so one sweep is cheaper than three correct diffs.
 
@@ -4377,7 +4426,7 @@ The dev's second look at the #1069 board. There were three asks, and all three s
 
 **He also asked for a second, much fainter wash of the same blue over each tile's centre** (*"same shade, much fainter alpha"*). It is the same texture carrying an inner square at a fraction of the line's alpha, tinted by the one `Move fill` colour. That makes it the same blue by construction, with no second colour authored anywhere.
 
-**Both are GENERATED, from four knobs** -- `MoveGrid` (`Classes/board/`), `ThreatLines2D`'s shape: a `board/` class whose statics both views read and `CLASS_KNOBS` tunes. The four knobs are line inset, line width, inner gap and inner fill. The first three are in pixels of the diorama's 32-texel tile. The dev picked the defaults off a slider mockup before anything was built: inset 0, width 1, gap 0, fill 0.25. `MoveGrid.image(size)` is the one rule, and each view rasterizes it at its own size -- the diorama at 32, the flat view at 16, asked of its own tileset. `Layer.MOVE` says `"grid": true`, and #1069's `"texture"` key went with its only user.
+**Both are GENERATED, from four knobs** -- `MoveGrid` (`Classes/board/`), `ThreatLines2D`'s shape: a `board/` class whose statics both views read and `CLASS_KNOBS` tunes. The four knobs are line inset, line width, inner gap and inner fill. The first three are in pixels of the diorama's 32-texel tile. The dev picked the defaults off a slider mockup before anything was built: inset 0, width 1, gap 0, fill 0.25. *(Tuned in play since to width 2 and fill 0.57; inset and gap are still 0.)* `MoveGrid.image(size)` is the one rule, and each view rasterizes it at its own size -- the diorama at 32, the flat view at 16, asked of its own tileset. `Layer.MOVE` says `"grid": true`, and #1069's `"texture"` key went with its only user.
 
 **A texel is judged by the span it covers, not by its centre**, and the dev's width is why. A one-pixel line sampled at texel centres lands outside every texel of the flat view's 16-texel tile and vanishes. Judging the span `[ring, ring+1)` is exactly centre sampling at 32 texels for whole-pixel knobs, and it keeps the line at 16.
 
@@ -4394,7 +4443,7 @@ The dev's second look at the #1069 board. There were three asks, and all three s
 
 **The panel builds GROUP-major now.** `GameTool` walks `GameKnobs.GROUP_TABS` in declaration order and draws one heading per section: that section's node-property rows, then its class-value rows. So `GROUP_TABS` order is both the tab order and the order inside a tab. The table-major builder it replaced could not put rows from the two tables under one heading, which is why the Markup and Colours tabs were split by how a value is STORED. The reach mark's controls lived on both tabs at once. That builder also drew "The tear-out" heading twice, because its rows were not contiguous.
 
-Asked and answered: **regroup by subject**. Markup is now the readout, in this order: range readout, movement grid, enemy focus, reach lines (arc, cone), aiming, sight beam, watch. Markers (was Colours) is everything else laid on the board. The dense groups on other tabs got sub-sections too: Unit HUD, Action ring, Fire and Camera flourish. No row moved in either table and no value changed; only group names and `GROUP_TABS` did. `MARKUP_COLOUR_GROUP` became `AIM_GROUP`, so the palette notice sits over the three rows it talks about.
+Asked and answered: **regroup by subject**. Markup is now the readout, in this order: range readout, movement grid, enemy focus, reach lines (arc, cone), aiming, sight beam, watch. *(Queued attacks and Unit highlights joined it after the cone, from [#1247](https://github.com/Phaazoid/Godoiosis/issues/1247) and [#1251](https://github.com/Phaazoid/Godoiosis/issues/1251).)* Markers (was Colours) is everything else laid on the board. The dense groups on other tabs got sub-sections too: Unit HUD, Action ring, Fire and Camera flourish. No row moved in either table and no value changed; only group names and `GROUP_TABS` did. `MARKUP_COLOUR_GROUP` became `AIM_GROUP`, so the palette notice sits over the three rows it talks about.
 
 ### Every pinned enemy flashes on one timer
 
@@ -4786,7 +4835,7 @@ With zooms off nothing stages: the break plays on the board, at the blow, with t
 
 | Leftover | What the code did | What changed |
 |---|---|---|
-| **The end-of-turn burn** | `stamp` never read `plan.tile_hits`, so a burn that downed a squadded unit wore no Split. | The burn settles after the contact sweep, in the live order: a death hands over at once, and the downed leave once every burn has landed (`apply_end_of_turn_tiles`, then named `apply_burning_tile_damage`). It settles on the ground the pass leaves, and its Split rides the END OF TURN row. |
+| **The end-of-turn burn** | `stamp` never read `plan.tile_hits`, so a burn that downed a squadded unit wore no Split. | The burn settles after the contact sweep, in the live order: a death hands over at once, and the downed leave once every burn has landed (`apply_end_of_turn_tiles`, then named `apply_burning_tile_damage`). It settles on the ground the pass leaves, and its Split rides the END OF TURN row. *(Since [#1353](https://github.com/Phaazoid/Godoiosis/issues/1353) that section also speaks for every other unit of the side this plan reaches: `PlanResolver._end_of_turn_subjects`.)* |
 | **This pass's ice** | A pass's deposits land in ONE batch after the attack volley (`OrderExecutor._apply_cell_effects`), while the forecast read only the pre-pass board. A melt that stranded a member was missed; a freeze that restored a path gave a false Split, whose break 2B then played for a link the pass kept. | `BoardContext.with_deposits` folds deposits over the live store through the existing `TerrainStateManager.projected_states_at`. The walk and the volley settle on the board as it was, the counters onward on the landed one. A pass that deposits anything copies every squad with members, since a melt splits one no blow touched. Ownership counts each blow's OWN deposits (`ResolvedCellEffect.cause`), so the melt's Split is on the fire. *(Superseded by [#1498](https://github.com/Phaazoid/Godoiosis/issues/1498), 2026-10-27/28: playback lands each volley's tiles after its last member, and the forecast settles each blow on the ground landed by then, read through `PlannedTiles` (`board.planned`). `with_deposits`, `projected_states_at` and the batch are retired.)* |
 | **A watch shot halting a walk** | Unreachable, measured. The validator judges a halted walk where the shot catches it (`MoveAction.get_destination`), so a catch out of range reds the walk and the plan is refused. A catch in range makes the shove an ordinary in-range to out-of-range change the forecast already owned. | Nothing in the forecast. `test_split_forecast` pins the refusal, since the forecast now leans on it. |
 | **A leader killed mid-walk** | Every walk starts together and a watch shot plays while the others keep walking, so the successor's reach was read at the frame of the kill. The pan, the shot's length and the battle-zoom setting decided who stayed; the Play API, which finishes every walk before any shot, already disagreed with the game. | **A live rule change (dev, 2026-09-27).** The successor is still named at once (it reads LDR, not cells), but its reach, range then capacity, waits for the walk to end: `SquadManager.hold_handovers`, held across `OrderExecutor._execute_move_phase`. The forecast defers the same check past the last mid-walk shot and keeps the chip on the killing blow. On screen, the new leader's tethers draw in at the kill, and anyone still out of its reach breaks off when the walk ends. |
