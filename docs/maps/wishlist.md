@@ -187,6 +187,13 @@ Each entry says which map wanted it, what it would have done there, and what the
   would do. If it changes, hazard squads at a post need a reason they cannot step away (a narrow
   post, or a zone that is all cloud).
 
+- **A watch that can be told what to wait for** (The Marshal's Charge). "The first enemy that is
+  not down", or a named unit. Two Overwatch shots meant for a fire caster went into a pike that
+  was shoved into the lane.
+- **A fire the AI respects** (the dropped Fire Wall board). If a squad would not end a move on a
+  burning tile at all, a line of fire would be a two-round wall today, and half of this list's
+  requests for raised earth would already have an answer.
+
 ## Authoring tools
 
 - **A way to pick the weather when testing a drawing board.** I built three scratch copies of The

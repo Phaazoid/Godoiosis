@@ -285,6 +285,31 @@ Build under test: `main` at `e64c760f` (v0.340.1) unless an entry says otherwise
 - **Why it is here:** it is a rule working exactly as written, and the first time in eleven
   boards that a gas other than steam or smoke changed a number I cared about.
 
+### S31. Overwatch fires at a downed body, and at whatever is already standing in the lane
+
+- **Where:** The Marshal's Charge. Two carbines set Overwatch on the tile a fire caster had to
+  step into. An allied Blowback had just shoved a pike onto that file. The first watch fired at
+  the pike the moment it was set ("fired this pass") and downed it; the second fired at the
+  downed body when the enemy turn began and killed it. The caster then walked into both lanes
+  unshot.
+- **Why it is here:** a watch is one shot, and it went to the least dangerous thing in the lane.
+  The player cannot say what a watch is waiting for.
+
+### S32. The AI treats a burning tile as a price, not a wall
+
+- **Where:** a sandbox for a Fire Wall rune (a line of three burning tiles laid on any ground for
+  two turns). A Rushdown squad walked into it to reach the caster; a Medium-band member ended its
+  move on a burning tile to attack, and took 5.
+- **Why it is here:** the Fire Wall is the nearest built thing to the raised-earth wall this run
+  kept wishing for, and it does not hold anybody. I dropped the board I had planned around it.
+
+### S33. A unit built from a cast file inherits that character's missing limbs
+
+- **Where:** building The Marshal's Charge. An allied unit made from Torv's file with new stats
+  written over it still had Torv's two prosthetics: MOV 2, STR 4.
+- **Why it is here:** it is what "built from Torv" means, and it cost a draft to notice. The
+  builder's stat overrides do not touch limbs.
+
 ## Known already (seen again, not new)
 
 - Marco's Splash is refused in the Warband kit: "Needs 2 wildcards (have 1)" (noted in the Hold the

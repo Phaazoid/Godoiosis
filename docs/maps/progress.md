@@ -29,7 +29,7 @@
 | Tooling (builder, catalog dump, bridge) | working |
 | Ledger written | yes |
 | Draft PR | opened after map 1 (see the log) |
-| Map in hand | 12, not started. Eleven boards are committed. Ideas left: a tiny indoor board on the air itself (essence, frost and heat haze moving Heal and Freeze), a Chemical Spitter and gypsum board, a board with an escort and a drawn weather |
+| Map in hand | 13, not started. Twelve boards are committed |
 
 ## What the first map taught (read before designing the next)
 
@@ -145,3 +145,13 @@
 - Freeze leaves frost and frost weakens the next Freeze cast through it.
 - A big board is mostly walking: budget a round per three tiles for the slowest unit, two tiles if
   it is wounded.
+- 2026-11-10: map 12, The Marshal's Charge, done after three drafts. Committed.
+- A unit with `must_survive` on the ALLY faction, run by the AI through `ai_factions`, is a working
+  escort you cannot steer. Turn order is PLAYER, ENEMY, ALLY.
+- A unit built with `"cast"` keeps that character's limbs: build generic allies with no cast.
+- The Company roster's Gun reaches a posted enemy from the deployment zone on a board this size.
+  Basics has no Gun.
+- Overwatch fires once, at the first enemy in the lane, including one already standing there and
+  one already down.
+- The AI walks through fire to attack. A Fire Wall rune (line of 3 burning tiles, 2 turns) does not
+  stop a squad.
