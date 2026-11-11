@@ -3,10 +3,19 @@
 [ext_resource type="Resource" uid="uid://2yqqa4yxo8sq" path="res://Resources/AttackShapes/Path Line 3.tres" id="1_ytj11"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_abhgi"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_t8oom"]
+[ext_resource type="Resource" uid="uid://b75d7k6eeqsrt" path="res://Resources/AttackShapes/Path Line 4.tres" id="3_wxldo"]
+[ext_resource type="Script" uid="uid://beliqfakhf2nc" path="res://Classes/alchemy/EmpoweredForm.gd" id="4_a5iyd"]
+
+[sub_resource type="Resource" id="Resource_8rnkt"]
+script = ExtResource("4_a5iyd")
+display_name = "Torrent"
+attack_shape = ExtResource("3_wxldo")
+swing = true
 
 [resource]
 script = ExtResource("3_t8oom")
 recipe = "Extract(3W2) + Push(3W2)"
+empowered = SubResource("Resource_8rnkt")
 display_name = "Pressure Spray"
 power = 5
 max_range = 0
