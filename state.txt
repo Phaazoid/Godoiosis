@@ -1,5 +1,0 @@
-@@ id=2147483647 ok=1 cmd=quit @@
-
-[turn=PLAYER  active=none  free=sqA,sqB]
-
-bridge shutting down
