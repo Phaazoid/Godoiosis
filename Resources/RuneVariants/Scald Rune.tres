@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://dtw34goskd63r"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_3dkls"]
+[ext_resource type="Resource" uid="uid://bxdrf5k5tl34e" path="res://Resources/TransmutationData/Scald.tres" id="2_kyvcl"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_j37x4"]
+
+[resource]
+script = ExtResource("3_j37x4")
+size = 1
+inscriptions = Array[ExtResource("1_3dkls")]([ExtResource("2_kyvcl")])
+temper = 6
+display_name = "Scald Rune"
+weight = 1

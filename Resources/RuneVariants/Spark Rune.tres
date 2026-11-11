@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://bmoclub7sfa6p"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_lx3h2"]
+[ext_resource type="Resource" uid="uid://b52fxpcemhb1o" path="res://Resources/TransmutationData/Spark.tres" id="2_ovbwa"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_6xmjh"]
+
+[resource]
+script = ExtResource("3_6xmjh")
+size = 1
+inscriptions = Array[ExtResource("1_lx3h2")]([ExtResource("2_ovbwa")])
+temper = 7
+display_name = "Spark Rune"
+weight = 1
