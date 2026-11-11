@@ -11,7 +11,8 @@ A street three tiles wide with three yards of thatch opening onto it, each alrea
 end. Each fire is a fuse: it burns down its yard a row a round and then cuts the street for five
 rounds. You are walking a slow, unarmed man to the far gate. Isaac carries the two time carvings,
 which no shipped board has used: **Stillness** holds a fire where it is for two rounds, and
-**Quickening** makes it run and burn out at double speed. So the first fire is one to hold back,
+**Conflagration** makes it run and burn out at double speed for three (two, as Quickening, until
+#1621: see *Runs*). So the first fire is one to hold back,
 the second is one to hurry onto the squad that is standing in its path, and the third is one to
 hold again while you get past.
 
@@ -56,7 +57,7 @@ are there to cost you the round in which the first band is still safe to cross.
 | **Tell** | They are standing on thatch at the foot of a yard that is visibly burning toward them. The Alt outline shows where the fire will be next round. |
 | **Key (board)** | Quicken the yard above them as soon as Isaac can reach it (round 4), and the street tiles under them the round after. The fire arrives two rounds early, sweeps the band two lanes at a time, and burns out twice as fast. In my run it took 5 off two of them on round 6, killed one outright on round 7 and downed the boss on round 8. |
 | **Key (verbs)** | They never leave the band, so a Carbine and a Freeze work on them from two and three tiles out with no answer. Mail stops half of the Carbine and none of the Freeze. |
-| **Window** | Quickening has to land while the fire is still in the yard. From round 6 they are burning; from round 9 the band is ash and open. |
+| **Window** | Conflagration has to land while the fire is still in the yard. From round 6 they are burning; from round 9 the band is ash and open. |
 | **Cost of brute force** | A melee unit that goes in stands on the same thatch. The AI-driven baseline lost Bram to the fire and two more to the boss. Downed Wreckers lie where they fell and still block the lane until they bleed out or are finished. |
 
 ### 3. The Firestarter (a strong solo, the hazard brought by the enemy)
@@ -82,6 +83,10 @@ are there to cost you the round in which the first band is still safe to cross.
   were chosen by name.
 
 ## Runs
+
+*(#1621, 2026-11-11: Quickening is now Conflagration and lasts three rounds, not two. Every run
+below predates that and keeps the old name. The board has not been replayed since, so the timings
+under **Key (board)** and **Window** are the two-round ones.)*
 
 | Run | Build | What I did | Result |
 |---|---|---|---|
