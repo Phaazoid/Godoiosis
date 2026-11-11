@@ -43,7 +43,7 @@ Each entry says which map wanted it, what it would have done there, and what the
   would give the victim a turn to move and the preview something to warn about.
 - **Heat that melts ice at a distance** (Meltwater). A burning tile or a heat haze beside ice does
   nothing to it. If standing heat thawed adjacent ice at the round tick, a fire on the bank would
-  be a slow fuse, and Stillness and Quickening would have a second use.
+  be a slow fuse, and Stillness and Conflagration would have a second use.
 
 - **Thunderstone that carries a current** (The Glass Walk). Fused sand is a source for an Extract
   and nothing more. As a conductor, a line of it would be a fuse the player lays across a floor.
@@ -51,7 +51,7 @@ Each entry says which map wanted it, what it would have done there, and what the
   costs a turn a stone. A carving that drew from one thunderstone and struck from the next would
   make a field of stones a network instead of a path.
 
-- **A time mark whose shape can be turned** (Cinder Row). Stillness and Quickening cover the two
+- **A time mark whose shape can be turned** (Cinder Row). Stillness and Conflagration cover the two
   rows north of the aimed tile, three wide, whichever way the caster faces. Every yard on Cinder Row
   is north of the street for that reason. A circle around the aimed tile, or a shape that turns
   with the cast, would let a fire be held from any side.

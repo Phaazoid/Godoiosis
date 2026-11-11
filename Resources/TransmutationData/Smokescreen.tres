@@ -3,11 +3,22 @@
 [ext_resource type="Resource" uid="uid://jvlbvm4uoehr" path="res://Resources/AttackShapes/Plus.tres" id="1_y8a4b"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_rdewh"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_bg46m"]
+[ext_resource type="Script" uid="uid://beliqfakhf2nc" path="res://Classes/alchemy/EmpoweredForm.gd" id="3_rdewh"]
+
+[sub_resource type="Resource" id="Resource_bg46m"]
+script = ExtResource("3_rdewh")
+display_name = "Pall"
+popup = "Pall!"
+gases = Dictionary[int, int]({
+1: 3
+})
+requires = Array[int]([6])
 
 [resource]
 script = ExtResource("3_bg46m")
-recipe = "Bind(A2, AE)"
+recipe = "Push(2AE)"
 popup = "Smoke!"
+empowered = SubResource("Resource_bg46m")
 display_name = "Smokescreen"
 max_range = 3
 attack_shape = ExtResource("1_y8a4b")

@@ -549,7 +549,7 @@ func _candidate_guard_in_range(squad: Squad, action: BaseAction) -> bool:
 # must find its arguments where the caster will STAND to cast it -- its projected origin, read the way
 # aim_finds_a_target reads it. The same CellSubstances.fizzle_reason the menu row greys with, so a
 # greyed row and a refused order cannot disagree. Asked of an aim and of a WATCH, whose shot fires
-# from that same cell (Pressure Spray is watch-only); a stored order's answer is the validator's
+# from that same cell (a watch-only carving's one way in); a stored order's answer is the validator's
 # ("Fizzles where they'll be standing"). Every other candidate passes straight through.
 #
 # `bodies` is the prefix's (candidate_bodies, #1529): the caster and its neighbours with the states the

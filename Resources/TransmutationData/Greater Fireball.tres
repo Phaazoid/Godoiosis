@@ -2,13 +2,22 @@
 
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_dg6yn"]
 [ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/ElementIcons/Fire.png" id="2_ck1ki"]
+[ext_resource type="Script" uid="uid://beliqfakhf2nc" path="res://Classes/alchemy/EmpoweredForm.gd" id="2_wy5ol"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_wy5ol"]
+
+[sub_resource type="Resource" id="Resource_tnrq3"]
+script = ExtResource("2_wy5ol")
+display_name = "Fireblast"
+popup = "Fireblast!"
+power_bonus = 1
+knockback_bonus = 1
 
 [resource]
 script = ExtResource("3_wy5ol")
 recipe = "Break(F, A) + Bind(F, F) + Push(F2)"
 popup = "Greater Fireball!"
 icon = ExtResource("2_ck1ki")
+empowered = SubResource("Resource_tnrq3")
 display_name = "Greater Fireball"
 power = 7
 min_range = 2

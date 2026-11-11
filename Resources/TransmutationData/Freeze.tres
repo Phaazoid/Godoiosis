@@ -3,10 +3,21 @@
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_24q66"]
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_xrrob"]
 [ext_resource type="Resource" uid="uid://bow4n5t5o3t8v" path="res://Resources/AttackShapes/Line 3.tres" id="3_shape0"]
+[ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="3_x3vig"]
+[ext_resource type="Script" uid="uid://beliqfakhf2nc" path="res://Classes/alchemy/EmpoweredForm.gd" id="4_7tso5"]
+
+[sub_resource type="Resource" id="Resource_je4yg"]
+script = ExtResource("4_7tso5")
+display_name = "Hoarfrost"
+attack_shape = ExtResource("3_x3vig")
+swing = true
+power_bonus = -1
+requires = Array[int]([2])
 
 [resource]
 script = ExtResource("2_24q66")
 recipe = "Break(A, W) + Bind(Q, W)"
+empowered = SubResource("Resource_je4yg")
 display_name = "Freeze"
 power = 4
 max_range = 0

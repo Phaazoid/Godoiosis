@@ -458,11 +458,11 @@ func test_a_forms_empty_stamp_degrades_rather_than_blocks() -> void:
 	_all_degrade(rows)
 
 
-# --- a carving carries a body only by pushing the air (#1637) ------------------------------------
+# --- a carving carries a body only with a Push (#1637, loosened by #1621) ----------------------
 #
-# Codev's carry kept as a check: the shove stays authored (verbs never move geometry), and the lint
-# flags a carving that shoves while its last Push moves no air. Only that clause says " shoves ".
-# Which substances are the air is Atmosphere.AIR's to say, so the cases read it, never a formula list.
+# The shove stays authored (verbs never move geometry), and the lint flags a carving that shoves with
+# no Push in its recipe. Shoving is not Air's alone (#1621): air, water, rock and a blast's flame may
+# all carry a body. Only that clause says " shoves ".
 
 func _carving(recipe: String, knockback: int) -> TransmutationData:
 	var t := TransmutationData.new()
@@ -481,31 +481,14 @@ func _shove_rows(attack: AttackData) -> Array[Dictionary]:
 	return out
 
 
-func _pushed(carving: TransmutationData) -> String:
-	return carving.parsed().steps[-1].args[0]
-
-
-func test_a_carving_that_shoves_without_pushing_the_air_degrades_and_names_what_it_pushes() -> void:
-	var carving := _carving("Push(F2)", 2)
-	assert_bool(Atmosphere.AIR.has(_pushed(carving))).override_failure_message(
-		"the fixture's Push must move something that is not the air").is_false()
-	var rows := _shove_rows(carving)
-	assert_int(rows.size()).is_equal(1)
-	assert_str(rows[0]["text"]).is_equal("Probe shoves 2 tiles, but its last Push carries %s, not air."
-		% SubstanceCatalog.name_of(_pushed(carving)).to_lower())
-	_all_degrade(rows)
-
-
-func test_a_carving_that_pushes_any_of_the_air_may_shove() -> void:
-	assert_array(Atmosphere.AIR).override_failure_message("no air to push -- the list is broken").is_not_empty()
-	for id: String in Atmosphere.AIR:
-		var substance := SubstanceCatalog.by_id(id)
-		assert_object(substance).override_failure_message("%s names no substance file" % id).is_not_null()
-		var carving := _carving("Push(%s)" % substance.formula, 1)
-		assert_str(_pushed(carving)).override_failure_message(
-			"Push(%s) did not parse to %s" % [substance.formula, id]).is_equal(id)
+# Air, flame, water and rock, and a Push that is not the recipe's last step.
+func test_a_carving_that_pushes_anything_may_shove() -> void:
+	for recipe in ["Push(A2)", "Push(F2)", "Push(3W2)", "Push(2E2)", "Push(A2) + Pull(A2)"]:
+		var carving := _carving(recipe, 1)
+		assert_bool(carving.parsed().is_legal()).override_failure_message(
+			"%s did not parse -- the fixture is broken, not the lint" % recipe).is_true()
 		assert_array(_shove_rows(carving)).override_failure_message(
-			"pushing %s is pushing the air, yet the shove was flagged" % id).is_empty()
+			"%s pushes something, yet its shove was flagged" % recipe).is_empty()
 
 
 func test_a_carving_that_shoves_with_no_push_at_all_degrades() -> void:
@@ -517,17 +500,26 @@ func test_a_carving_that_shoves_with_no_push_at_all_degrades() -> void:
 
 # The form keeps its base's recipe, so a shove only the form adds is flagged on the form.
 func test_a_shove_only_the_empowered_form_adds_is_flagged_on_the_form() -> void:
-	var carving := _carving("Push(F2)", 0)
+	var carving := _carving("Bind(F, F) + Spread(F2)", 0)
 	carving.empowered = EmpoweredForm.new()
 	carving.empowered.knockback_bonus = 1
 	var rows := _shove_rows(carving)
 	assert_int(rows.size()).is_equal(1)
-	assert_str(rows[0]["text"]).starts_with("Probe's empowered form shoves 1 tile, but its last Push carries")
+	assert_str(rows[0]["text"]).is_equal(
+		"Probe's empowered form shoves 1 tile, but its recipe has no Push to carry anyone.")
 	_all_degrade(rows)
 
 
+# Fireblast's shape: a base that pushes flame and shoves nobody, a form that adds the shove.
+func test_a_form_may_shove_when_its_base_has_a_push() -> void:
+	var carving := _carving("Push(F2)", 0)
+	carving.empowered = EmpoweredForm.new()
+	carving.empowered.knockback_bonus = 1
+	assert_array(_shove_rows(carving)).is_empty()
+
+
 func test_a_carving_that_shoves_nobody_is_not_flagged() -> void:
-	assert_array(_shove_rows(_carving("Push(F2)", 0))).is_empty()
+	assert_array(_shove_rows(_carving("Bind(F, F) + Spread(F2)", 0))).is_empty()
 
 
 # A weapon's shove has no recipe to answer to: Blowback's kind of attack shoves freely.
@@ -537,7 +529,7 @@ func test_a_weapon_attacks_shove_is_never_flagged() -> void:
 	assert_array(_shove_rows(attack)).is_empty()
 
 
-func test_no_shipped_carving_shoves_without_pushing_the_air() -> void:
+func test_no_shipped_carving_shoves_without_a_push() -> void:
 	var carvings := TransmutationCatalog.get_all()
 	assert_bool(carvings.is_empty()).override_failure_message(
 		"no carvings scanned -- the scan is broken, not the content").is_false()

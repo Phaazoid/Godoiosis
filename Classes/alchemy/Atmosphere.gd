@@ -17,8 +17,7 @@ extends Object
 # Every ambient substance, in display order. The one answer to "what is in every cell's air".
 const SUBSTANCES: Array[String] = ["inert_air", "vital_air", "vapor", "atom_fire", "atom_aether"]
 
-# The air itself, the atmosphere's gases: the first heading below, and what a Push must move to carry
-# a body (AttackLint, #1637).
+# The air itself, the atmosphere's gases: the first heading below.
 const AIR: Array[String] = ["inert_air", "vital_air", "vapor"]
 
 # The two headings a reading is shown under (c3potheds@ and Phaazoid@, 2026-10-13).

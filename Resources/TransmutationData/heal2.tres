@@ -2,10 +2,17 @@
 
 [ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_f1qh4"]
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_fa0vc"]
+[ext_resource type="Script" uid="uid://beliqfakhf2nc" path="res://Classes/alchemy/EmpoweredForm.gd" id="2_ttfp7"]
+
+[sub_resource type="Resource" id="Resource_s8lws"]
+script = ExtResource("2_ttfp7")
+display_name = "Greater Heal"
+power_bonus = 2
 
 [resource]
 script = ExtResource("2_fa0vc")
 recipe = "Bind(Q, Q)"
+empowered = SubResource("Resource_s8lws")
 display_name = "Heal"
 power = 6
 min_range = 0

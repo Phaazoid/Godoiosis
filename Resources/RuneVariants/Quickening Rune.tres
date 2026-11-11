@@ -9,5 +9,5 @@ script = ExtResource("3_hb21b")
 size = 1
 inscriptions = Array[ExtResource("1_qonsh")]([ExtResource("2_kpvsw")])
 temper = 1
-display_name = "Quickening Rune"
+display_name = "Conflagration Rune"
 weight = 1

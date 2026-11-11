@@ -591,7 +591,7 @@ func test_a_watch_row_says_whether_its_shot_hits_allies() -> void:
 #  Deep Alchemy Phase 2: a carving that would FIZZLE greys, with the reason
 # ==============================================================================
 
-# Pressure Spray's shape, which needs water beside the caster. Channelable at water-4, so the fizzle is
+# A tied carving, which needs water beside the caster. Channelable at water-4, so the fizzle is
 # the only thing that can grey it.
 func _spray_alchemist(cell: Vector2i) -> Unit:
 	var alch := _spawn(cell)
@@ -647,7 +647,7 @@ func test_the_row_is_judged_from_where_the_unit_will_stand() -> void:
 			"the row was judged from the live cell, not from where the queued walk ends").is_false()
 
 
-# Pressure Spray is watch-only, so the WATCH row greys the same way (the one shipped tied carving).
+# A watch-only carving's WATCH row greys the same way.
 # The control is the same rune on a caster carrying its own water.
 func test_a_watch_carving_that_would_fizzle_greys_its_watch_row_with_the_reason() -> void:
 	var alch := _spawn(Vector2i(1, 0))
