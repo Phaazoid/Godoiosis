@@ -402,6 +402,8 @@ func _cmd_load(path: String, resume := false, weather := "", kept: int = Weather
 			head += " -- your last loadout for this mission stands again"
 	elif drawn > 0:
 		head += "; this mission has no pre-mission screen, so its roster's authored draw of %d stands and the battle has begun" % drawn
+	if not resume and not _session.is_deploying():
+		head += _session.battle_begins()   # begin_mission's fall-through: the battle starts now (#1653)
 	return {"ok": true, "text": "%s\n\n%s" % [head, BoardView.render_overview(_session)]}
 
 # Why a driver may not pick this weather as the draw, or "": WeatherDraw's rule, asked of the scenario

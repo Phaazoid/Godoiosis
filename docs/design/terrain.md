@@ -58,7 +58,7 @@
 
 > **[#894](https://github.com/Phaazoid/Godoiosis/issues/894) (2026-10-30): an attack can LAY fire, and a laid fire on ground that is not fuel runs the ATTACK's life.** The one exception to "ground that is not fuel never runs out", and it is scoped to the deposit: `ResolvedCellEffect.state_turns` carries a life the hit brings (`AttackData.tile_effect_turns`), and `TerrainStateManager._start_timer` starts it only where the ground gives the state no clock (`_ground_clock` still wins, so a wall laid on grass burns on grass's clock and scorches). It lands in `_state_turns`, the one live countdown, so the tick, the save and spread need nothing new, and it never touches `_start_turns` (#1484's authored starts), because a cast fire is a battle fact. **A deposit never re-times a state the cell already holds**, so a laid fire over a brazier leaves it permanent. A burn-out with no fuel leaves no scorch. Refused on open water as the hit's own reactions leave the cell (`Terrain.open_water_of`), so ice the same hit melts takes none; plain ice keeps it until an ice rule exists. The attack side is weapons.md → *An attack may also lay a TILE EFFECT*.
 
-**Canon checked through #1629 (2026-11-07); #1534 (the gas files gain a dev-tools page) folded in 2026-11-05; #1421 (smoke becomes the molecule `A2*AE`) folded in 2026-11-07.**
+**Canon checked through #1629 (2026-11-07); #1534 (the gas files gain a dev-tools page) folded in 2026-11-05; #1421 (smoke becomes the molecule `A2*AE`) folded in 2026-11-07; #1653 (a battle's start soaks whoever stands in water) folded in 2026-11-11.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -247,7 +247,9 @@ bottom is what separates shallow water from ICE, which is what the first pass at
   2026-06-19, two months before the sentence was written — the hook was never missing. What was
   genuinely missing was a terrain SOURCE, which is a much smaller thing, and #884 built it:
   **`RulesService.wets_in` — WATER kind, not FROZEN, no Waterwalk** — asked at the two places a unit
-  comes to occupy a water cell, `PlanResolver.resolve_move`'s per-cell walk and a shove's LANDING.
+  comes to occupy a water cell, `PlanResolver.resolve_move`'s per-cell walk and a shove's LANDING
+  (and, since [#1653](https://github.com/Phaazoid/Godoiosis/issues/1653), once at the battle's fresh
+  start, `TurnBoundary.battle_begins`, for a unit the board placed there).
   The walk's soaking is stamped with its STEP (`MoveAction.resolved_soak_step`) and plays there
   when a shot lands on the walker after it ([#46](https://github.com/Phaazoid/Godoiosis/issues/46),
   2026-10-04 -- it went on at the walk's end until then, so a shock watch over a ford left the

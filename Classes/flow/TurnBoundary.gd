@@ -60,6 +60,26 @@ static func forecast(units: Array[Unit], states: TerrainStateManager, gas: GasFi
 	return hits
 
 
+# The battle's FIRST boundary (#1653): a unit standing in open water when a mission starts is Wet.
+# Every other soak is an ENTRY (a wade's step, a shove's landing, a sink), and a unit the board or
+# the deployment phase placed in water never entered it. Called at the fresh starts only (both hosts:
+# MissionController's three, the Play API's load and begin), never by a load: a save restores what
+# it holds. Returns the units it soaked.
+static func battle_begins(units: Array[Unit], board: BoardContext) -> Array[Unit]:
+	var soaked: Array[Unit] = []
+	for unit in units:
+		if unit == null or not is_instance_valid(unit) or unit.is_dead():
+			continue
+		if not RulesService.wets_in(unit.movement.cell, unit.state, board):
+			continue
+		if unit.element_states.has(Elemental.State.WET) \
+				or Elemental.is_blocked(unit.element_states, Elemental.State.WET):
+			continue
+		unit.add_element_state(Elemental.State.WET)
+		soaked.append(unit)
+	return soaked
+
+
 # Per-unit state that decays at the owning faction's turn start (downed clocks, crisis surge,
 # weapon rev, …). One pass; each tick self-guards, so no per-effect pre-filter. Add a new
 # turn-start tick as one line here — both stacks call this, so it reaches each at once.

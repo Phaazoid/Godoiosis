@@ -1,0 +1,77 @@
+[gd_resource type="Resource" script_class="ScenarioData" format=4]
+
+[ext_resource type="Script" path="res://Classes/flow/DialogBeat.gd" id="1_p6jpf"]
+[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="2_twpkr"]
+[ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_nk5qf"]
+[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_tlbnv"]
+[ext_resource type="Script" path="res://Classes/items/Item.gd" id="5_x81u8"]
+[ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="6_4psmn"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="7_d0sdi"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="8_l6aq2"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="9_p1wd0"]
+
+[sub_resource type="Resource" id="Resource_7n3ub"]
+script = ExtResource("9_p1wd0")
+display_name = "Wader"
+portrait = ExtResource("8_l6aq2")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+
+[sub_resource type="Resource" id="Resource_ikpvb"]
+script = ExtResource("4_tlbnv")
+unit_data = SubResource("Resource_7n3ub")
+cell = Vector2i(1, 0)
+
+[sub_resource type="Resource" id="Resource_jmt2o"]
+script = ExtResource("9_p1wd0")
+display_name = "Dry"
+portrait = ExtResource("8_l6aq2")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+
+[sub_resource type="Resource" id="Resource_4c8xb"]
+script = ExtResource("4_tlbnv")
+unit_data = SubResource("Resource_jmt2o")
+cell = Vector2i(3, 0)
+
+[sub_resource type="Resource" id="Resource_daiea"]
+script = ExtResource("9_p1wd0")
+display_name = "Foe"
+portrait = ExtResource("8_l6aq2")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4,
+8: 10
+})
+faction = 1
+
+[sub_resource type="Resource" id="Resource_wsldq"]
+script = ExtResource("4_tlbnv")
+unit_data = SubResource("Resource_daiea")
+cell = Vector2i(10, 0)
+
+[resource]
+script = ExtResource("2_twpkr")
+unit_entries = Array[ExtResource("4_tlbnv")]([SubResource("Resource_ikpvb"), SubResource("Resource_4c8xb"), SubResource("Resource_wsldq")])
+tile_data = PackedByteArray("AAD+//7/AAAFAAAAAAD+////AAAFAAAAAAD+/wAAAAAFAAAAAAD+/wEAAAAFAAAAAAD+/wIAAAAFAAAAAAD+/wMAAAAFAAAAAAD+/wQAAAAFAAAAAAD+/wUAAAAFAAAAAAD///7/AAAFAAAAAAD/////AAAFAAAAAAD//wAAAAAFAAAAAAD//wEAAAAFAAAAAAD//wIAAAAFAAAAAAD//wMAAAAFAAAAAAD//wQAAAAFAAAAAAD//wUAAAAFAAAAAAAAAP7/AAAFAAAAAAAAAP//AAAFAAAAAAAAAAAAAAAFAAAAAAAAAAEAAAAFAAAAAAAAAAIAAAAFAAAAAAAAAAMAAAAFAAAAAAAAAAQAAAAFAAAAAAAAAAUAAAAFAAAAAAABAP7/AAAFAAAAAAABAP//AAAFAAAAAAABAAAAAAAGAAYAAAABAAEAAAAFAAAAAAABAAIAAAAFAAAAAAABAAMAAAAFAAAAAAABAAQAAAAFAAAAAAABAAUAAAAFAAAAAAACAP7/AAAFAAAAAAACAP//AAAFAAAAAAACAAAAAAAFAAAAAAACAAEAAAAFAAAAAAACAAIAAAAFAAAAAAACAAMAAAAFAAAAAAACAAQAAAAFAAAAAAACAAUAAAAFAAAAAAADAP7/AAAFAAAAAAADAP//AAAFAAAAAAADAAAAAAAFAAAAAAADAAEAAAAFAAAAAAADAAIAAAAFAAAAAAADAAMAAAAFAAAAAAADAAQAAAAFAAAAAAADAAUAAAAFAAAAAAAEAP7/AAAFAAAAAAAEAP//AAAFAAAAAAAEAAAAAAAFAAAAAAAEAAEAAAAFAAAAAAAEAAIAAAAFAAAAAAAEAAMAAAAFAAAAAAAEAAQAAAAFAAAAAAAEAAUAAAAFAAAAAAAFAP7/AAAFAAAAAAAFAP//AAAFAAAAAAAFAAAAAAAFAAAAAAAFAAEAAAAFAAAAAAAFAAIAAAAFAAAAAAAFAAMAAAAFAAAAAAAFAAQAAAAFAAAAAAAFAAUAAAAFAAAAAAAGAP7/AAAFAAAAAAAGAP//AAAFAAAAAAAGAAAAAAAFAAAAAAAGAAEAAAAFAAAAAAAGAAIAAAAFAAAAAAAGAAMAAAAFAAAAAAAGAAQAAAAFAAAAAAAGAAUAAAAFAAAAAAAHAP7/AAAFAAAAAAAHAP//AAAFAAAAAAAHAAAAAAAFAAAAAAAHAAEAAAAFAAAAAAAHAAIAAAAFAAAAAAAHAAMAAAAFAAAAAAAHAAQAAAAFAAAAAAAHAAUAAAAFAAAAAAAIAP7/AAAFAAAAAAAIAP//AAAFAAAAAAAIAAAAAAAFAAAAAAAIAAEAAAAFAAAAAAAIAAIAAAAFAAAAAAAIAAMAAAAFAAAAAAAIAAQAAAAFAAAAAAAIAAUAAAAFAAAAAAAJAP7/AAAFAAAAAAAJAP//AAAFAAAAAAAJAAAAAAAFAAAAAAAJAAEAAAAFAAAAAAAJAAIAAAAFAAAAAAAJAAMAAAAFAAAAAAAJAAQAAAAFAAAAAAAJAAUAAAAFAAAAAAAKAP7/AAAFAAAAAAAKAP//AAAFAAAAAAAKAAAAAAAFAAAAAAAKAAEAAAAFAAAAAAAKAAIAAAAFAAAAAAAKAAMAAAAFAAAAAAAKAAQAAAAFAAAAAAAKAAUAAAAFAAAAAAALAP7/AAAFAAAAAAALAP//AAAFAAAAAAALAAAAAAAFAAAAAAALAAEAAAAFAAAAAAALAAIAAAAFAAAAAAALAAMAAAAFAAAAAAALAAQAAAAFAAAAAAALAAUAAAAFAAAAAAA=")

@@ -1,0 +1,5 @@
+@@ frame=1 id=0 ok=1 cmd=ready @@
+
+[no board]
+
+bridge ready - send {"id":1,"cmd":"new"} or {"id":1,"cmd":"load","args":{"path":"res://Scenarios/<name>.tres"}}
