@@ -5,7 +5,7 @@
 # re-plan, the resolver for an aim, a counter and a watch shot. The AI's half is
 # tests/ai/test_main_action_chooser.gd's, the menu row's tests/ui/test_menu_catalogue_rows.gd's.
 #
-# The carving is Pressure Spray's shape, `Focus(W2) + Push(W2)`: it needs water beside the caster. The
+# The carving is a tied one, `Focus(W2) + Push(W2)`: it needs water beside the caster. The
 # board is the fixture grid with one SPRING of water stubbed in (test_rune_firing.gd's idiom), so a
 # caster at DRY has none and one at NEAR has the spring; a WET caster brings its own.
 extends GdUnitTestSuite
@@ -263,7 +263,7 @@ func test_a_counterer_whose_carving_fizzles_draws_no_counter() -> void:
 	_break_volleys(wet)
 
 
-# A WATCH SHOT fizzles too -- Pressure Spray is a watch-only carving -- from the watcher's anchor.
+# A WATCH SHOT fizzles too -- a watch-only carving is asked from the watcher's anchor.
 func test_a_watch_shot_whose_carving_fizzles_lands_nothing() -> void:
 	var watched: Array[Vector2i] = [Vector2i(2, 0)]
 	var carving := _tied(true)
@@ -293,7 +293,7 @@ func test_a_watch_shot_whose_carving_fizzles_lands_nothing() -> void:
 
 
 # ==============================================================================
-#  A WATCH is asked the same question: Pressure Spray is watch-only
+#  A WATCH is asked the same question as an aim
 # ==============================================================================
 
 func test_the_queue_gate_refuses_a_watch_that_fizzles_and_says_why() -> void:
