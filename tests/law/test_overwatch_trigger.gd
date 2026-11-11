@@ -81,12 +81,8 @@ func test_walking_into_a_watched_cell_takes_the_shot() -> void:
 	_break_volleys(plan)
 
 
-# The trigger is ENTRY, and occupancy is a trigger at the ARM MOMENT ALONE (#1003). A watch left
-# STANDING from an earlier pass goes on waiting for an entry however long somebody sits in it —
-# re-asking every resolve would make it a mine that re-fires on every repaint.
-#
-# The name changed with the rule: it used to say "standing in the footprint is not entering it",
-# which is still true of an entry and no longer the whole claim.
+# The trigger is ENTRY, and only entry (#1654; #1003 briefly made occupancy at the arm moment a
+# second one). A watch goes on waiting for an entry however long somebody sits in it.
 func test_a_standing_watch_does_not_fire_on_a_squatter() -> void:
 	var watcher := _watcher()
 	var squatter := H.spawn_solo(self, _sm, PLAYER, WATCHED[0], {Stats.Stat.MHP: 60}, false)
@@ -322,14 +318,27 @@ const WATCH_LINE_LENGTH := 3
 
 # A watcher at (0,0) aiming a length-3 line EAST, queued as a real order so resolve_plan derives
 # the footprint. Its weapon's main IS the line, so nothing here depends on authored content.
-func _line_watcher(cell := Vector2i(0, 0), faction := ENEMY) -> Unit:
+# `queue` false leaves the order to the case, which then decides where in the queue it sits.
+func _line_watcher(cell := Vector2i(0, 0), faction := ENEMY, queue := true) -> Unit:
 	var unit := H.spawn_solo(self, _sm, faction, cell, {Stats.Stat.STR: 4}, true, 6)
-	var main := (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
-	P.line(main, WATCH_LINE_LENGTH)
-	var watch := OverwatchAction.new()
-	watch.init(unit, cell + Vector2i(1, 0), main)
-	unit.squad._queue_action(watch)
+	P.line(_main_of(unit), WATCH_LINE_LENGTH)
+	if queue:
+		unit.squad._queue_action(_line_watch_order(unit))
 	return unit
+
+
+# The line watcher's Overwatch order, aimed one cell east of where it stands.
+func _line_watch_order(unit: Unit) -> OverwatchAction:
+	var watch := OverwatchAction.new()
+	watch.init(unit, unit.movement.cell + Vector2i(1, 0), _main_of(unit))
+	return watch
+
+
+func _queued_watch_order(unit: Unit) -> OverwatchAction:
+	for action in unit.squad.action_queue:
+		if action is OverwatchAction:
+			return action as OverwatchAction
+	return null
 
 
 func _heights_board(units_in: Array, heights: BoardHeights) -> BoardContext:
@@ -356,11 +365,8 @@ func test_a_watch_covers_only_what_its_shot_can_reach() -> void:
 	var watcher := _line_watcher()
 	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 1), {Stats.Stat.MHP: 60}, false)
 	var board := _heights_board([watcher, crosser], heights)
-	# ARMED BEFORE THE WALK IS QUEUED, which is the game's own sequence (a watch stands from an
-	# earlier turn; the player then plans into it) and since #1003 the only one that measures an
-	# ENTRY. Arming over a crosser whose walk already ENDS in the footprint is now an arm-fire --
-	# the resolver reads projected cells everywhere, so the crosser is threaded at its destination
-	# before it has taken a step -- and both cases here would have gone on passing while measuring it.
+	# ARMED BEFORE THE WALK IS QUEUED, which is the game's own sequence: a watch stands from an
+	# earlier turn, and the player then plans into it.
 	_arm_queued_watch(watcher, board)
 	var walk := MoveAction.new()
 	walk.init(crosser, [Vector2i(3, 1), Vector2i(3, 0)], null)   # enters the far end of the line
@@ -426,191 +432,128 @@ func test_every_triggered_shot_plays_exactly_once() -> void:
 	_break_volleys(plan)
 
 
-# --- ARMING ONTO AN OCCUPIED CELL (#1003) --------------------------------------------------------
+# --- ONLY AN ENTRY TRIPS A WATCH (#1654) --------------------------------------------------------
 #
-# The dev's ruling: "if someone queues up an overwatch attack on a unit that it would trigger, the
-# overwatch attack should just get triggered." Occupancy at the ARM MOMENT is a second trigger
-# beside entry. Every case here drives the real queue, because a pre-armed Watch handed to the
-# resolver has no arm moment to measure -- which is why the rest of this suite is blind to all of it.
+# The dev's ruling, 2026-11-11: "Overwatch should not fire at things that whatever was in it's lane
+# when it's set, only things that move into the lane after setting." It repeals #1003, which made
+# occupancy at the ARM MOMENT a second trigger. Every case here queues the watch as a real order, as
+# that one did: a pre-armed Watch handed to the resolver has no arm moment to measure, which is why
+# the entry cases above could not see the arm door at all.
 
-func test_arming_onto_an_occupied_cell_fires_on_the_spot() -> void:
+func test_setting_a_watch_over_a_stander_fires_nothing() -> void:
 	var watcher := _line_watcher()
-	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+	var stander := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+	var board := _board_with([watcher, stander])
 
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
-
-	assert_int(plan.watch_shots.size()).is_equal(1)
-	assert_object(plan.watch_shots[0].actor).is_same(watcher)
-	assert_object(plan.watch_shots[0].target).is_same(squatter)
-	assert_int(plan.watch_shots[0].resolved.damage).is_greater(0)
-	_break_volleys(plan)
-
-
-# ...and it is THE WATCH BEING ARMED that fires, never whichever armed watch happens to cover the
-# cell first. The seed is scoped to one watch for exactly this: _watch_triggered_by searches the
-# whole list in ARM ORDER, so an older standing watch would eat the trigger and a unit the player
-# never commanded would take the shot the main action was spent on.
-func test_an_older_watch_over_the_same_cell_does_not_eat_the_arm_trigger() -> void:
-	var elder := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 5), {Stats.Stat.STR: 4}, true, 6)
-	var elder_cells: Array[Vector2i] = [Vector2i(2, 0)]
-	elder.arm_watch(Vector2i(0, 5), Vector2i(2, 0), elder_cells, _main_of(elder))
-	var watcher := _line_watcher()
-	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([elder, watcher, squatter]))
-
-	assert_int(plan.watch_shots.size()).is_equal(1)
-	assert_object(plan.watch_shots[0].actor).override_failure_message(
-			"an older standing watch covering the same cell ate the arming watch's trigger") \
-		.is_same(watcher)
-	_break_volleys(plan)
-
-
-# One trigger, ONE target (#1040, dev 2026-09-18: "only hit the first enemy they encounter, ever").
-# Two enemies stand in the line as it arms and the shot takes the NEARER, where until #1057 it swept
-# the frozen footprint and hit both. The line is painted rather than drawn as a path, so this is also
-# the every-watch-is-single-target rule: a watch walks its whole footprint as one path, nearest first.
-func test_an_arm_fired_shot_hits_only_the_nearest_in_its_line() -> void:
-	var watcher := _line_watcher()
-	var near := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 60}, false)
-	var far := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0), {Stats.Stat.MHP: 60}, false)
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, near, far]))
-
-	var hit: Array[Unit] = []
-	for shot in plan.watch_shots:
-		hit.append(shot.target)
-	assert_array(hit).override_failure_message(
-			"the watch shot swept its footprint -- it hit %d units, not just the nearer" % hit.size()) \
-		.contains_exactly([near])
-	_break_volleys(plan)
-
-
-# The arm door and the entry door share ONE predicate, so every rider comes along with no clause of
-# its own: a body does not trip a watch, and neither does the watcher's own side.
-func test_arming_over_a_body_does_not_fire_the_watch() -> void:
-	var watcher := _line_watcher()
-	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-	body.lifecycle_state = Unit.LifecycleState.DOWNED
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, body]))
-
-	assert_array(plan.watch_shots).is_empty()
-
-
-func test_arming_over_an_ally_does_not_fire_the_watch() -> void:
-	var watcher := _line_watcher()
-	var friend := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, friend]))
-
-	assert_array(plan.watch_shots).is_empty()
-
-
-# It arms ALREADY SPENT, so the queue row reads "(fired this pass)" and execution cannot hand back a
-# live watch the preview showed as used -- GuardAction.resolved_spent's rule, through a new door.
-func test_an_arm_fired_watch_arms_already_spent() -> void:
-	var watcher := _line_watcher()
-	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
-	var order := watcher.squad.action_queue[0] as OverwatchAction
-	assert_bool(order.resolved_spent).is_true()
-
-	order.execute()
-	assert_bool(watcher.watch.spent).override_failure_message(
-			"execution armed a live watch the pass had already fired").is_true()
-	_break_volleys(plan)
-
-
-# The MOMENT it plays at is its own ORDER, at no walk step -- which puts it in the THIRD playback
-# partition, the side-channel tail, and keeps it out of the attack phase entirely.
-func test_an_arm_fired_shot_plays_in_the_tail_and_not_in_the_attack_phase() -> void:
-	var watcher := _line_watcher()
-	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
-	var shot: AttackAction = plan.watch_shots[0]
-	var order := watcher.squad.action_queue[0] as OverwatchAction
-
-	assert_object(shot.triggered_during).is_same(order)
-	assert_int(shot.triggered_at_step).is_equal(-1)
-	assert_array(plan.coda_shots()).contains_exactly([shot])
-	assert_array(plan.attack_playback()).not_contains([shot])
-	assert_array(plan.mid_walk_shots()).is_empty()
-	_break_volleys(plan)
-
-
-# ...and the THREE partitions still add up to every shot fired, which is the property that stops a
-# shot playing twice or not at all.
-func test_the_three_playback_partitions_are_total() -> void:
-	var watcher := _line_watcher()
-	var squatter := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squatter]))
-
-	var played: Array[AttackAction] = []
-	played.append_array(plan.mid_walk_shots())
-	played.append_array(plan.coda_shots())
-	for action in plan.attack_playback():
-		if (action as AttackAction).is_watch_shot:
-			played.append(action)
-	assert_array(played).override_failure_message(
-			"the three playback partitions do not add up to every shot fired") \
-		.contains_exactly_in_any_order(plan.watch_shots)
-	_break_volleys(plan)
-
-
-# WHERE IN THE PASS the shot lands is the ruling's own second sentence -- "the very last thing to
-# happen, after everything else, even counters" -- which is the whole of why arming-as-an-attack is
-# strictly worse than attacking. Falsifiable form: a counter that BREAKS the watch (#810) lands
-# first, so the arm-fire never happens. Resolve the arm-fire any earlier and it does.
-func test_a_counter_breaks_the_watch_before_the_arm_fire_can_happen() -> void:
-	var watcher := _line_watcher(Vector2i(0, 0), PLAYER)   # the squad's leader, so the counter picks it
-	var squadmate := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 1), {Stats.Stat.MHP: 60}, true)
-	_sm.join_squad(squadmate, watcher.squad)
-	var brawler := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1), {Stats.Stat.MHP: 60}, true)
-	var squatter := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
-	watcher.squad._queue_action(H.stamped_attack(squadmate, brawler))
-
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, squadmate, brawler, squatter]))
-
-	# Fixture preconditions, stated loudly: without either of these the case measures nothing.
-	assert_int(plan.counters.size()).override_failure_message(
-			"the brawler never countered -- fixture, not mechanic").is_greater(0)
-	assert_object(plan.counters[0].target).override_failure_message(
-			"the counter answered the squadmate rather than the watcher -- fixture, not mechanic") \
-		.is_same(watcher)
+	var plan := _arm_queued_watch(watcher, board)
 
 	assert_array(plan.watch_shots).override_failure_message(
-			"the watch fired although a counter had already broken it, so the arm-fire is not " \
-			+ "resolving after the counters") \
-		.is_empty()
+			"the watch fired on a unit that was standing in its lane when it was set").is_empty()
+	assert_object(watcher.watch).override_failure_message(
+			"the watch never armed, so this case measures nothing").is_not_null()
+	assert_bool(watcher.watch.spent).override_failure_message(
+			"the watch armed already spent, as though it had fired on the stander").is_false()
+
+
+# ...and it is still waiting: the stander STEPPING to another watched cell is an entry, which is the
+# rule a unit walking along a watched line has always met (test_moving_between_two_watched_cells).
+func test_a_stander_who_steps_along_the_lane_takes_the_shot() -> void:
+	var watcher := _line_watcher()
+	var stander := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+	var board := _board_with([watcher, stander])
+	_arm_queued_watch(watcher, board)
+	var step := MoveAction.new()
+	step.init(stander, [Vector2i(2, 0), Vector2i(3, 0)], null)
+	stander.squad._queue_action(step)
+
+	var plan := _sm.resolve_plan(stander.squad, board)
+
+	assert_int(plan.watch_shots.size()).is_equal(1)
+	assert_object(plan.watch_shots[0].target).is_same(stander)
 	_break_volleys(plan)
 
 
-# The tail is now the FIRST phase that can fell somebody, and GUARD is the one verb that executes
-# after Overwatch -- so its liveness stamp has to be re-taken after the arm-fire (#1005's rule,
-# reached by a phase that did not exist when it was written). Without this a bodyguard the arm shot
-# killed still steps in front of somebody at execution.
-func test_an_arm_fired_shot_that_fells_a_guard_restamps_its_liveness() -> void:
-	var watcher := _line_watcher(Vector2i(0, 0), PLAYER)
-	_main_of(watcher).hits_allies = true   # the shot IS the attack, splash included
-	var guard_unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 1}, false)
-	_sm.join_squad(guard_unit, watcher.squad)
-	var ward := GuardAction.new()
-	ward.init(guard_unit, watcher)
-	watcher.squad._queue_action(ward)
-	var squatter := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+# Leaving the lane is not an entry; coming back into it is.
+func test_a_stander_who_steps_out_and_back_in_takes_the_shot_on_the_way_back() -> void:
+	var watcher := _line_watcher()
+	var stander := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), {Stats.Stat.MHP: 60}, false)
+	var board := _board_with([watcher, stander])
+	_arm_queued_watch(watcher, board)
+	var walk := MoveAction.new()
+	walk.init(stander, [Vector2i(2, 0), Vector2i(2, 1), Vector2i(2, 0)], null)
+	stander.squad._queue_action(walk)
 
-	var plan := _sm.resolve_plan(watcher.squad, _board_with([watcher, guard_unit, squatter]))
+	var plan := _sm.resolve_plan(stander.squad, board)
+
+	assert_int(plan.watch_shots.size()).is_equal(1)
+	assert_int(plan.watch_shots[0].triggered_at_step).override_failure_message(
+			"the shot did not fire at the step back INTO the lane").is_equal(2)
+	_break_volleys(plan)
+
+
+# A watcher with a squadmate who maces an enemy one cell north into the lane at (2,0).
+func _shove_into_the_lane() -> Dictionary:
+	var watcher := _line_watcher(Vector2i(0, 0), PLAYER, false)
+	var shover := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 2), {Stats.Stat.STR: 4}, true, 4)
+	_sm.join_squad(shover, watcher.squad)
+	var victim := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 1), {Stats.Stat.MHP: 60}, false)
+	(shover.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	return {"watcher": watcher, "shover": shover, "victim": victim,
+			"board": _board_with([watcher, shover, victim])}
+
+
+# The issue's own shape: a body shoved into the lane BEFORE the watch is set was in the lane when it
+# was set. The shove is queued ahead of the watch, so it lands before the watch arms at its slot.
+func test_a_unit_shoved_in_before_the_watch_is_set_does_not_trip_it() -> void:
+	var s := _shove_into_the_lane()
+	var watcher: Unit = s.watcher
+	watcher.squad._queue_action(H.stamped_attack(s.shover, s.victim))
+	watcher.squad._queue_action(_line_watch_order(watcher))
+
+	var plan := _sm.resolve_plan(watcher.squad, s.board)
+
+	assert_vector(PlanResolver.projected_position(s.victim, plan.hypo)).override_failure_message(
+			"the shove did not land the victim in the lane -- fixture, not mechanic").is_equal(Vector2i(2, 0))
+	assert_array(plan.watch_shots).override_failure_message(
+			"the watch fired on a unit already in its lane when it armed").is_empty()
+	assert_bool(_queued_watch_order(watcher).resolved_spent).is_false()
+	_break_volleys(plan)
+
+
+# ...and the shove combo survives: queued AFTER the watch, the same shove is an entry and fires it.
+func test_a_unit_shoved_in_after_the_watch_is_set_trips_it() -> void:
+	var s := _shove_into_the_lane()
+	var watcher: Unit = s.watcher
+	watcher.squad._queue_action(_line_watch_order(watcher))
+	watcher.squad._queue_action(H.stamped_attack(s.shover, s.victim))
+
+	var plan := _sm.resolve_plan(watcher.squad, s.board)
 
 	assert_int(plan.watch_shots.size()).override_failure_message(
-			"the watch never arm-fired -- fixture, not mechanic").is_greater(0)
-	assert_int(PlanResolver.projected_lifecycle(guard_unit, plan.hypo)).override_failure_message(
-			"the splash did not fell the bodyguard -- fixture, not mechanic") \
-		.is_not_equal(Unit.LifecycleState.ACTIVE)
-	assert_bool(ward.resolved_actor_felled).override_failure_message(
-			"a bodyguard the arm-fired shot killed is still stamped live, so execution arms its ward") \
-		.is_true()
+			"the shove combo no longer connects").is_equal(1)
+	assert_object(plan.watch_shots[0].target).is_same(s.victim)
+	assert_bool(_queued_watch_order(watcher).resolved_spent).is_true()
+	_break_volleys(plan)
+
+
+# A BODY NEARER THE WATCHER TAKES AN ENTRANT'S SHOT -- the issue's second watch, measured. A downed
+# body does not trip a watch, but every watch shot stops at the first valid victim on its path
+# (#1040), and RulesService.is_attack_victim counts a body. Pinned as it stands; whether a watch shot
+# should pass over a body is put to the dev on #1654.
+func test_a_body_in_front_takes_the_shot_an_entrant_trips() -> void:
+	var watcher := _watcher(Vector2i(0, 0))
+	var lane: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	watcher.arm_watch(Vector2i(0, 0), Vector2i(1, 0), lane, _main_of(watcher))
+	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 60}, false)
+	body.lifecycle_state = Unit.LifecycleState.DOWNED
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 1), {Stats.Stat.MHP: 60}, false)
+	var walk := MoveAction.new()
+	walk.init(crosser, [Vector2i(3, 1), Vector2i(3, 0)], null)
+	crosser.squad._queue_action(walk)
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, body, crosser]))
+
+	assert_int(plan.watch_shots.size()).is_equal(1)
+	assert_object(plan.watch_shots[0].triggered_by).is_same(crosser)
+	assert_object(plan.watch_shots[0].target).is_same(body)
 	_break_volleys(plan)

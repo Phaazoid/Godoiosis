@@ -153,7 +153,6 @@ static func playback(plan: ResolvedPlan) -> Array[AttackAction]:
 	order.append_array(plan.attack_playback())
 	for counter in plan.counters:
 		order.append(counter)
-	order.append_array(plan.coda_shots())
 	return order
 
 

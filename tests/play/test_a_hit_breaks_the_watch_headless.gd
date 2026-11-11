@@ -105,11 +105,10 @@ func test_the_play_api_refuses_a_dry_carbines_watch() -> void:
 	assert_bool(dry.ok).is_false()           # ...a dry one may not
 
 
-# THE OTHER TWIN (#1003). An Overwatch armed onto a cell an enemy already occupies fires in the
-# side-channel tail, and play_session.execute plays that phase in a loop of its own. A partition
-# added to the executor and not to the twin is a shot the Play API resolves and never applies --
-# the AI drives this surface (Law #3), so it would plan against damage that never lands.
-func test_the_headless_executor_plays_an_arm_fired_shot_too() -> void:
+# THE HEADLESS TWIN, set over a stander (#1654). A watch fires only on a unit that ENTERS its lane
+# after it is set, so a foe already standing on the aimed cell takes nothing, and the watch arms
+# live. The Play API is the surface the night-maps run saw the old arm-time shot through.
+func test_the_headless_executor_arms_a_watch_over_a_stander_unspent() -> void:
 	var s := _board()
 	var sess = s.sess
 	var hero: Unit = s.hero
@@ -122,6 +121,7 @@ func test_the_headless_executor_plays_an_arm_fired_shot_too() -> void:
 
 	assert_bool(result.ok).is_true()
 	assert_int(foe.get_current_hp()).override_failure_message(
-			"the headless twin resolved the arm-fired shot and never applied it").is_less(before)
+			"the watch shot a foe that was standing in its lane when it was set").is_equal(before)
+	assert_object(hero.watch).override_failure_message("the watch never armed").is_not_null()
 	assert_bool(hero.watch.spent).override_failure_message(
-			"the twin armed a live watch the pass had already fired").is_true()
+			"the twin armed the watch already spent").is_false()

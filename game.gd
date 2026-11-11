@@ -1778,10 +1778,9 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 	# A cell an ARMED watch already marks is skipped -- one mark per cell, and the solid one wins,
 	# since a standing threat outranks a promised one.
 	#
-	# is_armed() rather than is_intact() since #1003: a watch this pass has already SPENT promises
-	# nothing, and its own queue row says "(fired this pass)" -- a ghost footprint beside that row
-	# is the board disagreeing with the panel (Law #2). It covers the shove combo's spent watch too,
-	# which had the same gap and nobody had asked.
+	# is_armed() rather than is_intact(): a watch this pass has already SPENT promises nothing, and
+	# its own queue row says "(fired this pass)" -- a ghost footprint beside that row is the board
+	# disagreeing with the panel (Law #2). The shove combo is what spends one in its own pass.
 	var promised: Array[Vector2i] = []
 	for watch: Watch in plan.watches:
 		if watch.sequence != 0 or not watch.is_armed():
