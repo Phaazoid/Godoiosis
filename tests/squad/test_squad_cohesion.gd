@@ -580,10 +580,10 @@ func test_a_contended_destination_stays_green_and_queues() -> void:
 
 # The other half: sometimes no formation exists at all, and then the tile really must be red. A
 # one-wide hallway with the far side plugged leaves both members able to reach exactly ONE bubble
-# cell between them, so no ordering saves it. followable_destinations catches this by counting
-# distinct reachable cells against the member count.
+# cell between them, so no ordering saves it. followable_destinations catches this because no
+# matching gives both members a cell (#1652; test_group_move_matching.gd has the shapes a count missed).
 #
-# Falsified by removing that union check: the destination goes green and the click queues nothing.
+# Falsified by removing that check: the destination goes green and the click queues nothing.
 func test_a_corridor_that_collapses_the_squad_onto_one_cell_is_refused() -> void:
 	for x in range(0, 13):
 		game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)

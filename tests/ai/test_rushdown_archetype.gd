@@ -236,3 +236,45 @@ func test_an_allied_rusher_ignores_the_cargo() -> void:
 		assert_int(moves[0].x) \
 			.override_failure_message("an ALLY squad marched on the player's own cargo") \
 			.is_less_equal(4)
+
+
+# ==============================================================================
+#  A squad strung through a one-tile gap still advances (#1652)
+# ==============================================================================
+
+# The leader in the gap between two rock pairs, two members either side, the eastern pair three
+# tiles of path away through it. The leader's best cell used to be one only ONE eastern member could
+# follow to, which the followable answer passed; the group move rolled back and nobody moved, every
+# turn. Expectations come from the board: the leader leaves the gap and gets closer by route.
+func test_a_squad_strung_through_a_gap_advances() -> void:
+	var rocks: Array[Vector2i] = [Vector2i(11, 5), Vector2i(12, 5), Vector2i(11, 7), Vector2i(12, 7)]
+	var board: Dictionary = BB.build(self)
+	auto_free(board.root)
+	for x in 22:
+		for y in 13:
+			if not rocks.has(Vector2i(x, y)):
+				BB.paint_cell(board.grid, Vector2i(x, y), BB.GRASS_ATLAS)
+	var gap := Vector2i(11, 6)
+	var leader: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.COH: 3, Stats.Stat.LDR: 20},
+			Team.Faction.ENEMY), gap)
+	leader.equipped_weapon = H.make_weapon()
+	for cell in [Vector2i(10, 5), Vector2i(10, 7), Vector2i(13, 5), Vector2i(13, 7)]:
+		var member := _spawn(board, Team.Faction.ENEMY, cell)
+		board.squad_manager.join_squad(member, leader.squad)
+	assert_int(leader.squad.get_members().size()).override_failure_message(
+			"fixture: the gap squad did not form").is_equal(5)
+	var target := _spawn(board, Team.Faction.PLAYER, Vector2i(3, 6))
+	var squad := _bind_rushdown(leader)
+	var ctx := _context(board)
+	var route := RulesService.path_hops(target.movement.cell, ctx, leader.state)
+
+	RushdownArchetype.take_squad_turn(squad, ctx, board.squad_manager)
+
+	var at := leader.get_projected_destination()
+	assert_that(at).override_failure_message("the squad stayed in the gap").is_not_equal(gap)
+	assert_int(int(route.get(at, RulesService.UNREACHABLE))).override_failure_message(
+			"the leader moved to %s, no closer to its target by route" % [at]) \
+		.is_less(int(route[gap]))
+	for action in squad.action_queue:
+		assert_bool(action.is_valid).override_failure_message(
+				"a queued order is invalid: %s" % [action]).is_true()
