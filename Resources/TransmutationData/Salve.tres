@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://cfl27wveau70g"]
+
+[ext_resource type="Resource" uid="uid://jvlbvm4uoehr" path="res://Resources/AttackShapes/Plus.tres" id="1_8itfn"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_b8mld"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="3_rugaq"]
+
+[resource]
+script = ExtResource("3_rugaq")
+recipe = "Infuse(2Q2)"
+display_name = "Salve"
+power = 4
+min_range = 0
+attack_shape = ExtResource("1_8itfn")
+hits_allies = true
+hits_self = true
+heals = true
