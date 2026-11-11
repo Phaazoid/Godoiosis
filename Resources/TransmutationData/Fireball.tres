@@ -15,7 +15,7 @@ power_bonus = -1
 
 [resource]
 script = ExtResource("1_o3s3f")
-recipe = "Bind(F, F) + Push(F2)"
+recipe = "Bind(F, F)"
 popup = "Fireball!"
 icon = ExtResource("2_bcr2w")
 empowered = SubResource("Resource_t8pvo")

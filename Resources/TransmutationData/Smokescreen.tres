@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("3_bg46m")
-recipe = "Bind(A2, AE)"
+recipe = "Push(2AE)"
 popup = "Smoke!"
 display_name = "Smokescreen"
 max_range = 3
