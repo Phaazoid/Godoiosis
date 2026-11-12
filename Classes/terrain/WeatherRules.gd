@@ -13,6 +13,12 @@ const FOLDER := "res://Resources/WeatherRules/"
 # rain, units get the wet status") -- steam's soak, from the sky instead of a cell. NONE soaks nobody.
 @export var state: Elemental.State = Elemental.State.NONE
 
+# The element this weather strikes every tile's GROUND with at each round's end (#1660), through the
+# terrain reactions a hit of it fires there (WeatherStrike): rain douses fire, snow freezes water.
+# NONE strikes nothing. It strikes from the end of round `ground_from` on, so snow can take time to lie.
+@export var ground: Elemental.Element = Elemental.Element.NONE
+@export_range(1, 20) var ground_from := 1
+
 # How this weather moves the air's reading while it falls (#1324): substance id -> percentage points
 # added to what the board authors, composed by Atmosphere.effective. A missing key moves nothing. Only
 # a weather the board DRAWS carries one, which is what keeps the change visible (Phaazoid@, 2026-10-14).

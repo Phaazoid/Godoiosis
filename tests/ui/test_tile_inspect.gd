@@ -193,6 +193,19 @@ func _build_busy_tile(cell: Vector2i) -> void:
 	for kind: Gas.Kind in Gas.Kind.values():
 		if GasRules.for_kind(kind) != null:
 			game.gas_field.set_level(cell, kind, Gas.Level.THICK)
+	# The weather's strike row (#1660): a weather whose strike reaches this tile, if any does.
+	_sky_that_strikes(cell)
+
+
+# The first weather whose strike says something of this tile (#1660), left over the board; CLEAR when
+# none does. Which weather strikes with what is authored, so it is found off the files.
+func _sky_that_strikes(cell: Vector2i) -> Weather.Kind:
+	for kind: Weather.Kind in Weather.Kind.values():
+		game.scenario_manager.current_weather = kind
+		if WeatherStrike.card_line(game._board(), cell) != "":
+			return kind
+	game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	return Weather.Kind.CLEAR
 
 
 # ------------------------------------------------------------------------------
@@ -400,6 +413,26 @@ func test_clicking_an_empty_tile_shows_its_full_card() -> void:
 	assert_bool(_panel().is_showing()).override_failure_message(
 			"an empty tile opened the dock").is_false()
 	assert_object(_ring()).override_failure_message("an empty tile opened a ring").is_null()
+
+
+# What the weather will do to the tile at the round's end (#1660) is on its card, naming the weather,
+# and gone under a clear sky.
+func test_the_card_says_what_the_weathers_strike_will_do_to_the_tile() -> void:
+	var cell := Vector2i(3, 3)
+	_set_burning(cell)
+	var sky := _sky_that_strikes(cell)
+	assert_int(sky).override_failure_message("fixture: no weather's strike reaches a burning tile").is_not_equal(
+			Weather.Kind.CLEAR)
+	var line := WeatherStrike.card_line(game._board(), cell)
+
+	await _click(cell)
+
+	assert_str(line).contains(Weather.display_name(sky))
+	assert_str(await _all_pages_text()).override_failure_message(
+			"the card left out what the weather will do to the tile").contains(line)
+	game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	assert_bool(TileReadout.ground_lines(game, cell).has(line)).override_failure_message(
+			"a clear sky's card still names the weather's strike").is_false()
 
 
 func test_clicking_it_again_closes_it() -> void:
