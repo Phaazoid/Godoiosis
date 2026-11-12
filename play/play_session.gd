@@ -1874,17 +1874,18 @@ func _on_round_completed() -> void:
 
 
 func _on_turn_started(faction: Team.Faction) -> void:
-	# The downed whose clock this start may run out, by handle, since a body that bleeds out is freed.
+	# The bodies whose clock this start may run out, by line, since a body that dies is freed. A
+	# drowning one (#1657) drowns rather than bleeds out.
 	var bodies := {}
 	for unit in live_units():
-		if unit.is_downed() and unit.get_faction() == faction:
-			bodies[unit] = handle_for(unit)
+		if unit.awaits_rescue() and unit.get_faction() == faction:
+			bodies[unit] = "%s %s" % [handle_for(unit), "drowns" if unit.is_drowning() else "bleeds out"]
 	# The game's own hand-off rule (#1365), so a downed faction is passed over here exactly as there.
 	var start := TurnBoundary.start_turn(faction, live_units(), squad_manager, func() -> bool:
 		return mission_tag() != "")
 	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
 		if not is_instance_valid(unit) or (unit as Unit).is_dead():
-			_boundary_events.append("%s bleeds out" % bodies[unit])
+			_boundary_events.append(bodies[unit])
 	if start == TurnBoundary.Start.SKIP:
 		turn_manager.end_turn(_board().present_factions())   # re-enters here for the next faction
 
