@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://b52fxpcemhb1o"]
+
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="1_wem76"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="2_k0cp0"]
+
+[resource]
+script = ExtResource("2_k0cp0")
+recipe = "Bind(Q, F) + Push(QF)"
+display_name = "Spark"
+power = 4
+min_range = 2
+max_range = 2
+hits_allies = true
+hits_self = true
+targets = 2
+up_tolerance = 99
+down_tolerance = 99
+arc_clearance = 99
+pierces_guard = true
+damage_kind = 4

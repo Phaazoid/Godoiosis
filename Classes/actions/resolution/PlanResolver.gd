@@ -282,7 +282,7 @@ static func seed_at_origin(mover: Unit, hypo: Dictionary) -> void:
 
 
 # A rescue's haul (#116), threaded (#1349): the side channel drags the body onto the bank, so whatever
-# the pass resolves after it -- an arm-fired shot's path, the END OF TURN forecast -- meets the body
+# the pass resolves after it -- the END OF TURN forecast above all -- meets the body
 # there, as execution does (RESCUE plays before OVERWATCH). SquadManager publishes the same cell for the
 # board, and only for a haul it has judged legal.
 static func thread_haul(body: Unit, cell: Vector2i, hypo: Dictionary) -> void:
@@ -322,8 +322,9 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 		_hypo_for(mover, hypo).position = mover.movement.cell
 		return
 
-	# path[0] is where the mover already stands. Arming does not fire on a unit ALREADY in the
-	# footprint — the trigger is ENTRY — so the walk starts at the first cell it actually enters.
+	# path[0] is where the mover already stands. A watch never fires on a unit ALREADY in its
+	# footprint -- the trigger is ENTRY and only entry (#1654, which repealed #1003's arm-time
+	# trigger) -- so the walk starts at the first cell it actually enters.
 	# The threaded position is left wherever the loop leaves it: the mover's own step when nothing
 	# fired, and the shot's landing cell when one shoved them.
 	for i in range(1, walk.size()):
@@ -403,40 +404,9 @@ static func fire_watch_entries(entrants: Array, plan: ResolvedPlan, hypo: Dictio
 				terrain_reactions, during, at_step))
 
 
-# OCCUPANCY AT THE ARM MOMENT, the second trigger (#1003): a watch armed over cells an enemy is
-# ALREADY standing in fires then and there, instead of waiting for an entry a stationary target
-# never makes. Entry is untouched; this is the other door onto the same shot.
-#
-# SCOPED TO THIS WATCH, which is the whole reason it is not a fire_watch_entries call with the
-# occupants as entrants: _watch_triggered_by searches the WHOLE list in arm order, so an older
-# standing watch covering the same cell would eat the trigger and somebody else would take the shot
-# the player just spent a main action on. The CASCADE below is deliberately unscoped — a knock-on
-# is an ordinary entry and may reach any watch.
-#
-# One entrant is enough, and the pick only decides `triggered_by` — who the camera frames. The shot
-# walks the watch's own paths and takes the first valid target on each (_derive_watch_shot, #1040),
-# which need not be the unit that set it off: a body in front absorbs it, and a nearer valid ally
-# takes it. Footprint order is path order, so the first path is asked first.
-static func fire_watch_on_arm(watch: Watch, plan: ResolvedPlan, hypo: Dictionary,
-		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction],
-		during: BaseAction) -> void:
-	if board == null or watch == null:
-		return
-	for cell in watch.footprint:
-		var occupant := unit_threaded_at(cell, board, hypo)
-		if occupant == null or not _watch_fires_on(watch, occupant, hypo):
-			continue
-		# at_step -1: an arm-fired shot interrupts no walk, the shove-triggered shape.
-		var moved := _fire_one_watch(watch, occupant, plan, hypo, reactions, board,
-				terrain_reactions, during, -1)
-		if not moved.is_empty():
-			fire_watch_entries(moved, plan, hypo, reactions, board, terrain_reactions, during, -1)
-		return
-
-
 # One watch firing on one entrant: spend it, derive the volley, stamp the playback moment, resolve.
 # Returns whoever the shot MOVED — they have entered wherever they landed, including the crosser —
-# which is the cascade's own input and the only thing either caller needs back.
+# which is the cascade's own input and the only thing the caller needs back.
 static func _fire_one_watch(watch: Watch, entrant: Unit, plan: ResolvedPlan, hypo: Dictionary,
 		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction],
 		during: BaseAction, at_step: int) -> Array[Unit]:
@@ -471,8 +441,8 @@ static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Diction
 
 
 # THE trigger predicate, and the one spelling of it: would THIS watch fire on THIS unit, against
-# this pass's threaded positions? Split out of _watch_triggered_by by #1003, which needed the same
-# five clauses asked of one NAMED watch rather than searched for across the list — Watch.is_armed()'s
+# this pass's threaded positions? Split out of _watch_triggered_by by #1003 (whose arm-time door, the
+# second caller, #1654 removed) -- the five clauses asked of one NAMED watch, Watch.is_armed()'s
 # shape, one question up.
 static func _watch_fires_on(watch: Watch, entrant: Unit, hypo: Dictionary) -> bool:
 	if entrant == null or not is_instance_valid(entrant):

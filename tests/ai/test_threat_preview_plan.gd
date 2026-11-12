@@ -227,12 +227,9 @@ func test_a_lethal_blow_is_marked() -> void:
 			"a blow that downs the target is not marked as felling").is_true()
 
 
-# A WATCH ARMED OVER SOMEBODY FIRES ON THE SPOT (#1003), and that shot lands in plan.watch_shots, never
-# in plan.attacks -- so a harvest that read attacks alone missed it (#1197). Carbine-shaped: its Shot
-# fires at exactly 2, so the neighbour can only be the watch's.
-func test_a_watch_armed_over_you_previews_its_shot() -> void:
-	var board: Dictionary = _build_board()
-	var watcher: Unit = _spawn(board, ENEMY, Vector2i(4, 0))
+# A Carbine-shaped hold watcher: its Shot fires at exactly 2, its watch is a line of 3.
+func _carbine_watcher(board: Dictionary, cell: Vector2i) -> Unit:
+	var watcher: Unit = _spawn(board, ENEMY, cell)
 	var template := WeaponData.new()
 	template.weapon_type = WeaponData.WeaponType.CARBINE
 	template.main_attack = WeaponAttackData.new()
@@ -246,10 +243,37 @@ func test_a_watch_armed_over_you_previews_its_shot() -> void:
 	var extras: Array[WeaponAttackData] = [watch]
 	template.extra_attacks = extras
 	watcher.equipped_weapon = WeaponInstance.make(template)
+	return watcher
+
+
+# A WATCH SET OVER YOU FIRES NOTHING THIS PASS (#1654: only an ENTRY trips a watch). The neighbour is
+# out of the Shot's reach, so the hold watcher's only hit on it would have been #1003's arm-time shot.
+func test_a_watch_set_beside_you_previews_no_shot() -> void:
+	var board: Dictionary = _build_board()
+	var watcher := _carbine_watcher(board, Vector2i(4, 0))
 	var beside: Unit = _spawn(board, PLAYER, Vector2i(5, 0))
 
-	var intents: Array[ThreatIntent] = _preview(board)
-	assert_int(intents.size()).override_failure_message(
-			"the shot of a watch armed over a neighbour never reached the preview").is_equal(1)
-	assert_object(intents[0].attacker).is_same(watcher)
-	assert_object(intents[0].target).is_same(beside)
+	for intent: ThreatIntent in _preview(board):
+		assert_bool(intent.attacker == watcher and intent.target == beside).override_failure_message(
+				"a watch set beside a unit previews a shot at it").is_false()
+
+
+# A WATCH SHOT LANDS IN plan.watch_shots, never in plan.attacks -- so a harvest that read attacks alone
+# missed it (#1197). The way an enemy pass sets one off is a SHOVE into a watch already standing: the
+# shover maces the player north into the watcher's lane.
+func test_a_shove_into_a_standing_watch_previews_its_shot() -> void:
+	var board: Dictionary = _build_board()
+	var watcher := _carbine_watcher(board, Vector2i(4, 0))
+	var lane: Array[Vector2i] = [Vector2i(5, 0), Vector2i(6, 0), Vector2i(7, 0)]
+	var watch_attack: AttackData = (watcher.equipped_weapon as WeaponInstance).template.extra_attacks[0]
+	watcher.arm_watch(Vector2i(4, 0), Vector2i(5, 0), lane, watch_attack)
+	var victim: Unit = _spawn(board, PLAYER, Vector2i(6, 1), 1)
+	var shover: Unit = _spawn(board, ENEMY, Vector2i(6, 2))
+	(shover.equipped_weapon as WeaponInstance).template.main_attack.knockback = 1
+
+	var shot := false
+	for intent: ThreatIntent in _preview(board):
+		if intent.attacker == watcher and intent.target == victim:
+			shot = true
+	assert_bool(shot).override_failure_message(
+			"the shot of a watch the shove set off never reached the preview").is_true()
