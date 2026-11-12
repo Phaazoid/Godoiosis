@@ -13,7 +13,8 @@ extends SceneTree
 #   `args` must be a JSON object, or absent. Every command with a usable id is answered: a malformed
 #   one gets ok=0, never silence (#1602). A command with no usable id is skipped, and stdout says so.
 #   new                          - build a small programmatic board
-#   load   {"path": "res://..."} - load a saved scenario; a refused one keeps the board (#1603)
+#   load   {"path": "res://..."} - load a saved scenario; a refused one keeps the board (#1603). It
+#                                  reads the file on disk every time, `restart` too (#1661)
 #   overview | preview           - render the board / the active plan
 #   focus  {"unit": "A"}         - render a unit's move/attack reach
 #   ranges {"unit": "a"}         - where the enemy can strike or stand next turn, and who can hit each
@@ -370,7 +371,7 @@ func _cmd_load(path: String, resume := false, weather := "", kept: int = Weather
 	if path == "":
 		return {"ok": false, "text":
 				"load needs a path, e.g. {\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/Castle Assault.tres\"}}"}
-	var read := BoardBuilder.read_scenario(path)
+	var read := BoardBuilder.read_scenario(path, true)   # the file as it is NOW, never a cached copy (#1661)
 	if read.has("error"):
 		return {"ok": false, "text": "> ERROR: cannot load: %s -- the board you had still stands" % read.error}
 	var scenario: ScenarioData = read.scenario

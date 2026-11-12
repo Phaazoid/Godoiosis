@@ -39,14 +39,18 @@ static var _visiting: Dictionary = {}
 # `ResourceCatalog` and `ScenarioManager.load_scenario` both come through here, an exported build
 # had EMPTY CATALOGS AND UNLOADABLE MISSIONS from #608 (2026-08-27) until this line changed.
 # `ResourceLoader.exists` resolves the remap; `ResourceLoader.load` then returns the resource.
-static func load_tolerant(path: String) -> Resource:
+#
+# `fresh` reads the file as it is on disk now rather than a cached copy of the path (#1661): IGNORE,
+# not IGNORE_DEEP, so its dependencies stay the one shared object (DevWidgets.saved_copy's ruling).
+static func load_tolerant(path: String, fresh := false) -> Resource:
 	if not ResourceLoader.exists(path):
 		return null
 	var refused := ForeignResource.refusal(path)   # #1555: a file from outside could run code
 	if refused != "":
 		push_warning("%s was not loaded -- %s" % [path, refused])
 		return null
-	var res: Resource = ResourceLoader.load(path)
+	var mode := ResourceLoader.CACHE_MODE_IGNORE if fresh else ResourceLoader.CACHE_MODE_REUSE
+	var res: Resource = ResourceLoader.load(path, "", mode)
 	if res != null:
 		# A clean parse supersedes an earlier repair of the same path. The repaired copy coming back
 		# out of the cache is NOT one -- the repair put it there under the real path -- and erasing on
@@ -69,7 +73,7 @@ static func load_tolerant(path: String) -> Resource:
 	# frees it AND its cache entry, so the parent would re-read the broken file from disk.
 	var kept: Array[Resource] = []
 	if _repair_children(path, kept):
-		res = ResourceLoader.load(path)
+		res = ResourceLoader.load(path, "", mode)
 		if res != null:
 			return res
 	return _repair(path)
