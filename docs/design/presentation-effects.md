@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** *(It has outgrown the name: the Decisions section below now holds twenty-six built or ruled sections and most of this file, and the idea wall is the four Tiers after it.)* Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond *([#176](https://github.com/Phaazoid/Godoiosis/issues/176) closed 2026-10-08; an idea from the pool is now filed as its own issue when it is taken up, as #551 and #1460 are)*, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites *(nine now, plus a law test)* fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #1489 (2026-10-24); #1509 (a drawn weather leaves the look preset alone) folded in 2026-10-27; #894 (the ground ghost over the aim fill) folded in 2026-10-30; #1601 (a cancelled first aim takes its ground ghosts) folded in 2026-11-03; #1315 (meshlib item ids are stable by name) folded in 2026-11-05; #1506 (a body the ice holds, drawn frozen into it) folded in 2026-11-07.**
+**Canon checked through #1489 (2026-10-24); #1509 (a drawn weather leaves the look preset alone) folded in 2026-10-27; #894 (the ground ghost over the aim fill) folded in 2026-10-30; #1601 (a cancelled first aim takes its ground ghosts) folded in 2026-11-03; #1315 (meshlib item ids are stable by name) folded in 2026-11-05; #1506 (a body the ice holds, drawn frozen into it) folded in 2026-11-07; #1657 (drowning becomes its own state) folded in 2026-11-12.**
 
 ---
 
@@ -1174,14 +1174,14 @@ shatter, freeze) are their own follow-up, [#1095](https://github.com/Phaazoid/Go
 
 #### A body the ice holds is drawn frozen INTO it ([#1506](https://github.com/Phaazoid/Godoiosis/issues/1506), BUILT 2026-11-07)
 
-Since #1498 one pass can melt the ice under a unit (it sinks and goes down) and freeze the water
+Since #1498 one pass can melt the ice under a unit (it sinks and drowns) and freeze the water
 again over it. The dev picked the look from four rounds of real-UI mocks (round 4, V2): the body
 **standing**, frozen mid-pose, inside a ring of glass crystals, with a faint copy of the body drawn
 over the ice so it reads through.
 
-- **The trigger is DERIVED, never stored**: a DOWNED body on FROZEN water it would drown in were the
+- **The trigger is DERIVED, never stored**: a body awaiting rescue (downed, or drowning since #1657) on FROZEN water it would drown in were the
   ice gone (`RulesService.held_by_ice`, asked once a frame by `UnitMirror`). Every such body has the
-  same rules, however it got there: a melt finishes it, and a rescue lifts it where it lies. So a unit
+  same rules, however it got there: a melt drops it back in the water, and a rescue lifts it where it lies. So a unit
   cut down while standing on ice over deep water shows frozen in too. Shallow water never sinks
   anyone and a Waterwalker never goes under, so neither is held. A stored "went under" fact was
   weighed and not built: a save field and a resolver stamp, read only by the look.

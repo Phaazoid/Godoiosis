@@ -16,11 +16,16 @@ class_name Unit
 
 signal unit_died(unit: Unit)
 signal went_downed(unit: Unit)
+# Into water it cannot stand in, alive (#1657): out of the fight like a down, so the same listeners
+# answer it (the pass-end ejection, the threat drop), but it is not a down -- telemetry tells them apart.
+signal went_under(unit: Unit)
 
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
 
 const DOWNED_TURNS := 3     # turns a downed unit survives unrescued; Glossary interpolates it
+const DROWNING_TURNS := 3   # turns a drowning unit treads water unrescued (#1657); Glossary interpolates it
+const DOWNED_IN_WATER_TURNS := 1   # a downed body in the water gets one (dev, #1657: "a harsher clock")
 
 # The live battle state and the body rules that read it (#1480). Built in _init, so it exists before
 # _ready and on a Unit that never enters the tree.
@@ -153,7 +158,27 @@ signal stats_changed
 
 # --- Lifecycle (docs/design/will-and-death.md) --- The state itself is battle-scoped and lives on
 # `state` (UnitState.lifecycle_state); the type is named here, where every reader already finds it.
-enum LifecycleState { ACTIVE, DOWNED, DEAD }
+# DROWNING (#1657) is in water too deep to stand in, alive: out of action and on a rescue clock like a
+# down, but it is NOT a down -- no health lost, no wound, and never the Crisis gambit. APPENDED: a save
+# stores the int.
+enum LifecycleState { ACTIVE, DOWNED, DEAD, DROWNING }
+
+# Can a rescue answer this body (#1657)? The one predicate: a down or a drowning. Static for the plan's
+# copies of a body, which hold only the value.
+static func awaits_rescue_in(lifecycle: LifecycleState) -> bool:
+	return lifecycle == LifecycleState.DOWNED or lifecycle == LifecycleState.DROWNING
+
+# How far out of the fight a lifecycle is, for "did this get worse". The enum's ints are its SAVE
+# order, not this one (DROWNING was appended after DEAD), so never compare the values themselves.
+static func fell_rank(lifecycle: LifecycleState) -> int:
+	match lifecycle:
+		LifecycleState.DROWNING:
+			return 1
+		LifecycleState.DOWNED:
+			return 2
+		LifecycleState.DEAD:
+			return 3
+	return 0
 
 # Which rung a would-be-fatal hit lands on is decided by LethalityRules.predict(), NOT here —
 # the resolver has to ask the same question at plan time (Law #2), so the ladder and its tuning
@@ -720,8 +745,9 @@ func take_damage(damage: int, non_blow := 0):
 	# rung and whether a limb goes (the same calls PlanResolver makes at plan time, so the preview
 	# cannot disagree — Law #2); this function is the only thing that CARRIES them out. Raw HP math
 	# stays on UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
-	# `non_blow` is the part of `damage` that is not a blow (#1174): the drowning top-up, or the whole
-	# of a tile burn or a sinking. Both are judged on the PRE-hit body, before anything below moves it.
+	# `non_blow` is the part of `damage` that is not a blow (#1174): the whole of a tile burn, or of a
+	# void removal. Both are judged on the PRE-hit body, before anything below moves it. The water is
+	# never damage at all (#1657): go_under is its door.
 	# The limb goes AFTER the damage lands (#1455): the hit lands on the body it was struck at, so gear
 	# the lost limb strips (and the max HP it carried) holds through that hit, as the preview assumes.
 	var rung := LethalityRules.predict(state, damage)
@@ -755,6 +781,7 @@ func heal(amount: int) -> void:
 	# The body is STABILISED, never stood up (#1002): health stops the clock and nothing else.
 	# Keyed on the HP actually moving, the way the ladder keys a body's fate on the damage NUMBER
 	# (#126) — a heal the cap ate bought nothing. -1 is the field's own "not counting" sentinel.
+	# A DROWNING clock runs on (#1657): health does not get you out of the lake, only a rescue does.
 	if is_downed() and get_current_hp() > before:
 		downed_turns_remaining = -1
 		downed_countdown_changed.emit(downed_turns_remaining)
@@ -762,10 +789,11 @@ func heal(amount: int) -> void:
 # The downed STATE, and the wound it leaves (#1174). The limb is take_damage's, not this function's:
 # a blow decides it, and the dev force_down below is not a blow.
 func _go_downed():
+	var in_water := lifecycle_state == LifecycleState.DROWNING   # downed where it was drowning (#1657)
 	lifecycle_state = LifecycleState.DOWNED
 	wounded = true
 	set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
-	downed_turns_remaining = DOWNED_TURNS
+	downed_turns_remaining = DOWNED_IN_WATER_TURNS if in_water else DOWNED_TURNS
 	_show_downed_sprite(true)
 	went_downed.emit(self)
 	downed_countdown_changed.emit(downed_turns_remaining)
@@ -779,8 +807,25 @@ func force_down() -> void:
 		return
 	_go_downed()
 
+# Into water this body cannot stand in, ALIVE (#1657): the shove's landing and the floor leaving
+# (SinkAction) both come here, after any blow has landed. The water takes no health and fires no
+# Crisis. A standing body starts DROWNING; a downed one keeps its down on the water's harsher clock.
+# LethalityRules.go_under is the plan copy's twin, so the preview cannot disagree.
+func go_under() -> void:
+	match lifecycle_state:
+		LifecycleState.ACTIVE:
+			lifecycle_state = LifecycleState.DROWNING
+			downed_turns_remaining = DROWNING_TURNS
+			_show_downed_sprite(true)
+			went_under.emit(self)
+			downed_countdown_changed.emit(downed_turns_remaining)
+		LifecycleState.DOWNED:
+			downed_turns_remaining = LethalityRules.clock_in_water(downed_turns_remaining)
+			downed_countdown_changed.emit(downed_turns_remaining)
+
+# The rescue clock, a down's or a drowning's (#1657): one field, "turns until this body dies unrescued".
 func tick_downed_countdown():
-	if lifecycle_state != LifecycleState.DOWNED:
+	if not awaits_rescue():
 		return
 	if downed_turns_remaining < 0:
 		return   # stopped by a heal (#1002) — the sentinel the field declares, finally honoured here
@@ -800,6 +845,12 @@ func is_active() -> bool:
 
 func is_downed() -> bool:
 	return lifecycle_state == LifecycleState.DOWNED
+
+func is_drowning() -> bool:
+	return lifecycle_state == LifecycleState.DROWNING
+
+func awaits_rescue() -> bool:
+	return awaits_rescue_in(lifecycle_state)
 
 # DECLARED three-way split (re-verified #104, guard declared on UnitInstance.permadead):
 # THIS is "went down the permanent path this mission" and is the only one anything reads.
@@ -1011,8 +1062,9 @@ func remove_armor():
 func revive():
 	# Rescue brings a downed unit back up — ACTIVE again, at whatever HP the body has: a heal
 	# taken while down is kept (#1002), and an untouched body is still the 1 HP it clung at. It
-	# stays in its solo squad; rescue does NOT auto-rejoin the old one (per design).
-	if lifecycle_state != LifecycleState.DOWNED:
+	# stays in its solo squad; rescue does NOT auto-rejoin the old one (per design). A drowning body
+	# comes back the same way, at the health it never lost and unwounded (#1657).
+	if not awaits_rescue():
 		return
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
@@ -1022,12 +1074,14 @@ func revive():
 func enter_crisis():
 	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, surge primed
 	# for next turn, no safety net for the rest of the battle. Called on a unit that never went DOWNED,
-	# so the lifecycle/clock/sprite resets are usually no-ops — kept because they make this function
-	# total over any state it could ever be reached from.
+	# so the DOWNED reset is usually a no-op — kept because it makes this function total. A DROWNING
+	# unit a blow sets this off in stays in the water on its clock (#1657): the gambit stands you up,
+	# it does not swim you out.
 	in_crisis = true
-	lifecycle_state = LifecycleState.ACTIVE
-	downed_turns_remaining = -1
-	_show_downed_sprite(false)
+	if lifecycle_state == LifecycleState.DOWNED:
+		lifecycle_state = LifecycleState.ACTIVE
+		downed_turns_remaining = -1
+		_show_downed_sprite(false)
 	set_current_hp(Abilities.CRISIS_REVIVE_HP)
 	crisis_surge_pending = true
 
@@ -1342,7 +1396,7 @@ func can_burrow_weapon() -> bool:
 func restore_lifecycle(lifecycle: LifecycleState, turns_remaining: int) -> void:
 	lifecycle_state = lifecycle
 	downed_turns_remaining = turns_remaining
-	_show_downed_sprite(lifecycle == LifecycleState.DOWNED)
+	_show_downed_sprite(awaits_rescue_in(lifecycle))
 
 func restore_stat_effects(effects: Array[StatEffect]) -> void:
 	stat_effects.clear()

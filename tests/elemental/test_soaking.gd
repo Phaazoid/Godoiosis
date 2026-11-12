@@ -193,7 +193,7 @@ func test_a_shove_into_deep_water_soaks_the_drowning_body() -> void:
 	var deep: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0)]
 
 	var shove := _shove(attacker, target, _board(units, no_shallow, deep))
-	assert_int(shove.resolved.drown_damage).is_greater(0)
+	assert_bool(shove.resolved.drowned).is_true()
 	assert_bool(shove.resolved.states_added.has(Elemental.State.WET)).is_true()
 
 func test_a_shove_onto_dry_ground_soaks_nobody() -> void:

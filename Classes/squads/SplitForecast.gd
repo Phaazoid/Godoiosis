@@ -108,9 +108,9 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 	for i in blows.size():
 		if i > 0:
 			_land(so_far, landings[i - 1])
-			_sink(plan.sinks_caused_by(blows[i - 1]), bands, pos, body, ground, dead, downed, downs)
+			_sink(plan.sinks_caused_by(blows[i - 1]), bands, pos, body, ground, dead, downed, downs, plan.hypo)
 		if i == walk_ends:
-			_sink(walk_sinks, bands, pos, body, ground, dead, downed, downs)
+			_sink(walk_sinks, bands, pos, body, ground, dead, downed, downs, plan.hypo)
 			_hand_over_held(held, bands, pos, body, ground)
 		var blow := blows[i]
 		var outcome := blow.resolved_outcome()
@@ -121,22 +121,22 @@ static func stamp(plan: ResolvedPlan, board: BoardContext) -> void:
 			pos[victim] = outcome.knockback_to
 		if changes.get(victim, -1) == i:
 			body[victim] = PlanResolver.state_of(victim, plan.hypo)
-		match LethalityRules.lifecycle_for(outcome.lethality):
+		match _leaves_into(outcome, victim, plan.hypo):
 			Unit.LifecycleState.DEAD:
 				if not dead.has(victim):
 					dead[victim] = true
 					_leave(victim, outcome, bands, pos, body, ground, SquadManager.LeaveCause.DEATH, held,
 							i < walk_ends)
-			Unit.LifecycleState.DOWNED:
+			Unit.LifecycleState.DOWNED, Unit.LifecycleState.DROWNING:
 				if not downed.has(victim):
 					downed[victim] = true
 					downs.append(blow)
 	if not blows.is_empty():
 		_land(so_far, landings[-1])
-		_sink(plan.sinks_caused_by(blows[-1]), bands, pos, body, ground, dead, downed, downs)
-	_sink(walk_sinks, bands, pos, body, ground, dead, downed, downs)   # a pass that is nothing but its walk
+		_sink(plan.sinks_caused_by(blows[-1]), bands, pos, body, ground, dead, downed, downs, plan.hypo)
+	_sink(walk_sinks, bands, pos, body, ground, dead, downed, downs, plan.hypo)   # a pass that is nothing but its walk
 	_hand_over_held(held, bands, pos, body, ground)
-	_sink(plan.sinks, bands, pos, body, landed, dead, downed, downs)   # a cause that is no blow: a Burrow's cover
+	_sink(plan.sinks, bands, pos, body, landed, dead, downed, downs, plan.hypo)   # a cause that is no blow: a Burrow's cover
 
 	# A body finished off later in the pass is never ejected -- and needs no check here: its death
 	# already took it out of its copied squad, so _leave finds nothing to do.
@@ -281,7 +281,7 @@ static func _seed_bands(hits: Array[BaseAction], bands: Dictionary[Unit, _Band],
 		if not _landed(outcome) or victim == null or not is_instance_valid(victim):
 			continue
 		var moves_squads := outcome.knockback_applied \
-				or LethalityRules.lifecycle_for(outcome.lethality) != Unit.LifecycleState.ACTIVE
+				or outcome.lifecycle_after() != Unit.LifecycleState.ACTIVE
 		if moves_squads:
 			_seed_band(victim, bands, all_bands)
 
@@ -427,21 +427,30 @@ static func _settle_downs(downs: Array[BaseAction], bands: Dictionary[Unit, _Ban
 # Asking twice is harmless: a unit leaves or goes down once.
 static func _sink(sinks: Array[SinkAction], bands: Dictionary[Unit, _Band], pos: Dictionary[Unit, Vector2i],
 		body: Dictionary[Unit, UnitState], ground: BoardContext, dead: Dictionary[Unit, bool],
-		downed: Dictionary[Unit, bool], downs: Array[BaseAction]) -> void:
+		downed: Dictionary[Unit, bool], downs: Array[BaseAction], hypo: Dictionary) -> void:
 	for sink in sinks:
 		var outcome := sink.resolved_outcome()
 		var victim := sink.actor
 		if not _landed(outcome) or victim == null or not is_instance_valid(victim):
 			continue
-		match LethalityRules.lifecycle_for(outcome.lethality):
+		match _leaves_into(outcome, victim, hypo):
 			Unit.LifecycleState.DEAD:
 				if not dead.has(victim):
 					dead[victim] = true
 					_leave(victim, outcome, bands, pos, body, ground, SquadManager.LeaveCause.DEATH)
-			Unit.LifecycleState.DOWNED:
+			Unit.LifecycleState.DOWNED, Unit.LifecycleState.DROWNING:
 				if not downed.has(victim):
 					downed[victim] = true
 					downs.append(sink)
+
+
+# The lifecycle this hit or sinking moves its victim INTO, or ACTIVE when it moves nothing: the rung
+# and the water (#1657), folded onto what the victim came into the pass as, so a downed body the water
+# takes stays where it was rather than going down a second time.
+static func _leaves_into(outcome: ResolvedOutcome, victim: Unit, hypo: Dictionary) -> Unit.LifecycleState:
+	var start := PlanResolver.lifecycle_at_start(victim, hypo)
+	var after := outcome.lifecycle_after(start)
+	return Unit.LifecycleState.ACTIVE if after == start else after
 
 
 # END OF TURN, after the pass has settled: a burn death hands over at once, and the burned-down leave

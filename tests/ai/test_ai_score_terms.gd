@@ -206,6 +206,27 @@ func test_a_unit_that_only_refuses_kills_still_never_kills_its_own() -> void:
 			"the NEVER_KILLS notch killed its own squadmate").is_same(s.clean)
 
 
+# A DROWNING squadmate (#1657) is still ours to fell: killing it is a fall, though the lifecycle enum
+# lists DROWNING after DEAD. The floor ranks how far out of the fight a unit is (Unit.fell_rank), never
+# the enum's save order.
+func test_a_swing_that_would_kill_our_drowning_own_is_never_taken() -> void:
+	var board := _build_board()
+	var s := _line_through(board, 2)
+	var ally: Unit = s.ally
+	BB.paint_cell(board.grid, ally.movement.cell, BB.WATER_ATLAS)
+	ally.go_under()
+	assert_bool(ally.is_drowning()).override_failure_message("fixture: the squadmate did not go under").is_true()
+	var attacker: Unit = s.attacker
+	AITactics.queue_main_action(attacker, _ctx(board), board.squad_manager, ATTACK_ONLY)
+
+	var aim := _queued_attack(attacker)
+	assert_object(aim).override_failure_message("fixture: the attacker queued nothing at all").is_not_null()
+	if aim == null:
+		return
+	assert_object(aim.fired_attack).override_failure_message(
+			"the AI killed its own drowning squadmate for a net removal").is_same(s.clean)
+
+
 # The floor reads the candidate's DEPOSITS too: a fire that melts the ice under a squadmate it never
 # touched drowns them, and that is its work as surely as a blow.
 #

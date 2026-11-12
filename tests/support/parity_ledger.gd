@@ -334,7 +334,7 @@ static func outcome_fields() -> Dictionary:
 			"fall_damage": {"play": never("folded into the damage; the fall prints as 'falls N'"), "ai": never(IN_DAMAGE)},
 			"fall_levels": {"play": covered(SESSION, ".fall_levels"), "ai": never(IN_DAMAGE)},
 			"insulated": {"play": covered(SESSION, ".insulated"), "ai": never(IN_DAMAGE)},
-			"drown_damage": {"play": covered(SESSION, ".drown_damage"), "ai": never(IN_DAMAGE)},
+			"drowned": {"play": covered(SESSION, ".drowned"), "ai": never("priced through the lifecycle change it threads")},
 			"removed": {"play": covered(SESSION, ".removed"), "ai": never("a void removal reads as KILLED through lethality")},
 			"splits": {"play": covered(SESSION, ".splits"), "ai": covered(TACTICS, ".splits")},
 			"relinks": {"play": never("the tether animation; the split it follows prints"), "ai": never(ANIMATION)},

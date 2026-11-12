@@ -95,6 +95,9 @@ func _register(unit: Unit) -> void:
 		unit.unit_died.connect(_on_unit_died)
 	if not unit.went_downed.is_connected(_on_unit_downed):
 		unit.went_downed.connect(_on_unit_downed)
+	# Going under (#1657) leaves the fight like a down: the same deferred ejection, game._build_unit's twin.
+	if not unit.went_under.is_connected(_on_unit_downed):
+		unit.went_under.connect(_on_unit_downed)
 
 func _on_unit_died(unit: Unit) -> void:
 	mission.note_unit_died(unit)   # FIRST, as game._on_unit_died: the mission may be protecting this one
@@ -1448,7 +1451,7 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("holds %d" % r.knockback_held)
 	if r.fall_levels > 0:
 		events.append("falls %d" % r.fall_levels)
-	if r.drown_damage > 0:
+	if r.drowned:
 		events.append("drowns")
 	if r.removed:
 		events.append("into the void")

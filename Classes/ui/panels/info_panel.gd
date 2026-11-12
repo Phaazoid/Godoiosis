@@ -92,6 +92,9 @@ func _refresh_limbs():
 		else:
 			limbs_row.add_child(_badge("DOWN", EMPTY_COLOR,
 				"Healed while down — no death clock, still needs a rescue"))
+	elif unit.is_drowning():   # #1657: the clock always runs, a heal does not stop it
+		limbs_row.add_child(_badge("DROWNING %d" % unit.downed_turns_remaining, EMPTY_COLOR,
+			"Drowns in %d turn(s) without rescue" % unit.downed_turns_remaining))
 	elif unit.wounded:
 		# Standing again after a down (#1174); a body's DOWN already says it.
 		limbs_row.add_child(_icon_badge(StateIcons.WOUNDED, "WOUNDED", AT_RISK_COLOR,

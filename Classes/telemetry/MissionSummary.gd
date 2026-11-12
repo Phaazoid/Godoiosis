@@ -243,7 +243,7 @@ static func _faction_index(events: Array[Dictionary]) -> Dictionary:
 		elif kind == "turn_start" or kind == "mission_end":
 			for u: Dictionary in e.get("units", []):
 				index[_id_of(u)] = u.get("faction", "")
-		elif kind == "unit_downed" or kind == "unit_died":
+		elif kind == "unit_downed" or kind == "unit_drowning" or kind == "unit_died":
 			index[_id_of(e)] = e.get("faction", "")
 	return index
 

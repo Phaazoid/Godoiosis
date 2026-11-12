@@ -58,7 +58,7 @@
 
 > **[#894](https://github.com/Phaazoid/Godoiosis/issues/894) (2026-10-30): an attack can LAY fire, and a laid fire on ground that is not fuel runs the ATTACK's life.** The one exception to "ground that is not fuel never runs out", and it is scoped to the deposit: `ResolvedCellEffect.state_turns` carries a life the hit brings (`AttackData.tile_effect_turns`), and `TerrainStateManager._start_timer` starts it only where the ground gives the state no clock (`_ground_clock` still wins, so a wall laid on grass burns on grass's clock and scorches). It lands in `_state_turns`, the one live countdown, so the tick, the save and spread need nothing new, and it never touches `_start_turns` (#1484's authored starts), because a cast fire is a battle fact. **A deposit never re-times a state the cell already holds**, so a laid fire over a brazier leaves it permanent. A burn-out with no fuel leaves no scorch. Refused on open water as the hit's own reactions leave the cell (`Terrain.open_water_of`), so ice the same hit melts takes none; plain ice keeps it until an ice rule exists. The attack side is weapons.md → *An attack may also lay a TILE EFFECT*.
 
-**Canon checked through #1629 (2026-11-07); #1534 (the gas files gain a dev-tools page) folded in 2026-11-05; #1421 (smoke becomes the molecule `A2*AE`) folded in 2026-11-07.**
+**Canon checked through #1629 (2026-11-07); #1534 (the gas files gain a dev-tools page) folded in 2026-11-05; #1421 (smoke becomes the molecule `A2*AE`) folded in 2026-11-07; #1657 (drowning becomes its own state) folded in 2026-11-12.**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -159,14 +159,21 @@ forgetting the state question means drowning on solid ice.
 you mid-flight and a lake can, and stopping at the water's *edge* is what keeps the body inside a
 rescuer's reach, which is the drown clock's whole point.
 
-**Drowning is DAMAGE, not a lifecycle door of its own** (dev, 2026-08-26: *"Downing means getting set
-to one life. We don't need a no damage down — falling into deep water = losing all one's health"*).
-So the ordinary `LethalityRules` ladder names the rung, and the down, the wound, the Crisis gambit
-and finishing a body that is already DOWNED all arrive for free. The water is never a BLOW, so it
-takes no limb ([#1174](https://github.com/Phaazoid/Godoiosis/issues/1174)): only a blow limb-sized on its own does, drowning or not. It is
-computed **after** the Iron Will clamp: the cap governs the *hit* and stays absolute, and the water
-then takes the remainder — a lake is not a blow, and capping it would mean a unit holding Iron Will
-above `Abilities.IRON_WILL_DAMAGE_CAP` simply could not drown.
+**Drowning is a LIFECYCLE STATE of its own, and the water takes no health** ([#1657](https://github.com/Phaazoid/Godoiosis/issues/1657), dev,
+2026-11-12, replacing #116's damage model: *"it doesn't make sense for a unit to lose all their
+health when they fall in water... entering the drowning state does not trigger crisis mode"*). Going
+under is `Unit.LifecycleState.DROWNING`: out of action and on a rescue clock (`Unit.DROWNING_TURNS`)
+like a down, but no health lost, no wound and never the Crisis gambit. One door per body:
+`Unit.go_under()` live, `LethalityRules.go_under()` on the plan's copy, both after any blow has
+landed. A blow on a drowner is judged as on a standing body, so it can down it (DOWNED, on the
+water's harsher `DOWNED_IN_WATER_TURNS` clock), kill it, or fire Crisis, which leaves it drowning. A
+body already DOWNED that goes into the water stays down on that one-turn clock. A heal on a drowner
+restores health and never stops the clock. The rule lives in `docs/design/will-and-death.md` →
+*Drowning*.
+
+*(Historical, 2026-08-26 → 2026-11-12: drowning was DAMAGE, the water taking whatever health the blow
+left, so the ordinary ladder named the rung. That made an armed Berserker shoved into a lake enter
+Crisis, #1657.)*
 
 **A rescue HAULS the body out** (dev, same day: *"we need a valid tile next to the rescuer to bring
 the drowning unit onto"*). `RulesService.rescue_landings` lists every legal destination, keyed on *can the body stand there*

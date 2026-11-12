@@ -77,19 +77,18 @@ var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): t
 							# trail's own surfaces, which is the only form that can see the SECOND
 							# drop a plummet adds.
 # The target SHRUGGED OFF at least one element this hit (#685 follow-up). The last of the four
-# world-consequence facts to be recorded rather than left as a string: fall_levels, drown_damage and
+# world-consequence facts to be recorded rather than left as a string: fall_levels, drowned and
 # `removed` were already here, so the queue row could read three of them and had to parse the fourth
 # back out of `popups`. This file's own rule -- record it when nothing downstream can tell afterwards
 # -- applies exactly: `elements` holds what SURVIVED, so an insulated hit and a non-elemental swing
 # both arrive with it empty and only this tells them apart.
 var insulated: bool = false
-# Shoved into water this unit cannot stand on (#116) — the water's own component, whatever the hit
-# and the fall left, already folded into `damage` above. Recorded rather than derived because
-# afterwards nothing can tell a drowning from an ordinary down: both land on the DOWNED rung with the
-# target at 0, which is the point (a drowning IS a down, answerable by RescueAction's haul), and a
-# readout that wants to say WHY has no other witness. Never set beside `removed` — a VOID landing
-# returns before the water is asked.
-var drown_damage: int = 0
+# Into water this unit cannot stand in (#116): this hit's shove landed there, or (a SinkAction's
+# outcome) the floor left it. Since #1657 the water is not damage and not a rung -- it puts a standing
+# body into DROWNING and a downed one on the water's clock (LethalityRules.go_under / Unit.go_under),
+# after whatever the blow did. Recorded because nothing else can tell afterwards: the rung reads only
+# the blow. Never set beside `removed` — a VOID landing returns before the water is asked.
+var drowned: bool = false
 # Shoved into a VOID (#259) — gone outright, the #116 kill doctrine. lethality reads KILLED so
 # every reader (AI removal tiers, the KILL icon, lifecycle_for → DEAD) lights up; this flag exists
 # because execution needs its own door — a 0-damage take_damage cannot kill an ACTIVE unit, so
@@ -122,11 +121,21 @@ var lethality: Lethality = Lethality.NONE
 # its copy of the body (UnitState.lose_next_limb), and execution takes the same slot by the same rotation.
 var severed_limb: int = -1
 
-# How much of `damage` is NOT a blow (#1174), so can never take a limb: the drowning top-up, or all of
-# it when the void took the unit (a removal is a kill, and a kill takes nothing). One answer for the
-# resolver and both execution twins -- execution re-asks the ladder, which cannot see a removal.
+# How much of `damage` is NOT a blow (#1174), so can never take a limb: all of it when the void took
+# the unit (a removal is a kill, and a kill takes nothing). One answer for the resolver and both
+# execution twins -- execution re-asks the ladder, which cannot see a removal. The water deals nothing
+# since #1657, so it has no share here.
 func non_blow() -> int:
-	return damage if removed else drown_damage
+	return damage if removed else 0
+
+# Which lifecycle this hit or sinking LEAVES its target in, from `current`: the rung's, then the
+# water's (#1657). The one answer for a reader holding only the outcome -- lifecycle_for reads the rung
+# alone and cannot see a drowning, which names no rung.
+func lifecycle_after(current := Unit.LifecycleState.ACTIVE) -> Unit.LifecycleState:
+	var after := LethalityRules.lifecycle_for(lethality, current)
+	if drowned and after == Unit.LifecycleState.ACTIVE:
+		return Unit.LifecycleState.DROWNING
+	return after
 
 # The HP a heal actually gave back (#46): heal_amount is the heal's whole size, and the max-HP cap ate
 # the rest, so a readout of what happened reads this. The field stays uncapped for its other readers.

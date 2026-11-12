@@ -44,7 +44,7 @@ func aimed_at() -> Unit:
 
 func execute() -> void:
 	begin_execution()
-	if target != null and is_instance_valid(target) and target.is_downed():
+	if target != null and is_instance_valid(target) and target.awaits_rescue():
 		if _still_adjacent():
 			_haul_out()
 			target.revive()

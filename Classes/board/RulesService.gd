@@ -47,10 +47,12 @@ static func stand_block_reason(board: BoardContext, cell: Vector2i, body: UnitSt
 static func can_place_at(board: BoardContext, cell: Vector2i) -> bool:
 	return can_spawn_at(board, cell) and board.projected_unit_at_cell(cell) == null
 
-# WHY this unit may not act at all -- "" means it is standing. Downed and dead units can't be
-# commanded (will-and-death.md). Its own question because the order chokepoint asks it without the
-# faction half: the AI's preview queues enemy orders on the player's turn (#662).
+# WHY this unit may not act at all -- "" means it is standing. Downed, drowning (#1657) and dead units
+# can't be commanded (will-and-death.md). Its own question because the order chokepoint asks it without
+# the faction half: the AI's preview queues enemy orders on the player's turn (#662).
 static func standing_block_reason(unit: Unit) -> String:
+	if unit.is_drowning():
+		return "%s is drowning." % unit.get_unit_name()
 	if not unit.is_active():
 		return "%s is down." % unit.get_unit_name()
 	return ""
@@ -129,8 +131,8 @@ static func wets_in(cell: Vector2i, body: UnitState, board: BoardContext) -> boo
 
 # Is the ice all that holds this body up (#1506)? drowns_in asked of the water UNDER a FROZEN cell:
 # the tile's own walkability (GridUtils.walkable_of, BoardContext.is_walkable's tile half) and
-# can_traverse's Waterwalk clause. A thaw would sink a body here, and a downed one is drawn frozen
-# into the ice. Asks nothing of the lifecycle: the caller does.
+# can_traverse's Waterwalk clause. A thaw would sink a body here, and a body awaiting rescue is drawn
+# frozen into the ice. Asks nothing of the lifecycle: the caller does.
 static func held_by_ice(cell: Vector2i, body: UnitState, board: BoardContext) -> bool:
 	return board.has_tile_state(cell, Terrain.TileState.FROZEN) \
 		and board.terrain_kind_at(cell) == Terrain.Kind.WATER \
@@ -245,7 +247,7 @@ static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: Boa
 static func blocks_passage(mover: Unit, occupant: Unit) -> bool:
 	if occupant == null:
 		return false
-	return Team.is_enemy(mover.get_faction(), occupant.get_faction()) and not occupant.is_downed()
+	return Team.is_enemy(mover.get_faction(), occupant.get_faction()) and not occupant.awaits_rescue()
 
 # May `mover` STAND on it? Stricter: only a squadmate's cell is shareable, because squads rotate
 # through each other on purpose. This is compute_move_range's destination filter.
@@ -580,8 +582,8 @@ static func rescue_block_reason(target: Unit, plan: ResolvedPlan, rescuer: Unit 
 	if target == null or not is_instance_valid(target):
 		return "Rescue target won't be down"
 	if plan == null:
-		return "" if target.is_downed() else "Rescue target won't be down"
-	if PlanResolver.projected_lifecycle(target, plan.hypo) != Unit.LifecycleState.DOWNED:
+		return "" if target.awaits_rescue() else "Rescue target won't be down"
+	if not Unit.awaits_rescue_in(PlanResolver.projected_lifecycle(target, plan.hypo)):
 		return "Rescue target won't be down"
 	var claimer: Variant = plan.rescued_by.get(target)   # untyped: a typed read of a freed ref throws (#149)
 	if rescuer != null and is_instance_valid(claimer) and claimer != rescuer:

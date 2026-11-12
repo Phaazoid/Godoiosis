@@ -220,7 +220,7 @@ func _apply(event: Dictionary) -> void:
 			_replay_squad_verb(event)
 		_:
 			# Everything else is a CONSEQUENCE the rules re-derive: order_queued (the pass carries
-			# the committed queue), order_cancelled, unit_downed, unit_died, turn_effects,
+			# the committed queue), order_cancelled, unit_downed, unit_drowning, unit_died, turn_effects,
 			# zone_captured, mission_end, summary. Replaying a consequence would be the side-channel
 			# write Law #3 forbids for orders.
 			pass
@@ -417,7 +417,7 @@ func _replay_squad_verb(event: Dictionary) -> void:
 # order_queued / gear / squad_verb are deliberately absent -- they are this driver's own input, so
 # diffing them asks only whether it echoed what it was handed. Including them would pad the report
 # with rows that cannot fail.
-const COMPARED := ["turn_start", "pass", "turn_effects", "unit_downed", "unit_died",
+const COMPARED := ["turn_start", "pass", "turn_effects", "unit_downed", "unit_drowning", "unit_died",
 	"zone_captured", "mission_end"]
 
 const LIST_CAP := 40   # record diffs listed; the first 40 are the ones anyone reads
