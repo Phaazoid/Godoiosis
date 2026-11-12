@@ -55,6 +55,7 @@ const NOT_COMMANDS := {
 	"get_unit_at_cell": "a host call PreMissionPhase makes, not ordered",
 	"start_pre_mission": "called by `load`, the fresh-start door",
 	"start_weather": "called by `load` and `restart`, the mission start's weather draw (#1509)",
+	"battle_begins": "called by `load` and `begin`, the battle's start soaking whoever stands in water (#1653)",
 	"is_deploying": "read by the view, not ordered",
 	"reserve_units": "read by the view, not ordered",
 	"deployment_cells": "read by the view, not ordered",
