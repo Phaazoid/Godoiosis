@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1649 (2026-11-09).**
+**Canon checked through #1649 (2026-11-09); only an entry trips a watch (#1654) folded in 2026-11-11.**
 
 ## Principles
 
@@ -4114,7 +4114,7 @@ A zone knob restyles both views through one door (`GameKnobs._restyle_zone_marks
 
 **THE FIELD DRAWS THE WATCH SHOT AND THE CURRENT ([#1197](https://github.com/Phaazoid/Godoiosis/issues/1197), 2026-10-03).** The field promises an upper bound, and two live mechanisms hit cells it painted safe.
 
-- **The watch shot.** A watch set over a cell an enemy already stands in fires on the spot ([#1003](https://github.com/Phaazoid/Godoiosis/issues/1003)). A watch attack is never in the fire view ([#590](https://github.com/Phaazoid/Godoiosis/issues/590)), so the reach pass never saw one. The Carbine's Shot fires at exactly 2 and its watch lane runs 1 to 4, so in practice the watch is its point-blank shot. That was live on The Causeway's Bridge Watch.
+- **The watch shot.** Stepping into a lane a watcher could set is a shot, and a watch attack is never in the fire view ([#590](https://github.com/Phaazoid/Godoiosis/issues/590)), so the reach pass never saw one. The Carbine's Shot fires at exactly 2 and its watch lane runs 1 to 4. That was live on The Causeway's Bridge Watch, where a watch set over a cell an enemy already stood in also fired on the spot ([#1003](https://github.com/Phaazoid/Godoiosis/issues/1003)). Since [#1654](https://github.com/Phaazoid/Godoiosis/issues/1654) only an ENTRY trips a watch, so the lanes are a looser upper bound: a unit that stays put in one is marked and never shot by it.
 - **Shock arcs.** A SHOCK hit runs on through water and through anyone wet, and the field never asked `Conduction`. That was live by The Quarry's ford.
 
 So the prediction reach (`ThreatField._threat_of`) now has four parts:

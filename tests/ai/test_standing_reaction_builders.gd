@@ -204,6 +204,28 @@ func test_a_watcher_ignores_a_corpse_and_faces_the_living() -> void:
 			"the watch is aimed at the approach of a body that can never enter it").is_equal(Vector2i(4, 3))
 
 
+# STANDING IN A LANE IS NO ENTRY (#1654): a watch set over the cell an enemy stands on never fires on
+# it, so that cell must not score the lane zero hops. The enemy is adjacent to the north and the lane
+# is that one cell, so north covers nothing it can ENTER. The mutant is the cell skip dropped, which
+# aims north at the enemy's own cell.
+func test_a_watcher_does_not_aim_at_the_cell_its_enemy_stands_on() -> void:
+	var board := _board_of()
+	var watcher: Unit = _spawn(board, PLAYER, Vector2i(4, 4))
+	watcher.equipped_weapon = _watch_weapon()
+	var enemy: Unit = _spawn(board, ENEMY, Vector2i(4, 3))
+
+	assert_bool(AITactics.queue_main_action(watcher, _context(board), board.squad_manager, WATCH_ONLY)) \
+		.override_failure_message("the watcher declined to watch at all").is_true()
+
+	var watch := _queued_watch(watcher)
+	assert_object(watch).is_not_null()
+	if watch == null:
+		return
+	assert_vector(watch.target_cell).override_failure_message(
+			"the watch is aimed at the cell the enemy already stands on, which it can never enter") \
+		.is_not_equal(enemy.movement.cell)
+
+
 # THE LANE, NOT THE CELL IN FRONT (#769). A watch fires when an enemy enters ANY cell it covers, so
 # a facing whose near cell is merely OCCUPIED is still a facing -- and since path_hops walks from the
 # ENEMY'S side with occupancy on, the unit blocking it is usually the watcher's own squadmate.
