@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://c5gqacsjsahxn"]
+
+[ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="1_p0q6f"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_2nmis"]
+[ext_resource type="Texture2D" uid="uid://58sryvavf804" path="res://Art/Icons/ArrowIcons/nomove.png" id="3_vacot"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="4_1l18y"]
+
+[resource]
+script = ExtResource("4_1l18y")
+recipe = "Still(AE)"
+popup = "Still!"
+icon = ExtResource("3_vacot")
+display_name = "Hang Smoke"
+max_range = 3
+attack_shape = ExtResource("1_p0q6f")
+can_counter = false
+hits_allies = true
+targets = 2
+deals_no_damage = true
+damage_kind = 7

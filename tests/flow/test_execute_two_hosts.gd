@@ -331,6 +331,32 @@ func test_a_heal() -> void:
 	_assert_hosts_agree(ran)
 
 
+# A heal over an area (#1621's Salve was the first shipped): one volley of heals, every patient in the
+# shape mended, in both hosts.
+func test_an_area_heal() -> void:
+	var aimed := Vector2i(3, 1)
+	var below := Vector2i(3, 2)
+	var path := _author("area_heal", func() -> void:
+		var healer := _spawn(PLAYER, Vector2i(1, 1))
+		var mend := _blow(6)
+		mend.heals = true
+		mend.hits_allies = true
+		P.stamped(mend, 2, [Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)] as Array[Vector2i])
+		mend.swing = false
+		_arm(healer, mend)
+		_spawn(PLAYER, aimed, 40).set_current_hp(10)
+		_spawn(PLAYER, below, 40).set_current_hp(10))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": Vector2i(1, 1), "at": aimed}])
+
+	for host: String in ["game", "play"]:
+		for cell: Vector2i in [aimed, below]:
+			var patient: Unit = ran[host][cell]
+			assert_int(patient.get_current_hp()).override_failure_message(
+					"the %s host's area heal left the patient at %s unhealed" % [host, cell]).is_greater(10)
+	_assert_hosts_agree(ran)
+
+
 # A counter the pass skips: the hero's blow drops the foe, so the foe's Carbine counter never fires.
 func test_a_skipped_carbine_counter() -> void:
 	var path := _author("carbine", func() -> void:

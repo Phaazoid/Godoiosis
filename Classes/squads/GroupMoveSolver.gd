@@ -110,6 +110,22 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		taken[best] = true
 		assigned[member] = best
 
+	# The greedy pass has no backtracking, so it can strand a member a formation exists for (#1652).
+	# Repair by augmenting path, the same matching stranding() asks, so plan() places everyone exactly
+	# where followable_destinations says it can. Greedy placements stand wherever it already succeeded.
+	if assigned.size() < followers.size():
+		var owner := { leader_destination: leader }
+		var fixed := { leader: true }
+		for member: Unit in pinned:
+			fixed[member] = true
+		for member: Unit in assigned:
+			owner[assigned[member]] = member
+		for member in order:
+			if not assigned.has(member) and _augment(member, candidates, owner, {}, fixed):
+				for cell: Vector2i in owner:
+					if owner[cell] != leader:
+						assigned[owner[cell]] = cell
+
 	# Emitted in MEMBER order, not assignment order, so the queue panel's rows do not reshuffle
 	# just because someone was more constrained this turn.
 	for member in followers:
@@ -134,8 +150,8 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 # Which of the leader's own destinations the WHOLE squad can follow to — every non-leader member
 # must be able to end inside the cohesion bubble there. Answered once for the whole overlay instead
 # of per hovered tile: one compute_move_range per member, then every cell it could stand on marks
-# the diamond of destinations that cell satisfies. Running the real plan() per destination is the
-# same answer at ~4.1 ms a cell, i.e. 176 ms to filter a 44-cell range.
+# the diamond of destinations that cell satisfies, then one matching per destination. Running the
+# real plan() per destination is the same answer at ~4.1 ms a cell, i.e. 176 ms for a 44-cell range.
 static func followable_destinations(squad: Squad, board: BoardContext, leader_destinations: Array) -> Dictionary:
 	var followable := {}
 	var stranded := stranding(squad, board, leader_destinations)
@@ -149,8 +165,8 @@ static func followable_destinations(squad: Squad, board: BoardContext, leader_de
 # of this one and the two cannot disagree. It names who rather than only whether, because the tether
 # that turns red on a refused tile is THAT member's.
 #
-# The corridor rule below is squad-wide -- too few cells for everybody, with no one member to blame --
-# so a destination it refuses strands every follower, unless somebody was already named.
+# The matching rule below is squad-wide -- no way to give everybody a cell of their own, with no one
+# member to blame -- so a destination it refuses strands every follower, unless somebody was named.
 static func stranding(squad: Squad, board: BoardContext, leader_destinations: Array) -> Dictionary:
 	var stranded := {}   # destination -> Array[Unit]
 	for cell in leader_destinations:
@@ -168,7 +184,7 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 		leash_at[cell] = leash
 		bound = maxi(bound, leash)
 	var followers: Array[Unit] = []
-	var union_at := {}   # destination -> {cell: true}: every cell ANY member could take there
+	var options_at := {}   # destination -> {Unit: {cell: true}}: the cells each member could take there
 	for member in squad.get_members():
 		if member == leader:
 			continue
@@ -197,23 +213,46 @@ static func stranding(squad: Squad, board: BoardContext, leader_destinations: Ar
 				if int(field[destination]) > int(leash_at[destination]):
 					continue
 				satisfied[destination] = true
-				if not union_at.has(destination):
-					union_at[destination] = {}
-				union_at[destination][cell] = true
+				if not options_at.has(destination):
+					options_at[destination] = {}
+				if not options_at[destination].has(member):
+					options_at[destination][member] = {}
+				options_at[destination][member][cell] = true
 
 		for destination in stranded.keys():
 			if not satisfied.has(destination):
 				(stranded[destination] as Array).append(member)
 
-	# Each member needs its OWN cell: fewer distinct reachable cells than members means no formation
-	# exists at all (a thin corridor collapses them). Necessary, not sufficient — it never asks which
-	# member takes which — but it is the shape a corridor produces, and refused nothing on real maps.
-	var needed: int = followers.size()
+	# Each member needs its OWN cell, so a destination is followable only when a matching places every
+	# member at once (#1652). Counting the cells was not enough: two members whose only cell is the
+	# same one, round a one-tile gap, passed the count while no formation existed.
+	var no_one := {}
 	for destination in stranded.keys():
 		var named: Array = stranded[destination]
-		if named.is_empty() and union_at.get(destination, {}).size() < needed:
-			named.append_array(followers)
+		if not named.is_empty():
+			continue
+		var options: Dictionary = options_at.get(destination, {})
+		var owner := {}
+		for member in followers:
+			if not _augment(member, options, owner, {}, no_one):
+				named.append_array(followers)
+				break
 	return stranded
+
+# Kuhn's augmenting path: give `member` a cell from `options[member]`, moving whoever holds one onto
+# another of theirs, recursively. `owner` is cell -> Unit, updated in place; a unit in `fixed` is
+# never moved. Keys walk in insertion order, so the result is deterministic (Law #1).
+static func _augment(member: Unit, options: Dictionary, owner: Dictionary, seen: Dictionary,
+		fixed: Dictionary) -> bool:
+	for cell: Vector2i in options.get(member, {}):
+		if seen.has(cell):
+			continue
+		seen[cell] = true
+		var holder: Unit = owner.get(cell, null)
+		if holder == null or (not fixed.has(holder) and _augment(holder, options, owner, seen, fixed)):
+			owner[cell] = member
+			return true
+	return false
 
 # Where `member` may end if its leader ends on `leader_destination` -> move cost: reach, cohesion
 # field and allow-list together. plan()'s question, public for the AI's seek (#760) so the two ask it

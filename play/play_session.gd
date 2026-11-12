@@ -413,7 +413,9 @@ static func _fires_label(aiming: AttackData, firing: AttackData) -> String:
 
 # Where a watch may be set (#46), by overwatch's own click gate, each with the cells it would watch
 # (OverwatchAction.watched_paths_from, the resolver's footprint rule) and the hostiles standing in
-# them now -- who it would fire on the moment it is armed (#1003). A watch is a main, so it is listed on
+# them now. A watch never fires on those (#1654: only a unit that ENTERS the lane after it is set
+# trips it), but its shot stops at the first body on its path, so they stand in the way of one that
+# does. A watch is a main, so it is listed on
 # the queue without the one it would displace (judge_candidate, #1529), as the gate judges it.
 func _legal_watch_aims(unit: Unit, handle: String, watch: AttackData) -> Dictionary:
 	var reason := AttackAction.fire_block_reason(unit, watch)
@@ -1601,13 +1603,6 @@ func execute() -> Dictionary:
 			action.execute()
 			events.append(_side_line(action))
 			_land_after(plan, action, events)   # a Burrow's COVER, at its own slot
-			# ...then the shots THIS order set off (#1003) -- MIRRORS execute_orders' own interleave,
-			# which is the third and last playback partition. An Overwatch armed onto a cell an
-			# enemy already occupies fires here, after the counters, because that is where the
-			# arming happens.
-			for shot in plan.shots_fired_during(action):
-				_apply_attack(shot, events)
-				_land_after(plan, shot, events)
 
 	# The pass is over before the sweeps, as OrderExecutor drops executing_plan before them: the
 	# sweeps' and the clear's own refreshes re-resolve the plan.

@@ -8,7 +8,7 @@ class_name ThreatField
 # ignored as of slice 4 -- it used to be applied, which under-stated every follower.
 #
 # TWO MORE WAYS TO BE HIT since #1197, both of which this field used to paint safe: the lanes a
-# watcher could arm, since a watch armed over somebody fires on the spot (#1003) and a watch attack
+# watcher could arm, since stepping into one is a shot (#413) and a watch attack
 # is never in the fire view (#590); and where a SHOCK hit's current runs, through water and through
 # anyone wet -- counting whoever the viewer's own PENDING plan will soak (dev, 2026-10-03).
 # A placed blast's splash and a payload's landing ARE drawn, dilated as an upper bound (_add_splash,
@@ -319,10 +319,11 @@ static func _add_counter_reach(unit: Unit, board: BoardContext, origins: Array[V
 			out[cell] = true
 
 
-# THE LANES A WATCHER COULD ARM (#1197). A watch armed over a cell somebody already stands in fires on
-# the spot (#1003), so every lane this unit could arm next turn is somewhere it can hit -- and since
-# #590 a watch attack is never in the fire view, so the pass above never saw one. The live case is the
-# Carbine: Shot fires at exactly 2, the watch lane runs 1 to 4, so the watch is its point-blank shot.
+# THE LANES A WATCHER COULD ARM (#1197). Stepping into a watched cell is a shot, so every lane this unit
+# could arm is somewhere it can hit you -- and since #590 a watch attack is never in the fire view, so
+# the pass above never saw one. The live case is the Carbine: Shot fires at exactly 2, the watch lane
+# runs 1 to 4. An upper bound, and a looser one since #1654: a unit that STAYS in a lane the watch is
+# set over is never shot by it (only an entry trips a watch), and this marks its cell all the same.
 #
 # Asked of the ARCHETYPE'S declared list, so Rushdown (OVERWATCH is NEVER) marks none, and of
 # AITactics' own two doors, so these are the lanes the builder could arm. From EVERY origin: the shot

@@ -426,9 +426,9 @@ func _watcher(board: Dictionary, cell: Vector2i, archetype: AIArchetype.Type) ->
 	return unit
 
 
-# THE CARBINE'S SHAPE: a watch armed over somebody fires on the spot (#1003), so a lane it could arm is
-# somewhere it can hit. The main attack here reaches the four neighbours only, so the far lane cells
-# are the watch's alone.
+# THE CARBINE'S SHAPE: stepping into a lane it could arm is a shot, so the lane is somewhere it can hit
+# you. The main attack here reaches the four neighbours only, so the far lane cells are the watch's
+# alone.
 func test_a_hold_watcher_marks_the_lane_its_attack_cannot_reach() -> void:
 	var board: Dictionary = _build_board()
 	var watcher := _watcher(board, Vector2i(3, 1), AIArchetype.Type.HOLD)
@@ -637,16 +637,13 @@ func test_a_soaking_still_pending_in_your_plan_is_seen() -> void:
 
 
 # THE VICTIM WIRE (#1197). The field promises safety; the real AI then plans and resolves through the
-# real SquadManager, and every PLAYER unit the plan hits -- by an ordinary attack, by a watch armed
-# over it, or by the current running through the water -- must stand on a cell the field marked. The
-# aim wire above checks where attacks POINT; this one checks who they HIT, which is the promise.
+# real SquadManager, and every PLAYER unit the plan hits -- by an ordinary attack or by the current
+# running through the water -- must stand on a cell the field marked. The aim wire above checks where
+# attacks POINT; this one checks who they HIT, which is the promise. (A watch set over a unit was a
+# third way until #1654: a watch now hits nobody in the pass it is set, so its lane is a promise about
+# the NEXT turn, test_a_hold_watcher_marks_the_lane_its_attack_cannot_reach's.)
 func test_every_unit_the_ai_would_hit_stands_inside_the_field() -> void:
 	var board := _water_board()
-	# Carbine-shaped: its Shot fires at exactly 2, so the neighbour is the watch's to take.
-	var watcher: Unit = _spawn(board, ENEMY, Vector2i(9, 1))
-	watcher.equipped_weapon = _watch_weapon(3, 2)
-	_bind(watcher, AIArchetype.Type.HOLD)
-	var beside: Unit = _spawn(board, PLAYER, Vector2i(10, 1))
 	# A shocker hitting a wader, with a second wader one cell further along the same water.
 	var shocker := _shocker(board, Vector2i(0, 0))
 	var _near: Unit = _spawn(board, PLAYER, Vector2i(1, 0))
@@ -655,7 +652,7 @@ func test_every_unit_the_ai_would_hit_stands_inside_the_field() -> void:
 	var field := ThreatField.build(ctx, PLAYER)
 
 	var hit := {}
-	for squad: Squad in [watcher.squad, shocker.squad]:
+	for squad: Squad in [shocker.squad]:
 		AIController.plan_squad(squad, ctx, board.squad_manager)
 		var plan: ResolvedPlan = board.squad_manager.resolve_plan(squad, ctx)
 		var rows: Array[AttackAction] = []
@@ -668,7 +665,7 @@ func test_every_unit_the_ai_would_hit_stands_inside_the_field() -> void:
 			hit[victim] = true
 			assert_bool(field.cells.has(victim.movement.cell)).override_failure_message(
 					"%s is hit at %s, which the field called safe" % [victim.get_unit_name(), victim.movement.cell]).is_true()
-	for victim: Unit in [beside, far]:
+	for victim: Unit in [far]:
 		assert_bool(hit.has(victim)).override_failure_message(
 				"fixture is vacuous: %s was never hit, so its mechanism went unexercised" % victim.get_unit_name()).is_true()
 

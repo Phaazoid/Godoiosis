@@ -3,7 +3,7 @@
 # are #1058's 31-51.
 #
 # Through the REAL resolve wherever the rule lives there -- SquadManager.resolve_plan for aims and
-# counters, PlanResolver.fire_watch_on_arm for a watch shot -- because where a payload goes off, what
+# counters, PlanResolver.fire_watch_entries for a watch shot -- because where a payload goes off, what
 # list it joins and what it spends are all decided by the walk, not by drop_payloads alone.
 #
 # Every attack and board is BUILT here (the content razor). Units are tough (MHP 60) unless a case
@@ -457,7 +457,7 @@ func test_a_watch_shots_payload_plays_right_behind_the_shot() -> void:
 	plan.watches.append(watch)
 	var no_reactions: Array[ElementalReaction] = []
 	var no_terrain: Array[TerrainReaction] = []
-	PlanResolver.fire_watch_on_arm(watch, plan, plan.hypo, no_reactions, _board(), no_terrain, null)
+	PlanResolver.fire_watch_entries([entrant], plan, plan.hypo, no_reactions, _board(), no_terrain, null, -1)
 	assert_int(plan.watch_shots.size()).is_equal(2)
 	var bomb := plan.watch_shots[1]
 	assert_object(bomb.dropped_by).is_same(plan.watch_shots[0])
