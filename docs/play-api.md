@@ -223,6 +223,12 @@ made it re-run the command every frame without answering. Now:
 - A `load` it refuses gets `ok=0` with the reason, and **the board you had still stands** (#1603). The
   reasons are: no file, not a scenario, refused as foreign (`ForeignResource`), or unreadable. The file
   is read before anything is torn down, which is the order the game's loader keeps.
+- `load` reads the scenario file **as it is on disk now**, every time, and so does `restart` (#1661). It
+  used to serve Godot's cached copy of a path it had loaded before, so a board rewritten by another
+  process came back as the old one. The read is shallow (`ContentRepair.load_tolerant(path, true)`,
+  `CACHE_MODE_IGNORE`): what the file embeds is re-read, but the files it *references* (cast unit
+  files, a roster, weapons, attack shapes) still come from the process's cache. **Rewrote one of those?
+  Restart the bridge.** A deep read would fork the templates that must stay one shared object.
 - `-- --run-dir=<dir>` moves `playrun/`, so a suite can run its own bridge beside a playtest's
   (`tests/support/bridge_process.gd`).
 
