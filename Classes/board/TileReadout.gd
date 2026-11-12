@@ -265,4 +265,8 @@ static func ground_lines(game, cell: Vector2i) -> Array[String]:
 	elif elevation != 0:
 		lines.append("Height %d — reached only by a ramp that climbs to it." % elevation)
 	lines.append_array(Glossary.terrain_reactions_for(kind, held, board.made_of_at(cell)))
+	# What the weather will do to this tile at the round's end (#1660), the strike's own wording.
+	var strike := WeatherStrike.card_line(board, cell)
+	if strike != "":
+		lines.append(strike)
 	return lines

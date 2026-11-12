@@ -11,7 +11,8 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **Rain, or a Wet body, slaking quicklime** (The Lime Kiln). Today only a water *hit* slakes. If
   rain did, a drawn weather would turn the yard into a different fight; if a soaked unit stepping
   onto quicklime did, wading the drain would be a way to spring it. The map uses a clear sky and
-  one Splash.
+  one Splash. *(The rain half is built by #1660, 2026-11-11: the rain strikes the ground with water
+  at each round's end. A Wet body stepping onto quicklime still does nothing.)*
 - **Brick that does something** (The Lime Kiln). Fire on clay soil sets Brick, and Brick is a
   permanent state with no effect. As +1 DEF footing, or as a tile gas cannot cross, a kiln yard
   could have a floor the player bakes into cover. The map has no clay.
@@ -163,7 +164,8 @@ Each entry says which map wanted it, what it would have done there, and what the
 
 - **Weather that changes the ground** (The Drowned Orchard). Rain that damps or stops a grass
   fire. Snow that freezes shallows after a few rounds. A drawn weather would then decide which key
-  exists on a board, not only which one hits hardest.
+  exists on a board, not only which one hits hardest. *(Built by #1660, 2026-11-11: rain puts a
+  fire out at the round's end, and snow freezes all open water from the end of round 3.)*
 - **A hazard that hurries its victims** (The Drowned Orchard). The safe answer to a posted squad on
   fuel is to light it and end the turn a dozen times. Fire that spread two tiles a round in dry
   air, or a posted squad that broke and ran for water when its post caught, would turn the wait

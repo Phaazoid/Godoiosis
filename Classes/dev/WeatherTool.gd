@@ -124,6 +124,20 @@ func _fill() -> void:
 			func(picked: Variant) -> void: _write(rules, "state", int(picked)),
 			DevWidgets.wrap_tooltip("The state a unit gains at the end of its own turn while this "
 				+ "weather falls. None soaks nobody."))
+		var elements: Array = []
+		for key: String in Elemental.Element.keys():
+			elements.append(key.capitalize())
+		DevWidgets.add_knob_row(_rows, {"label": "Strikes the ground with", "options": elements},
+			int(rules.ground),
+			func(picked: Variant) -> void: _write(rules, "ground", int(picked)),
+			DevWidgets.wrap_tooltip("The element this weather hits every tile's ground with at each "
+				+ "round's end, through the terrain reactions a hit of it fires there: Water douses fire "
+				+ "and slakes quicklime, Ice freezes water. Units are not struck. None strikes nothing."))
+		DevWidgets.add_knob_row(_rows, {"label": "From the end of round", "min": 1, "max": 20, "step": 1},
+			rules.ground_from,
+			func(first: Variant) -> void: _write(rules, "ground_from", int(first)),
+			DevWidgets.wrap_tooltip("The first round whose end the ground is struck: 1 strikes from "
+				+ "the first round, 3 lets two rounds pass first (snow taking time to lie)."))
 		for id: String in Atmosphere.SUBSTANCES:
 			DevWidgets.add_knob_row(_rows,
 				{"label": "Air: " + SubstanceCatalog.name_of(id), "min": -100, "max": 100, "step": 1},

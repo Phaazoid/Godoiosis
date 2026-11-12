@@ -4,6 +4,8 @@
 
 [resource]
 script = ExtResource("1_j1g6v")
+state = 2
+ground = 4
 air = Dictionary[String, int]({
 "atom_fire": -30
 })

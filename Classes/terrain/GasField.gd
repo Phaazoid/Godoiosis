@@ -88,7 +88,13 @@ static func fold(packed: int, effect: ResolvedCellEffect, grounded := true) -> i
 # tick's, so the two cannot disagree. A board carrying planned tiles (#1332, #1498) is ruled from where
 # they leave the gas: the Alt outline hands it the previewed plan's, so a queued push outlines from where
 # it lands. The tick's board carries none.
-func next_round(board: BoardContext) -> Dictionary[Vector2i, int]:
+#
+# The round's end opens with the weather's strike (#1660, WeatherStrike), folded here so the round and
+# every forecast read it: a fire the rain douses neither spreads nor smokes, and its steam spreads with
+# the rest. `sky` false runs the gas alone (the dev page's Step gas).
+func next_round(board: BoardContext, sky := true) -> Dictionary[Vector2i, int]:
+	if board != null and sky:
+		board = WeatherStrike.at_round_end(board)
 	return GasSpread.next(_cells_under(board.tiles if board != null else null), board)
 
 
@@ -108,9 +114,10 @@ func _cells_under(planned: PlannedTiles) -> Dictionary[Vector2i, int]:
 
 
 # The round's gas step (#508): GasSpread's answer for this board, written back cell by cell so only
-# what moved is marked. Called once per round by both stacks, and by the dev Step gas button.
-func tick(board: BoardContext) -> void:
-	var next := next_round(board)
+# what moved is marked. Called once per round by TurnBoundary.end_round, and by the dev Step gas button
+# with `sky` false.
+func tick(board: BoardContext, sky := true) -> void:
+	var next := next_round(board, sky)
 	for cell: Vector2i in _cells.keys():
 		if not next.has(cell):
 			_write(cell, 0)

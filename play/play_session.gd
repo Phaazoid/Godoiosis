@@ -1855,10 +1855,7 @@ func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 # The two signal-driven halves of the boundary, connected in _init. round_completed fires before
 # turn_started, so a round's tile tick lands before the incoming faction's own ticks.
 func _on_round_completed() -> void:
-	if gas_field != null:
-		gas_field.tick(_board())   # game._on_round_completed's twin (#508), gas FIRST as it orders it (#1335)
-	if terrain_states != null:
-		terrain_states.tick_states()
+	TurnBoundary.end_round(_board(), gas_field, terrain_states)   # game._on_round_completed's twin (#1660)
 	mission.advance_round()   # the clock's ONE tick, LAST as the game orders it; the turn-start check sees it
 
 

@@ -232,6 +232,37 @@ static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.Tile
 		lines.append("%s → %s" % [Elemental.trigger_names(reaction.incoming_element, reaction.also_triggered_by), ", ".join(effects)])
 	return lines
 
+# What the weather's strike does to ONE tile (#1660): the effects of every reaction in `reactions`
+# (WeatherStrike.reactions) this tile admits, through the same predicate as the card's list above.
+static func strike_effects(reactions: Array[TerrainReaction], kind: Terrain.Kind,
+		states: Array[Terrain.TileState], made_of: Array[String]) -> Array[String]:
+	var effects: Array[String] = []
+	for reaction in reactions:
+		if reaction.applies_to_tile(kind, states, made_of):
+			effects.append_array(_terrain_effects(reaction))
+	return effects
+
+# What the weather's strike does anywhere (#1660), one arrow line per reaction, for the pre-mission
+# box: "Burning → clears Burning, releases Steam".
+static func strike_lines(reactions: Array[TerrainReaction]) -> Array[String]:
+	var lines: Array[String] = []
+	for reaction in reactions:
+		var effects := _terrain_effects(reaction)
+		if not effects.is_empty():
+			lines.append("%s → %s" % [_terrain_subject(reaction), ", ".join(effects)])
+	return lines
+
+# The ground a terrain reaction acts on, named by its gates: "Burning", "Water", "Burning Grass".
+static func _terrain_subject(r: TerrainReaction) -> String:
+	var parts: Array[String] = []
+	if r.required_tile_state != Terrain.TileState.NONE:
+		parts.append(Terrain.tile_state_display_name(r.required_tile_state))
+	if r.required_made_of != "":
+		parts.append(SubstanceCatalog.name_of(r.required_made_of))
+	if r.required_kind != Terrain.Kind.NONE:
+		parts.append(Terrain.kind_display_name(r.required_kind))
+	return " ".join(parts) if not parts.is_empty() else "Any ground"
+
 static func _assemble_line(trigger: String, effects: Array[String], popup: String) -> String:
 	var line: String = trigger
 	if not effects.is_empty():
