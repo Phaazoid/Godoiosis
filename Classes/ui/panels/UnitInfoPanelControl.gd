@@ -71,7 +71,7 @@ func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	_content_shown = true
 	_apply_visibility()
 	name_label.text = unit.get_unit_name()
-	jobs_label.text = _jobs_text(unit)
+	jobs_label.text = jobs_text(unit)
 	portrait_panel.set_unit(unit)
 	stats_section.set_unit(unit, board)
 	inventory_panel.set_unit(unit, can_act)
@@ -141,7 +141,8 @@ func is_showing_unit(unit: Unit) -> bool:
 func panel_width() -> float:
 	return $UnitInfoPanel.size.x
 
-func _jobs_text(unit: Unit) -> String:
+# The dock header's job line, also the Play API unit line's (#1662): one wording.
+static func jobs_text(unit: Unit) -> String:
 	# Always-reveal placeholder (#69: the real PER-gated enemy-job reveal needs a
 	# "who's inspecting" concept that doesn't exist yet).
 	var names: Array[String] = []
