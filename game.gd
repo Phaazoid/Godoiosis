@@ -2538,6 +2538,8 @@ func _board() -> BoardContext:
 	var board := BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights, gas_field,
 			mission_controller.mission if mission_controller != null else null)
 	board.weather = scenario_manager.current_weather   # #1260
+	board.wind = scenario_manager.current_wind   # #1660
+	board.wind_direction = scenario_manager.current_wind_direction
 	board.atmosphere = scenario_manager.air_reading()   # #1324: the authored air, moved by the weather
 	board.veins = vein_field   # #696
 	return board

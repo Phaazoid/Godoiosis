@@ -127,12 +127,14 @@ func _add_weather_picker(row: HBoxContainer) -> void:
 
 
 # The wind over this board (#1286), beside the weather on the same row and for the same reason: how
-# hard it blows and which way, independent of what falls. A look only, so no plan re-resolves.
+# hard it blows and which way, independent of what falls. A rule since #1660 (gas drifts, shoves lean
+# with it), so a pick re-resolves the open plan as a weather pick does.
 func _add_wind_pickers(row: HBoxContainer) -> void:
 	var tip := DevWidgets.wrap_tooltip(
 		"How hard the wind blows over this board, and which way. It slants the rain, carries the snow, "
 		+ "fog and gas, sways the plants, blows leaves across the board and drifts cloud shadows over "
-		+ "it, under any weather. A look only. Saved with the board; each strength is tuned on "
+		+ "it, under any weather. It also moves gas downwind each round and lengthens a shove going "
+		+ "with it, shortens one going against it. Saved with the board; each strength is tuned on "
 		+ "Project > Weather.")
 	var label := Label.new()
 	label.text = "Wind"
@@ -143,7 +145,7 @@ func _add_wind_pickers(row: HBoxContainer) -> void:
 	strength.select(strength.get_item_index(scenario_manager.current_wind))
 	strength.item_selected.connect(func(index: int) -> void:
 		scenario_manager.current_wind = strength.get_item_id(index) as Wind.Kind
-		_mark())
+		_weather_edited())
 	row.add_child(strength)
 	var toward := OptionButton.new()
 	for direction: Wind.Direction in Wind.Direction.values():
@@ -151,7 +153,7 @@ func _add_wind_pickers(row: HBoxContainer) -> void:
 	toward.select(toward.get_item_index(scenario_manager.current_wind_direction))
 	toward.item_selected.connect(func(index: int) -> void:
 		scenario_manager.current_wind_direction = toward.get_item_id(index) as Wind.Direction
-		_mark())
+		_weather_edited())
 	row.add_child(toward)
 	for control: Control in [label, strength, toward]:
 		DevWidgets.apply_tooltip(control, tip)
@@ -162,9 +164,9 @@ func _on_weather_picked(kind: Weather.Kind) -> void:
 	_weather_edited()
 
 
-# Either half of the weather changed (#1260, #1509). The open plan's END OF TURN rows read the weather,
-# and since #1324 so do its carving rows and the corner HUD's air, so re-resolve and redraw now rather
-# than show what the last weather would have.
+# Either half of the weather changed (#1260, #1509), or the wind (#1660, whose shoves the plan resolves).
+# The open plan's END OF TURN rows read the weather, and since #1324 so do its carving rows and the
+# corner HUD's air, so re-resolve and redraw now rather than show what the last weather would have.
 func _weather_edited() -> void:
 	_mark()
 	game.refresh_action_queue(game.squad_manager.active_squad)

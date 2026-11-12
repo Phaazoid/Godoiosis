@@ -25,7 +25,8 @@ Each entry says which map wanted it, what it would have done there, and what the
 - **Wind that moves gas** (Chaff). The board authors a strong east wind and it only draws. Gas that
   drifted a tile a round downwind would make "which side of the heap do I light" a real choice and
   would let a map put its smoke where the author wants it without placing a caster. The map relies
-  on the squad walking into smoke that stays put.
+  on the squad walking into smoke that stays put. *(Built by #1660, 2026-11-12: a Strong Wind drifts
+  gas a tile a round downwind and a Gale two, tuned per strength on the Weather page.)*
 - **A Smokescreen that needs no ash, or a carried pouch of it** (Chaff). On stone, sand or water the
   carving fizzles unless a heap, scorched ground or smoke is within a tile of the caster. On Chaff
   that meant the guest who carries it never cast it: wherever she could cast from, the fire had
@@ -70,6 +71,8 @@ Each entry says which map wanted it, what it would have done there, and what the
   that drags a unit two tiles toward the caster would let the player haul a Warden off his ledge
   from the side, and would give the enemy a way to drag a unit onto the spine.
 - **Wind as a rule** (The Salt Stair, Chaff). A tile added to shoves and gas going downwind.
+  *(Built by #1660, 2026-11-12: a shove with the wind goes a tile further and one against it a
+  tile shorter, and gas drifts downwind each round.)*
 
 - **A carving that moves or buries a vein** (The Lodes). Every answer to a vein-bound caster today
   is "move the caster". Moving the vein is the other half.

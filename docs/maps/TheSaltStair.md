@@ -2,8 +2,8 @@
 
 **CLAUDE-AUTHORED, unreviewed.** Board: `Scenarios/missions/TheSaltStair.tres`. Built 2026-11-10 on
 `main` at v0.340.1. Medium and tall (14 x 17, about 75 standable tiles, four heights), Capture, no
-clock, clear sky with a Gale (a look), Dawn look, Warband roster with a cap of 4. Seven enemies in
-four groups.
+clock, clear sky with a Gale (a rule since #1660), Dawn look, Warband roster with a cap of 4. Seven
+enemies in four groups.
 
 ## The idea
 
@@ -116,4 +116,6 @@ Two Easy thugs, 14 HP, who reach the deployment on round 1.
 - **Wind as a rule.** The board authors a Gale blowing east, as a look. If wind added a tile to a
   shove going with it and took one from a shove going against it, the west Galewright (who pushes
   east) would be deadlier than the east one, and the player's own Gusts would have a good side of
-  the stair to cast from.
+  the stair to cast from. *(Built by #1660, 2026-11-12: a Gale adds a tile to a shove going east
+  and takes one from a shove going west, and drifts gas two tiles a round. Not played on this
+  board yet.)*

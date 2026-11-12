@@ -111,6 +111,8 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 				board.get("mission"))
 		context.veins = vein_field
 		context.weather = weather_of(board)
+		context.wind = wind_of(board)   # #1660
+		context.wind_direction = wind_direction_of(board)
 		context.atmosphere = atmosphere_of(board)
 		return context
 
@@ -135,6 +137,14 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 # before a scenario is loaded.
 static func weather_of(board: Dictionary) -> Weather.Kind:
 	return board.get("weather", Weather.Kind.CLEAR)
+
+# The wind over a built board (#1660), the weather's store beside it: CALM, blowing EAST, before a
+# scenario is loaded.
+static func wind_of(board: Dictionary) -> Wind.Kind:
+	return board.get("wind", Wind.Kind.CALM)
+
+static func wind_direction_of(board: Dictionary) -> Wind.Direction:
+	return board.get("wind_direction", Wind.Direction.EAST)
 
 # And its air (#1324) as played: the loaded scenario's reading moved by that weather
 # (Atmosphere.effective), Normal before one is loaded.
@@ -274,4 +284,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	# The weather it STANDS under (#1509): ScenarioManager.current_weather's twin, the one store both
 	# headless boards read. A mission start may draw over it (PlaySession.start_weather); a load never does.
 	board["weather"] = scenario.weather
+	# The wind it blows under (#1660): ScenarioManager.current_wind's twin. A load writes it; nothing draws it.
+	board["wind"] = scenario.wind
+	board["wind_direction"] = scenario.wind_direction
 	return spawned

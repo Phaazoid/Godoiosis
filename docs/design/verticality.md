@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25; #1585 (adjacent melee asks the edge movement asks) folded in 2026-11-03.**
+**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25; #1585 (adjacent melee asks the edge movement asks) folded in 2026-11-03; #1660 slice 2 (the wind leans on a shove) folded in 2026-11-12.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -741,7 +741,7 @@ untouched, because the level designer decides which edges exist.
 
 So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
 
-- **The flight** travels the knockback distance, less the target's weight band ([#120](https://github.com/Phaazoid/Godoiosis/issues/120), [weight.md](weight.md)), at the unit's STARTING elevation. A cell higher
+- **The flight** travels the knockback distance *(the wind's lean included since #1660)*, less the target's weight band ([#120](https://github.com/Phaazoid/Godoiosis/issues/120), [weight.md](weight.md)), at the unit's STARTING elevation. A cell higher
   than that **braces** it ("you cannot be pushed uphill" — the flight stops before it); a **VOID
   cell is flown over**; walls, bodies and off-board stop it exactly as before. **WATER CATCHES it**
   ([#116](https://github.com/Phaazoid/Godoiosis/issues/116), 2026-08-26): the flight ENTERS the

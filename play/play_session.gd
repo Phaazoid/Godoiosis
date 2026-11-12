@@ -173,6 +173,8 @@ func _board() -> BoardContext:
 			mission)
 	board.veins = vein_field   # #696
 	board.weather = _weather()
+	board.wind = BoardBuilder.wind_of(_built)   # #1660, the builder's store
+	board.wind_direction = BoardBuilder.wind_direction_of(_built)
 	board.atmosphere = BoardBuilder.atmosphere_of(_built)   # #1324: the air as played, the builder's one composition
 	return board
 
@@ -1444,6 +1446,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("shoved to %s" % str(r.knockback_to))
 	if r.knockback_held > 0:
 		events.append("holds %d" % r.knockback_held)
+	if r.knockback_wind != 0:
+		events.append("wind %+d" % r.knockback_wind)   # #1660: tiles the wind added to the shove, or took
 	if r.fall_levels > 0:
 		events.append("falls %d" % r.fall_levels)
 	if r.drown_damage > 0:

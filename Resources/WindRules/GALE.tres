@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="WindRules" format=3 uid="uid://ddn1i3shgrd30"]
+
+[ext_resource type="Script" uid="uid://db0wfp0hq3iwa" path="res://Classes/terrain/WindRules.gd" id="1_6qpbo"]
+
+[resource]
+script = ExtResource("1_6qpbo")
+drift = 2
+shove = 1

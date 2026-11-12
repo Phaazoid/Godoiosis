@@ -345,6 +345,42 @@ func test_the_strike_rows_write_the_rules_the_strike_reads() -> void:
 	assert_bool(page.has_unsaved_changes()).override_failure_message("a strike edit left Save unmarked").is_true()
 
 
+# The wind's two rules rows (#1660) write the very WindRules the drift and the shove read, through the
+# real sliders, and redraw the open plan: a shove's length is the plan's.
+func test_the_wind_rules_rows_write_the_rules_the_round_and_the_shove_read() -> void:
+	var rules := WindRules.for_kind(Wind.Kind.GALE)
+	assert_object(rules).override_failure_message("fixture: the Gale has no rules file").is_not_null()
+	if rules == null:
+		return
+	var was_drift := rules.drift
+	var was_shove := rules.shove
+	var game := FakeGame.new()
+	var page := WeatherTool.new()
+	add_child(page)
+	auto_free(page)
+	page.init(game)
+	page._show_wind(Wind.Kind.GALE)
+	var drift := _slider_after(page, "Gas drifts (tiles a round)")
+	var shove := _slider_after(page, "Shoves with or against it (tiles)")
+	assert_object(drift).override_failure_message("the page drew no drift slider").is_not_null()
+	assert_object(shove).override_failure_message("the page drew no shove slider").is_not_null()
+	if drift == null or shove == null:
+		return
+	var drift_to := was_drift + 1 if was_drift < drift.max_value else was_drift - 1
+	var shove_to := was_shove + 1 if was_shove < shove.max_value else was_shove - 1
+	drift.value = drift_to
+	shove.value = shove_to
+	await await_idle_frame()
+	var landed_drift := WindRules.for_kind(Wind.Kind.GALE).drift
+	var landed_shove := WindRules.for_kind(Wind.Kind.GALE).shove
+	rules.drift = was_drift
+	rules.shove = was_shove
+	assert_int(landed_drift).override_failure_message("the slider moved and the drift did not").is_equal(drift_to)
+	assert_int(landed_shove).override_failure_message("the slider moved and the shove did not").is_equal(shove_to)
+	assert_int(game.refreshed).override_failure_message("a wind edit left the open plan unresolved").is_greater(0)
+	assert_bool(page.has_unsaved_changes()).override_failure_message("a wind edit left Save unmarked").is_true()
+
+
 func _option_after(root: Node, label: String) -> OptionButton:
 	for node in root.find_children("*", "Label", true, false):
 		if (node as Label).text != label:

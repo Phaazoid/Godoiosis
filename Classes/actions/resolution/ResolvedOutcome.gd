@@ -39,6 +39,9 @@ var knockback_landing_index: int = 0
 # Tiles of this hit's shove the target's weight band absorbed (#120). Non-zero whether the shove was
 # shortened or stopped outright; a fully held one draws no trail, and held_in_place() marks it instead.
 var knockback_held: int = 0
+# Tiles the board's wind added to this hit's shove, negative when it took them (#1660): with the wind or
+# against it. Set even when the wind cut the shove to nothing, so the row can say why it never moved.
+var knockback_wind: int = 0
 # The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
 # and the attack did not pierce DEF. Already folded into the mitigation; recorded so a readout can
 # name it without re-deriving (Law #2's spirit applied to a readout). Its one reader is

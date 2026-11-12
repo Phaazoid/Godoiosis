@@ -114,3 +114,6 @@ The clock went from 11 to 12 after run 5. I won with nothing to spare and I knew
 - **Wind that moves smoke.** The board authors a strong east wind and it is a look only. If wind
   drifted gas a tile a round, the west heaps' smoke would roll over the squad as it came, and the
   east heaps' smoke would roll onto the road. The heap positions would not need to change.
+  *(Built by #1660, 2026-11-12: a Strong Wind drifts gas a tile a round downwind, so this board's
+  smoke now walks east. Not played on this board yet: whether the squad still walks into it is
+  the open question.)*

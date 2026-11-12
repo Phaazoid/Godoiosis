@@ -566,6 +566,29 @@ func test_blown_gas_stops_on_the_last_tile_it_can_cross() -> void:
 	assert_int(board.gas.packed_at(walls[0])).is_equal(0)
 
 
+# The wind carries blown gas as it carries the body (#1660): the one shove length, the wind's say
+# included. Its rules are injected in memory and restored before anything is asserted.
+func test_blown_gas_flies_the_shove_the_wind_lengthened() -> void:
+	var cache := WindRules._rules_by_kind.duplicate()
+	var rules := WindRules.new()
+	rules.shove = 1
+	WindRules._rules_by_kind[Wind.Kind.STRONG_WIND] = rules
+	var attacker := _blower(1)
+	var away := _away(attacker, TARGET_CELL)
+	var board := _room()
+	board.wind = Wind.Kind.STRONG_WIND
+	board.wind_direction = Wind.Direction.EAST
+	board.gas.set_level(TARGET_CELL, Gas.Kind.SMOKE, Gas.Level.MEDIUM)
+	var struck: Array[Vector2i] = [TARGET_CELL]
+	_play(_resolve(_one(_aim(attacker, struck)), board), board)
+	WindRules._rules_by_kind = cache
+	assert_that(away).override_failure_message("fixture: the shove does not go east, so the wind runs across it") \
+		.is_equal(Vector2i.RIGHT)
+	assert_int(board.gas.level_at(TARGET_CELL + away * 2, Gas.Kind.SMOKE)).override_failure_message(
+			"the gas flew the authored shove, not the wind's").is_equal(Gas.Level.MEDIUM)
+	assert_int(board.gas.packed_at(TARGET_CELL + away)).is_equal(0)
+
+
 # A REAL board (#1638): one row of open grass along the shove, from the caster's cell out to the rim,
 # `rim_steps` tiles past the target, with `holes` erased inside it. GridUtils then says where the edge
 # is and what is a hole, as it does in play; _room's stub board has neither.

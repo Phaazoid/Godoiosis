@@ -11,7 +11,8 @@ class_name WeatherTool
 # it drops (WeatherLook.row_shows), so a snow page lists no splashes.
 #
 # The wind's strengths are on this page too (#1286), below the weathers in the one picker: a wind is
-# a weather the board wears beside the other, and each strength's WindLook is tuned the same way.
+# a weather the board wears beside the other, and each strength's WindLook is tuned the same way. Its
+# WindRules (#1660: how far gas drifts, what it does to a shove) head its page, as a weather's rules do.
 #
 # The unsaved marker is per FILE (#1370), WeightsTool's _touched: an edit lives on the cached resource,
 # so it outlives picking another weather, and Save writes every file touched since the last save.
@@ -162,6 +163,20 @@ func _fill() -> void:
 
 
 func _fill_wind(kind: Wind.Kind) -> void:
+	var rules := WindRules.for_kind(kind)
+	if rules != null:
+		DevWidgets.add_knob_row(_rows, {"label": "Gas drifts (tiles a round)", "min": 0, "max": 4, "step": 1},
+			rules.drift,
+			func(tiles: Variant) -> void: _write(rules, "drift", int(tiles)),
+			DevWidgets.wrap_tooltip("Tiles every gas moves downwind at each round's end, after it spills "
+				+ "and fades. A wall, a ledge or a hole stops it; past the board's edge it is gone. 0 moves "
+				+ "nothing."))
+		DevWidgets.add_knob_row(_rows, {"label": "Shoves with or against it (tiles)", "min": 0, "max": 3, "step": 1},
+			rules.shove,
+			func(tiles: Variant) -> void: _write(rules, "shove", int(tiles)),
+			DevWidgets.wrap_tooltip("Tiles a shove gains going with this wind and loses going against "
+				+ "it, never below none. A shove across the wind keeps its length; weight holds its tiles "
+				+ "after the wind. 0 changes no shove."))
 	var look := WindLook.for_kind(kind)
 	if look == null:
 		DevWidgets.add_label(_rows, NO_WIND_LOOK)
@@ -182,7 +197,7 @@ func _write(resource: Resource, prop: String, value: Variant) -> void:
 	_touch(resource)
 	if prop == "fall":
 		_fill.call_deferred()   # deferred: the picker that fired this is one of the rows freed
-	if resource is WeatherRules:
+	if resource is WeatherRules or resource is WindRules:
 		_redraw_plan()
 
 

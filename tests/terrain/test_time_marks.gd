@@ -338,6 +338,34 @@ func test_the_gas_forecast_is_the_round() -> void:
 	assert_dict(_gas_now()).is_equal(forecast)
 
 
+# The wind's twin (#1660): the gas Alt forecasts under a wind is the gas the round leaves, a quickened
+# cloud drifting on both steps, and that forecast is not the calm board's -- so neither the forecast's
+# board nor the round's dropped the wind. Its rules are injected, and put back before the asserts.
+func test_the_gas_forecast_is_the_round_under_a_wind() -> void:
+	_bystander()
+	var cache := WindRules._rules_by_kind.duplicate()
+	var rules := WindRules.new()
+	rules.drift = 1
+	WindRules._rules_by_kind[Wind.Kind.GALE] = rules
+	sm.current_wind = Wind.Kind.GALE
+	sm.current_wind_direction = Wind.Direction.EAST
+	var cloud := Vector2i(3, 1)
+	game.gas_field.set_level(cloud, Gas.Kind.SMOKE, Gas.MAX_LEVEL)
+	var quick: Array[Vector2i] = [cloud, cloud + Vector2i.RIGHT]
+	_mark(quick, _smoke_part(), Pace.Kind.QUICK, 1)
+
+	var board: BoardContext = game.next_round_board()
+	var forecast := _plain(game.gas_field.next_round(board))
+	board.wind = Wind.Kind.CALM
+	var calm := _plain(game.gas_field.next_round(board))
+	await _end_round()
+	var after := _gas_now()
+	WindRules._rules_by_kind = cache
+	assert_dict(forecast).override_failure_message("precondition: the wind moved nothing in the forecast") \
+		.is_not_equal(calm)
+	assert_dict(after).is_equal(forecast)
+
+
 # A Still still QUEUED already holds in the forecast (PlannedTiles carries its marks), and the round
 # that follows the pass leaves exactly that gas.
 func test_a_queued_still_holds_in_the_forecast() -> void:
