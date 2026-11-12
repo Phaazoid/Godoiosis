@@ -113,9 +113,10 @@ func test_a_crossing_shows_its_watch_shot_and_its_end_of_turn_burn() -> void:
 	assert_str(text).contains("END OF TURN")
 
 
-# An Overwatch armed over somebody fires at once (#1003); its shot hangs under the order.
-func test_a_watch_armed_over_an_enemy_shows_the_shot_it_fires() -> void:
-	var b := _board("ArmShotPreviewRoot")
+# An Overwatch set over somebody fires nothing (#1654: only an ENTRY trips a watch), so the order has
+# no shot row under it -- the row shape the arm-time trigger (#1003) used to give it.
+func test_a_watch_set_over_an_enemy_shows_no_shot() -> void:
+	var b := _board("WatchOverStanderRoot")
 	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
 	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(1, 0))
 	hero.add_item(_watch_weapon())
@@ -131,8 +132,10 @@ func test_a_watch_armed_over_an_enemy_shows_the_shot_it_fires() -> void:
 	assert_bool(res.ok).is_true()
 	var rows: Array = res.plan.rows
 	_assert_rows_match_the_panel(sess, rows)
-	assert_bool(_row_where(rows, {"section": "OVERWATCH", "depth": 1, "actor": h, "target": f}).is_empty()) \
-		.override_failure_message("the arm-time shot is missing:\n%s" % str(rows)).is_false()
+	assert_bool(_row_where(rows, {"section": "OVERWATCH", "depth": 0, "actor": h}).is_empty()) \
+		.override_failure_message("fixture: the Overwatch order has no row:\n%s" % str(rows)).is_false()
+	assert_bool(_row_where(rows, {"actor": h, "target": f}).is_empty()) \
+		.override_failure_message("a watch set over a stander shot it:\n%s" % str(rows)).is_true()
 
 
 # A heal reads as what it gives back, the way the panel's readout does.

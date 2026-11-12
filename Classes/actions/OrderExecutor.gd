@@ -258,14 +258,9 @@ func execute_orders(unit):
 	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
 	# flat beat and one camera position.
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
-		# Each order, then the shots IT set off (#1003) -- a watch armed onto an occupied cell
-		# fires here, where the arming happens, which is what the dev's ruling asks for: the very
-		# last thing in the pass, after the counters. plan.coda_shots() is the third playback
-		# partition and this is the only place it plays.
-		var batch: Array = []
-		for order in side_channel.get(type, []):
-			batch.append(order)
-			batch.append_array(plan.shots_fired_during(order))
+		# The orders alone: no order in the tail sets off a shot (#1654 removed the arm-time trigger,
+		# #1003's, that was the only one that did).
+		var batch: Array = side_channel.get(type, [])
 		# ...unless the verb earns no beat on this pass (#931) -- an AI's Rev, today's only one.
 		# The BARE call is the whole of it: every schedule defaults to empty and the base beat to
 		# zero, which this function already reads as no subject, no hold and no linger. So the
@@ -278,14 +273,9 @@ func execute_orders(unit):
 				return
 			continue
 		var codas := sheet.codas(type)
-		# MERGED with the volley schedules hoisted above, because an arm-fired shot's beat is an
-		# ordinary non-counter VOLLEY and is already in `volleys(false)` -- so it pans, holds and
-		# lingers off the same Pacing tables every other shot does, and the coda entries keep
-		# answering for the orders. The two key sets are disjoint (an order, or a derived shot), so
-		# the merge cannot resolve a conflict in either direction.
-		await _execute_action_sequence(plan, batch, beat, _beat_holds(codas, is_ai).merged(holds),
-				_beat_subjects(codas).merged(subjects), lines, _beat_lingers(codas).merged(lingers),
-				_beat_emphases(codas).merged(emphases), _beat_profiles(codas).merged(profiles))
+		await _execute_action_sequence(plan, batch, beat, _beat_holds(codas, is_ai),
+				_beat_subjects(codas), {}, _beat_lingers(codas), _beat_emphases(codas),
+				_beat_profiles(codas))
 		if _board_gone(board):
 			return
 	await _bring_the_board_home()   # the tiles travel back into their sockets (#521 slice B)

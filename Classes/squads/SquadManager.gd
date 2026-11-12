@@ -1062,10 +1062,6 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 	for watch in Watch.standing(board.units, hypo):
 		plan.watches.append(watch.copy())
 	var watch_orders: Dictionary = {}   # Watch (this pass's copy) -> the OverwatchAction that armed it
-	# ...and the same watches in QUEUE ORDER, for the arm-fire pass in the tail (#1003). Its own
-	# array rather than a walk of watch_orders' keys: the order a Dictionary happens to iterate in
-	# is not a rule anything states, and this one decides which watch shoots first.
-	var armed_this_pass: Array[Watch] = []
 
 	# --- The MOVE phase (#412) -------------------------------------------------------------
 	# Moves resolve in the order they sit in the queue, and that order is the player's to set (the
@@ -1175,7 +1171,6 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 						watch_order.resolved_empowered, watch_order.resolved_leans_on_vial)
 				plan.watches.append(armed)
 				watch_orders[armed] = watch_order
-				armed_this_pass.append(armed)
 			continue
 		if action.action_type != BaseAction.ActionType.ATTACK:
 			continue
@@ -1345,9 +1340,8 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			# undrawn, the validator reads this verdict and reds the row, which is the answer.
 			#
 			# Judged on the pass's own cells and ground (#1349, #1498), and THREADED as well as
-			# published: everything after this in the pass -- an arm-fired shot's path, the END OF
-			# TURN forecast -- meets the body on the bank, as execution does (RESCUE plays before
-			# OVERWATCH). A bank this pass melted, or a lake it froze under the body, is one execution meets.
+			# published: everything after this in the pass -- the END OF TURN forecast -- meets the
+			# body on the bank, as execution does (RESCUE plays before OVERWATCH). A bank this pass melted, or a lake it froze under the body, is one execution meets.
 			var landings := RulesService.rescue_landings(action.actor, rescue.target, board, hypo)
 			rescue.resolved_haul_lands = landings.has(rescue.haul_to)
 			if plan.rescued_by.get(rescue.target) != rescue.actor:
@@ -1373,35 +1367,6 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			cover.cause = action   # so it lands when the Burrow plays (ResolvedPlan.landing_after)
 			plan.deposit(cover)
 			PlanResolver.settle_landing(action, plan, hypo, board)
-
-	# A watch armed over an enemy who is ALREADY standing there fires on the spot (#1003, dev's
-	# ruling). HERE, and the position is the ruling rather than a convenience: *"it would be the
-	# very last thing to happen, after everything else, even counters"* — which is also where the
-	# OverwatchAction itself EXECUTES (SIDE_CHANNEL_ORDER, second to last), so the resolve order and
-	# the playback order are one order. Resolved at the watch's queue slot instead, the shot's
-	# damage would be computed among the attacks and played back after them, so an aim the arm shot
-	# had already killed would play first as a silent whiff — #1005's shape, one phase along.
-	#
-	# Only the watches THIS PASS armed, in queue order. The trigger is the ARM, not occupancy: a
-	# standing watch with a squatter in its footprint is still waiting for an entry (the doc's rule,
-	# unrepealed), and re-asking every pass would make it a mine that re-fires on every resolve.
-	#
-	# What makes this safe for every existing plan: a pass with no OverwatchAction, or one whose
-	# fresh footprint holds no ACTIVE enemy, reaches nothing here — the state it fires on produced
-	# zero shots before today, so nothing already resolvable resolves differently.
-	for armed in armed_this_pass:
-		PlanResolver.fire_watch_on_arm(armed, plan, hypo, reactions, board, terrain_reactions,
-				watch_orders[armed] as OverwatchAction)
-
-	# ...which makes the tail the first phase that can fell somebody, so GUARD's liveness stamp is
-	# re-taken (#1003). The walk above ran after the counters on the premise that nothing in the
-	# tail kills anyone, and an arm-fired shot's splash breaks it. GUARD alone, because it is the
-	# only verb executing AFTER Overwatch; every other order in the tail has already gone by, so
-	# re-stamping the rest would answer for a pass they were not in.
-	if not armed_this_pass.is_empty():
-		for action in actions:
-			if action.action_type == BaseAction.ActionType.GUARD:
-				action.resolved_actor_felled = not PlanResolver.actor_is_live(action.actor, hypo)
 
 	# Hand each queued Guard the pass's verdict on itself (#414). Side-channel verbs execute AFTER
 	# the attack phase, so a Guard that absorbed a hit from an attack queued after its own slot has

@@ -1024,16 +1024,15 @@ static func _try_burrow(unit: Unit, squad_manager: SquadManager) -> bool:
 # A PREPARATION, so it is a RULE and never a score term (#726's doctrine, second application). It
 # sits below ATTACK for the same reason REV does: no preemption.
 #
-# Its reason USED to be that the shot lands on somebody else's turn, which `_score_plan`
-# structurally cannot reach. #1003 made that false -- a watch armed onto a cell an enemy already
-# occupies fires in this pass -- and the rule stands anyway, on the doctrine's other half: a
-# preparation is a legible sentence, and the predictability contract prefers one to a score term.
-# What the change is worth knowing for is that `_watch_aim` floods FROM the enemy's own cell, so a
-# lane containing it scores zero hops and wins -- the AI already prefers aiming where the enemy is
-# standing, and that aim is now a shot. ATTACK sitting above this keeps it rare ONLY where the two
-# cover the same cells, which since #590 they need not: the Carbine's Shot is range exactly 2 and its
-# watch lane runs 1 to 4, so the watch is that unit's shot at 1, 3 and 4 (#1197; whether it should
-# be is #752's). ThreatField draws these lanes for that reason.
+# Its reason is that the shot lands on somebody else's turn, which `_score_plan` structurally cannot
+# reach -- true again since #1654 repealed #1003's arm-time trigger (a watch set over an enemy no
+# longer fires on it in this pass) -- and the doctrine's other half holds besides: a preparation is
+# a legible sentence, and the predictability contract prefers one to a score term. `_watch_aim`
+# floods FROM the enemy's own cell, and skips that cell: standing in a lane is no entry, so a lane
+# is scored by the nearest cell the enemy must STEP into. ATTACK sitting above this keeps it rare
+# ONLY where the two cover the same cells, which since #590 they need not: the Carbine's Shot is
+# range exactly 2 and its watch lane runs 1 to 4 (#1197; whether it should be is #752's).
+# ThreatField draws these lanes for that reason.
 #
 # THE AIM MUST BE ACTIVE-ONLY, and this is #720's pathology one door over. `nearest_enemy` ranks a
 # BODY as an ordinary target, but `PlanResolver._watch_triggered_by` refuses a non-ACTIVE entrant and
@@ -1178,7 +1177,9 @@ static func _watch_aim(unit: Unit, origin: Vector2i, attack: AttackData, enemy: 
 		var hops := -1
 		var covered := 0
 		for cell in lane:
-			if not field.has(cell):
+			# The cell the enemy already stands on is no entry (#1654): a watch set over it never fires
+			# on it, so it neither scores zero hops nor counts as covered.
+			if not field.has(cell) or cell == enemy.movement.cell:
 				continue
 			covered += 1
 			var d: int = field[cell]

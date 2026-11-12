@@ -292,7 +292,7 @@ static func _preview_squad(squad: Squad, board: BoardContext, sm: SquadManager, 
 
 	AIController.plan_squad(squad, board, sm)
 	var plan: ResolvedPlan = sm.resolve_plan(squad, board)
-	# The watch shots as well: a watch armed over somebody fires on the spot (#1003), and that shot
+	# The watch shots as well: a shove into a standing watch fires it in this pass, and that shot
 	# lands in watch_shots, never in attacks (#1197).
 	var rows: Array[AttackAction] = []
 	rows.append_array(plan.attacks)

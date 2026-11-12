@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://60ykq6k0frob"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_al8ss"]
+[ext_resource type="Resource" uid="uid://du152fj8k5xph" path="res://Resources/TransmutationData/Stone Shards.tres" id="2_xt3jn"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="3_bvuhj"]
+
+[resource]
+script = ExtResource("3_bvuhj")
+size = 1
+inscriptions = Array[ExtResource("1_al8ss")]([ExtResource("2_xt3jn")])
+temper = 5
+display_name = "Stone Shards Rune"
+weight = 1

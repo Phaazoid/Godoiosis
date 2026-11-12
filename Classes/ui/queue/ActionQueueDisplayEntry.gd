@@ -148,9 +148,9 @@ static func _depth_of(action: BaseAction) -> int:
 #
 # WHICH ROW a shot hangs under is `triggered_during`, the moment the resolve stamped (#567) — one
 # question, one answer, whatever the verb. It matched the crossing MOVE by comparing `triggered_by`
-# against the row's ACTOR until #1003, which is the same answer for a walk and wrong twice over
-# elsewhere: an arm-fired shot's entrant is an enemy with no row at all, and a SHOVE-triggered
-# shot's was landing under the victim's own queued move if they happened to have one.
+# against the row's ACTOR until #1003, which is the same answer for a walk and wrong for a shove: a
+# SHOVE-triggered shot's entrant is the victim, so it was landing under the victim's own queued move
+# if they happened to have one.
 static func _watch_shots_for(plan: ResolvedPlan, action: BaseAction) -> Array[AttackAction]:
 	var shots: Array[AttackAction] = []
 	if plan == null:
