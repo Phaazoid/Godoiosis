@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://ciudrbacvi56q"]
+
+[ext_resource type="Resource" uid="uid://jvlbvm4uoehr" path="res://Resources/AttackShapes/Plus.tres" id="1_ep2w1"]
+[ext_resource type="Script" uid="uid://dle5ob08qngde" path="res://Classes/presentation/EffectLook.gd" id="2_qu3yr"]
+[ext_resource type="Resource" uid="uid://cu0du4b08ervn" path="res://Resources/AttackShapes/Wide 3 Deep 2.tres" id="3_03quc"]
+[ext_resource type="Script" uid="uid://beliqfakhf2nc" path="res://Classes/alchemy/EmpoweredForm.gd" id="4_t6km3"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="5_cp4ky"]
+
+[sub_resource type="Resource" id="Resource_wbymn"]
+script = ExtResource("4_t6km3")
+display_name = "Cyclone"
+attack_shape = ExtResource("3_03quc")
+
+[resource]
+script = ExtResource("5_cp4ky")
+recipe = "Push(A2) + Pull(A2)"
+empowered = SubResource("Resource_wbymn")
+display_name = "Twister"
+power = 3
+min_range = 2
+max_range = 2
+max_and_a_half = true
+attack_shape = ExtResource("1_ep2w1")
+hits_allies = true
+targets = 2
+up_tolerance = 6
+arc_clearance = 6
+damage_kind = 1
