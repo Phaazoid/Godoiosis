@@ -148,7 +148,8 @@ next stash `slot`. All four are pre-mission only (fitting is read-only in battle
 
 `kit {unit}` reads it back: each slot with `(E)` / `(W)`, why this unit cannot use a piece, each
 weapon's spaces (`1 [1/2: Line Sniper]`, `off` past the wielder's proficiency), and while the phase
-is open the offered jobs and mods. `kit stash` lists the stash.
+is open the offered jobs and mods. `kit stash` lists the stash. `kit` reads any unit on the board, an
+enemy's too, in or out of the phase.
 
 ```bash
 play/send.sh --batch '[{"cmd":"kit","args":{"unit":"stash"}},{"cmd":"give","args":{"from":"stash","slot":0,"to":"A"}},{"cmd":"kit","args":{"unit":"A"}}]'
@@ -223,6 +224,12 @@ made it re-run the command every frame without answering. Now:
 - A `load` it refuses gets `ok=0` with the reason, and **the board you had still stands** (#1603). The
   reasons are: no file, not a scenario, refused as foreign (`ForeignResource`), or unreadable. The file
   is read before anything is torn down, which is the order the game's loader keeps.
+- `load` reads the scenario file **as it is on disk now**, every time, and so does `restart` (#1661). It
+  used to serve Godot's cached copy of a path it had loaded before, so a board rewritten by another
+  process came back as the old one. The read is shallow (`ContentRepair.load_tolerant(path, true)`,
+  `CACHE_MODE_IGNORE`): what the file embeds is re-read, but the files it *references* (cast unit
+  files, a roster, weapons, attack shapes) still come from the process's cache. **Rewrote one of those?
+  Restart the bridge.** A deep read would fork the templates that must stay one shared object.
 - `-- --run-dir=<dir>` moves `playrun/`, so a suite can run its own bridge beside a playtest's
   (`tests/support/bridge_process.gd`).
 
@@ -242,21 +249,29 @@ if it ever matters); each unit gets a unique letter handle used in commands. Ter
 shallow / deep water (split on walkability, so deep water no longer draws as rock), `#` rock or any
 other impassable tile, `T` tree, blank a hole or off the map. **A tile state draws over its ground**:
 `^` burning, `_` frozen, `;` scorched, `n` cover, so a fire spreading toward you and a frozen-over
-river are on the board. A `Ground:` line under the board names only the glyphs it holds. Walkability
+river are on the board. A `Ground:` line under the board names only the glyphs it holds. A glyph names a
+ground KIND, and one kind can be several tiles made of different things (eight dirt tiles share `:`, from
+sand to cut stone), which decides what a carving can draw on: when a glyph covers more than one tile, the
+legend names each by the tile card's title (`TileReadout.title_of`), as in `: dirt (Sand, Stone Floor --
+see terrain)`, and the `terrain` view says where each lies and what it is made of (#1662). Walkability
 is still the board's (`BoardContext.is_walkable`, #109), and so is a cell's move cost
 (`BoardContext.move_cost_at`, #1223, which charges ice 1), so the view and the rules cannot disagree
 about a frozen cell. Height does not fit in a 3-char cell: when the board has relief or gas the
 overview says so and the `terrain` view draws it. A legend table carries what a glyph can't (name,
 hp, squad/leader, weapon), and in brackets what the unit is standing in: a body's death clock,
 Wounded, Crisis, its element states and any limb that is not its own, the facts the inspect panel
-shows (#1236, e.g. `[DOWNED (dies in 2), Wet, no left arm]`). Mission zones overlay their cells: `C`
+shows (#1236, e.g. `[DOWNED (dies in 2), Wet, no left arm]`). A unit holding a job or an ability says so
+after its weapon, in the inspect dock's words (`UnitInfoPanelControl.jobs_text`, `Unit.get_live_abilities`,
+#1662): `job Water Walker  abilities Waterwalk`, whatever its side. A watching unit names its lane's reach
+as each path's first and last cell and the count, `[WATCHING Overwatch: (4,2)-(4,5), 4 cells]`: the `!`
+sits in a cell's third slot beside any unit standing there, but a downed body's `v` replaces it. Mission zones overlay their cells: `C`
 capture, `E` extract, `F` a defended point, `D` deployment while the force is placed. Unit handles are session-stable ids
 assigned by `PlaySession` — units have no persistent id today.
 
 **Layered views — pull detail only where you act** (token discipline):
 - **Overview** (`describe_state`): ruled board + one-line-per-unit legend + turn / squad status. The default; small.
-- **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid, then the unit's numbers as the game derives them, gear and jobs included (HP, MOV, STR/DEX/PER/CON/BLD, DEF, LDR, squad size against capacity, leash), and each attack it can fire or watch with in `Unit.attack_detail`'s words, the game's own hover readout (#46). A unit still in reserve has no range to draw and answers in words, pointing at `kit`.
-- **Terrain** (`terrain`): each cell's height in the rules' half-level units (`Terrain.UNITS_PER_LEVEL` to a level), with `n`/`e`/`s`/`w` for the side a ramp rises toward or `*` for a corner form, then the gas lying on each cell and how thick (#46). Then any time mark a Still or Quicken has laid, with its rounds left (#1311, `PlaySession.marks_at`). Read through `PlaySession.height_at` / `gas_at`, i.e. `BoardHeights` and `GasField`.
+- **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid, then the unit's numbers as the game derives them, gear and jobs included (HP, MOV, STR/DEX/PER/CON/BLD, DEF, LDR, squad size against capacity, leash), and each attack it can fire or watch with in `Unit.attack_detail`'s words, the game's own hover readout (#46), then each live ability with its description (#1662). A unit still in reserve has no range to draw and answers in words, pointing at `kit`.
+- **Terrain** (`terrain`): each cell's height in the rules' half-level units (`Terrain.UNITS_PER_LEVEL` to a level), with `n`/`e`/`s`/`w` for the side a ramp rises toward or `*` for a corner form, then the gas lying on each cell and how thick (#46). Then any time mark a Still or Quicken has laid, with its rounds left (#1311, `PlaySession.marks_at`). Then, where one ground glyph covers different tiles, a **Made of** block: each tile by its card title with its substances (`BoardContext.made_of_at`, named by `SubstanceCatalog.name_of`) and its cells grouped by row (#1662). Read through `PlaySession.height_at` / `gas_at`, i.e. `BoardHeights` and `GasField`.
 - **Preview** (`preview`): the **resolved** outcome of the current/hypothetical plan — exact damage, deaths, counters, net board change — as a concise diff, not a re-dump. The deterministic-engine payoff.
 - **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below. A hit logs the states it gave and took (`b gains Wet`, `b loses Wet`) and a limb it took (`b loses left arm`, #1236), and a Crisis hit says `(CRISIS)`; a side-channel order logs its actor, verb and target by handle ahead of the game's own words (`A GUARD -> B: Warden guards Warden`), so two units sharing a name stay apart (#46).
 - **Affordances** (`legal_moves(unit)` / `legal_targets(unit, attack?)`): where this unit may go, and

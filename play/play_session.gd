@@ -697,7 +697,19 @@ func begin() -> Dictionary:
 		return {"ok": false, "error": refusal}
 	staged = _phase.capture(scenario_data.resource_path if scenario_data != null else "")
 	_deploying = false
-	return {"ok": true, "summary": "mission begun with %d deployed" % _phase.deployed_count()}
+	return {"ok": true, "summary": "mission begun with %d deployed%s" % [_phase.deployed_count(),
+			battle_begins()]}
+
+# The battle's first boundary (#1653), MissionController._battle_begins' twin: whoever stands in open
+# water is Wet. Called at the fresh starts only (begin above, and the bridge's load once no phase
+# opened), never on a resume. Returns the clause the reply carries, "" when nobody was soaked.
+func battle_begins() -> String:
+	var handles: Array[String] = []
+	for unit in TurnBoundary.battle_begins(live_units(), _board()):
+		handles.append(handle_for(unit))
+	if handles.is_empty():
+		return ""
+	return "; standing in water, Wet: %s" % ", ".join(handles)
 
 # ---- the loadout screen's writes (#46 slice 2a) ----
 # Gear, jobs and mods, each through the door the screen calls: Loadout.move, Loadout.set_job, and the

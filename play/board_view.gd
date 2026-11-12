@@ -120,6 +120,9 @@ static func render_focus(session, handle: String) -> String:
 	for line in _attack_lines(unit, session.squad_manager.candidate_board(unit.squad),
 			session.squad_manager.candidate_bodies(unit.squad)):
 		lines.append("    " + line)
+	# Each live ability in the dock's words (#1662): its name and authored description.
+	for ability in unit.get_live_abilities():
+		lines.append("    ability %s: %s" % [ability.display_name, ability.description])
 	return "\n".join(lines)
 
 
@@ -210,6 +213,12 @@ static func render_terrain(session) -> String:
 		lines.append("Time marks:")
 		for line in marked:
 			lines.append("  " + line)
+	# Made of (#1662), only where one glyph covers tiles that differ.
+	var made_of := _made_of_lines(session, bounds)
+	if not made_of.is_empty():
+		lines.append("")
+		lines.append("Made of (where one glyph covers different tiles):")
+		lines.append_array(made_of)
 	return "\n".join(lines)
 
 # The enemy ranges view (#46): the game's V key as text. Its two glyphs are its own, unused by the
@@ -386,12 +395,74 @@ static func _ground_legend(session, bounds: Rect2i) -> String:
 	for y in range(bounds.position.y, bounds.end.y):
 		for x in range(bounds.position.x, bounds.end.x):
 			present[_ground_key(session, Vector2i(x, y))] = true
+	var mixed := _mixed_tiles(session, bounds)
 	var parts: Array[String] = []
 	for key: String in GROUND:
 		var word: String = GROUND[key][1]
 		if present.has(key) and word != "":
+			if mixed.has(key):
+				word += " (%s -- see `terrain`)" % ", ".join(_titles_of(mixed[key]))
 			parts.append("%s %s" % ["' '" if GROUND[key][0] == " " else GROUND[key][0], word])
 	return "Ground: " + "  ".join(parts)
+
+# The GROUND keys a tile STATE draws, which hide the tile's own name rather than share it.
+const STATE_KEYS := ["burning", "frozen", "scorched", "cover", "quicklime", "brick", "thunderstone",
+		"gypsum", "quicksilver"]
+
+# Each ground glyph that covers more than one tile (#1662): the eight dirt tiles share ":" and differ
+# in what a carving draws on. key -> {"Title|made,of": {title, made_of, cells}}, the title being the
+# tile card's (TileReadout.title_of) and the materials BoardContext.made_of_at's.
+static func _mixed_tiles(session, bounds: Rect2i) -> Dictionary:
+	var board: BoardContext = session._board()
+	var by_key := {}
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			var cell := Vector2i(x, y)
+			var key := _ground_key(session, cell)
+			if STATE_KEYS.has(key) or not session.terrain_at(cell).exists:
+				continue
+			var title: String = TileReadout.title_of(session, cell)
+			var made_of: Array[String] = board.made_of_at(cell)
+			var id := "%s|%s" % [title, ",".join(made_of)]
+			var tiles: Dictionary = by_key.get(key, {})
+			if not tiles.has(id):
+				tiles[id] = {"title": title, "made_of": made_of, "cells": [] as Array[Vector2i]}
+			(tiles[id].cells as Array[Vector2i]).append(cell)
+			by_key[key] = tiles
+	var mixed := {}
+	for key: String in by_key:
+		if (by_key[key] as Dictionary).size() > 1:
+			mixed[key] = by_key[key]
+	return mixed
+
+static func _titles_of(tiles: Dictionary) -> Array[String]:
+	var titles: Array[String] = []
+	for id: String in tiles:
+		var title: String = tiles[id].title
+		if title != "" and not titles.has(title):
+			titles.append(title)
+	titles.sort()
+	return titles
+
+# What each tile under a shared glyph is made of (#1662), named the way every readout names a substance.
+static func _made_of_lines(session, bounds: Rect2i) -> Array[String]:
+	var lines: Array[String] = []
+	var mixed := _mixed_tiles(session, bounds)
+	for key: String in GROUND:
+		if not mixed.has(key):
+			continue
+		var ids: Array = (mixed[key] as Dictionary).keys()
+		ids.sort()
+		for id: String in ids:
+			var tile: Dictionary = mixed[key][id]
+			var names: Array[String] = []
+			for substance: String in tile.made_of:
+				names.append(SubstanceCatalog.name_of(substance))
+			var label := "%s %s (%s)" % [GROUND[key][0], tile.title if tile.title != "" else GROUND[key][1],
+					", ".join(names) if not names.is_empty() else "nothing"]
+			var rows := _cell_rows(tile.cells).strip_edges().replace("\n  ", "   ")
+			lines.append("  %s   %s" % [label, rows])
+	return lines
 
 # Does the board have anything only the `terrain` view shows: a raised or sloped cell, gas or a time mark?
 static func _has_relief(session, bounds: Rect2i) -> bool:
@@ -757,12 +828,40 @@ static func _unit_line(session, unit: Unit) -> String:
 	# Whose watch the "!" cells belong to, and what it fires (#413). Named on the unit line rather
 	# than in a second block: the footprint is on the board, this says who is behind it.
 	if unit.watch != null and unit.watch.is_armed() and unit.watch.is_anchored(unit.movement.cell):
-		state += "  [WATCHING %s]" % (unit.watch.attack.display_name if unit.watch.attack != null else "?")
-	return "%s %s  %s  hp%d/%d  %s  %s%s" % [
+		state += "  [WATCHING %s: %s]" % [unit.watch.attack.display_name if unit.watch.attack != null else "?",
+				_lane_str(unit.watch)]
+	return "%s %s  %s  hp%d/%d  %s  %s%s%s" % [
 		session.handle_for(unit), unit.get_unit_name(), fac,
 		unit.get_current_hp(), unit.get_max_hp(),
-		squad_tag, wep, state,
+		squad_tag, wep, _kit_tags(unit), state,
 	]
+
+# The inspect dock's header job and its ability list (#1662), named only when the unit has either, so
+# a plain unit's line costs nothing more.
+static func _kit_tags(unit: Unit) -> String:
+	var s := ""
+	if not unit.unit_instance.jobs.is_empty():
+		s += "  job " + UnitInfoPanelControl.jobs_text(unit)
+	var names: Array[String] = []
+	for ability in unit.get_live_abilities():
+		names.append(ability.display_name)
+	if not names.is_empty():
+		s += "  abilities " + ", ".join(names)
+	return s
+
+# Where a watch reaches (#1662): each path the shot walks as its first and last cell, then the count,
+# since a body standing in the lane draws its letter beside the "!" and a downed one's "v" replaces it.
+static func _lane_str(watch: Watch) -> String:
+	var parts: Array[String] = []
+	var count := 0
+	for path: Array in watch.paths():
+		if path.is_empty():
+			continue
+		var a: Vector2i = path[0]
+		var b: Vector2i = path[path.size() - 1]
+		parts.append("(%d,%d)" % [a.x, a.y] if path.size() == 1 else "(%d,%d)-(%d,%d)" % [a.x, a.y, b.x, b.y])
+		count += path.size()
+	return "%s, %d cell%s" % ["; ".join(parts), count, "" if count == 1 else "s"]
 
 # What a unit is standing in (#1236): the facts the inspect panel's badges and state icons show,
 # read off the same fields. A downed body's clock, Wounded, Crisis, its element states, and every

@@ -638,8 +638,8 @@ static func _build_entries() -> Dictionary:
 			+ "ground next to them."}
 	e[Term.SHALLOW_WATER] = {"category": Category.TERRAIN, "title": "Shallow water",
 		"short": "Wadeable, but slow going, and you come out WET.",
-		"long": "Shallow water is waded at the same cost as mud, and anyone who crosses it or is "
-			+ "shoved into it comes out WET. It is deep water, not this, that drowns. Waterwalk "
+		"long": "Shallow water is waded at the same cost as mud, and anyone who crosses it, is "
+			+ "shoved into it or begins a battle standing in it is WET. It is deep water, not this, that drowns. Waterwalk "
 			+ "keeps you dry, and so does crossing it once it is frozen."}
 	# No fixed duration in this text since #890: a fire lasts as long as its FUEL, so how long it
 	# burns is a property of the ground and differs from one to the next. The tile hover reads the

@@ -190,8 +190,9 @@ static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
 
 # The scenario at `path` as {"scenario": ScenarioData}, or {"error": why not} -- read BEFORE any board
 # is torn down, which is the order the game's loader keeps (#1603). The diagnosis runs on a miss only.
-static func read_scenario(path: String) -> Dictionary:
-	var res := ContentRepair.load_tolerant(path)   # the game's loader's door (#608, #1365)
+# `fresh` reads the file on disk, never a cached copy of the path (#1661; ContentRepair.load_tolerant).
+static func read_scenario(path: String, fresh := false) -> Dictionary:
+	var res := ContentRepair.load_tolerant(path, fresh)   # the game's loader's door (#608, #1365)
 	if res is ScenarioData:
 		return {"scenario": res}
 	if res != null:
