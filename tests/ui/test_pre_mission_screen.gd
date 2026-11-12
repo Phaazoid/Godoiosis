@@ -650,6 +650,37 @@ func test_the_conditions_show_the_boards_weather_and_its_air() -> void:
 			+ "\n\n" + Glossary.short(Glossary.Term.ATMOSPHERE)))
 
 
+# Under the weather sits what it does (#1660): its soak, and what it strikes the ground with, one line
+# per reaction. Which weather says most is authored, so it is found off the files; the box still ends
+# on screen with it, the stash below giving up the height.
+func test_the_conditions_say_what_the_weather_does() -> void:
+	var sky := Weather.Kind.CLEAR
+	for kind: Weather.Kind in Weather.Kind.values():
+		if PreMissionScreen.what_the_weather_does(kind).size() > PreMissionScreen.what_the_weather_does(sky).size():
+			sky = kind
+	assert_int(sky).override_failure_message("fixture: no weather's rules do anything to say").is_not_equal(
+			Weather.Kind.CLEAR)
+	if not await _enter_phase(2, {}, sky):
+		return
+	var screen := _screen()
+	await await_idle_frame()
+	var shown: Array[String] = []
+	for child in screen._weather_does.get_children():
+		shown.append((child as Label).text)
+	assert_array(shown).override_failure_message("the conditions say something else of %s" % Weather.name_of(sky)
+			).is_equal(PreMissionScreen.what_the_weather_does(sky))
+	var region := screen._weather_does.get_parent() as Control
+	while region != null and not region is PanelContainer:
+		region = region.get_parent() as Control
+	assert_float(region.get_global_rect().end.y).override_failure_message(
+			"the conditions run off the bottom of the screen").is_less_equal(screen.get_viewport_rect().size.y)
+
+	game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	screen._refresh_conditions()
+	assert_int(screen._weather_does.get_child_count()).override_failure_message(
+			"a clear sky still says it does something").is_equal(0)
+
+
 # The two headings are a ruling (Atmosphere.GROUPS), so every row sits under its own, in order.
 func test_the_reading_is_shown_under_its_two_headings_and_explains_itself() -> void:
 	if not await _enter_phase():

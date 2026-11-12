@@ -4,8 +4,8 @@ class_name TurnBoundary
 # The RULE half of a turn boundary (#898, first found by #110): who burns or soaks at a faction's end
 # of turn, what ticks at its start, and what the hand-off decides. Static, and called by the game
 # stack (game._on_turn_started, OrderExecutor.apply_end_of_turn_tiles) and the headless Play API, so
-# a new tick or step cannot land in one stack only. The round tick is one call and stays in each
-# stack's handler.
+# a new tick or step cannot land in one stack only. The ROUND's end is end_round, called from each
+# stack's round handler.
 
 
 # Who the end-of-turn pass is about, answered ONCE before any of it plays -- the same TileHitAction
@@ -73,6 +73,23 @@ static func turn_start_ticks(units: Array[Unit], faction: Team.Faction) -> void:
 		unit.tick_carried_revs()      # every carried weapon, not just the one in hand (#1357)
 		unit.lapse_guard()            # #414: last turn's Guard is gone BEFORE this turn's move phase
 		unit.lapse_watch()            # #413: and so is last turn's untriggered watch
+
+
+# THE ROUND'S END, one order for both hosts (#1660). The weather strikes the ground first
+# (WeatherStrike), then the gas round runs, then the strike's tile states land, then the tile tick.
+# The gas round folds the same strike (GasField.next_round) off tiles nothing has written yet, so it
+# must run BEFORE the states land: after, it would find the fire already out and lose its steam. The
+# gas runs before the tile tick for #1335's reason: a spreading fire's smoke goes on the cells the tick
+# is about to light, which GasSpread can only name before they are alight. The host redraws and
+# advances the mission clock after.
+static func end_round(board: BoardContext, gas: GasField, states: TerrainStateManager) -> void:
+	var strike := WeatherStrike.effects(board)
+	if gas != null:
+		gas.tick(board)
+	if states != null:
+		for effect in strike:
+			states.apply(effect)
+		states.tick_states()
 
 
 # What a faction's turn start comes to (#1365): it plays, it is passed over, or the mission ended.

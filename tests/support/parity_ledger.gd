@@ -486,6 +486,11 @@ static func weathers() -> Dictionary:
 			members.append(kind)
 	var K := Weather.Kind
 	var blind := gap("#117", "the AI is blind to rain's soak, as it is to the soak half of steam's row (terrain.md); the vapor it adds is priced through the damage it moves")
+	# A weather that strikes the ground at the round's end (#1660): the AI reads the gas it leaves
+	# through next round's (GasField.next_round folds the strike) and nothing else of it.
+	var struck := gap("#117", "the AI is blind to rain's soak and to the fire its strike puts out at the round's end (#1660); the steam it releases is read through next round's gas (GasField.next_round), and the vapor it adds is priced through the damage it moves")
+	var snows := gap("#117", "the AI does not foresee the water snow freezes at the round's end (#1660); the air it moves is priced through the damage it moves")
+	var blizzard := gap("#117", "the AI does not foresee the water a blizzard freezes at the round's end (#1660) nor price its chill, as it is blind to rain's soak; the air it moves is priced through the damage it moves")
 	# A weather whose only rule is the air it moves (#1324): the AI reads that through the resolve.
 	var air := never("its only rule moves the air, which the AI prices through the damage it moves (Atmosphere.effective)")
 	return {
@@ -495,12 +500,12 @@ static func weathers() -> Dictionary:
 		"play_all": covered(SESSION, "BoardBuilder.weather_of"),   # the built board's store (#1509)
 		"rows": {
 			K.LIGHT_RAIN: {"ai": blind},
-			K.RAIN: {"ai": blind},
-			K.HEAVY_RAIN: {"ai": blind},
-			K.THUNDERSTORM: {"ai": blind},
+			K.RAIN: {"ai": struck},
+			K.HEAVY_RAIN: {"ai": struck},
+			K.THUNDERSTORM: {"ai": struck},
 			K.LIGHT_SNOW: {"ai": air},
-			K.SNOW: {"ai": air},
-			K.BLIZZARD: {"ai": air},
+			K.SNOW: {"ai": snows},
+			K.BLIZZARD: {"ai": blizzard},
 			K.MIST: {"ai": air},
 			K.FOG: {"ai": air},
 			K.THICK_FOG: {"ai": air},

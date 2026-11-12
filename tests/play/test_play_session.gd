@@ -197,6 +197,64 @@ func test_the_headless_round_spreads_the_gas_too() -> void:
 	for cell: Vector2i in expected:
 		assert_int(field.packed_at(cell)).is_equal(expected[cell])
 
+# ...and its round opens with the weather's strike as the game's does (#1660, TurnBoundary.end_round):
+# fire the sky puts out is out, and the gas is the store's own forecast. The sky is this case's own
+# rules, in memory, striking with whatever element puts fire out.
+func test_the_headless_round_strikes_the_ground_as_the_game_does() -> void:
+	var douse: TerrainReaction = null
+	for reaction in TerrainReactionCatalog.get_all():
+		if not reaction.in_the_air and reaction.required_tile_state == Terrain.TileState.BURNING \
+				and reaction.remove_tile_states.has(Terrain.TileState.BURNING):
+			douse = reaction
+			break
+	assert_object(douse).override_failure_message("precondition: no ground reaction puts fire out").is_not_null()
+	if douse == null:
+		return
+	var rules := WeatherRules.new()
+	rules.ground = douse.incoming_element
+	var sky := Weather.Kind.RAIN   # any kind: its rules are this case's, put back below
+	WeatherRules.for_kind(sky)
+	var authored: Variant = WeatherRules._rules_by_kind[sky]
+	WeatherRules._rules_by_kind[sky] = rules
+	var src: Dictionary = BoardBuilder.build(self, "SkySrc")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 6, 6))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	scenario.weather = sky
+	for spec: Array in [["Out", PLAYER, Vector2i(0, 0)], ["Foe", ENEMY, Vector2i(5, 5)]]:
+		var entry := ScenarioUnitEntry.new()
+		entry.unit_data = _data(spec[0], spec[1])
+		entry.cell = spec[2]
+		scenario.unit_entries.append(entry)
+	var dst: Dictionary = BoardBuilder.build(self, "SkyDst")
+	auto_free(dst.root)
+	await BoardBuilder.apply_scenario(dst, scenario)
+	var sess := PlaySession.new(dst)
+	var fire := Vector2i(3, 3)
+	var lit := ResolvedCellEffect.new()
+	lit.cell = fire
+	lit.states_added.assign([Terrain.TileState.BURNING])
+	var states: TerrainStateManager = dst.terrain_states
+	var field: GasField = dst.gas_field
+	states.apply(lit)
+	var expected := field.next_round(sess._board())
+
+	sess.end_turn()   # PLAYER -> ENEMY
+	sess.end_turn()   # ENEMY -> PLAYER: the round wraps
+
+	WeatherRules._rules_by_kind[sky] = authored
+	assert_bool(states.has_state(fire, Terrain.TileState.BURNING)).override_failure_message(
+			"the headless round never put out the fire the sky strikes").is_false()
+	assert_int(field.cells().size()).override_failure_message(
+			"the headless round's gas is not its forecast").is_equal(expected.size())
+	for cell: Vector2i in expected:
+		assert_int(field.packed_at(cell)).is_equal(expected[cell])
+	for kind: Gas.Kind in Gas.released(douse.gases):
+		assert_int(field.level_at(fire, kind)).override_failure_message(
+				"the headless douse released no %s" % Gas.Kind.keys()[kind]).is_greater(0)
+
+
 # ...and its turn end soaks as the game's does (#508 PR 3): OrderExecutor.apply_end_of_turn_tiles'
 # twin, through the same TurnBoundary list. The state and its level are read off the rules file.
 func test_the_headless_turn_end_soaks_a_unit_standing_in_steam() -> void:

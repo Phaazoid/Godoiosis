@@ -117,6 +117,26 @@ func test_the_forecast_names_the_soak_the_pass_lands() -> void:
 			"a soak row printed an HP arrow; nobody is hit").is_false()
 
 
+# Every weather the files say soaks forecasts its OWN state, not the first one's: a soak of a paired
+# state (a chill and its stat change, #1660) rides the same row.
+func test_every_weather_that_soaks_forecasts_its_own_state() -> void:
+	var unit := _spawn(CELL, Team.Faction.PLAYER)
+	var soakers := 0
+	for kind: Weather.Kind in Weather.Kind.values():
+		var authored := WeatherRules.for_kind(kind)
+		if authored == null or authored.state == Elemental.State.NONE:
+			continue
+		soakers += 1
+		game.scenario_manager.current_weather = kind
+		var rows := _weather_rows(_plan_for(unit).tile_hits)
+		assert_int(rows.size()).override_failure_message(
+				"%s forecast %d soak rows" % [Weather.name_of(kind), rows.size()]).is_equal(1)
+		if rows.size() == 1:
+			assert_array(rows[0].resolved.states_added).override_failure_message(
+					"%s forecast another weather's soak" % Weather.name_of(kind)).is_equal([authored.state])
+	assert_int(soakers).override_failure_message("fixture: no weather soaks").is_greater(0)
+
+
 # A row says what CHANGED: a unit already holding the state grows none, and neither does one holding
 # a state that keeps it off (Elemental.OVERRIDES) -- the gate every other door asks.
 func test_a_unit_already_holding_the_state_or_its_blocker_grows_no_row() -> void:
