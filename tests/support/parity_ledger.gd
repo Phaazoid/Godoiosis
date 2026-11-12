@@ -320,6 +320,7 @@ static func outcome_fields() -> Dictionary:
 			"knockback_path": {"play": never(ANIMATION), "ai": never(ANIMATION)},
 			"knockback_landing_index": {"play": never(ANIMATION), "ai": never(ANIMATION)},
 			"knockback_held": {"play": covered(SESSION, ".knockback_held"), "ai": never(NOT_SCORED)},
+			"knockback_wind": {"play": covered(SESSION, ".knockback_wind"), "ai": never(NOT_SCORED)},
 			"burned_vial": {"play": covered(SESSION, ".burned_vial"), "ai": never(NOT_SCORED)},
 			"air_steps": {"play": covered(SESSION, ".air_steps"), "ai": never(IN_DAMAGE)},
 			"charge_spent": {"play": covered(SESSION, ".charge_spent"), "ai": never(NOT_SCORED)},
@@ -460,21 +461,27 @@ static func gases() -> Dictionary:
 	}
 
 
-# The winds a board may name (#1286). CALM is left out the way CLEAR is: it blows nothing. A look only --
-# nothing a rule reads, so neither the Play API nor the AI has anything to answer. The day a wind gains
-# a rule (#277's Tempest row), these two lines are what has to change.
+# The winds a board may name (#1286). CALM is left out the way CLEAR is: it blows nothing. A rule since
+# #1660 (WindRules): gas drifts downwind and a shove goes further with it, shorter against it. Both live
+# in shared answers -- the round's gas (GasField.next_round) and the resolver's shove -- so the Play API
+# plays them and the AI reads them with no wind of its own.
 static func winds() -> Dictionary:
 	var members: Array = []
 	for kind: int in Wind.Kind.values():
 		if kind != Wind.Kind.CALM:
 			members.append(kind)
+	var K := Wind.Kind
+	var reads := covered(TACTICS, "_round_gas")   # the drift through next round's gas; a shove through the resolve
 	return {
 		"name": "winds (Wind.Kind)",
 		"members": members,
-		"label": _enum_label(Wind.Kind.keys()),
-		"play_all": never("a look only: nothing headless draws the wind"),
-		"ai_all": never("a look only: no rule reads the wind"),
-		"rows": {},
+		"label": _enum_label(K.keys()),
+		"play_all": covered(SESSION, "BoardBuilder.wind_of"),   # the built board's store, beside the weather's
+		"rows": {
+			K.BREEZE: {"ai": reads},
+			K.STRONG_WIND: {"ai": reads},
+			K.GALE: {"ai": reads},
+		},
 	}
 
 
@@ -486,6 +493,11 @@ static func weathers() -> Dictionary:
 			members.append(kind)
 	var K := Weather.Kind
 	var blind := gap("#117", "the AI is blind to rain's soak, as it is to the soak half of steam's row (terrain.md); the vapor it adds is priced through the damage it moves")
+	# A weather that strikes the ground at the round's end (#1660): the AI reads the gas it leaves
+	# through next round's (GasField.next_round folds the strike) and nothing else of it.
+	var struck := gap("#117", "the AI is blind to rain's soak and to the fire its strike puts out at the round's end (#1660); the steam it releases is read through next round's gas (GasField.next_round), and the vapor it adds is priced through the damage it moves")
+	var snows := gap("#117", "the AI does not foresee the water snow freezes at the round's end (#1660); the air it moves is priced through the damage it moves")
+	var blizzard := gap("#117", "the AI does not foresee the water a blizzard freezes at the round's end (#1660) nor price its chill, as it is blind to rain's soak; the air it moves is priced through the damage it moves")
 	# A weather whose only rule is the air it moves (#1324): the AI reads that through the resolve.
 	var air := never("its only rule moves the air, which the AI prices through the damage it moves (Atmosphere.effective)")
 	return {
@@ -495,12 +507,12 @@ static func weathers() -> Dictionary:
 		"play_all": covered(SESSION, "BoardBuilder.weather_of"),   # the built board's store (#1509)
 		"rows": {
 			K.LIGHT_RAIN: {"ai": blind},
-			K.RAIN: {"ai": blind},
-			K.HEAVY_RAIN: {"ai": blind},
-			K.THUNDERSTORM: {"ai": blind},
+			K.RAIN: {"ai": struck},
+			K.HEAVY_RAIN: {"ai": struck},
+			K.THUNDERSTORM: {"ai": struck},
 			K.LIGHT_SNOW: {"ai": air},
-			K.SNOW: {"ai": air},
-			K.BLIZZARD: {"ai": air},
+			K.SNOW: {"ai": snows},
+			K.BLIZZARD: {"ai": blizzard},
 			K.MIST: {"ai": air},
 			K.FOG: {"ai": air},
 			K.THICK_FOG: {"ai": air},

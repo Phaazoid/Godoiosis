@@ -322,6 +322,7 @@ func begin_mission(path: String, armed := true) -> void:
 		game.scenario_director.mission_started()   # fresh start (the #220 door); ARMS before turn 1 fires
 	else:
 		game.scenario_director.disarm()
+	_battle_begins()
 	_begin_turn()
 
 
@@ -418,6 +419,7 @@ func commit_deployment() -> bool:
 	_close_deployment_menu()
 	game.exit_current_mode()   # the phase's own ring/pick is over; rests on the new _base_state
 	game.scenario_director.mission_started()   # a commit is a fresh start (#182), same as the door above
+	_battle_begins()
 	_begin_turn()
 	return true
 
@@ -618,7 +620,14 @@ func restart_mission() -> void:
 		_open_deployment()
 		return
 	game.scenario_director.mission_started()   # a restart is a fresh start (#182); arms before turn 1
+	_battle_begins()
 	_begin_turn()
+
+# The battle's first boundary (#1653), at the three fresh starts above once every unit stands where it
+# will begin, and BEFORE _begin_turn, whose MissionLog.begin captures the replay seed. Never from a
+# resume, the sandbox or a replay: those reach _begin_turn holding the state they restore.
+func _battle_begins() -> void:
+	TurnBoundary.battle_begins(game._all_units(), game._board())
 
 # Player-facing resume (#144): the same two-step arrival begin_mission makes, except the
 # board comes from a save slot and last_loaded_path is aimed at the ORIGIN mission -- so Restart

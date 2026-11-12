@@ -27,6 +27,8 @@ const UNSEALED := {
 	"units": "bodies, sealed on the body side (Unit.state, Unit.open_seal)",
 	"squad_manager": "the queue and its projection; bodies through it are sealed on the body side",
 	"weather": "a value the builder hands the board for its length; a pass changes none",
+	"wind": "a value the builder hands the board beside its weather (#1660); a pass changes none",
+	"wind_direction": "the wind's direction, beside it; a pass changes none",
 	"atmosphere": "a value the builder composes from the weather; a pass changes none",
 	"tiles": "the pass's own planned tiles: the door the seal points reads through",
 	"mission": "a value the builder hands the board; a pass changes none",

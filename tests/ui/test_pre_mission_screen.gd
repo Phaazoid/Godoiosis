@@ -27,10 +27,12 @@ var game: Node2D
 var sm: ScenarioManager
 var mc: MissionController
 var _slide_seconds: float
+var _wind_cache: Dictionary
 
 
 func before_test() -> void:
 	_slide_seconds = PreMissionScreen.CARD_SLIDE_SECONDS
+	_wind_cache = WindRules._rules_by_kind.duplicate()
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -51,6 +53,7 @@ func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
 	PreMissionScreen.CARD_SLIDE_SECONDS = _slide_seconds
+	WindRules._rules_by_kind = _wind_cache
 	if FileAccess.file_exists(SCRATCH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SCRATCH))
 
@@ -648,6 +651,101 @@ func test_the_conditions_show_the_boards_weather_and_its_air() -> void:
 	assert_int(named).override_failure_message("%s named no row" % Weather.name_of(sky)).is_greater(0)
 	assert_str(screen._air_box.tooltip_text).is_equal(UiText.wrap("\n".join(Atmosphere.weather_lines(sky))
 			+ "\n\n" + Glossary.short(Glossary.Term.ATMOSPHERE)))
+
+
+# Under the weather sits what it does (#1660): its soak, and what it strikes the ground with, one line
+# per reaction. Which weather says most is authored, so it is found off the files; the box still ends
+# on screen with it, the stash below giving up the height.
+func test_the_conditions_say_what_the_weather_does() -> void:
+	var sky := Weather.Kind.CLEAR
+	for kind: Weather.Kind in Weather.Kind.values():
+		if PreMissionScreen.what_the_weather_does(kind).size() > PreMissionScreen.what_the_weather_does(sky).size():
+			sky = kind
+	assert_int(sky).override_failure_message("fixture: no weather's rules do anything to say").is_not_equal(
+			Weather.Kind.CLEAR)
+	if not await _enter_phase(2, {}, sky):
+		return
+	var screen := _screen()
+	await await_idle_frame()
+	var shown: Array[String] = []
+	for child in screen._weather_does.get_children():
+		shown.append((child as Label).text)
+	assert_array(shown).override_failure_message("the conditions say something else of %s" % Weather.name_of(sky)
+			).is_equal(PreMissionScreen.what_the_weather_does(sky))
+	var region := screen._weather_does.get_parent() as Control
+	while region != null and not region is PanelContainer:
+		region = region.get_parent() as Control
+	assert_float(region.get_global_rect().end.y).override_failure_message(
+			"the conditions run off the bottom of the screen").is_less_equal(screen.get_viewport_rect().size.y)
+
+	game.scenario_manager.current_weather = Weather.Kind.CLEAR
+	screen._refresh_conditions()
+	assert_int(screen._weather_does.get_child_count()).override_failure_message(
+			"a clear sky still says it does something").is_equal(0)
+
+
+# Rules written here, never read off the files (the content razor): drift 2, shove 1.
+func _gale(drift := 2, shove := 1) -> void:
+	var rules := WindRules.new()
+	rules.drift = drift
+	rules.shove = shove
+	WindRules._rules_by_kind[Wind.Kind.GALE] = rules
+
+
+# What a wind does (#1660), worded off its rules: the drift, then which shoves it lengthens, a diagonal
+# wind leaning on both of its sides. Rules of nothing, and no rules, say nothing.
+func test_the_wind_says_how_far_gas_drifts_and_which_shoves_it_leans_on() -> void:
+	_gale()
+	assert_str(PreMissionScreen.wind_text(Wind.Kind.GALE, Wind.Direction.EAST)).is_equal("Gale, toward east")
+	assert_array(PreMissionScreen.what_the_wind_does(Wind.Kind.GALE, Wind.Direction.EAST)).is_equal([
+		"Gas drifts 2 tiles east each round.",
+		"A shove east goes 1 tile further, a shove west 1 shorter.",
+	])
+	assert_array(PreMissionScreen.what_the_wind_does(Wind.Kind.GALE, Wind.Direction.NORTH_EAST)).is_equal([
+		"Gas drifts 2 tiles north east each round.",
+		"A shove north or east goes 1 tile further, a shove south or west 1 shorter.",
+	])
+	_gale(0, 0)
+	assert_array(PreMissionScreen.what_the_wind_does(Wind.Kind.GALE, Wind.Direction.EAST)).override_failure_message(
+			"a wind whose rules do nothing still says something").is_empty()
+	WindRules._rules_by_kind[Wind.Kind.CALM] = null
+	assert_array(PreMissionScreen.what_the_wind_does(Wind.Kind.CALM, Wind.Direction.EAST)).is_empty()
+	assert_str(PreMissionScreen.wind_text(Wind.Kind.CALM, Wind.Direction.EAST)).is_equal("Calm")
+
+
+# The conditions box shows the board's wind under its weather, and its lines under that; the box still
+# ends on screen.
+func test_the_conditions_say_what_the_wind_does() -> void:
+	if not await _enter_phase():
+		return
+	_gale()
+	game.scenario_manager.current_wind = Wind.Kind.GALE
+	game.scenario_manager.current_wind_direction = Wind.Direction.NORTH_EAST
+	var screen := _screen()
+	screen._refresh_conditions()
+	await await_idle_frame()
+	assert_str(screen._wind_value.text).is_equal(PreMissionScreen.wind_text(Wind.Kind.GALE, Wind.Direction.NORTH_EAST))
+	assert_bool(_draws_in_full(screen._wind_value)).override_failure_message(
+			"the wind's value is drawn narrower than its text").is_true()
+	var shown: Array[String] = []
+	for child in screen._wind_does.get_children():
+		shown.append((child as Label).text)
+	var expected := PreMissionScreen.what_the_wind_does(Wind.Kind.GALE, Wind.Direction.NORTH_EAST)
+	assert_int(expected.size()).override_failure_message("fixture: the gale says nothing").is_equal(2)
+	assert_array(shown).is_equal(expected)
+	assert_int(screen._wind_does.get_index()).override_failure_message(
+			"the wind's lines are not under the weather's").is_greater(screen._weather_does.get_index())
+	var region := screen._wind_does.get_parent() as Control
+	while region != null and not region is PanelContainer:
+		region = region.get_parent() as Control
+	assert_float(region.get_global_rect().end.y).override_failure_message(
+			"the conditions run off the bottom of the screen").is_less_equal(screen.get_viewport_rect().size.y)
+
+	game.scenario_manager.current_wind = Wind.Kind.CALM
+	screen._refresh_conditions()
+	assert_str(screen._wind_value.text).is_equal("Calm")
+	assert_int(screen._wind_does.get_child_count()).override_failure_message(
+			"a calm board still says the wind does something").is_equal(0)
 
 
 # The two headings are a ruling (Atmosphere.GROUPS), so every row sits under its own, in order.

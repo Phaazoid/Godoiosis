@@ -926,11 +926,12 @@ func _paint_vein(cell: Vector2i) -> void:
 func _erase_vein(cell: Vector2i) -> void:
 	game.vein_field.set_kind(cell, Vein.Kind.NONE)
 
-# The brush's Step Gas: exactly the round's gas step (GasField.tick), bracketed as one undo step.
+# The brush's Step Gas: the round's gas step (GasField.tick) without the weather's strike, which it
+# would steam and never land (#1660), bracketed as one undo step.
 func step_gas() -> void:
 	_begin_stroke()
 	var board: BoardContext = game._board()
-	game.gas_field.tick(board)
+	game.gas_field.tick(board, false)
 	_end_stroke()
 
 # The board-wide gas wipe, bracketed as one undo step like clear_tile_states.

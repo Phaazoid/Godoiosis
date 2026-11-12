@@ -85,7 +85,8 @@ var current_weather: Weather.Kind = Weather.Kind.CLEAR
 # locked board.
 var current_weather_odds: Dictionary[Weather.Kind, int] = {}
 
-# The wind over the CURRENT board (#1286): the weather's store/writer shape, a look only.
+# The wind over the CURRENT board (#1286): the weather's store/writer shape, a rule input since #1660
+# (WindRules), read through game._board().
 var current_wind: Wind.Kind = Wind.Kind.CALM
 var current_wind_direction: Wind.Direction = Wind.Direction.EAST
 
@@ -319,7 +320,7 @@ func capture_scenario(scenario_name: String, authored := false, board: BoardSnap
 	if authored and WeatherDraw.draws(current_weather_odds):
 		scenario.weather = Weather.Kind.CLEAR
 	scenario.weather_odds = current_weather_odds.duplicate()   # and what a mission start may draw
-	scenario.wind = current_wind                             # #1286: and the wind, a look only
+	scenario.wind = current_wind                             # #1286: and the wind (a rule since #1660)
 	scenario.wind_direction = current_wind_direction
 	scenario.atmosphere = current_atmosphere.duplicate()     # #1324: and the air it holds
 	scenario.roster = current_roster                         # #735: who it offers, if anyone
@@ -453,7 +454,7 @@ func apply_scenario(scenario: ScenarioData, path := "") -> void:
 	current_look_preset = scenario.look_preset
 	current_weather = scenario.weather            # #1260: a rule input, read through game._board()
 	current_weather_odds = scenario.weather_odds.duplicate()   # #1509: drawn from at a mission start, never here
-	current_wind = scenario.wind                  # #1286: a look only
+	current_wind = scenario.wind                  # #1286; a rule input since #1660, like the weather
 	current_wind_direction = scenario.wind_direction
 	current_atmosphere = scenario.atmosphere.duplicate()   # #1324: a rule input, like the weather
 	current_camera_start = scenario.camera_start   # #234, same signal, same reason: read from board_loaded

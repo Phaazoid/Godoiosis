@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1649 (2026-11-09); only an entry trips a watch (#1654) folded in 2026-11-11; #1657 (drowning becomes its own state) folded in 2026-11-12.**
+**Canon checked through #1649 (2026-11-09); only an entry trips a watch (#1654) folded in 2026-11-11; #1660 slice 2 (the wind leans on a shove) folded in 2026-11-12; #1657 (drowning becomes its own state) folded in 2026-11-12.**
 
 ## Principles
 
@@ -4153,7 +4153,7 @@ So the prediction reach (`ThreatField._threat_of`) now has four parts:
 The red grows modestly everywhere.
 
 **Declared limits:**
-- ~~**Placed-blast splash and payload landings.**~~ **Closed by [#1207](https://github.com/Phaazoid/Godoiosis/issues/1207) inside #1220 (2026-10-05).** For an attack placed at range, `Reach.get_all_attack_cells_from` answers the range ring, not the blast area around each aim, so `ThreatField._add_splash` dilates the ring by the stamp (and a payload by its knockback, then its own footprint). It had to land with #1220's candidate aims: the AI now drops a blast beside a target, and `_squad_can_reach_anyone` relies on the field covering every aim the AI can take.
+- ~~**Placed-blast splash and payload landings.**~~ **Closed by [#1207](https://github.com/Phaazoid/Godoiosis/issues/1207) inside #1220 (2026-10-05).** For an attack placed at range, `Reach.get_all_attack_cells_from` answers the range ring, not the blast area around each aim, so `ThreatField._add_splash` dilates the ring by the stamp (and a payload by its knockback, then its own footprint; since #1660 the knockback plus the wind's lean). It had to land with #1220's candidate aims: the AI now drops a blast beside a target, and `_squad_can_reach_anyone` relies on the field covering every aim the AI can take.
 - **A wet unit HOVERING a dry destination beside lit water reads safe until the move is queued.** The field is per cell, not per unit; queued, the field rebuilds with the unit standing there.
 - **A soaking from the enemy's own turn is not chained** (their Splash, then their Zap). No shipped squad pairs the two.
 - **The dormant plan preview's AI still plans against live states**, the positions-only snapshot from #1001. The field it gates is a superset either way.

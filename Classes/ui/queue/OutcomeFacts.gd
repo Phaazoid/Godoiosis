@@ -65,6 +65,12 @@ static func of(outcome: ResolvedOutcome, fired: AttackData = null) -> Array[Fact
 	if outcome.knockback_held > 0:
 		facts.append(_event(ActionQueueRow.BADGE_HELD % outcome.knockback_held,
 				PlanResolver.HELD_POPUP % outcome.knockback_held))
+	# The wind's lean on a shove (#1660), said even when it cut the shove to nothing. The card's pill
+	# keeps the badge, since a sentence would crowd its tray; the sentence is the row's hover.
+	if outcome.knockback_wind != 0:
+		var wind := ActionQueueRow.BADGE_WIND % outcome.knockback_wind
+		facts.append(Fact.new(QueueStyle.ink(QueueStyle.Role.EVENT_TINT), wind, wind,
+				UiText.wrap(wind_line(outcome.knockback_wind))))
 	if outcome.fall_levels > 0:
 		facts.append(_event(ActionQueueRow.BADGE_FELL % outcome.fall_levels,
 				PlanResolver.FELL_POPUP % outcome.fall_levels))
@@ -142,6 +148,12 @@ static func setter_of(reaction: ElementalReaction, outcome: ResolvedOutcome) -> 
 		if reaction.fires_for(one):
 			return e
 	return reaction.incoming_element
+
+
+# What the wind did to a shove, in words: `tiles` is ResolvedOutcome.knockback_wind, never 0.
+static func wind_line(tiles: int) -> String:
+	var count := "%d tile%s" % [absi(tiles), "" if absi(tiles) == 1 else "s"]
+	return ("The wind carries the shove %s further" if tiles > 0 else "The wind cuts the shove %s short") % count
 
 
 static func _event(badge: String, spoken: String) -> Fact:

@@ -176,6 +176,8 @@ func _board() -> BoardContext:
 			mission)
 	board.veins = vein_field   # #696
 	board.weather = _weather()
+	board.wind = BoardBuilder.wind_of(_built)   # #1660, the builder's store
+	board.wind_direction = BoardBuilder.wind_direction_of(_built)
 	board.atmosphere = BoardBuilder.atmosphere_of(_built)   # #1324: the air as played, the builder's one composition
 	return board
 
@@ -698,7 +700,19 @@ func begin() -> Dictionary:
 		return {"ok": false, "error": refusal}
 	staged = _phase.capture(scenario_data.resource_path if scenario_data != null else "")
 	_deploying = false
-	return {"ok": true, "summary": "mission begun with %d deployed" % _phase.deployed_count()}
+	return {"ok": true, "summary": "mission begun with %d deployed%s" % [_phase.deployed_count(),
+			battle_begins()]}
+
+# The battle's first boundary (#1653), MissionController._battle_begins' twin: whoever stands in open
+# water is Wet. Called at the fresh starts only (begin above, and the bridge's load once no phase
+# opened), never on a resume. Returns the clause the reply carries, "" when nobody was soaked.
+func battle_begins() -> String:
+	var handles: Array[String] = []
+	for unit in TurnBoundary.battle_begins(live_units(), _board()):
+		handles.append(handle_for(unit))
+	if handles.is_empty():
+		return ""
+	return "; standing in water, Wet: %s" % ", ".join(handles)
 
 # ---- the loadout screen's writes (#46 slice 2a) ----
 # Gear, jobs and mods, each through the door the screen calls: Loadout.move, Loadout.set_job, and the
@@ -1449,6 +1463,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("shoved to %s" % str(r.knockback_to))
 	if r.knockback_held > 0:
 		events.append("holds %d" % r.knockback_held)
+	if r.knockback_wind != 0:
+		events.append("wind %+d" % r.knockback_wind)   # #1660: tiles the wind added to the shove, or took
 	if r.fall_levels > 0:
 		events.append("falls %d" % r.fall_levels)
 	if r.drowned:
@@ -1853,10 +1869,7 @@ func _end_of_turn_tiles(faction: Team.Faction) -> Array[String]:
 # The two signal-driven halves of the boundary, connected in _init. round_completed fires before
 # turn_started, so a round's tile tick lands before the incoming faction's own ticks.
 func _on_round_completed() -> void:
-	if gas_field != null:
-		gas_field.tick(_board())   # game._on_round_completed's twin (#508), gas FIRST as it orders it (#1335)
-	if terrain_states != null:
-		terrain_states.tick_states()
+	TurnBoundary.end_round(_board(), gas_field, terrain_states)   # game._on_round_completed's twin (#1660)
 	mission.advance_round()   # the clock's ONE tick, LAST as the game orders it; the turn-start check sees it
 
 

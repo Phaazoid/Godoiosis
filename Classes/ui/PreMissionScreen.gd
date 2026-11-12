@@ -86,6 +86,9 @@ var _last_refusal := ""
 var _hover_note := ""
 var _weather_value: Label
 var _weather_row: HBoxContainer   # carries the draw's tooltip (#1509)
+var _weather_does: VBoxContainer   # what the weather does to units and the ground (#1660), rebuilt per weather
+var _wind_value: Label
+var _wind_does: VBoxContainer   # what the wind does to gas and a shove (#1660), rebuilt per wind
 # The air's reading (#1324): its rows' box, which carries the glossary tooltip, and per substance id
 # its [name, percent, steps] labels. Built once, since Atmosphere.SUBSTANCES is a const.
 var _air_box: VBoxContainer
@@ -242,8 +245,10 @@ func _build_roster() -> Control:
 
 
 # What the board is fought under (#1324): its weather, and the air's reading in Atmosphere's two
-# groups, so the player can see before the battle what a carving will draw from. Fixed rows, since
-# the substances are a const, so this region does not scroll and never grows.
+# groups, so the player can see before the battle what a carving will draw from. The air's rows are
+# fixed, since the substances are a const; under the weather sit what it does to units and the ground
+# (#1660), a few lines bounded by the reactions its element fires, so this region does not scroll.
+# The wind follows (#1660), with at most two lines: its drift and its lean on a shove.
 func _build_conditions() -> Control:
 	var parts := _region("CONDITIONS", STASH_WIDTH)
 	var column: VBoxContainer = parts[1]
@@ -252,6 +257,18 @@ func _build_conditions() -> Control:
 	_weather_value = weather[1]
 	_weather_row = weather[0]
 	column.add_child(weather[0])
+
+	_weather_does = VBoxContainer.new()
+	_weather_does.add_theme_constant_override("separation", 0)
+	column.add_child(_weather_does)
+
+	var wind := _condition_row("Wind")
+	_wind_value = wind[1]
+	column.add_child(wind[0])
+
+	_wind_does = VBoxContainer.new()
+	_wind_does.add_theme_constant_override("separation", 0)
+	column.add_child(_wind_does)
 
 	_air_box = VBoxContainer.new()
 	_air_box.add_theme_constant_override("separation", 2)
@@ -536,6 +553,9 @@ func _refresh_conditions() -> void:
 	var odds := sm.current_weather_odds
 	_weather_row.tooltip_text = UiText.wrap("Drawn when the mission started, from %s." % WeatherDraw.odds_text(odds)) \
 			if WeatherDraw.draws(odds) else ""
+	_fill_lines(_weather_does, what_the_weather_does(weather))
+	_wind_value.text = wind_text(sm.current_wind, sm.current_wind_direction)
+	_fill_lines(_wind_does, what_the_wind_does(sm.current_wind, sm.current_wind_direction))
 	for id: String in _air_rows:
 		var labels: Array = _air_rows[id]
 		(labels[1] as Label).text = Atmosphere.percent_text(id, reading)
@@ -546,6 +566,78 @@ func _refresh_conditions() -> void:
 	if not lines.is_empty():
 		tip = "\n".join(lines) + "\n\n" + tip
 	_air_box.tooltip_text = UiText.wrap(tip)
+
+
+# What a weather does, for the conditions box (#1660): the soak it gives a unit at the end of its turn,
+# then what it strikes the ground with and from when, one line per reaction that strike fires.
+static func what_the_weather_does(kind: Weather.Kind) -> Array[String]:
+	var lines: Array[String] = []
+	var rules := WeatherRules.for_kind(kind)
+	if rules == null:
+		return lines
+	if rules.state != Elemental.State.NONE:
+		lines.append("Units end their turn %s." % Elemental.state_display_name(rules.state))
+	var strikes := Glossary.strike_lines(WeatherStrike.reactions(rules.ground))
+	if not strikes.is_empty():
+		var when := "Each round's end" if rules.ground_from <= 1 else "From the end of round %d" % rules.ground_from
+		lines.append("%s, %s hits the ground:" % [when, Elemental.display_name(rules.ground).to_lower()])
+		for line in strikes:
+			lines.append("   " + line)
+	return lines
+
+
+# A rules line per Label, small and wrapping, in place of whatever the box held.
+func _fill_lines(box: VBoxContainer, lines: Array[String]) -> void:
+	for child in box.get_children():
+		box.remove_child(child)
+		child.free()
+	for text in lines:
+		var label := Label.new()
+		label.text = text
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size", 10)
+		label.add_theme_color_override("font_color", QueueStyle.ink(QueueStyle.Role.FRAME_TEXT))
+		box.add_child(label)
+
+
+# The Wind row's value: "Calm", or the strength and which way it blows ("Gale, toward east").
+static func wind_text(kind: Wind.Kind, direction: Wind.Direction) -> String:
+	if kind == Wind.Kind.CALM:
+		return Wind.display_name(kind)
+	return "%s, toward %s" % [Wind.display_name(kind), Wind.direction_name(direction).to_lower()]
+
+
+const CARDINALS: Dictionary[String, Vector2i] = {
+	"north": Vector2i.UP, "east": Vector2i.RIGHT, "south": Vector2i.DOWN, "west": Vector2i.LEFT,
+}
+
+
+# What a wind does, for the conditions box (#1660): how far gas drifts each round, then which shoves it
+# lengthens and which it shortens, asked of WindRules.lean per cardinal so the words cannot disagree
+# with the resolver. A wind with no rules, or rules of nothing, says nothing.
+static func what_the_wind_does(kind: Wind.Kind, direction: Wind.Direction) -> Array[String]:
+	var lines: Array[String] = []
+	var rules := WindRules.for_kind(kind)
+	if rules == null:
+		return lines
+	if rules.drift > 0:
+		lines.append("Gas drifts %s %s each round." % [_tiles(rules.drift), Wind.direction_name(direction).to_lower()])
+	var with: Array[String] = []
+	var against: Array[String] = []
+	for side: String in CARDINALS:
+		var tiles := WindRules.lean(kind, direction, CARDINALS[side])
+		if tiles > 0:
+			with.append(side)
+		elif tiles < 0:
+			against.append(side)
+	if not with.is_empty():
+		lines.append("A shove %s goes %s further, a shove %s %d shorter." % [" or ".join(with),
+				_tiles(rules.shove), " or ".join(against), rules.shove])
+	return lines
+
+
+static func _tiles(count: int) -> String:
+	return "%d tile%s" % [count, "" if count == 1 else "s"]
 
 
 func _refresh_stash() -> void:

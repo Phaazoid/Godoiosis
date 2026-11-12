@@ -4,7 +4,8 @@ class_name Wind
 # The wind's vocabulary (#1286): how hard it blows and which way. A board names one strength and one
 # direction (ScenarioData.wind, ScenarioData.wind_direction) beside its weather and independent of it,
 # so any weather can blow at any strength -- a second axis, not a stack. How each strength LOOKS, and
-# how fast it blows, is its WindLook file. Wind is a look only: no rule reads it.
+# how fast it blows, is its WindLook file; what it DOES (#1660: gas drifts, a shove goes further or
+# shorter) is its WindRules file, read off the board's BoardContext.wind.
 #
 # Both enums' ints are what a save holds, so they are APPEND-ONLY: rename a member freely, never
 # reorder or delete one. CALM is the default and blows nothing; EAST is the default direction.
@@ -31,3 +32,9 @@ static func direction_name(direction: Direction) -> String:
 # The unit vector the wind blows along, on the board's x / z.
 static func heading(direction: Direction) -> Vector2:
 	return Vector2.RIGHT.rotated(float(direction) * PI / 4.0)
+
+
+# One grid step downwind (#1660), the heading rounded: EAST (1, 0), NORTH_EAST (1, -1).
+static func step(direction: Direction) -> Vector2i:
+	var h := heading(direction)
+	return Vector2i(roundi(h.x), roundi(h.y))

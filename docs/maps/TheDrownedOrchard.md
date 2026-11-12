@@ -92,6 +92,11 @@ hit two enemies, an ally and himself.
 the Clear. I had built the board expecting the Rain to close the fire key. It does not; it opens
 the shock key beside it.
 
+*(Since [#1660](https://github.com/Phaazoid/Godoiosis/issues/1660), 2026-11-11, it does: the rain
+strikes every tile's ground with water at each round's end, so a fire lit in the Rain is steam by
+the next round, and the Snow freezes the shallows from the end of round 3. The runs below were
+played before that and have not been played again.)*
+
 ## How it was built and checked
 
 - Written by `ScenarioManager.save_scenario` (authored) from a scratch script, with the board's

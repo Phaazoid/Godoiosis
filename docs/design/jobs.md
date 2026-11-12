@@ -62,7 +62,7 @@ Still open, deliberately: whether the player-side "act after counters" is an abi
 
 ## Enemies & legibility
 
-**Same system, unaffected by the descope.** An enemy's held jobs are its kit; its AI archetype is its behavior — two orthogonal legibility axes. Enemies use the identical `JobData`/`UnitInstance` path, and job assignment rides `ScenarioUnitEntry` (now a single `jobs: Array[String]`) so it survives scenario save/load with zero special-casing. **PER-gated reveal is still a placeholder** (`UnitInfoPanelControl._jobs_text` always reveals the job line — [#69](https://github.com/Phaazoid/Godoiosis/issues/69), unaffected by this session).
+**Same system, unaffected by the descope.** An enemy's held jobs are its kit; its AI archetype is its behavior — two orthogonal legibility axes. Enemies use the identical `JobData`/`UnitInstance` path, and job assignment rides `ScenarioUnitEntry` (now a single `jobs: Array[String]`) so it survives scenario save/load with zero special-casing. **PER-gated reveal is still a placeholder** (`UnitInfoPanelControl.jobs_text` always reveals the job line — [#69](https://github.com/Phaazoid/Godoiosis/issues/69), unaffected by this session).
 
 ## Data model
 

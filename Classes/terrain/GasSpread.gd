@@ -21,6 +21,15 @@ class_name GasSpread
 # smoke sits thick for a round before it spreads. Asked of the tile states BEFORE their own tick lights
 # anything, which is why both stacks run the gas round first (game._on_round_completed).
 #
+# WIND (#1660): after spill and fade, every gas the step runs drifts the board's wind's tiles downwind
+# (WindRules.drift), along can_cross -- a wall, a sheer ledge or a hole stops it -- and leaves past the
+# board's edge (off_board, #1638's rule). A diagonal wind moves it a tile diagonally per tile, as two
+# cardinal legs through either side tile: height_step_ok reads no edge on a true diagonal, so it is never
+# asked whole. Every cloud walks from one snapshot, and each tile then keeps, per gas, the thickest of all
+# that ends there, the younger on a tie, so the visiting order cannot change the answer. A held gas
+# neither drifts nor takes a cloud of its kind, which stops on the tile before it. Fresh smoke comes
+# after, so it sits a round before it travels; the sky's steam is in the field already, and drifts at once.
+#
 # THE TIME PAIR (#1311, Pace): the round is two steps. The first runs every gas a Still does not hold; a
 # held gas keeps its level and its age, spills nothing, and takes no raise or fresh smoke while it lies
 # there (one that is absent may still drift in). The second, only where something is quickened, runs the
@@ -86,8 +95,75 @@ static func _step(cells: Dictionary[Vector2i, int], board: BoardContext, lit: Ar
 				packed = Gas.with_level(packed, kind, level)
 		if packed != 0:
 			out[cell] = packed
+	out = _drift(out, board, quick_only)
 	_add_ignitions(out, board, lit)
 	return out
+
+
+# The wind's step (#1660): every gas this step runs, moved downwind by the board's drift. `cells` is
+# read, never written; a board with no drift hands it back as it is.
+static func _drift(cells: Dictionary[Vector2i, int], board: BoardContext, quick_only: bool) -> Dictionary[Vector2i, int]:
+	var tiles := WindRules.drift_of(board)
+	if tiles <= 0 or cells.is_empty():
+		return cells
+	var step := Wind.step(board.wind_direction)
+	var out: Dictionary[Vector2i, int] = {}
+	var landed: Array[Array] = []   # [cell, kind, level, age]
+	for cell: Vector2i in cells:
+		var packed: int = cells[cell]
+		var stays := packed
+		var marks := board.paces_at(cell)
+		for kind: Gas.Kind in Gas.kinds_in(packed):
+			if not _runs(Pace.of_gas(marks, kind), quick_only) or GasRules.for_kind(kind) == null:
+				continue
+			stays = Gas.with_level(stays, kind, 0)
+			var to: Variant = _blown_to(cell, kind, step, tiles, cells, board)
+			if to != null:
+				landed.append([to, kind, Gas.level_in(packed, kind), Gas.age_in(packed, kind)])
+		if stays != 0:
+			out[cell] = stays
+	for land: Array in landed:
+		var cell: Vector2i = land[0]
+		var kind: Gas.Kind = land[1]
+		var level: int = land[2]
+		var age: int = land[3]
+		var packed: int = out.get(cell, 0)
+		var here := Gas.level_in(packed, kind)
+		if level > here or (level == here and age < Gas.age_in(packed, kind)):
+			out[cell] = Gas.with_level(packed, kind, level, age)
+	return out
+
+
+# Where a cloud of `kind` on `cell` comes to rest after `tiles` steps downwind, or null when it blows
+# off the board. `cells` is the field it drifts across, whose held gas it stops short of.
+static func _blown_to(cell: Vector2i, kind: Gas.Kind, step: Vector2i, tiles: int,
+		cells: Dictionary[Vector2i, int], board: BoardContext) -> Variant:
+	var pos := cell
+	for _i in tiles:
+		var next := pos + step
+		if off_board(next, board):
+			return null
+		if _held_here(cells.get(next, 0), kind, board.paces_at(next)) or not _drifts(pos, next, step, board):
+			break
+		pos = next
+	return pos
+
+
+# May a cloud drift one step: across the edge for a cardinal wind, or through either side tile, each leg
+# crossed, for a diagonal one.
+static func _drifts(from: Vector2i, to: Vector2i, step: Vector2i, board: BoardContext) -> bool:
+	if step.x == 0 or step.y == 0:
+		return can_cross(from, to, board)
+	for side: Vector2i in [from + Vector2i(step.x, 0), from + Vector2i(0, step.y)]:
+		if can_cross(from, side, board) and can_cross(side, to, board):
+			return true
+	return false
+
+
+# Is this cell past the board's edge (#1638): no tile, and not a hole inside the board. Open sky, which
+# carries gas away. The one answer for blown gas (PlanResolver._gas_landing) and the wind's drift.
+static func off_board(cell: Vector2i, board: BoardContext) -> bool:
+	return not board.has_ground(cell) and not board.is_void_at(cell)
 
 
 # Does a step run a gas at this pace: never a held one, and only a quickened one on the second step.
