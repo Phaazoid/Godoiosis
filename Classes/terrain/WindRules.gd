@@ -45,8 +45,13 @@ static func shove_of(board: BoardContext) -> int:
 # Tiles the board's wind adds to a shove going `dir` (a cardinal step): +shove with it, -shove against
 # it, 0 across it. A diagonal wind leans on both of its sides.
 static func shove_along(board: BoardContext, dir: Vector2i) -> int:
-	var tiles := shove_of(board)
-	if tiles == 0:
+	return lean(board.wind, board.wind_direction, dir)
+
+
+# The same lean, of a wind named outright rather than a board's: what the conditions box words.
+static func lean(kind: Wind.Kind, direction: Wind.Direction, dir: Vector2i) -> int:
+	var rules := for_kind(kind)
+	if rules == null or rules.shove == 0:
 		return 0
-	var step := Wind.step(board.wind_direction)
-	return tiles * signi(dir.x * step.x + dir.y * step.y)
+	var step := Wind.step(direction)
+	return rules.shove * signi(dir.x * step.x + dir.y * step.y)
