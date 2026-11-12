@@ -320,6 +320,7 @@ static func outcome_fields() -> Dictionary:
 			"knockback_path": {"play": never(ANIMATION), "ai": never(ANIMATION)},
 			"knockback_landing_index": {"play": never(ANIMATION), "ai": never(ANIMATION)},
 			"knockback_held": {"play": covered(SESSION, ".knockback_held"), "ai": never(NOT_SCORED)},
+			"knockback_wind": {"play": covered(SESSION, ".knockback_wind"), "ai": never(NOT_SCORED)},
 			"burned_vial": {"play": covered(SESSION, ".burned_vial"), "ai": never(NOT_SCORED)},
 			"air_steps": {"play": covered(SESSION, ".air_steps"), "ai": never(IN_DAMAGE)},
 			"charge_spent": {"play": covered(SESSION, ".charge_spent"), "ai": never(NOT_SCORED)},
@@ -460,21 +461,27 @@ static func gases() -> Dictionary:
 	}
 
 
-# The winds a board may name (#1286). CALM is left out the way CLEAR is: it blows nothing. A look only --
-# nothing a rule reads, so neither the Play API nor the AI has anything to answer. The day a wind gains
-# a rule (#277's Tempest row), these two lines are what has to change.
+# The winds a board may name (#1286). CALM is left out the way CLEAR is: it blows nothing. A rule since
+# #1660 (WindRules): gas drifts downwind and a shove goes further with it, shorter against it. Both live
+# in shared answers -- the round's gas (GasField.next_round) and the resolver's shove -- so the Play API
+# plays them and the AI reads them with no wind of its own.
 static func winds() -> Dictionary:
 	var members: Array = []
 	for kind: int in Wind.Kind.values():
 		if kind != Wind.Kind.CALM:
 			members.append(kind)
+	var K := Wind.Kind
+	var reads := covered(TACTICS, "_round_gas")   # the drift through next round's gas; a shove through the resolve
 	return {
 		"name": "winds (Wind.Kind)",
 		"members": members,
-		"label": _enum_label(Wind.Kind.keys()),
-		"play_all": never("a look only: nothing headless draws the wind"),
-		"ai_all": never("a look only: no rule reads the wind"),
-		"rows": {},
+		"label": _enum_label(K.keys()),
+		"play_all": covered(SESSION, "BoardBuilder.wind_of"),   # the built board's store, beside the weather's
+		"rows": {
+			K.BREEZE: {"ai": reads},
+			K.STRONG_WIND: {"ai": reads},
+			K.GALE: {"ai": reads},
+		},
 	}
 
 

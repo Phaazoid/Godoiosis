@@ -805,7 +805,8 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 	# names the rung. predict is pure; the second call is the one that counts.
 	var landing: _Landing = null
 	if LethalityRules.predict(body, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
-		outcome.knockback_held = _shove_against(action, body, target_hypo, hypo).y
+		outcome.knockback_held = _shove_against(action, body, target_hypo, board, hypo).y
+		outcome.knockback_wind = _shove_wind(action, target_hypo.position, board, hypo)
 		# Where the shove found its target: the launch cell when it lands, and the cell a fully held
 		# shove leaves it on (#1186 marks it there).
 		outcome.knockback_from = target_hypo.position
@@ -1189,19 +1190,39 @@ static func _source_knockback(action: AttackAction, hypo: Dictionary) -> int:
 		return action.fired_attack.knockback
 	return body.attack_knockback(action.fired_attack)
 
-# The shove this hit delivers to THIS target (#120), as [tiles delivered, tiles its weight held]:
-# the attack's knockback, mods included, less the target's weight band, floored at 0. The ONE place
-# weight meets a shove -- the landing walks the first number and the outcome reports the second. Read
-# off the TARGET's body as the pass has left it (#1480), so a Guard's substitution has the blocker's
-# weight answer, and a strip earlier in the pass sheds what it took.
-static func _shove_against(action: AttackAction, body: UnitState, target_hypo: _Hypo, hypo: Dictionary) -> Vector2i:
+# How far this hit shoves whatever is on `cell`, before any weight (#1660): the attack's knockback,
+# mods included, and the wind's say along the shove (WindRules.shove_along: more with it, less against
+# it), floored at 0. The ONE length a body and the gas it stands in both fly. 0 for a hit that shoves
+# nobody, or nothing on the origin's own cell, which the wind leaves as it is.
+static func _shove_length(action: AttackAction, cell: Vector2i, board: BoardContext, hypo: Dictionary) -> int:
 	var authored := _source_knockback(action, hypo)
-	if authored <= 0 or body == null:
+	var dir := _shove_direction(action, cell)
+	if authored <= 0 or dir == Vector2i.ZERO:
+		return 0
+	return maxi(0, authored + WindRules.shove_along(board, dir)) if board != null else authored
+
+# The tiles the wind added to this hit's shove on `cell` (negative: took), 0 where nothing is shoved.
+static func _shove_wind(action: AttackAction, cell: Vector2i, board: BoardContext, hypo: Dictionary) -> int:
+	var authored := _source_knockback(action, hypo)
+	if authored <= 0 or _shove_direction(action, cell) == Vector2i.ZERO:
+		return 0
+	return _shove_length(action, cell, board, hypo) - authored
+
+# The shove this hit delivers to THIS target (#120), as [tiles delivered, tiles its weight held]:
+# its _shove_length, wind included, less the target's weight band, floored at 0. The ONE place weight
+# meets a shove -- the landing walks the first number and the outcome reports the second. Read off the
+# TARGET's body as the pass has left it (#1480), so a Guard's substitution has the blocker's weight
+# answer, and a strip earlier in the pass sheds what it took.
+static func _shove_against(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext,
+		hypo: Dictionary) -> Vector2i:
+	if body == null:
 		return Vector2i.ZERO
-	if _shove_direction(action, target_hypo.position) == Vector2i.ZERO:
-		return Vector2i.ZERO   # a payload stuck to its victim shoves nobody, so nothing is held either
-	var held := mini(authored, Stats.weight_band(body.get_weight()))
-	return Vector2i(authored - held, held)
+	# 0 also for a payload stuck to its victim: it shoves nobody, so nothing is held either.
+	var length := _shove_length(action, target_hypo.position, board, hypo)
+	if length <= 0:
+		return Vector2i.ZERO
+	var held := mini(length, Stats.weight_band(body.get_weight()))
+	return Vector2i(length - held, held)
 
 # Which way this hit shoves whatever is on `cell`: away from where it was fired from, GridUtils'
 # tie-break settling a diagonal. ZERO on the origin's own cell. A body and the gas it stands in (#1332)
@@ -1226,7 +1247,7 @@ class _Landing:
 # _resolve_one applies the result after the rung is named.
 static func _knockback_landing(action: AttackAction, body: UnitState, target_hypo: _Hypo, board: BoardContext,
 		hypo: Dictionary) -> _Landing:
-	var distance := _shove_against(action, body, target_hypo, hypo).x
+	var distance := _shove_against(action, body, target_hypo, board, hypo).x
 	if distance <= 0 or board == null:
 		return null
 	var dir := _shove_direction(action, target_hypo.position)
@@ -1735,8 +1756,9 @@ static func _arrival(to: Vector2i, action: AttackAction, at: Dictionary[Vector2i
 		at[to] = effect
 	return effect
 
-# Where the gas a hit clears from `cell` comes to rest (#1332): as far as the hit SHOVES, along the
-# shove's own direction, so a body and the gas it stands in fly together. Gas weighs nothing, so no
+# Where the gas a hit clears from `cell` comes to rest (#1332): as far as the hit SHOVES (_shove_length,
+# the wind's say included, #1660), along the shove's own direction, so a body and the gas it stands in
+# fly together. Gas weighs nothing, so no
 # weight band holds it. It walks tile by tile through GasSpread.can_cross -- the round's spread rule,
 # so a wall, a tree, a sheer ledge or a hole stops it -- and rests on the last tile it reached. Past the
 # board's edge is open sky (#1638): a step off the board carries it away. `cell` itself when it comes to
@@ -1747,9 +1769,9 @@ static func _gas_landing(action: AttackAction, cell: Vector2i, board: BoardConte
 	if dir == Vector2i.ZERO:
 		return cell
 	var pos := cell
-	for _i in range(_source_knockback(action, hypo)):
+	for _i in range(_shove_length(action, cell, board, hypo)):
 		var next := pos + dir
-		if not board.has_ground(next) and not board.is_void_at(next):
+		if GasSpread.off_board(next, board):
 			return cell   # no tile and not a hole: past the edge (is_void_at's rect)
 		if not GasSpread.can_cross(pos, next, board):
 			break

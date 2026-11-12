@@ -836,6 +836,46 @@ func test_every_unit_a_splash_or_payload_hits_stands_inside_the_field() -> void:
 				"fixture is vacuous: a target was never hit, so its shape went unexercised").is_true()
 
 
+# The wind's twin of the wire above (#1660): a shove going with the wind flies further, so a payload
+# dropped where it leaves its victim goes off further too, and the field must still hold whoever it
+# hits. A one-tile shove the wind makes two carries the victim to (4, 1); the bomb there reaches (5, 1),
+# a tile past anything the authored shove could. The wind's rules are injected, and restored before
+# anything is asserted.
+func test_a_payload_a_wind_carries_further_still_lands_inside_the_field() -> void:
+	var cache := WindRules._rules_by_kind.duplicate()
+	var rules := WindRules.new()
+	rules.shove = 1
+	WindRules._rules_by_kind[Wind.Kind.STRONG_WIND] = rules
+	var board := _water_board()
+	var bomber: Unit = _spawn(board, ENEMY, Vector2i(1, 1))
+	var carrier: WeaponAttackData = (bomber.equipped_weapon as WeaponInstance).template.main_attack
+	P.point(carrier, 1)
+	carrier.knockback = 1
+	var bomb := WeaponAttackData.new()
+	bomb.power = 30
+	P.stamped(bomb, 1, PLUS)
+	carrier.payload = bomb
+	_bind(bomber, AIArchetype.Type.HOLD)
+	var shoved: Unit = _spawn(board, PLAYER, Vector2i(2, 1))
+	var beyond: Unit = _spawn(board, PLAYER, Vector2i(5, 1))
+	var ctx := _context(board)
+	ctx.wind = Wind.Kind.STRONG_WIND
+	ctx.wind_direction = Wind.Direction.EAST
+	var field := ThreatField.build(ctx, PLAYER)
+	bomber.squad._queue_action(AttackAction.declare(bomber, bomber.movement.cell, shoved.movement.cell))
+	var plan: ResolvedPlan = board.squad_manager.resolve_plan(bomber.squad, ctx)
+	WindRules._rules_by_kind = cache
+
+	var hit := {}
+	for row in plan.attacks:
+		if row.target != null and is_instance_valid(row.target):
+			hit[row.target] = true
+	assert_bool(hit.has(beyond)).override_failure_message(
+			"fixture is vacuous: the bomb never reached %s, so the wind's tile went unexercised" % beyond.movement.cell).is_true()
+	assert_bool(field.cells.has(beyond.movement.cell)).override_failure_message(
+			"%s is hit at %s, which the field called safe" % [beyond.get_unit_name(), beyond.movement.cell]).is_true()
+
+
 # --- #1344: what one build costs -----------------------------------------------------------------
 #
 # Counts, never milliseconds: `traces` is how many sight traces the build ran. The field is a union, so

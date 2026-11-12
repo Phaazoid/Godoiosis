@@ -20,6 +20,10 @@ var veins: VeinField
 # The weather over the board (#1260). Set after construction by the builders that have one (game,
 # the Play API), so every other builder -- the test fixtures above all -- reads CLEAR.
 var weather: Weather.Kind = Weather.Kind.CLEAR
+# The wind over the board (#1660), set beside the weather by the same builders: how hard it blows
+# (WindRules) and which way. Every other builder reads CALM.
+var wind: Wind.Kind = Wind.Kind.CALM
+var wind_direction: Wind.Direction = Wind.Direction.EAST
 # The air's reading (#1324, Atmosphere): substance id -> percent, the EFFECTIVE one -- the board's
 # authored air moved by its weather (Atmosphere.effective), composed by the builder that sets it. Set
 # beside the weather, so every other builder reads a Normal board.
@@ -219,6 +223,8 @@ func planned(planned_tiles: PlannedTiles) -> BoardContext:
 	board.units = units.duplicate()
 	board.veins = veins
 	board.weather = weather
+	board.wind = wind
+	board.wind_direction = wind_direction
 	board.atmosphere = atmosphere
 	board.tiles = planned_tiles
 	return board
@@ -229,6 +235,8 @@ func with_units(unit_list: Array[Unit]) -> BoardContext:
 	var board := BoardContext.new(grid, unit_list, squad_manager, terrain_states, zones, heights, gas, mission)
 	board.veins = veins
 	board.weather = weather
+	board.wind = wind
+	board.wind_direction = wind_direction
 	board.atmosphere = atmosphere
 	board.tiles = tiles
 	return board

@@ -34,6 +34,7 @@ const BADGE_FELL := "Fell %d"
 const BADGE_DROWNED := "Drown"
 const BADGE_VOID := "Void"
 const BADGE_HELD := "Held %d"       # #120: tiles of a shove the target's weight absorbed
+const BADGE_WIND := "Wind %+d"      # #1660: tiles the wind added to a shove, or took
 const BADGE_INSULATED := "Shrug"
 const BADGE_VIAL := "Vial"
 const BADGE_TANK := "Tank"

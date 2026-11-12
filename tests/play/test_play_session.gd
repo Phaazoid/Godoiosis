@@ -354,6 +354,85 @@ func test_the_headless_board_source_sees_the_loaded_weather() -> void:
 	var board: BoardContext = dst.squad_manager.board_source.call()
 	assert_int(board.weather).is_equal(made[1])
 
+# The wind (#1660), loaded the way the weather is: A at (1, 1) facing a foe at (2, 1), so a shove A
+# throws goes east.
+func _windy_session(kind: Wind.Kind, direction: Wind.Direction) -> Array:
+	var src: Dictionary = BoardBuilder.build(self, "WindSrc")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 8, 4))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	scenario.wind = kind
+	scenario.wind_direction = direction
+	for spec: Array in [["Out", PLAYER, Vector2i(1, 1)], ["Foe", ENEMY, Vector2i(2, 1)]]:
+		var entry := ScenarioUnitEntry.new()
+		entry.unit_data = _data(spec[0], spec[1])
+		entry.cell = spec[2]
+		scenario.unit_entries.append(entry)
+	var dst: Dictionary = BoardBuilder.build(self, "WindDst")
+	auto_free(dst.root)
+	await BoardBuilder.apply_scenario(dst, scenario)
+	return [PlaySession.new(dst), dst]
+
+# A wind's rules for this case alone, put back by the caller with the cache it returns.
+func _wind_rules(kind: Wind.Kind, drift: int, shove: int) -> Dictionary:
+	var cache := WindRules._rules_by_kind.duplicate()
+	var rules := WindRules.new()
+	rules.drift = drift
+	rules.shove = shove
+	WindRules._rules_by_kind[kind] = rules
+	return cache
+
+# Both headless boards carry the loaded wind: the session's own, which the preview and the round read,
+# and the builder's board_source, which the AI reads. The wire #103 says goes missing.
+func test_both_headless_boards_see_the_loaded_wind() -> void:
+	var made: Array = await _windy_session(Wind.Kind.GALE, Wind.Direction.NORTH_EAST)
+	var sess = made[0]
+	var dst: Dictionary = made[1]
+	var source: BoardContext = dst.squad_manager.board_source.call()
+	for board: BoardContext in [sess._board(), source]:
+		assert_int(board.wind).is_equal(Wind.Kind.GALE)
+		assert_int(board.wind_direction).is_equal(Wind.Direction.NORTH_EAST)
+
+# ...and the headless round drifts the gas as its forecast says, which differs from a calm board's: so
+# neither the forecast nor the round dropped the wind.
+func test_the_headless_round_drifts_the_gas_as_forecast() -> void:
+	var cache := _wind_rules(Wind.Kind.STRONG_WIND, 1, 0)
+	var made: Array = await _windy_session(Wind.Kind.STRONG_WIND, Wind.Direction.EAST)
+	var sess = made[0]
+	var dst: Dictionary = made[1]
+	var field: GasField = dst.gas_field
+	field.set_level(Vector2i(4, 2), Gas.Kind.STEAM, Gas.Level.THICK)
+	var board: BoardContext = sess._board()
+	var expected := field.next_round(board)
+	board.wind = Wind.Kind.CALM
+	var calm := field.next_round(board)
+	sess.end_turn()   # PLAYER -> ENEMY
+	sess.end_turn()   # ENEMY -> PLAYER: the round wraps
+	WindRules._rules_by_kind = cache
+	assert_dict(expected).override_failure_message("fixture: the wind moved nothing in the forecast").is_not_equal(calm)
+	assert_int(field.cells().size()).override_failure_message(
+			"the headless round's gas is not its forecast").is_equal(expected.size())
+	for cell: Vector2i in expected:
+		assert_int(field.packed_at(cell)).is_equal(expected[cell])
+
+# ...and a shove the wind carries says so on its preview row, beside "holds", and execution flies it.
+func test_a_headless_shove_the_wind_carries_says_so() -> void:
+	var cache := _wind_rules(Wind.Kind.STRONG_WIND, 0, 1)
+	var made: Array = await _windy_session(Wind.Kind.STRONG_WIND, Wind.Direction.EAST)
+	var sess = made[0]
+	var hero: Unit = sess.unit_by_handle("A")
+	BoardBuilder.arm(hero, 6)
+	(hero.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	assert_bool(sess.queue_attack("A", Vector2i(2, 1)).ok).is_true()
+	var rows: Array = sess.preview()["plan"]["rows"]
+	var events: Array = sess.execute().get("events", [])
+	WindRules._rules_by_kind = cache
+	assert_bool(rows.any(func(row: Variant) -> bool: return (row as Dictionary).get("events", []).has("wind +1"))) \
+		.override_failure_message("no preview row says the wind carried the shove: %s" % str(rows)).is_true()
+	assert_bool(events.any(func(line: Variant) -> bool: return str(line).contains("shoved to (4, 1)"))) \
+		.override_failure_message("the shove did not fly the wind's extra tile: %s" % str(events)).is_true()
+
 # The air (#1324) rides both headless boards the way the weather does: the session's own, which the
 # preview resolves through, and the builder's board_source, which the AI reads.
 func test_both_headless_boards_see_the_loaded_air() -> void:

@@ -21,9 +21,11 @@ const GRASS_ATLAS := Vector2i(5, 0)
 
 var _main: Node
 var game: Node2D
+var _wind_cache: Dictionary
 
 
 func before_test() -> void:
+	_wind_cache = WindRules._rules_by_kind.duplicate()
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
 	_main.name = "Main"
 	get_tree().root.add_child(_main)
@@ -38,6 +40,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	WindRules._rules_by_kind = _wind_cache
 	get_tree().root.remove_child(_main)
 	_main.free()
 	await await_idle_frame()   # #93/#114: let the freed subtree settle before the orphan sample
@@ -482,6 +485,60 @@ func test_a_partly_held_shove_draws_its_trail_and_no_mark() -> void:
 	assert_bool(game.overlay_manager.knockback_preview_sprites.is_empty()).override_failure_message(
 		"the shortened shove drew nothing, so the case measures nothing").is_false()
 	assert_array(_held_mark_cells()).is_empty()
+
+
+# #1660: a shove the wind lengthened says by how much, its sentence on hover.
+func test_a_shove_the_wind_carries_says_so_on_the_row() -> void:
+	await _wind_shove_fixture(Vector2i(1, 1))
+	var entry := _entry(_attack_row(), ActionQueueRow.BADGE_WIND % 1)
+	assert_bool(entry.is_empty()).override_failure_message(
+		"the wind carried the shove and the row said nothing about it -- got %s"
+		% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	if not entry.is_empty():
+		assert_str(String(entry["tip"])).is_equal(UiText.wrap(OutcomeFacts.wind_line(1)))
+
+
+# Against the wind the one-tile shove is cut to nothing, so it draws no trail and the chip is the
+# row's whole account of why (Law #2).
+func test_a_shove_the_wind_cancels_still_says_why() -> void:
+	await _wind_shove_fixture(Vector2i(3, 1))
+	assert_bool(game.overlay_manager.knockback_preview_sprites.is_empty()).override_failure_message(
+		"a shove the wind cut to nothing still drew a trail").is_true()
+	var entry := _entry(_attack_row(), ActionQueueRow.BADGE_WIND % -1)
+	assert_bool(entry.is_empty()).override_failure_message(
+		"the wind cancelled the shove and the row said nothing about it -- got %s"
+		% [_texts(_consequence_entries(_attack_row()))]).is_false()
+	if not entry.is_empty():
+		assert_str(String(entry["tip"])).is_equal(UiText.wrap(OutcomeFacts.wind_line(-1)))
+
+
+# Across the wind a shove keeps its length, and the row has nothing to say about the wind.
+func test_a_shove_across_the_wind_wears_no_wind_chip() -> void:
+	await _wind_shove_fixture(Vector2i(2, 0))
+	assert_bool(game.overlay_manager.knockback_preview_sprites.is_empty()).override_failure_message(
+		"the cross-wind shove drew nothing, so the case measures nothing").is_false()
+	for e in _consequence_entries(_attack_row()):
+		assert_str(String(e["text"])).override_failure_message(
+			"a shove across the wind still wears a wind chip").does_not_start_with("Wind")
+
+
+# A one-tile shove into an enemy at (2,1) from `from`, under a Gale toward east whose rules lean a shove
+# by 1 (written here, never read off its file), queued and refreshed through the real door.
+func _wind_shove_fixture(from: Vector2i) -> void:
+	var rules := WindRules.new()
+	rules.shove = 1
+	WindRules._rules_by_kind[Wind.Kind.GALE] = rules
+	game.scenario_manager.current_wind = Wind.Kind.GALE
+	game.scenario_manager.current_wind_direction = Wind.Direction.EAST
+	var victim := _spawn(Team.Faction.ENEMY, Vector2i(2, 1))
+	var attacker := _spawn(Team.Faction.PLAYER, from)
+	var weapon := H.make_weapon(4)
+	(weapon.template.main_attack as WeaponAttackData).knockback = 1
+	attacker.equipped_weapon = weapon
+	game.squad_manager.active_squad = attacker.squad
+	game.squad_manager.queue_action(attacker.squad, H.stamped_attack(attacker, victim))
+	game.refresh_action_queue(attacker.squad)
+	await await_idle_frame()
 
 
 # A two-tile shove from (1,1) into an enemy at (2,1) weighed to exactly `weight`, queued and refreshed

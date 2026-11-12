@@ -230,7 +230,7 @@ static func _threat_of(unit: Unit, board: BoardContext, origins: Array[Vector2i]
 		memo: TraceMemo) -> Dictionary:
 	var by_attack := _reach_by_attack(unit, board, origins, memo)
 	_add_watch_reach(unit, board, origins, by_attack)
-	_add_splash(by_attack)
+	_add_splash(by_attack, WindRules.shove_of(board))
 	var out := {}
 	for attack: AttackData in by_attack:
 		var cells: Dictionary = by_attack[attack]
@@ -350,8 +350,9 @@ static func _add_watch_reach(unit: Unit, board: BoardContext, origins: Array[Vec
 # wherever the hit leaves its victim. The AI aims BESIDE a target since #1220, and this field must
 # stay a superset of every aim it can take (AIController._squad_can_reach_anyone reads a false as a
 # proof), so each ring is dilated as an upper bound: by the shape as drawn (a placed shape never
-# turns), then for payloads by the parent's shove and each payload's shape under every facing.
-static func _add_splash(by_attack: Dictionary) -> void:
+# turns), then for payloads by the parent's shove and each payload's shape under every facing. A shove
+# going with the wind flies `wind_tiles` further (#1660, WindRules.shove_of), so it dilates by that too.
+static func _add_splash(by_attack: Dictionary, wind_tiles: int) -> void:
 	for attack: AttackData in by_attack.keys():
 		if attack == null:
 			continue
@@ -362,7 +363,7 @@ static func _add_splash(by_attack: Dictionary) -> void:
 			continue
 		var landed := cells
 		if attack.knockback > 0:
-			landed = _dilated(landed, GridUtils.cells_within_manhattan_range(Vector2i.ZERO, attack.knockback))
+			landed = _dilated(landed, GridUtils.cells_within_manhattan_range(Vector2i.ZERO, attack.knockback + wind_tiles))
 		for payload in attack.payload_chain():
 			landed = _dilated(landed, _any_facing(payload))
 			cells.merge(landed)
