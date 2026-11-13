@@ -154,3 +154,24 @@ func test_a_bleed_out_is_logged_at_the_turn_it_happens() -> void:
 			"the body bled out on the ENEMY's turn start: %s" % str(to_enemy)).is_false()
 	assert_bool((back.get("ai_events", []) as Array).has(line)).override_failure_message(
 			"the bleed-out was not logged: %s" % str(back)).is_true()
+
+
+# ...and a drowning one (#1657), whose clock is the same field, drowns on the same turn start.
+func test_a_drowning_is_logged_at_the_turn_it_happens() -> void:
+	var b := _board("DrownLogRoot")
+	BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var body: Unit = BoardBuilder.spawn(b, _data("Swimmer", PLAYER), Vector2i(3, 3))
+	BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(8, 8))
+	BoardBuilder.paint_cell(b.grid, Vector2i(3, 3), BoardBuilder.WATER_ATLAS)
+	var sess = PlaySession.new(b)
+	var handle: String = sess.handle_for(body)
+	body.go_under()
+	body.downed_turns_remaining = 1   # this side's next turn start is its last
+
+	sess.end_turn()
+	var back: Dictionary = sess.end_turn()
+
+	assert_bool(is_instance_valid(body) and not body.is_dead()).override_failure_message(
+			"fixture: the drowner outlived its clock").is_false()
+	assert_bool((back.get("ai_events", []) as Array).has("%s drowns" % handle)).override_failure_message(
+			"the drowning was not logged: %s" % str(back)).is_true()

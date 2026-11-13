@@ -1310,7 +1310,7 @@ func _resolve_pass(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction],
 			continue
 		if claim.target == null or not is_instance_valid(claim.target) or plan.rescued_by.has(claim.target):
 			continue
-		if PlanResolver.projected_lifecycle(claim.target, hypo) == Unit.LifecycleState.DOWNED:
+		if Unit.awaits_rescue_in(PlanResolver.projected_lifecycle(claim.target, hypo)):
 			plan.rescued_by[claim.target] = claim.actor
 
 	# Rescue hauls (#116): a body that cannot stand where it lies -- in deep water -- is dragged onto

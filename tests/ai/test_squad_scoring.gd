@@ -884,27 +884,6 @@ func test_a_counter_that_sets_off_our_crisis_costs_the_hp_it_takes() -> void:
 	assert_int(AITactics._score_plan(PLAYER, plan, null, blind_profile).taken).is_equal(reply.resolved.damage)
 
 
-# A drowning that sets Crisis off is priced the same way. The row is built by hand: the arithmetic is
-# what is under test, and a melt that drowns a Crisis-armed unit is a long way to walk for one sum.
-func test_a_drowning_that_sets_off_crisis_is_priced_at_the_hp_it_takes() -> void:
-	var board: Dictionary = _build_board()
-	var victim: Unit = BB.spawn(board, H.make_unit_data({Stats.Stat.MHP: 20}, ENEMY), A_CELL)
-	var sink := SinkAction.new()
-	sink.actor = victim
-	sink.resolved = ResolvedOutcome.new()
-	sink.resolved.lethality = ResolvedOutcome.Lethality.CRISIS
-	sink.resolved.hp_before = 20
-	sink.resolved.target_hp_after = Abilities.CRISIS_REVIVE_HP
-	sink.resolved.damage = 25
-	var plan := ResolvedPlan.new()
-	plan.sinks.append(sink)
-
-	assert_int(AITactics._score_plan(PLAYER, plan, null, AIProfile.new()).damage) 		.is_equal(20 - Abilities.CRISIS_REVIVE_HP)
-	var blind_profile := AIProfile.new()
-	blind_profile.sees_crisis = false
-	assert_int(AITactics._score_plan(PLAYER, plan, null, blind_profile).damage) 		.override_failure_message("a blind unit prices the raw damage, capped at the HP the victim had").is_equal(20)
-
-
 # A HEALED body is still worth +1 (#1002, keeping #720's ruling literal). That "+1" was never a
 # constant -- it is the overkill clamp at the victim's own HP, worth 1 only while a body clung at 1
 # -- so once a heal can leave one holding real health the same arithmetic prices finishing it at
@@ -928,6 +907,24 @@ func test_a_healed_body_is_still_priced_at_one_beside_a_standing_enemy() -> void
 	assert_int(_aim_count(attacker.squad, standing.movement.cell)).override_failure_message(
 			"the AI took the healed body over somebody still on their feet -- #720's ranking, "
 			+ "broken by the HP a heal put on a corpse").is_equal(1)
+	assert_int(_aim_count(attacker.squad, body.movement.cell)).is_equal(0)
+
+
+# ...and a DROWNING body (#1657) is a body too, though the water took none of its HP: the same clamp,
+# the same tie, the same loss to somebody still on their feet.
+func test_a_drowning_body_is_priced_at_one_beside_a_standing_enemy() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+	BB.paint_cell(board.grid, body.movement.cell, BB.WATER_ATLAS)
+	body.go_under()
+	var standing: Unit = _spawn(board, ENEMY, Vector2i(0, 1))
+	assert_bool(body.is_drowning()).override_failure_message("fixture: the body did not go under").is_true()
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, standing.movement.cell)).override_failure_message(
+			"the AI took a drowning body, priced at its full HP, over somebody still on their feet").is_equal(1)
 	assert_int(_aim_count(attacker.squad, body.movement.cell)).is_equal(0)
 
 

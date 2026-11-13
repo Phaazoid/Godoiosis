@@ -695,13 +695,13 @@ func test_melting_the_ice_under_a_unit_sinks_it_headlessly_too() -> void:
 			"fixture: the fire alone must leave the foe standing").is_equal(ResolvedOutcome.Lethality.NONE)
 	assert_int(prev.plan.sinks.size()).is_equal(1)
 	assert_str(prev.plan.sinks[0].actor).is_equal(sess.handle_for(foe))
-	assert_str(prev.plan.sinks[0].lethality).is_equal("DOWNED")
+	assert_str(prev.plan.sinks[0].lethality).is_equal("NONE")   # the water names no rung (#1657)
 	for counter: Dictionary in prev.plan.counters:
 		assert_bool(counter.skipped).override_failure_message("a sunk unit still counters").is_true()
 
 	var hero_hp := hero.get_current_hp()
 	assert_bool(sess.execute().ok).is_true()
-	assert_bool(foe.is_downed()).override_failure_message(
+	assert_bool(foe.is_drowning()).override_failure_message(
 			"the headless twin left the foe standing on the water").is_true()
 	assert_bool(foe.element_states.has(Elemental.State.WET)).is_true()
 	assert_int(hero.get_current_hp()).is_equal(hero_hp)

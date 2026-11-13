@@ -127,8 +127,9 @@ func test_every_written_hit_reconciles_against_the_snapshots() -> void:
 	assert_int(int(player.get("unattributed"))).is_equal(0)
 
 
-# #922: the water a melt drops a unit into is damage no hit carries, recorded on the pass beside its
-# hits. It must reconcile like a burn, or every sinking reads as a hole in the log.
+# #922: a run written before #1657 records the water a melt drops a unit into as damage no hit
+# carries, on the pass beside its hits. It must reconcile like a burn, or every such sinking reads as
+# a hole in the log.
 func test_a_sinking_is_attributed_damage_not_a_gap() -> void:
 	var events := _events()
 	var pass_line: Dictionary = events[8]

@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25; #1585 (adjacent melee asks the edge movement asks) folded in 2026-11-03; #1660 slice 2 (the wind leans on a shove) folded in 2026-11-12.**
+**Canon checked through #1415 (2026-10-22); #1500 (a shove's flight and tumble meet bodies where the pass has them) folded in 2026-10-25; #1585 (adjacent melee asks the edge movement asks) folded in 2026-11-03; #1660 slice 2 (the wind leans on a shove) folded in 2026-11-12; #1657 (drowning becomes its own state) folded in 2026-11-12.**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -752,8 +752,9 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
   *onto* the water and stands there rather than being braced by ground it walks on every turn.
 - **The landing** resolves wherever the horizontal travel ends — distance spent *or* blocked early.
   Ending on a VOID (blown onto it, or halted mid-flight over it) = **removed**. Ending in **deep
-  water** = the water takes whatever the blow and the fall left, so the unit goes DOWN on the
-  ordinary clock and a rescue can haul it out (`terrain.md` → *Water — shallow vs deep*). Ending
+  water** = the unit is DROWNING, at the health the blow and the fall left (the water takes none, and
+  never fires Crisis, [#1657](https://github.com/Phaazoid/Godoiosis/issues/1657)), and a rescue can
+  haul it out (`will-and-death.md` → *Drowning*). Ending
   lower =
   **fall damage** for the full levels dropped — `FallRules.damage_for`, which **bypasses DEF**
   (dev: armor does not stop gravity; it joins the total after mitigation, before the Iron Will cap

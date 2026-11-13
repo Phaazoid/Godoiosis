@@ -1805,7 +1805,7 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# at the next resolve and never re-words a queue already resolved.
 	{"group": "Limb loss", "label": "Limb loss damage", "static": "LIMB_LOSS_DAMAGE",
 		"script": LETHALITY_RULES_SCRIPT, "min": 1, "max": 40, "step": 1,
-		"tip": "A single blow this big takes a limb, whether or not it downs the unit. The blow is the hit after armour, any fall included, after Iron Will's cap; never the drowning or the ground. A kill takes nothing."},
+		"tip": "A single blow this big takes a limb, whether or not it downs the unit. The blow is the hit after armour, any fall included, after Iron Will's cap; never the ground. A kill takes nothing."},
 	{"group": "Limb loss", "label": "Limb loss damage (wounded)", "static": "LIMB_LOSS_DAMAGE_WOUNDED",
 		"script": LETHALITY_RULES_SCRIPT, "min": 1, "max": 40, "step": 1,
 		"tip": "The same threshold once the unit has gone down this battle. Lower than the fresh one, so a unit that has been down is easier to maim."},

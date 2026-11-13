@@ -134,12 +134,12 @@ func apply_placement(unit: Unit) -> void:
 	unit.squad.zone_name = squad_zone
 	unit.squad.home_cell = squad_home_cell if squad_home_saved else cell
 
-# Does this entry spawn as a BODY, RulesService.can_spawn_at's is_body (#116)? A saved DOWNED unit may
+# Does this entry spawn as a BODY, RulesService.can_spawn_at's is_body (#116)? A saved DOWNED or DROWNING unit may
 # lie on ground nothing may STAND on -- deep water -- and without this a load would silently drop it.
 # A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right. The ONE
 # answer both loaders hand the terrain clause, stand_block_reason below (#46, #1597).
 func spawns_as_body() -> bool:
-	return state_saved and lifecycle_state == Unit.LifecycleState.DOWNED
+	return state_saved and Unit.awaits_rescue_in(lifecycle_state)
 
 # May the unit this entry spawned stand on its cell (#1597)? The spawn gate's terrain clause, asked of
 # the FINISHED body: both loaders spawn without it and ask here once the saved state has landed, because

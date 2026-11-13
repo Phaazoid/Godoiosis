@@ -23,8 +23,7 @@ const OVERKILL_CEILING := 10
 
 # A blow this big takes a limb, whether or not it downs (dev, #1174). A WOUNDED unit -- one that
 # has gone down this battle -- loses one to a smaller blow. The blow is the hit after armour, any
-# fall included, after Iron Will's cap: never the drowning top-up, never the ground. static var,
-# not const: tuned on the Game tab.
+# fall included, after Iron Will's cap: never the ground. static var, not const: tuned on the Game tab.
 static var LIMB_LOSS_DAMAGE := 10
 static var LIMB_LOSS_DAMAGE_WOUNDED := 8
 
@@ -47,6 +46,10 @@ static func crisis_armed_for(body: UnitState) -> bool:
 #
 # Whether the blow ALSO takes a limb is not a rung: severs() answers it beside this, for any rung
 # the unit survives (#1174).
+#
+# A DROWNING body (#1657) is judged as a standing one: it holds its health, so a blow can down it (in
+# the water, on the water's clock), kill it, or set its Crisis off. The water itself never reaches
+# this ladder -- it is not damage (go_under, below) -- which is why going under never fires Crisis.
 #
 # Crisis-in-progress is special (dev call 2026-06-26): it never downs/maims (a would-be-down is
 # death). A unit already DEAD takes no rung at all, in Crisis or not: a later hit in the same pass is a
@@ -87,7 +90,7 @@ static func predict(body: UnitState, damage: int) -> ResolvedOutcome.Lethality:
 
 # Does this blow take a limb (#1174)? Any rung the unit survives: a standing hit, a down, a Crisis
 # entry, a hit on a body that holds. A kill takes nothing. `blow` is the hit alone -- the caller
-# leaves out what is not a blow (the drowning top-up, the ground), which is why it is a parameter
+# leaves out what is not a blow (the ground, a void removal), which is why it is a parameter
 # rather than the damage predict() read. The threshold is read off the PRE-hit state, so the hit
 # that wounds a unit is still judged as a fresh one.
 static func severs(body: UnitState, blow: int, rung: ResolvedOutcome.Lethality) -> bool:
@@ -147,6 +150,22 @@ static func land_rung(body: UnitState, rung: ResolvedOutcome.Lethality, damage: 
 	elif rung == ResolvedOutcome.Lethality.CRISIS:
 		body.in_crisis = true                       # the gambit: no safety net from here on
 	body.set_current_hp(hp_after(rung, hp, damage))
+
+# Into water this body cannot stand in, alive (#1657), on a planned body: Unit.go_under's twin, so the
+# resolver threads what execution does. A standing body starts DROWNING; a downed one stays down (its
+# harsher clock is execution's, like every clock: nothing in a pass reads one). No health moves, and
+# no rung is named -- the water is not a blow, so it cannot set Crisis off.
+static func go_under(body: UnitState) -> void:
+	if body.lifecycle_state == Unit.LifecycleState.ACTIVE:
+		body.lifecycle_state = Unit.LifecycleState.DROWNING
+
+# What a downed body's clock becomes when it goes into the water (dev, #1657: "downed in the water should
+# be a harsher clock"): the water's one turn, or less if it already had less. A clock a heal stopped
+# (-1) starts again: the water does not care about the bandage.
+static func clock_in_water(turns_remaining: int) -> int:
+	if turns_remaining < 0:
+		return Unit.DOWNED_IN_WATER_TURNS
+	return mini(turns_remaining, Unit.DOWNED_IN_WATER_TURNS)
 
 # What a PREVIEW shows for HP the ladder has already sentenced. Since #1002 the threaded number is
 # already what execution lands on (hp_after above), so the only clamp left is the dead: a kill's
