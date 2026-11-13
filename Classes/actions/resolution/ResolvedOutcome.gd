@@ -125,6 +125,21 @@ var lethality: Lethality = Lethality.NONE
 # its copy of the body (UnitState.lose_next_limb), and execution takes the same slot by the same rotation.
 var severed_limb: int = -1
 
+# The worn gear this hit takes OFF its target (#1659), each with the gate's own refusal: a lost limb's
+# aura tax drying a rune, its STR or DEX dropping the body under armour's gate, a paired state's shift.
+# Read off the resolver's copy of the body before and after the hit (UnitState.worn_gear), so it is the
+# wear gate's judgement, never a second rule; execution strips the same pieces by the same doors.
+# Parallel arrays, one entry per piece. A twinned WeaponInstance here is the pass's copy: read its name.
+var gear_lost: Array[EquippableData] = []
+var gear_lost_reasons: Array[String] = []
+
+# The i-th lost piece in words, the gate's refusal after it: the one spelling the matchup pill, the row's
+# hover and the Play API's lines all print.
+func gear_lost_line(i: int) -> String:
+	var name := gear_lost[i].shown_name()
+	var reason := gear_lost_reasons[i]
+	return "%s comes off" % name if reason == "" else "%s comes off: %s" % [name, reason]
+
 # How much of `damage` is NOT a blow (#1174), so can never take a limb: the drowning top-up, or all of
 # it when the void took the unit (a removal is a kill, and a kill takes nothing). One answer for the
 # resolver and both execution twins -- execution re-asks the ladder, which cannot see a removal.

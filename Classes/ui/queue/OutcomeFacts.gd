@@ -81,6 +81,9 @@ static func of(outcome: ResolvedOutcome, fired: AttackData = null) -> Array[Fact
 	var vial := _vial_fact(outcome)
 	if vial != null:
 		facts.append(vial)
+	# Gear the hit takes off (#1659): the gate's own sentence, stamped by the resolver.
+	for i in outcome.gear_lost.size():
+		facts.append(_gear_lost_fact(outcome, i))
 	# The TANK spend (#97): this shot is the supercharged one and the next will not be.
 	if outcome.charge_spent:
 		var spent := "Spends a supercharged shot"
@@ -138,6 +141,17 @@ static func _vial_fact(outcome: ResolvedOutcome) -> Fact:
 			else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
 	var spent := "Burns %s" % burned.display_name
 	return Fact.new(ink, ActionQueueRow.BADGE_VIAL, spent, UiText.wrap(spent))
+
+
+# A piece the hit takes off its wearer (#1659). A rune wears its temper's ink, since its loss is an
+# aura fact; anything else the event tint. The words are the outcome's own (gear_lost_line).
+static func _gear_lost_fact(outcome: ResolvedOutcome, i: int) -> Fact:
+	var piece := outcome.gear_lost[i]
+	var rune := piece as RuneData
+	var ink := QueueStyle.element_ink(rune.temper) if rune != null and rune.temper != Elemental.Element.NONE \
+			else QueueStyle.ink(QueueStyle.Role.EVENT_TINT)
+	var word := outcome.gear_lost_line(i)
+	return Fact.new(ink, ActionQueueRow.BADGE_GEAR_LOST % piece.shown_name(), word, UiText.wrap(word))
 
 
 # Which of the hit's elements set this reaction off -- its ink. A reaction answers to more than its

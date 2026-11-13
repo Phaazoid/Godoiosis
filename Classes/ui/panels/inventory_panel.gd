@@ -273,6 +273,19 @@ func _do_cancel():
 
 # Hover readout for one slot. ItemText owns the composition -- since #137 the pre-mission surfaces
 # say the same words, and a panel wording an item its own way is what that door exists to stop.
+# A carried piece its holder's own gate refuses (#1659): a rune a lost limb's aura tax dried, armour a
+# body fell under. Marked on sight, not only on hover or a click. GearVerbs' answer, the one the
+# Equip/Wear button wears, so the mark and the button cannot disagree.
+const CANNOT_EQUIP_MARK := "  (can't equip)"   # PLACEHOLDER words, the dev's to keep
+
+func _cannot_put_on(item: Item, index: int) -> bool:
+	match item.equip_slot():
+		Item.EquipSlot.WEAPON:
+			return GearVerbs.block_reason(unit, GearVerbs.Verb.EQUIP, index) != ""
+		Item.EquipSlot.ARMOR:
+			return GearVerbs.block_reason(unit, GearVerbs.Verb.WEAR, index) != ""
+	return false
+
 func _tooltip_for(item: Item) -> String:
 	return ItemText.hover(item, unit)
 
@@ -300,6 +313,9 @@ func refresh():
 			elif item == unit.worn_armor:
 				display_name += "  (W)"
 				_ink_name(name_label, QueueStyle.Role.EMPHASIS_TEXT)
+			elif _cannot_put_on(item, i):
+				display_name += CANNOT_EQUIP_MARK
+				_ink_name(name_label, QueueStyle.Role.ROW_REFUSED_BORDER)
 			else:
 				_ink_name(name_label, QueueStyle.Role.BODY_TEXT)
 			if item is ArmorData and item.modifier_text() != "":

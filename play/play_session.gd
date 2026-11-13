@@ -1482,6 +1482,8 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("spends a charge")
 	if r.severed_limb != -1:
 		events.append("takes the %s" % _limb_name(r.severed_limb))
+	for i in r.gear_lost.size():
+		events.append(r.gear_lost_line(i))
 	for reaction: ElementalReaction in r.fired_reactions:
 		if reaction.is_combo() and reaction.badge_name() != "":
 			events.append(reaction.badge_name())
@@ -1689,6 +1691,8 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 			events.append("%s hits %s for %d%s%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality), dropped])
 			if r.severed_limb != -1:
 				events.append("%s loses %s" % [handle_for(target), _limb_name(r.severed_limb)])
+			for i in r.gear_lost.size():
+				events.append("%s: %s" % [handle_for(target), r.gear_lost_line(i)])
 		if r.knockback_applied and is_instance_valid(target):
 			target.movement.set_cell(r.knockback_to)
 			events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])

@@ -714,6 +714,8 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		action.resolved = outcome
 		return released
 
+	# What the body wears as the blow arrives, so the gear it loses can be read off the gate (#1659).
+	var worn_before := body.worn_gear()
 
 	# THE WATCH BREAKS ON CONTACT (#810, dev 2026-09-09). Deliberately BELOW the heal return above:
 	# a heal is the one landed hit that does not break a watch, and can_target is the WRONG gate for
@@ -896,6 +898,7 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		moved = body.add_element_state(s, outcome.state_turns.get(s, 0)) or moved
 	if moved and outcome.lethality != ResolvedOutcome.Lethality.KILLED:   # a kill keeps the ladder's number
 		outcome.target_hp_after = body.get_current_hp()
+	_stamp_gear_lost(outcome, worn_before, body)
 
 	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
 	# the hypo so a later hit this pass sees the moved cell (R4). The path is the trail's one
@@ -909,6 +912,19 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 
 	action.resolved = outcome
 	return released
+
+# The worn gear a hit took off its target (#1659): what the body wore before the blow and no longer
+# wears, each with the gate's own sentence against the body the hit left. The strip itself is the wear
+# gate's (UnitState.settle); this only records it. A kill strips nothing anyone needs telling about.
+static func _stamp_gear_lost(outcome: ResolvedOutcome, worn_before: Array[EquippableData], body: UnitState) -> void:
+	if outcome.lethality == ResolvedOutcome.Lethality.KILLED:
+		return
+	var worn_after := body.worn_gear()
+	for piece in worn_before:
+		if worn_after.has(piece):
+			continue
+		outcome.gear_lost.append(piece)
+		outcome.gear_lost_reasons.append(piece.can_equip_reason(body))
 
 # The gas a hit's fired reactions release (#1329): fire drying a wet unit boils its water off as steam,
 # on the cell the target was hit on. Once per VICTIM, secondary hits included, since each victim's

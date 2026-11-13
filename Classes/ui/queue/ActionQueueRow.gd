@@ -43,6 +43,7 @@ const BADGE_SPLITS := "Split %d"    # ...and the count when more than one does
 const BADGE_FIZZLED := "Fizzle"     # a carving with nothing to work with
 const BADGE_WHIFFED := "Whiff"      # a swing at a target this pass already killed (#1350)
 const BADGE_EMPOWERED := "Empowered"   # a form that keeps its carving's name (#695); a named one wears its name
+const BADGE_GEAR_LOST := "%s off"  # #1659: a worn piece the hit takes off (a rune its aura tax dries)
 
 @onready var rail: ColorRect = $Frame/Rail
 @onready var actor_texture: TextureRect = $Frame/Pad/Body/Line/ActorTexture
