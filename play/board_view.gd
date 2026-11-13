@@ -73,7 +73,7 @@ static func _overview_overlay(session) -> Dictionary:
 		for cell in unit.watch.footprint:
 			overlay[cell] = "!"
 	for unit in session.live_units():
-		if unit.is_downed():
+		if unit.awaits_rescue():
 			overlay[unit.movement.cell] = "v"
 	return overlay
 
@@ -105,7 +105,7 @@ static func render_focus(session, handle: String) -> String:
 		for cell in Reach.get_all_attack_cells_from(origin, firing):
 			overlay[cell] = "*" if overlay.has(cell) else "x"
 	for other in session.live_units():
-		if other.is_downed() and not overlay.has(other.movement.cell):
+		if other.awaits_rescue() and not overlay.has(other.movement.cell):
 			overlay[other.movement.cell] = "v"
 	overlay[unit.movement.cell] = "@"
 	var lines: Array[String] = []
@@ -488,11 +488,11 @@ static func _legend(session) -> String:
 	var any_downed := false
 	for unit in session.live_units():
 		lines.append("  " + _unit_line(session, unit))
-		if unit.is_downed():
+		if unit.awaits_rescue():
 			any_downed = true
 	var notes: Array[String] = []
 	if any_downed:
-		notes.append("v = downed body on board; finish it or rescue it")
+		notes.append("v = downed or drowning body on board; finish it or rescue it")
 	var has_c := false
 	var has_e := false
 	var has_f := false
@@ -871,6 +871,8 @@ static func _conditions(unit: Unit) -> String:
 	if unit.is_downed():
 		parts.append("DOWNED (dies in %d)" % unit.downed_turns_remaining
 				if unit.downed_turns_remaining > 0 else "DOWNED")
+	elif unit.is_drowning():
+		parts.append("DROWNING (drowns in %d)" % unit.downed_turns_remaining)
 	elif unit.wounded:
 		parts.append("WOUNDED")
 	if unit.in_crisis:

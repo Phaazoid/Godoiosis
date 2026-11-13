@@ -511,7 +511,7 @@ func _sync_status(unit: Unit, id: int, sprite: UnitSprite3D, delta: float) -> vo
 	else:
 		_status[id] = level
 	# A blizzard fogs every standing unit's breath (#1269); a body on the ground does not breathe it.
-	var breath := 1.0 if _breathing and not unit.is_downed() else 0.0
+	var breath := 1.0 if _breathing and not unit.awaits_rescue() else 0.0
 	if in_ice:
 		_frozen_in_ice.hold(id, sprite, status_seed(id))
 	elif level != Vector4.ZERO or breath > 0.0:
@@ -904,7 +904,7 @@ func _sync(unit: Unit, sprite: UnitSprite3D, delta := 0.0) -> void:
 	sprite.art_offset = Vector3(art.x, 0.0, art.y)
 	sprite.position = stand + sprite.art_offset
 
-	var downed := unit.lifecycle_state == Unit.LifecycleState.DOWNED
+	var downed := unit.awaits_rescue()   # a drowning body lies as a downed one does, for now (#1657)
 	if downed != sprite.is_downed():
 		sprite.set_downed(downed)
 	if not downed:
@@ -1022,7 +1022,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# per-unit part, and DAMAGED is HP alone (dev call). A BODY joins it outright since #1002 — the
 	# ruling's own reason was that a body clings at 1 HP and so qualifies already, and a healed one
 	# can sit at full while still being the thing #322's glyph exists to show.
-	var damaged_or_down := unit.is_downed() or unit.get_current_hp() < unit.get_max_hp()
+	var damaged_or_down := unit.awaits_rescue() or unit.get_current_hp() < unit.get_max_hp()
 	var preferred := bars == PlayerSettings.HealthBars.EVERY \
 			or (bars == PlayerSettings.HealthBars.DAMAGED and damaged_or_down)
 	# FOUR reasons again (#1069). #710 slice 3 added a fifth -- the enemy intends to hit this unit --
@@ -1056,7 +1056,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# is DOWNED with no clock, and one gate for both hid it entirely. Lifecycle drives the glyph;
 	# the count keeps the hover card's own `> 0`, since the clock emits 0 in the instant before the
 	# body is lost.
-	var downed := unit.is_downed()
+	var downed := unit.awaits_rescue()   # the drowning clock too (#1657)
 	var downed_turns: int = unit.downed_turns_remaining if downed else -1
 	var row: Array[Texture2D] = StateIcons.textures_for(_states_shown(unit))
 	if downed:

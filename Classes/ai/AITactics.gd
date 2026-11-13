@@ -120,7 +120,7 @@ static func _engageable_enemies(leader: Unit, board: BoardContext, allowed) -> D
 	var per_enemy := {}
 	var wanted := {}
 	for enemy in board.units:
-		if not is_instance_valid(enemy) or not (enemy.is_active() or enemy.is_downed()):
+		if not is_instance_valid(enemy) or not (enemy.is_active() or enemy.awaits_rescue()):
 			continue
 		if not Team.is_enemy(leader.get_faction(), enemy.get_faction()):
 			continue
@@ -190,7 +190,7 @@ static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null, a
 			continue
 		var life := PlanResolver.projected_lifecycle(unit, hypo)
 		var standing := life == Unit.LifecycleState.ACTIVE
-		if not (standing or (life == Unit.LifecycleState.DOWNED and not active_only)):
+		if not (standing or (Unit.awaits_rescue_in(life) and not active_only)):   # a drowning body too (#1657)
 			continue
 		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
 			continue
@@ -289,7 +289,7 @@ static func choose_balanced_target(leader: Unit, board: BoardContext, squad_mana
 	var best_standing := false
 	var best_dist := 0
 	for unit in board.units:
-		if not is_instance_valid(unit) or not firing.has(unit) or not (unit.is_active() or unit.is_downed()):
+		if not is_instance_valid(unit) or not firing.has(unit) or not (unit.is_active() or unit.awaits_rescue()):
 			continue
 		var hops: int = firing[unit][0]
 		var from: Vector2i = firing[unit][1]
@@ -652,7 +652,7 @@ static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
 # above damage and below a squad break.
 #
 # A UNIT THE PASS'S OWN MELT DROWNS (#922) is a victim like any other: plan.sinks seeds the ledger,
-# so the removal and the damage are priced through the ordinary rules below.
+# so the removal is priced through the ordinary rules below. The water takes no HP (#1657).
 #
 # A SQUAD BREAK SITS ABOVE DAMAGE AND BELOW A REMOVAL (#761, dev 2026-10-03), so a shove that knocks
 # somebody out of their squad beats a harder hit that does not. Counted off SplitForecast -- the
@@ -687,8 +687,8 @@ static func _aim_key(attack: AttackData, sweep: Conduction.Sweep) -> String:
 # that SEES Crisis prices a hit that sets the gambit off as what it really does: the HP it takes
 # (hp_before - target_hp_after, the revive HP), and no removal, since the target stands straight back
 # up. A unit already IN Crisis stays an ordinary target -- its next drop is a kill, and a kill is a
-# removal (dev, 2026-10-05). The same pricing reaches every list, counters and sinks included, so
-# what a counter costs us is measured the same way.
+# removal (dev, 2026-10-05). The same pricing reaches every list, counters included, so what a
+# counter costs us is measured the same way. A sink never sets it off (#1657).
 #
 # A unit BLIND to it (#708, dev 2026-09-04: "the ai simply won't see crisis mode until they have to
 # react to a unit currently in it") prices the hit at the damage AND the removal it would have
@@ -773,10 +773,11 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, stakes: _Stak
 	# never a constant -- it is this clamp, worth 1 only because a body clung at 1 HP -- so once a
 	# heal can leave one at 15 the same arithmetic prices finishing it above chipping a standing
 	# enemy, which is exactly the head-to-head the dev ruled a body must lose. Asked of the LIVE
-	# board like the clamp it belongs to: a body the PLAN fells is a removal, not this.
+	# board like the clamp it belongs to: a body the PLAN fells is a removal, not this. A drowning body
+	# (#1657) holds all its HP and is a body all the same.
 	var net := 0
 	for victim: Unit in dealt:
-		var cap: int = 1 if victim.is_downed() else maxi(victim.get_current_hp(), 0)
+		var cap: int = 1 if victim.awaits_rescue() else maxi(victim.get_current_hp(), 0)
 		var counted: int = mini(int(dealt[victim]), cap)
 		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
 	for patient: Unit in restored:
@@ -960,7 +961,7 @@ static func _newly_felled(unit: Unit, faction: Team.Faction, base: ResolvedPlan,
 	var before := PlanResolver.projected_lifecycle(unit, base.hypo)
 	if kills_only:
 		return after == Unit.LifecycleState.DEAD and before != Unit.LifecycleState.DEAD
-	return after > before
+	return Unit.fell_rank(after) > Unit.fell_rank(before)
 
 # Fallback builders -- each mirrors MainActionMenu's gate for its verb, then picks a
 # deterministic target (Law #1: explicit tie-break, first-in-order wins).
@@ -1604,7 +1605,7 @@ static func _rescue_cell(unit: Unit, squad: Squad, cells: Array, board: BoardCon
 		return GridUtils.NO_CELL
 	var bodies: Array[Unit] = []
 	for other in board.units:
-		if is_instance_valid(other) and other != unit and other.is_downed() and not claimed.has(other) \
+		if is_instance_valid(other) and other != unit and other.awaits_rescue() and not claimed.has(other) \
 				and not Team.is_enemy(unit.get_faction(), other.get_faction()):
 			bodies.append(other)
 	bodies.sort_custom(func(a: Unit, b: Unit) -> bool: return _rescue_urgency(a) < _rescue_urgency(b))

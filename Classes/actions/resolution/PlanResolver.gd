@@ -834,21 +834,13 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.iron_will_held = outcome.damage > Abilities.IRON_WILL_DAMAGE_CAP
 		outcome.damage = mini(outcome.damage, Abilities.IRON_WILL_DAMAGE_CAP)
 
-	# Drowning (#116; dev, 2026-08-26: "falling into deep water = losing all one's health"). Computed
-	# AFTER the Iron Will clamp on purpose: the cap governs the HIT and stays absolute, and the water
-	# then takes whatever the hit left. A lake is not a blow, and capping it would mean a unit holding
-	# Iron Will above IRON_WILL_DAMAGE_CAP simply could not drown.
-	#
-	# DAMAGE rather than a lifecycle door of its own, which is what makes a drowning an ORDINARY down:
-	# the ladder below names the rung, so the down, the Crisis gambit and finishing a body that is
-	# already DOWNED all arrive for free. It is NOT part of the blow, so it never takes a limb (#1174).
-	# A hit that alone downs its target leaves nothing to take (the clamp to 0), so the water can never
-	# promote a down into a kill -- and drowning is deliberately not the void's outright removal: it is
-	# a clock a rescuer can answer (RescueAction hauls the body out), which is what the two are meant
-	# to read as.
+	# Drowning (#116, redesigned by #1657). The water is NOT damage and names no rung: the ladder below
+	# reads the blow alone, so going under can never set the Crisis gambit off. It is a lifecycle door
+	# of its own (LethalityRules.go_under, after the rung lands): a standing body goes DROWNING with its
+	# health, a downed one stays down on the water's clock. Not the void's outright removal either: it
+	# is a clock a rescuer can answer (RescueAction hauls the body out).
 	if landing != null and landing.drowned:
-		outcome.drown_damage = maxi(0, body.get_current_hp() - outcome.damage)
-		outcome.damage += outcome.drown_damage
+		outcome.drowned = true
 		outcome.popups.append(DROWNING_POPUP)
 
 	# A shove that ENDS in water soaks its victim (#884). Appended AFTER the remove-wins fold above
@@ -875,15 +867,18 @@ static func _resolve_one(action: AttackAction, plan: ResolvedPlan, reactions: Ar
 		outcome.lethality = ResolvedOutcome.Lethality.KILLED
 		outcome.removed = true
 		outcome.popups.append(VOID_POPUP)
-	# The limb (#1174), judged on the pre-hit body like the rung, and on the BLOW: what the water added
-	# is not one. Taken AFTER the damage lands, Unit.take_damage's order (#1455): the copy loses the
-	# limb and settles what it strips, so a later hit this pass meets that body and takes the NEXT limb.
+	# The limb (#1174), judged on the pre-hit body like the rung, and on the BLOW. Taken AFTER the
+	# damage lands, Unit.take_damage's order (#1455): the copy loses the limb and settles what it
+	# strips, so a later hit this pass meets that body and takes the NEXT limb.
 	var takes_limb := LethalityRules.severs(body, outcome.damage - outcome.non_blow(), outcome.lethality)
 	LethalityRules.land_rung(body, outcome.lethality, outcome.damage)
 	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, outcome.hp_before, outcome.damage)
 	if takes_limb:
 		outcome.severed_limb = body.lose_next_limb()
 		outcome.target_hp_after = body.get_current_hp()   # the strip's re-clamp, where one bites
+	# ...and then the water, on whatever the blow left (AttackAction.land's order, #1657).
+	if outcome.drowned:
+		LethalityRules.go_under(body)
 
 	# --- thread the hit's states forward (R4) ---
 	# Through the live body's own doors and in AttackAction.land's order, after the blow: the removes,
@@ -991,7 +986,7 @@ static func settle_landing(played: BaseAction, plan: ResolvedPlan, hypo: Diction
 # A sinking lands on the pass's copy of the body through SinkAction.execute's doors, and joins the plan.
 static func _go_under(sink: SinkAction, plan: ResolvedPlan, hypo: Dictionary) -> void:
 	var sinker := _hypo_for(sink.actor, hypo).state
-	LethalityRules.land_rung(sinker, sink.resolved.lethality, sink.resolved.damage)
+	LethalityRules.go_under(sinker)
 	for s in sink.resolved.states_added:
 		sinker.add_element_state(s, sink.resolved.state_turns.get(s, 0))
 	plan.sinks.append(sink)
@@ -1472,6 +1467,16 @@ static func projected_hp(unit: Unit, hypo: Dictionary) -> int:
 static func projected_lifecycle(unit: Unit, hypo: Dictionary) -> Unit.LifecycleState:
 	if unit == null or not is_instance_valid(unit):
 		return Unit.LifecycleState.DEAD
+	return state_of(unit, hypo).lifecycle_state
+
+# The lifecycle the unit came INTO the pass with -- plan_fells' baseline, for a reader that must fold
+# an outcome onto it (ResolvedOutcome.lifecycle_after: a downed body that sinks stays DOWNED, #1657).
+# Same read-only contract: no entry means the pass never touched it.
+static func lifecycle_at_start(unit: Unit, hypo: Dictionary) -> Unit.LifecycleState:
+	if unit == null or not is_instance_valid(unit):
+		return Unit.LifecycleState.DEAD
+	if hypo.has(unit):
+		return (hypo[unit] as _Hypo).start_lifecycle
 	return state_of(unit, hypo).lifecycle_state
 
 # Where the pass has put the unit so far — a shove earlier in this plan has already threaded its

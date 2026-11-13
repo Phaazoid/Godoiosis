@@ -6,9 +6,8 @@ class_name SinkAction
 # the queue hangs each one under its cause, and both execution twins play it right after that cause.
 #
 # #116's drowning from the other side: there the unit arrives in the water, here the floor leaves. So
-# the water does what it does to a shove -- takes everything left, through the ordinary ladder (a
-# down, Crisis, and a body already down is finished; never a limb, the water not being a blow) -- and
-# the answer is a rescue from the bank.
+# the water does what it does to a shove (#1657): no health, no rung, never Crisis -- a standing body
+# goes DROWNING, a downed one stays down on the water's clock -- and the answer is a rescue from the bank.
 
 var cell: Vector2i
 # What it goes under after (#1498): the action whose landing melted the ice -- a volley's last member,
@@ -28,12 +27,10 @@ static func make(body: UnitState, at: Vector2i, after: BaseAction, wets: bool) -
 	sink.cause = after
 	var outcome := ResolvedOutcome.new()
 	outcome.hp_before = body.get_current_hp()
-	# The water takes everything (PlanResolver._resolve_one's drowning, #116). drown_damage is what the
-	# queue row's Drowned badge reads, so the two doors into the water wear one badge.
-	outcome.drown_damage = maxi(0, outcome.hp_before)
-	outcome.damage = outcome.drown_damage
-	outcome.lethality = LethalityRules.predict(body, outcome.damage)
-	outcome.target_hp_after = LethalityRules.hp_after(outcome.lethality, outcome.hp_before, outcome.damage)
+	outcome.target_hp_after = outcome.hp_before   # the water takes nothing (#1657)
+	# `drowned` is what the queue row's Drowned badge reads, so the two doors into the water wear one
+	# badge, and what lifecycle_after folds in.
+	outcome.drowned = true
 	outcome.popups.append(PlanResolver.DROWNING_POPUP)
 	if wets:
 		outcome.states_added.append(Elemental.State.WET)
@@ -41,11 +38,11 @@ static func make(body: UnitState, at: Vector2i, after: BaseAction, wets: bool) -
 	return sink
 
 
-# Pure playback (R3): the damage, then the soak -- AttackAction.execute's order.
+# Pure playback (R3): the water, then the soak -- AttackAction.land's order.
 func execute() -> void:
 	begin_execution()
 	if actor != null and is_instance_valid(actor) and resolved != null:
-		actor.take_damage(resolved.damage, resolved.damage)   # the ground is never a blow (#1174)
+		actor.go_under()
 		for s in resolved.states_added:
 			actor.add_element_state(s, resolved.state_turns.get(s, 0))
 	finish_execution()

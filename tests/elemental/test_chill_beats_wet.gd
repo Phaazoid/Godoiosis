@@ -395,6 +395,6 @@ func test_a_chilled_unit_the_melt_sinks_goes_under_and_comes_up_dry() -> void:
 	assert_bool(PlanResolver.projected_states(ally, plan.hypo).has(WET)).is_false()
 
 	await game.order_executor.execute_orders(hero)
-	assert_bool(ally.is_downed()).override_failure_message("fixture: the ally never went under").is_true()
+	assert_bool(ally.is_drowning()).override_failure_message("fixture: the ally never went under").is_true()
 	assert_bool(ally.element_states.has(WET)).override_failure_message(
 			"executed, the sunk Chilled ally came up Wet").is_false()

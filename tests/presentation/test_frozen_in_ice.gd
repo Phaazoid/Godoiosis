@@ -1,6 +1,6 @@
-# A downed body the ice holds is drawn frozen INTO it (#1506): standing, in its map art, inside
+# A body the ice holds is drawn frozen INTO it (#1506): standing, in its map art, inside
 # FrozenInIce's ring of crystals, with a faint copy of the body drawn over the ice. Every case reaches
-# the ice through the real pass -- a fire that melts the ice under an enemy (it sinks and goes down)
+# the ice through the real pass -- a fire that melts the ice under an enemy (it sinks and drowns)
 # and a frost that freezes the water again -- on the real Battle3D board, then reads the mirror.
 #
 # What NO case here can see is whether any of it LOOKS right: the dummy renderer draws nothing, so the
@@ -109,7 +109,7 @@ func _paint() -> void:
 	game.terrain_states.apply(freeze)
 
 
-# The real pass: a fire melts the ice under an enemy, which sinks and goes down, and a frost on the
+# The real pass: a fire melts the ice under an enemy, which sinks and drowns (#1657), and a frost on the
 # tile alone (a hit on the body would finish it) freezes the water over it again.
 func _sink_and_refreeze() -> Unit:
 	_paint()
@@ -124,7 +124,7 @@ func _sink_and_refreeze() -> Unit:
 	_queue(hero, ICE)
 	_queue(froster, ICE)
 	await game.order_executor.execute_orders(hero)
-	assert_bool(foe.is_downed()).override_failure_message("fixture: the melt did not sink the enemy").is_true()
+	assert_bool(foe.is_drowning()).override_failure_message("fixture: the melt did not sink the enemy").is_true()
 	assert_bool(_frozen(ICE)).override_failure_message("fixture: the frost did not close the ice").is_true()
 	_mirror.reconcile(0.1)
 	return foe

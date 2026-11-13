@@ -532,8 +532,8 @@ func test_a_counter_throws_a_squadmate_onto_ice_the_pass_froze() -> void:
 	var counter := _assert_the_lake_freezes_and_the_counter_throws(ran)
 	if counter == null:
 		return
-	assert_int(counter.resolved.drown_damage).override_failure_message(
-			"the counter drowns the squadmate in a lake the pass has already frozen").is_equal(0)
+	assert_bool(counter.resolved.drowned).override_failure_message(
+			"the counter drowns the squadmate in a lake the pass has already frozen").is_false()
 	assert_that(PlanResolver.projected_lifecycle(ran.game[MATE_AT], (ran.plan as ResolvedPlan).hypo)) \
 		.is_equal(Unit.LifecycleState.ACTIVE)
 	_assert_hosts_agree(ran)
@@ -1070,8 +1070,8 @@ func test_a_shove_lands_on_ice_an_earlier_attack_froze() -> void:
 	if blow != null:
 		assert_that(blow.resolved.knockback_to).override_failure_message(
 				"fixture: the shove did not throw its victim onto the lake").is_equal(LAKE)
-		assert_int(blow.resolved.drown_damage).override_failure_message(
-				"the shove drowned its victim in a lake the pass had already frozen").is_equal(0)
+		assert_bool(blow.resolved.drowned).override_failure_message(
+				"the shove drowned its victim in a lake the pass had already frozen").is_false()
 	assert_that(PlanResolver.projected_lifecycle(ran.game[MATE_AT], (ran.plan as ResolvedPlan).hypo)) \
 		.is_equal(Unit.LifecycleState.ACTIVE)
 	_assert_hosts_agree(ran)
@@ -1143,7 +1143,7 @@ func test_a_melt_sinks_its_stander_before_the_next_attack() -> void:
 	assert_that(at_the_mate).override_failure_message("fixture: the mate's blow never struck in the game").is_not_null()
 	assert_that(at_the_mate).override_failure_message(
 			"the game's next attack struck while the stander still stood on the ice it had lost").is_equal(
-			Unit.LifecycleState.DOWNED)
+			Unit.LifecycleState.DROWNING)
 	var events: Array = ran.events
 	var at := {"blast": _line(events, _hit(ran, hero_at, ICE_AT)),
 			"sinking": _line(events, "%s goes under" % _sess.handle_for(ran.play[ICE_AT])),
@@ -1153,6 +1153,38 @@ func test_a_melt_sinks_its_stander_before_the_next_attack() -> void:
 				"the headless host sank the stander before the blast:\n%s" % "\n".join(events)).is_greater(at["blast"])
 		assert_int(at["sinking"]).override_failure_message(
 				"the headless host sank the stander only after the next attack:\n%s" % "\n".join(events)).is_less(at["next attack"])
+	_assert_hosts_agree(ran)
+
+
+# A drowner leaves its squad at the pass end, as a downed member does (#1657). The wire is per host
+# (game._build_unit, PlaySession's own connection), and a missing one leaves a drowner in its squad in
+# that host alone.
+func test_a_drowning_squadmate_leaves_its_squad_in_both_hosts() -> void:
+	var hero_at := Vector2i(3, 1)
+	var mate_at := Vector2i(5, 1)
+	var path := _author("drowner_leaves", func() -> void:
+		_ice(ICE_AT)
+		var fire := _blow(1)
+		fire.elemental_damage_type = Elemental.Element.FIRE
+		fire.targets = EquippableData.TargetMode.BOTH
+		_arm(_spawn(PLAYER, hero_at), fire)
+		var sunk := _spawn(ENEMY, ICE_AT, 30)
+		var mate := _spawn(ENEMY, mate_at, 30)
+		game.squad_manager.join_squad(mate, sunk.squad)
+		assert_int(sunk.squad.members.size()).override_failure_message("fixture: the enemy squad did not form") \
+			.is_equal(2))
+
+	var ran: Dictionary = await _run(path, [{"verb": "attack", "from": hero_at, "at": ICE_AT}])
+
+	assert_object(_sink_of(ran.plan, ran.game[ICE_AT])).override_failure_message("fixture: the melt sank nobody") \
+		.is_not_null()
+	for host: String in ["game", "play"]:
+		var sunk: Unit = ran[host][ICE_AT]
+		var mate: Unit = ran[host][mate_at]
+		assert_bool(sunk.is_drowning()).override_failure_message("the %s host's sunk enemy is not drowning" % host) \
+			.is_true()
+		assert_bool(sunk.squad == mate.squad).override_failure_message(
+				"the %s host left the drowner in its squad past the pass end" % host).is_false()
 	_assert_hosts_agree(ran)
 
 
@@ -1175,8 +1207,8 @@ func test_a_refreeze_closes_over_a_sunk_body() -> void:
 			"the melt sank nobody because a later attack refroze it").is_not_null()
 	assert_bool(game.terrain_states.has_state(ICE_AT, Terrain.TileState.FROZEN)).override_failure_message(
 			"the refreeze did not close over the water in the game").is_true()
-	assert_bool((ran.game[ICE_AT] as Unit).is_downed()).override_failure_message(
-			"the body under the ice is not down in the game").is_true()
+	assert_bool((ran.game[ICE_AT] as Unit).is_drowning()).override_failure_message(
+			"the body under the ice is not drowning in the game").is_true()
 	_assert_hosts_agree(ran)
 
 
@@ -1220,7 +1252,7 @@ func test_water_a_walk_shot_melted_catches_the_walker() -> void:
 		var caught: Unit = ran[host][walker_at]
 		assert_that(caught.movement.cell).override_failure_message(
 				"the %s host's walker did not stop where the water took it" % host).is_equal(thin_ice)
-		assert_bool(caught.is_downed()).override_failure_message(
+		assert_bool(caught.is_drowning()).override_failure_message(
 				"the %s host's walker is standing in the water" % host).is_true()
 	_assert_hosts_agree(ran)
 

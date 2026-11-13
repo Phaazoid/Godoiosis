@@ -1,6 +1,6 @@
 # #922: ice melting under a standing unit drops it into the water. The floor leaving is #116's
-# drowning from the other side, so it reaches the same rung -- the water takes whatever is left, the
-# unit comes up WET, and a rescue from the bank is the answer.
+# drowning from the other side, so it does the same thing (#1657): the unit goes DROWNING with its
+# health, never Crisis, comes up WET, and a rescue from the bank is the answer.
 #
 # WHEN is the dev's ruling (#1498 ruling 4, replacing #922's two batch moments): a unit goes under AT
 # THE MELT -- right after the action whose landing took the floor away (a volley's last member, a
@@ -147,15 +147,17 @@ func test_a_fire_that_melts_the_ice_under_an_enemy_sinks_it() -> void:
 	assert_object(sink).override_failure_message("the melt previews nothing for the unit on the ice") \
 		.is_not_null()
 	assert_that(sink.cell).is_equal(ICE)
-	# The water takes whatever the blow left (#116), through the ordinary ladder.
+	# The water takes nothing and names no rung (#1657): the unit goes under at what the blow left it.
 	assert_int(sink.resolved.hp_before).is_equal(hit.resolved.target_hp_after)
-	assert_int(sink.resolved.drown_damage).is_equal(hit.resolved.target_hp_after)
-	assert_that(sink.resolved.lethality).is_equal(ResolvedOutcome.Lethality.DOWNED)
+	assert_bool(sink.resolved.drowned).is_true()
+	assert_int(sink.resolved.target_hp_after).override_failure_message(
+			"the water took health (#1657)").is_equal(sink.resolved.hp_before)
+	assert_that(sink.resolved.lethality).is_equal(ResolvedOutcome.Lethality.NONE)
 	assert_bool(sink.resolved.states_added.has(Elemental.State.WET)).override_failure_message(
 			"a unit that went under comes up WET (#884)").is_true()
 	assert_object(sink.cause).override_failure_message("the sinking does not name the fire that melted the ice") \
 		.is_same(hit)
-	assert_that(PlanResolver.projected_lifecycle(foe, plan.hypo)).is_equal(Unit.LifecycleState.DOWNED)
+	assert_that(PlanResolver.projected_lifecycle(foe, plan.hypo)).is_equal(Unit.LifecycleState.DROWNING)
 
 
 func test_the_sinking_hangs_under_the_attack_that_melted_the_ice() -> void:
@@ -237,8 +239,8 @@ func test_a_unit_the_melt_sinks_does_not_counter() -> void:
 
 
 # The melt, not the blow: a blast that spares the unit standing there still takes the floor away --
-# here the caster's own squadmate, whom an attack that does not hit allies passes over. So the water
-# takes the WHOLE of its health, and it is the player's own fire that did it.
+# here the caster's own squadmate, whom an attack that does not hit allies passes over. So it goes under
+# at its WHOLE health (#1657), and it is the player's own fire that did it.
 func test_a_blast_that_spares_the_unit_on_the_ice_still_sinks_it() -> void:
 	_ice(ICE)
 	var ally := _spawn(PLAYER, ICE, {Stats.Stat.MHP: 30})
@@ -252,8 +254,9 @@ func test_a_blast_that_spares_the_unit_on_the_ice_still_sinks_it() -> void:
 	var sink := _sink_of(plan, ally)
 	assert_object(sink).override_failure_message("a unit the blast spared stood on in the water") \
 		.is_not_null()
-	assert_int(sink.resolved.drown_damage).is_equal(ally.get_current_hp())
-	assert_that(sink.resolved.lethality).is_equal(ResolvedOutcome.Lethality.DOWNED)
+	assert_bool(sink.resolved.drowned).is_true()
+	assert_int(sink.resolved.target_hp_after).is_equal(ally.get_current_hp())
+	assert_that(sink.resolved.lethality).is_equal(ResolvedOutcome.Lethality.NONE)
 
 
 func test_a_waterwalker_on_melting_ice_keeps_standing() -> void:
@@ -309,7 +312,7 @@ func test_the_body_a_refreeze_closes_over_is_held_by_the_ice() -> void:
 
 	await game.order_executor.execute_orders(hero)
 
-	assert_bool(foe.is_downed()).override_failure_message("fixture: the sunk enemy is not down").is_true()
+	assert_bool(foe.is_drowning()).override_failure_message("fixture: the sunk enemy is not drowning").is_true()
 	assert_bool(_frozen(ICE)).override_failure_message("fixture: the refreeze never landed").is_true()
 	assert_bool(RulesService.held_by_ice(ICE, foe.state, game._board())).override_failure_message(
 			"the ice that closed over the body does not hold it").is_true()
@@ -372,11 +375,36 @@ func test_a_haul_onto_a_bank_the_pass_melts_reds_the_rescue() -> void:
 			"the board draws the body on a bank the pass melts").is_not_equal(bank)
 
 
+# A rescue answers a drowner as it answers a down (#1657): queued through the player's door, played
+# through the real pass, and the body comes up on the bank at the health it never lost, unwounded.
+func test_a_rescue_hauls_a_drowner_out_at_its_health() -> void:
+	var lake := Vector2i(5, 1)
+	var bank := Vector2i(4, 0)
+	var rescuer := _spawn(PLAYER, Vector2i(4, 1))
+	var ally := _spawn(PLAYER, lake, {Stats.Stat.MHP: 30})
+	(game.grid as BoardGrid).paint(lake, GRASS_SOURCE, DEEP_WATER)
+	ally.set_current_hp(17)
+	ally.go_under()
+	assert_bool(ally.is_drowning()).override_failure_message("fixture: the ally did not go under").is_true()
+	game.squad_manager.active_squad = rescuer.squad
+	var rescue := RescueAction.new()
+	rescue.init(rescuer, ally, bank)
+	assert_bool(game.squad_manager.queue_action(rescuer.squad, rescue)).override_failure_message(
+			"a drowner cannot be rescued (%s)" % ", ".join(rescue.validation_errors)).is_true()
+
+	await game.order_executor.execute_orders(rescuer)
+
+	assert_bool(ally.is_active()).override_failure_message("the rescue left the ally in the water").is_true()
+	assert_that(ally.movement.cell).is_equal(bank)
+	assert_int(ally.get_current_hp()).is_equal(17)
+	assert_bool(ally.wounded).override_failure_message("a rescue from the water left a wound").is_false()
+
+
 # --- execution plays it back ---------------------------------------------------------------------
 
 # The wire: a resolved sinking that nobody plays is #103's shape exactly, so this reads the board the
 # pass leaves rather than the plan.
-func test_after_the_pass_the_sunk_unit_is_down_and_wet_in_the_water() -> void:
+func test_after_the_pass_the_sunk_unit_is_drowning_and_wet_in_the_water() -> void:
 	var s := _fire_on_the_ice()
 	var hero: Unit = s.hero
 	var foe: Unit = s.foe
@@ -387,13 +415,57 @@ func test_after_the_pass_the_sunk_unit_is_down_and_wet_in_the_water() -> void:
 	await game.order_executor.execute_orders(hero)
 
 	assert_bool(_frozen(ICE)).override_failure_message("fixture: the ice never melted").is_false()
-	assert_bool(foe.is_downed()).override_failure_message(
+	assert_bool(foe.is_drowning()).override_failure_message(
 			"the enemy is still standing on water it cannot stand on").is_true()
 	assert_int(foe.get_current_hp()).is_equal(predicted.resolved.target_hp_after)
 	assert_bool(foe.element_states.has(Elemental.State.WET)).is_true()
 	assert_that(foe.movement.cell).is_equal(ICE)
 	assert_int(hero.get_current_hp()).override_failure_message(
 			"the sunk enemy's counter landed after all").is_equal(hero_hp)
+
+
+# THE #1657 regression from the floor's side: an armed Berserker the melt drops into the water goes
+# under DROWNING with its health and never enters Crisis, previewed and played.
+func test_a_berserker_the_melt_sinks_does_not_enter_crisis() -> void:
+	var s := _fire_on_the_ice()
+	var hero: Unit = s.hero
+	var foe: Unit = s.foe
+	foe.unit_instance.jobs.append("berserker")
+	assert_bool(foe.has_live_ability(Abilities.Id.CRISIS)).override_failure_message(
+			"fixture: the Berserker job did not arm Crisis").is_true()
+	var sink := _sink_of(_plan(hero.squad), foe)
+	assert_object(sink).override_failure_message("fixture: the preview has no sinking").is_not_null()
+	assert_that(sink.resolved.lethality).override_failure_message(
+			"the preview fired Crisis for going under").is_equal(ResolvedOutcome.Lethality.NONE)
+
+	await game.order_executor.execute_orders(hero)
+
+	assert_bool(foe.in_crisis).override_failure_message("execution fired Crisis for going under").is_false()
+	assert_bool(foe.is_drowning()).is_true()
+	assert_int(foe.get_current_hp()).is_equal(sink.resolved.target_hp_after)
+
+
+# A body already DOWN on the ice when it melts stays down (dev, #1657: the water is no longer a death),
+# on the water's harsher clock.
+func test_a_downed_body_the_melt_sinks_stays_down_on_the_waters_clock() -> void:
+	var s := _fire_on_the_ice()
+	var hero: Unit = s.hero
+	var foe: Unit = s.foe
+	# The fire is aimed at the cell, so a downed body there would take the hit; make it map-only.
+	_imbue(hero, Elemental.Element.FIRE, EquippableData.TargetMode.MAP)
+	foe.force_down()
+	assert_int(foe.downed_turns_remaining).override_failure_message(
+			"fixture: the down's own clock is already as short as the water's").is_greater(Unit.DOWNED_IN_WATER_TURNS)
+	var plan := _plan(hero.squad)
+	assert_object(_sink_of(plan, foe)).override_failure_message("fixture: the downed body did not sink") \
+		.is_not_null()
+	assert_that(PlanResolver.projected_lifecycle(foe, plan.hypo)).override_failure_message(
+			"the water finished the downed body in the preview").is_equal(Unit.LifecycleState.DOWNED)
+
+	await game.order_executor.execute_orders(hero)
+
+	assert_bool(foe.is_downed()).override_failure_message("the water finished the downed body").is_true()
+	assert_int(foe.downed_turns_remaining).is_equal(Unit.DOWNED_IN_WATER_TURNS)
 
 
 # A melt a COUNTER makes sinks the unit it strands right after that counter -- here the attacker,
@@ -412,7 +484,8 @@ func test_a_counter_that_melts_the_ice_under_the_attacker_sinks_it_after_the_cou
 	assert_object(sink).override_failure_message("the counter's melt left the attacker standing on water") \
 		.is_not_null()
 	assert_object(sink.cause).is_same(counter)
-	assert_int(sink.resolved.drown_damage).is_equal(counter.resolved.target_hp_after)
+	assert_bool(sink.resolved.drowned).is_true()
+	assert_int(sink.resolved.target_hp_after).is_equal(counter.resolved.target_hp_after)
 
 	var entries := ActionQueueDisplayEntry.build_for(hero.squad, plan)
 	var at := -1
@@ -424,6 +497,6 @@ func test_a_counter_that_melts_the_ice_under_the_attacker_sinks_it_after_the_cou
 			"the sinking does not hang under the counter that melted the ice").is_true()
 
 	await game.order_executor.execute_orders(hero)
-	assert_bool(hero.is_downed()).override_failure_message(
+	assert_bool(hero.is_drowning()).override_failure_message(
 			"the attacker is still standing on the water the counter opened").is_true()
 	assert_bool(hero.element_states.has(Elemental.State.WET)).is_true()

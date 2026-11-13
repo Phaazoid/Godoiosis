@@ -70,7 +70,8 @@ func _refresh_status_icons():
 	StateIcons.populate(states_row, unit.element_states)
 	# The glyph says it is a body, the count says how long it has — two claims since #1002, because a
 	# heal stops the clock without standing anyone up.
-	if unit.is_downed():
+	if unit.awaits_rescue():
+		# A drowning body wears the downed glyph until it has its own look (#1657).
 		_add_status_icon(StateIcons.DOWNED)
 		if unit.downed_turns_remaining > 0:
 			_add_status_count(unit.downed_turns_remaining)

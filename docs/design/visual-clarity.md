@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #1649 (2026-11-09); only an entry trips a watch (#1654) folded in 2026-11-11; #1660 slice 2 (the wind leans on a shove) folded in 2026-11-12.**
+**Canon checked through #1649 (2026-11-09); only an entry trips a watch (#1654) folded in 2026-11-11; #1660 slice 2 (the wind leans on a shove) folded in 2026-11-12; #1657 (drowning becomes its own state) folded in 2026-11-12.**
 
 ## Principles
 
@@ -999,8 +999,8 @@ on the first frame HP moves — so this is two retimings, and only one of them t
 - **The camera jolt stays at the hit.** It rides the live HP diff; the landing reports nothing of its
   own, since the blow was already reported once.
 - **Declared edges.** A shove that falls at TWO breaks releases the whole fall at the FIRST touchdown
-  (the outcome carries one fall number, and splitting it per edge would be a re-derivation). A
-  drowning's `drown_damage` is not held. A triggered shot landing on a volley member between the lead's
+  (the outcome carries one fall number, and splitting it per edge would be a re-derivation). The
+  water holds nothing: it takes no HP since #1657. A triggered shot landing on a volley member between the lead's
   blow and that member's own would spend the member's arm. The cube grid is 3D-only, so this is a
   declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry.
 - **Declared edge: a fall that DOWNS.** When hit plus fall reaches the unit's HP within the overkill
@@ -3949,7 +3949,7 @@ about "one big one fits."**
 had been split from its dramatic word (`short_name` / `popup`); the world-event pills never were, and
 rendered `popups` verbatim — a channel built for the **board's floating text**, where there is room
 and nothing has to fit. So the row now builds those chips from the outcome's **recorded facts**
-(`insulated`, `fall_levels`, `drown_damage`, `removed`) rather than parsing them back out of strings
+(`insulated`, `fall_levels`, `drowned`, `removed`) rather than parsing them back out of strings
 *(since [#1629](https://github.com/Phaazoid/Godoiosis/issues/1629) through `OutcomeFacts.of`, which
 the right-click `MatchupCard` shares)*,
 prints its own short badge, and puts the dramatic word on hover — which is where the dev is taking

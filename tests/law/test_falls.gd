@@ -467,68 +467,119 @@ func test_a_tumble_stops_at_the_boards_edge_rather_than_falling_off() -> void:
 
 # --- The two rules #259 deliberately does NOT change -----------------------------------------
 
-# --- Water (#116) -----------------------------------------------------------------------------
+
+# --- Water (#116, redesigned by #1657) --------------------------------------------------------
 #
-# The shoreline stop is GONE, and its replacement is the ticket: water CATCHES a shove instead of
-# bracing it. "Water stops the shove" is still true -- one cell later, in the drink.
+# The shoreline stop is GONE, and its replacement is #116: water CATCHES a shove instead of bracing
+# it. "Water stops the shove" is still true -- one cell later, in the drink.
 #
-# What the drown COSTS is asserted as a property, never as a number: the water takes whatever the
-# blow left, so the fixture's own HP is the expectation and nothing here pins a tuning value. The
-# rung is read through lifecycle_for, the one map every reader of a rung shares.
+# Since #1657 the water is not damage. It takes no health and names no rung: a standing body goes
+# DROWNING (out of action, on a rescue clock), a downed one stays down on the water's harsher clock, and
+# the Crisis gambit never fires for it. What a hit leaves is read through ResolvedOutcome.lifecycle_after,
+# the one answer that folds the water onto the rung.
 
-func _lifecycle(outcome: ResolvedOutcome) -> Unit.LifecycleState:
-	return LethalityRules.lifecycle_for(outcome.lethality)
+func _lifecycle(outcome: ResolvedOutcome, current := Unit.LifecycleState.ACTIVE) -> Unit.LifecycleState:
+	return outcome.lifecycle_after(current)
 
 
-func test_a_shove_into_deep_water_takes_everything_the_blow_left() -> void:
+func _arm(unit: Unit) -> void:
+	unit.unit_instance.jobs.append("berserker")
+	assert_bool(unit.has_live_ability(Abilities.Id.CRISIS)) \
+		.override_failure_message("fixture: the Berserker job did not arm Crisis").is_true()
+
+
+# Resolve one stamped attack and hand back the order, so a case can also execute it.
+func _resolve_attack(sm: SquadManager, a: Unit, d: Unit) -> AttackAction:
+	var attack := H.stamped_attack(a, d)
+	var plan := ResolvedPlan.new()
+	var attacks: Array[AttackAction] = [attack]
+	plan.attacks = attacks
+	PlanResolver.resolve(plan, _no_reactions, sm.board_source.call())
+	return attack
+
+
+func test_a_shove_into_deep_water_drowns_without_taking_health() -> void:
 	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
 	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)) \
 		.override_failure_message("the shove should end IN the water, not dry on the bank").is_true()
-	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DOWNED)
-	# "Losing all one's health", stated as the arithmetic rather than as a number: total damage IS
-	# what the unit had, so no tuning value is pinned here.
-	assert_int(outcome.damage).is_equal(outcome.hp_before)
-	# And what the rung LEAVES is the cling, which is what execution lands on -- since #1002 the
-	# resolver threads that rather than the raw subtraction, so this is Law #2 rather than arithmetic.
-	assert_int(outcome.target_hp_after).is_equal(1)
-	assert_int(outcome.drown_damage).is_greater(0)
+	assert_bool(outcome.drowned).is_true()
+	assert_that(outcome.lethality).override_failure_message(
+			"fixture: the blow alone must leave the unit standing").is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DROWNING)
+	# The water took nothing: what the unit is left at is the blow's subtraction alone.
+	assert_int(outcome.target_hp_after).is_equal(outcome.hp_before - outcome.damage)
+	assert_int(outcome.target_hp_after).is_greater(0)
 
 
-# The water is not a BLOW (#1174, Iron Will's own "a lake is not a blow"). A small shove into a lake
-# drowns the unit whole and takes no limb, however much health the water took. Executed through the
-# real AttackAction.execute, because that is where the blow and the water are split for take_damage.
-func test_a_drowning_takes_no_limb_from_a_small_blow() -> void:
+# THE #1657 regression, through the real AttackAction.execute: an armed Berserker the water takes goes
+# under DROWNING with its health and never enters Crisis -- in the preview or in execution.
+func test_the_water_never_sets_crisis_off() -> void:
 	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
 	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
 	var d: Unit = s.d
-	var attack := H.stamped_attack(s.a, d)
-	var plan := ResolvedPlan.new()
-	var attacks: Array[AttackAction] = [attack]
-	plan.attacks = attacks
-	var sm: SquadManager = s.sm
-	PlanResolver.resolve(plan, _no_reactions, sm.board_source.call())
+	_arm(d)
+	var attack := _resolve_attack(s.sm, s.a, d)
 	var outcome := attack.resolved
-	assert_int(outcome.damage - outcome.drown_damage) \
-		.override_failure_message("fixture blow is already limb-sized; the water cannot be told apart") \
-		.is_less(LethalityRules.LIMB_LOSS_DAMAGE)
-	assert_int(outcome.damage) \
-		.override_failure_message("fixture: blow plus water must reach the limb threshold") \
-		.is_greater_equal(LethalityRules.LIMB_LOSS_DAMAGE)
-	assert_int(outcome.severed_limb) \
-		.override_failure_message("the preview counted the water as a blow").is_equal(-1)
+	assert_bool(outcome.drowned).override_failure_message("fixture: the shove never reached the water").is_true()
+	assert_that(outcome.lethality).override_failure_message(
+			"the preview fired Crisis for going under").is_equal(ResolvedOutcome.Lethality.NONE)
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DROWNING)
 
 	await attack.execute()
 
-	assert_bool(d.is_downed()).override_failure_message("fixture: the water did not down the unit").is_true()
-	assert_bool(d.unit_instance.is_maimed()) \
-		.override_failure_message("execution counted the water as a blow and took a limb").is_false()
+	assert_bool(d.in_crisis).override_failure_message("execution fired Crisis for going under").is_false()
+	assert_bool(d.is_drowning()).override_failure_message("the unit is not drowning in the lake").is_true()
+	assert_int(d.get_current_hp()).override_failure_message(
+			"execution's HP disagrees with the preview (Law #2)").is_equal(outcome.target_hp_after)
+	assert_int(d.downed_turns_remaining).is_equal(Unit.DROWNING_TURNS)
 
 
-# ...and a blow that is limb-sized on its own still takes the limb when the water finishes the job.
+# A BLOW that would set Crisis off still does (dev, #1657: only the water never fires it), and the
+# unit it stands back up is still in the lake -- in Crisis AND drowning.
+func test_a_blow_that_fires_crisis_into_the_water_leaves_it_drowning_in_crisis() -> void:
+	var sm := H.make_manager(self)
+	# Power 5 + the fixture's STR 5 meets the fixture's MHP 10 exactly: a would-be-down, not overkill.
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0), {}, true, 5)
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0))
+	(a.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	(sm.get_node("../Grid") as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	_arm(d)
+	var attack := _resolve_attack(sm, a, d)
+	assert_that(attack.resolved.lethality).override_failure_message(
+			"fixture: the blow alone should fire the gambit").is_equal(ResolvedOutcome.Lethality.CRISIS)
+	assert_bool(attack.resolved.drowned).is_true()
+	assert_that(_lifecycle(attack.resolved)).is_equal(Unit.LifecycleState.DROWNING)
+
+	await attack.execute()
+
+	assert_bool(d.in_crisis).is_true()
+	assert_bool(d.is_drowning()).override_failure_message("the gambit swam the unit out of the lake").is_true()
+	assert_int(d.get_current_hp()).is_equal(attack.resolved.target_hp_after)
+
+
+# A blow that downs the unit as it lands in the water: down, on the water's harsher clock (#1657).
+func test_a_blow_that_downs_into_the_water_downs_on_the_waters_clock() -> void:
+	var sm := H.make_manager(self)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0), {}, true, 5)
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0))
+	(a.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	(sm.get_node("../Grid") as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	var attack := _resolve_attack(sm, a, d)
+	assert_that(attack.resolved.lethality).override_failure_message(
+			"fixture: the blow alone should down the unit").is_equal(ResolvedOutcome.Lethality.DOWNED)
+	assert_bool(attack.resolved.drowned).is_true()
+	assert_that(_lifecycle(attack.resolved)).is_equal(Unit.LifecycleState.DOWNED)
+
+	await attack.execute()
+
+	assert_bool(d.is_downed()).is_true()
+	assert_int(d.downed_turns_remaining).is_equal(Unit.DOWNED_IN_WATER_TURNS)
+
+
+# A blow that is limb-sized on its own still takes the limb when it also throws the unit in the lake.
 func test_a_big_blow_that_also_drowns_takes_the_limb() -> void:
-	# Headroom, so the blow alone leaves something for the water -- test_a_fall_into_water's reason.
 	var sm := H.make_manager(self)
 	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0), {}, true, LethalityRules.LIMB_LOSS_DAMAGE)
 	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 200})
@@ -536,9 +587,9 @@ func test_a_big_blow_that_also_drowns_takes_the_limb() -> void:
 	var grid := sm.get_node("../Grid") as TileMapLayer
 	grid.set_cell(Vector2i(3, 0), 0, DEEP_WATER)
 	var outcome := _resolve({"sm": sm, "a": a, "d": d, "grid": grid})
-	assert_int(outcome.damage - outcome.drown_damage) \
-		.override_failure_message("fixture blow is not limb-sized").is_greater_equal(LethalityRules.LIMB_LOSS_DAMAGE)
-	assert_int(outcome.drown_damage).override_failure_message("fixture: the blow alone downed the unit").is_greater(0)
+	assert_int(outcome.damage).override_failure_message("fixture blow is not limb-sized") \
+		.is_greater_equal(LethalityRules.LIMB_LOSS_DAMAGE)
+	assert_bool(outcome.drowned).is_true()
 	assert_int(outcome.severed_limb).is_not_equal(-1)
 
 
@@ -559,7 +610,7 @@ func test_a_shove_into_shallow_water_is_only_a_shove() -> void:
 	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, SHALLOW_WATER)
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
-	assert_int(outcome.drown_damage).is_equal(0)
+	assert_bool(outcome.drowned).is_false()
 	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.ACTIVE)
 
 
@@ -570,7 +621,7 @@ func test_a_waterwalker_is_shoved_onto_the_water_and_stands() -> void:
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)) \
 		.override_failure_message("water it can stand on must not brace the shove").is_true()
-	assert_int(outcome.drown_damage).is_equal(0)
+	assert_bool(outcome.drowned).is_false()
 	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.ACTIVE)
 
 
@@ -592,14 +643,16 @@ func test_frozen_water_catches_the_shove_without_drowning_anyone() -> void:
 	# The ice is solid ground (#109's whole point), and drowns_in asks can_traverse, which reads tile
 	# STATE -- so this comes out right with no ice clause anywhere in the shove.
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
-	assert_int(outcome.drown_damage).is_equal(0)
+	assert_bool(outcome.drowned).is_false()
 	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.ACTIVE)
 
 
-func test_a_body_already_down_is_finished_by_the_water() -> void:
+# A body already down that the water takes STAYS down (dev, #1657: the water is no longer a death) but
+# on the water's harsher clock.
+func test_a_body_already_down_stays_down_in_the_water_on_a_harsher_clock() -> void:
 	# A 0-damage shove, because that is the only kind a downed body ever takes: a damaging hit
 	# finishes it where it lies (#126), and the resolver's provisional rung then leaves nothing to
-	# shove. So this is the REPOSITION case, and the water is what turns it lethal.
+	# shove. So this is the REPOSITION case.
 	var sm := H.make_manager(self)
 	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
 	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0))
@@ -611,11 +664,18 @@ func test_a_body_already_down_is_finished_by_the_water() -> void:
 	main.deals_no_damage = true
 	(sm.get_node("../Grid") as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
 	d.force_down()
-	var outcome := _resolve({"sm": sm, "a": a, "d": d})
-	assert_bool(outcome.knockback_to == Vector2i(3, 0)) \
+	assert_int(d.downed_turns_remaining).override_failure_message(
+			"fixture: the down's own clock is already as short as the water's").is_greater(Unit.DOWNED_IN_WATER_TURNS)
+	var attack := _resolve_attack(sm, a, d)
+	assert_bool(attack.resolved.knockback_to == Vector2i(3, 0)) \
 		.override_failure_message("the body should be pushed into the water, not left on the bank") \
 		.is_true()
-	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DEAD)
+	assert_that(_lifecycle(attack.resolved, Unit.LifecycleState.DOWNED)).is_equal(Unit.LifecycleState.DOWNED)
+
+	await attack.execute()
+
+	assert_bool(d.is_downed()).override_failure_message("the water finished the body").is_true()
+	assert_int(d.downed_turns_remaining).is_equal(Unit.DOWNED_IN_WATER_TURNS)
 
 
 func test_a_tumble_that_bottoms_out_in_a_lake_ends_in_the_lake() -> void:
@@ -629,16 +689,13 @@ func test_a_tumble_that_bottoms_out_in_a_lake_ends_in_the_lake() -> void:
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)) \
 		.override_failure_message("the slide should carry on into the water, not stop dry above it") \
 		.is_true()
-	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DOWNED)
-	# The water took everything (the property), and the down leaves the cling (#1002).
-	assert_int(outcome.damage).is_equal(outcome.hp_before)
-	assert_int(outcome.target_hp_after).is_equal(1)
+	assert_bool(outcome.drowned).is_true()
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DROWNING)
 
 
-func test_a_fall_into_water_pays_the_fall_and_the_water_takes_the_rest() -> void:
-	# ONE level, off the constant rather than a number. The victim is given HEADROOM rather than the
-	# drop being tuned down: the baseline fixture unit is felled by the swing plus a single level, so
-	# without it there is nothing left for the water and the case tests only the fall.
+func test_a_fall_into_water_pays_the_fall_and_the_water_takes_nothing() -> void:
+	# ONE level, off the constant rather than a number. The victim is given HEADROOM so the swing plus
+	# the fall leave it standing, which is what makes the water's own share visible (it is none).
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), Terrain.UNITS_PER_LEVEL)
 	heights.set_cell(Vector2i(2, 0), Terrain.UNITS_PER_LEVEL)
@@ -651,13 +708,11 @@ func test_a_fall_into_water_pays_the_fall_and_the_water_takes_the_rest() -> void
 	var outcome := _resolve({"sm": sm, "a": a, "d": d, "grid": grid})
 	assert_int(outcome.fall_damage) \
 		.override_failure_message("a drop into water is still a drop").is_greater(0)
-	assert_int(outcome.drown_damage) \
-		.override_failure_message("fixture assumption broke: the fall alone finished the unit, so "
-			+ "there was nothing left for the water to take -- lower the drop").is_greater(0)
-	# THE property, and it is tuning-proof: however the blow and the fall are priced, the water takes
-	# the remainder, so the total is exactly what the unit had.
-	assert_int(outcome.damage).is_equal(outcome.hp_before)
-	assert_int(outcome.target_hp_after).is_equal(1)   # and the down leaves the cling (#1002)
+	assert_bool(outcome.drowned).is_true()
+	assert_int(outcome.target_hp_after).is_equal(outcome.hp_before - outcome.damage)
+	assert_int(outcome.target_hp_after).is_greater(0)
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DROWNING)
+
 
 
 # A hit that alone kills leaves nothing to shove (the pre-#259 rule, judged provisionally).

@@ -74,7 +74,7 @@ static func of(outcome: ResolvedOutcome, fired: AttackData = null) -> Array[Fact
 	if outcome.fall_levels > 0:
 		facts.append(_event(ActionQueueRow.BADGE_FELL % outcome.fall_levels,
 				PlanResolver.FELL_POPUP % outcome.fall_levels))
-	if outcome.drown_damage > 0:
+	if outcome.drowned:
 		facts.append(_event(ActionQueueRow.BADGE_DROWNED, PlanResolver.DROWNING_POPUP))
 	if outcome.removed:
 		facts.append(_event(ActionQueueRow.BADGE_VOID, PlanResolver.VOID_POPUP))

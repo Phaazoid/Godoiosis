@@ -43,7 +43,7 @@ enum Term {
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, SCORCHED, FROZEN, COVER, QUICKLIME, BRICK,
 	THUNDERSTONE, GYPSUM, QUICKSILVER, HELD, QUICKENED,
 	# Lifecycle
-	DOWNED, WOUNDED, CRISIS, MAIM, PROSTHETIC,
+	DOWNED, DROWNING, WOUNDED, CRISIS, MAIM, PROSTHETIC,
 	# Missions (one per player-facing ZoneManager.Kind, #1105, then the VIP the pre-mission screen
 	# marks, #1456)
 	CAPTURE_ZONE, EXTRACTION_ZONE, DEPLOYMENT_ZONE, DEFEND_ZONE, VIP,
@@ -629,13 +629,12 @@ static func _build_entries() -> Dictionary:
 			+ "ice freezes water. Hovering a tile that is anything other than ordinary shows what "
 			+ "it does."}
 	e[Term.WATER_TILE] = {"category": Category.TERRAIN, "title": "Deep water",
-		"short": "Too deep to stand in. Shoved in, a unit goes under, with %d turns to be pulled out."
-			% Unit.DOWNED_TURNS,
-		"long": "Nothing walks into deep water, but a unit SHOVED in goes under: the water takes "
-			+ "whatever health the blow left, and the unit is down with the usual %d turns to be "
-			% Unit.DOWNED_TURNS
-			+ "rescued before it drowns. A rescuer beside the water drags the body out onto dry "
-			+ "ground next to them."}
+		"short": "Too deep to stand in. Shoved in, a unit is drowning, with %d turns to be pulled out."
+			% Unit.DROWNING_TURNS,
+		"long": "Nothing walks into deep water, but a unit SHOVED in, or standing on ice that melts, "
+			+ "goes under and is DROWNING: it loses no health, but has %d turns to be rescued. "
+			% Unit.DROWNING_TURNS
+			+ "A rescuer beside the water drags the body out onto dry ground next to them."}
 	e[Term.SHALLOW_WATER] = {"category": Category.TERRAIN, "title": "Shallow water",
 		"short": "Wadeable, but slow going, and you come out WET.",
 		"long": "Shallow water is waded at the same cost as mud, and anyone who crosses it, is "
@@ -715,6 +714,15 @@ static func _build_entries() -> Dictionary:
 			+ "downed unit is helpless: it dies when its %d-turn clock runs out, and a hit that "
 			% Unit.DOWNED_TURNS
 			+ "meets the health it has left finishes it early. Rescue stands it back up."}
+	# Its own state, not a down (#1657): the water takes no health and never sets off Crisis.
+	e[Term.DROWNING] = {"category": Category.LIFECYCLE, "title": "Drowning",
+		"short": "In water too deep to stand in: can't act, and drowns in %d turns unless rescued."
+			% Unit.DROWNING_TURNS,
+		"long": "A unit in water too deep to stand in is drowning. It can't act and loses no "
+			+ "health, but it drowns when its %d-turn clock runs out, and healing does not stop "
+			% Unit.DROWNING_TURNS
+			+ "the clock. A rescuer beside the water drags it out, back on its feet at the health "
+			+ "it had. A downed body in the water has only %d turn." % Unit.DOWNED_IN_WATER_TURNS}
 	e[Term.WOUNDED] = {"category": Category.LIFECYCLE, "title": "Wounded",
 		"short": "This unit injures more easily",
 		"long": "After going down once, a unit becomes wounded.  A wounded unit can be maimed more easily."}

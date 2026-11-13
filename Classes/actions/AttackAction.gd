@@ -252,6 +252,8 @@ func land() -> bool:
 		target.heal(resolved.heal_amount)
 	else:
 		target.take_damage(resolved.damage, resolved.non_blow())
+	if resolved.drowned:
+		target.go_under()   # the water, after the blow (#1657); a no-op on a body the blow killed
 	for s in resolved.states_removed:
 		target.remove_element_state(s)
 	for s in resolved.states_added:

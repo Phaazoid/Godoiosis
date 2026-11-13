@@ -95,6 +95,9 @@ func _register(unit: Unit) -> void:
 		unit.unit_died.connect(_on_unit_died)
 	if not unit.went_downed.is_connected(_on_unit_downed):
 		unit.went_downed.connect(_on_unit_downed)
+	# Going under (#1657) leaves the fight like a down: the same deferred ejection, game._build_unit's twin.
+	if not unit.went_under.is_connected(_on_unit_downed):
+		unit.went_under.connect(_on_unit_downed)
 
 func _on_unit_died(unit: Unit) -> void:
 	mission.note_unit_died(unit)   # FIRST, as game._on_unit_died: the mission may be protecting this one
@@ -1464,7 +1467,7 @@ func _describe_row(section: String, action: BaseAction, depth: int) -> Dictionar
 		events.append("wind %+d" % r.knockback_wind)   # #1660: tiles the wind added to the shove, or took
 	if r.fall_levels > 0:
 		events.append("falls %d" % r.fall_levels)
-	if r.drown_damage > 0:
+	if r.drowned:
 		events.append("drowns")
 	if r.removed:
 		events.append("into the void")
@@ -1871,17 +1874,18 @@ func _on_round_completed() -> void:
 
 
 func _on_turn_started(faction: Team.Faction) -> void:
-	# The downed whose clock this start may run out, by handle, since a body that bleeds out is freed.
+	# The bodies whose clock this start may run out, by line, since a body that dies is freed. A
+	# drowning one (#1657) drowns rather than bleeds out.
 	var bodies := {}
 	for unit in live_units():
-		if unit.is_downed() and unit.get_faction() == faction:
-			bodies[unit] = handle_for(unit)
+		if unit.awaits_rescue() and unit.get_faction() == faction:
+			bodies[unit] = "%s %s" % [handle_for(unit), "drowns" if unit.is_drowning() else "bleeds out"]
 	# The game's own hand-off rule (#1365), so a downed faction is passed over here exactly as there.
 	var start := TurnBoundary.start_turn(faction, live_units(), squad_manager, func() -> bool:
 		return mission_tag() != "")
 	for unit in bodies.keys():   # untyped: a typed loop variable cannot hold a freed unit (#149)
 		if not is_instance_valid(unit) or (unit as Unit).is_dead():
-			_boundary_events.append("%s bleeds out" % bodies[unit])
+			_boundary_events.append(bodies[unit])
 	if start == TurnBoundary.Start.SKIP:
 		turn_manager.end_turn(_board().present_factions())   # re-enters here for the next faction
 

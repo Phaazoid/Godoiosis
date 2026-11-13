@@ -320,8 +320,8 @@ func record_pass(squad: Squad, plan: ResolvedPlan) -> void:
 			"removed": _names(Terrain.TileState, effect.states_removed),
 			"gas": gas,
 		})
-	# Who the pass's own terrain dropped into the water (#922) -- the ground's damage, recorded beside
-	# the hits the way turn_effects records a burn, because no hit carries it.
+	# Who the pass's own terrain dropped into the water (#922), recorded beside the hits because no hit
+	# carries it. Since #1657 the water takes no HP, so damage is 0; the field stays for older runs.
 	var sinks: Array[Dictionary] = []
 	for sink: SinkAction in plan.sinks:
 		sinks.append({
@@ -459,12 +459,20 @@ func _on_squad_created(squad: Squad) -> void:
 		return
 	if not unit.went_downed.is_connected(_on_unit_downed):
 		unit.went_downed.connect(_on_unit_downed)
+	if not unit.went_under.is_connected(_on_unit_under):
+		unit.went_under.connect(_on_unit_under)
 	if not unit.unit_died.is_connected(_on_unit_died):
 		unit.unit_died.connect(_on_unit_died)
 
 
 func _on_unit_downed(unit: Unit) -> void:
 	_record("unit_downed", _vitals(unit))
+
+
+# Into the water alive (#1657): not a down, so its own record -- a run before #1657 logged a drowning
+# as a unit_downed.
+func _on_unit_under(unit: Unit) -> void:
+	_record("unit_drowning", _vitals(unit))
 
 
 func _on_unit_died(unit: Unit) -> void:

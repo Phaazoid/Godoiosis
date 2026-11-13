@@ -1988,6 +1988,9 @@ func _build_unit(data: UnitData, grid_layer: TileMapLayer, cell: Vector2i) -> Un
 	# A down is a lifecycle change no plan edit announces: the dev Down button and a turn-start tick
 	# land outside any pass, so without this the cached field keeps the body as an attacker.
 	unit.went_downed.connect(drop_threat_field.unbind(1))
+	# Going under (#1657) leaves the fight the same way: ejected at pass end, and no longer a threat.
+	unit.went_under.connect(order_executor.on_unit_downed)
+	unit.went_under.connect(drop_threat_field.unbind(1))
 	return unit
 
 func spawn_unit(data: UnitData, pos: Vector2i, terrain_later := false) -> Unit:
