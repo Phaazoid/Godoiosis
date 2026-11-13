@@ -341,6 +341,8 @@ static func outcome_fields() -> Dictionary:
 			"relinks": {"play": never("the tether animation; the split it follows prints"), "ai": never(ANIMATION)},
 			"lethality": {"play": covered(SESSION, ".lethality"), "ai": covered(TACTICS, ".lethality")},
 			"severed_limb": {"play": covered(SESSION, ".severed_limb"), "ai": covered(TACTICS, ".severed_limb")},
+			"gear_lost": {"play": covered(SESSION, ".gear_lost"), "ai": never(NOT_SCORED)},
+			"gear_lost_reasons": {"play": covered(SESSION, ".gear_lost_line("), "ai": never(NOT_SCORED)},
 			"skipped": {"play": covered(SESSION, ".skipped"), "ai": covered(CONTROLLER, ".skipped")},
 			"fizzled": {"play": covered(SESSION, ".fizzled"),
 					"ai": covered(TACTICS, "CellSubstances.fizzle_reason")},
